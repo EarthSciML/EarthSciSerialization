@@ -19,6 +19,11 @@
 // Re-export all types from types.ts (which includes generated types and augmentations)
 export * from './types.js'
 
+// Export parsing and serialization functions
+export { load, validateSchema, ParseError, SchemaValidationError } from './parse.js'
+export type { SchemaError } from './parse.js'
+export { save } from './serialize.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
