@@ -82,6 +82,12 @@ from .coupling_graph import (
     resolve_coupling_dependencies,
     build_execution_order_from_dependencies,
 )
+from .hierarchical_scope_resolution import (
+    HierarchicalScopeResolver,
+    ScopeInfo,
+    VariableResolution,
+    create_enhanced_scoped_reference,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -153,4 +159,8 @@ __all__ = [
     "ScopedReferenceResolver",
     "resolve_coupling_dependencies",
     "build_execution_order_from_dependencies",
+    "HierarchicalScopeResolver",
+    "ScopeInfo",
+    "VariableResolution",
+    "create_enhanced_scoped_reference",
 ]
