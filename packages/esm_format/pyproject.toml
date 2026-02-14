@@ -17,6 +17,9 @@ dependencies = [
     "jsonschema",
     "sympy",
     "pint",
+    "numpy",
+    "scipy",
+    "matplotlib",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +29,15 @@ dev = [
     "black",
     "flake8",
     "mypy",
+]
+simulation = [
+    "jupyter",
+    "ipython",
+    "ipywidgets",
+    "notebook",
+    "seaborn",
+    "pandas",
+    "scikit-learn",
 ]
 
 [tool.setuptools.packages.find]
