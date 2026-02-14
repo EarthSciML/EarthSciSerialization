@@ -25,6 +25,16 @@ from .types import (
 )
 
 
+class SchemaValidationError(Exception):
+    """Exception raised when schema validation fails."""
+    pass
+
+
+class UnsupportedVersionError(Exception):
+    """Exception raised when ESM version is not supported."""
+    pass
+
+
 def _get_schema() -> Dict[str, Any]:
     """Load the bundled ESM schema."""
     schema_path = Path(__file__).parent / "data" / "esm-schema.json"
