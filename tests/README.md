@@ -23,7 +23,9 @@ tests/
 │   └── event_var_undeclared.esm
 ├── display/                  # Expected pretty-printing outputs
 │   ├── expr_precedence.json  # Expression → Unicode/LaTeX/ASCII
-│   ├── chemical_subscripts.json
+│   ├── chemical_subscripts.json # Basic chemical species formatting test cases
+│   ├── chemical_subscripts_comprehensive.json # Comprehensive chemical species formatting (all elements, complex formulas, edge cases)
+│   ├── chemical_subscripts_edge_cases.json # Additional edge cases and negative test cases
 │   └── model_summary.json
 ├── substitution/             # Expression substitution tests
 │   └── simple_var_replace.json
@@ -98,7 +100,7 @@ Each language library should implement tests that:
 - ✅ Baseline directory structure
 - ✅ Schema validation errors (3 cases)
 - ✅ Structural validation errors (7 cases)
-- ✅ Display format fixtures (18 expression cases, 18 chemical subscript cases)
+- ✅ Display format fixtures (18 expression cases, 18 basic + 150+ comprehensive chemical subscript cases)
 - ✅ Substitution fixtures (8 cases)
 - ✅ System graph fixtures (1 case)
 - ❌ Full coupled system fixtures (TODO)
