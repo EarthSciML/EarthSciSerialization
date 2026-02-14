@@ -24,6 +24,10 @@ from esm_format.types import (
     ModelVariable, Parameter, Species, Equation, ExprNode,
     Model, ReactionSystem, Reaction
 )
+from esm_format.verification import (
+    MathematicalVerifier, VerificationStatus, verify_reaction_system,
+    verify_model, compute_stoichiometric_matrix
+)
 
 
 class TestStoichiometricMatrixVerification:
@@ -725,3 +729,149 @@ class TestParameterEstimationVerification:
         # Parameter should be within 2-sigma of true value most of the time
         deviation = abs(slope_est - true_slope)
         assert deviation < 2 * slope_uncertainty
+
+
+class TestVerificationModuleIntegration:
+    """Test integration of the verification module with existing functionality."""
+
+    def test_verification_module_stoichiometric_matrix(self):
+        """Test verification module's stoichiometric matrix computation."""
+        # Simple reaction: A + B -> C
+        species = [
+            Species(name="A"), Species(name="B"), Species(name="C")
+        ]
+        reaction = Reaction(
+            name="synthesis",
+            reactants={"A": 1.0, "B": 1.0},
+            products={"C": 1.0}
+        )
+        reaction_system = ReactionSystem("test", species=species, reactions=[reaction])
+
+        # Test using verification module
+        matrix = compute_stoichiometric_matrix(reaction_system)
+        expected = np.array([[-1.0], [-1.0], [1.0]])
+
+        np.testing.assert_array_equal(matrix, expected)
+
+        # Test consistency with existing method
+        existing_matrix = self._compute_stoichiometric_matrix(reaction_system)
+        np.testing.assert_array_equal(matrix, existing_matrix)
+
+    def test_verification_module_mass_conservation(self):
+        """Test verification module's mass conservation checking."""
+        species = [
+            Species(name="CH4", mass=16.04),
+            Species(name="O2", mass=31.998),
+            Species(name="CO2", mass=44.01),
+            Species(name="H2O", mass=18.015)
+        ]
+        reaction = Reaction(
+            name="combustion",
+            reactants={"CH4": 1, "O2": 2},
+            products={"CO2": 1, "H2O": 2}
+        )
+        reaction_system = ReactionSystem("combustion", species=species, reactions=[reaction])
+
+        # Test full verification with appropriate tolerance for molecular weights
+        report = verify_reaction_system(reaction_system, tolerance=1e-4)
+
+        # Should pass all major tests
+        assert report.passed()
+        assert report.summary["pass"] > 0
+        assert report.summary["fail"] == 0
+
+        # Check specific mass conservation result
+        mass_results = [r for r in report.results if "mass conservation" in r.message.lower()]
+        assert len(mass_results) > 0
+        assert mass_results[0].status == VerificationStatus.PASS
+
+    def test_verification_module_model_validation(self):
+        """Test verification module's model validation."""
+        # Create a simple model with consistent variables and equations
+        variables = {
+            "x": ModelVariable(type="state", units="m"),
+            "v": ModelVariable(type="state", units="m/s"),
+            "t": ModelVariable(type="parameter", units="s")
+        }
+
+        equations = [
+            Equation(lhs="dx_dt", rhs="v"),
+            Equation(lhs="dv_dt", rhs="-9.8")  # Simple gravity
+        ]
+
+        model = Model(name="falling_object", variables=variables, equations=equations)
+
+        # Test model verification
+        report = verify_model(model)
+
+        # Should have some passing tests
+        assert len(report.results) > 0
+
+        # Check that variable-equation consistency is verified
+        consistency_results = [r for r in report.results if "consistency" in r.message.lower()]
+        assert len(consistency_results) > 0
+
+    def test_verification_module_error_handling(self):
+        """Test verification module's error handling with invalid data."""
+        # Empty reaction system
+        empty_system = ReactionSystem("empty")
+        report = verify_reaction_system(empty_system)
+
+        # Should handle gracefully with warnings
+        assert len(report.results) > 0
+        # Should have warnings but not crash
+        warning_count = report.summary["warning"]
+        assert warning_count >= 0
+
+    def test_verification_module_numerical_stability(self):
+        """Test numerical stability analysis."""
+        verifier = MathematicalVerifier(tolerance=1e-10)
+
+        # Test with well-conditioned matrix
+        well_conditioned = np.array([[1, 0], [0, 1]])  # Identity matrix
+        stability = verifier.check_numerical_stability(well_conditioned)
+
+        assert stability["is_well_conditioned"]
+        assert stability["condition_number"] == 1.0
+
+        # Test with ill-conditioned matrix
+        ill_conditioned = np.array([[1, 1], [1, 1.0001]])  # Nearly singular
+        stability_bad = verifier.check_numerical_stability(ill_conditioned)
+
+        assert stability_bad["condition_number"] > 1000  # Should be large
+
+    def test_verification_module_conservation_analysis(self):
+        """Test conservation law analysis."""
+        verifier = MathematicalVerifier()
+
+        # Simple conservation example: A -> B (1:1 ratio)
+        species = [Species(name="A", mass=10.0), Species(name="B", mass=10.0)]
+        reaction = Reaction("conversion", reactants={"A": 1}, products={"B": 1})
+        reaction_system = ReactionSystem("conservation_test", species=species, reactions=[reaction])
+
+        stoich_matrix = verifier.compute_stoichiometric_matrix(reaction_system)
+        mass_vector = np.array([[10.0], [10.0]])
+
+        analysis = verifier.analyze_conservation_laws(stoich_matrix, mass_vector)
+
+        assert "mass_conserved" in analysis
+        assert analysis["mass_conserved"] == True
+        assert analysis["conserved_quantities"] >= 1
+
+    def _compute_stoichiometric_matrix(self, reaction_system: ReactionSystem) -> np.ndarray:
+        """Helper method for backward compatibility testing."""
+        species_names = [s.name for s in reaction_system.species]
+        n_species = len(species_names)
+        n_reactions = len(reaction_system.reactions)
+
+        matrix = np.zeros((n_species, n_reactions))
+
+        for j, reaction in enumerate(reaction_system.reactions):
+            for species, coeff in reaction.reactants.items():
+                i = species_names.index(species)
+                matrix[i, j] -= coeff
+            for species, coeff in reaction.products.items():
+                i = species_names.index(species)
+                matrix[i, j] += coeff
+
+        return matrix

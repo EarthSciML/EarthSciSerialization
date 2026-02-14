@@ -28,8 +28,17 @@ from .types import (
     Metadata,
     EsmFile,
 )
-from .parse import load
+from .parse import load, SchemaValidationError, UnsupportedVersionError
 from .serialize import save
+from .verification import (
+    MathematicalVerifier,
+    VerificationResult,
+    VerificationReport,
+    VerificationStatus,
+    verify_reaction_system,
+    verify_model,
+    compute_stoichiometric_matrix,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -57,4 +66,13 @@ __all__ = [
     "EsmFile",
     "load",
     "save",
+    "SchemaValidationError",
+    "UnsupportedVersionError",
+    "MathematicalVerifier",
+    "VerificationResult",
+    "VerificationReport",
+    "VerificationStatus",
+    "verify_reaction_system",
+    "verify_model",
+    "compute_stoichiometric_matrix",
 ]

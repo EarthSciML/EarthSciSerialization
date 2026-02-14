@@ -8,7 +8,7 @@ of the ESM Libraries Specification.
 import pytest
 import json
 from pathlib import Path
-from esm_format import load, VERSION
+from esm_format import load, __version__ as VERSION
 from esm_format.parse import SchemaValidationError, UnsupportedVersionError
 
 # Path to version compatibility test fixtures
