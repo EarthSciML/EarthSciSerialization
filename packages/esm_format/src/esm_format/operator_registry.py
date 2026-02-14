@@ -40,6 +40,7 @@ class OperatorRegistry:
             EqualOperator, NotEqualOperator, LessThanOperator,
             LessThanOrEqualOperator, GreaterThanOperator, GreaterThanOrEqualOperator
         )
+        from .spatial_operators import GradientOperator, DivergenceOperator, LaplacianOperator
 
         # Register mathematical operators
         self.register_operator(
@@ -132,6 +133,28 @@ class OperatorRegistry:
             name="ge",
             operator_type=OperatorType.LOGICAL,
             operator_class=GreaterThanOrEqualOperator,
+            version="1.0"
+        )
+
+        # Register spatial differential operators
+        self.register_operator(
+            name="grad",
+            operator_type=OperatorType.DIFFERENTIATION,
+            operator_class=GradientOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="div",
+            operator_type=OperatorType.DIFFERENTIATION,
+            operator_class=DivergenceOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="laplacian",
+            operator_type=OperatorType.DIFFERENTIATION,
+            operator_class=LaplacianOperator,
             version="1.0"
         )
 

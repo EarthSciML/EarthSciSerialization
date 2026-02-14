@@ -208,9 +208,10 @@ class TestOperatorRegistry:
         filter_ops = registry.list_operators_by_type(OperatorType.FILTERING)
         assert filter_ops == ["filter1"]
 
-        # Test empty type
+        # Test DIFFERENTIATION type (now has spatial operators)
         diff_ops = registry.list_operators_by_type(OperatorType.DIFFERENTIATION)
-        assert diff_ops == []
+        expected_spatial_ops = {"grad", "div", "laplacian"}
+        assert set(diff_ops) == expected_spatial_ops
 
     def test_get_operator_info(self):
         """Test getting operator information."""
