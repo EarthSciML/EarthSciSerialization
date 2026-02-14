@@ -23,6 +23,8 @@ export * from './types.js'
 export { load, validateSchema, ParseError, SchemaValidationError } from './parse.js'
 export type { SchemaError } from './parse.js'
 export { save } from './serialize.js'
+export { validate } from './validate.js'
+export type { ValidationError, ValidationResult } from './validate.js'
 
 // Package metadata
 export const VERSION = '0.1.0'

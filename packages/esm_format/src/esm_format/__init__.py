@@ -30,6 +30,7 @@ from .types import (
 )
 from .parse import load, SchemaValidationError, UnsupportedVersionError
 from .serialize import save
+from .validation import validate, ValidationResult, ValidationError
 from .verification import (
     MathematicalVerifier,
     VerificationResult,
@@ -72,6 +73,9 @@ __all__ = [
     "EsmFile",
     "load",
     "save",
+    "validate",
+    "ValidationResult",
+    "ValidationError",
     "SchemaValidationError",
     "UnsupportedVersionError",
     "MathematicalVerifier",
