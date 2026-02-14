@@ -88,6 +88,16 @@ from .hierarchical_scope_resolution import (
     VariableResolution,
     create_enhanced_scoped_reference,
 )
+from .placeholder_expansion import (
+    expand_placeholder,
+    expand_multiple_placeholders,
+    validate_placeholder_expansion,
+    get_placeholder_variables,
+    create_expansion_template,
+    ExpansionContext,
+    CircularReferenceError,
+    PlaceholderExpansionError,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -163,4 +173,12 @@ __all__ = [
     "ScopeInfo",
     "VariableResolution",
     "create_enhanced_scoped_reference",
+    "expand_placeholder",
+    "expand_multiple_placeholders",
+    "validate_placeholder_expansion",
+    "get_placeholder_variables",
+    "create_expansion_template",
+    "ExpansionContext",
+    "CircularReferenceError",
+    "PlaceholderExpansionError",
 ]
