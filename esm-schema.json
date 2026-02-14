@@ -125,7 +125,6 @@
             ">", "<", ">=", "<=", "==", "!=",
             "and", "or", "not",
             "Pre",
-            "binomial",
             "sign"
           ]
         },
@@ -399,6 +398,11 @@
         "continuous_events": {
           "type": "array",
           "items": { "$ref": "#/$defs/ContinuousEvent" }
+        },
+        "subsystems": {
+          "type": "object",
+          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\".",
+          "additionalProperties": { "$ref": "#/$defs/Model" }
         }
       }
     },
@@ -476,11 +480,6 @@
           "$ref": "#/$defs/Expression",
           "description": "Rate expression: a parameter reference string, number, or expression AST."
         },
-        "combinatoric_ratelaw": {
-          "type": "boolean",
-          "description": "If true (default), mass action rates are rescaled by stoichiometric binomial coefficients.",
-          "default": true
-        },
         "reference": { "$ref": "#/$defs/Reference" }
       }
     },
@@ -527,6 +526,11 @@
         "continuous_events": {
           "type": "array",
           "items": { "$ref": "#/$defs/ContinuousEvent" }
+        },
+        "subsystems": {
+          "type": "object",
+          "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\".",
+          "additionalProperties": { "$ref": "#/$defs/ReactionSystem" }
         }
       }
     },

@@ -6,6 +6,8 @@
 
 This document specifies the requirements and architecture for libraries that read, write, manipulate, validate, and optionally simulate models defined in the ESM format (`.esm` files). Each library must provide a consistent developer experience in its host language while mapping faithfully to the ESM JSON Schema.
 
+**Companion schema:** The authoritative type definitions, operator enums, and structural constraints are in [`esm-schema.json`](esm-schema.json) (same directory as this document). This spec describes behavior, algorithms, and API surfaces; the schema is the single source of truth for field names, types, required properties, and allowed values.
+
 ### 1.1 Design Goals
 
 1. **Fidelity** — Round-trip an `.esm` file through load → manipulate → save without information loss.
@@ -53,6 +55,14 @@ All libraries share the same conceptual layering regardless of implementation la
 │  Schema-aware deserialization                │
 └─────────────────────────────────────────────┘
 ```
+
+### 2.1a Error Handling
+
+The `load()` function must **throw** (or return an error, in languages without exceptions) when given invalid JSON. Specifically:
+
+- **Malformed JSON** (syntax errors): Throw a parse error immediately. Do not attempt recovery.
+- **Valid JSON that fails schema validation**: Throw a validation error with the list of schema violations. Libraries must not silently accept invalid files.
+- **Valid JSON that passes schema validation but fails structural validation**: `load()` succeeds (returns an `EsmFile`), but the structural issues are reported by the separate `validate()` function. This allows loading partially invalid files for inspection and repair.
 
 ### 2.2 Data Model
 
@@ -106,7 +116,6 @@ Pretty-printing must handle:
 
 - Operator precedence and associativity (minimize parentheses).
 - Subscripts for chemical species (O₃, NO₂, CH₂O).
-- Greek letters for common parameter names (α, β, σ, μ).
 - Fractions: display `a/b` as `\frac{a}{b}` in LaTeX.
 - The `Pre` operator: render as `Pre(x)` or `x⁻` depending on format.
 - Calculus operators: `D(x, t)` → `∂x/∂t`, `grad(x, y)` → `∂x/∂y`.
@@ -121,15 +130,15 @@ substitute(expr, {"k1": Op("*", [Num(1.8e-12), ...])})  # variable → expressio
 substitute(expr, {"_var": Var("O3")})                    # placeholder → variable
 ```
 
-Substitution must be recursive and handle scoped references (`"Model.var"`).
+Substitution must be recursive and handle hierarchical scoped references (`"Model.Subsystem.var"` — see the ESM format spec Section 4.3 for the full resolution algorithm).
 
 #### 2.3.4 Structural Operations
 
 - `free_variables(expr) → Set<string>` — all variable references in the expression.
 - `free_parameters(expr) → Set<string>` — subset that are parameters (requires model context).
 - `contains(expr, var) → bool` — whether a variable appears in the expression.
-- `simplify(expr) → Expr` — optional algebraic simplification (language-dependent).
-- `evaluate(expr, bindings: Map<string, number>) → number` — numerical evaluation with all variables bound.
+- `simplify(expr) → Expr` — optional algebraic simplification (language-dependent). At minimum, implementations should fold constant arithmetic (e.g., `2 + 3` → `5`, `x * 1` → `x`, `x + 0` → `x`, `x * 0` → `0`). Deeper algebraic simplification (factoring, trigonometric identities, etc.) is language-dependent and not required for conformance.
+- `evaluate(expr, bindings: Map<string, number>) → number` — numerical evaluation. All variables and parameters must be present in `bindings`; if any variable is unbound, the function must raise an error listing the unbound variables. (Partial evaluation is the responsibility of `substitute`, not `evaluate`.)
 
 #### 2.3.5 Serialization
 
@@ -173,10 +182,10 @@ For each reaction system:
 
 #### 3.2.2 Reference Integrity
 
-- Every variable name referenced in an equation exists in the model's `variables`.
-- Every scoped reference (`"Model.var"`) in coupling entries resolves to an actual model/variable.
+- Every variable name referenced in an equation exists in the model's `variables` (or in a subsystem's variables, if using a scoped reference).
+- Every scoped reference in coupling entries resolves to an actual variable by walking the subsystem hierarchy. A reference like `"A.B.C"` must resolve as: `A` is a top-level system, `B` is a subsystem of `A`, and `C` is a variable/species/parameter in `B`. The last dot-separated segment is always the variable name; all preceding segments form the system path. See the ESM format spec Section 4.3 for the full resolution algorithm.
 - Every `discrete_parameters` entry in an event matches a declared parameter.
-- Every `from`/`to` in coupling entries references an existing model, reaction system, data loader, or operator.
+- Every `from`/`to` in coupling entries references an existing model, reaction system, data loader, or operator (including subsystems nested at any depth).
 - Every `operator` in `operator_apply` coupling entries exists in the `operators` section.
 
 #### 3.2.3 Event Consistency
@@ -239,6 +248,43 @@ Where `ValidationResult` contains:
 - `unit_warnings: List<UnitWarning>` — dimensional inconsistencies (warnings, not hard errors, because unit strings may be ambiguous).
 - `is_valid: bool` — true if no schema or structural errors.
 
+#### Error Type Structures
+
+```
+SchemaError:
+  path: string          # JSON Pointer to the offending location (e.g., "/models/SuperFast/equations/0/rhs")
+  message: string       # Human-readable description (e.g., "Required property 'op' is missing")
+  keyword: string       # JSON Schema keyword that failed (e.g., "required", "enum", "type")
+
+StructuralError:
+  path: string          # JSON Pointer to the relevant component (e.g., "/models/SuperFast")
+  code: string          # Machine-readable error code (see below)
+  message: string       # Human-readable description
+  details: Map<string, any>  # Additional context (e.g., {"variable": "O3", "expected_in": "variables"})
+
+UnitWarning:
+  path: string          # JSON Pointer to the equation or expression
+  message: string       # Human-readable description
+  lhs_units: string     # Inferred units of the LHS
+  rhs_units: string     # Inferred units of the RHS
+```
+
+**Structural error codes:**
+
+| Code | Description |
+|---|---|
+| `equation_count_mismatch` | Number of ODE equations does not match number of state variables |
+| `undefined_variable` | Variable referenced in an equation is not declared |
+| `undefined_species` | Species referenced in a reaction is not declared |
+| `undefined_parameter` | Parameter referenced in a rate expression is not declared |
+| `undefined_system` | Coupling entry references a nonexistent model, reaction system, data loader, or operator |
+| `undefined_operator` | `operator_apply` references a nonexistent operator |
+| `unresolved_scoped_ref` | Scoped reference (e.g., `"Model.Subsystem.var"`) cannot be resolved — a segment in the system path does not exist or the final variable is not declared |
+| `invalid_discrete_param` | `discrete_parameters` entry does not match a declared parameter |
+| `null_reaction` | Reaction has both `substrates: null` and `products: null` |
+| `missing_observed_expr` | Observed variable is missing its `expression` field |
+| `event_var_undeclared` | Variable in event affects/conditions is not declared |
+
 ---
 
 ## 4. Editing Operations
@@ -284,11 +330,85 @@ Beyond expression-level substitution, libraries must support model-level editing
 - `derive_odes(reaction_system) → Model` — generate the ODE model from a reaction system's stoichiometry and rate laws.
 - `stoichiometric_matrix(reaction_system) → Matrix` — compute the net stoichiometric matrix.
 
-### 4.7 Graph Representations
+### 4.7 Coupling Resolution
 
-Every library must be able to produce two distinct graph representations of an `.esm` file. These graphs are returned as language-idiomatic adjacency structures (not rendered visually — rendering is the concern of `esm-editor` or downstream tools).
+Libraries that support simulation (Julia, Python) or coupled system assembly must implement coupling resolution — the process of combining individual models, reaction systems, data loaders, and operators into a single system according to the coupling rules. Libraries at the Core tier do not need to resolve coupling but must understand the semantics for validation and graph construction.
 
-#### 4.7.1 System Graph (Component-Level)
+**Resolution order:** The order of entries in the `coupling` array does not affect the final result. Coupling rules are commutative — the same mathematical system is produced regardless of the order in which rules are applied. (This matches the behavior of EarthSciMLBase.jl, which is tested across all permutations of system ordering.)
+
+However, for deterministic intermediate representations (e.g., variable naming), libraries should process coupling entries in array order.
+
+#### 4.7.1 `operator_compose` Algorithm
+
+`operator_compose` merges two ODE systems by matching time derivatives on the left-hand side and adding right-hand side terms together. This is the primary mechanism for adding physical processes (advection, diffusion, deposition) to chemical or dynamical systems.
+
+**Algorithm:**
+
+1. **Extract dependent variables.** For each equation in both systems, extract the dependent variable from the LHS:
+   - If the LHS is `D(var, t)`, the dependent variable is `var`.
+   - Otherwise, the dependent variable is the LHS expression itself.
+
+2. **Apply translations.** If a `translate` map is provided, build a mapping from system A variable names to system B variable names (with optional conversion factors). Translations use scoped references (e.g., `"ChemModel.ozone": "PhotolysisModel.O3"`).
+
+3. **Match equations.** For each equation in system A, find a matching equation in system B by comparing dependent variables:
+   - **Direct match:** Both equations have `D(x, t)` on the LHS with the same variable name `x`.
+   - **Translation match:** The translate map maps A's variable to B's variable.
+   - **Placeholder expansion:** If system B's equation uses the `_var` placeholder (e.g., `D(_var, t) = ...`), it matches _every_ state variable in system A. The placeholder equation is cloned once per matched variable, with `_var` substituted for the actual variable name.
+
+4. **Combine matched equations.** For each matched pair:
+   - The final equation for variable `x` has the original LHS: `D(x, t)`.
+   - The RHS is the sum of both systems' RHS expressions: `rhs_A + factor * rhs_B`, where `factor` is the conversion factor from the translate map (default 1).
+   - Variables from system B that appear in the combined RHS are added to the merged system's variable list.
+
+5. **Preserve unmatched equations.** Equations in either system that have no match are included in the merged system unchanged.
+
+**Placeholder expansion example:** Given system A (a reaction system with species O₃, NO, NO₂) composed with system B (advection with equation `D(_var)/dt = -u·∂_var/∂x - v·∂_var/∂y`), the result contains three advection equations:
+
+```
+D(O₃)/dt  = [chemistry RHS for O₃]  + (-u·∂O₃/∂x  - v·∂O₃/∂y)
+D(NO)/dt  = [chemistry RHS for NO]  + (-u·∂NO/∂x   - v·∂NO/∂y)
+D(NO₂)/dt = [chemistry RHS for NO₂] + (-u·∂NO₂/∂x  - v·∂NO₂/∂y)
+```
+
+#### 4.7.2 `couple2` Semantics
+
+`couple2` provides bidirectional coupling between two systems via a `ConnectorSystem` — a set of explicit equations that define how variables in one system affect the other.
+
+In Julia, `couple2` uses multiple dispatch on `coupletype` metadata to select the coupling method. **In non-Julia languages, dispatch is not needed** because the ESM file's `connector` field already contains the fully specified coupling equations. The `coupletype_pair` field is informational (identifying which Julia dispatch method produced the coupling) but the `connector.equations` array is the complete specification.
+
+**Resolution algorithm for `couple2`:**
+
+1. Read the `connector.equations` array.
+2. For each connector equation:
+   - Resolve the `from` and `to` scoped references to their respective systems and variables.
+   - Apply the coupling based on the `transform` type:
+     - `additive`: Add the `expression` as a source/sink term to the target variable's ODE RHS.
+     - `multiplicative`: Multiply the target variable's existing ODE RHS by the `expression`.
+     - `replacement`: Replace the target variable's value with the `expression` (used for algebraic constraints).
+3. Variables referenced across systems become shared — the coupled system includes both systems' variables.
+
+#### 4.7.3 `variable_map` Resolution
+
+`variable_map` replaces a parameter in one system with a variable provided by another system (typically a data loader).
+
+1. Resolve the `from` scoped reference to the source system and variable.
+2. Resolve the `to` scoped reference to the target system and parameter.
+3. Apply the transform:
+   - `param_to_var`: The target parameter is promoted from a constant to a time-varying variable whose value comes from the source. In the merged system, the parameter is removed from the target's parameter list and becomes a shared variable.
+   - `identity`: Direct assignment without type change.
+   - `additive`: The source value is added to the target variable's equation RHS.
+   - `multiplicative`: The target variable's equation RHS is multiplied by the source value.
+   - `conversion_factor`: Same as `param_to_var` but the source value is multiplied by the `factor` field before assignment.
+
+#### 4.7.4 `operator_apply` and `callback` Resolution
+
+These coupling types register runtime-specific components. Libraries record them in the coupled system metadata but cannot resolve their behavior (they are opaque references to runtime implementations). For validation, libraries verify that the referenced operator or callback ID exists in the file's `operators` section or is a known registered ID.
+
+### 4.8 Graph Representations
+
+Every library must be able to produce two distinct graph representations of an `.esm` file. These graphs are **data-only**: libraries return language-idiomatic adjacency structures (nodes, edges, connectivity) but do **not** render, lay out, or visualize the graph. Rendering is the sole concern of downstream consumers (`esm-editor`'s `<CouplingGraph>` component, CLI export to DOT/Mermaid, or user code).
+
+#### 4.8.1 System Graph (Component-Level)
 
 A directed graph where **nodes are model components** (models, reaction systems, data loaders, operators) and **edges are coupling rules**.
 
@@ -335,7 +455,7 @@ Edges:
 
 This is the graph that `esm-editor`'s `<CouplingGraph>` component renders visually.
 
-#### 4.7.2 Expression Graph (Variable-Level)
+#### 4.8.2 Expression Graph (Variable-Level)
 
 A directed graph where **nodes are variables and parameters** and **edges are mathematical dependencies** extracted from equations.
 
@@ -404,7 +524,7 @@ Edges:
   jNO₂→ O₃  (rate, R2)
 ```
 
-#### 4.7.3 Graph Data Structure
+#### 4.8.3 Graph Data Structure
 
 Libraries should return graphs in their language's idiomatic structure. The minimum interface:
 
@@ -417,9 +537,9 @@ Graph<N, E>:
   successors(node: N) → List<N>
 ```
 
-Libraries may also support export to common graph interchange formats:
+Libraries should also support serializing graphs to common interchange formats (as strings, not rendered images):
 
-- **DOT** (Graphviz) — for static visualization and debugging
+- **DOT** (Graphviz) — for piping to `dot` or other layout engines
 - **JSON adjacency list** — for web consumption
 - **Mermaid** — for embedding in Markdown documentation
 
@@ -650,7 +770,7 @@ interface ExprNode {
 type CouplingEntry =
   | { type: 'operator_compose'; systems: [string, string]; translate?: Record<string, TranslateTarget>; description?: string }
   | { type: 'couple2'; systems: [string, string]; coupletype_pair: [string, string]; connector: Connector; description?: string }
-  | { type: 'variable_map'; from: string; to: string; transform: string; description?: string }
+  | { type: 'variable_map'; from: string; to: string; transform: string; factor?: number; description?: string }
   | { type: 'operator_apply'; operator: string; description?: string }
   | { type: 'callback'; callback_id: string; config?: Record<string, unknown>; description?: string }
   | { type: 'event'; event_type: 'continuous' | 'discrete'; /* ... */ };
@@ -888,7 +1008,7 @@ The highlight scoping is configurable:
 - **File scope:** Highlight across all models with equivalence resolution. This is the mode where hovering `T` in one model lights up every coupled `T` everywhere. This is the most useful mode for understanding data flow.
 - **Equation scope:** Highlight only within the current equation.
 
-Scoped references are normalized: both `O3` (bare) and `SimpleOzone.O3` (qualified) are recognized as the same variable when the context model is `SimpleOzone`.
+Scoped references are normalized: both `O3` (bare) and `SimpleOzone.O3` (qualified) are recognized as the same variable when the context model is `SimpleOzone`. For subsystems, the full path is used: `SimpleOzone.GasPhase.O3` refers to variable `O3` in subsystem `GasPhase` of `SimpleOzone`.
 
 **Selection:** Click any AST node to select it. The selected node is highlighted and its AST path is exposed. A detail panel shows the node's type, value, parent context, and available actions.
 
@@ -977,7 +1097,7 @@ Beyond individual expressions, `esm-editor` provides composed editors for entire
 
 **`<ReactionEditor>`** — Reaction system editor showing reactions in chemical notation (`NO + O₃ →[k₁] NO₂`) with clickable rate expressions. Add/remove reactions via UI.
 
-**`<CouplingGraph>`** — Visual directed graph of model components and their coupling relationships. Nodes are models/reaction systems/data loaders; edges are coupling entries. Click an edge to edit the coupling rule. Built with a lightweight Solid-compatible graph layout (e.g., `d3-force` for layout, Solid for rendering).
+**`<CouplingGraph>`** — Visual directed graph of model components and their coupling relationships. Nodes are models/reaction systems/data loaders; edges are coupling entries. Click an edge to edit the coupling rule. Consumes the data-only graph structure from `esm-format`'s `component_graph()` and handles layout and rendering internally (e.g., using `d3-force` for layout, Solid for DOM rendering).
 
 **`<FileSummary>`** — Read-only overview panel showing the structured summary (as specified in Section 6.3 of this document), with links that scroll to / select the relevant editor section.
 
@@ -985,7 +1105,20 @@ Beyond individual expressions, `esm-editor` provides composed editors for entire
 
 #### 5.2.8 Code Generation
 
-The pure `esm-format` library (not the editor) provides code generation for backend simulation:
+The pure `esm-format` library (not the editor) provides code generation for backend simulation. Code generation covers **models and reaction systems** — their variables, parameters, equations, reactions, and events. Coupling, domain, and solver configuration are emitted as structured comments or stubs that the user can complete manually.
+
+**Scope:** Code generation must handle:
+
+- Model variables (state, parameter, observed) with units and defaults.
+- Model equations (ODE equations with full expression translation).
+- Reaction system species, parameters, and reactions.
+- Events (continuous and discrete) with affect equations.
+
+Code generation does **not** need to handle (these are emitted as TODO comments):
+
+- Coupling resolution (the generated code defines individual systems; the user composes them).
+- Domain and solver setup (emitted as commented-out boilerplate with values from the file).
+- Data loaders and operators (runtime-specific; emitted as placeholder comments with the loader/operator ID).
 
 ```typescript
 import { toJuliaCode, toPythonCode } from 'esm-format';
@@ -1001,7 +1134,9 @@ const julia: string = toJuliaCode(file);
 //     Reaction(jNO2, [NO2], [NO, O3]),
 //   ]
 //   @named sys = ReactionSystem(rxs, t)
-//   ...
+//   # TODO: Coupling — operator_compose(SimpleOzone, Advection)
+//   # TODO: Domain — lon [-130, -100], 2024-05-01 to 2024-05-03
+//   # TODO: Solver — strang_threads(Rosenbrock23, dt=1.0)
 
 // Generate a self-contained Python script
 const python: string = toPythonCode(file);
@@ -1010,6 +1145,19 @@ const python: string = toPythonCode(file);
 //   file = esm.load_string('''...''')
 //   solution = esm.simulate(file, tspan=(0, 86400), ...)
 ```
+
+**Expression-to-code mapping:**
+
+| ESM AST | Julia output | Python output |
+|---|---|---|
+| `{"op": "+", "args": ["a", "b"]}` | `a + b` | `a + b` |
+| `{"op": "*", "args": ["k", "A", "B"]}` | `k * A * B` | `k * A * B` |
+| `{"op": "D", "args": ["O3"], "wrt": "t"}` | `D(O3)` | `Derivative(O3(t), t)` |
+| `{"op": "exp", "args": [x]}` | `exp(x)` | `sp.exp(x)` |
+| `{"op": "ifelse", "args": [c, a, b]}` | `ifelse(c, a, b)` | `sp.Piecewise((a, c), (b, True))` |
+| `{"op": "Pre", "args": ["x"]}` | `Pre(x)` | `Function('Pre')(x)` |
+| `{"op": "^", "args": ["x", 2]}` | `x^2` | `x**2` |
+| `{"op": "grad", "args": ["x"], "dim": "y"}` | `Differential(y)(x)` | `sp.Derivative(x, y)` |
 
 ---
 
@@ -1302,15 +1450,39 @@ All libraries must produce identical output for a given display format when give
 
 ### 6.1 Unicode Display
 
-**Chemical species subscripts:** Digits following element symbols become subscripts.
+**Chemical species subscripts:** Digits following chemical element symbols become subscripts. Libraries must use an **element-aware tokenizer** that recognizes chemical element symbols (one uppercase letter optionally followed by one lowercase letter, matching entries in the periodic table) and subscripts trailing digits.
 
-| Input | Output |
-|---|---|
-| `O3` | `O₃` |
-| `NO2` | `NO₂` |
-| `CH2O` | `CH₂O` |
-| `H2O2` | `H₂O₂` |
-| `k_NO_O3` | `k_NO_O₃` (subscript only applies to chemical portions) |
+**Algorithm:**
+
+1. Split the name on underscores into segments (e.g., `k_NO_O3` → `["k", "NO", "O3"]`).
+2. For each segment, scan left-to-right matching the pattern `[A-Z][a-z]?` against a lookup table of chemical element symbols (H, He, Li, Be, B, C, N, O, F, Ne, Na, Mg, Al, Si, P, S, Cl, Ar, K, Ca, …all 118 elements).
+3. If a match is found and is immediately followed by one or more digits, convert those digits to Unicode subscript characters (₀₁₂₃₄₅₆₇₈₉).
+4. If a segment does not start with a recognized element symbol, leave it unchanged (e.g., `k` → `k`, `var2` → `var2`).
+5. Rejoin segments with underscores (for Unicode) or `\_` (for LaTeX).
+
+| Input | Output | Reasoning |
+|---|---|---|
+| `O3` | `O₃` | `O` is oxygen, `3` subscripted |
+| `NO2` | `NO₂` | `N` is nitrogen, `O` is oxygen, `2` follows `O` |
+| `CH2O` | `CH₂O` | `C` is carbon, `H` is hydrogen, `2` follows `H`, `O` is oxygen |
+| `H2O2` | `H₂O₂` | Both digit groups follow element symbols |
+| `k_NO_O3` | `k_NO_O₃` | `k` is not an element, `N`/`O` are elements, `3` follows `O` |
+| `var2` | `var2` | `V` could be vanadium but `va` is not followed by a digit after an element match; `var` doesn't start with a valid element+digit pattern |
+| `T` | `T` | No trailing digits |
+| `jNO2` | `jNO₂` | `j` is not an element, skip; `N` is nitrogen, `O` is oxygen, `2` follows `O` |
+
+**Note:** The element lookup table must be included in each library (a static list of 118 symbol strings). The algorithm is greedy — it tries to match two-character element symbols before one-character symbols (e.g., `Ca` matches calcium before `C` matches carbon).
+
+**Number formatting:** Numbers in Unicode display use the following rules:
+
+| Condition | Format | Example |
+|---|---|---|
+| Integer (no fractional part) | Plain integer | `3`, `−1`, `1000` |
+| Decimal, 1–4 significant digits | Decimal notation | `0.005`, `298.15` |
+| \|value\| < 0.01 or \|value\| ≥ 10000 | Scientific notation with Unicode superscripts | `1.8×10⁻¹²`, `2.46×10¹⁹` |
+| Exactly 0.0 | `0` | `0` |
+
+For LaTeX, use `\times 10^{...}` for scientific notation. For ASCII, use `e` notation (e.g., `1.8e-12`).
 
 **Operators:**
 
@@ -1347,8 +1519,8 @@ ESM v0.1.0: MinimalChemAdvection
   Authors: Chris Tessum
 
   Reaction Systems:
-    SimpleOzone (3 species, 2 parameters, 2 reactions)
-      R1: NO + O₃ → NO₂    rate: 1.8×10⁻¹² · exp(−1370/T)
+    SimpleOzone (3 species, 3 parameters, 2 reactions)
+      R1: NO + O₃ → NO₂    rate: 1.8×10⁻¹² · exp(−1370/T) · M
       R2: NO₂ → NO + O₃    rate: jNO₂
 
   Models:
@@ -1365,7 +1537,7 @@ ESM v0.1.0: MinimalChemAdvection
     4. variable_map: GEOSFP.v → Advection.v_wind
 
   Domain: lon [−130, −100] (Δ0.3125°), 2024-05-01 to 2024-05-03
-  Solver: strang_threads (Tsit5, dt=1.0)
+  Solver: strang_threads (Rosenbrock23, dt=1.0)
 ```
 
 ---
@@ -1413,11 +1585,25 @@ tests/
         └── bouncing_ball.csv
 ```
 
-### 7.2 Round-Trip Tests
+### 7.2 Test Fixture Authoring
+
+The conformance test suite must be authored as a standalone, language-independent artifact stored in the `EarthSciSerialization` repository alongside the schema and specs. Test fixtures are **not** generated from any single library implementation — they are the canonical source of truth.
+
+**Minimum fixture set for Phase 1 (required before cross-language conformance testing):**
+
+1. **`valid/minimal_chemistry.esm`** — The `MinimalChemAdvection` example from the format spec (Section 13). This is the baseline test: every library must parse, validate, pretty-print, and round-trip this file identically.
+2. **`valid/events_all_types.esm`** — A file exercising continuous events (with `affect_neg`, `root_find`), discrete events (condition, periodic, preset_times), discrete parameters, and a functional affect.
+3. **`invalid/missing_esm_version.esm`** and **`invalid/unknown_variable_ref.esm`** — Minimal files that fail schema and structural validation respectively, with expected error codes documented in a companion `expected_errors.json`.
+4. **`display/expr_precedence.json`** — Array of `{input: Expression, unicode: string, latex: string}` triples covering: operator precedence (nested `+`/`*`/`^`), chemical subscripts, derivatives, Pre operator, scientific notation numbers.
+5. **`substitution/simple_var_replace.json`** — Array of `{input: Expression, bindings: object, expected: Expression}` triples.
+
+Each expected output must be reviewed and agreed upon before being committed, since it defines the conformance standard.
+
+### 7.3 Round-Trip Tests
 
 For every valid `.esm` file: `load(save(load(file))) == load(file)`. JSON key ordering and whitespace may differ, but the parsed data model must be identical.
 
-### 7.3 Cross-Language Tests
+### 7.4 Cross-Language Tests
 
 Periodically, the CI runs the same test suite across Julia, TypeScript, Python, and Rust and compares outputs. Failures indicate divergence in rendering or validation logic.
 
@@ -1431,7 +1617,7 @@ The `"esm"` field in each file specifies the schema version. Libraries must:
 
 - Reject files with a major version they don't support.
 - Accept files with a minor version ≤ their supported minor version (backward compatible).
-- Warn on files with a higher minor version (forward compatible — unknown fields ignored).
+- Warn on files with a higher minor version (forward compatible — unknown fields ignored). Since the JSON Schema uses `additionalProperties: false` for strict validation at a specific version, libraries must **skip JSON Schema validation** for files whose minor version exceeds the library's supported version and rely on structural validation only.
 
 ### 8.2 Library Versions
 
@@ -1470,31 +1656,48 @@ migrate(file: EsmFile, target_version: string) → EsmFile
 
 ### Phase 3: Simulation
 
-12. Julia: MTK/Catalyst bidirectional conversion.
-13. Julia: coupled system assembly.
-14. Python: SymPy expression conversion.
-15. Python: SciPy-backed box model simulation.
-16. Python: event handling in simulation.
+14. Julia: MTK/Catalyst bidirectional conversion.
+15. Julia: coupled system assembly.
+16. Python: SymPy expression conversion.
+17. Python: SciPy-backed box model simulation.
+18. Python: event handling in simulation.
 
 ### Phase 4: Ecosystem
 
-17. Rust: WASM compilation for web use.
-18. Rust: CLI tool.
-19. `esm-format`: Julia and Python code generation.
-20. `esm-editor`: `ExpressionNode` component with click-to-select, hover highlight, CSS math layout.
-21. `esm-editor`: Inline editing (double-click numbers/variables), autocomplete.
-22. `esm-editor`: Structural editing (wrap/unwrap/delete/drag-reorder).
-23. `esm-editor`: Expression palette sidebar.
-24. `esm-editor`: `ModelEditor`, `ReactionEditor` composed components.
-25. `esm-editor`: `CouplingGraph` visualization.
-26. `esm-editor`: `ValidationPanel` with error-to-node linking.
-27. `esm-editor`: Undo/redo history.
-28. `esm-editor`: Web component export via `solid-element`.
-29. Julia: full EarthSciML integration (data loaders, operators, spatial simulation).
+19. Rust: WASM compilation for web use.
+20. Rust: CLI tool.
+21. `esm-format`: Julia and Python code generation.
+22. `esm-editor`: `ExpressionNode` component with click-to-select, hover highlight, CSS math layout.
+23. `esm-editor`: Inline editing (double-click numbers/variables), autocomplete.
+24. `esm-editor`: Structural editing (wrap/unwrap/delete/drag-reorder).
+25. `esm-editor`: Expression palette sidebar.
+26. `esm-editor`: `ModelEditor`, `ReactionEditor` composed components.
+27. `esm-editor`: `CouplingGraph` visualization.
+28. `esm-editor`: `ValidationPanel` with error-to-node linking.
+29. `esm-editor`: Undo/redo history.
+30. `esm-editor`: Web component export via `solid-element`.
+31. Julia: full EarthSciML integration (data loaders, operators, spatial simulation).
 
 ---
 
-## 10. Summary Table
+## 10. Outstanding Issues
+
+The following items are acknowledged gaps in this specification. They do not block Phase 1 or Phase 2 implementation and will be addressed in subsequent revisions.
+
+| Issue | Affected area | Notes |
+|---|---|---|
+| `derive_odes` algorithm not fully specified | Section 4.6 | Standard mass-action kinetics ODE generation from stoichiometry + rate laws. Need to specify handling of source reactions (null substrates), sink reactions (null products), and constraint equations. |
+| Stoichiometric matrix convention not stated | Section 4.6 | Must specify: species × reactions (rows × columns), net stoichiometry (products − substrates). |
+| Expression graph edge rules for reactions are ambiguous | Section 4.8.2 | The rule for which nodes get edges (self-loops, rate parameter edges) needs a precise algorithm, not just an example. |
+| Unit string parsing grammar undefined | Section 3.3 | Unit strings are free-form. A formal grammar or recognized-token list (including `molec`, `ppb`, `ppm`) would improve cross-language consistency. |
+| Python simulation with spatial operators | Section 5.3.5 | Coupling resolution with `operator_compose` involving spatial derivatives (grad, laplacian) is not meaningful for 0D simulation. The spec should clarify that Python simulation skips spatial terms or raises an error. |
+| Code generation templates underspecified | Section 5.2.8 | Exact rules for emitting parameter defaults, unit strings (Julia `u"..."`, Python `pint`), and boilerplate structure need more detail. |
+| `esm-editor` CSS theming / dark mode | Section 5.2.4 | No specification for CSS custom properties or theme customization. |
+| Concurrency / thread safety | All libraries | Not addressed. Relevant for Julia (multi-threaded solvers) and Rust (Send/Sync bounds). |
+
+---
+
+## 11. Summary Table
 
 | Capability | Julia | TS `esm-format` | Solid `esm-editor` | Python | Rust | Go |
 |---|---|---|---|---|---|---|
