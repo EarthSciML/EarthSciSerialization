@@ -39,9 +39,11 @@ export
     load, save, ParseError, SchemaValidationError,
     # MTK/Catalyst conversion functions
     to_mtk_system, to_catalyst_system, from_mtk_system, from_catalyst_system,
-    # Mock system types
-    MockMTKSystem, MockCatalystSystem,
+    to_coupled_system,
     # Expression conversion utilities
+    esm_to_symbolic, symbolic_to_esm,
+    # Legacy compatibility aliases (for tests)
+    MockMTKSystem, MockCatalystSystem,
     esm_to_mock_symbolic, mock_symbolic_to_esm
 
 end # module ESMFormat
