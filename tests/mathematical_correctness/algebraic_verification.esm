@@ -1,0 +1,585 @@
+{
+  "meta": {
+    "name": "Algebraic Verification Test Fixtures",
+    "version": "1.0.0",
+    "description": "Comprehensive algebraic correctness verification test cases for symbolic mathematics",
+    "mathematical_type": "algebraic_verification",
+    "tolerance": 1e-15,
+    "test_cases": 32
+  },
+  "expression_simplification_tests": [
+    {
+      "name": "polynomial_simplification",
+      "test_cases": [
+        {
+          "expression": "(x + 1)*(x - 1)",
+          "simplified": "x^2 - 1",
+          "verification_points": [0, 1, -1, 2, -2, 0.5],
+          "algebraic_identity": "difference_of_squares"
+        },
+        {
+          "expression": "(x + y)^2",
+          "simplified": "x^2 + 2*x*y + y^2",
+          "verification_points": [[1,1], [2,3], [-1,2], [0.5, 1.5]],
+          "algebraic_identity": "perfect_square_trinomial"
+        },
+        {
+          "expression": "x^3 + 3*x^2*y + 3*x*y^2 + y^3",
+          "simplified": "(x + y)^3",
+          "verification_points": [[1,2], [0,1], [-1,1], [2,-1]],
+          "algebraic_identity": "binomial_cube"
+        },
+        {
+          "expression": "x^4 - y^4",
+          "simplified": "(x^2 + y^2)*(x + y)*(x - y)",
+          "verification_points": [[2,1], [3,2], [1,1], [5,3]],
+          "algebraic_identity": "difference_of_fourth_powers"
+        }
+      ]
+    },
+    {
+      "name": "rational_expression_simplification",
+      "test_cases": [
+        {
+          "expression": "(x^2 - 1)/(x - 1)",
+          "simplified": "x + 1",
+          "domain_restriction": "x ≠ 1",
+          "verification_points": [2, 3, -2, 0, 0.5],
+          "removable_discontinuity": [1]
+        },
+        {
+          "expression": "(x^2 + 2*x + 1)/(x + 1)",
+          "simplified": "x + 1",
+          "domain_restriction": "x ≠ -1",
+          "verification_points": [0, 1, -2, 2, 0.5],
+          "removable_discontinuity": [-1]
+        },
+        {
+          "expression": "(2*x^2 + 3*x - 2)/(x^2 - 1)",
+          "simplified": "(2*x - 1)/(x - 1)",
+          "domain_restriction": "x ≠ ±1",
+          "verification_points": [2, 3, -2, 0, 0.5],
+          "removable_discontinuity": [-1],
+          "vertical_asymptote": [1]
+        }
+      ]
+    },
+    {
+      "name": "trigonometric_simplification",
+      "test_cases": [
+        {
+          "expression": "sin^2(x) + cos^2(x)",
+          "simplified": "1",
+          "verification_points": [0, 0.7854, 1.5708, 3.14159265359, 4.7124, 6.2832],
+          "trigonometric_identity": "pythagorean_identity"
+        },
+        {
+          "expression": "1 + tan^2(x)",
+          "simplified": "sec^2(x)",
+          "verification_points": [0, 0.5236, 0.7854, 1.0472, -0.7854],
+          "domain_restriction": "x ≠ 1.5708 + n3.14159265359",
+          "trigonometric_identity": "tangent_secant_identity"
+        },
+        {
+          "expression": "sin(2*x)",
+          "simplified": "2*sin(x)*cos(x)",
+          "verification_points": [0, 0.5236, 0.7854, 1.0472, 1.5708],
+          "trigonometric_identity": "double_angle_sine"
+        },
+        {
+          "expression": "cos(x + y)",
+          "simplified": "cos(x)*cos(y) - sin(x)*sin(y)",
+          "verification_points": [[0,0.7854], [0.5236,1.0472], [0.7854,0.7854]],
+          "trigonometric_identity": "cosine_addition_formula"
+        }
+      ]
+    },
+    {
+      "name": "logarithmic_and_exponential_simplification",
+      "test_cases": [
+        {
+          "expression": "ln(e^x)",
+          "simplified": "x",
+          "verification_points": [0, 1, -1, 2, 0.5],
+          "logarithmic_identity": "inverse_functions"
+        },
+        {
+          "expression": "e^(ln(x))",
+          "simplified": "x",
+          "domain_restriction": "x > 0",
+          "verification_points": [1, 2, 0.5, 10, 0.1],
+          "logarithmic_identity": "inverse_functions"
+        },
+        {
+          "expression": "ln(x*y)",
+          "simplified": "ln(x) + ln(y)",
+          "domain_restriction": "x > 0, y > 0",
+          "verification_points": [[2,3], [1,5], [0.5,4], [10,0.1]],
+          "logarithmic_identity": "product_rule"
+        },
+        {
+          "expression": "ln(x/y)",
+          "simplified": "ln(x) - ln(y)",
+          "domain_restriction": "x > 0, y > 0",
+          "verification_points": [[6,2], [10,5], [1,2], [4,0.5]],
+          "logarithmic_identity": "quotient_rule"
+        }
+      ]
+    }
+  ],
+  "equation_solving_verification": [
+    {
+      "name": "linear_equations",
+      "test_cases": [
+        {
+          "equation": "2*x + 3 = 7",
+          "solution": "x = 2",
+          "solution_method": "algebraic_manipulation",
+          "verification": "2*2 + 3 = 7 ✓"
+        },
+        {
+          "equation": "3*x - 2*y = 8, x + y = 3",
+          "solution": ["x = 14/5", "y = 1/5"],
+          "solution_method": "substitution",
+          "verification": ["3*(14/5) - 2*(1/5) = 8 ✓", "(14/5) + (1/5) = 3 ✓"]
+        }
+      ]
+    },
+    {
+      "name": "quadratic_equations",
+      "test_cases": [
+        {
+          "equation": "x^2 - 5*x + 6 = 0",
+          "solutions": ["x = 2", "x = 3"],
+          "solution_method": "factoring",
+          "factored_form": "(x - 2)*(x - 3) = 0",
+          "discriminant": 1,
+          "verification": ["2^2 - 5*2 + 6 = 0 ✓", "3^2 - 5*3 + 6 = 0 ✓"]
+        },
+        {
+          "equation": "x^2 + 2*x - 8 = 0",
+          "solutions": ["x = 2", "x = -4"],
+          "solution_method": "quadratic_formula",
+          "discriminant": 36,
+          "verification": ["2^2 + 2*2 - 8 = 0 ✓", "(-4)^2 + 2*(-4) - 8 = 0 ✓"]
+        },
+        {
+          "equation": "x^2 + 2*x + 5 = 0",
+          "solutions": ["x = -1 + 2i", "x = -1 - 2i"],
+          "solution_method": "quadratic_formula",
+          "discriminant": -16,
+          "complex_solutions": true,
+          "verification": "complex_arithmetic_required"
+        }
+      ]
+    },
+    {
+      "name": "polynomial_equations",
+      "test_cases": [
+        {
+          "equation": "x^3 - 6*x^2 + 11*x - 6 = 0",
+          "solutions": ["x = 1", "x = 2", "x = 3"],
+          "solution_method": "rational_root_theorem",
+          "factored_form": "(x - 1)*(x - 2)*(x - 3) = 0",
+          "verification": ["1 - 6 + 11 - 6 = 0 ✓", "8 - 24 + 22 - 6 = 0 ✓", "27 - 54 + 33 - 6 = 0 ✓"]
+        },
+        {
+          "equation": "x^4 - 10*x^2 + 9 = 0",
+          "solutions": ["x = ±1", "x = ±3"],
+          "solution_method": "substitution_u = x^2",
+          "intermediate_equation": "u^2 - 10*u + 9 = 0",
+          "verification": ["1 - 10 + 9 = 0 ✓", "1 - 10 + 9 = 0 ✓", "81 - 90 + 9 = 0 ✓", "81 - 90 + 9 = 0 ✓"]
+        }
+      ]
+    },
+    {
+      "name": "transcendental_equations",
+      "test_cases": [
+        {
+          "equation": "e^x = x + 2",
+          "solution": "x ≈ 1.1461932206205826",
+          "solution_method": "numerical_newton_raphson",
+          "verification_tolerance": 1e-12,
+          "function_intersection": ["f(x) = e^x", "g(x) = x + 2"]
+        },
+        {
+          "equation": "sin(x) = x/2",
+          "solutions": ["x = 0", "x ≈ ±1.8955468286649985"],
+          "solution_method": "graphical_and_numerical",
+          "verification_tolerance": 1e-12,
+          "function_intersection": ["f(x) = sin(x)", "g(x) = x/2"]
+        }
+      ]
+    }
+  ],
+  "symbolic_differentiation_verification": [
+    {
+      "name": "power_rule_verification",
+      "test_cases": [
+        {
+          "function": "f(x) = x^n",
+          "derivative": "f'(x) = n*x^(n-1)",
+          "test_values": [
+            {"n": 2, "x": 3, "expected": 6},
+            {"n": 3, "x": 2, "expected": 12},
+            {"n": 0.5, "x": 4, "expected": 1},
+            {"n": -1, "x": 2, "expected": -0.25}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "product_rule_verification",
+      "test_cases": [
+        {
+          "function": "f(x) = x^2 * sin(x)",
+          "derivative": "f'(x) = 2*x*sin(x) + x^2*cos(x)",
+          "test_values": [
+            {"x": 0, "expected": 0},
+            {"x": 1.5708, "expected": 3.14159265359},
+            {"x": 3.14159265359, "expected": 6.2832}
+          ]
+        },
+        {
+          "function": "f(x) = e^x * ln(x)",
+          "derivative": "f'(x) = e^x*ln(x) + e^x/x",
+          "domain_restriction": "x > 0",
+          "test_values": [
+            {"x": 1, "expected": 2.71828182846},
+            {"x": 2.71828182846, "expected": 3.7191}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chain_rule_verification",
+      "test_cases": [
+        {
+          "function": "f(x) = sin(x^2)",
+          "derivative": "f'(x) = cos(x^2) * 2*x",
+          "test_values": [
+            {"x": 0, "expected": 0},
+            {"x": 1, "expected": 1.0806},
+            {"x": 1.7725, "expected": -3.545}
+          ]
+        },
+        {
+          "function": "f(x) = e^(2*x + 1)",
+          "derivative": "f'(x) = 2*e^(2*x + 1)",
+          "test_values": [
+            {"x": 0, "expected": 5.4366},
+            {"x": 1, "expected": 40.1711},
+            {"x": -0.5, "expected": 2}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "implicit_differentiation_verification",
+      "test_cases": [
+        {
+          "equation": "x^2 + y^2 = 1",
+          "derivative": "dy/dx = -x/y",
+          "test_points": [
+            {"x": 0, "y": 1, "dy_dx": 0},
+            {"x": 1, "y": 0, "dy_dx": "undefined"},
+            {"x": 0.6, "y": 0.8, "dy_dx": -0.75}
+          ]
+        },
+        {
+          "equation": "x*y + sin(y) = 1",
+          "derivative": "dy/dx = -y/(x + cos(y))",
+          "verification_method": "numerical_differentiation_comparison"
+        }
+      ]
+    }
+  ],
+  "symbolic_integration_verification": [
+    {
+      "name": "power_rule_integration",
+      "test_cases": [
+        {
+          "integrand": "x^n",
+          "antiderivative": "x^(n+1)/(n+1) + C",
+          "restriction": "n ≠ -1",
+          "test_values": [
+            {"n": 2, "limits": [0, 2], "exact": 2.6667},
+            {"n": 0.5, "limits": [1, 4], "exact": 4.0},
+            {"n": -0.5, "limits": [1, 4], "exact": 2.0}
+          ]
+        },
+        {
+          "integrand": "1/x",
+          "antiderivative": "ln|x| + C",
+          "domain_restriction": "x ≠ 0",
+          "test_values": [
+            {"limits": [1, 2.71828182846], "exact": 1},
+            {"limits": [2.71828182846, 7.3891], "exact": 1}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "substitution_method_verification",
+      "test_cases": [
+        {
+          "integrand": "2*x*e^(x^2)",
+          "substitution": "u = x^2, du = 2*x*dx",
+          "transformed_integral": "∫ e^u du",
+          "antiderivative": "e^(x^2) + C",
+          "test_values": [
+            {"limits": [0, 1], "exact": 2.71828182846 - 1},
+            {"limits": [-1, 1], "exact": 0}
+          ]
+        },
+        {
+          "integrand": "sin(2*x)",
+          "substitution": "u = 2*x, du = 2*dx",
+          "transformed_integral": "(1/2)∫ sin(u) du",
+          "antiderivative": "-(1/2)*cos(2*x) + C",
+          "test_values": [
+            {"limits": [0, 1.5708], "exact": 1},
+            {"limits": [0, 3.14159265359], "exact": 0}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "integration_by_parts_verification",
+      "test_cases": [
+        {
+          "integrand": "x*e^x",
+          "u": "x", "dv": "e^x*dx",
+          "du": "dx", "v": "e^x",
+          "integration_by_parts": "x*e^x - ∫ e^x dx",
+          "antiderivative": "(x - 1)*e^x + C",
+          "test_values": [
+            {"limits": [0, 1], "exact": 1},
+            {"limits": [1, 2], "exact": 2.71828182846}
+          ]
+        },
+        {
+          "integrand": "x*sin(x)",
+          "u": "x", "dv": "sin(x)*dx",
+          "du": "dx", "v": "-cos(x)",
+          "integration_by_parts": "-x*cos(x) + ∫ cos(x) dx",
+          "antiderivative": "-x*cos(x) + sin(x) + C",
+          "test_values": [
+            {"limits": [0, 3.14159265359], "exact": 3.14159265359},
+            {"limits": [0, 1.5708], "exact": 1}
+          ]
+        }
+      ]
+    }
+  ],
+  "matrix_algebra_verification": [
+    {
+      "name": "matrix_operations",
+      "test_cases": [
+        {
+          "operation": "matrix_addition",
+          "A": [[1, 2], [3, 4]],
+          "B": [[5, 6], [7, 8]],
+          "result": [[6, 8], [10, 12]],
+          "properties": ["commutative", "associative"]
+        },
+        {
+          "operation": "matrix_multiplication",
+          "A": [[1, 2], [3, 4]],
+          "B": [[5, 6], [7, 8]],
+          "result": [[19, 22], [43, 50]],
+          "properties": ["associative", "distributive"],
+          "non_commutative": true
+        },
+        {
+          "operation": "matrix_inversion",
+          "A": [[1, 2], [3, 4]],
+          "determinant": -2,
+          "inverse": [[-2, 1], [1.5, -0.5]],
+          "verification": "A * A^(-1) = I"
+        }
+      ]
+    },
+    {
+      "name": "determinant_calculation",
+      "test_cases": [
+        {
+          "matrix": [[2, 3], [1, 4]],
+          "determinant": 5,
+          "method": "2x2_formula"
+        },
+        {
+          "matrix": [[1, 2, 3], [0, 1, 4], [5, 6, 0]],
+          "determinant": 1,
+          "method": "cofactor_expansion",
+          "expansion_row": 1
+        },
+        {
+          "matrix": [[1, 2, 3, 4], [0, 1, 2, 3], [0, 0, 1, 2], [0, 0, 0, 1]],
+          "determinant": 1,
+          "method": "upper_triangular",
+          "properties": ["triangular_determinant_is_product_of_diagonal"]
+        }
+      ]
+    },
+    {
+      "name": "eigenvalue_eigenvector_verification",
+      "test_cases": [
+        {
+          "matrix": [[3, 1], [0, 2]],
+          "eigenvalues": [3, 2],
+          "eigenvectors": [[1, 0], [1, -1]],
+          "verification": "A*v = λ*v for each eigenvalue-eigenvector pair"
+        },
+        {
+          "matrix": [[0, 1], [-1, 0]],
+          "eigenvalues": ["i", "-i"],
+          "eigenvectors": [["1", "i"], ["1", "-i"]],
+          "complex_eigenvalues": true,
+          "rotation_matrix": true
+        }
+      ]
+    }
+  ],
+  "series_and_sequences_verification": [
+    {
+      "name": "arithmetic_sequences",
+      "test_cases": [
+        {
+          "sequence": "a_n = 3 + 2*n",
+          "first_term": 5,
+          "common_difference": 2,
+          "nth_term_formula": "a_n = 5 + (n-1)*2",
+          "sum_formula": "S_n = n*(2*5 + (n-1)*2)/2",
+          "verification_values": [
+            {"n": 1, "a_n": 5, "S_n": 5},
+            {"n": 5, "a_n": 13, "S_n": 45},
+            {"n": 10, "a_n": 23, "S_n": 140}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "geometric_series",
+      "test_cases": [
+        {
+          "series": "a_n = 2 * 3^(n-1)",
+          "first_term": 2,
+          "common_ratio": 3,
+          "nth_term_formula": "a_n = 2 * 3^(n-1)",
+          "sum_formula": "S_n = 2*(3^n - 1)/(3 - 1)",
+          "verification_values": [
+            {"n": 1, "a_n": 2, "S_n": 2},
+            {"n": 3, "a_n": 18, "S_n": 26},
+            {"n": 5, "a_n": 162, "S_n": 242}
+          ]
+        },
+        {
+          "series": "infinite_geometric",
+          "first_term": 1,
+          "common_ratio": 0.5,
+          "convergence": true,
+          "sum_to_infinity": 2,
+          "convergence_condition": "|r| < 1"
+        }
+      ]
+    },
+    {
+      "name": "power_series",
+      "test_cases": [
+        {
+          "function": "e^x",
+          "power_series": "∑(x^n/n!) for n=0 to ∞",
+          "radius_of_convergence": "∞",
+          "verification_points": [
+            {"x": 0, "exact": 1, "series_sum": 1},
+            {"x": 1, "exact": 2.71828182846, "series_terms": 10, "error": "< 1e-10"},
+            {"x": -1, "exact": 0.3679, "series_terms": 10, "error": "< 1e-10"}
+          ]
+        },
+        {
+          "function": "sin(x)",
+          "power_series": "∑((-1)^n * x^(2n+1)/(2n+1)!) for n=0 to ∞",
+          "radius_of_convergence": "∞",
+          "verification_points": [
+            {"x": 0, "exact": 0, "series_sum": 0},
+            {"x": 1.5708, "exact": 1, "series_terms": 5, "error": "< 1e-12"},
+            {"x": 3.14159265359, "exact": 0, "series_terms": 7, "error": "< 1e-12"}
+          ]
+        }
+      ]
+    }
+  ],
+  "complex_number_algebra": [
+    {
+      "name": "complex_arithmetic",
+      "test_cases": [
+        {
+          "operation": "addition",
+          "z1": "3 + 4i",
+          "z2": "1 - 2i",
+          "result": "4 + 2i",
+          "verification": "(3 + 1) + (4 - 2)i = 4 + 2i"
+        },
+        {
+          "operation": "multiplication",
+          "z1": "2 + 3i",
+          "z2": "1 + 4i",
+          "result": "-10 + 11i",
+          "verification": "(2 + 3i)(1 + 4i) = 2 + 8i + 3i + 12i² = 2 + 11i - 12 = -10 + 11i"
+        },
+        {
+          "operation": "division",
+          "z1": "1 + 2i",
+          "z2": "3 + 4i",
+          "result": "11/25 + 2i/25",
+          "verification": "(1 + 2i)/(3 + 4i) * (3 - 4i)/(3 - 4i) = (11 + 2i)/25"
+        }
+      ]
+    },
+    {
+      "name": "polar_form_conversion",
+      "test_cases": [
+        {
+          "rectangular": "1 + i",
+          "polar": "sqrt2 * e^(i0.7854)",
+          "magnitude": "sqrt2",
+          "argument": "0.7854",
+          "verification": "|1 + i| = sqrt(1² + 1²) = sqrt2, arg(1 + i) = arctan(1/1) = 0.7854"
+        },
+        {
+          "rectangular": "-1 + isqrt3",
+          "polar": "2 * e^(i21.0472)",
+          "magnitude": 2,
+          "argument": "21.0472",
+          "verification": "|-1 + isqrt3| = sqrt(1 + 3) = 2, arg(-1 + isqrt3) = 3.14159265359 - 1.0472 = 21.0472"
+        }
+      ]
+    }
+  ],
+  "verification_algorithms": {
+    "symbolic_verification": {
+      "method": "algebraic_manipulation_checking",
+      "identity_verification": true,
+      "domain_restriction_analysis": true
+    },
+    "numerical_verification": {
+      "method": "point_evaluation_comparison",
+      "tolerance": 1e-12,
+      "test_point_generation": "random_and_critical"
+    },
+    "structural_verification": {
+      "method": "expression_tree_comparison",
+      "canonical_form": true,
+      "equivalence_classes": true
+    }
+  },
+  "performance_benchmarks": {
+    "symbolic_computation": {
+      "expression_simplification": {"complexity": "polynomial_degree_10", "target_time_ms": 100},
+      "equation_solving": {"polynomial_degree": 5, "target_time_ms": 50},
+      "differentiation": {"expression_nodes": 100, "target_time_ms": 10},
+      "integration": {"rational_function", "target_time_ms": 500}
+    }
+  }
+}
