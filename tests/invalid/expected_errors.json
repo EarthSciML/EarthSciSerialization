@@ -970,5 +970,424 @@
     ],
     "structural_errors": [],
     "is_valid": false
+  },
+
+  "missing_required_fields.esm": {
+    "schema_errors": [
+      {
+        "path": "",
+        "message": "Required property 'metadata' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "invalid_enum_values.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/TestModel/variables/x/type",
+        "message": "'invalid_type' is not one of ['state', 'parameter', 'observed']",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "wrong_data_types.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata/authors",
+        "message": "Expected array, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/created",
+        "message": "Does not match format 'date-time'",
+        "keyword": "format"
+      },
+      {
+        "path": "/metadata/tags",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/variables/x/units",
+        "message": "Expected string, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/variables/x/default",
+        "message": "Expected number, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/equations",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "missing_required_fields.esm": {
+    "schema_errors": [
+      {
+        "path": "",
+        "message": "Required property 'metadata' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "invalid_enum_values.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/TestModel/variables/x/type",
+        "message": "'invalid_type' is not one of ['state', 'parameter', 'observed']",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "wrong_data_types.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata/authors",
+        "message": "Expected array, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/created",
+        "message": "Does not match format 'date-time'",
+        "keyword": "format"
+      },
+      {
+        "path": "/metadata/tags",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/variables/x/units",
+        "message": "Expected string, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/variables/x/default",
+        "message": "Expected number, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/equations",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "empty_required_arrays.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/TestModel/equations",
+        "message": "Array must contain at least 1 item(s)",
+        "keyword": "minItems"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "circular_coupling.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ModelA",
+        "code": "circular_dependency",
+        "message": "Circular coupling detected: ModelA → ModelB → ModelA",
+        "details": {
+          "cycle": ["ModelA", "ModelB", "ModelA"],
+          "coupling_chain": [
+            {"from": "ModelA.x", "references": "ModelB.y"},
+            {"from": "ModelB.y", "references": "ModelA.x"}
+          ]
+        }
+      }
+    ],
+    "is_valid": false
+  }
+,
+
+  "missing_required_fields.esm": {
+    "schema_errors": [
+      {
+        "path": "",
+        "message": "Required property 'metadata' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "invalid_enum_values.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/TestModel/variables/x/type",
+        "message": "'invalid_type' is not one of ['state', 'parameter', 'observed']",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "wrong_data_types.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata/authors",
+        "message": "Expected array, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/created",
+        "message": "Does not match format 'date-time'",
+        "keyword": "format"
+      },
+      {
+        "path": "/metadata/tags",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/variables/x/units",
+        "message": "Expected string, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/variables/x/default",
+        "message": "Expected number, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/models/TestModel/equations",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "empty_required_arrays.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/TestModel/equations",
+        "message": "Array must contain at least 1 item(s)",
+        "keyword": "minItems"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "circular_coupling.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ModelA",
+        "code": "circular_dependency",
+        "message": "Circular coupling detected: ModelA → ModelB → ModelA",
+        "details": {
+          "cycle": ["ModelA", "ModelB", "ModelA"],
+          "coupling_chain": [
+            {"from": "ModelA.x", "references": "ModelB.y"},
+            {"from": "ModelB.y", "references": "ModelA.x"}
+          ]
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "complete_error_coverage.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadModel",
+        "code": "equation_count_mismatch",
+        "message": "Number of ODE equations (1) does not match number of state variables (2)",
+        "details": {
+          "state_variables": ["x", "y"],
+          "ode_equations": 1,
+          "missing_equations_for": ["y"]
+        }
+      },
+      {
+        "path": "/models/BadModel",
+        "code": "undefined_variable",
+        "message": "Variable 'undefined_rate' referenced in equation is not declared",
+        "details": {
+          "variable": "undefined_rate",
+          "equation_index": 0,
+          "expected_in": "variables"
+        }
+      },
+      {
+        "path": "/models/BadModel",
+        "code": "undefined_variable",
+        "message": "Variable 'undefined_var' referenced in equation is not declared",
+        "details": {
+          "variable": "undefined_var",
+          "equation_index": 0,
+          "expected_in": "variables"
+        }
+      },
+      {
+        "path": "/models/BadModel/variables/observed_without_expr",
+        "code": "missing_observed_expr",
+        "message": "Observed variable is missing its expression field",
+        "details": {
+          "variable": "observed_without_expr",
+          "type": "observed"
+        }
+      },
+      {
+        "path": "/models/BadModel/continuous_events/0",
+        "code": "event_var_undeclared",
+        "message": "Variable 'undefined_condition_var' in event condition is not declared",
+        "details": {
+          "variable": "undefined_condition_var",
+          "event_name": "bad_event",
+          "event_type": "continuous",
+          "location": "condition",
+          "expected_in": "variables"
+        }
+      },
+      {
+        "path": "/models/BadModel/continuous_events/0",
+        "code": "event_var_undeclared",
+        "message": "Variable 'nonexistent_var' in event affects is not declared",
+        "details": {
+          "variable": "nonexistent_var",
+          "event_name": "bad_event",
+          "event_type": "continuous",
+          "location": "affects",
+          "expected_in": "variables"
+        }
+      },
+      {
+        "path": "/models/BadModel/discrete_events/0",
+        "code": "invalid_discrete_param",
+        "message": "Discrete parameter 'undefined_discrete_param' in event is not declared as a parameter",
+        "details": {
+          "parameter": "undefined_discrete_param",
+          "event_name": "bad_discrete_event",
+          "event_type": "discrete",
+          "expected_in": "parameters"
+        }
+      },
+      {
+        "path": "/reaction_systems/BadReactions/reactions/0",
+        "code": "null_reaction",
+        "message": "Reaction has both substrates: null and products: null",
+        "details": {
+          "reaction_id": "bad_reaction"
+        }
+      },
+      {
+        "path": "/reaction_systems/BadReactions/reactions/0",
+        "code": "undefined_parameter",
+        "message": "Parameter 'missing_rate_param' referenced in rate expression is not declared",
+        "details": {
+          "parameter": "missing_rate_param",
+          "reaction_id": "bad_reaction",
+          "expected_in": "parameters"
+        }
+      },
+      {
+        "path": "/reaction_systems/BadReactions/reactions/1",
+        "code": "undefined_species",
+        "message": "Species 'UndefinedProduct' referenced in reaction products is not declared",
+        "details": {
+          "species": "UndefinedProduct",
+          "reaction_id": "undefined_species_reaction",
+          "location": "products",
+          "expected_in": "species"
+        }
+      },
+      {
+        "path": "/reaction_systems/BadReactions/reactions/1",
+        "code": "undefined_parameter",
+        "message": "Parameter 'also_missing_param' referenced in rate expression is not declared",
+        "details": {
+          "parameter": "also_missing_param",
+          "reaction_id": "undefined_species_reaction",
+          "expected_in": "parameters"
+        }
+      },
+      {
+        "path": "/coupling/0",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'NonExistentSystem.var' cannot be resolved",
+        "details": {
+          "reference": "NonExistentSystem.var",
+          "coupling_type": "variable_map",
+          "missing_component": "NonExistentSystem"
+        }
+      },
+      {
+        "path": "/coupling/0",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
+        "details": {
+          "system": "NonExistentSystem",
+          "coupling_type": "variable_map",
+          "reference": "NonExistentSystem.var",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      },
+      {
+        "path": "/coupling/1",
+        "code": "undefined_operator",
+        "message": "Operator 'MissingOperator' referenced in operator_apply coupling is not declared",
+        "details": {
+          "operator": "MissingOperator",
+          "coupling_type": "operator_apply",
+          "expected_in": "operators"
+        }
+      },
+      {
+        "path": "/coupling/2",
+        "code": "operator_variable_missing",
+        "message": "Operator 'TestOperator' requires variable 'nonexistent_needed_var' which is not available in coupled systems",
+        "details": {
+          "operator": "TestOperator",
+          "missing_variable": "nonexistent_needed_var",
+          "coupling_type": "operator_apply",
+          "available_systems": ["BadModel"]
+        }
+      },
+      {
+        "path": "/coupling/2",
+        "code": "operator_variable_missing",
+        "message": "Operator 'TestOperator' modifies variable 'another_nonexistent_var' which is not available in coupled systems",
+        "details": {
+          "operator": "TestOperator",
+          "missing_variable": "another_nonexistent_var",
+          "coupling_type": "operator_apply",
+          "available_systems": ["BadModel"]
+        }
+      }
+    ],
+    "is_valid": false
   }
 }
