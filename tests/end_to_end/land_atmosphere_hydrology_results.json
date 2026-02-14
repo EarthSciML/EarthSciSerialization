@@ -1,0 +1,363 @@
+{
+  "description": "Expected simulation results for land-atmosphere hydrology coupling end-to-end test",
+  "test_metadata": {
+    "system_name": "LandAtmosphereHydrology",
+    "file": "land_atmosphere_hydrology.esm",
+    "simulation_duration": "1 year",
+    "domain_size": "720x360 grid cells",
+    "spatial_resolution": "0.5° longitude x 0.5° latitude",
+    "temporal_resolution": "300-7200s adaptive timestep"
+  },
+
+  "coupling_verification": {
+    "description": "Verification of land-atmosphere coupling mechanisms",
+    "couple2_atmosphere_surface": {
+      "systems": ["AtmosphericBoundaryLayer", "SurfaceEnergyBalance"],
+      "bidirectional_fluxes": ["sensible_heat", "latent_heat"],
+      "connector_equations": 2,
+      "energy_closure": "Surface energy balance: Rn = H + LE + G (within 5% residual)",
+      "feedback_strength": "Strong coupling during daytime, weaker at night"
+    },
+    "couple2_surface_soil": {
+      "systems": ["SurfaceEnergyBalance", "SoilHydrologyThermal"],
+      "heat_transfer": "Ground heat flux G couples surface and soil layer 1",
+      "conductive_coupling": "Multi-layer soil heat conduction",
+      "thermal_inertia": "Soil provides thermal memory, dampens temperature oscillations"
+    },
+    "couple2_vegetation_soil": {
+      "systems": ["VegetationDynamics", "SoilHydrologyThermal"],
+      "water_coupling": "Root water uptake from soil layer 2 (main rooting zone)",
+      "feedback_mechanism": "Soil moisture → water stress → photosynthesis → transpiration",
+      "allocation_coupling": "Root biomass affects water uptake capacity"
+    },
+    "variable_map": {
+      "count": 9,
+      "meteorological_forcing": [
+        "air_temperature: ERA5 → AtmosphericBoundaryLayer",
+        "specific_humidity: ERA5 → AtmosphericBoundaryLayer",
+        "wind_speed: ERA5 → AtmosphericBoundaryLayer",
+        "precipitation: ERA5 → AtmosphericBoundaryLayer",
+        "incoming_radiation: ERA5 → AtmosphericBoundaryLayer",
+        "longwave_radiation: ERA5 → AtmosphericBoundaryLayer"
+      ],
+      "soil_properties": [
+        "porosity: SoilGrids → SoilHydrologyThermal",
+        "field_capacity: SoilGrids → SoilHydrologyThermal",
+        "wilting_point: SoilGrids → SoilHydrologyThermal"
+      ]
+    },
+    "operator_apply": {
+      "count": 3,
+      "land_surface_operators": [
+        "LandSurfaceAlbedo: Vegetation and soil moisture dependent albedo",
+        "StomatalConductance: Photosynthesis-environment coupled conductance",
+        "SoilHeatCapacity: Moisture-dependent soil thermal properties"
+      ]
+    },
+    "callback": {
+      "count": 2,
+      "hydrological_callbacks": [
+        "PrecipitationInfiltration: Partition precipitation into infiltration/runoff",
+        "SeasonalPhenology: Control growing degree day phenology"
+      ]
+    },
+    "event": {
+      "count": 3,
+      "eco_hydrological_events": [
+        "drought_stress_response: Photosynthetic capacity reduction",
+        "soil_moisture_saturation_runoff: Prevent oversaturation",
+        "seasonal_leaf_senescence: Autumn senescence trigger"
+      ]
+    }
+  },
+
+  "system_assembly_verification": {
+    "description": "Complete land-atmosphere system assembly",
+    "total_state_variables": 13,
+    "atmospheric_states": 3,
+    "soil_states": 6,
+    "vegetation_states": 3,
+    "surface_states": 1,
+    "energy_balance_closure": {
+      "surface_energy_budget": "Rn = H + LE + G",
+      "soil_heat_conduction": "Multi-layer finite difference",
+      "atmospheric_boundary_layer": "Mixed layer approximation",
+      "vegetation_energy": "Canopy radiation interception and transpiration"
+    },
+    "water_balance_closure": {
+      "atmospheric_moisture": "Precipitation - evapotranspiration = storage change",
+      "soil_water": "Infiltration - drainage - root uptake = storage change",
+      "vegetation_water": "Root uptake - transpiration = negligible storage",
+      "expected_closure": "< 1% water balance residual"
+    },
+    "carbon_cycling": {
+      "photosynthesis": "Light, water, and temperature limited",
+      "respiration": "Temperature dependent maintenance costs",
+      "allocation": "Fixed fraction to above/below ground",
+      "turnover": "Exponential decay of biomass pools"
+    }
+  },
+
+  "cross_system_variable_flow": {
+    "description": "Multi-directional variable flow between land-atmosphere components",
+    "atmosphere_to_surface": {
+      "energy_forcing": {
+        "shortwave_radiation": "Direct photosynthetic and heating energy",
+        "longwave_radiation": "Thermal infrared energy input",
+        "air_temperature": "Controls sensible heat flux gradient",
+        "humidity": "Controls latent heat flux gradient"
+      },
+      "hydrological_forcing": {
+        "precipitation": "Primary water input to soil system",
+        "atmospheric_demand": "Vapor pressure deficit drives transpiration",
+        "wind_speed": "Affects aerodynamic conductance"
+      }
+    },
+    "surface_to_atmosphere": {
+      "energy_fluxes": {
+        "sensible_heat": "H = ρcp ga (Tsurf - Tair)",
+        "latent_heat": "LE = λ gs β (esat(Tsurf) - eair)",
+        "momentum_flux": "Wind stress on surface roughness"
+      },
+      "water_flux": {
+        "evapotranspiration": "Combined soil evaporation and plant transpiration",
+        "canopy_interception": "Precipitation intercepted by vegetation",
+        "surface_runoff": "Excess water when infiltration capacity exceeded"
+      }
+    },
+    "soil_to_vegetation": {
+      "water_supply": {
+        "root_zone_availability": "Weighted average of soil layers by root density",
+        "water_stress_function": "Limits photosynthesis and stomatal conductance",
+        "hydraulic_lift": "Passive water redistribution by roots"
+      },
+      "thermal_effects": {
+        "soil_temperature": "Affects root respiration and uptake rates",
+        "thermal_buffering": "Soil thermal mass stabilizes root zone temperature"
+      }
+    },
+    "vegetation_to_surface": {
+      "biophysical_effects": {
+        "albedo_modification": "Vegetation cover reduces surface albedo",
+        "roughness_enhancement": "Canopy increases aerodynamic conductance",
+        "radiation_interception": "LAI controls radiation penetration to soil"
+      },
+      "hydrological_effects": {
+        "transpiration_pathway": "Major pathway for water loss from soil",
+        "canopy_energy_partitioning": "Latent heat dominates over sensible heat",
+        "root_water_uptake": "Active water extraction from multiple soil layers"
+      }
+    }
+  },
+
+  "expected_simulation_results": {
+    "description": "Expected numerical results for 1-year land-atmosphere simulation",
+    "annual_mean_values": {
+      "air_temperature_K": 295.15,
+      "specific_humidity_kg_per_kg": 0.008,
+      "wind_speed_m_per_s": 3.0,
+      "surface_temperature_K": 292.15,
+      "soil_moisture_layer1_m3_per_m3": 0.25,
+      "soil_moisture_layer2_m3_per_m3": 0.30,
+      "soil_temperature_layer1_K": 290.15,
+      "leaf_area_index_m2_per_m2": 3.5,
+      "above_ground_biomass_kg_per_m2": 2.5,
+      "below_ground_biomass_kg_per_m2": 1.8,
+      "net_radiation_W_per_m2": 120.0,
+      "sensible_heat_flux_W_per_m2": 45.0,
+      "latent_heat_flux_W_per_m2": 65.0,
+      "ground_heat_flux_W_per_m2": 10.0
+    },
+    "seasonal_cycles": {
+      "description": "Expected seasonal variations in land-atmosphere system",
+      "temperature_cycles": {
+        "air_temperature_amplitude_K": 25.0,
+        "surface_temperature_amplitude_K": 30.0,
+        "soil_temperature_phase_lag_days": 30,
+        "soil_thermal_damping_factor": 0.7
+      },
+      "hydrological_cycles": {
+        "evapotranspiration_summer_peak_W_per_m2": 150.0,
+        "evapotranspiration_winter_minimum_W_per_m2": 20.0,
+        "soil_moisture_spring_maximum": 0.40,
+        "soil_moisture_autumn_minimum": 0.20
+      },
+      "vegetation_cycles": {
+        "LAI_spring_emergence": "Rapid increase March-May",
+        "LAI_summer_maximum": "Peak in July-August",
+        "LAI_autumn_senescence": "Decline September-November",
+        "biomass_growing_season": "Net accumulation March-September",
+        "dormant_season": "Maintenance respiration only October-February"
+      },
+      "energy_balance_cycles": {
+        "net_radiation_peak_W_per_m2": 250.0,
+        "sensible_heat_summer_peak_W_per_m2": 100.0,
+        "latent_heat_fraction_growing_season": 0.6,
+        "latent_heat_fraction_dormant_season": 0.3
+      }
+    },
+    "diurnal_cycles": {
+      "description": "Expected daily cycles in energy and water fluxes",
+      "energy_fluxes": {
+        "peak_net_radiation_time": "12:00-14:00 local solar time",
+        "peak_sensible_heat_time": "13:00-15:00 local solar time",
+        "peak_latent_heat_time": "10:00-16:00 local solar time (broader peak)",
+        "nighttime_ground_heat_flux": "Negative (cooling soil surface)"
+      },
+      "temperature_cycles": {
+        "surface_temperature_range_K": 15.0,
+        "air_temperature_range_K": 12.0,
+        "soil_temperature_range_layer1_K": 8.0,
+        "soil_temperature_range_layer3_K": 2.0
+      },
+      "hydrological_cycles": {
+        "morning_dew_formation": "High humidity, low wind conditions",
+        "midday_transpiration_peak": "Maximum stomatal conductance",
+        "afternoon_soil_evaporation": "High temperature, dry air",
+        "nighttime_moisture_recovery": "Reduced atmospheric demand"
+      }
+    },
+    "spatial_patterns": {
+      "description": "Expected biogeographical and climatic spatial patterns",
+      "latitudinal_gradients": {
+        "tropical_regions": "High LAI (>5), high ET (>3 mm/day), minimal seasonality",
+        "temperate_regions": "Moderate LAI (2-6 seasonal), strong seasonal ET variation",
+        "boreal_regions": "Low LAI (<3), short growing season, snow effects",
+        "arctic_regions": "Very low LAI (<1), permafrost effects, extreme seasonality"
+      },
+      "continental_effects": {
+        "coastal_regions": "Moderated temperatures, higher humidity",
+        "continental_interior": "Extreme temperature ranges, lower humidity",
+        "mountain_regions": "Temperature lapse rate, orographic precipitation",
+        "desert_regions": "High sensible heat, minimal latent heat, low biomass"
+      }
+    },
+    "event_triggering": {
+      "description": "Expected triggering of eco-hydrological events",
+      "drought_stress_events": {
+        "trigger_frequency": "1-3 times per year in semi-arid regions",
+        "water_stress_threshold": 0.2,
+        "photosynthetic_reduction": "30% decrease in max photosynthetic rate",
+        "recovery_time": "1-2 weeks after soil moisture restoration"
+      },
+      "soil_saturation_events": {
+        "trigger_conditions": "Heavy precipitation events (>10 mm/hr)",
+        "saturation_threshold": "95% of soil porosity",
+        "surface_runoff_generation": "Excess water routed as runoff",
+        "duration": "Minutes to hours depending on drainage rate"
+      },
+      "seasonal_senescence": {
+        "trigger_timing": "Late autumn when temperature < 5°C",
+        "leaf_turnover_acceleration": "5x increase in turnover rate",
+        "biomass_loss_rate": "50% of above-ground biomass over 6 weeks",
+        "LAI_reduction": "From peak summer values to winter minimum"
+      }
+    }
+  },
+
+  "process_interactions": {
+    "description": "Key land-atmosphere process interactions and feedbacks",
+    "soil_moisture_feedback": {
+      "mechanism": "Soil moisture → water stress → transpiration → latent heat → air temperature",
+      "positive_feedback": "Dry soils → hot air → increased evaporation demand",
+      "negative_feedback": "Wet soils → increased transpiration → local cooling",
+      "timescale": "Hours to days for local effects"
+    },
+    "vegetation_albedo_feedback": {
+      "mechanism": "Vegetation growth → lower albedo → more energy absorption → higher growth",
+      "seasonal_strength": "Strong during growing season, weak in dormant season",
+      "magnitude": "Albedo change: 0.05-0.15 between vegetated and bare soil",
+      "energy_impact": "10-30 W/m² difference in net radiation"
+    },
+    "phenology_temperature_feedback": {
+      "mechanism": "Temperature → phenology → LAI → transpiration → local cooling",
+      "spring_emergence": "Earlier leaf-out with warming → enhanced cooling",
+      "autumn_senescence": "Later senescence with warming → extended cooling",
+      "growing_season_length": "10-20 days longer per °C warming"
+    },
+    "root_zone_coupling": {
+      "mechanism": "Root water uptake → soil moisture → plant water stress → allocation",
+      "deep_rooting_advantage": "Access to deeper, more stable water sources",
+      "shallow_rooting_risk": "Higher vulnerability to surface drying",
+      "allocation_response": "Increased root allocation under water stress"
+    }
+  },
+
+  "validation_requirements": {
+    "description": "Validation requirements for land-atmosphere coupling",
+    "energy_balance_closure": [
+      "Surface energy balance: |Rn - H - LE - G| < 10 W/m² daily mean",
+      "Bowen ratio validation: H/LE typical values 0.2-2.0 depending on climate",
+      "Diurnal energy cycle: Peak fluxes within 1-2 hours of expected timing",
+      "Seasonal energy range: Factor of 3-5 variation between summer and winter"
+    ],
+    "water_balance_closure": [
+      "Soil water balance: |P - ET - D - ΔS| < 0.5 mm/day residual",
+      "Evapotranspiration partitioning: Transpiration 60-90% of total ET",
+      "Runoff generation: Occurs when precipitation > infiltration capacity",
+      "Soil moisture memory: 1-3 month autocorrelation in root zone"
+    ],
+    "vegetation_dynamics": [
+      "Growing degree days: Phenology responds to temperature accumulation",
+      "LAI seasonal range: Factor of 2-6 variation between minimum and maximum",
+      "Biomass allocation: Root:shoot ratio 0.2-2.0 depending on water stress",
+      "Carbon balance: NPP = GPP - Respiration with realistic magnitudes"
+    ],
+    "process_coupling": [
+      "Stomatal conductance: Responds to light, humidity, soil moisture, CO2",
+      "Soil thermal properties: Vary with moisture content (factor of 2-3)",
+      "Surface roughness: Increases with vegetation height and density",
+      "Albedo dependence: Function of LAI, biomass, and soil moisture"
+    ]
+  },
+
+  "performance_benchmarks": {
+    "description": "Expected computational performance for land surface model",
+    "julia_mtk": {
+      "assembly_time": "< 15 seconds for full coupled system",
+      "simulation_time": "< 600 seconds for 1-year simulation",
+      "memory_usage": "< 12 GB for global 0.5° resolution",
+      "solver_efficiency": "Operator splitting reduces stiffness, improves performance"
+    },
+    "python_scipy": {
+      "assembly_time": "< 45 seconds for RHS function generation",
+      "simulation_time": "< 2000 seconds for 1-year simulation",
+      "memory_usage": "< 24 GB for equivalent problem size",
+      "jacobian_structure": "Block diagonal structure due to spatial locality"
+    }
+  },
+
+  "validation_tolerance": {
+    "description": "Numerical tolerances for land-atmosphere validation",
+    "energy_fluxes": {
+      "net_radiation": {"relative": 0.05, "absolute": 10.0},
+      "sensible_heat": {"relative": 0.15, "absolute": 5.0},
+      "latent_heat": {"relative": 0.15, "absolute": 5.0},
+      "ground_heat": {"relative": 0.20, "absolute": 2.0},
+      "note": "Energy flux units in W/m², looser tolerances for smaller fluxes"
+    },
+    "temperature_variables": {
+      "air_temperature": {"relative": 0.02, "absolute": 2.0},
+      "surface_temperature": {"relative": 0.03, "absolute": 3.0},
+      "soil_temperature": {"relative": 0.05, "absolute": 2.0},
+      "note": "Temperature units in K"
+    },
+    "hydrological_variables": {
+      "soil_moisture": {"relative": 0.10, "absolute": 0.02},
+      "evapotranspiration": {"relative": 0.20, "absolute": 0.5},
+      "specific_humidity": {"relative": 0.15, "absolute": 0.001},
+      "note": "Moisture units: m³/m³ for soil, kg/kg for air, mm/day for fluxes"
+    },
+    "vegetation_variables": {
+      "leaf_area_index": {"relative": 0.20, "absolute": 0.5},
+      "biomass": {"relative": 0.25, "absolute": 0.1},
+      "photosynthesis": {"relative": 0.30, "absolute": 1.0},
+      "note": "Vegetation variables have higher uncertainty, allow larger tolerances"
+    },
+    "coupling_consistency": {
+      "flux_conservation": {"relative": 0.05, "note": "Energy and water flux conservation"},
+      "mass_balance": {"relative": 0.02, "note": "Carbon and water mass balance"},
+      "feedback_strength": {"relative": 0.30, "note": "Process feedback magnitudes"}
+    }
+  }
+}
