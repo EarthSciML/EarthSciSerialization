@@ -6,12 +6,23 @@ including node creation, edge detection, dependency analysis, and cycle detectio
 It serves as the foundation for all coupling resolution operations.
 """
 
-from typing import Dict, List, Set, Optional, Tuple, Union
+from typing import Dict, List, Set, Optional, Tuple, Union, Any
 from dataclasses import dataclass, field
 from collections import defaultdict, deque
 from enum import Enum
+import logging
 
-from .types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator
+from .types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator, ModelVariable, Species
+
+# Optional import for unit handling
+try:
+    from pint import UnitRegistry, DimensionalityError, Quantity
+    PINT_AVAILABLE = True
+    ureg = UnitRegistry()
+except ImportError:
+    PINT_AVAILABLE = False
+    ureg = None
+    logging.warning("Pint not available. Unit conversion features will be disabled.")
 
 
 class NodeType(Enum):
@@ -49,6 +60,22 @@ class DependencyInfo:
     indirect_dependencies: Set[str] = field(default_factory=set)
     dependents: Set[str] = field(default_factory=set)
     dependency_level: int = 0
+
+
+@dataclass
+class VariableMatchResult:
+    """Result of variable matching between source and target variables."""
+    is_compatible: bool
+    source_variable: Dict[str, Any]
+    target_variable: Dict[str, Any]
+    unit_conversion_factor: Optional[float] = None
+    conversion_expression: Optional[str] = None
+    type_compatibility: bool = True
+    unit_compatibility: bool = True
+    interface_compatibility: bool = True
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class CouplingGraph:
@@ -327,6 +354,376 @@ class CouplingGraph:
         }
 
 
+def match_coupling_variables(
+    source_var_name: str,
+    target_var_name: str,
+    source_component: Union[Model, ReactionSystem],
+    target_component: Union[Model, ReactionSystem],
+    coupling_type: CouplingType = CouplingType.DIRECT
+) -> VariableMatchResult:
+    """
+    Match variables between coupled components with type compatibility checking,
+    unit conversion, and interface validation.
+
+    Args:
+        source_var_name: Name of the source variable
+        target_var_name: Name of the target variable
+        source_component: Source model or reaction system component
+        target_component: Target model or reaction system component
+        coupling_type: Type of coupling between components
+
+    Returns:
+        VariableMatchResult containing compatibility analysis and conversion info
+
+    Raises:
+        ValueError: If variables are not found in their respective components
+    """
+    result = VariableMatchResult(
+        is_compatible=True,
+        source_variable={},
+        target_variable={}
+    )
+
+    # Step 1: Extract variable information
+    try:
+        source_var = _extract_variable_info(source_var_name, source_component)
+        target_var = _extract_variable_info(target_var_name, target_component)
+
+        result.source_variable = source_var
+        result.target_variable = target_var
+
+    except ValueError as e:
+        result.is_compatible = False
+        result.errors.append(str(e))
+        return result
+
+    # Step 2: Check type compatibility
+    type_compatible, type_errors, type_warnings = _check_type_compatibility(
+        source_var, target_var, coupling_type
+    )
+    result.type_compatibility = type_compatible
+    result.errors.extend(type_errors)
+    result.warnings.extend(type_warnings)
+
+    # Step 3: Check unit compatibility and conversion
+    if PINT_AVAILABLE:
+        unit_compatible, unit_errors, unit_warnings, conversion_info = _check_unit_compatibility(
+            source_var, target_var, coupling_type
+        )
+        result.unit_compatibility = unit_compatible
+        result.errors.extend(unit_errors)
+        result.warnings.extend(unit_warnings)
+
+        if conversion_info:
+            result.unit_conversion_factor = conversion_info.get('factor')
+            result.conversion_expression = conversion_info.get('expression')
+    else:
+        result.warnings.append("Unit validation disabled: pint library not available")
+
+    # Step 4: Check interface compatibility
+    interface_compatible, interface_errors, interface_warnings = _check_interface_compatibility(
+        source_var, target_var, coupling_type
+    )
+    result.interface_compatibility = interface_compatible
+    result.errors.extend(interface_errors)
+    result.warnings.extend(interface_warnings)
+
+    # Step 5: Overall compatibility assessment
+    result.is_compatible = (
+        result.type_compatibility and
+        result.unit_compatibility and
+        result.interface_compatibility and
+        len(result.errors) == 0
+    )
+
+    # Step 6: Add metadata about the matching process
+    result.metadata = {
+        'coupling_type': coupling_type.value,
+        'source_component_type': type(source_component).__name__,
+        'target_component_type': type(target_component).__name__,
+        'matching_algorithm_version': '1.0.0'
+    }
+
+    return result
+
+
+def _extract_variable_info(var_name: str, component: Union[Model, ReactionSystem]) -> Dict[str, Any]:
+    """Extract variable information from a component."""
+    var_info = {
+        'name': var_name,
+        'type': None,
+        'units': None,
+        'description': None,
+        'default': None,
+        'component_type': type(component).__name__
+    }
+
+    if isinstance(component, Model):
+        if var_name not in component.variables:
+            raise ValueError(f"Variable '{var_name}' not found in model '{component.name}'")
+
+        model_var = component.variables[var_name]
+        var_info.update({
+            'type': model_var.type,
+            'units': model_var.units,
+            'description': model_var.description,
+            'default': model_var.default,
+            'expression': getattr(model_var, 'expression', None)
+        })
+
+    elif isinstance(component, ReactionSystem):
+        # Look for variable in species list
+        species_var = None
+        for species in component.species:
+            if species.name == var_name:
+                species_var = species
+                break
+
+        if species_var:
+            var_info.update({
+                'type': 'species',
+                'units': species_var.units,
+                'description': species_var.description,
+                'formula': getattr(species_var, 'formula', None),
+                'mass': getattr(species_var, 'mass', None)
+            })
+        else:
+            # Look in parameters
+            param_var = None
+            for param in component.parameters:
+                if param.name == var_name:
+                    param_var = param
+                    break
+
+            if param_var:
+                var_info.update({
+                    'type': 'parameter',
+                    'units': param_var.units,
+                    'description': param_var.description,
+                    'default': param_var.value,
+                    'uncertainty': getattr(param_var, 'uncertainty', None)
+                })
+            else:
+                raise ValueError(f"Variable '{var_name}' not found in reaction system '{component.name}'")
+
+    else:
+        if component is None:
+            raise ValueError(f"Component cannot be None")
+        raise ValueError(f"Unsupported component type: {type(component)}")
+
+    return var_info
+
+
+def _check_type_compatibility(
+    source_var: Dict[str, Any],
+    target_var: Dict[str, Any],
+    coupling_type: CouplingType
+) -> Tuple[bool, List[str], List[str]]:
+    """Check type compatibility between source and target variables."""
+    errors = []
+    warnings = []
+
+    source_type = source_var.get('type')
+    target_type = target_var.get('type')
+
+    # Define compatible type mappings
+    compatible_types = {
+        ('state', 'state'): True,
+        ('parameter', 'parameter'): True,
+        ('observed', 'observed'): True,
+        ('species', 'state'): True,  # Species can be mapped to model state variables
+        ('state', 'species'): True,  # Model states can provide species concentrations
+        ('parameter', 'state'): False,  # Generally not recommended - parameters shouldn't drive states directly
+        ('state', 'parameter'): False,  # Generally not recommended - states shouldn't directly set parameters
+        ('species', 'parameter'): False,  # Generally not recommended
+        ('parameter', 'species'): False,  # Generally not recommended
+    }
+
+    type_pair = (source_type, target_type)
+    is_compatible = compatible_types.get(type_pair, False)
+
+    if not is_compatible:
+        errors.append(
+            f"Type incompatibility: cannot couple '{source_type}' to '{target_type}' "
+            f"with coupling type '{coupling_type.value}'"
+        )
+
+    # Add warnings for potentially problematic couplings
+    if type_pair in [('parameter', 'state'), ('state', 'parameter')]:
+        warnings.append(
+            "Coupling parameter to/from state variable may require careful validation "
+            "of temporal evolution assumptions"
+        )
+
+    return is_compatible, errors, warnings
+
+
+def _check_unit_compatibility(
+    source_var: Dict[str, Any],
+    target_var: Dict[str, Any],
+    coupling_type: CouplingType
+) -> Tuple[bool, List[str], List[str], Optional[Dict[str, Any]]]:
+    """Check unit compatibility and calculate conversion if needed."""
+    errors = []
+    warnings = []
+    conversion_info = None
+
+    source_units = source_var.get('units')
+    target_units = target_var.get('units')
+
+    # Handle cases where units are missing or dimensionless
+    if not source_units and not target_units:
+        warnings.append("Both variables lack unit specifications")
+        return True, errors, warnings, conversion_info
+
+    # Handle dimensionless units
+    if source_units == "dimensionless":
+        source_units = ""
+    if target_units == "dimensionless":
+        target_units = ""
+
+    if not source_units and target_units:
+        errors.append(f"Source variable '{source_var['name']}' missing unit specification")
+        return False, errors, warnings, conversion_info
+
+    if source_units and not target_units:
+        errors.append(f"Target variable '{target_var['name']}' missing unit specification")
+        return False, errors, warnings, conversion_info
+
+    # Both dimensionless/empty
+    if not source_units and not target_units:
+        return True, errors, warnings, conversion_info
+
+    try:
+        # Create quantities for unit comparison
+        source_qty = ureg.Quantity(1.0, source_units)
+        target_qty = ureg.Quantity(1.0, target_units)
+
+        # Check if units are dimensionally compatible
+        try:
+            converted_qty = source_qty.to(target_units)
+            conversion_factor = float(converted_qty.magnitude)
+
+            conversion_info = {
+                'factor': conversion_factor,
+                'expression': f"target_value = source_value * {conversion_factor}"
+            }
+
+            if abs(conversion_factor - 1.0) > 1e-12:
+                warnings.append(
+                    f"Unit conversion required: {source_units} -> {target_units} "
+                    f"(factor: {conversion_factor})"
+                )
+
+            return True, errors, warnings, conversion_info
+
+        except DimensionalityError:
+            errors.append(
+                f"Unit dimensionality mismatch: '{source_units}' cannot be converted to '{target_units}'"
+            )
+            return False, errors, warnings, conversion_info
+
+    except Exception as e:
+        errors.append(f"Unit parsing error: {str(e)}")
+        return False, errors, warnings, conversion_info
+
+
+def _check_interface_compatibility(
+    source_var: Dict[str, Any],
+    target_var: Dict[str, Any],
+    coupling_type: CouplingType
+) -> Tuple[bool, List[str], List[str]]:
+    """Check interface compatibility for the coupling."""
+    errors = []
+    warnings = []
+
+    # Check for required interface properties based on coupling type
+    if coupling_type == CouplingType.INTERPOLATED:
+        # Interpolation requires compatible data domains
+        if not _has_spatial_domain_info(source_var):
+            warnings.append(
+                f"Source variable '{source_var['name']}' lacks spatial domain information "
+                "required for interpolation"
+            )
+
+        if not _has_spatial_domain_info(target_var):
+            warnings.append(
+                f"Target variable '{target_var['name']}' lacks spatial domain information "
+                "required for interpolation"
+            )
+
+    elif coupling_type == CouplingType.AGGREGATED:
+        # Aggregation requires understanding of how to combine values
+        if not _has_aggregation_metadata(source_var):
+            warnings.append(
+                f"Source variable '{source_var['name']}' lacks aggregation metadata "
+                "for proper aggregation coupling"
+            )
+
+    elif coupling_type == CouplingType.FEEDBACK:
+        # Feedback couplings require careful handling of temporal dependencies
+        warnings.append(
+            "Feedback coupling detected: ensure proper temporal synchronization "
+            "to avoid numerical instabilities"
+        )
+
+    # Check for semantic compatibility based on descriptions
+    source_desc = (source_var.get('description') or '').lower()
+    target_desc = (target_var.get('description') or '').lower()
+
+    if source_desc and target_desc:
+        # Simple keyword matching for semantic validation
+        semantic_mismatch = _detect_semantic_mismatch(source_desc, target_desc)
+        if semantic_mismatch:
+            warnings.append(
+                f"Potential semantic mismatch: '{source_desc}' -> '{target_desc}'"
+            )
+
+    # Interface compatibility is generally permissive with warnings
+    return True, errors, warnings
+
+
+def _has_spatial_domain_info(var_info: Dict[str, Any]) -> bool:
+    """Check if variable has spatial domain information for interpolation."""
+    # This is a placeholder - in practice, would check for grid information,
+    # coordinate systems, etc.
+    description = (var_info.get('description') or '').lower()
+    spatial_keywords = ['grid', 'spatial', 'coordinate', 'latitude', 'longitude', 'x', 'y', 'z']
+    return any(keyword in description for keyword in spatial_keywords)
+
+
+def _has_aggregation_metadata(var_info: Dict[str, Any]) -> bool:
+    """Check if variable has aggregation metadata."""
+    # Placeholder for checking aggregation-related metadata
+    description = (var_info.get('description') or '').lower()
+    aggregation_keywords = ['average', 'sum', 'integral', 'mean', 'total']
+    return any(keyword in description for keyword in aggregation_keywords)
+
+
+def _detect_semantic_mismatch(source_desc: str, target_desc: str) -> bool:
+    """Detect potential semantic mismatches between variable descriptions."""
+    # Handle empty descriptions
+    if not source_desc or not target_desc:
+        return False
+
+    # Simple heuristic: look for conflicting keywords
+    conflicting_pairs = [
+        (['temperature', 'thermal'], ['pressure', 'force']),
+        (['concentration', 'density'], ['velocity', 'speed']),
+        (['mass', 'weight'], ['length', 'distance']),
+        (['energy', 'power'], ['time', 'duration'])
+    ]
+
+    for group1, group2 in conflicting_pairs:
+        has_group1 = any(keyword in source_desc for keyword in group1)
+        has_group2 = any(keyword in target_desc for keyword in group2)
+
+        if has_group1 and has_group2:
+            return True
+
+    return False
+
+
 def construct_coupling_graph(esm_file: EsmFile) -> CouplingGraph:
     """
     Construct a coupling graph from an ESM file definition.
@@ -473,6 +870,74 @@ def validate_coupling_graph(graph: CouplingGraph) -> Tuple[bool, List[str]]:
                          f"{len(edge.source_variables)} source vars vs {len(edge.target_variables)} target vars")
 
     return len(errors) == 0, errors
+
+
+def validate_coupling_variables(
+    graph: CouplingGraph,
+    esm_file: EsmFile,
+    detailed: bool = False
+) -> Tuple[bool, List[str], Optional[List[VariableMatchResult]]]:
+    """
+    Validate coupling variables using the variable matching algorithm.
+
+    Args:
+        graph: The coupling graph to validate
+        esm_file: The ESM file containing component definitions
+        detailed: If True, return detailed matching results
+
+    Returns:
+        Tuple of (is_valid, error_messages, detailed_results)
+    """
+    errors = []
+    detailed_results = [] if detailed else None
+
+    # Create component lookup
+    components = {}
+    for model in esm_file.models:
+        components[f"model:{model.name}"] = model
+    for reaction_system in esm_file.reaction_systems:
+        components[f"reaction_system:{reaction_system.name}"] = reaction_system
+
+    # Validate each coupling edge
+    for edge in graph.edges:
+        source_component = components.get(edge.source_node)
+        target_component = components.get(edge.target_node)
+
+        if not source_component:
+            errors.append(f"Source component '{edge.source_node}' not found")
+
+        if not target_component:
+            errors.append(f"Target component '{edge.target_node}' not found")
+
+        if not source_component or not target_component:
+            continue
+
+        # Validate each variable pair in the coupling
+        for i, (source_var, target_var) in enumerate(zip(edge.source_variables, edge.target_variables)):
+            try:
+                match_result = match_coupling_variables(
+                    source_var, target_var,
+                    source_component, target_component,
+                    edge.coupling_type
+                )
+
+                if detailed:
+                    detailed_results.append(match_result)
+
+                if not match_result.is_compatible:
+                    errors.extend([
+                        f"Variable matching failed for {edge.source_node}.{source_var} -> "
+                        f"{edge.target_node}.{target_var}: {error}"
+                        for error in match_result.errors
+                    ])
+
+            except Exception as e:
+                errors.append(
+                    f"Error validating coupling {edge.source_node}.{source_var} -> "
+                    f"{edge.target_node}.{target_var}: {str(e)}"
+                )
+
+    return len(errors) == 0, errors, detailed_results
 
 
 @dataclass
