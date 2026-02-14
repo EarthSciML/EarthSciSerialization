@@ -5,6 +5,7 @@ authors = ["Chris Tessum with Claude <noreply@anthropic.com>"]
 
 [deps]
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
