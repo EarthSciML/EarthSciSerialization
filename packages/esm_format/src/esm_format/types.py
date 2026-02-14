@@ -168,6 +168,7 @@ class OperatorType(Enum):
     DIFFERENTIATION = "differentiation"
     FILTERING = "filtering"
     TRANSFORMATION = "transformation"
+    ARITHMETIC = "arithmetic"
 
 
 @dataclass
