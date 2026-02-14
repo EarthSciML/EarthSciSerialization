@@ -1,0 +1,283 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ComprehensiveCompatibilityTest",
+    "description": "Comprehensive test using all major ESM format features for version compatibility validation",
+    "authors": ["ESM Format Team", "Version Compatibility Working Group"],
+    "created": "2024-01-15T00:00:00Z",
+    "license": "MIT",
+    "version": "1.0.0",
+    "tags": ["test", "compatibility", "comprehensive"]
+  },
+  "reaction_systems": {
+    "AtmosphericChemistry": {
+      "coupletype": "AtmosphericChemistryCoupler",
+      "reference": {
+        "doi": "10.1000/test.version.compat",
+        "citation": "Test et al. (2024). Version Compatibility in ESM Format.",
+        "url": "https://example.com/version-compat",
+        "notes": "Comprehensive atmospheric chemistry mechanism for testing"
+      },
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" },
+        "CO": { "units": "mol/mol", "default": 100e-9, "description": "Carbon monoxide" },
+        "HO2": { "units": "mol/mol", "default": 0.01e-9, "description": "Hydroperoxy radical" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "P": { "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "M": { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" },
+        "jNO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" },
+        "jO3": { "units": "1/s", "default": 0.0001, "description": "O3 photolysis rate" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3_reaction",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": {
+            "op": "*",
+            "args": [
+              1.8e-12,
+              { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] },
+              "M"
+            ]
+          }
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": "jNO2"
+        },
+        {
+          "id": "R3",
+          "name": "CO_OH_reaction",
+          "substrates": [
+            { "species": "CO", "stoichiometry": 1 },
+            { "species": "HO2", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.5e-13, { "op": "exp", "args": [250, { "op": "/", "args": [1, "T"] }] }] }
+        }
+      ],
+      "events": [
+        {
+          "name": "daylight_switch",
+          "type": "discrete",
+          "trigger": {
+            "type": "periodic",
+            "interval": 86400,
+            "initial_offset": 21600
+          },
+          "affects": [
+            { "lhs": "jNO2", "rhs": { "op": "ifelse", "args": [true, 0.01, 0.001] } },
+            { "lhs": "jO3", "rhs": { "op": "ifelse", "args": [true, 0.0002, 0.00005] } }
+          ]
+        }
+      ]
+    }
+  },
+  "models": {
+    "Transport": {
+      "reference": { "notes": "3D transport with diffusion" },
+      "variables": {
+        "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Zonal wind" },
+        "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Meridional wind" },
+        "w_wind": { "type": "parameter", "units": "m/s", "default": 0.1, "description": "Vertical wind" },
+        "Kh": { "type": "parameter", "units": "m^2/s", "default": 1000.0, "description": "Horizontal diffusivity" },
+        "Kv": { "type": "parameter", "units": "m^2/s", "default": 10.0, "description": "Vertical diffusivity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["w_wind"] }, { "op": "grad", "args": ["_var"], "dim": "z" }] },
+              { "op": "*", "args": ["Kh", { "op": "laplacian", "args": ["_var"], "dims": ["x", "y"] }] },
+              { "op": "*", "args": ["Kv", { "op": "D", "args": [{ "op": "D", "args": ["_var"], "wrt": "z" }], "wrt": "z" }] }
+            ]
+          }
+        }
+      ],
+      "events": [
+        {
+          "name": "wind_adjustment",
+          "type": "continuous",
+          "condition": { "op": ">", "args": [{ "op": "abs", "args": ["u_wind"] }, 20.0] },
+          "affects": [
+            { "lhs": "u_wind", "rhs": { "op": "*", "args": ["u_wind", 0.8] } }
+          ],
+          "root_find": "upcrossing_only"
+        }
+      ]
+    },
+    "Emissions": {
+      "reference": { "notes": "Anthropogenic and biogenic emissions" },
+      "variables": {
+        "E_NO": { "type": "parameter", "units": "molec/cm^3/s", "default": 1e6, "description": "NO emission rate" },
+        "E_CO": { "type": "parameter", "units": "molec/cm^3/s", "default": 1e8, "description": "CO emission rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
+          "rhs": "E_NO"
+        },
+        {
+          "lhs": { "op": "D", "args": ["CO"], "wrt": "t" },
+          "rhs": "E_CO"
+        }
+      ]
+    }
+  },
+  "data_loaders": {
+    "WeatherData": {
+      "type": "gridded_data",
+      "loader_id": "ECMWF_ERA5",
+      "config": {
+        "resolution": "0.25x0.25",
+        "variables": ["temperature", "pressure", "wind_u", "wind_v", "humidity"],
+        "coord_defaults": { "lat": 40.0, "lon": -100.0, "lev": 850 }
+      },
+      "provides": {
+        "T": { "units": "K", "description": "2-meter temperature" },
+        "P": { "units": "Pa", "description": "Surface pressure" },
+        "u": { "units": "m/s", "description": "10-meter eastward wind" },
+        "v": { "units": "m/s", "description": "10-meter northward wind" },
+        "RH": { "units": "1", "description": "Relative humidity" }
+      }
+    },
+    "EmissionInventory": {
+      "type": "sectoral_emissions",
+      "loader_id": "CEDS_v2021",
+      "config": {
+        "sectors": ["energy", "industry", "transport", "residential"],
+        "species": ["NOx", "CO", "SO2", "NH3"]
+      },
+      "provides": {
+        "E_NO_total": { "units": "kg/m^2/s", "description": "Total NOx emissions" },
+        "E_CO_total": { "units": "kg/m^2/s", "description": "Total CO emissions" }
+      }
+    }
+  },
+  "operators": {
+    "WetDeposition": {
+      "operator_id": "henry_law_washout",
+      "description": "Henry's law wet deposition",
+      "config": {
+        "henry_constants": {
+          "NO2": 0.01,
+          "O3": 0.001,
+          "CO": 0.0001
+        },
+        "precipitation_threshold": 0.1
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["AtmosphericChemistry", "Transport"],
+      "description": "Couple chemistry with transport"
+    },
+    {
+      "type": "operator_compose",
+      "systems": ["AtmosphericChemistry", "Emissions"],
+      "description": "Couple chemistry with emissions"
+    },
+    {
+      "type": "variable_map",
+      "from": "WeatherData.T",
+      "to": "AtmosphericChemistry.T",
+      "transform": "param_to_var",
+      "description": "Temperature from weather data"
+    },
+    {
+      "type": "variable_map",
+      "from": "WeatherData.P",
+      "to": "AtmosphericChemistry.P",
+      "transform": "param_to_var",
+      "description": "Pressure from weather data"
+    },
+    {
+      "type": "variable_map",
+      "from": "WeatherData.u",
+      "to": "Transport.u_wind",
+      "transform": "param_to_var",
+      "description": "Eastward wind component"
+    },
+    {
+      "type": "variable_map",
+      "from": "WeatherData.v",
+      "to": "Transport.v_wind",
+      "transform": "param_to_var",
+      "description": "Northward wind component"
+    },
+    {
+      "type": "variable_map",
+      "from": "EmissionInventory.E_NO_total",
+      "to": "Emissions.E_NO",
+      "transform": "conversion_factor",
+      "factor": 2.14e19,
+      "description": "Convert kg/m^2/s to molec/cm^3/s for NO"
+    },
+    {
+      "type": "operator_apply",
+      "operator": "WetDeposition",
+      "description": "Apply wet deposition to all chemical species"
+    }
+  ],
+  "domain": {
+    "temporal": {
+      "start": "2024-07-01T00:00:00Z",
+      "end": "2024-07-03T00:00:00Z",
+      "units": "UTC"
+    },
+    "spatial": {
+      "lon": { "min": -130.0, "max": -100.0, "grid_spacing": 0.5, "units": "degrees_east" },
+      "lat": { "min": 25.0, "max": 50.0, "grid_spacing": 0.5, "units": "degrees_north" },
+      "lev": { "min": 1000.0, "max": 100.0, "grid_spacing": 50.0, "units": "hPa" }
+    },
+    "coordinate_transforms": [
+      { "id": "lonlat_to_cartesian", "dimensions": ["lon", "lat"] },
+      { "id": "pressure_to_altitude", "dimensions": ["lev"] }
+    ],
+    "initial_conditions": {
+      "type": "spatially_varying",
+      "source": "WeatherData",
+      "variable": "initial_concentrations"
+    },
+    "boundary_conditions": [
+      { "type": "periodic", "dimensions": ["lon"] },
+      { "type": "zero_gradient", "dimensions": ["lat"] },
+      { "type": "fixed_value", "dimensions": ["lev"], "value": 0.0, "location": "top" }
+    ],
+    "element_type": "Float64"
+  },
+  "solver": {
+    "strategy": "operator_splitting",
+    "config": {
+      "chemistry_solver": "rosenbrock",
+      "transport_solver": "tvd_advection",
+      "timestep": 60.0,
+      "max_timestep": 300.0,
+      "tolerances": { "relative": 1e-6, "absolute": 1e-12 }
+    }
+  }
+}
