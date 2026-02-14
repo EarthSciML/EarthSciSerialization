@@ -273,7 +273,7 @@ class TestDataLoaderFactory:
             source="test.h5"
         )
 
-        with pytest.raises(ValueError, match="not yet implemented"):
+        with pytest.raises(ValueError, match="is not registered"):
             create_data_loader(config)
 
 
