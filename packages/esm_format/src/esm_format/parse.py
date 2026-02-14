@@ -21,7 +21,8 @@ from .types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator, OperatorType,
     CouplingEntry, CouplingType, Domain, Solver, SolverType,
-    Reference
+    Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
+    InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionType
 )
 
 
@@ -280,6 +281,160 @@ def _parse_metadata(metadata_data: Dict[str, Any]) -> Metadata:
     )
 
 
+def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
+    """Parse domain configuration from JSON data."""
+    domain = Domain()
+
+    if "independent_variable" in domain_data:
+        domain.independent_variable = domain_data["independent_variable"]
+
+    # Parse temporal domain
+    if "temporal" in domain_data:
+        temporal_data = domain_data["temporal"]
+        domain.temporal = TemporalDomain(
+            start=temporal_data["start"],
+            end=temporal_data["end"],
+            reference_time=temporal_data.get("reference_time")
+        )
+
+    # Parse spatial domain
+    if "spatial" in domain_data:
+        spatial_data = domain_data["spatial"]
+        domain.spatial = {}
+        for dim_name, dim_data in spatial_data.items():
+            domain.spatial[dim_name] = SpatialDimension(
+                min=dim_data["min"],
+                max=dim_data["max"],
+                units=dim_data["units"],
+                grid_spacing=dim_data.get("grid_spacing")
+            )
+
+    # Parse coordinate transforms
+    if "coordinate_transforms" in domain_data:
+        for transform_data in domain_data["coordinate_transforms"]:
+            transform = CoordinateTransform(
+                id=transform_data["id"],
+                description=transform_data["description"],
+                dimensions=transform_data["dimensions"]
+            )
+            domain.coordinate_transforms.append(transform)
+
+    # Parse spatial reference
+    if "spatial_ref" in domain_data:
+        domain.spatial_ref = domain_data["spatial_ref"]
+
+    # Parse initial conditions
+    if "initial_conditions" in domain_data:
+        ic_data = domain_data["initial_conditions"]
+        ic_type_str = ic_data["type"]
+
+        # Map schema types to our enum types
+        type_mapping = {
+            "constant": InitialConditionType.CONSTANT,
+            "per_variable": InitialConditionType.CONSTANT,  # Treat as constant for now
+            "from_file": InitialConditionType.DATA
+        }
+
+        ic_type = type_mapping.get(ic_type_str, InitialConditionType.CONSTANT)
+
+        # Extract appropriate fields based on type
+        value = ic_data.get("value")
+        function = None
+        data_source = ic_data.get("path")  # Schema uses "path" for file source
+
+        domain.initial_conditions = InitialCondition(
+            type=ic_type,
+            value=value,
+            function=function,
+            data_source=data_source
+        )
+
+    # Parse boundary conditions
+    if "boundary_conditions" in domain_data:
+        for bc_data in domain_data["boundary_conditions"]:
+            bc_type = BoundaryConditionType(bc_data["type"])
+            bc = BoundaryCondition(
+                type=bc_type,
+                dimensions=bc_data["dimensions"],
+                value=bc_data.get("value"),
+                function=bc_data.get("function")
+            )
+            domain.boundary_conditions.append(bc)
+
+    return domain
+
+
+def _validate_domain(domain: Domain) -> None:
+    """Validate domain configuration for consistency and semantic correctness."""
+    errors = []
+
+    # Validate temporal domain
+    if domain.temporal:
+        try:
+            from datetime import datetime
+            start_dt = datetime.fromisoformat(domain.temporal.start.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(domain.temporal.end.replace('Z', '+00:00'))
+
+            if start_dt >= end_dt:
+                errors.append("Temporal domain: start time must be before end time")
+
+            if domain.temporal.reference_time:
+                ref_dt = datetime.fromisoformat(domain.temporal.reference_time.replace('Z', '+00:00'))
+                if ref_dt < start_dt or ref_dt > end_dt:
+                    errors.append("Temporal domain: reference time must be within start and end times")
+        except ValueError as e:
+            errors.append(f"Temporal domain: invalid datetime format - {e}")
+
+    # Validate spatial dimensions
+    if domain.spatial:
+        for dim_name, dim_spec in domain.spatial.items():
+            if dim_spec.min >= dim_spec.max:
+                errors.append(f"Spatial dimension '{dim_name}': min value must be less than max value")
+
+            if dim_spec.grid_spacing is not None and dim_spec.grid_spacing <= 0:
+                errors.append(f"Spatial dimension '{dim_name}': grid spacing must be positive")
+
+            # Check reasonable coordinate ranges
+            if dim_name in ['lon', 'longitude']:
+                if dim_spec.min < -180 or dim_spec.max > 180:
+                    errors.append(f"Longitude dimension: values should be between -180 and 180 degrees")
+            elif dim_name in ['lat', 'latitude']:
+                if dim_spec.min < -90 or dim_spec.max > 90:
+                    errors.append(f"Latitude dimension: values should be between -90 and 90 degrees")
+
+    # Validate coordinate transforms reference valid dimensions
+    if domain.coordinate_transforms and domain.spatial:
+        for transform in domain.coordinate_transforms:
+            for dim in transform.dimensions:
+                if dim not in domain.spatial:
+                    errors.append(f"Coordinate transform '{transform.id}': references undefined dimension '{dim}'")
+
+    # Validate boundary conditions reference valid dimensions
+    if domain.boundary_conditions and domain.spatial:
+        for bc in domain.boundary_conditions:
+            for dim in bc.dimensions:
+                if dim not in domain.spatial:
+                    errors.append(f"Boundary condition: references undefined dimension '{dim}'")
+
+    # Validate initial conditions have required fields
+    if domain.initial_conditions:
+        ic = domain.initial_conditions
+        if ic.type == InitialConditionType.CONSTANT and ic.value is None:
+            errors.append("Initial condition type 'constant' requires a value")
+        elif ic.type == InitialConditionType.FUNCTION and ic.function is None:
+            errors.append("Initial condition type 'function' requires a function specification")
+        elif ic.type == InitialConditionType.DATA and ic.data_source is None:
+            errors.append("Initial condition type 'data' requires a data source")
+
+    # Validate boundary conditions have required fields
+    for i, bc in enumerate(domain.boundary_conditions):
+        if bc.type in [BoundaryConditionType.CONSTANT, BoundaryConditionType.DIRICHLET] and bc.value is None:
+            errors.append(f"Boundary condition {i+1}: type '{bc.type.value}' requires a value")
+
+    if errors:
+        raise ValueError("Domain validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
+
+
 def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
     """Parse ESM data from validated JSON."""
     # Parse metadata
@@ -301,12 +456,18 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             rs.name = rs_name
             reaction_systems.append(rs)
 
+    # Parse domain if present
+    domains = []
+    if "domain" in data:
+        domain = _parse_domain(data["domain"])
+        _validate_domain(domain)
+        domains.append(domain)
+
     # For now, we'll leave other fields empty as they require more complex parsing
     events = []
     data_loaders = []
     operators = []
     couplings = []
-    domains = []
     solvers = []
 
     return EsmFile(

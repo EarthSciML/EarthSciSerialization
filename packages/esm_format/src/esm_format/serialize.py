@@ -15,7 +15,8 @@ from .types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator, OperatorType,
     CouplingEntry, CouplingType, Domain, Solver, SolverType,
-    Reference
+    Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
+    InitialCondition, BoundaryCondition
 )
 
 
@@ -250,6 +251,84 @@ def _serialize_metadata(metadata: Metadata) -> Dict[str, Any]:
     return result
 
 
+def _serialize_domain(domain: Domain) -> Dict[str, Any]:
+    """Serialize a domain to JSON-compatible format."""
+    result = {}
+
+    if domain.independent_variable:
+        result["independent_variable"] = domain.independent_variable
+
+    # Serialize temporal domain
+    if domain.temporal:
+        temporal_data = {
+            "start": domain.temporal.start,
+            "end": domain.temporal.end
+        }
+        if domain.temporal.reference_time:
+            temporal_data["reference_time"] = domain.temporal.reference_time
+        result["temporal"] = temporal_data
+
+    # Serialize spatial domain
+    if domain.spatial:
+        spatial_data = {}
+        for dim_name, dim_spec in domain.spatial.items():
+            dim_data = {
+                "min": dim_spec.min,
+                "max": dim_spec.max,
+                "units": dim_spec.units
+            }
+            if dim_spec.grid_spacing is not None:
+                dim_data["grid_spacing"] = dim_spec.grid_spacing
+            spatial_data[dim_name] = dim_data
+        result["spatial"] = spatial_data
+
+    # Serialize coordinate transforms
+    if domain.coordinate_transforms:
+        result["coordinate_transforms"] = [
+            {
+                "id": transform.id,
+                "description": transform.description,
+                "dimensions": transform.dimensions
+            }
+            for transform in domain.coordinate_transforms
+        ]
+
+    # Serialize spatial reference
+    if domain.spatial_ref:
+        result["spatial_ref"] = domain.spatial_ref
+
+    # Serialize initial conditions
+    if domain.initial_conditions:
+        ic = domain.initial_conditions
+        ic_data = {"type": ic.type.value}
+
+        if ic.value is not None:
+            ic_data["value"] = ic.value
+        if ic.function is not None:
+            ic_data["function"] = ic.function
+        if ic.data_source is not None:
+            ic_data["path"] = ic.data_source  # Schema uses "path" for data source
+
+        result["initial_conditions"] = ic_data
+
+    # Serialize boundary conditions
+    if domain.boundary_conditions:
+        bc_data = []
+        for bc in domain.boundary_conditions:
+            bc_dict = {
+                "type": bc.type.value,
+                "dimensions": bc.dimensions
+            }
+            if bc.value is not None:
+                bc_dict["value"] = bc.value
+            if bc.function is not None:
+                bc_dict["function"] = bc.function
+            bc_data.append(bc_dict)
+        result["boundary_conditions"] = bc_data
+
+    return result
+
+
 def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     """Serialize an ESM file to JSON-compatible format."""
     result = {
@@ -271,8 +350,12 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for rs in esm_file.reaction_systems
         }
 
+    # Serialize domain (only first domain for now, as schema expects single domain)
+    if esm_file.domains:
+        result["domain"] = _serialize_domain(esm_file.domains[0])
+
     # TODO: Add serialization for other components when implemented in parse.py
-    # - events, data_loaders, operators, couplings, domains, solvers
+    # - events, data_loaders, operators, couplings, solvers
 
     return result
 
