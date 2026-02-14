@@ -22,6 +22,7 @@ from .types import (
     DataLoader,
     DataLoaderType,
     Operator,
+    OperatorType,
     CouplingEntry,
     Domain,
     Solver,
@@ -59,6 +60,15 @@ from .data_loader_registry import (
     create_auto_loader,
     detect_loader_type,
 )
+from .operator_registry import (
+    OperatorRegistry,
+    get_registry as get_operator_registry,
+    register_operator,
+    create_operator,
+    create_operator_by_name,
+    list_operators_by_type,
+    has_operator,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -79,6 +89,7 @@ __all__ = [
     "DataLoader",
     "DataLoaderType",
     "Operator",
+    "OperatorType",
     "CouplingEntry",
     "Domain",
     "Solver",
@@ -111,4 +122,11 @@ __all__ = [
     "register_loader",
     "create_auto_loader",
     "detect_loader_type",
+    "OperatorRegistry",
+    "get_operator_registry",
+    "register_operator",
+    "create_operator",
+    "create_operator_by_name",
+    "list_operators_by_type",
+    "has_operator",
 ]
