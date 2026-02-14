@@ -780,5 +780,195 @@
     "structural_errors": [],
     "is_valid": false,
     "notes": "Empty string validation may be implementation-specific. Some validators may accept empty strings, others may reject them."
+  },
+
+  "data_loader_missing_type.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadLoader",
+        "message": "Required property 'type' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "data_loader_missing_loader_id.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadLoader",
+        "message": "Required property 'loader_id' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "data_loader_missing_provides.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadLoader",
+        "message": "Required property 'provides' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "data_loader_invalid_type.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadLoader/type",
+        "message": "Value 'invalid_type' not in enum: [gridded_data, emissions, timeseries, static, callback]",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "data_loader_undefined_reference.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "data_loader_variable_missing",
+        "message": "Data loader variable 'undefined_variable' referenced in coupling is not provided",
+        "details": {
+          "variable": "undefined_variable",
+          "data_loader": "WeatherData",
+          "coupling_type": "variable_map",
+          "available_variables": ["T", "P"]
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "operator_missing_operator_id.esm": {
+    "schema_errors": [
+      {
+        "path": "/operators/BadOperator",
+        "message": "Required property 'operator_id' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "operator_missing_needed_vars.esm": {
+    "schema_errors": [
+      {
+        "path": "/operators/BadOperator",
+        "message": "Required property 'needed_vars' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "operator_variable_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "operator_variable_missing",
+        "message": "Operator 'TestOperator' requires variable 'nonexistent_variable' which is not available in coupled systems",
+        "details": {
+          "operator": "TestOperator",
+          "missing_variable": "nonexistent_variable",
+          "coupling_type": "operator_apply",
+          "available_systems": ["ChemistryModel"]
+        }
+      },
+      {
+        "path": "/coupling/0",
+        "code": "operator_variable_missing",
+        "message": "Operator 'TestOperator' requires variable 'NO2' which is not available in coupled systems",
+        "details": {
+          "operator": "TestOperator",
+          "missing_variable": "NO2",
+          "coupling_type": "operator_apply",
+          "available_systems": ["ChemistryModel"]
+        }
+      },
+      {
+        "path": "/coupling/0",
+        "code": "operator_variable_missing",
+        "message": "Operator 'TestOperator' modifies variable 'another_nonexistent_var' which is not available in coupled systems",
+        "details": {
+          "operator": "TestOperator",
+          "missing_variable": "another_nonexistent_var",
+          "coupling_type": "operator_apply",
+          "available_systems": ["ChemistryModel"]
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "interpolation_method_invalid.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadInterpolation/interpolation",
+        "message": "Value 'invalid_interpolation_method' not in enum: [linear, nearest, cubic]",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "temporal_resolution_invalid.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadTemporal/temporal_resolution",
+        "message": "Does not match format 'duration' (ISO 8601)",
+        "keyword": "format"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "data_loader_config_schema_violation.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadConfig/config",
+        "message": "Expected object, got string",
+        "keyword": "type"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "data_loader_provides_missing_units.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadProvides/provides/T",
+        "message": "Required property 'units' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "data_loader_provides_missing_description.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadProvides/provides/T",
+        "message": "Required property 'description' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
   }
 }
