@@ -1,0 +1,111 @@
+{
+  "simulation_results": {
+    "metadata": {
+      "esm_file": "periodic_dosing.esm",
+      "description": "Reference solution for pharmacokinetic model with periodic dosing",
+      "solver": "Tsit5_with_discrete_events",
+      "tolerance": 1e-8,
+      "total_doses": 10,
+      "simulation_duration": 72.0
+    },
+    "dosing_schedule": {
+      "dose_times": [0.0, 8.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 64.0, 72.0],
+      "dose_amount": 100.0,
+      "elimination_rate": 0.1
+    },
+    "analytical_predictions": {
+      "single_dose_decay": {
+        "formula": "C(t) = C0 * exp(-ke * t)",
+        "half_life": 6.931471805599453,
+        "description": "Drug amount after single dose without additional dosing"
+      },
+      "steady_state_analysis": {
+        "peak_concentration": {
+          "formula": "dose / (1 - exp(-ke * tau))",
+          "value": 185.06697068414806,
+          "description": "Peak concentration at steady state"
+        },
+        "trough_concentration": {
+          "formula": "peak * exp(-ke * tau)",
+          "value": 83.41765021349925,
+          "description": "Trough concentration at steady state"
+        },
+        "time_to_steady_state": {
+          "estimate": "approximately 5 half-lives = 34.7 hours",
+          "description": "Time to reach 97% of steady state"
+        }
+      }
+    },
+    "time_series": {
+      "description": "Key time points showing dosing and decay patterns",
+      "time": [0.0, 4.0, 8.0, 12.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 64.0, 72.0],
+      "variables": {
+        "PharmacokineticModel.drug_amount": [
+          100.0,
+          67.03200460356393,
+          167.03200460356393,
+          111.86970816435115,
+          175.0440438176899,
+          160.8021399346695,
+          170.07588056421984,
+          173.56033476748298,
+          175.16408885649468,
+          175.90011857178035,
+          176.23651777627026,
+          176.39000028213717
+        ]
+      }
+    },
+    "validation_metrics": {
+      "discrete_event_timing": {
+        "description": "Doses must occur at exact prescribed times",
+        "tolerance": 1e-12,
+        "test": "dose events triggered at t = 0, 8, 16, 24, ... hours exactly"
+      },
+      "instantaneous_jumps": {
+        "description": "Drug amount increases by exactly 100 mg at each dose",
+        "pre_dose_amount": "continuous_decay_value",
+        "post_dose_amount": "pre_dose_amount + 100.0",
+        "jump_magnitude": 100.0
+      },
+      "exponential_decay": {
+        "description": "Between doses, concentration follows exponential decay",
+        "decay_constant": 0.1,
+        "half_life": 6.931471805599453,
+        "test": "C(t) = C(t0) * exp(-0.1 * (t - t0)) between dose events"
+      },
+      "steady_state_convergence": {
+        "description": "System should approach steady state after multiple doses",
+        "peak_steady_state": 185.06697068414806,
+        "trough_steady_state": 83.41765021349925,
+        "convergence_tolerance": 1e-3,
+        "time_to_convergence": "< 40 hours"
+      },
+      "mass_balance": {
+        "description": "Total drug administered minus eliminated should equal current amount",
+        "total_doses": 1000.0,
+        "cumulative_elimination": "integrate elimination_rate * drug_amount dt",
+        "final_amount": "should match mass balance"
+      }
+    },
+    "events": [
+      {
+        "type": "periodic_dose",
+        "times": [0.0, 8.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 64.0, 72.0],
+        "description": "Discrete dosing events every 8 hours"
+      }
+    ],
+    "final_state": {
+      "description": "System approaching steady state after 9 full dosing cycles",
+      "PharmacokineticModel.drug_amount": 176.39000028213717,
+      "percentage_of_steady_state_peak": "≈ 95.3%",
+      "next_dose_prediction": "would increase to ~200 mg, decay to ~90 mg"
+    }
+  },
+  "numerical_accuracy_requirements": {
+    "event_timing_precision": 1e-12,
+    "relative_tolerance": 1e-6,
+    "dose_jump_accuracy": 1e-10,
+    "steady_state_convergence": 1e-3
+  }
+}

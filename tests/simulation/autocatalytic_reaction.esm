@@ -1,0 +1,75 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "AutocatalyticReactionTest",
+    "description": "Chemical reaction network with autocatalysis and mass conservation",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["test", "chemical_reactions", "mass_conservation"]
+  },
+  "reaction_systems": {
+    "ChemicalSystem": {
+      "reference": {
+        "notes": "Autocatalytic reaction: A + B -> 2B (rate k1), B -> C (rate k2)"
+      },
+      "species": {
+        "A": { "units": "mol", "default": 100.0, "description": "Substrate species" },
+        "B": { "units": "mol", "default": 1.0, "description": "Autocatalytic species" },
+        "C": { "units": "mol", "default": 0.0, "description": "Product species" },
+        "total_mass": { "units": "mol", "default": 101.0, "description": "Total mass (should be conserved)" }
+      },
+      "parameters": {
+        "k1": { "units": "1/(mol*s)", "default": 0.1, "description": "Autocatalytic rate constant" },
+        "k2": { "units": "1/s", "default": 0.05, "description": "Product formation rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "autocatalytic_step",
+          "substrates": [
+            { "species": "A", "stoichiometry": 1 },
+            { "species": "B", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "B", "stoichiometry": 2 }
+          ],
+          "rate": { "op": "*", "args": ["k1", "A", "B"] }
+        },
+        {
+          "id": "R2",
+          "name": "product_formation",
+          "substrates": [
+            { "species": "B", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "C", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["k2", "B"] }
+        }
+      ],
+      "constraint_equations": [
+        {
+          "lhs": "total_mass",
+          "rhs": { "op": "+", "args": ["A", "B", "C"] }
+        }
+      ]
+    }
+  },
+  "domain": {
+    "temporal": { "start": 0.0, "end": 100.0, "step": 0.1 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "ChemicalSystem.A": 100.0,
+      "ChemicalSystem.B": 1.0,
+      "ChemicalSystem.C": 0.0
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 0.1,
+      "reltol": 1e-6,
+      "abstol": 1e-9
+    }
+  }
+}

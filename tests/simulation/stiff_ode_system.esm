@@ -1,0 +1,60 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "StiffODESystemTest",
+    "description": "Stiff ODE system requiring implicit solvers for numerical stability",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["test", "stiff", "numerical_stability"]
+  },
+  "models": {
+    "StiffSystem": {
+      "reference": {
+        "notes": "Van der Pol oscillator with small epsilon parameter creating stiffness"
+      },
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 2.0, "description": "Position variable" },
+        "y": { "type": "state", "units": "1", "default": 0.0, "description": "Velocity variable" },
+        "epsilon": { "type": "parameter", "units": "1", "default": 0.01, "description": "Stiffness parameter (small value)" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "y"
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "/", "args": [1.0, "epsilon"] },
+            { "op": "-", "args": [
+              { "op": "*", "args": [
+                { "op": "-", "args": [
+                  { "op": "^", "args": ["x", 2] },
+                  1.0
+                ]},
+                "y"
+              ]},
+              "x"
+            ]}
+          ]}
+        }
+      ]
+    }
+  },
+  "domain": {
+    "temporal": { "start": 0.0, "end": 20.0, "step": 0.001 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "StiffSystem.x": 2.0,
+      "StiffSystem.y": 0.0
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "algorithm": "Rodas4P",
+      "rtol": 1e-6,
+      "atol": 1e-9,
+      "max_iters": 10000
+    }
+  }
+}
