@@ -1,0 +1,28 @@
+{
+  "name": "esm-format",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TypeScript types and utilities for EarthSciML Serialization Format",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "generate-types": "json2ts -i ../../esm-schema.json -o src/generated.ts",
+    "dev": "tsc --watch"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "json-schema-to-typescript": "^13.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
