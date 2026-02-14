@@ -1,0 +1,32 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedParameter",
+    "description": "Rate expression references undefined parameter"
+  },
+  "reaction_systems": {
+    "TestReactions": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 1e-8, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 1e-10, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1e-10, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["undefined_k", { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }] }
+        }
+      ]
+    }
+  }
+}
