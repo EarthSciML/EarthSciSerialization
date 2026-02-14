@@ -206,10 +206,78 @@ class CouplingEntry:
 # ========================================
 
 @dataclass
+class TemporalDomain:
+    """Temporal domain specification."""
+    start: str  # ISO datetime string
+    end: str    # ISO datetime string
+    reference_time: Optional[str] = None  # ISO datetime string
+
+
+@dataclass
+class SpatialDimension:
+    """Spatial dimension specification."""
+    min: float
+    max: float
+    units: str
+    grid_spacing: Optional[float] = None
+
+
+@dataclass
+class CoordinateTransform:
+    """Coordinate transformation specification."""
+    id: str
+    description: str
+    dimensions: List[str]
+
+
+class InitialConditionType(Enum):
+    """Types of initial conditions."""
+    CONSTANT = "constant"
+    FUNCTION = "function"
+    DATA = "data"
+
+
+@dataclass
+class InitialCondition:
+    """Initial condition specification."""
+    type: InitialConditionType
+    value: Optional[Union[float, Expr]] = None
+    function: Optional[str] = None
+    data_source: Optional[str] = None
+
+
+class BoundaryConditionType(Enum):
+    """Types of boundary conditions."""
+    ZERO_GRADIENT = "zero_gradient"
+    CONSTANT = "constant"
+    PERIODIC = "periodic"
+    DIRICHLET = "dirichlet"
+    NEUMANN = "neumann"
+
+
+@dataclass
+class BoundaryCondition:
+    """Boundary condition specification."""
+    type: BoundaryConditionType
+    dimensions: List[str]
+    value: Optional[Union[float, Expr]] = None
+    function: Optional[str] = None
+
+
+@dataclass
 class Domain:
-    """Computational domain specification."""
-    name: str
-    dimensions: Dict[str, Any]  # dimension name -> size/range
+    """Comprehensive computational domain specification."""
+    name: Optional[str] = None
+    independent_variable: Optional[str] = None
+    temporal: Optional[TemporalDomain] = None
+    spatial: Optional[Dict[str, SpatialDimension]] = None
+    coordinate_transforms: List[CoordinateTransform] = field(default_factory=list)
+    spatial_ref: Optional[str] = None
+    initial_conditions: Optional[InitialCondition] = None
+    boundary_conditions: List[BoundaryCondition] = field(default_factory=list)
+
+    # Legacy support for backwards compatibility
+    dimensions: Optional[Dict[str, Any]] = None
     coordinates: Dict[str, List[float]] = field(default_factory=dict)
     boundaries: Dict[str, Any] = field(default_factory=dict)
 
