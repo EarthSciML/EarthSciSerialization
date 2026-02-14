@@ -17,6 +17,7 @@ using JSONSchema
 include("types.jl")
 include("parse.jl")
 include("serialize.jl")
+include("mtk_catalyst.jl")
 
 # Export main types
 export
@@ -35,6 +36,12 @@ export
     # System types
     Domain, Solver, Reference, Metadata, EsmFile,
     # JSON functionality
-    load, save, ParseError, SchemaValidationError
+    load, save, ParseError, SchemaValidationError,
+    # MTK/Catalyst conversion functions
+    to_mtk_system, to_catalyst_system, from_mtk_system, from_catalyst_system,
+    # Mock system types
+    MockMTKSystem, MockCatalystSystem,
+    # Expression conversion utilities
+    esm_to_mock_symbolic, mock_symbolic_to_esm
 
 end # module ESMFormat

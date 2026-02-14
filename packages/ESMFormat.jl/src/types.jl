@@ -210,13 +210,15 @@ struct ModelVariable
     default::Union{Float64,Nothing}
     description::Union{String,Nothing}
     expression::Union{Expr,Nothing}
+    units::Union{String,Nothing}
 
     # Constructor with optional parameters
     ModelVariable(type::ModelVariableType;
                   default=nothing,
                   description=nothing,
-                  expression=nothing) =
-        new(type, default, description, expression)
+                  expression=nothing,
+                  units=nothing) =
+        new(type, default, description, expression, units)
 end
 
 """
