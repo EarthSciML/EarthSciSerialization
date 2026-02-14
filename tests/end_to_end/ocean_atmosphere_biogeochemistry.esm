@@ -1,0 +1,835 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "OceanAtmosphereBiogeochemistry",
+    "description": "End-to-end test for coupled ocean-atmosphere biogeochemical cycles with CO2, O2, and marine ecosystem interactions",
+    "authors": ["ESM Test Suite"],
+    "license": "MIT",
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["end-to-end", "ocean-atmosphere", "biogeochemistry", "carbon-cycle"],
+    "references": [
+      {
+        "citation": "Ocean-atmosphere biogeochemical coupling test fixture",
+        "notes": "Tests bidirectional fluxes, ecosystem dynamics, and carbonate chemistry"
+      }
+    ]
+  },
+
+  "models": {
+    "AtmosphericCarbon": {
+      "coupletype": "AtmosphereCoupler",
+      "reference": {
+        "notes": "Atmospheric CO2 and O2 with air-sea gas exchange"
+      },
+      "variables": {
+        "CO2": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 420e-6,
+          "description": "Atmospheric CO2 mixing ratio",
+          "bounds": {"min": 300e-6, "max": 500e-6}
+        },
+        "O2": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.2095,
+          "description": "Atmospheric O2 mixing ratio",
+          "bounds": {"min": 0.20, "max": 0.22}
+        },
+        "temperature": {
+          "type": "parameter",
+          "units": "K",
+          "default": 288.15,
+          "description": "Air temperature"
+        },
+        "pressure": {
+          "type": "parameter",
+          "units": "Pa",
+          "default": 101325.0,
+          "description": "Atmospheric pressure"
+        },
+        "wind_speed": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 7.0,
+          "description": "Surface wind speed for gas exchange"
+        },
+        "total_carbon": {
+          "type": "observed",
+          "units": "mol/mol",
+          "expression": "CO2",
+          "description": "Total atmospheric carbon (simplified)"
+        }
+      },
+      "equations": []
+    },
+
+    "OceanCarbon": {
+      "coupletype": "OceanCoupler",
+      "reference": {
+        "notes": "Ocean carbonate system with pH, alkalinity, and dissolved inorganic carbon"
+      },
+      "variables": {
+        "DIC": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 2100.0,
+          "description": "Dissolved inorganic carbon",
+          "bounds": {"min": 1800.0, "max": 2400.0}
+        },
+        "ALK": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 2300.0,
+          "description": "Total alkalinity",
+          "bounds": {"min": 2200.0, "max": 2400.0}
+        },
+        "O2_dissolved": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 250.0,
+          "description": "Dissolved oxygen",
+          "bounds": {"min": 0.0, "max": 350.0}
+        },
+        "temperature_ocean": {
+          "type": "parameter",
+          "units": "K",
+          "default": 285.15,
+          "description": "Sea surface temperature"
+        },
+        "salinity": {
+          "type": "parameter",
+          "units": "psu",
+          "default": 35.0,
+          "description": "Sea surface salinity"
+        },
+        "mixed_layer_depth": {
+          "type": "parameter",
+          "units": "m",
+          "default": 50.0,
+          "description": "Ocean mixed layer depth"
+        },
+        "CO2_solubility": {
+          "type": "parameter",
+          "units": "mol/m^3/atm",
+          "default": 0.034,
+          "description": "Henry's law constant for CO2"
+        },
+        "O2_solubility": {
+          "type": "parameter",
+          "units": "mol/m^3/atm",
+          "default": 0.0013,
+          "description": "Henry's law constant for O2"
+        },
+        "pCO2_ocean": {
+          "type": "observed",
+          "units": "atm",
+          "expression": {
+            "op": "/",
+            "args": ["DIC", {"op": "*", "args": ["CO2_solubility", "mixed_layer_depth"]}]
+          },
+          "description": "Ocean surface pCO2"
+        },
+        "pH": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {
+            "op": "-",
+            "args": [
+              8.1,
+              {"op": "*", "args": [0.0002, {"op": "-", "args": ["DIC", 2100]}]}
+            ]
+          },
+          "description": "Ocean pH (simplified relationship)"
+        },
+        "omega_aragonite": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {
+            "op": "*",
+            "args": [
+              {"op": "/", "args": [{"op": "*", "args": ["ALK", 1.2]}, {"op": "+", "args": ["DIC", 50]}}],
+              {"op": "exp", "args": [{"op": "*", "args": [0.01, {"op": "-", "args": ["temperature_ocean", 298.15]}]}]}
+            ]
+          },
+          "description": "Aragonite saturation state"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "DIC change from air-sea exchange and biological processes",
+          "lhs": {"op": "D", "args": ["DIC"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [0.0, "mixed_layer_depth"]
+          }
+        },
+        {
+          "_comment": "Alkalinity affected by calcification and dissolution",
+          "lhs": {"op": "D", "args": ["ALK"], "wrt": "t"},
+          "rhs": 0.0
+        },
+        {
+          "_comment": "Dissolved oxygen from air-sea exchange and biological processes",
+          "lhs": {"op": "D", "args": ["O2_dissolved"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [0.0, "mixed_layer_depth"]
+          }
+        }
+      ]
+    },
+
+    "MarineEcosystem": {
+      "reference": {
+        "notes": "Simple NPZD (Nutrient-Phytoplankton-Zooplankton-Detritus) marine ecosystem model"
+      },
+      "variables": {
+        "nutrients": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 15.0,
+          "description": "Dissolved nutrients (as nitrogen)",
+          "bounds": {"min": 0.0, "max": 50.0}
+        },
+        "phytoplankton": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 2.0,
+          "description": "Phytoplankton biomass (as nitrogen)",
+          "bounds": {"min": 0.0, "max": 20.0}
+        },
+        "zooplankton": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 1.0,
+          "description": "Zooplankton biomass (as nitrogen)",
+          "bounds": {"min": 0.0, "max": 10.0}
+        },
+        "detritus": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 0.5,
+          "description": "Detrital matter (as nitrogen)",
+          "bounds": {"min": 0.0, "max": 5.0}
+        },
+        "light": {
+          "type": "parameter",
+          "units": "W/m^2",
+          "default": 200.0,
+          "description": "Surface irradiance"
+        },
+        "max_growth_rate": {
+          "type": "parameter",
+          "units": "1/day",
+          "default": 1.5,
+          "description": "Maximum phytoplankton growth rate"
+        },
+        "half_saturation_light": {
+          "type": "parameter",
+          "units": "W/m^2",
+          "default": 50.0,
+          "description": "Half-saturation light intensity"
+        },
+        "half_saturation_nutrients": {
+          "type": "parameter",
+          "units": "mol/m^3",
+          "default": 1.0,
+          "description": "Half-saturation nutrient concentration"
+        },
+        "grazing_rate": {
+          "type": "parameter",
+          "units": "m^3/mol/day",
+          "default": 0.8,
+          "description": "Zooplankton grazing rate"
+        },
+        "mortality_rate": {
+          "type": "parameter",
+          "units": "1/day",
+          "default": 0.1,
+          "description": "Mortality rate for phytoplankton and zooplankton"
+        },
+        "remineralization_rate": {
+          "type": "parameter",
+          "units": "1/day",
+          "default": 0.05,
+          "description": "Detritus remineralization rate"
+        },
+        "C_to_N_ratio": {
+          "type": "parameter",
+          "units": "mol/mol",
+          "default": 6.625,
+          "description": "Redfield C:N ratio"
+        },
+        "primary_production": {
+          "type": "observed",
+          "units": "mol/m^3/day",
+          "expression": {
+            "op": "*",
+            "args": [
+              "max_growth_rate",
+              {"op": "/", "args": ["light", {"op": "+", "args": ["light", "half_saturation_light"]}]},
+              {"op": "/", "args": ["nutrients", {"op": "+", "args": ["nutrients", "half_saturation_nutrients"]}]},
+              "phytoplankton"
+            ]
+          },
+          "description": "Primary production rate"
+        },
+        "grazing": {
+          "type": "observed",
+          "units": "mol/m^3/day",
+          "expression": {
+            "op": "*",
+            "args": ["grazing_rate", "phytoplankton", "zooplankton"]
+          },
+          "description": "Grazing rate"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["nutrients"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["primary_production"]}, {"op": "/", "args": [1, 86400]}]},
+              {"op": "*", "args": ["remineralization_rate", "detritus", {"op": "/", "args": [1, 86400]}]}
+            ]
+          }
+        },
+        {
+          "lhs": {"op": "D", "args": ["phytoplankton"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["primary_production", {"op": "/", "args": [1, 86400]}]},
+              {"op": "*", "args": [{"op": "-", "args": ["grazing"]}, {"op": "/", "args": [1, 86400]}]},
+              {"op": "*", "args": [{"op": "-", "args": ["mortality_rate"]}, "phytoplankton", {"op": "/", "args": [1, 86400]}]}
+            ]
+          }
+        },
+        {
+          "lhs": {"op": "D", "args": ["zooplankton"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [0.7, "grazing", {"op": "/", "args": [1, 86400]}]},
+              {"op": "*", "args": [{"op": "-", "args": ["mortality_rate"]}, "zooplankton", {"op": "/", "args": [1, 86400]}]}
+            ]
+          }
+        },
+        {
+          "lhs": {"op": "D", "args": ["detritus"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [0.3, "grazing", {"op": "/", "args": [1, 86400]}]},
+              {"op": "*", "args": ["mortality_rate", {"op": "+", "args": ["phytoplankton", "zooplankton"]}, {"op": "/", "args": [1, 86400]}]},
+              {"op": "*", "args": [{"op": "-", "args": ["remineralization_rate"]}, "detritus", {"op": "/", "args": [1, 86400]}]}
+            ]
+          }
+        }
+      ]
+    },
+
+    "AirSeaGasExchange": {
+      "reference": {
+        "notes": "Physical air-sea gas exchange using wind-speed dependent transfer velocities",
+        "citation": "Wanninkhof, 2014. Relationship between wind speed and gas exchange"
+      },
+      "variables": {
+        "k_CO2": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 2e-5,
+          "description": "CO2 gas transfer velocity"
+        },
+        "k_O2": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 2.5e-5,
+          "description": "O2 gas transfer velocity"
+        },
+        "Schmidt_CO2": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 600.0,
+          "description": "CO2 Schmidt number"
+        },
+        "Schmidt_O2": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 500.0,
+          "description": "O2 Schmidt number"
+        }
+      },
+      "equations": []
+    }
+  },
+
+  "data_loaders": {
+    "ClimateForcing": {
+      "type": "climate_data",
+      "loader_id": "CESM2_Output",
+      "config": {
+        "model": "CESM2",
+        "scenario": "SSP2-4.5",
+        "variables": ["SST", "U10", "V10", "SLP", "FSNS"],
+        "temporal_frequency": "daily"
+      },
+      "provides": {
+        "temperature_ocean": {"units": "K", "description": "Sea surface temperature"},
+        "wind_speed": {"units": "m/s", "description": "Surface wind speed"},
+        "pressure": {"units": "Pa", "description": "Sea level pressure"},
+        "light": {"units": "W/m^2", "description": "Net surface solar radiation"}
+      }
+    },
+
+    "OceanObservations": {
+      "type": "observational_data",
+      "loader_id": "SOCAT_pCO2",
+      "config": {
+        "dataset": "SOCATv2022",
+        "quality_flags": [2, 3],
+        "spatial_binning": "1x1_degree",
+        "temporal_binning": "monthly"
+      },
+      "provides": {
+        "pCO2_observed": {"units": "uatm", "description": "Observed ocean pCO2"}
+      }
+    }
+  },
+
+  "operators": {
+    "CarbonateChemistry": {
+      "operator_id": "CO2SYS_v3",
+      "reference": {
+        "citation": "Lewis et al., 1998. Program developed for CO2 system calculations",
+        "doi": "10.2172/639712"
+      },
+      "config": {
+        "K1K2_constants": "Mehrbach_refit",
+        "KSO4_constant": "Dickson",
+        "pH_scale": "Total",
+        "pressure_correction": true
+      },
+      "needed_vars": ["DIC", "ALK", "temperature_ocean", "salinity", "pressure"],
+      "modifies": ["CO2_solubility"],
+      "description": "Full carbonate system calculations"
+    },
+
+    "GasTransferVelocity": {
+      "operator_id": "Wanninkhof2014",
+      "reference": {
+        "citation": "Wanninkhof, 2014. Relationship between wind speed and gas exchange over the ocean",
+        "doi": "10.4319/lom.2014.12.351"
+      },
+      "config": {
+        "parameterization": "cubic_wind_speed",
+        "temperature_dependence": "schmidt_number_scaling"
+      },
+      "needed_vars": ["wind_speed", "temperature_ocean", "Schmidt_CO2", "Schmidt_O2"],
+      "modifies": ["k_CO2", "k_O2"],
+      "description": "Wind speed and temperature dependent gas transfer velocities"
+    },
+
+    "BiologicalPump": {
+      "operator_id": "Export_Production",
+      "reference": {
+        "notes": "Biological carbon pump with export to deep ocean"
+      },
+      "config": {
+        "export_ratio": 0.25,
+        "sinking_velocity": 10.0,
+        "remineralization_depth": 1000.0
+      },
+      "needed_vars": ["primary_production", "phytoplankton", "detritus"],
+      "modifies": ["DIC", "ALK", "nutrients"],
+      "description": "Export production and deep ocean remineralization"
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "Type 1: operator_compose - No direct application here, but could couple atmosphere transport if present",
+      "type": "operator_compose",
+      "systems": ["AtmosphericCarbon"],
+      "description": "Placeholder for atmospheric transport coupling if extended"
+    },
+
+    {
+      "_comment": "Type 2: couple2 - Bidirectional air-sea CO2 and O2 exchange",
+      "type": "couple2",
+      "systems": ["AtmosphericCarbon", "OceanCarbon"],
+      "coupletype_pair": ["AtmosphereCoupler", "OceanCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "_comment": "Air-sea CO2 flux: positive into ocean",
+            "from": "AirSeaGasExchange.k_CO2",
+            "to": "AtmosphericCarbon.CO2",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                {"op": "-", "args": ["AirSeaGasExchange.k_CO2"]},
+                {"op": "-", "args": [
+                  {"op": "*", "args": ["AtmosphericCarbon.CO2", "AtmosphericCarbon.pressure", 1e-6]},
+                  "OceanCarbon.pCO2_ocean"
+                ]}
+              ]
+            }
+          },
+          {
+            "_comment": "Ocean DIC change from air-sea CO2 exchange",
+            "from": "AirSeaGasExchange.k_CO2",
+            "to": "OceanCarbon.DIC",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                "AirSeaGasExchange.k_CO2",
+                {"op": "-", "args": [
+                  {"op": "*", "args": ["AtmosphericCarbon.CO2", "AtmosphericCarbon.pressure", 1e-6]},
+                  "OceanCarbon.pCO2_ocean"
+                ]},
+                {"op": "/", "args": [1, "OceanCarbon.mixed_layer_depth"]}
+              ]
+            }
+          },
+          {
+            "_comment": "Air-sea O2 flux",
+            "from": "AirSeaGasExchange.k_O2",
+            "to": "AtmosphericCarbon.O2",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                {"op": "-", "args": ["AirSeaGasExchange.k_O2"]},
+                {"op": "-", "args": [
+                  {"op": "*", "args": ["AtmosphericCarbon.O2", "AtmosphericCarbon.pressure"]},
+                  {"op": "/", "args": ["OceanCarbon.O2_dissolved", "OceanCarbon.O2_solubility"]}
+                ]}
+              ]
+            }
+          },
+          {
+            "_comment": "Ocean O2 change from air-sea exchange",
+            "from": "AirSeaGasExchange.k_O2",
+            "to": "OceanCarbon.O2_dissolved",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                "AirSeaGasExchange.k_O2",
+                {"op": "-", "args": [
+                  {"op": "*", "args": ["AtmosphericCarbon.O2", "AtmosphericCarbon.pressure"]},
+                  {"op": "/", "args": ["OceanCarbon.O2_dissolved", "OceanCarbon.O2_solubility"]}
+                ]},
+                {"op": "/", "args": [1, "OceanCarbon.mixed_layer_depth"]}
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Bidirectional air-sea gas exchange for CO2 and O2"
+    },
+
+    {
+      "_comment": "Type 2: couple2 - Ocean carbon-ecosystem coupling",
+      "type": "couple2",
+      "systems": ["OceanCarbon", "MarineEcosystem"],
+      "connector": {
+        "equations": [
+          {
+            "_comment": "DIC consumption by primary production",
+            "from": "MarineEcosystem.primary_production",
+            "to": "OceanCarbon.DIC",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                {"op": "-", "args": ["MarineEcosystem.primary_production"]},
+                "MarineEcosystem.C_to_N_ratio",
+                {"op": "/", "args": [1, 86400]}
+              ]
+            }
+          },
+          {
+            "_comment": "DIC production by remineralization",
+            "from": "MarineEcosystem.remineralization_rate",
+            "to": "OceanCarbon.DIC",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                "MarineEcosystem.remineralization_rate",
+                "MarineEcosystem.detritus",
+                "MarineEcosystem.C_to_N_ratio",
+                {"op": "/", "args": [1, 86400]}
+              ]
+            }
+          },
+          {
+            "_comment": "O2 production by photosynthesis",
+            "from": "MarineEcosystem.primary_production",
+            "to": "OceanCarbon.O2_dissolved",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                "MarineEcosystem.primary_production",
+                1.4,
+                {"op": "/", "args": [1, 86400]}
+              ]
+            }
+          },
+          {
+            "_comment": "O2 consumption by respiration",
+            "from": "MarineEcosystem.remineralization_rate",
+            "to": "OceanCarbon.O2_dissolved",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                {"op": "-", "args": ["MarineEcosystem.remineralization_rate"]},
+                "MarineEcosystem.detritus",
+                1.4,
+                {"op": "/", "args": [1, 86400]}
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Couple marine ecosystem carbon and oxygen fluxes"
+    },
+
+    {
+      "_comment": "Type 3: variable_map - Replace parameters with climate forcing",
+      "type": "variable_map",
+      "from": "ClimateForcing.temperature_ocean",
+      "to": "OceanCarbon.temperature_ocean",
+      "transform": "param_to_var",
+      "description": "Use CESM2 sea surface temperature"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ClimateForcing.wind_speed",
+      "to": "AtmosphericCarbon.wind_speed",
+      "transform": "param_to_var",
+      "description": "Use CESM2 surface wind speed"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ClimateForcing.pressure",
+      "to": "AtmosphericCarbon.pressure",
+      "transform": "param_to_var",
+      "description": "Use CESM2 sea level pressure"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ClimateForcing.light",
+      "to": "MarineEcosystem.light",
+      "transform": "param_to_var",
+      "description": "Use CESM2 surface solar radiation"
+    },
+
+    {
+      "_comment": "Type 4: operator_apply - Apply biogeochemical operators",
+      "type": "operator_apply",
+      "operator": "CarbonateChemistry",
+      "description": "Calculate full carbonate system equilibrium"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "GasTransferVelocity",
+      "description": "Update gas transfer velocities with wind and temperature"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "BiologicalPump",
+      "description": "Export production to deep ocean"
+    },
+
+    {
+      "_comment": "Type 5: callback - Environmental forcing callbacks",
+      "type": "callback",
+      "callback_id": "SeasonalLightCycle",
+      "config": {
+        "latitude": 45.0,
+        "declination_amplitude": 23.45,
+        "clear_sky_fraction": 0.7
+      },
+      "description": "Seasonal and diurnal light variations"
+    },
+
+    {
+      "type": "callback",
+      "callback_id": "MixedLayerDepthSeasonal",
+      "config": {
+        "summer_depth": 20.0,
+        "winter_depth": 100.0,
+        "transition_months": [3, 4, 9, 10]
+      },
+      "description": "Seasonal mixed layer depth variations"
+    },
+
+    {
+      "_comment": "Type 6: event - Ecosystem and chemistry events",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "phytoplankton_bloom_trigger",
+      "conditions": [
+        {"op": "-", "args": ["MarineEcosystem.phytoplankton", 5.0]}
+      ],
+      "affects": [
+        {
+          "lhs": "MarineEcosystem.max_growth_rate",
+          "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["MarineEcosystem.max_growth_rate"]}, 1.5]}
+        }
+      ],
+      "discrete_parameters": ["MarineEcosystem.max_growth_rate"],
+      "description": "Enhance growth rate during phytoplankton blooms"
+    },
+
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "name": "ocean_acidification_threshold",
+      "conditions": [
+        {"op": "-", "args": [7.8, "OceanCarbon.pH"]}
+      ],
+      "affects": [
+        {
+          "lhs": "OceanCarbon.CO2_solubility",
+          "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["OceanCarbon.CO2_solubility"]}, 1.1]}
+        }
+      ],
+      "discrete_parameters": ["OceanCarbon.CO2_solubility"],
+      "description": "Increase CO2 solubility when pH drops below 7.8 (acidification response)"
+    },
+
+    {
+      "type": "event",
+      "event_type": "discrete",
+      "name": "seasonal_nutrient_upwelling",
+      "trigger": {
+        "type": "periodic",
+        "interval": 7776000.0,
+        "phase": 5184000.0
+      },
+      "affects": [
+        {
+          "lhs": "MarineEcosystem.nutrients",
+          "rhs": {"op": "+", "args": [{"op": "Pre", "args": ["MarineEcosystem.nutrients"]}, 10.0]}
+        }
+      ],
+      "discrete_parameters": ["MarineEcosystem.nutrients"],
+      "description": "Seasonal nutrient injection every 90 days (upwelling)"
+    }
+  ],
+
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2025-01-01T00:00:00Z",
+      "reference_time": "2024-01-01T00:00:00Z"
+    },
+    "spatial": {
+      "x": {
+        "min": -180.0,
+        "max": 180.0,
+        "units": "degrees_east",
+        "grid_spacing": 2.0,
+        "coordinate_system": "longitude"
+      },
+      "y": {
+        "min": -90.0,
+        "max": 90.0,
+        "units": "degrees_north",
+        "grid_spacing": 2.0,
+        "coordinate_system": "latitude"
+      },
+      "z": {
+        "min": 0.0,
+        "max": 5000.0,
+        "units": "meters",
+        "grid_spacing": 50.0,
+        "coordinate_system": "depth_below_sea_level"
+      }
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "AtmosphericCarbon.CO2": 420e-6,
+        "AtmosphericCarbon.O2": 0.2095,
+        "OceanCarbon.DIC": 2100.0,
+        "OceanCarbon.ALK": 2300.0,
+        "OceanCarbon.O2_dissolved": 250.0,
+        "MarineEcosystem.nutrients": 15.0,
+        "MarineEcosystem.phytoplankton": 2.0,
+        "MarineEcosystem.zooplankton": 1.0,
+        "MarineEcosystem.detritus": 0.5
+      },
+      "spatial_variation": {
+        "type": "latitudinal_gradient",
+        "gradient_variables": {
+          "MarineEcosystem.nutrients": {"equator": 5.0, "poles": 25.0},
+          "OceanCarbon.temperature_ocean": {"equator": 300.0, "poles": 275.0}
+        }
+      }
+    },
+    "boundary_conditions": [
+      {
+        "type": "periodic",
+        "boundaries": ["west", "east"]
+      },
+      {
+        "type": "zero_gradient",
+        "boundaries": ["south", "north"]
+      },
+      {
+        "type": "air_sea_interface",
+        "boundaries": ["top"],
+        "description": "Air-sea gas exchange interface"
+      },
+      {
+        "type": "deep_ocean",
+        "boundaries": ["bottom"],
+        "values": {
+          "OceanCarbon.DIC": 2200.0,
+          "MarineEcosystem.nutrients": 30.0
+        }
+      }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "operator_splitting",
+    "config": {
+      "physical_timestep": 3600.0,
+      "biogeochemical_timestep": 1800.0,
+      "gas_exchange_timestep": 300.0,
+      "stiff_algorithm": "CVODE_BDF",
+      "nonstiff_algorithm": "Vern8",
+      "stiff_kwargs": {
+        "abstol": 1e-10,
+        "reltol": 1e-8,
+        "maxord": 5
+      }
+    },
+    "adaptive_timestepping": {
+      "enabled": true,
+      "min_timestep": 60.0,
+      "max_timestep": 7200.0,
+      "growth_factor": 1.2,
+      "shrink_factor": 0.5
+    }
+  }
+}

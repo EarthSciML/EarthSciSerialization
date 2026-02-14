@@ -1,0 +1,325 @@
+{
+  "description": "Expected simulation results for coupled atmospheric system end-to-end test",
+  "test_metadata": {
+    "system_name": "CoupledAtmosphericSystem",
+    "file": "coupled_atmospheric_system.esm",
+    "simulation_duration": "48 hours",
+    "domain_size": "167x167x150 grid cells",
+    "spatial_resolution": "12km horizontal, 100m vertical",
+    "temporal_resolution": "600s base timestep"
+  },
+
+  "coupling_verification": {
+    "description": "Verification that all coupling types are properly assembled",
+    "operator_compose": {
+      "systems": ["AtmosphericChemistry", "AtmosphericTransport"],
+      "verification": "Chemistry species (O3, NO, NO2, HCHO, HO2) receive transport terms",
+      "expected_equations": 10,
+      "transport_terms_per_species": 5,
+      "coupling_mechanism": "_var placeholder expansion"
+    },
+    "couple2": {
+      "systems": ["AtmosphericChemistry", "SurfaceExchange"],
+      "verification": "Bidirectional coupling via connector equations",
+      "connector_equations": 2,
+      "coupled_species": ["O3", "NO2"],
+      "deposition_flux_units": "mol/mol/s"
+    },
+    "variable_map": {
+      "count": 8,
+      "meteorological_couplings": [
+        "temperature: MeteorologicalFields → AtmosphericChemistry",
+        "pressure: MeteorologicalFields → AtmosphericChemistry",
+        "humidity: MeteorologicalFields → AtmosphericChemistry",
+        "u_wind: MeteorologicalFields → AtmosphericTransport",
+        "v_wind: MeteorologicalFields → AtmosphericTransport",
+        "boundary_layer_height: MeteorologicalFields → SurfaceExchange"
+      ],
+      "emission_couplings": [
+        "NOx_emission_rate: EmissionInventories → EmissionSources",
+        "VOC_emission_rate: EmissionInventories → EmissionSources"
+      ],
+      "verification": "Parameters replaced with time-varying data loader variables"
+    },
+    "operator_apply": {
+      "count": 3,
+      "operators": ["DryDepositionOperator", "TurbulentMixingOperator", "PhotolysisOperator"],
+      "verification": "Runtime operators registered and applied during simulation"
+    },
+    "callback": {
+      "count": 2,
+      "callbacks": ["BiogenicEmissionTemperatureScaling", "WeekdayWeekendScaling"],
+      "verification": "Callbacks registered for parameter updates"
+    },
+    "event": {
+      "count": 3,
+      "continuous_events": 2,
+      "discrete_events": 1,
+      "cross_system_events": 3,
+      "verification": "Events affect variables across multiple systems"
+    }
+  },
+
+  "system_assembly_verification": {
+    "description": "Verification of complete coupled system assembly",
+    "total_state_variables": 5,
+    "total_parameters": 27,
+    "total_observed_variables": 4,
+    "total_equations": 15,
+    "data_loader_variables": 6,
+    "operator_modifications": 12,
+    "event_affects": 4,
+    "conservation_laws": [
+      "Total nitrogen: NO + NO2 + emitted_NOx = conserved (accounting for deposition)",
+      "Carbon mass: HCHO + emitted_VOC = conserved (accounting for photolysis and deposition)"
+    ],
+    "mass_balance_verification": {
+      "NOx_budget": {
+        "sources": ["EmissionSources", "atmospheric_transport_inflow"],
+        "sinks": ["SurfaceExchange.deposition", "atmospheric_transport_outflow"],
+        "expected_closure": "< 1% residual"
+      },
+      "O3_budget": {
+        "sources": ["photochemical_production", "atmospheric_transport_inflow"],
+        "sinks": ["NO_titration", "SurfaceExchange.deposition", "atmospheric_transport_outflow"],
+        "expected_closure": "< 2% residual"
+      }
+    }
+  },
+
+  "cross_system_variable_flow": {
+    "description": "Verification of variable flow between coupled systems",
+    "meteorology_to_chemistry": {
+      "temperature": {
+        "source": "MeteorologicalFields",
+        "destination": "AtmosphericChemistry",
+        "coupling_type": "variable_map",
+        "effect": "Temperature-dependent reaction rates"
+      },
+      "pressure": {
+        "source": "MeteorologicalFields",
+        "destination": "AtmosphericChemistry",
+        "coupling_type": "variable_map",
+        "effect": "Air density for reaction rate calculations"
+      },
+      "humidity": {
+        "source": "MeteorologicalFields",
+        "destination": "AtmosphericChemistry",
+        "coupling_type": "variable_map",
+        "effect": "Water vapor for heterogeneous reactions"
+      }
+    },
+    "meteorology_to_transport": {
+      "winds": {
+        "source": "MeteorologicalFields.{u_wind,v_wind}",
+        "destination": "AtmosphericTransport.{u_wind,v_wind}",
+        "coupling_type": "variable_map",
+        "effect": "Advection velocity fields"
+      }
+    },
+    "meteorology_to_surface": {
+      "boundary_layer_height": {
+        "source": "MeteorologicalFields",
+        "destination": "SurfaceExchange",
+        "coupling_type": "variable_map",
+        "effect": "Controls deposition flux normalization"
+      }
+    },
+    "emissions_to_sources": {
+      "emission_rates": {
+        "source": "EmissionInventories.{NOx_emission_rate,VOC_emission_rate}",
+        "destination": "EmissionSources.{NOx_emission_rate,VOC_emission_rate}",
+        "coupling_type": "variable_map",
+        "effect": "Spatially and temporally varying emissions"
+      }
+    },
+    "chemistry_to_surface": {
+      "concentrations": {
+        "source": "AtmosphericChemistry.{O3,NO2}",
+        "destination": "SurfaceExchange connector equations",
+        "coupling_type": "couple2",
+        "effect": "Concentration-dependent deposition fluxes"
+      }
+    },
+    "surface_to_chemistry": {
+      "deposition_fluxes": {
+        "source": "SurfaceExchange.{deposition_velocity_O3,deposition_velocity_NO2}",
+        "destination": "AtmosphericChemistry.{O3,NO2} equations",
+        "coupling_type": "couple2",
+        "effect": "Surface loss terms for species"
+      }
+    }
+  },
+
+  "expected_simulation_results": {
+    "description": "Expected numerical results for 48-hour simulation",
+    "temporal_evolution": {
+      "time_points": [0, 21600, 43200, 64800, 86400, 108000, 129600, 151200, 172800],
+      "time_labels": ["0h", "6h", "12h", "18h", "24h", "30h", "36h", "42h", "48h"],
+      "domain_averaged_concentrations": {
+        "O3_ppb": [40.0, 35.2, 58.7, 73.1, 65.4, 38.9, 67.2, 79.8, 71.3],
+        "NO_ppt": [500, 650, 420, 380, 520, 680, 450, 390, 540],
+        "NO2_ppb": [2.0, 2.8, 1.9, 1.7, 2.2, 2.9, 2.0, 1.8, 2.3],
+        "HCHO_ppb": [1.0, 1.2, 1.4, 1.3, 1.1, 1.3, 1.5, 1.4, 1.2],
+        "HO2_ppt": [1.0, 2.1, 4.8, 3.2, 1.8, 2.3, 5.1, 3.5, 2.0]
+      },
+      "observed_quantities": {
+        "total_NOx_ppb": [2.5, 3.45, 2.32, 2.08, 2.72, 3.58, 2.45, 2.19, 2.84],
+        "ozone_production_rate_ppb_per_hour": [0, 0.8, 2.3, 1.7, 0.6, 0.9, 2.5, 1.9, 0.7]
+      }
+    },
+    "diurnal_patterns": {
+      "description": "Expected diurnal cycles consistent with atmospheric chemistry",
+      "O3_cycle": "Minimum at sunrise (~6h), maximum in mid-afternoon (~18h)",
+      "NO_cycle": "Morning rush hour peak (~6h), evening peak (~42h, 66h)",
+      "NO2_cycle": "Follows NO but shifted by photolysis",
+      "photolysis_rates": {
+        "jNO2_peak": "1/s range: 0.008-0.012 during daylight hours",
+        "jHCHO_peak": "1/s range: 3e-5 to 5e-5 during daylight hours"
+      }
+    },
+    "spatial_patterns": {
+      "description": "Expected spatial gradients and transport effects",
+      "emission_plume": {
+        "initial_gaussian_spread": "50km sigma in x,y directions",
+        "transport_advection": "Eastward at 8 m/s, northward at 3 m/s",
+        "48h_displacement": "~1380km east, ~518km north"
+      },
+      "concentration_gradients": {
+        "urban_enhancement": "2-5x higher NOx in emission source region",
+        "O3_titration": "Lower O3 in high-NOx regions",
+        "boundary_effects": "Concentrations approach boundary values at domain edges"
+      }
+    },
+    "event_triggers": {
+      "description": "Expected event triggering during simulation",
+      "ozone_exceedance_events": {
+        "trigger_times": ["~18h", "~42h"],
+        "trigger_concentration": "> 70 ppb O3",
+        "effect": "jNO2 increased by 20%",
+        "duration": "Until O3 drops below threshold"
+      },
+      "high_ozone_emission_control": {
+        "trigger_times": ["~18h", "~42h"],
+        "trigger_concentration": "> 80 ppb O3",
+        "effect": "NOx emissions reduced to 60%",
+        "duration": "Until O3 drops below 80 ppb"
+      },
+      "weekend_effects": {
+        "trigger_time": "t > 86400s (Saturday)",
+        "effect": "weekday_factor = 0.75",
+        "verification": "Lower emissions Saturday-Sunday"
+      },
+      "boundary_layer_collapse": {
+        "expected_occurrences": "Nighttime hours when PBL < 100m",
+        "effect": "K_z reduced to 10% of daytime values",
+        "impact": "Reduced vertical mixing, surface accumulation"
+      }
+    }
+  },
+
+  "operator_composition_results": {
+    "description": "Verification of operator composition effects",
+    "transport_chemistry_coupling": {
+      "verification": "All 5 chemical species receive identical transport operators",
+      "advection_effect": "Species concentrations advected eastward and northward",
+      "diffusion_effect": "Gaussian plume spreading enhanced by turbulent diffusion",
+      "expected_transport_timescale": "~3-6 hours for significant concentration changes"
+    },
+    "deposition_coupling": {
+      "O3_deposition": {
+        "deposition_velocity": "~0.005 m/s (typical for O3 over crops)",
+        "flux_magnitude": "~2e-12 mol/mol/s when O3 = 40 ppb, PBL = 800m",
+        "impact": "5-10% O3 loss per day near surface"
+      },
+      "NO2_deposition": {
+        "deposition_velocity": "~0.004 m/s (typical for NO2)",
+        "flux_magnitude": "~1e-13 mol/mol/s when NO2 = 2 ppb",
+        "impact": "Lower than O3 due to smaller deposition velocity and concentration"
+      }
+    },
+    "emission_coupling": {
+      "diurnal_variation": {
+        "peak_factor": "1.8 at 15:00 local time",
+        "minimum_factor": "0.2 at 03:00 local time",
+        "emission_enhancement": "NOx and VOC emissions vary by factor of 9"
+      },
+      "temperature_scaling": {
+        "biogenic_response": "Exponential increase with temperature",
+        "typical_factor": "1.5-3x at summer temperatures vs reference"
+      }
+    }
+  },
+
+  "simulation_testing_requirements": {
+    "description": "Requirements for testing simulation codes against these fixtures",
+    "julia_mtk_tests": [
+      "Parse ESM → ODESystem with 5 state variables",
+      "Parse ESM → 3 ReactionSystem objects (if reaction systems present)",
+      "Assemble CoupledSystem with all 6 coupling types",
+      "Generate 15 total differential equations (5 chemistry + 10 transport)",
+      "Verify event callbacks are SymbolicContinuousCallback/SymbolicDiscreteCallback",
+      "Simulate ODEProblem with QNDF solver for 48 hours",
+      "Verify mass conservation for NOx and carbon budgets",
+      "Verify diurnal cycles match expected patterns",
+      "Verify spatial transport matches advection velocities",
+      "Verify event triggering at expected thresholds"
+    ],
+    "python_scipy_tests": [
+      "Parse ESM → callable RHS function with 5 state variables",
+      "Generate Jacobian for stiff solver (BDF method)",
+      "Integrate with solve_ivp for 48 hours with event detection",
+      "Verify conservation laws within numerical tolerance",
+      "Verify diurnal patterns emerge from chemical kinetics",
+      "Compare results with Julia MTK simulation (cross-validation)",
+      "Test operator composition by comparing transport-only vs full system",
+      "Verify emission and deposition flux calculations"
+    ],
+    "typescript_tests": [
+      "Parse and validate ESM schema",
+      "Generate expression graphs for all coupled equations",
+      "Verify coupling graph shows all 6 coupling types",
+      "Export to interactive visualization format",
+      "Support click-to-edit for parameters and initial conditions"
+    ]
+  },
+
+  "performance_benchmarks": {
+    "description": "Expected computational performance for benchmarking",
+    "julia_mtk": {
+      "assembly_time": "< 5 seconds for full coupled system",
+      "simulation_time": "< 60 seconds for 48h simulation",
+      "memory_usage": "< 2 GB for 167x167x150 grid",
+      "scaling": "Linear with number of grid cells"
+    },
+    "python_scipy": {
+      "assembly_time": "< 15 seconds for RHS function generation",
+      "simulation_time": "< 300 seconds for 48h simulation",
+      "memory_usage": "< 4 GB for equivalent problem size",
+      "jacobian_evaluation": "< 0.1 seconds per evaluation"
+    }
+  },
+
+  "validation_tolerance": {
+    "description": "Acceptable numerical tolerances for test validation",
+    "concentration_values": {
+      "relative_tolerance": 0.05,
+      "absolute_tolerance": 1e-12,
+      "note": "5% relative or 1 ppt absolute, whichever is larger"
+    },
+    "conservation_laws": {
+      "mass_balance_closure": 0.01,
+      "note": "Mass balance residuals must be < 1%"
+    },
+    "event_triggering": {
+      "time_tolerance": 300,
+      "concentration_tolerance": 0.02,
+      "note": "Events must trigger within 5 minutes of expected time"
+    },
+    "spatial_patterns": {
+      "transport_distance_tolerance": 0.1,
+      "concentration_gradient_tolerance": 0.15,
+      "note": "10% tolerance on transport distances, 15% on gradients"
+    }
+  }
+}
