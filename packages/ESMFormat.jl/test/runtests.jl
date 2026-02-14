@@ -4,6 +4,7 @@ using ESMFormat
 @testset "ESMFormat.jl Tests" begin
 
     include("parse_test.jl")
+    include("mtk_catalyst_test.jl")
 
     @testset "Expression Types" begin
         # Test NumExpr
