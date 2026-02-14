@@ -20,6 +20,7 @@ from .types import (
     FunctionalAffect,
     DiscreteEventTrigger,
     DataLoader,
+    DataLoaderType,
     Operator,
     CouplingEntry,
     Domain,
@@ -46,6 +47,10 @@ from .simulation import (
     SimulationResult,
     SimulationError,
 )
+from .data_loaders import (
+    NetCDFLoader,
+    create_data_loader,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -64,6 +69,7 @@ __all__ = [
     "FunctionalAffect",
     "DiscreteEventTrigger",
     "DataLoader",
+    "DataLoaderType",
     "Operator",
     "CouplingEntry",
     "Domain",
@@ -89,4 +95,6 @@ __all__ = [
     "simulate_with_discrete_events",
     "SimulationResult",
     "SimulationError",
+    "NetCDFLoader",
+    "create_data_loader",
 ]
