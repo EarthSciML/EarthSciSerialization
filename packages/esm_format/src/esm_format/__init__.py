@@ -39,6 +39,12 @@ from .verification import (
     verify_model,
     compute_stoichiometric_matrix,
 )
+from .simulation import (
+    simulate,
+    simulate_with_discrete_events,
+    SimulationResult,
+    SimulationError,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -75,4 +81,8 @@ __all__ = [
     "verify_reaction_system",
     "verify_model",
     "compute_stoichiometric_matrix",
+    "simulate",
+    "simulate_with_discrete_events",
+    "SimulationResult",
+    "SimulationError",
 ]
