@@ -1,0 +1,33 @@
+{
+  "esm": "0.0.5",
+  "metadata": {
+    "name": "MigrationTest_0_0_5",
+    "description": "Test file representing older format that might need migration to current version",
+    "authors": ["ESM Format Team"],
+    "created": "2023-10-01T00:00:00Z"
+  },
+  "reaction_systems": {
+    "LegacyChemistry": {
+      "species": {
+        "CH4": { "units": "ppbv", "default": 1900, "description": "Methane in ppbv (old unit convention)" },
+        "OH": { "units": "molec/cm3", "default": 2e6, "description": "Hydroxyl radical" }
+      },
+      "parameters": {
+        "k_CH4_OH": { "units": "cm3/molec/s", "default": 6.4e-15, "description": "CH4 + OH rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "CH4_oxidation",
+          "substrates": [
+            { "species": "CH4", "stoichiometry": 1 },
+            { "species": "OH", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "H2O", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["k_CH4_OH", "CH4", "OH"] }
+        }
+      ]
+    }
+  }
+}
