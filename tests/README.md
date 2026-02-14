@@ -10,8 +10,13 @@ tests/
 │   ├── minimal_chemistry.esm # Baseline test - all libraries must parse this
 │   ├── full_coupled.esm      # TODO: Complete file with all sections
 │   └── events_all_types.esm  # TODO: All event variants
+├── events/                   # Event system test fixtures
+│   ├── comprehensive_events.esm # Basic event system functionality
+│   ├── event_system_edge_cases.esm # Advanced edge cases: ordering, boundaries, scoping, chains
+│   └── event_timing_synchronization.esm # Timing precision, race conditions, synchronization
 ├── invalid/                  # Invalid ESM files for validation testing
 │   ├── expected_errors.json  # Expected validation errors for each invalid file
+│   ├── event_expected_errors.json # Expected validation errors for event system edge cases
 │   ├── missing_esm_version.esm
 │   ├── unknown_variable_ref.esm
 │   ├── equation_count_mismatch.esm
@@ -20,7 +25,8 @@ tests/
 │   ├── null_reaction.esm
 │   ├── missing_observed_expr.esm
 │   ├── unresolved_scoped_ref.esm
-│   └── event_var_undeclared.esm
+│   ├── event_var_undeclared.esm
+│   └── event_error_conditions.esm # Invalid event configurations for error testing
 ├── display/                  # Expected pretty-printing outputs
 │   ├── expr_precedence.json  # Expression → Unicode/LaTeX/ASCII
 │   ├── chemical_subscripts.json # Basic chemical species formatting test cases
@@ -99,11 +105,11 @@ Each language library should implement tests that:
 **Coverage**:
 - ✅ Baseline directory structure
 - ✅ Schema validation errors (3 cases)
-- ✅ Structural validation errors (7 cases)
+- ✅ Structural validation errors (7 cases + 9 event system error cases)
 - ✅ Display format fixtures (18 expression cases, 18 basic + 150+ comprehensive chemical subscript cases)
 - ✅ Substitution fixtures (8 cases)
 - ✅ System graph fixtures (1 case)
+- ✅ Event system fixtures (3 comprehensive files: basic functionality, edge cases, timing/synchronization)
 - ❌ Full coupled system fixtures (TODO)
-- ❌ Event system fixtures (TODO)
 - ❌ Expression graph fixtures (TODO)
 - ❌ Simulation reference trajectories (TODO)
