@@ -1,0 +1,319 @@
+{
+  "description": "Expected simulation results for ocean-atmosphere biogeochemical coupling end-to-end test",
+  "test_metadata": {
+    "system_name": "OceanAtmosphereBiogeochemistry",
+    "file": "ocean_atmosphere_biogeochemistry.esm",
+    "simulation_duration": "1 year",
+    "domain_size": "180x90x100 grid cells",
+    "spatial_resolution": "2° longitude x 2° latitude, 50m vertical",
+    "temporal_resolution": "300-3600s adaptive timestep"
+  },
+
+  "coupling_verification": {
+    "description": "Verification that all coupling types function correctly in biogeochemical context",
+    "couple2_air_sea_exchange": {
+      "systems": ["AtmosphericCarbon", "OceanCarbon"],
+      "bidirectional_fluxes": ["CO2", "O2"],
+      "connector_equations": 4,
+      "flux_direction": "CO2 typically ocean→atmosphere, O2 typically atmosphere→ocean",
+      "equilibrium_timescale": "months to years"
+    },
+    "couple2_ocean_ecosystem": {
+      "systems": ["OceanCarbon", "MarineEcosystem"],
+      "biogeochemical_fluxes": ["DIC", "O2_dissolved"],
+      "connector_equations": 4,
+      "coupling_mechanism": "Primary production consumes DIC, produces O2; respiration does reverse",
+      "stoichiometry": "Redfield ratio C:N = 6.625"
+    },
+    "variable_map": {
+      "count": 4,
+      "climate_forcing": [
+        "temperature_ocean: ClimateForcing → OceanCarbon",
+        "wind_speed: ClimateForcing → AtmosphericCarbon",
+        "pressure: ClimateForcing → AtmosphericCarbon",
+        "light: ClimateForcing → MarineEcosystem"
+      ],
+      "temporal_variation": "Daily to seasonal cycles from CESM2 climate data"
+    },
+    "operator_apply": {
+      "count": 3,
+      "biogeochemical_operators": [
+        "CarbonateChemistry: Full CO2 system equilibrium",
+        "GasTransferVelocity: Wind-dependent gas exchange rates",
+        "BiologicalPump: Export production to deep ocean"
+      ]
+    },
+    "callback": {
+      "count": 2,
+      "environmental_forcing": [
+        "SeasonalLightCycle: Seasonal and diurnal solar radiation",
+        "MixedLayerDepthSeasonal: Seasonal stratification cycles"
+      ]
+    },
+    "event": {
+      "count": 3,
+      "ecosystem_events": [
+        "phytoplankton_bloom_trigger: Enhanced growth during blooms",
+        "ocean_acidification_threshold: Chemical response to low pH",
+        "seasonal_nutrient_upwelling: Quarterly nutrient injection"
+      ]
+    }
+  },
+
+  "system_assembly_verification": {
+    "description": "Complete coupled system assembly verification",
+    "total_state_variables": 9,
+    "atmospheric_states": 2,
+    "ocean_chemistry_states": 3,
+    "ecosystem_states": 4,
+    "total_parameters": 31,
+    "total_equations": 8,
+    "conservation_principles": [
+      "Global carbon conservation: atmospheric CO2 + oceanic DIC + ecosystem carbon = constant",
+      "Global oxygen conservation: atmospheric O2 + oceanic O2 = constant (+ biological sources/sinks)",
+      "Marine nitrogen conservation: nutrients + phytoplankton + zooplankton + detritus = constant",
+      "Alkalinity quasi-conservation: ALK changes only through CaCO3 formation/dissolution"
+    ],
+    "mass_balance_closure": {
+      "carbon_cycle": {
+        "air_sea_flux_magnitude": "2-20 mol C/m²/year",
+        "biological_pump_flux": "1-10 mol C/m²/year",
+        "expected_closure": "< 0.5% residual"
+      },
+      "oxygen_cycle": {
+        "air_sea_flux_magnitude": "10-100 mol O2/m²/year",
+        "biological_production": "2-40 mol O2/m²/year",
+        "expected_closure": "< 1% residual"
+      }
+    }
+  },
+
+  "cross_system_variable_flow": {
+    "description": "Bidirectional variable flow verification",
+    "atmosphere_to_ocean": {
+      "CO2_dissolution": {
+        "driving_gradient": "pCO2_atm - pCO2_ocean",
+        "transfer_velocity": "Wind-speed dependent (2-20 cm/hr)",
+        "seasonal_pattern": "Higher dissolution in winter (cooler SST)"
+      },
+      "O2_dissolution": {
+        "solubility_temperature_dependence": "Higher solubility at lower temperature",
+        "typical_saturation": "90-105% in surface waters"
+      }
+    },
+    "ocean_to_atmosphere": {
+      "CO2_outgassing": {
+        "biological_control": "Reduced pCO2 during bloom periods",
+        "temperature_control": "Increased outgassing with warming",
+        "upwelling_enhancement": "Higher pCO2 in upwelling regions"
+      },
+      "O2_outgassing": {
+        "biological_supersaturation": "O2 production exceeds solubility during blooms",
+        "magnitude": "1-10% supersaturation during productive periods"
+      }
+    },
+    "ecosystem_to_chemistry": {
+      "primary_production_effects": {
+        "DIC_drawdown": "6.625 mol C per mol N fixed",
+        "O2_production": "1.4 mol O2 per mol N fixed",
+        "seasonal_amplitude": "Factor of 2-5 variation"
+      },
+      "remineralization_effects": {
+        "DIC_production": "Releases CO2 back to solution",
+        "O2_consumption": "Respiratory oxygen demand",
+        "vertical_profile": "Exponential decay with depth"
+      }
+    },
+    "climate_forcing_effects": {
+      "temperature_impacts": {
+        "solubility_reduction": "2%/°C for CO2, 3%/°C for O2",
+        "biological_rates": "Q10 ~ 2-3 for metabolic processes",
+        "stratification": "Warmer surface → deeper mixed layer in winter"
+      },
+      "wind_impacts": {
+        "gas_exchange_enhancement": "Quadratic dependence on wind speed",
+        "mixing_enhancement": "Deeper mixed layers with stronger winds"
+      },
+      "light_impacts": {
+        "photosynthesis_limitation": "Half-saturation ~ 50 W/m²",
+        "seasonal_cycle": "Factor of 4-10 variation with latitude"
+      }
+    }
+  },
+
+  "expected_simulation_results": {
+    "description": "Expected numerical results for 1-year biogeochemical simulation",
+    "annual_mean_values": {
+      "atmospheric_CO2_ppm": 420.0,
+      "atmospheric_O2_per_meg": 0.0,
+      "ocean_DIC_umol_per_kg": 2100.0,
+      "ocean_ALK_umol_per_kg": 2300.0,
+      "ocean_pCO2_uatm": 400.0,
+      "ocean_pH": 8.05,
+      "omega_aragonite": 2.8,
+      "dissolved_O2_umol_per_kg": 250.0,
+      "nutrients_umol_per_kg": 15.0,
+      "phytoplankton_umol_per_kg": 2.0,
+      "zooplankton_umol_per_kg": 1.0,
+      "detritus_umol_per_kg": 0.5
+    },
+    "seasonal_cycles": {
+      "description": "Expected seasonal variations in key variables",
+      "atmospheric_CO2": {
+        "amplitude_ppm": 2.0,
+        "phase": "Minimum in late summer (August-September)",
+        "driver": "Northern hemisphere terrestrial carbon cycle proxy"
+      },
+      "ocean_pCO2": {
+        "amplitude_uatm": 50.0,
+        "phase": "Minimum during spring bloom (March-May)",
+        "driver": "Seasonal primary production and temperature cycles"
+      },
+      "marine_primary_production": {
+        "amplitude_factor": 5.0,
+        "phase": "Maximum during spring bloom",
+        "secondary_peak": "Autumn overturn in temperate regions"
+      },
+      "mixed_layer_depth": {
+        "summer_minimum": "20-30m",
+        "winter_maximum": "80-120m",
+        "transition_timing": "March-April deepening, September-October shoaling"
+      }
+    },
+    "spatial_patterns": {
+      "description": "Expected biogeographical patterns",
+      "latitudinal_gradients": {
+        "nutrient_concentration": "Low in tropics (5 μmol/kg), high in polar regions (25 μmol/kg)",
+        "primary_production": "High in upwelling regions and high latitudes",
+        "ocean_CO2": "Outgassing in tropics, uptake in high latitudes"
+      },
+      "seasonal_migration": {
+        "bloom_progression": "Equatorward in autumn, poleward in spring",
+        "nutrient_depletion": "Follows primary production patterns with ~1 month lag"
+      }
+    },
+    "event_triggering": {
+      "description": "Expected biogeochemical event occurrences",
+      "phytoplankton_blooms": {
+        "trigger_frequency": "1-2 times per year in temperate zones",
+        "bloom_magnitude": "5-20x background biomass",
+        "growth_rate_enhancement": "50% increase during bloom conditions",
+        "duration": "2-6 weeks depending on nutrient availability"
+      },
+      "acidification_events": {
+        "frequency": "Rare in global mean, but possible in coastal upwelling",
+        "pH_threshold": 7.8,
+        "recovery_time": "Weeks to months depending on CO2 flux magnitude"
+      },
+      "nutrient_upwelling": {
+        "frequency": "Every 90 days (quarterly)",
+        "magnitude": "10 μmol N/kg injection",
+        "ecosystem_response": "Phytoplankton bloom within 1-2 weeks"
+      }
+    }
+  },
+
+  "biogeochemical_fluxes": {
+    "description": "Expected magnitude and direction of biogeochemical fluxes",
+    "air_sea_CO2_exchange": {
+      "global_mean_flux": "Near zero (slight ocean uptake)",
+      "regional_variation": "-5 to +10 mol C/m²/year",
+      "seasonal_amplitude": "Factor of 2-3 variation",
+      "temperature_sensitivity": "6%/°C outgassing enhancement"
+    },
+    "air_sea_O2_exchange": {
+      "global_mean_flux": "Near zero equilibrium",
+      "biological_supersaturation": "5-15% during bloom periods",
+      "winter_undersaturation": "2-5% during deep mixing",
+      "gas_exchange_rate": "2-3x faster than CO2 due to lower Schmidt number"
+    },
+    "biological_carbon_pump": {
+      "export_production": "25% of primary production",
+      "sinking_flux": "1-10 mol C/m²/year depending on productivity",
+      "remineralization_profile": "90% remineralized in upper 1000m",
+      "efficiency": "Higher in oligotrophic (nutrient-poor) regions"
+    },
+    "ecosystem_carbon_cycling": {
+      "primary_production": "10-200 mol C/m²/year (spatially variable)",
+      "grazing_efficiency": "70% of phytoplankton consumed by zooplankton",
+      "mortality_losses": "10%/day background mortality",
+      "detrital_remineralization": "5%/day remineralization rate"
+    }
+  },
+
+  "validation_requirements": {
+    "description": "Specific validation requirements for biogeochemical coupling",
+    "mass_conservation_tests": [
+      "Total carbon: atmospheric + oceanic + biological pools conserved to < 0.1%",
+      "Total oxygen: atmospheric + oceanic pools conserved to < 0.5%",
+      "Marine nitrogen: all ecosystem pools conserved to < 0.01%",
+      "Alkalinity: changes only through calcification (not implemented, so conserved)"
+    ],
+    "flux_magnitude_tests": [
+      "Air-sea CO2 flux: 0.1-50 mol C/m²/year range",
+      "Primary production: 1-200 mol C/m²/year range",
+      "Export production: 0.25-50 mol C/m²/year range",
+      "Remineralization: matches export production integrated over year"
+    ],
+    "seasonal_cycle_tests": [
+      "Northern hemisphere CO2 minimum in August-September",
+      "Ocean pCO2 minimum during spring bloom periods",
+      "Primary production peaks in spring and autumn",
+      "Mixed layer depth maximum in winter months"
+    ],
+    "event_response_tests": [
+      "Bloom events trigger growth rate enhancement within 1 timestep",
+      "Acidification events trigger solubility changes",
+      "Nutrient upwelling events trigger ecosystem response within days",
+      "Event recovery follows exponential decay with appropriate timescales"
+    ],
+    "coupling_consistency_tests": [
+      "Connector equations maintain flux balance across system boundaries",
+      "Variable map updates propagate within same timestep",
+      "Operator applications modify correct variables",
+      "Callback updates occur at specified frequencies"
+    ]
+  },
+
+  "performance_benchmarks": {
+    "description": "Expected computational performance for biogeochemical system",
+    "julia_mtk": {
+      "assembly_time": "< 10 seconds for full coupled system",
+      "simulation_time": "< 300 seconds for 1-year simulation",
+      "memory_usage": "< 8 GB for global 2° resolution",
+      "solver_performance": "CVODE_BDF optimal for stiff biogeochemical ODEs"
+    },
+    "python_scipy": {
+      "assembly_time": "< 30 seconds for RHS function generation",
+      "simulation_time": "< 1200 seconds for 1-year simulation",
+      "memory_usage": "< 16 GB for equivalent problem",
+      "jacobian_sparsity": "~30% non-zero elements in biogeochemical Jacobian"
+    }
+  },
+
+  "validation_tolerance": {
+    "description": "Numerical tolerances for biogeochemical validation",
+    "concentration_values": {
+      "atmospheric_gases": {"relative": 0.001, "absolute": 0.1e-6},
+      "ocean_chemistry": {"relative": 0.01, "absolute": 1.0},
+      "ecosystem_variables": {"relative": 0.05, "absolute": 0.01},
+      "note": "Stricter tolerances for well-mixed atmospheric gases"
+    },
+    "flux_values": {
+      "air_sea_exchange": {"relative": 0.1, "absolute": 0.1},
+      "biological_fluxes": {"relative": 0.2, "absolute": 0.01},
+      "note": "Biological fluxes more variable, allow larger tolerances"
+    },
+    "conservation_laws": {
+      "carbon_conservation": 0.001,
+      "oxygen_conservation": 0.005,
+      "nitrogen_conservation": 0.0001,
+      "note": "Tightest conservation for marine nitrogen (closed system)"
+    },
+    "seasonal_cycles": {
+      "amplitude_tolerance": 0.15,
+      "phase_tolerance": 30,
+      "note": "15% amplitude tolerance, 30-day phase tolerance"
+    }
+  }
+}
