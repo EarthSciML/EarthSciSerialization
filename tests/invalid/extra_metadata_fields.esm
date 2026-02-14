@@ -1,0 +1,29 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ExtraFieldsExample",
+    "description": "Metadata with additional non-schema fields",
+    "authors": ["Extra Fields Test Author"],
+    "created": "2024-01-01T00:00:00Z",
+    "version": "1.2.3",
+    "contact": "test@example.com",
+    "institution": "University of Example",
+    "funding": "NSF Grant 12345",
+    "custom_field": "This should not be allowed"
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for extra metadata fields" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}

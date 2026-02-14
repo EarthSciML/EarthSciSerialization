@@ -1,0 +1,164 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CoupledSystemMetadataExample",
+    "description": "Demonstrates metadata inheritance and provenance tracking in coupled systems",
+    "authors": [
+      "Lead Researcher <lead@institution.edu>",
+      "Coupling Specialist <coupling@lab.org>"
+    ],
+    "created": "2024-01-15T00:00:00Z",
+    "modified": "2024-02-14T16:30:00Z",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "coupled-systems",
+      "atmospheric-chemistry",
+      "transport-processes",
+      "multi-component"
+    ],
+    "references": [
+      {
+        "doi": "10.1029/2023MS003012",
+        "citation": "Researcher, L. et al. (2023). Coupled atmospheric chemistry-transport modeling framework. Model Development, 16, 1234-1250.",
+        "notes": "Primary reference for coupling methodology"
+      }
+    ]
+  },
+
+  "reaction_systems": {
+    "AtmosphericChemistry": {
+      "coupletype": "ChemistryCoupler",
+      "reference": {
+        "doi": "10.5194/acp-20-1000-2020",
+        "citation": "Chen, A. & Wong, B. (2020). Atmospheric chemistry mechanisms. ACP, 20, 1000-1020.",
+        "notes": "Chemical mechanism reference - inherits from parent metadata for provenance"
+      },
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "jNO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3_reaction",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }] }
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": "jNO2"
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "AdvectionTransport": {
+      "reference": {
+        "url": "https://github.com/atmospheric-modeling/transport-lib",
+        "citation": "Transport Library v3.2.1",
+        "notes": "Open source transport model - inherits provenance from parent metadata"
+      },
+      "variables": {
+        "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind velocity" },
+        "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind velocity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "MeteorologicalData": {
+      "type": "gridded_data",
+      "loader_id": "ECMWF_ERA5",
+      "reference": {
+        "doi": "10.24381/cds.adbb2d47",
+        "citation": "Hersbach, H. et al. (2020). ERA5 hourly data. Copernicus Climate Change Service.",
+        "notes": "External data source with its own provenance"
+      },
+      "config": {
+        "resolution": "0.25x0.25",
+        "variables": ["temperature", "wind_u", "wind_v"]
+      },
+      "provides": {
+        "T": { "units": "K", "description": "Temperature from ERA5" },
+        "u": { "units": "m/s", "description": "Eastward wind from ERA5" },
+        "v": { "units": "m/s", "description": "Northward wind from ERA5" }
+      }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["AtmosphericChemistry", "AdvectionTransport"],
+      "reference": {
+        "notes": "Strang splitting coupling method - inherits provenance from parent and component systems"
+      }
+    },
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalData.T",
+      "to": "AtmosphericChemistry.T",
+      "transform": "param_to_var"
+    },
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalData.u",
+      "to": "AdvectionTransport.u_wind",
+      "transform": "param_to_var"
+    },
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalData.v",
+      "to": "AdvectionTransport.v_wind",
+      "transform": "param_to_var"
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-02T00:00:00Z"
+    },
+    "spatial": {
+      "lon": { "min": -125.0, "max": -115.0, "grid_spacing": 0.25, "units": "degrees" },
+      "lat": { "min": 32.0, "max": 40.0, "grid_spacing": 0.25, "units": "degrees" }
+    }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 3600.0
+    }
+  }
+}

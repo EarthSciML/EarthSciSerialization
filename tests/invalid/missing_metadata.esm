@@ -1,0 +1,18 @@
+{
+  "esm": "0.1.0",
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model missing metadata section" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}
