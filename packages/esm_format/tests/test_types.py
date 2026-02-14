@@ -1,0 +1,175 @@
+"""Test the type definitions in esm_format.types."""
+
+import pytest
+from esm_format.types import (
+    ExprNode, Expr, Equation, AffectEquation, ModelVariable, Model,
+    Species, Parameter, Reaction, ReactionSystem,
+    ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
+    DataLoader, DataLoaderType, Operator, OperatorType,
+    CouplingEntry, CouplingType, Domain, Solver, SolverType,
+    Reference, Metadata, EsmFile
+)
+
+
+def test_expr_node():
+    """Test ExprNode creation."""
+    node = ExprNode(op="+", args=[1, 2])
+    assert node.op == "+"
+    assert node.args == [1, 2]
+    assert node.wrt is None
+    assert node.dim is None
+
+
+def test_equation():
+    """Test Equation creation."""
+    eq = Equation(lhs="x", rhs=5)
+    assert eq.lhs == "x"
+    assert eq.rhs == 5
+
+
+def test_affect_equation():
+    """Test AffectEquation creation."""
+    affect = AffectEquation(lhs="y", rhs=ExprNode(op="*", args=[2, "x"]))
+    assert affect.lhs == "y"
+    assert isinstance(affect.rhs, ExprNode)
+
+
+def test_model_variable():
+    """Test ModelVariable creation."""
+    var = ModelVariable(
+        type="state",
+        units="kg/m^3",
+        default=0.0,
+        description="Concentration"
+    )
+    assert var.type == "state"
+    assert var.units == "kg/m^3"
+    assert var.default == 0.0
+    assert var.description == "Concentration"
+
+
+def test_model():
+    """Test Model creation."""
+    model = Model(name="TestModel")
+    assert model.name == "TestModel"
+    assert len(model.variables) == 0
+    assert len(model.equations) == 0
+
+
+def test_species():
+    """Test Species creation."""
+    species = Species(name="CO2", formula="CO2", mass=44.01)
+    assert species.name == "CO2"
+    assert species.formula == "CO2"
+    assert species.mass == 44.01
+
+
+def test_parameter():
+    """Test Parameter creation."""
+    param = Parameter(name="k1", value=0.1, units="1/s")
+    assert param.name == "k1"
+    assert param.value == 0.1
+    assert param.units == "1/s"
+
+
+def test_reaction():
+    """Test Reaction creation."""
+    reaction = Reaction(
+        name="R1",
+        reactants={"A": 1, "B": 1},
+        products={"C": 1},
+        rate_constant=0.1
+    )
+    assert reaction.name == "R1"
+    assert reaction.reactants == {"A": 1, "B": 1}
+    assert reaction.products == {"C": 1}
+    assert reaction.rate_constant == 0.1
+
+
+def test_reaction_system():
+    """Test ReactionSystem creation."""
+    system = ReactionSystem(name="TestSystem")
+    assert system.name == "TestSystem"
+    assert len(system.species) == 0
+    assert len(system.reactions) == 0
+
+
+def test_data_loader():
+    """Test DataLoader creation."""
+    loader = DataLoader(name="test", type=DataLoaderType.CSV, source="data.csv")
+    assert loader.name == "test"
+    assert loader.type == DataLoaderType.CSV
+    assert loader.source == "data.csv"
+
+
+def test_operator():
+    """Test Operator creation."""
+    op = Operator(name="interp", type=OperatorType.INTERPOLATION)
+    assert op.name == "interp"
+    assert op.type == OperatorType.INTERPOLATION
+
+
+def test_coupling_entry():
+    """Test CouplingEntry creation."""
+    coupling = CouplingEntry(
+        source_model="Model1",
+        target_model="Model2",
+        source_variables=["x"],
+        target_variables=["y"],
+        coupling_type=CouplingType.DIRECT
+    )
+    assert coupling.source_model == "Model1"
+    assert coupling.target_model == "Model2"
+    assert coupling.coupling_type == CouplingType.DIRECT
+
+
+def test_domain():
+    """Test Domain creation."""
+    domain = Domain(name="2D", dimensions={"x": 100, "y": 50})
+    assert domain.name == "2D"
+    assert domain.dimensions == {"x": 100, "y": 50}
+
+
+def test_solver():
+    """Test Solver creation."""
+    solver = Solver(name="RK4", type=SolverType.ODE, algorithm="rk4")
+    assert solver.name == "RK4"
+    assert solver.type == SolverType.ODE
+    assert solver.algorithm == "rk4"
+
+
+def test_reference():
+    """Test Reference creation."""
+    ref = Reference(title="Test Paper", authors=["Smith, J."], year=2024)
+    assert ref.title == "Test Paper"
+    assert ref.authors == ["Smith, J."]
+    assert ref.year == 2024
+
+
+def test_metadata():
+    """Test Metadata creation."""
+    metadata = Metadata(title="Test Model", version="1.0")
+    assert metadata.title == "Test Model"
+    assert metadata.version == "1.0"
+
+
+def test_esm_file():
+    """Test EsmFile creation."""
+    metadata = Metadata(title="Test", version="1.0")
+    esm_file = EsmFile(version="1.0", metadata=metadata)
+    assert esm_file.version == "1.0"
+    assert esm_file.metadata == metadata
+    assert len(esm_file.models) == 0
+
+
+def test_complex_expression():
+    """Test complex nested expression."""
+    # Create expression: (x + y) * 2
+    add_expr = ExprNode(op="+", args=["x", "y"])
+    mult_expr = ExprNode(op="*", args=[add_expr, 2])
+
+    assert mult_expr.op == "*"
+    assert len(mult_expr.args) == 2
+    assert mult_expr.args[1] == 2
+    assert isinstance(mult_expr.args[0], ExprNode)
+    assert mult_expr.args[0].op == "+"
