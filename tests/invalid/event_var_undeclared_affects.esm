@@ -1,0 +1,36 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventVarUndeclaredAffects",
+    "description": "Discrete event with undefined variable in affects"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol", "default": 1.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.1 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "k", "x"] }
+        }
+      ],
+      "discrete_events": [
+        {
+          "name": "parameter_update",
+          "trigger": {
+            "type": "periodic",
+            "interval": 60.0
+          },
+          "affects": [
+            {
+              "lhs": "undefined_parameter",
+              "rhs": { "op": "*", "args": [2.0, "k"] }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

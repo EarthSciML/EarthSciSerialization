@@ -1,0 +1,32 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MissingObservedExprMultiple",
+    "description": "Multiple observed variables missing expressions"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol", "default": 1.0 },
+        "y": { "type": "state", "units": "mol", "default": 2.0 },
+        "total": { "type": "observed", "units": "mol" },
+        "ratio": { "type": "observed", "units": "1" },
+        "valid_observed": {
+          "type": "observed",
+          "units": "mol",
+          "expression": { "op": "+", "args": ["x", "y"] }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.2, "y"] }
+        }
+      ]
+    }
+  }
+}

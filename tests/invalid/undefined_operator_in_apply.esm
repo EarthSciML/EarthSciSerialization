@@ -1,0 +1,33 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedOperatorInApply",
+    "description": "operator_apply coupling references nonexistent operator"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "concentration": { "type": "state", "units": "mol/mol", "default": 1e-9 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["concentration"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "concentration"] }
+        }
+      ]
+    }
+  },
+  "operators": {
+    "ValidOperator": {
+      "type": "spatial_operator",
+      "description": "Existing operator"
+    }
+  },
+  "coupling": [
+    {
+      "type": "operator_apply",
+      "operator": "NonExistentAdvectionOperator",
+      "description": "Apply nonexistent advection"
+    }
+  ]
+}
