@@ -5,7 +5,7 @@
  * Separates concerns: JSON parsing → schema validation → type coercion.
  */
 
-import Ajv, { ErrorObject } from 'ajv'
+import Ajv, { ErrorObject, ValidateFunction } from 'ajv'
 import addFormats from 'ajv-formats'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -51,7 +51,7 @@ export class SchemaValidationError extends Error {
 // Load and compile the schema at module load time
 const schemaPath = join(__dirname, '..', 'schema', 'esm-schema.json')
 let schema: any
-let validator: Ajv.ValidateFunction
+let validator: ValidateFunction
 
 try {
   const schemaText = readFileSync(schemaPath, 'utf-8')
@@ -61,7 +61,6 @@ try {
     allErrors: true,
     verbose: true,
     strict: false, // Allow unknown keywords for compatibility
-    loadSchema: false, // Don't automatically load remote schemas
     addUsedSchema: false, // Don't add the schema to cache
     validateSchema: false // Skip schema validation for now
   })
