@@ -1,0 +1,350 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MathematicalCorrectnessValidation",
+    "description": "Test mathematical correctness verification across all operations",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["mathematical-correctness", "conservation", "verification"]
+  },
+
+  "reaction_systems": {
+    "MassConservationTest": {
+      "reference": {
+        "notes": "Test mass conservation in chemical reaction networks"
+      },
+      "species": {
+        "A": {"units": "mol", "default": 1.0, "description": "Reactant A"},
+        "B": {"units": "mol", "default": 0.0, "description": "Product B"},
+        "C": {"units": "mol", "default": 0.0, "description": "Product C"}
+      },
+      "parameters": {
+        "k1": {"units": "1/s", "default": 0.1, "description": "Forward rate"},
+        "k2": {"units": "1/s", "default": 0.05, "description": "Reverse rate"},
+        "k3": {"units": "1/s", "default": 0.02, "description": "Side reaction rate"}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "forward_reaction",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": [{"species": "B", "stoichiometry": 1}],
+          "rate": "k1"
+        },
+        {
+          "id": "R2",
+          "name": "reverse_reaction",
+          "substrates": [{"species": "B", "stoichiometry": 1}],
+          "products": [{"species": "A", "stoichiometry": 1}],
+          "rate": "k2"
+        },
+        {
+          "id": "R3",
+          "name": "side_reaction",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": [{"species": "C", "stoichiometry": 1}],
+          "rate": "k3"
+        }
+      ]
+    },
+
+    "StoichiometricBalance": {
+      "reference": {
+        "notes": "Test complex stoichiometric balancing: 2A + B → 3C + D"
+      },
+      "species": {
+        "A": {"units": "mol", "default": 2.0, "description": "Reactant A"},
+        "B": {"units": "mol", "default": 1.0, "description": "Reactant B"},
+        "C": {"units": "mol", "default": 0.0, "description": "Product C"},
+        "D": {"units": "mol", "default": 0.0, "description": "Product D"}
+      },
+      "parameters": {
+        "rate_constant": {"units": "mol^-2/s", "default": 0.01, "description": "Bimolecular rate"}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "complex_stoichiometry",
+          "substrates": [
+            {"species": "A", "stoichiometry": 2},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "C", "stoichiometry": 3},
+            {"species": "D", "stoichiometry": 1}
+          ],
+          "rate": {"op": "*", "args": ["rate_constant", {"op": "^", "args": ["A", 2]}, "B"]}
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "EnergyConservation": {
+      "reference": {
+        "notes": "Test energy conservation in mechanical systems"
+      },
+      "variables": {
+        "position": {
+          "type": "state",
+          "units": "m",
+          "default": 1.0,
+          "description": "Position coordinate"
+        },
+        "velocity": {
+          "type": "state",
+          "units": "m/s",
+          "default": 0.0,
+          "description": "Velocity"
+        },
+        "mass": {
+          "type": "parameter",
+          "units": "kg",
+          "default": 1.0,
+          "description": "System mass"
+        },
+        "spring_constant": {
+          "type": "parameter",
+          "units": "N/m",
+          "default": 1.0,
+          "description": "Spring constant"
+        },
+        "kinetic_energy": {
+          "type": "observed",
+          "units": "J",
+          "expression": {
+            "op": "*",
+            "args": [
+              0.5,
+              "mass",
+              {"op": "^", "args": ["velocity", 2]}
+            ]
+          },
+          "description": "Kinetic energy = ½mv²"
+        },
+        "potential_energy": {
+          "type": "observed",
+          "units": "J",
+          "expression": {
+            "op": "*",
+            "args": [
+              0.5,
+              "spring_constant",
+              {"op": "^", "args": ["position", 2]}
+            ]
+          },
+          "description": "Potential energy = ½kx²"
+        },
+        "total_energy": {
+          "type": "observed",
+          "units": "J",
+          "expression": {
+            "op": "+",
+            "args": ["kinetic_energy", "potential_energy"]
+          },
+          "description": "Total energy (conserved)"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["position"], "wrt": "t"},
+          "rhs": "velocity"
+        },
+        {
+          "lhs": {"op": "D", "args": ["velocity"], "wrt": "t"},
+          "rhs": {
+            "op": "*",
+            "args": [
+              {"op": "/", "args": [{"op": "-", "args": ["spring_constant"]}, "mass"]},
+              "position"
+            ]
+          }
+        }
+      ]
+    },
+
+    "MomentumConservation": {
+      "reference": {
+        "notes": "Two-body collision with momentum and energy conservation"
+      },
+      "variables": {
+        "x1": {"type": "state", "units": "m", "default": -1.0, "description": "Position of mass 1"},
+        "x2": {"type": "state", "units": "m", "default": 1.0, "description": "Position of mass 2"},
+        "v1": {"type": "state", "units": "m/s", "default": 1.0, "description": "Velocity of mass 1"},
+        "v2": {"type": "state", "units": "m/s", "default": -0.5, "description": "Velocity of mass 2"},
+        "m1": {"type": "parameter", "units": "kg", "default": 1.0, "description": "Mass 1"},
+        "m2": {"type": "parameter", "units": "kg", "default": 2.0, "description": "Mass 2"},
+        "total_momentum": {
+          "type": "observed",
+          "units": "kg⋅m/s",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["m1", "v1"]},
+              {"op": "*", "args": ["m2", "v2"]}
+            ]
+          },
+          "description": "Total momentum (conserved)"
+        },
+        "total_kinetic_energy": {
+          "type": "observed",
+          "units": "J",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [0.5, "m1", {"op": "^", "args": ["v1", 2]}]},
+              {"op": "*", "args": [0.5, "m2", {"op": "^", "args": ["v2", 2]}]}
+            ]
+          },
+          "description": "Total kinetic energy"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["x1"], "wrt": "t"},
+          "rhs": "v1"
+        },
+        {
+          "lhs": {"op": "D", "args": ["x2"], "wrt": "t"},
+          "rhs": "v2"
+        },
+        {
+          "_comment": "Free motion until collision",
+          "lhs": {"op": "D", "args": ["v1"], "wrt": "t"},
+          "rhs": 0.0
+        },
+        {
+          "lhs": {"op": "D", "args": ["v2"], "wrt": "t"},
+          "rhs": 0.0
+        }
+      ],
+      "continuous_events": [
+        {
+          "name": "elastic_collision",
+          "conditions": [
+            {"op": "-", "args": ["x1", "x2"]}
+          ],
+          "affects": [
+            {
+              "lhs": "v1",
+              "rhs": {
+                "_comment": "Elastic collision formula: v1' = ((m1-m2)v1 + 2m2*v2)/(m1+m2)",
+                "op": "/",
+                "args": [
+                  {"op": "+", "args": [
+                    {"op": "*", "args": [
+                      {"op": "-", "args": ["m1", "m2"]},
+                      {"op": "Pre", "args": ["v1"]}
+                    ]},
+                    {"op": "*", "args": [2, "m2", {"op": "Pre", "args": ["v2"]}]}
+                  ]},
+                  {"op": "+", "args": ["m1", "m2"]}
+                ]
+              }
+            },
+            {
+              "lhs": "v2",
+              "rhs": {
+                "_comment": "v2' = ((m2-m1)v2 + 2m1*v1)/(m1+m2)",
+                "op": "/",
+                "args": [
+                  {"op": "+", "args": [
+                    {"op": "*", "args": [
+                      {"op": "-", "args": ["m2", "m1"]},
+                      {"op": "Pre", "args": ["v2"]}
+                    ]},
+                    {"op": "*", "args": [2, "m1", {"op": "Pre", "args": ["v1"]}]}
+                  ]},
+                  {"op": "+", "args": ["m1", "m2"]}
+                ]
+              }
+            }
+          ],
+          "description": "Elastic collision conserving momentum and energy"
+        }
+      ]
+    },
+
+    "LinearityTest": {
+      "reference": {
+        "notes": "Test linearity of differential operators"
+      },
+      "variables": {
+        "u": {"type": "state", "units": "dimensionless", "default": 1.0},
+        "v": {"type": "state", "units": "dimensionless", "default": 2.0},
+        "alpha": {"type": "parameter", "units": "dimensionless", "default": 3.0},
+        "beta": {"type": "parameter", "units": "dimensionless", "default": -1.5},
+        "linear_combination": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {"op": "+", "args": [{"op": "*", "args": ["alpha", "u"]}, {"op": "*", "args": ["beta", "v"]}]},
+          "description": "αu + βv"
+        },
+        "derivative_of_combination": {
+          "type": "observed",
+          "units": "1/s",
+          "expression": {"op": "D", "args": ["linear_combination"], "wrt": "t"},
+          "description": "d(αu + βv)/dt"
+        },
+        "combination_of_derivatives": {
+          "type": "observed",
+          "units": "1/s",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["alpha", {"op": "D", "args": ["u"], "wrt": "t"}]},
+              {"op": "*", "args": ["beta", {"op": "D", "args": ["v"], "wrt": "t"}]}
+            ]
+          },
+          "description": "α(du/dt) + β(dv/dt)"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Simple exponential decay for u",
+          "lhs": {"op": "D", "args": ["u"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [-0.1, "u"]}
+        },
+        {
+          "_comment": "Exponential growth for v",
+          "lhs": {"op": "D", "args": ["v"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [0.05, "v"]}
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T01:00:00Z"
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "position": 1.0,
+        "velocity": 0.0,
+        "x1": -1.0,
+        "x2": 1.0,
+        "v1": 1.0,
+        "v2": -0.5,
+        "u": 1.0,
+        "v": 2.0
+      }
+    },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "strang_serial",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 0.1,
+      "stiff_kwargs": {
+        "abstol": 1e-12,
+        "reltol": 1e-10
+      }
+    }
+  }
+}
