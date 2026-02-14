@@ -1,0 +1,30 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "AuthorVariationsExample",
+    "description": "Demonstrates various valid author formatting styles",
+    "authors": [
+      "Simple Name",
+      "First Last <email@domain.edu>",
+      "Institution Affiliation (University of Example)",
+      "With ORCID (ORCID: 0000-0002-1825-0097)",
+      "Multiple Formats <contact@lab.org> (ORCID: 0000-0001-5000-0007)"
+    ],
+    "created": "2024-01-01T00:00:00Z"
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for author variations" },
+      "variables": {
+        "y": { "type": "state", "units": "kg", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": 0
+        }
+      ]
+    }
+  }
+}

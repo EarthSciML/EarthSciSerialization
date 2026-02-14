@@ -1,0 +1,25 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "InvalidDateFormatExample",
+    "description": "Metadata with invalid ISO 8601 date format",
+    "authors": ["Date Test Author"],
+    "created": "2024-01-01 10:30:00",
+    "modified": "Feb 14, 2024 4:45 PM"
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for invalid date format" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}

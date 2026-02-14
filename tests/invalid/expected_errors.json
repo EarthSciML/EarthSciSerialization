@@ -628,5 +628,157 @@
       }
     ],
     "is_valid": false
+  },
+
+  "missing_metadata.esm": {
+    "schema_errors": [
+      {
+        "path": "",
+        "message": "Required property 'metadata' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "missing_metadata_name.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata",
+        "message": "Required property 'name' is missing",
+        "keyword": "required"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "invalid_date_format.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata/created",
+        "message": "Does not match format 'date-time'",
+        "keyword": "format"
+      },
+      {
+        "path": "/metadata/modified",
+        "message": "Does not match format 'date-time'",
+        "keyword": "format"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "malformed_doi.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": false,
+    "notes": "DOI format validation may be implementation-specific. Some validators may accept any string, others may validate DOI patterns."
+  },
+
+  "invalid_url_format.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata/references/0/url",
+        "message": "Does not match format 'uri'",
+        "keyword": "format"
+      },
+      {
+        "path": "/metadata/references/2/url",
+        "message": "Does not match format 'uri'",
+        "keyword": "format"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "extra_metadata_fields.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata",
+        "message": "Additional property 'version' is not allowed",
+        "keyword": "additionalProperties"
+      },
+      {
+        "path": "/metadata",
+        "message": "Additional property 'contact' is not allowed",
+        "keyword": "additionalProperties"
+      },
+      {
+        "path": "/metadata",
+        "message": "Additional property 'institution' is not allowed",
+        "keyword": "additionalProperties"
+      },
+      {
+        "path": "/metadata",
+        "message": "Additional property 'funding' is not allowed",
+        "keyword": "additionalProperties"
+      },
+      {
+        "path": "/metadata",
+        "message": "Additional property 'custom_field' is not allowed",
+        "keyword": "additionalProperties"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "invalid_metadata_types.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata/name",
+        "message": "Expected string, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/description",
+        "message": "Expected string, got array",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/authors",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/license",
+        "message": "Expected string, got null",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/created",
+        "message": "Expected string, got number",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/tags",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      },
+      {
+        "path": "/metadata/references",
+        "message": "Expected array, got string",
+        "keyword": "type"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "empty_reference_fields.esm": {
+    "schema_errors": [
+      {
+        "path": "/metadata/references/3",
+        "message": "Additional property 'extra_field' is not allowed",
+        "keyword": "additionalProperties"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "notes": "Empty string validation may be implementation-specific. Some validators may accept empty strings, others may reject them."
   }
 }

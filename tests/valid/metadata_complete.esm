@@ -1,0 +1,60 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CompleteMetadataExample",
+    "description": "A complete example demonstrating all ESM metadata fields with proper formatting",
+    "authors": [
+      "Dr. Jane Smith <jane.smith@university.edu>",
+      "Prof. Robert Chen",
+      "Alex Johnson (ORCID: 0000-0000-0000-0000)"
+    ],
+    "license": "MIT",
+    "created": "2024-01-15T10:30:00Z",
+    "modified": "2024-02-14T16:45:30Z",
+    "tags": [
+      "atmospheric-chemistry",
+      "ozone",
+      "NOx",
+      "photochemistry"
+    ],
+    "references": [
+      {
+        "doi": "10.1029/2023JD038742",
+        "citation": "Smith, J. et al. (2023). Advanced ozone-NOx chemistry for Earth system models. Journal of Geophysical Research: Atmospheres, 128(12), e2023JD038742.",
+        "notes": "Primary reference for chemical mechanism"
+      },
+      {
+        "url": "https://acp.copernicus.org/articles/21/1809/2021/",
+        "citation": "Chen, R. & Johnson, A. (2021). Photolysis rate calculations in complex atmospheric environments. Atmospheric Chemistry and Physics, 21, 1809-1825.",
+        "notes": "Photolysis rate methodology"
+      },
+      {
+        "citation": "Williams, M. (2020). Chemical kinetics database v2.1. Personal communication.",
+        "notes": "Rate constant compilation"
+      }
+    ]
+  },
+
+  "reaction_systems": {
+    "SimpleOzone": {
+      "coupletype": "SimpleOzoneCoupler",
+      "reference": { "notes": "Minimal O3-NOx photochemical cycle" },
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "test_reaction",
+          "substrates": [{ "species": "O3", "stoichiometry": 1 }],
+          "products": [{ "species": "NO", "stoichiometry": 1 }],
+          "rate": 0.001
+        }
+      ]
+    }
+  }
+}
