@@ -528,6 +528,9 @@ def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoade
     """
     Factory function to create appropriate data loader based on type.
 
+    This function is maintained for backward compatibility.
+    For new code, prefer using the data_loader_registry module functions.
+
     Args:
         data_loader: DataLoader configuration object
 
@@ -537,9 +540,7 @@ def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoade
     Raises:
         ValueError: If data loader type is not supported
     """
-    if data_loader.type == DataLoaderType.NETCDF:
-        return NetCDFLoader(data_loader)
-    elif data_loader.type == DataLoaderType.JSON:
-        return JSONLoader(data_loader)
-    else:
-        raise ValueError(f"Data loader type {data_loader.type} not yet implemented")
+    # Import here to avoid circular imports
+    from .data_loader_registry import create_data_loader as registry_create_loader
+
+    return registry_create_loader(data_loader)

@@ -49,7 +49,15 @@ from .simulation import (
 )
 from .data_loaders import (
     NetCDFLoader,
+    JSONLoader,
     create_data_loader,
+)
+from .data_loader_registry import (
+    DataLoaderRegistry,
+    get_registry,
+    register_loader,
+    create_auto_loader,
+    detect_loader_type,
 )
 
 __version__ = "0.1.0"
@@ -96,5 +104,11 @@ __all__ = [
     "SimulationResult",
     "SimulationError",
     "NetCDFLoader",
+    "JSONLoader",
     "create_data_loader",
+    "DataLoaderRegistry",
+    "get_registry",
+    "register_loader",
+    "create_auto_loader",
+    "detect_loader_type",
 ]
