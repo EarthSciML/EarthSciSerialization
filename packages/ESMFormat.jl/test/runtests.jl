@@ -3,6 +3,8 @@ using ESMFormat
 
 @testset "ESMFormat.jl Tests" begin
 
+    include("parse_test.jl")
+
     @testset "Expression Types" begin
         # Test NumExpr
         num_expr = NumExpr(3.14)

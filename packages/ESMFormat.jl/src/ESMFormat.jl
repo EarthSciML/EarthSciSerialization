@@ -13,8 +13,10 @@ module ESMFormat
 using JSON3
 using JSONSchema
 
-# Include type definitions
+# Include type definitions and functionality
 include("types.jl")
+include("parse.jl")
+include("serialize.jl")
 
 # Export main types
 export
@@ -31,6 +33,8 @@ export
     # Data and operator types
     DataLoader, Operator, CouplingEntry,
     # System types
-    Domain, Solver, Reference, Metadata, EsmFile
+    Domain, Solver, Reference, Metadata, EsmFile,
+    # JSON functionality
+    load, save, ParseError, SchemaValidationError
 
 end # module ESMFormat
