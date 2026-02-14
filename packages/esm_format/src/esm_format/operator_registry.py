@@ -34,14 +34,36 @@ class OperatorRegistry:
 
     def _register_builtin_operators(self):
         """Register the built-in operators."""
-        # Placeholder for built-in operators
-        # In the future, this would register standard operators like:
-        # - LinearInterpolation
-        # - SplineInterpolation
-        # - RungeKuttaIntegrator
-        # - ForwardDifference
-        # etc.
-        pass
+        from .math_operators import AddOperator, SubtractOperator, MultiplyOperator, DivideOperator
+
+        # Register mathematical operators
+        self.register_operator(
+            name="add",
+            operator_type=OperatorType.ARITHMETIC,
+            operator_class=AddOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="subtract",
+            operator_type=OperatorType.ARITHMETIC,
+            operator_class=SubtractOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="multiply",
+            operator_type=OperatorType.ARITHMETIC,
+            operator_class=MultiplyOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="divide",
+            operator_type=OperatorType.ARITHMETIC,
+            operator_class=DivideOperator,
+            version="1.0"
+        )
 
     def register_operator(
         self,
