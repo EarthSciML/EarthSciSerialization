@@ -1,0 +1,73 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BouncingBallTest",
+    "description": "Ball dropping with elastic collisions - continuous event handling test",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["test", "events", "continuous", "collision"]
+  },
+  "models": {
+    "BallDynamics": {
+      "reference": {
+        "notes": "Free falling ball with elastic bounces: h'' = -g, bounce when h = 0"
+      },
+      "variables": {
+        "height": { "type": "state", "units": "m", "default": 10.0, "description": "Height above ground" },
+        "velocity": { "type": "state", "units": "m/s", "default": 0.0, "description": "Vertical velocity (positive upward)" },
+        "g": { "type": "parameter", "units": "m/s^2", "default": 9.81, "description": "Gravitational acceleration" },
+        "restitution": { "type": "parameter", "units": "1", "default": 0.8, "description": "Coefficient of restitution" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["height"], "wrt": "t" },
+          "rhs": "velocity"
+        },
+        {
+          "lhs": { "op": "D", "args": ["velocity"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["g"] }
+        }
+      ],
+      "events": [
+        {
+          "id": "ground_collision",
+          "type": "continuous",
+          "condition": "height",
+          "direction": "negative",
+          "description": "Ball hits ground when height crosses zero from above",
+          "actions": [
+            {
+              "type": "assignment",
+              "variable": "height",
+              "value": 0.0
+            },
+            {
+              "type": "assignment",
+              "variable": "velocity",
+              "value": { "op": "*", "args": [
+                { "op": "-", "args": ["restitution"] },
+                "velocity"
+              ]}
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "domain": {
+    "temporal": { "start": 0.0, "end": 10.0, "step": 0.001 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "BallDynamics.height": 10.0,
+      "BallDynamics.velocity": 0.0
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "algorithm": "Tsit5",
+      "rtol": 1e-6,
+      "atol": 1e-8,
+      "event_tolerance": 1e-9
+    }
+  }
+}

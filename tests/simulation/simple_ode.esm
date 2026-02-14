@@ -1,0 +1,45 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SimpleODETest",
+    "description": "Basic ODE test for exponential decay with known analytical solution",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["test", "simple", "analytical"]
+  },
+  "models": {
+    "ExponentialDecay": {
+      "reference": {
+        "notes": "Simple exponential decay: dN/dt = -lambda * N, analytical solution N(t) = N0 * exp(-lambda * t)"
+      },
+      "variables": {
+        "N": { "type": "state", "units": "mol", "default": 100.0, "description": "Amount of decaying species" },
+        "lambda": { "type": "parameter", "units": "1/s", "default": 0.1, "description": "Decay constant" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["N"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "-", "args": ["lambda"] },
+            "N"
+          ]}
+        }
+      ]
+    }
+  },
+  "domain": {
+    "temporal": { "start": 0.0, "end": 50.0, "step": 0.1 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "ExponentialDecay.N": 100.0
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "nonstiff_algorithm": "Tsit5",
+      "timestep": 0.1,
+      "reltol": 1e-6,
+      "abstol": 1e-8
+    }
+  }
+}

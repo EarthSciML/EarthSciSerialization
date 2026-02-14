@@ -1,0 +1,54 @@
+{
+  "simulation_results": {
+    "metadata": {
+      "esm_file": "simple_ode.esm",
+      "description": "Analytical reference solution for exponential decay",
+      "solver": "analytical",
+      "tolerance": 1e-12,
+      "total_steps": 501
+    },
+    "analytical_solution": {
+      "formula": "N(t) = 100.0 * exp(-0.1 * t)",
+      "parameters": {
+        "N0": 100.0,
+        "lambda": 0.1
+      }
+    },
+    "time_series": {
+      "description": "Selected time points with high-precision analytical values",
+      "time": [0.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0],
+      "variables": {
+        "ExponentialDecay.N": [
+          100.0,
+          60.65306597126334,
+          36.787944117144235,
+          13.533528323661267,
+          4.978706836786395,
+          1.8315638888734182,
+          0.6737946999085468
+        ]
+      }
+    },
+    "validation_metrics": {
+      "mass_conservation": {
+        "description": "Mass should decay monotonically",
+        "test": "dN/dt < 0 for all t > 0",
+        "expected": "monotonic_decrease"
+      },
+      "half_life": {
+        "description": "Half-life should be ln(2)/lambda = 6.93 seconds",
+        "analytical_value": 6.931471805599453,
+        "tolerance": 1e-10
+      }
+    },
+    "events": [],
+    "final_state": {
+      "ExponentialDecay.N": 0.6737946999085468
+    }
+  },
+  "numerical_accuracy_requirements": {
+    "relative_tolerance": 1e-3,
+    "absolute_tolerance": 1e-6,
+    "conservation_error": 1e-10
+  }
+}
