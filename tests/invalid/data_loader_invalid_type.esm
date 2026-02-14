@@ -1,0 +1,32 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DataLoaderInvalidType",
+    "description": "Test case: data loader with invalid type (not one of: gridded_data, emissions, timeseries, static, callback)",
+    "authors": ["Test Suite"]
+  },
+
+  "data_loaders": {
+    "BadLoader": {
+      "type": "invalid_type",
+      "loader_id": "TestLoader",
+      "provides": {
+        "T": { "units": "K", "description": "Temperature" }
+      }
+    }
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    }
+  }
+}
