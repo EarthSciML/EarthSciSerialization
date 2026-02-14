@@ -1,0 +1,210 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ComprehensiveEventTests",
+    "description": "Complete test coverage for all event system capabilities",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+
+  "models": {
+    "BouncingBall": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.0, "description": "Position" },
+        "v": { "type": "state", "units": "m/s", "default": -5.0, "description": "Velocity" },
+        "y": { "type": "state", "units": "m", "default": 0.0, "description": "Y position" },
+        "vy": { "type": "state", "units": "m/s", "default": 2.0, "description": "Y velocity" },
+        "g": { "type": "parameter", "units": "m/s^2", "default": 9.81, "description": "Gravity" },
+        "bounce_count": { "type": "parameter", "units": "1", "default": 0, "description": "Number of bounces" },
+        "friction_active": { "type": "parameter", "units": "1", "default": 1, "description": "Friction flag" },
+        "total_energy": { "type": "observed", "units": "J", "expression": { "op": "+", "args": [
+          { "op": "*", "args": [0.5, { "op": "^", "args": ["v", 2] }] },
+          { "op": "*", "args": ["g", "x"] }
+        ]}, "description": "Total mechanical energy" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["g"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": "vy"
+        },
+        {
+          "lhs": { "op": "D", "args": ["vy"], "wrt": "t" },
+          "rhs": 0.0
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "ground_bounce",
+          "conditions": [
+            { "op": "-", "args": ["x", 0] }
+          ],
+          "affects": [
+            {
+              "lhs": "v",
+              "rhs": { "op": "*", "args": [-0.8, { "op": "Pre", "args": ["v"] }] }
+            }
+          ],
+          "affect_neg": [
+            {
+              "lhs": "v",
+              "rhs": { "op": "*", "args": [-0.9, { "op": "Pre", "args": ["v"] }] }
+            }
+          ],
+          "root_find": "left",
+          "reinitialize": true,
+          "description": "Ball bounces off ground with different coefficients for up/down crossings"
+        },
+        {
+          "name": "wall_collision",
+          "conditions": [
+            { "op": "-", "args": ["y", -1.5] },
+            { "op": "-", "args": ["y", 1.5] }
+          ],
+          "affects": [
+            {
+              "lhs": "vy",
+              "rhs": { "op": "*", "args": [-1, { "op": "Pre", "args": ["vy"] }] }
+            }
+          ],
+          "description": "Elastic collision with walls at y = ±1.5"
+        },
+        {
+          "name": "friction_threshold",
+          "conditions": [
+            { "op": "-", "args": [{ "op": "abs", "args": ["v"] }, 0.1] }
+          ],
+          "affects": [
+            {
+              "lhs": "friction_active",
+              "rhs": 0
+            }
+          ],
+          "discrete_parameters": ["friction_active"],
+          "description": "Disable friction when velocity drops below threshold"
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "bounce_counter",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "and", "args": [
+              { "op": "<", "args": ["x", 0.01] },
+              { "op": "<", "args": ["v", 0] }
+            ]}
+          },
+          "affects": [
+            {
+              "lhs": "bounce_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["bounce_count"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["bounce_count"],
+          "description": "Count bounces when ball hits ground"
+        },
+        {
+          "name": "periodic_damping",
+          "trigger": {
+            "type": "periodic",
+            "interval": 2.0,
+            "initial_offset": 0.5
+          },
+          "affects": [
+            {
+              "lhs": "v",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["v"] }, 0.95] }
+            },
+            {
+              "lhs": "vy",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["vy"] }, 0.95] }
+            }
+          ],
+          "description": "Apply 5% velocity damping every 2 seconds"
+        },
+        {
+          "name": "measurement_times",
+          "trigger": {
+            "type": "preset_times",
+            "times": [1.0, 2.5, 5.0, 10.0]
+          },
+          "affects": [],
+          "description": "Mark measurement times (no state change)"
+        },
+        {
+          "name": "complex_controller",
+          "trigger": {
+            "type": "periodic",
+            "interval": 1.0
+          },
+          "functional_affect": {
+            "handler_id": "PIDController",
+            "read_vars": ["x", "v", "total_energy"],
+            "read_params": ["bounce_count", "friction_active"],
+            "modified_params": ["g"],
+            "config": {
+              "setpoint": 0.5,
+              "kp": 0.1,
+              "ki": 0.01,
+              "kd": 0.05
+            }
+          },
+          "discrete_parameters": ["g"],
+          "reinitialize": true,
+          "description": "PID controller adjusts gravity to maintain target height"
+        }
+      ]
+    },
+
+    "EmissionController": {
+      "variables": {
+        "emission_rate": { "type": "parameter", "units": "kg/s", "default": 1.0, "description": "Emission rate" },
+        "temperature": { "type": "state", "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.001, { "op": "-", "args": [300, "temperature"] }] }
+        }
+      ],
+      "discrete_events": []
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "conditions": [
+        { "op": "-", "args": ["BouncingBall.total_energy", 10.0] }
+      ],
+      "affects": [
+        {
+          "lhs": "EmissionController.emission_rate",
+          "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["EmissionController.emission_rate"] }, 0.5] }
+        }
+      ],
+      "discrete_parameters": ["EmissionController.emission_rate"],
+      "description": "Reduce emissions when ball energy exceeds threshold (cross-system event)"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:01:00Z" },
+    "initial_conditions": { "type": "constant", "value": 0.0 }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": { "stiff_algorithm": "Rosenbrock23", "timestep": 0.01 }
+  }
+}

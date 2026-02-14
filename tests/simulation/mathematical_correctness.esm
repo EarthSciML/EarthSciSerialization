@@ -1,0 +1,198 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MathematicalCorrectnessTests",
+    "description": "Test mathematical correctness of ESM operations: mass conservation, ODE derivation, and numerical accuracy",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+
+  "reaction_systems": {
+    "MassConservationTest": {
+      "reference": {
+        "notes": "Simple reaction network for testing mass conservation: A + B -> C + D (1:1:1:1 stoichiometry)"
+      },
+      "species": {
+        "A": { "units": "mol", "default": 1.0, "description": "Reactant A" },
+        "B": { "units": "mol", "default": 1.0, "description": "Reactant B" },
+        "C": { "units": "mol", "default": 0.0, "description": "Product C" },
+        "D": { "units": "mol", "default": 0.0, "description": "Product D" },
+        "total_mass": { "units": "mol", "default": 2.0, "description": "Should remain constant" }
+      },
+      "parameters": {
+        "k": { "units": "1/(mol*s)", "default": 0.1, "description": "Rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "A_plus_B_to_C_plus_D",
+          "substrates": [
+            { "species": "A", "stoichiometry": 1 },
+            { "species": "B", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "C", "stoichiometry": 1 },
+            { "species": "D", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["k", "A", "B"] }
+        }
+      ],
+      "constraint_equations": [
+        {
+          "lhs": "total_mass",
+          "rhs": { "op": "+", "args": ["A", "B", "C", "D"] }
+        }
+      ]
+    },
+
+    "LinearChain": {
+      "reference": {
+        "notes": "Linear reaction chain A -> B -> C with known analytical solution for testing ODE derivation accuracy"
+      },
+      "species": {
+        "A": { "units": "mol", "default": 1.0, "description": "Initial species" },
+        "B": { "units": "mol", "default": 0.0, "description": "Intermediate" },
+        "C": { "units": "mol", "default": 0.0, "description": "Final product" }
+      },
+      "parameters": {
+        "k1": { "units": "1/s", "default": 0.5, "description": "A -> B rate" },
+        "k2": { "units": "1/s", "default": 0.3, "description": "B -> C rate" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "A_to_B",
+          "substrates": [{ "species": "A", "stoichiometry": 1 }],
+          "products": [{ "species": "B", "stoichiometry": 1 }],
+          "rate": { "op": "*", "args": ["k1", "A"] }
+        },
+        {
+          "id": "R2",
+          "name": "B_to_C",
+          "substrates": [{ "species": "B", "stoichiometry": 1 }],
+          "products": [{ "species": "C", "stoichiometry": 1 }],
+          "rate": { "op": "*", "args": ["k2", "B"] }
+        }
+      ]
+    },
+
+    "StoichiometryTest": {
+      "reference": {
+        "notes": "Complex stoichiometry test: 2A + 3B -> C + 4D for testing stoichiometric matrix computation"
+      },
+      "species": {
+        "A": { "units": "mol", "default": 2.0, "description": "Reactant A" },
+        "B": { "units": "mol", "default": 3.0, "description": "Reactant B" },
+        "C": { "units": "mol", "default": 0.0, "description": "Product C" },
+        "D": { "units": "mol", "default": 0.0, "description": "Product D" }
+      },
+      "parameters": {
+        "k": { "units": "1/(mol^4*s)", "default": 0.01, "description": "Rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "complex_stoichiometry",
+          "substrates": [
+            { "species": "A", "stoichiometry": 2 },
+            { "species": "B", "stoichiometry": 3 }
+          ],
+          "products": [
+            { "species": "C", "stoichiometry": 1 },
+            { "species": "D", "stoichiometry": 4 }
+          ],
+          "rate": { "op": "*", "args": ["k", { "op": "^", "args": ["A", 2] }, { "op": "^", "args": ["B", 3] }] }
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "AnalyticalODE": {
+      "reference": {
+        "notes": "Simple harmonic oscillator with known analytical solution: x'' + omega^2 * x = 0"
+      },
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.0, "description": "Position" },
+        "v": { "type": "state", "units": "m/s", "default": 0.0, "description": "Velocity" },
+        "omega": { "type": "parameter", "units": "1/s", "default": 1.0, "description": "Angular frequency" },
+        "energy": { "type": "observed", "units": "J", "expression": {
+          "op": "+", "args": [
+            { "op": "*", "args": [0.5, { "op": "^", "args": ["v", 2] }] },
+            { "op": "*", "args": [0.5, { "op": "^", "args": ["omega", 2] }, { "op": "^", "args": ["x", 2] }] }
+          ]
+        }, "description": "Total energy (should be conserved)" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "-", "args": [{ "op": "^", "args": ["omega", 2] }] },
+            "x"
+          ]}
+        }
+      ]
+    },
+
+    "NumericalStabilityTest": {
+      "reference": {
+        "notes": "Stiff equation system for testing numerical stability: fast and slow dynamics"
+      },
+      "variables": {
+        "y_fast": { "type": "state", "units": "1", "default": 1.0, "description": "Fast variable" },
+        "y_slow": { "type": "state", "units": "1", "default": 1.0, "description": "Slow variable" },
+        "lambda_fast": { "type": "parameter", "units": "1/s", "default": -1000, "description": "Fast decay rate" },
+        "lambda_slow": { "type": "parameter", "units": "1/s", "default": -1, "description": "Slow decay rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["y_fast"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["lambda_fast", "y_fast"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y_slow"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": ["lambda_slow", "y_slow"] },
+            { "op": "*", "args": [0.1, "y_fast"] }
+          ]}
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:10:00Z" },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "MassConservationTest.A": 1.0,
+      "MassConservationTest.B": 1.0,
+      "MassConservationTest.C": 0.0,
+      "MassConservationTest.D": 0.0,
+      "LinearChain.A": 1.0,
+      "LinearChain.B": 0.0,
+      "LinearChain.C": 0.0,
+      "StoichiometryTest.A": 2.0,
+      "StoichiometryTest.B": 3.0,
+      "StoichiometryTest.C": 0.0,
+      "StoichiometryTest.D": 0.0,
+      "AnalyticalODE.x": 1.0,
+      "AnalyticalODE.v": 0.0,
+      "NumericalStabilityTest.y_fast": 1.0,
+      "NumericalStabilityTest.y_slow": 1.0
+    }}
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "nonstiff_algorithm": "Tsit5",
+      "timestep": 0.001,
+      "abstol": 1e-8,
+      "reltol": 1e-6
+    }
+  }
+}

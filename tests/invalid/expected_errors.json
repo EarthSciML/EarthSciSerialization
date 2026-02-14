@@ -143,5 +143,40 @@
       }
     ],
     "is_valid": false
+  },
+
+  "undefined_operator.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "undefined_operator",
+        "message": "Operator 'NonExistentOperator' referenced in operator_apply coupling is not declared",
+        "details": {
+          "operator": "NonExistentOperator",
+          "coupling_type": "operator_apply",
+          "expected_in": "operators"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "invalid_discrete_param.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/TestModel/discrete_events/0",
+        "code": "invalid_discrete_param",
+        "message": "Discrete parameter 'undefined_param' in event is not declared as a parameter",
+        "details": {
+          "parameter": "undefined_param",
+          "event_name": "parameter_update",
+          "event_type": "discrete",
+          "expected_in": "parameters"
+        }
+      }
+    ],
+    "is_valid": false
   }
 }

@@ -1,0 +1,47 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedOperatorTest",
+    "description": "Test case: coupling references nonexistent operator",
+    "authors": ["Test Suite"]
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    }
+  },
+
+  "operators": {
+    "ValidOperator": {
+      "operator_id": "TestOp",
+      "needed_vars": ["x"],
+      "modifies": ["x"]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_apply",
+      "operator": "NonExistentOperator",
+      "description": "This should fail - operator doesn't exist"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:01:00Z" }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": { "timestep": 1.0 }
+  }
+}
