@@ -67,6 +67,13 @@ tests/
 - **Expression Graph**: Variable dependency analysis
 - **Export Formats**: DOT, Mermaid, JSON adjacency lists
 
+### Data Loaders and Operators (ESM Spec Sections 8-9)
+- **Valid Fixtures**: Comprehensive test cases covering all data loader types (`gridded_data`, `emissions`, `timeseries`, `static`, `callback`) and operator configurations
+- **Schema Validation**: Tests for missing required fields (`type`, `loader_id`, `provides`, `operator_id`, `needed_vars`)
+- **Configuration Validation**: Tests for invalid interpolation methods, temporal resolution formats, and config structures
+- **Variable Resolution**: Tests for undefined variable references in coupling and operator variable mismatches
+- **Provides Validation**: Tests for missing units and descriptions in data loader variable specifications
+
 ## Error Codes Tested
 
 Based on libraries specification Section 3.4:
@@ -110,6 +117,7 @@ Each language library should implement tests that:
 - ✅ Substitution fixtures (8 cases)
 - ✅ System graph fixtures (1 case)
 - ✅ Event system fixtures (3 comprehensive files: basic functionality, edge cases, timing/synchronization)
+- ✅ Data loader and operator fixtures (2 comprehensive valid files + 13 invalid error cases)
 - ❌ Full coupled system fixtures (TODO)
 - ❌ Expression graph fixtures (TODO)
 - ❌ Simulation reference trajectories (TODO)

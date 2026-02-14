@@ -1,0 +1,44 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DataLoaderUndefinedReference",
+    "description": "Test case: coupling references undefined data loader variable",
+    "authors": ["Test Suite"]
+  },
+
+  "data_loaders": {
+    "WeatherData": {
+      "type": "gridded_data",
+      "loader_id": "TestLoader",
+      "provides": {
+        "T": { "units": "K", "description": "Temperature" },
+        "P": { "units": "Pa", "description": "Pressure" }
+      }
+    }
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 },
+        "external_temp": { "type": "parameter", "units": "K", "default": 298.15 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "WeatherData.undefined_variable",
+      "to": "TestModel.external_temp",
+      "transform": "param_to_var",
+      "description": "This should fail - variable not provided by loader"
+    }
+  ]
+}
