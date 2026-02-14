@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from collections import defaultdict, deque
 from enum import Enum
 
-from .types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem
+from .types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator
 
 
 class NodeType(Enum):
@@ -473,3 +473,305 @@ def validate_coupling_graph(graph: CouplingGraph) -> Tuple[bool, List[str]]:
                          f"{len(edge.source_variables)} source vars vs {len(edge.target_variables)} target vars")
 
     return len(errors) == 0, errors
+
+
+@dataclass
+class ScopedReference:
+    """
+    A resolved scoped reference containing the path and target information.
+
+    A scoped reference like 'AtmosphereModel.Chemistry.temperature' is resolved into:
+    - path: ['AtmosphereModel', 'Chemistry'] (the hierarchy path)
+    - target: 'temperature' (the final variable/system name)
+    - resolved_component: The actual component object
+    - resolved_variable: The actual variable object (if applicable)
+    """
+    original_reference: str
+    path: List[str]
+    target: str
+    resolved_component: Union[Model, ReactionSystem, DataLoader, Operator, Dict]
+    resolved_variable: Optional[Dict] = None
+    component_type: str = ""  # 'model', 'reaction_system', 'data_loader', 'operator'
+
+
+class ScopedReferenceResolver:
+    """
+    Resolver for hierarchical scoped references in ESM format.
+
+    Implements the hierarchical dot notation resolution algorithm from Section 4.3:
+    Given 'A.B.C.var', splits on '.' → [A, B, C, var]
+    Final segment 'var' is variable name
+    Path [A, B, C] walks subsystem hierarchy
+    """
+
+    def __init__(self, esm_file: EsmFile):
+        """
+        Initialize resolver with an ESM file.
+
+        Args:
+            esm_file: The ESM file containing components to resolve against
+        """
+        self.esm_file = esm_file
+
+    def resolve_reference(self, reference: str) -> ScopedReference:
+        """
+        Resolve a scoped reference to its component and variable.
+
+        Args:
+            reference: Scoped reference like 'AtmosphereModel.Chemistry.temperature'
+
+        Returns:
+            ScopedReference object with resolved component and variable information
+
+        Raises:
+            ValueError: If the reference cannot be resolved
+        """
+        # Step 1: Split on '.'
+        segments = reference.split('.')
+        if len(segments) < 2:
+            raise ValueError(f"Invalid scoped reference '{reference}': must contain at least one dot")
+
+        # Step 2: Final segment could be variable name or system name
+        target = segments[-1]
+        path = segments[:-1]
+
+        # Step 3: Find the top-level system in models, reaction_systems, data_loaders, or operators
+        top_level_name = path[0]
+        component, component_type = self._find_top_level_component(top_level_name)
+
+        if component is None:
+            raise ValueError(f"Top-level component '{top_level_name}' not found in ESM file")
+
+        # Step 4: Walk the subsystem hierarchy
+        current_component = component
+        remaining_path = path[1:]  # Skip the top-level component we already found
+
+        for i, subsystem_name in enumerate(remaining_path):
+            if not hasattr(current_component, 'subsystems') and not isinstance(current_component, dict):
+                raise ValueError(f"Component at path '{'.'.join(path[:i+1])}' has no subsystems")
+
+            # Handle dict-based components (from parsed JSON)
+            if isinstance(current_component, dict):
+                subsystems = current_component.get('subsystems', {})
+            else:
+                subsystems = getattr(current_component, 'subsystems', {})
+
+            if subsystem_name not in subsystems:
+                raise ValueError(f"Subsystem '{subsystem_name}' not found in component '{'.'.join(path[:i+1])}'")
+
+            current_component = subsystems[subsystem_name]
+
+        # Step 5: Try to resolve the target as a variable first, then as a subsystem
+        resolved_variable = None
+
+        # Check if target is a variable
+        variables = {}
+        if isinstance(current_component, dict):
+            variables = current_component.get('variables', {})
+        elif hasattr(current_component, 'variables'):
+            variables = getattr(current_component, 'variables', {})
+
+        if target in variables:
+            resolved_variable = variables[target]
+        else:
+            # Check if target is a subsystem (for references like 'AtmosphereModel.Chemistry')
+            subsystems = {}
+            if isinstance(current_component, dict):
+                subsystems = current_component.get('subsystems', {})
+            elif hasattr(current_component, 'subsystems'):
+                subsystems = getattr(current_component, 'subsystems', {})
+
+            if target in subsystems:
+                # Target is a subsystem, not a variable
+                current_component = subsystems[target]
+                path = segments  # Include the target in the path since it's a component
+                target = ""  # No specific variable targeted
+            else:
+                raise ValueError(f"Target '{target}' not found as variable or subsystem in component '{'.'.join(path)}'")
+
+        return ScopedReference(
+            original_reference=reference,
+            path=path,
+            target=target,
+            resolved_component=current_component,
+            resolved_variable=resolved_variable,
+            component_type=component_type
+        )
+
+    def _find_top_level_component(self, name: str) -> Tuple[Optional[Union[Model, ReactionSystem, DataLoader, Operator, Dict]], str]:
+        """
+        Find a top-level component by name in models, reaction_systems, data_loaders, or operators.
+
+        Args:
+            name: Name of the component to find
+
+        Returns:
+            Tuple of (component, component_type) or (None, "") if not found
+        """
+        # Check models
+        if hasattr(self.esm_file, 'models') and self.esm_file.models:
+            if isinstance(self.esm_file.models, dict) and name in self.esm_file.models:
+                return self.esm_file.models[name], 'model'
+            elif isinstance(self.esm_file.models, list):
+                for model in self.esm_file.models:
+                    if (isinstance(model, dict) and model.get('name') == name) or \
+                       (hasattr(model, 'name') and model.name == name):
+                        return model, 'model'
+
+        # Check reaction_systems
+        if hasattr(self.esm_file, 'reaction_systems') and self.esm_file.reaction_systems:
+            if isinstance(self.esm_file.reaction_systems, dict) and name in self.esm_file.reaction_systems:
+                return self.esm_file.reaction_systems[name], 'reaction_system'
+            elif isinstance(self.esm_file.reaction_systems, list):
+                for rs in self.esm_file.reaction_systems:
+                    if (isinstance(rs, dict) and rs.get('name') == name) or \
+                       (hasattr(rs, 'name') and rs.name == name):
+                        return rs, 'reaction_system'
+
+        # Check data_loaders
+        if hasattr(self.esm_file, 'data_loaders') and self.esm_file.data_loaders:
+            if isinstance(self.esm_file.data_loaders, dict) and name in self.esm_file.data_loaders:
+                return self.esm_file.data_loaders[name], 'data_loader'
+
+        # Check operators
+        if hasattr(self.esm_file, 'operators') and self.esm_file.operators:
+            if isinstance(self.esm_file.operators, dict) and name in self.esm_file.operators:
+                return self.esm_file.operators[name], 'operator'
+
+        return None, ""
+
+    def validate_reference(self, reference: str) -> Tuple[bool, List[str]]:
+        """
+        Validate a scoped reference without fully resolving it.
+
+        Args:
+            reference: Scoped reference to validate
+
+        Returns:
+            Tuple of (is_valid, list_of_error_messages)
+        """
+        try:
+            self.resolve_reference(reference)
+            return True, []
+        except ValueError as e:
+            return False, [str(e)]
+
+
+def resolve_coupling_dependencies(esm_file: EsmFile) -> Dict[str, List[str]]:
+    """
+    Resolve all coupling dependencies in an ESM file using scoped references.
+
+    This function analyzes all coupling entries in the ESM file and resolves
+    their scoped references to determine the actual dependencies between components.
+
+    Args:
+        esm_file: ESM file to analyze
+
+    Returns:
+        Dictionary mapping component identifiers to lists of their dependencies
+
+    Raises:
+        ValueError: If any scoped references cannot be resolved
+    """
+    resolver = ScopedReferenceResolver(esm_file)
+    dependencies = defaultdict(list)
+
+    if not hasattr(esm_file, 'couplings') or not esm_file.couplings:
+        return dict(dependencies)
+
+    for coupling in esm_file.couplings:
+        if hasattr(coupling, 'type') and coupling.type in ['variable_map', 'couple2']:
+            # Handle variable_map couplings
+            if hasattr(coupling, 'from_ref') and hasattr(coupling, 'to_ref'):
+                from_ref = coupling.from_ref
+                to_ref = coupling.to_ref
+            elif hasattr(coupling, 'from') and hasattr(coupling, 'to'):
+                from_ref = coupling.from_ref if hasattr(coupling, 'from_ref') else str(coupling.from_ref)
+                to_ref = coupling.to if hasattr(coupling, 'to_ref') else str(coupling.to)
+            else:
+                continue
+
+            try:
+                # Resolve source and target references
+                from_resolved = resolver.resolve_reference(from_ref)
+                to_resolved = resolver.resolve_reference(to_ref)
+
+                # Create dependency: target depends on source
+                from_component_id = f"{from_resolved.component_type}:{from_resolved.path[0]}"
+                to_component_id = f"{to_resolved.component_type}:{to_resolved.path[0]}"
+
+                if from_component_id != to_component_id:
+                    dependencies[to_component_id].append(from_component_id)
+
+            except ValueError as e:
+                # Skip invalid references for now, could be enhanced to collect errors
+                continue
+
+        elif hasattr(coupling, 'type') and coupling.type == 'operator_compose':
+            # Handle operator_compose couplings
+            if hasattr(coupling, 'systems') and isinstance(coupling.systems, list):
+                # All systems in the compose depend on each other
+                resolved_systems = []
+                for system_ref in coupling.systems:
+                    try:
+                        resolved = resolver.resolve_reference(system_ref)
+                        component_id = f"{resolved.component_type}:{resolved.path[0]}"
+                        resolved_systems.append(component_id)
+                    except ValueError:
+                        continue
+
+                # Create bidirectional dependencies between composed systems
+                for i, sys1 in enumerate(resolved_systems):
+                    for j, sys2 in enumerate(resolved_systems):
+                        if i != j and sys2 not in dependencies[sys1]:
+                            dependencies[sys1].append(sys2)
+
+    return dict(dependencies)
+
+
+def build_execution_order_from_dependencies(dependencies: Dict[str, List[str]]) -> List[str]:
+    """
+    Build an execution order from dependency information using topological sorting.
+
+    Args:
+        dependencies: Dictionary mapping components to their dependencies
+
+    Returns:
+        List of component identifiers in execution order
+
+    Raises:
+        ValueError: If circular dependencies are detected
+    """
+    # Create a graph representation
+    all_components = set(dependencies.keys())
+    for deps in dependencies.values():
+        all_components.update(deps)
+
+    # Calculate in-degrees
+    in_degree = {comp: 0 for comp in all_components}
+    for target, deps in dependencies.items():
+        for dep in deps:
+            if dep in all_components:  # Only count dependencies that exist
+                in_degree[target] += 1
+
+    # Topological sort using Kahn's algorithm
+    queue = deque([comp for comp in all_components if in_degree[comp] == 0])
+    execution_order = []
+
+    while queue:
+        current = queue.popleft()
+        execution_order.append(current)
+
+        # Find all components that depend on current
+        for target, deps in dependencies.items():
+            if current in deps:
+                in_degree[target] -= 1
+                if in_degree[target] == 0:
+                    queue.append(target)
+
+    # Check for cycles
+    if len(execution_order) != len(all_components):
+        remaining = all_components - set(execution_order)
+        raise ValueError(f"Circular dependencies detected among components: {', '.join(remaining)}")
+
+    return execution_order

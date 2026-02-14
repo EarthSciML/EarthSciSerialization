@@ -77,6 +77,10 @@ from .coupling_graph import (
     DependencyInfo,
     construct_coupling_graph,
     validate_coupling_graph,
+    ScopedReference,
+    ScopedReferenceResolver,
+    resolve_coupling_dependencies,
+    build_execution_order_from_dependencies,
 )
 
 __version__ = "0.1.0"
@@ -145,4 +149,8 @@ __all__ = [
     "DependencyInfo",
     "construct_coupling_graph",
     "validate_coupling_graph",
+    "ScopedReference",
+    "ScopedReferenceResolver",
+    "resolve_coupling_dependencies",
+    "build_execution_order_from_dependencies",
 ]
