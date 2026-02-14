@@ -92,10 +92,13 @@ describe('Parse and Serialize', () => {
       }
 
       const result = load(esmWithExpression)
-      const observedVar = result.models!["test"].variables["result"]
-      expect(observedVar.type).toBe('observed')
-      expect(typeof observedVar.expression).toBe('object')
-      if (typeof observedVar.expression === 'object' && observedVar.expression && 'op' in observedVar.expression) {
+      const testModel = result.models?.["test"]
+      expect(testModel).toBeDefined()
+      const observedVar = testModel?.variables["result"]
+      expect(observedVar).toBeDefined()
+      expect(observedVar?.type).toBe('observed')
+      expect(typeof observedVar?.expression).toBe('object')
+      if (observedVar && typeof observedVar.expression === 'object' && observedVar.expression && 'op' in observedVar.expression) {
         expect(observedVar.expression.op).toBe('+')
         expect(Array.isArray(observedVar.expression.args)).toBe(true)
         expect(observedVar.expression.args[0]).toBe(42) // number
@@ -122,7 +125,7 @@ describe('Parse and Serialize', () => {
 
       const result = load(esmWithCoupling)
       expect(result.coupling).toBeDefined()
-      expect(result.coupling![0].type).toBe('operator_compose')
+      expect(result.coupling?.[0]?.type).toBe('operator_compose')
     })
 
     it('should handle optional vs required fields correctly', () => {
@@ -149,7 +152,7 @@ describe('Parse and Serialize', () => {
 
   describe('save()', () => {
     it('should serialize EsmFile to formatted JSON string', () => {
-      const result = save(validMinimalEsm)
+      const result = save(validMinimalEsm as any)
       expect(typeof result).toBe('string')
 
       // Should be valid JSON
@@ -159,7 +162,7 @@ describe('Parse and Serialize', () => {
     })
 
     it('should produce formatted output with proper indentation', () => {
-      const result = save(validMinimalEsm)
+      const result = save(validMinimalEsm as any)
       expect(result).toContain('{\n  "esm"')
       expect(result).toContain('  "metadata": {')
     })
