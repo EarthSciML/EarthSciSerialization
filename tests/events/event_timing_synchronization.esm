@@ -1,0 +1,317 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventTimingSynchronization",
+    "description": "Test fixtures for event timing, synchronization, and race conditions",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+
+  "models": {
+    "FastDynamicsSystem": {
+      "description": "System with fast dynamics to test event timing precision",
+      "variables": {
+        "fast_state": { "type": "state", "units": "1", "default": 1.0, "description": "Rapidly changing state" },
+        "trigger_count": { "type": "parameter", "units": "1", "default": 0, "description": "Event trigger counter" },
+        "last_event_time": { "type": "parameter", "units": "s", "default": 0.0, "description": "Time of last event" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["fast_state"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1000.0, "fast_state"] }
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "rapid_oscillation_detector",
+          "conditions": [
+            { "op": "-", "args": ["fast_state", 0.5] }
+          ],
+          "affects": [
+            {
+              "lhs": "trigger_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["trigger_count"] }, 1] }
+            },
+            {
+              "lhs": "last_event_time",
+              "rhs": "t"
+            }
+          ],
+          "discrete_parameters": ["trigger_count", "last_event_time"],
+          "root_find": "all",
+          "description": "Detects rapid oscillations in fast-changing system"
+        },
+        {
+          "name": "chattering_prevention",
+          "conditions": [
+            { "op": "-", "args": ["fast_state", 0.49] }
+          ],
+          "affects": [
+            {
+              "lhs": "fast_state",
+              "rhs": 0.4
+            }
+          ],
+          "description": "Prevents chattering by introducing hysteresis deadband"
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "high_frequency_periodic",
+          "trigger": {
+            "type": "periodic",
+            "interval": 1e-6,
+            "initial_offset": 0.0
+          },
+          "affects": [
+            {
+              "lhs": "fast_state",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["fast_state"] }, 1e-9] }
+            }
+          ],
+          "description": "Very high frequency periodic perturbation"
+        },
+        {
+          "name": "microsecond_precision_times",
+          "trigger": {
+            "type": "preset_times",
+            "times": [
+              1.000001,
+              1.000002,
+              1.000003,
+              1.000004,
+              1.000005
+            ]
+          },
+          "affects": [
+            {
+              "lhs": "trigger_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["trigger_count"] }, 100] }
+            }
+          ],
+          "discrete_parameters": ["trigger_count"],
+          "description": "Events at microsecond-precision times to test timing accuracy"
+        }
+      ]
+    },
+
+    "SynchronizedOscillators": {
+      "description": "Multiple coupled oscillators for testing synchronized events",
+      "variables": {
+        "osc1_phase": { "type": "state", "units": "rad", "default": 0.0, "description": "Oscillator 1 phase" },
+        "osc2_phase": { "type": "state", "units": "rad", "default": 1.57, "description": "Oscillator 2 phase (90° offset)" },
+        "osc3_phase": { "type": "state", "units": "rad", "default": 3.14, "description": "Oscillator 3 phase (180° offset)" },
+        "sync_strength": { "type": "parameter", "units": "1", "default": 0.1, "description": "Synchronization coupling strength" },
+        "phase_lock_count": { "type": "parameter", "units": "1", "default": 0, "description": "Number of phase lock events" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["osc1_phase"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            1.0,
+            { "op": "*", "args": ["sync_strength", { "op": "sin", "args": [{ "op": "-", "args": ["osc2_phase", "osc1_phase"] }] }] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["osc2_phase"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            1.1,
+            { "op": "*", "args": ["sync_strength", { "op": "sin", "args": [{ "op": "-", "args": ["osc3_phase", "osc2_phase"] }] }] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["osc3_phase"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            0.9,
+            { "op": "*", "args": ["sync_strength", { "op": "sin", "args": [{ "op": "-", "args": ["osc1_phase", "osc3_phase"] }] }] }
+          ]}
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "phase_synchronization_12",
+          "conditions": [
+            { "op": "-", "args": [{ "op": "sin", "args": [{ "op": "-", "args": ["osc1_phase", "osc2_phase"] }] }, 0.01] }
+          ],
+          "affects": [
+            {
+              "lhs": "phase_lock_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["phase_lock_count"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["phase_lock_count"],
+          "description": "Detect phase synchronization between oscillators 1 and 2"
+        },
+        {
+          "name": "phase_synchronization_23",
+          "conditions": [
+            { "op": "-", "args": [{ "op": "sin", "args": [{ "op": "-", "args": ["osc2_phase", "osc3_phase"] }] }, 0.01] }
+          ],
+          "affects": [
+            {
+              "lhs": "phase_lock_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["phase_lock_count"] }, 10] }
+            }
+          ],
+          "discrete_parameters": ["phase_lock_count"],
+          "description": "Detect phase synchronization between oscillators 2 and 3"
+        },
+        {
+          "name": "phase_synchronization_13",
+          "conditions": [
+            { "op": "-", "args": [{ "op": "sin", "args": [{ "op": "-", "args": ["osc1_phase", "osc3_phase"] }] }, 0.01] }
+          ],
+          "affects": [
+            {
+              "lhs": "phase_lock_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["phase_lock_count"] }, 100] }
+            }
+          ],
+          "discrete_parameters": ["phase_lock_count"],
+          "description": "Detect phase synchronization between oscillators 1 and 3"
+        }
+      ]
+    },
+
+    "RaceConditionSystem": {
+      "description": "System designed to test race conditions between events",
+      "variables": {
+        "shared_resource": { "type": "state", "units": "1", "default": 10.0, "description": "Shared resource accessed by multiple events" },
+        "consumer1_active": { "type": "parameter", "units": "1", "default": 1, "description": "Consumer 1 active flag" },
+        "consumer2_active": { "type": "parameter", "units": "1", "default": 1, "description": "Consumer 2 active flag" },
+        "access_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Resource access counter" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["shared_resource"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.5, { "op": "-", "args": [10.0, "shared_resource"] }] }
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "consumer1_resource_access",
+          "conditions": [
+            { "op": "-", "args": ["shared_resource", 8.0] }
+          ],
+          "affects": [
+            {
+              "lhs": "shared_resource",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["shared_resource"] }, 0.8] }
+            },
+            {
+              "lhs": "access_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["access_counter"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["access_counter"],
+          "description": "Consumer 1 accesses shared resource"
+        },
+        {
+          "name": "consumer2_resource_access",
+          "conditions": [
+            { "op": "-", "args": ["shared_resource", 8.001] }
+          ],
+          "affects": [
+            {
+              "lhs": "shared_resource",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["shared_resource"] }, 0.75] }
+            },
+            {
+              "lhs": "access_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["access_counter"] }, 10] }
+            }
+          ],
+          "discrete_parameters": ["access_counter"],
+          "description": "Consumer 2 accesses shared resource (very close condition to consumer 1)"
+        },
+        {
+          "name": "resource_depletion_protection",
+          "conditions": [
+            { "op": "-", "args": ["shared_resource", 1.0] }
+          ],
+          "affects": [
+            {
+              "lhs": "consumer1_active",
+              "rhs": 0
+            },
+            {
+              "lhs": "consumer2_active",
+              "rhs": 0
+            }
+          ],
+          "discrete_parameters": ["consumer1_active", "consumer2_active"],
+          "description": "Disable consumers when resource is depleted"
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "simultaneous_discrete_event1",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "==", "args": [{ "op": "mod", "args": ["access_counter", 5] }, 0] }
+          },
+          "affects": [
+            {
+              "lhs": "shared_resource",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["shared_resource"] }, 1.0] }
+            }
+          ],
+          "description": "Discrete event 1 - triggers every 5 access counts"
+        },
+        {
+          "name": "simultaneous_discrete_event2",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "==", "args": [{ "op": "mod", "args": ["access_counter", 5] }, 0] }
+          },
+          "affects": [
+            {
+              "lhs": "shared_resource",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["shared_resource"] }, 2.0] }
+            }
+          ],
+          "description": "Discrete event 2 - identical trigger to event 1 (tests simultaneous execution)"
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "conditions": [
+        { "op": ">", "args": ["FastDynamicsSystem.trigger_count", 1000] },
+        { "op": ">", "args": ["SynchronizedOscillators.phase_lock_count", 50] }
+      ],
+      "affects": [
+        {
+          "lhs": "RaceConditionSystem.shared_resource",
+          "rhs": 100.0
+        }
+      ],
+      "description": "Cross-system synchronization event with multiple complex conditions"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00.000000Z", "end": "2024-01-01T00:00:10.000000Z" },
+    "initial_conditions": { "type": "constant", "value": 0.0 }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 1e-8,
+      "abstol": 1e-15,
+      "reltol": 1e-12,
+      "event_tolerance": 1e-14
+    }
+  }
+}

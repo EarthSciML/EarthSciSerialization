@@ -1,0 +1,218 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventErrorConditions",
+    "description": "Invalid event configurations for testing error handling",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+
+  "models": {
+    "ErrorTestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.0, "description": "State variable" },
+        "y": { "type": "state", "units": "m", "default": 2.0, "description": "Another state variable" },
+        "valid_param": { "type": "parameter", "units": "1", "default": 1.0, "description": "Valid parameter" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["valid_param", "x"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["y"] }
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "undefined_variable_in_condition",
+          "conditions": [
+            { "op": "-", "args": ["undefined_variable", 0.5] }
+          ],
+          "affects": [
+            {
+              "lhs": "x",
+              "rhs": 0.0
+            }
+          ],
+          "description": "ERROR: References undefined variable 'undefined_variable' in condition"
+        },
+        {
+          "name": "undefined_variable_in_affect",
+          "conditions": [
+            { "op": "-", "args": ["x", 0.5] }
+          ],
+          "affects": [
+            {
+              "lhs": "undefined_target",
+              "rhs": { "op": "Pre", "args": ["x"] }
+            }
+          ],
+          "description": "ERROR: Affect targets undefined variable 'undefined_target'"
+        },
+        {
+          "name": "invalid_pre_in_condition",
+          "conditions": [
+            { "op": "-", "args": [{ "op": "Pre", "args": ["x"] }, 0.5] }
+          ],
+          "affects": [
+            {
+              "lhs": "y",
+              "rhs": 1.0
+            }
+          ],
+          "description": "ERROR: Pre() operator used in condition (only allowed in affects)"
+        },
+        {
+          "name": "parameter_not_declared_discrete",
+          "conditions": [
+            { "op": "-", "args": ["y", 1.0] }
+          ],
+          "affects": [
+            {
+              "lhs": "valid_param",
+              "rhs": 10.0
+            }
+          ],
+          "description": "ERROR: Modifies parameter 'valid_param' but not declared in discrete_parameters"
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "conflicting_discrete_parameters",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": ">", "args": ["x", 5.0] }
+          },
+          "affects": [
+            {
+              "lhs": "valid_param",
+              "rhs": 1.0
+            }
+          ],
+          "discrete_parameters": ["valid_param", "nonexistent_param"],
+          "description": "ERROR: discrete_parameters includes undeclared 'nonexistent_param'"
+        },
+        {
+          "name": "invalid_trigger_type",
+          "trigger": {
+            "type": "invalid_trigger_type",
+            "expression": { "op": ">", "args": ["y", 3.0] }
+          },
+          "affects": [
+            {
+              "lhs": "x",
+              "rhs": 0.0
+            }
+          ],
+          "description": "ERROR: Invalid trigger type 'invalid_trigger_type'"
+        },
+        {
+          "name": "missing_trigger_fields",
+          "trigger": {
+            "type": "periodic"
+          },
+          "affects": [
+            {
+              "lhs": "y",
+              "rhs": 1.0
+            }
+          ],
+          "description": "ERROR: Periodic trigger missing required 'interval' field"
+        },
+        {
+          "name": "empty_preset_times",
+          "trigger": {
+            "type": "preset_times",
+            "times": []
+          },
+          "affects": [
+            {
+              "lhs": "x",
+              "rhs": 2.0
+            }
+          ],
+          "description": "ERROR: Empty times array in preset_times trigger"
+        },
+        {
+          "name": "functional_affect_errors",
+          "trigger": {
+            "type": "periodic",
+            "interval": 1.0
+          },
+          "functional_affect": {
+            "handler_id": "NonexistentHandler",
+            "read_vars": ["x", "undefined_variable"],
+            "read_params": ["valid_param"],
+            "modified_params": ["another_undefined_param"]
+          },
+          "description": "ERROR: Multiple issues - undefined variables in read_vars and modified_params"
+        },
+        {
+          "name": "both_affects_and_functional",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "<", "args": ["x", 0.1] }
+          },
+          "affects": [
+            {
+              "lhs": "y",
+              "rhs": 1.0
+            }
+          ],
+          "functional_affect": {
+            "handler_id": "SomeHandler",
+            "read_vars": ["x"],
+            "read_params": [],
+            "modified_params": []
+          },
+          "description": "ERROR: Event has both 'affects' and 'functional_affect' (should be mutually exclusive)"
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "conditions": [
+        { "op": "-", "args": ["ErrorTestModel.x", "NonexistentModel.some_variable"] }
+      ],
+      "affects": [
+        {
+          "lhs": "ErrorTestModel.y",
+          "rhs": 0.0
+        }
+      ],
+      "description": "ERROR: Cross-system event references nonexistent model 'NonexistentModel'"
+    },
+    {
+      "type": "event",
+      "event_type": "discrete",
+      "trigger": {
+        "type": "condition",
+        "expression": { "op": ">", "args": ["ErrorTestModel.x", 10.0] }
+      },
+      "affects": [
+        {
+          "lhs": "ErrorTestModel.valid_param",
+          "rhs": 5.0
+        }
+      ],
+      "description": "ERROR: Cross-system event modifies parameter but missing discrete_parameters declaration"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:01:00Z" }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": { "timestep": 0.01 }
+  }
+}
