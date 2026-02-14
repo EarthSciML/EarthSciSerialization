@@ -1,0 +1,38 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedVarNested",
+    "description": "Undefined variable in nested expression"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "T": { "type": "state", "units": "K", "default": 298.15 },
+        "A": { "type": "parameter", "units": "1/s", "default": 1e6 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["T"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "A",
+              {
+                "op": "exp",
+                "args": [
+                  {
+                    "op": "/",
+                    "args": [
+                      { "op": "*", "args": [-1, "undefined_energy"] },
+                      "T"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
