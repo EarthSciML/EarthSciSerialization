@@ -35,6 +35,11 @@ class OperatorRegistry:
     def _register_builtin_operators(self):
         """Register the built-in operators."""
         from .math_operators import AddOperator, SubtractOperator, MultiplyOperator, DivideOperator
+        from .logical_operators import (
+            AndOperator, OrOperator, NotOperator,
+            EqualOperator, NotEqualOperator, LessThanOperator,
+            LessThanOrEqualOperator, GreaterThanOperator, GreaterThanOrEqualOperator
+        )
 
         # Register mathematical operators
         self.register_operator(
@@ -62,6 +67,71 @@ class OperatorRegistry:
             name="divide",
             operator_type=OperatorType.ARITHMETIC,
             operator_class=DivideOperator,
+            version="1.0"
+        )
+
+        # Register logical operators
+        self.register_operator(
+            name="and",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=AndOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="or",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=OrOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="not",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=NotOperator,
+            version="1.0"
+        )
+
+        # Register comparison operators
+        self.register_operator(
+            name="eq",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=EqualOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="ne",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=NotEqualOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="lt",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=LessThanOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="le",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=LessThanOrEqualOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="gt",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=GreaterThanOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="ge",
+            operator_type=OperatorType.LOGICAL,
+            operator_class=GreaterThanOrEqualOperator,
             version="1.0"
         )
 
