@@ -69,6 +69,15 @@ from .operator_registry import (
     list_operators_by_type,
     has_operator,
 )
+from .coupling_graph import (
+    CouplingGraph,
+    CouplingNode,
+    CouplingEdge,
+    NodeType,
+    DependencyInfo,
+    construct_coupling_graph,
+    validate_coupling_graph,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -129,4 +138,11 @@ __all__ = [
     "create_operator_by_name",
     "list_operators_by_type",
     "has_operator",
+    "CouplingGraph",
+    "CouplingNode",
+    "CouplingEdge",
+    "NodeType",
+    "DependencyInfo",
+    "construct_coupling_graph",
+    "validate_coupling_graph",
 ]
