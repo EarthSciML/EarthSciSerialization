@@ -122,24 +122,47 @@ class ErrorConsistencyRunner:
         """Run validation using the TypeScript implementation."""
         ts_dir = self.project_root / "packages" / "esm-format"
 
-        # Create a temporary TypeScript script
+        # Create a temporary TypeScript script using existing validateSchema function
         ts_script = f'''
         import {{ readFileSync }} from 'fs';
-        import {{ load, validate }} from './dist/index.js';
+        import {{ load, validateSchema }} from '{ts_dir}/dist/index.js';
 
         try {{
             const content = readFileSync("{esm_file}", "utf8");
             const data = JSON.parse(content);
-            const esmFile = load(data);
-            const validation = validate(esmFile);
+
+            // Perform schema validation first
+            const schemaErrors = validateSchema(data);
+
+            // Try to load for structural validation
+            let structuralErrors = [];
+            try {{
+                const esmFile = load(data);
+                // If load succeeds, no structural errors
+            }} catch (loadError) {{
+                structuralErrors.push({{
+                    path: "$",
+                    message: loadError.message || String(loadError),
+                    code: loadError.constructor.name.toLowerCase().replace('error', ''),
+                    details: {{
+                        exception_type: loadError.constructor.name,
+                        error: loadError.message || String(loadError)
+                    }}
+                }});
+            }}
 
             const output = {{
                 language: "typescript",
                 file: "{esm_file.name}",
                 validation_result: {{
-                    valid: validation.is_valid,
-                    schema_errors: validation.schema_errors,
-                    structural_errors: validation.structural_errors
+                    valid: schemaErrors.length === 0 && structuralErrors.length === 0,
+                    schema_errors: schemaErrors.map(err => ({{
+                        path: err.path,
+                        message: err.message,
+                        code: err.keyword || "",
+                        details: {{ keyword: err.keyword }}
+                    }})),
+                    structural_errors: structuralErrors
                 }}
             }};
 
@@ -210,23 +233,41 @@ import sys
 sys.path.insert(0, "{python_dir / 'src'}")
 
 import json
-from esm_format import load, validate
+from esm_format import validate
 
 try:
     with open("{esm_file}", "r") as f:
         content = f.read()
 
-    data = json.loads(content)
-    esm_file_obj = load(data)
-    validation = validate(esm_file_obj)
+    # Validate with raw data (string or dict)
+    validation = validate(content)
+
+    # Convert validation errors to dictionaries for JSON serialization
+    schema_errors = []
+    for error in validation.schema_errors:
+        schema_errors.append({{
+            "path": error.path,
+            "message": error.message,
+            "code": error.code,
+            "details": error.details
+        }})
+
+    structural_errors = []
+    for error in validation.structural_errors:
+        structural_errors.append({{
+            "path": error.path,
+            "message": error.message,
+            "code": error.code,
+            "details": error.details
+        }})
 
     output = {{
         "language": "python",
         "file": "{esm_file.name}",
         "validation_result": {{
             "valid": validation.is_valid,
-            "schema_errors": validation.schema_errors,
-            "structural_errors": validation.structural_errors
+            "schema_errors": schema_errors,
+            "structural_errors": structural_errors
         }}
     }}
 
