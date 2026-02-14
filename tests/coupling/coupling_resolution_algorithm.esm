@@ -1,0 +1,319 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CouplingResolutionAlgorithmTests",
+    "description": "Step-by-step verification tests for ESM scoped reference resolution algorithm (Section 4.3)",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "notes": [
+      "Tests the hierarchical dot notation resolution algorithm:",
+      "Given 'A.B.C.var', split on '.' → [A, B, C, var]",
+      "Final segment 'var' is variable name",
+      "Path [A, B, C] walks subsystem hierarchy:",
+      "- A must match top-level system in models/reaction_systems/data_loaders/operators",
+      "- B must match key in A's subsystems map",
+      "- C must match key in B's subsystems map",
+      "Each test case verifies a specific step of this algorithm"
+    ]
+  },
+
+  "models": {
+    "AtmosphereModel": {
+      "coupletype": "AtmosphereCoupler",
+      "variables": {
+        "pressure": { "type": "parameter", "units": "Pa", "default": 101325.0, "description": "Surface pressure" },
+        "temperature": { "type": "parameter", "units": "K", "default": 298.15, "description": "Surface temperature" }
+      },
+      "subsystems": {
+        "Chemistry": {
+          "coupletype": "ChemistryCoupler",
+          "variables": {
+            "O3": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone mixing ratio" },
+            "NO": { "type": "state", "units": "mol/mol", "default": 0.1e-9, "description": "NO mixing ratio" },
+            "temperature": { "type": "parameter", "units": "K", "default": 298.15, "description": "Chemistry temperature" }
+          },
+          "subsystems": {
+            "FastReactions": {
+              "variables": {
+                "k1": { "type": "parameter", "units": "1/s", "default": 1e-5, "description": "Rate constant 1" },
+                "k2": { "type": "parameter", "units": "cm^3/molec/s", "default": 1.8e-12, "description": "Rate constant 2" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+                  "rhs": { "op": "*", "args": [-1, "k1", "O3"] }
+                }
+              ]
+            },
+            "SlowReactions": {
+              "variables": {
+                "k_slow": { "type": "parameter", "units": "1/s", "default": 1e-7, "description": "Slow rate constant" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
+                  "rhs": { "op": "*", "args": [-1, "k_slow", "NO"] }
+                }
+              ]
+            }
+          },
+          "equations": []
+        },
+        "Transport": {
+          "variables": {
+            "wind_speed": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Wind speed" },
+            "diffusivity": { "type": "parameter", "units": "m^2/s", "default": 10.0, "description": "Turbulent diffusivity" }
+          },
+          "subsystems": {
+            "Advection": {
+              "variables": {
+                "u_wind": { "type": "parameter", "units": "m/s", "default": 3.0, "description": "Eastward wind" },
+                "v_wind": { "type": "parameter", "units": "m/s", "default": 4.0, "description": "Northward wind" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+                  "rhs": { "op": "+", "args": [
+                    { "op": "*", "args": [
+                      { "op": "-", "args": ["u_wind"] },
+                      { "op": "grad", "args": ["_var"], "dim": "x" }
+                    ]},
+                    { "op": "*", "args": [
+                      { "op": "-", "args": ["v_wind"] },
+                      { "op": "grad", "args": ["_var"], "dim": "y" }
+                    ]}
+                  ]}
+                }
+              ]
+            }
+          },
+          "equations": []
+        }
+      },
+      "equations": []
+    },
+
+    "SurfaceModel": {
+      "coupletype": "SurfaceCoupler",
+      "variables": {
+        "soil_temperature": { "type": "parameter", "units": "K", "default": 285.0, "description": "Soil temperature" },
+        "surface_resistance": { "type": "parameter", "units": "s/m", "default": 100.0, "description": "Surface resistance" }
+      },
+      "subsystems": {
+        "VegetationLayer": {
+          "variables": {
+            "leaf_area_index": { "type": "parameter", "units": "m^2/m^2", "default": 3.0, "description": "Leaf area index" },
+            "stomatal_resistance": { "type": "parameter", "units": "s/m", "default": 200.0, "description": "Stomatal resistance" }
+          },
+          "equations": []
+        }
+      },
+      "equations": []
+    }
+  },
+
+  "data_loaders": {
+    "MeteorologicalData": {
+      "type": "gridded_data",
+      "loader_id": "WRF",
+      "config": {
+        "file_pattern": "wrfout_*"
+      },
+      "provides": {
+        "temperature": { "units": "K", "description": "Air temperature" },
+        "pressure": { "units": "Pa", "description": "Surface pressure" },
+        "wind_u": { "units": "m/s", "description": "Eastward wind component" },
+        "wind_v": { "units": "m/s", "description": "Northward wind component" }
+      },
+      "subsystems": {
+        "QualityControl": {
+          "variables": {
+            "data_quality_flag": { "type": "parameter", "units": "dimensionless", "default": 1.0, "description": "Quality control flag" }
+          }
+        }
+      }
+    }
+  },
+
+  "operators": {
+    "BiogenicEmissions": {
+      "operator_id": "MEGAN",
+      "config": {
+        "emission_factor_map": "megan_ef.nc"
+      },
+      "needed_vars": ["temperature", "solar_radiation"],
+      "modifies": ["emission_rate_isoprene"],
+      "description": "MEGAN biogenic emissions model",
+      "subsystems": {
+        "TemperatureDependence": {
+          "variables": {
+            "beta": { "type": "parameter", "units": "1/K", "default": 0.09, "description": "Temperature dependence factor" }
+          }
+        }
+      }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["AtmosphereModel.Chemistry", "AtmosphereModel.Transport"],
+      "description": "TEST CASE 1: Two-level scoped references - AtmosphereModel.Chemistry should resolve to Chemistry subsystem of AtmosphereModel"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalData.temperature",
+      "to": "AtmosphereModel.temperature",
+      "transform": "param_to_var",
+      "description": "TEST CASE 2: Simple two-part scoped reference resolution - MeteorologicalData.temperature"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "AtmosphereModel.Chemistry.temperature",
+      "to": "SurfaceModel.soil_temperature",
+      "transform": "param_to_var",
+      "description": "TEST CASE 3: Three-level hierarchy - AtmosphereModel.Chemistry.temperature. Algorithm steps: [AtmosphereModel, Chemistry, temperature]. Find AtmosphereModel in models, find Chemistry in AtmosphereModel.subsystems, find temperature in Chemistry.variables"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "AtmosphereModel.Chemistry.FastReactions.k1",
+      "to": "AtmosphereModel.Chemistry.SlowReactions.k_slow",
+      "transform": "param_to_var",
+      "description": "TEST CASE 4: Four-level deep nesting - AtmosphereModel.Chemistry.FastReactions.k1. Algorithm steps: [AtmosphereModel, Chemistry, FastReactions, k1]. Verify each step of hierarchy walking."
+    },
+
+    {
+      "type": "variable_map",
+      "from": "AtmosphereModel.Transport.Advection.u_wind",
+      "to": "AtmosphereModel.Transport.wind_speed",
+      "transform": "conversion_factor",
+      "factor": 1.0,
+      "description": "TEST CASE 5: Four-level resolution in different subsystem branch - AtmosphereModel.Transport.Advection.u_wind"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalData.QualityControl.data_quality_flag",
+      "to": "SurfaceModel.VegetationLayer.leaf_area_index",
+      "transform": "multiplicative",
+      "description": "TEST CASE 6: Data loader subsystem resolution - MeteorologicalData.QualityControl.data_quality_flag. Tests resolution in data_loaders section."
+    },
+
+    {
+      "type": "variable_map",
+      "from": "BiogenicEmissions.TemperatureDependence.beta",
+      "to": "AtmosphereModel.Chemistry.FastReactions.k2",
+      "transform": "multiplicative",
+      "description": "TEST CASE 7: Operator subsystem resolution - BiogenicEmissions.TemperatureDependence.beta. Tests resolution in operators section."
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["AtmosphereModel.Chemistry", "SurfaceModel"],
+      "coupletype_pair": ["ChemistryCoupler", "SurfaceCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "AtmosphereModel.Chemistry.O3",
+            "to": "SurfaceModel.surface_resistance",
+            "transform": "multiplicative",
+            "expression": {
+              "op": "+", "args": [
+                1.0,
+                { "op": "*", "args": [0.1, "AtmosphereModel.Chemistry.O3"] }
+              ]
+            },
+            "description": "TEST CASE 8: Scoped references within expressions - both from/to and within expression args use scoped references"
+          }
+        ]
+      },
+      "description": "TEST CASE 8: couple2 with scoped references in connector expressions"
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-01T12:00:00Z"
+    }
+  },
+
+  "_test_verification": {
+    "resolution_algorithm_tests": [
+      {
+        "test_case": "Two-level resolution",
+        "reference": "AtmosphereModel.Chemistry",
+        "algorithm_steps": [
+          "1. Split on '.' → ['AtmosphereModel', 'Chemistry']",
+          "2. Final segment: 'Chemistry' (system name, not variable)",
+          "3. Path: ['AtmosphereModel']",
+          "4. Find 'AtmosphereModel' in top-level models section ✓",
+          "5. Find 'Chemistry' in AtmosphereModel.subsystems ✓",
+          "6. Resolution succeeds: AtmosphereModel.subsystems['Chemistry']"
+        ]
+      },
+      {
+        "test_case": "Three-level variable resolution",
+        "reference": "AtmosphereModel.Chemistry.temperature",
+        "algorithm_steps": [
+          "1. Split on '.' → ['AtmosphereModel', 'Chemistry', 'temperature']",
+          "2. Final segment: 'temperature' (variable name)",
+          "3. Path: ['AtmosphereModel', 'Chemistry']",
+          "4. Find 'AtmosphereModel' in top-level models section ✓",
+          "5. Find 'Chemistry' in AtmosphereModel.subsystems ✓",
+          "6. Find 'temperature' in Chemistry.variables ✓",
+          "7. Resolution succeeds: AtmosphereModel.subsystems['Chemistry'].variables['temperature']"
+        ]
+      },
+      {
+        "test_case": "Four-level deep nesting",
+        "reference": "AtmosphereModel.Chemistry.FastReactions.k1",
+        "algorithm_steps": [
+          "1. Split on '.' → ['AtmosphereModel', 'Chemistry', 'FastReactions', 'k1']",
+          "2. Final segment: 'k1' (variable name)",
+          "3. Path: ['AtmosphereModel', 'Chemistry', 'FastReactions']",
+          "4. Find 'AtmosphereModel' in top-level models section ✓",
+          "5. Find 'Chemistry' in AtmosphereModel.subsystems ✓",
+          "6. Find 'FastReactions' in Chemistry.subsystems ✓",
+          "7. Find 'k1' in FastReactions.variables ✓",
+          "8. Resolution succeeds: AtmosphereModel.subsystems['Chemistry'].subsystems['FastReactions'].variables['k1']"
+        ]
+      },
+      {
+        "test_case": "Cross-section resolution",
+        "reference": "MeteorologicalData.QualityControl.data_quality_flag",
+        "algorithm_steps": [
+          "1. Split on '.' → ['MeteorologicalData', 'QualityControl', 'data_quality_flag']",
+          "2. Final segment: 'data_quality_flag' (variable name)",
+          "3. Path: ['MeteorologicalData', 'QualityControl']",
+          "4. Find 'MeteorologicalData' in top-level data_loaders section ✓",
+          "5. Find 'QualityControl' in MeteorologicalData.subsystems ✓",
+          "6. Find 'data_quality_flag' in QualityControl.variables ✓",
+          "7. Resolution succeeds: data_loaders['MeteorologicalData'].subsystems['QualityControl'].variables['data_quality_flag']"
+        ]
+      },
+      {
+        "test_case": "Operator subsystem resolution",
+        "reference": "BiogenicEmissions.TemperatureDependence.beta",
+        "algorithm_steps": [
+          "1. Split on '.' → ['BiogenicEmissions', 'TemperatureDependence', 'beta']",
+          "2. Final segment: 'beta' (variable name)",
+          "3. Path: ['BiogenicEmissions', 'TemperatureDependence']",
+          "4. Find 'BiogenicEmissions' in top-level operators section ✓",
+          "5. Find 'TemperatureDependence' in BiogenicEmissions.subsystems ✓",
+          "6. Find 'beta' in TemperatureDependence.variables ✓",
+          "7. Resolution succeeds: operators['BiogenicEmissions'].subsystems['TemperatureDependence'].variables['beta']"
+        ]
+      }
+    ],
+    "error_cases_to_test_separately": [
+      "Invalid top-level system: 'NonExistentModel.Chemistry.O3' - step 4 fails",
+      "Invalid subsystem: 'AtmosphereModel.NonExistentSub.O3' - step 5 fails",
+      "Invalid variable: 'AtmosphereModel.Chemistry.NonExistentVar' - step 6 fails",
+      "Trying to access variable as system: 'AtmosphereModel.Chemistry.O3.invalid' - step 5 fails because O3 is variable, not system"
+    ]
+  }
+}
