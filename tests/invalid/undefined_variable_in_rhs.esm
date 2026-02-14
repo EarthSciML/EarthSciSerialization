@@ -1,0 +1,21 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedVarInRHS",
+    "description": "Undefined variable in equation RHS"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol", "default": 1.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.1 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["k", "x", "undefined_concentration"] }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnresolvedScopedRefMissingVariable",
+    "description": "Scoped reference with valid system but nonexistent variable"
+  },
+  "models": {
+    "ModelA": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": 1.0
+        }
+      ]
+    },
+    "ModelB": {
+      "variables": {
+        "y": { "type": "parameter", "units": "m/s", "default": 1.0 }
+      },
+      "equations": []
+    }
+  },
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "ModelB.nonexistent_variable",
+      "to": "ModelA.x",
+      "transform": "identity"
+    }
+  ]
+}

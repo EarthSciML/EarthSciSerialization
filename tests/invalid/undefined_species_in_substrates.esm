@@ -1,0 +1,26 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedSpeciesSubstrates",
+    "description": "Undefined species in reaction substrates"
+  },
+  "reaction_systems": {
+    "ChemSystem": {
+      "species": {
+        "NO": { "units": "mol/mol", "default": 1e-9 },
+        "O3": { "units": "mol/mol", "default": 40e-9 }
+      },
+      "parameters": {
+        "k1": { "units": "cm^3/molec/s", "default": 1.8e-12 }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": { "NO": 1, "undefined_species": 1 },
+          "products": { "NO2": 1 },
+          "rate": "k1"
+        }
+      ]
+    }
+  }
+}
