@@ -144,6 +144,7 @@ class DiscreteEvent:
 class DataLoaderType(Enum):
     """Types of data loaders."""
     CSV = "csv"
+    JSON = "json"
     NETCDF = "netcdf"
     HDF5 = "hdf5"
     BINARY = "binary"
