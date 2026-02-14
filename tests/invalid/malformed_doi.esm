@@ -1,0 +1,34 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MalformedDOIExample",
+    "description": "Metadata with malformed DOI in references",
+    "authors": ["DOI Test Author"],
+    "created": "2024-01-01T00:00:00Z",
+    "references": [
+      {
+        "doi": "not-a-valid-doi",
+        "citation": "Invalid DOI format example"
+      },
+      {
+        "doi": "10.invalid/",
+        "citation": "Another malformed DOI"
+      }
+    ]
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for malformed DOI" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}
