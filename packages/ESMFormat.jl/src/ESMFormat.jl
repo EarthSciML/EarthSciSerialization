@@ -17,7 +17,8 @@ using JSONSchema
 include("types.jl")
 include("parse.jl")
 include("serialize.jl")
-include("mtk_catalyst.jl")
+# Temporarily commenting out mtk_catalyst.jl due to precompilation issues
+# include("mtk_catalyst.jl")
 
 # Export main types
 export
@@ -37,13 +38,16 @@ export
     Domain, Solver, Reference, Metadata, EsmFile,
     # JSON functionality
     load, save, ParseError, SchemaValidationError,
-    # MTK/Catalyst conversion functions
-    to_mtk_system, to_catalyst_system, from_mtk_system, from_catalyst_system,
-    to_coupled_system,
+    # Qualified reference resolution
+    resolve_qualified_reference, QualifiedReferenceError, ReferenceResolution,
+    validate_reference_syntax, is_valid_identifier
+    # MTK/Catalyst conversion functions temporarily disabled
+    # to_mtk_system, to_catalyst_system, from_mtk_system, from_catalyst_system,
+    # to_coupled_system,
     # Expression conversion utilities
-    esm_to_symbolic, symbolic_to_esm,
+    # esm_to_symbolic, symbolic_to_esm,
     # Legacy compatibility aliases (for tests)
-    MockMTKSystem, MockCatalystSystem,
-    esm_to_mock_symbolic, mock_symbolic_to_esm
+    # MockMTKSystem, MockCatalystSystem,
+    # esm_to_mock_symbolic, mock_symbolic_to_esm
 
 end # module ESMFormat
