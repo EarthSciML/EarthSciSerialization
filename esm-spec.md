@@ -67,7 +67,7 @@ At least one of `models` or `reaction_systems` must be present.
     "references": [
       {
         "doi": "10.5194/acp-8-6365-2008",
-        "citation": "Cameron-Smith et al., 2006. A new reduced mechanism for gas-phase chemistry.",
+        "citation": "Cameron-Smith et al., 2008. A new reduced mechanism for gas-phase chemistry.",
         "url": "https://doi.org/10.5194/acp-8-6365-2008"
       }
     ]
@@ -117,7 +117,7 @@ Example: `{"op": "D", "args": ["O3"], "wrt": "t"}` represents ∂O₃/∂t.
 
 #### Elementary Functions
 
-`exp`, `log`, `log10`, `sqrt`, `abs`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `min`, `max`, `floor`, `ceil`
+`exp`, `log`, `log10`, `sqrt`, `abs`, `sign`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `min`, `max`, `floor`, `ceil`
 
 All take their standard mathematical arguments in `args`.
 
@@ -135,15 +135,27 @@ All take their standard mathematical arguments in `args`.
 |---|---|---|
 | `Pre` | `[var]` | Value of variable immediately before an event fires (see Section 5) |
 
-#### Special: Combinatoric Rate Law Helper
-
-| Op | Args | Meaning |
-|---|---|---|
-| `binomial` | `[n, k]` | n! / (k! · (n−k)!) for mass action rate rescaling |
-
 ### 4.3 Scoped References
 
-Variables can be referenced across models using dot notation: `"SuperFast.O3"` refers to variable `O3` in the model named `SuperFast`.
+Variables are referenced across systems using **hierarchical dot notation**. Systems can contain subsystems to arbitrary depth, and the dot-separated path walks the hierarchy from the top-level system down to the variable:
+
+```
+"System.variable"              →  variable in a top-level system
+"System.Subsystem.variable"    →  variable in a subsystem of a top-level system
+"A.B.C.variable"               →  variable in A → B → C (nested subsystems)
+```
+
+The **last** segment is always the variable (or species/parameter) name. All preceding segments are system names forming a path through the subsystem hierarchy. For example:
+
+| Reference | Meaning |
+|---|---|
+| `"SuperFast.O3"` | Variable `O3` in top-level model `SuperFast` |
+| `"SuperFast.GasPhase.O3"` | Variable `O3` in subsystem `GasPhase` of model `SuperFast` |
+| `"Atmosphere.Chemistry.FastChem.NO2"` | Variable `NO2` in `Atmosphere` → `Chemistry` → `FastChem` |
+
+**Resolution algorithm:** Given a scoped reference string, split on `"."` to produce segments `[s₁, s₂, …, sₙ]`. The final segment `sₙ` is the variable name. The preceding segments `[s₁, …, sₙ₋₁]` form a path: `s₁` must match a key in the top-level `models`, `reaction_systems`, `data_loaders`, or `operators` section, and each subsequent segment must match a key in the parent system's `subsystems` map.
+
+**Bare references** (no dot) refer to a variable within the current system context. In coupling entries, all references must be fully qualified from the top-level system name.
 
 ---
 
@@ -162,12 +174,6 @@ Event affects (the state changes that occur when an event fires) use a **pre/pos
 - A variable that does not appear on the LHS of any affect equation is free to be modified by the runtime to maintain algebraic consistency (e.g., in DAE systems)
 
 For example, to increment `x` by 1 when the event fires:
-
-```json
-{ "lhs": "x", "rhs": { "op": "Pre", "args": ["x", 1] } }
-```
-
-Wait — more precisely, using the expression AST:
 
 ```json
 { "lhs": "x", "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["x"] }, 1] } }
@@ -238,7 +244,7 @@ Continuous events fire when a **condition expression crosses zero**. The runtime
 | `affects` | ✓ | Array of `{lhs, rhs}` affect equations. Empty array `[]` for pure detection (no state change). |
 | `affect_neg` | | Separate affects for negative-going zero crossings. If `null` or absent, `affects` is used for both directions. |
 | `root_find` | | Root-finding direction: `"left"` (default), `"right"`, or `"all"`. Maps to DiffEq `rootfind` option. |
-| `reinitialize` | | Boolean. Whether to reinitialize the system after the event (default: `false` for symbolic affects, `true` for functional affects). |
+| `reinitialize` | | Boolean. Whether to reinitialize the system after the event (default: `false`). |
 | `description` | | Human-readable description |
 
 #### Direction-dependent Affects
@@ -254,13 +260,13 @@ When a continuous event needs different behavior for positive vs. negative zero 
   "affects": [
     {
       "lhs": "heater_on",
-      "rhs": 1
+      "rhs": 0
     }
   ],
   "affect_neg": [
     {
       "lhs": "heater_on",
-      "rhs": 0
+      "rhs": 1
     }
   ],
   "description": "Turn heater on when T drops below setpoint, off when above"
@@ -309,7 +315,7 @@ Discrete events fire when a **boolean condition evaluates to true** at the end o
     },
 
     {
-      "name": "periodic_emission_update",
+      "name": "periodic_emission_decay",
       "trigger": {
         "type": "periodic",
         "interval": 3600.0
@@ -317,11 +323,11 @@ Discrete events fire when a **boolean condition evaluates to true** at the end o
       "affects": [
         {
           "lhs": "emission_scale",
-          "rhs": { "op": "Pre", "args": ["emission_scale"] }
+          "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["emission_scale"] }, 0.95] }
         }
       ],
       "discrete_parameters": ["emission_scale"],
-      "description": "Update emission scaling factor every hour"
+      "description": "Reduce emission scaling factor by 5% every hour"
     },
 
     {
@@ -349,7 +355,7 @@ Discrete events fire when a **boolean condition evaluates to true** at the end o
 |---|---|---|
 | `name` | | Human-readable identifier |
 | `trigger` | ✓ | Trigger specification (see trigger types below) |
-| `affects` | ✓ | Array of `{lhs, rhs}` affect equations |
+| `affects` | ✓* | Array of `{lhs, rhs}` affect equations. *Required unless `functional_affect` is provided. |
 | `discrete_parameters` | | Array of parameter names that are modified by this event. Parameters not listed here are treated as immutable. Required when affects modify parameters rather than state variables. |
 | `reinitialize` | | Boolean. Whether to reinitialize the system after the event. |
 | `description` | | Human-readable description |
@@ -443,7 +449,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 
 **All models must be fully specified.** Every equation, variable, and parameter must be present in the `.esm` file. This ensures any conforming parser can reconstruct the model without external dependencies.
 
-### 5.1 Schema
+### 6.1 Schema
 
 ```json
 {
@@ -453,7 +459,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 
       "reference": {
         "doi": "10.5194/acp-8-6365-2008",
-        "citation": "Cameron-Smith et al., 2006",
+        "citation": "Cameron-Smith et al., 2008",
         "url": "https://doi.org/10.5194/acp-8-6365-2008",
         "notes": "Simplified tropospheric chemistry mechanism with 16 species"
       },
@@ -464,6 +470,12 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
           "units": "mol/mol",
           "default": 1.0e-8,
           "description": "Ozone mixing ratio"
+        },
+        "NO": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1.0e-10,
+          "description": "Nitric oxide mixing ratio"
         },
         "NO2": {
           "type": "state",
@@ -542,7 +554,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 }
 ```
 
-### 5.2 Model Fields
+### 6.2 Model Fields
 
 | Field | Required | Description |
 |---|---|---|
@@ -552,8 +564,9 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `equations` | ✓ | Array of `{lhs, rhs}` equation objects |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
+| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
 
-### 5.3 Variable Types
+### 6.3 Variable Types
 
 | Type | Description |
 |---|---|
@@ -561,7 +574,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `parameter` | Values set externally or held constant during integration |
 | `observed` | Derived quantities; must include an `expression` field |
 
-### 5.4 Advection Model Example
+### 6.4 Advection Model Example
 
 Advection is a model like any other — fully specified:
 
@@ -601,6 +614,56 @@ Advection is a model like any other — fully specified:
 
 The special variable `"_var"` is a placeholder used in operator-style models. When coupled via `operator_compose`, it is substituted with each matching state variable from the target system.
 
+### 6.5 Dry Deposition Model Example
+
+A model that computes deposition velocities from surface resistance parameters. This model is coupled to a chemistry system via `couple2` to provide deposition loss terms, while a separate operator (see Section 9) handles grid-level application.
+
+```json
+{
+  "DryDeposition": {
+    "coupletype": "DryDepositionCoupler",
+    "reference": {
+      "doi": "10.1016/0004-6981(89)90153-4",
+      "citation": "Wesely, 1989. Parameterization of surface resistances to gaseous dry deposition.",
+      "notes": "Resistance-based model: v_dep = 1 / (r_a + r_b + r_c)"
+    },
+    "variables": {
+      "r_a": {
+        "type": "parameter",
+        "units": "s/m",
+        "default": 100.0,
+        "description": "Aerodynamic resistance"
+      },
+      "r_b": {
+        "type": "parameter",
+        "units": "s/m",
+        "default": 50.0,
+        "description": "Quasi-laminar sublayer resistance"
+      },
+      "r_c_O3": {
+        "type": "parameter",
+        "units": "s/m",
+        "default": 200.0,
+        "description": "Surface resistance for O3"
+      },
+      "v_dep_O3": {
+        "type": "observed",
+        "units": "m/s",
+        "expression": {
+          "op": "/",
+          "args": [
+            1,
+            { "op": "+", "args": ["r_a", "r_b", "r_c_O3"] }
+          ]
+        },
+        "description": "Dry deposition velocity for O3"
+      }
+    },
+    "equations": []
+  }
+}
+```
+
 ---
 
 ## 7. Reaction Systems
@@ -609,7 +672,7 @@ Reaction systems provide a declarative representation of chemical or biological 
 
 This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 
-### 6.1 Schema
+### 7.1 Schema
 
 ```json
 {
@@ -619,7 +682,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 
       "reference": {
         "doi": "10.5194/acp-8-6365-2008",
-        "citation": "Cameron-Smith et al., 2006"
+        "citation": "Cameron-Smith et al., 2008"
       },
 
       "species": {
@@ -640,7 +703,8 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
         "M":    { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" },
         "jNO2": { "units": "1/s",        "default": 0.005,   "description": "NO2 photolysis rate" },
         "jH2O2":{ "units": "1/s",        "default": 5.0e-6,  "description": "H2O2 photolysis rate" },
-        "jCH2O":{ "units": "1/s",        "default": 2.0e-5,  "description": "CH2O photolysis rate" }
+        "jCH2O":{ "units": "1/s",        "default": 2.0e-5,  "description": "CH2O photolysis rate" },
+        "emission_rate_NO": { "units": "mol/mol/s", "default": 0.0, "description": "NO emission rate" }
       },
 
       "reactions": [
@@ -660,11 +724,11 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
               1.8e-12,
               { "op": "exp", "args": [
                   { "op": "/", "args": [-1370, "T"] }
-              ]}
+              ]},
+              "M"
             ]
           },
-          "reference": { "notes": "JPL 2015 recommendation" },
-          "combinatoric_ratelaw": true
+          "reference": { "notes": "JPL 2015 recommendation. Rate includes M factor for mixing-ratio species." }
         },
         {
           "id": "R2",
@@ -691,10 +755,15 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
             { "species": "HO2", "stoichiometry": 1 }
           ],
           "rate": {
-            "op": "+",
+            "op": "*",
             "args": [
-              1.44e-13,
-              { "op": "/", "args": ["M", 3.43e11] }
+              { "op": "+",
+                "args": [
+                  1.44e-13,
+                  { "op": "/", "args": ["M", 3.43e11] }
+                ]
+              },
+              "M"
             ]
           }
         },
@@ -724,10 +793,10 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
               2.2e-13,
               { "op": "exp", "args": [
                   { "op": "/", "args": [600, "T"] }
-              ]}
+              ]},
+              "M"
             ]
-          },
-          "combinatoric_ratelaw": true
+          }
         },
         {
           "id": "R6",
@@ -746,7 +815,8 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
               1.85e-12,
               { "op": "exp", "args": [
                   { "op": "/", "args": [-1690, "T"] }
-              ]}
+              ]},
+              "M"
             ]
           }
         },
@@ -783,7 +853,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 }
 ```
 
-### 6.2 Reaction System Fields
+### 7.2 Reaction System Fields
 
 | Field | Required | Description |
 |---|---|---|
@@ -795,8 +865,9 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `constraint_equations` | | Additional algebraic or ODE constraints (in expression AST form) |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
+| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
 
-### 6.3 Reaction Fields
+### 7.3 Reaction Fields
 
 | Field | Required | Description |
 |---|---|---|
@@ -805,19 +876,13 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `substrates` | ✓ | Array of `{species, stoichiometry}` or `null` for source reactions (∅ → X) |
 | `products` | ✓ | Array of `{species, stoichiometry}` or `null` for sink reactions (X → ∅) |
 | `rate` | ✓ | Rate expression: a string (parameter ref), number, or expression AST |
-| `combinatoric_ratelaw` | | Boolean (default `true`). If true, mass action rates are rescaled by stoichiometric binomial coefficients |
 | `reference` | | Per-reaction citation or notes |
 
-### 6.4 ODE Generation from Reactions
+### 7.4 ODE Generation from Reactions
 
 A conforming implementation generates ODEs from the reaction list using standard mass action kinetics. For a reaction with rate `k`, substrates `{S_i}` with stoichiometries `{n_i}`, and products `{P_j}` with stoichiometries `{m_j}`:
 
-**Rate law** (with `combinatoric_ratelaw: true`):
-```
-v = k · ∏ᵢ (Sᵢ^nᵢ / nᵢ!)
-```
-
-**Rate law** (with `combinatoric_ratelaw: false`):
+**Rate law:**
 ```
 v = k · ∏ᵢ Sᵢ^nᵢ
 ```
@@ -828,6 +893,8 @@ dX/dt += (net_stoich_X) · v
 ```
 
 where `net_stoich_X = (stoich as product) − (stoich as substrate)`.
+
+**Unit convention:** The `rate` field in each reaction must be the **effective rate** for the species units used — i.e., mass action applied to the rate and species values must produce the correct ODE tendency in the declared species units. When species are in mixing ratios (e.g., `mol/mol`) but rate constants are in concentration units (e.g., `cm³/molec/s`), the rate expression must include the appropriate number density factor(s) `M` to convert. For a reaction of total substrate order `n`, the rate should include `M^(n−1)`.
 
 ---
 
@@ -882,7 +949,7 @@ A data loader declares what variables it provides and how to identify/configure 
 }
 ```
 
-### 7.1 Data Loader Fields
+### 8.1 Data Loader Fields
 
 | Field | Required | Description |
 |---|---|---|
@@ -906,7 +973,7 @@ Like data loaders, operators are **registered by type** rather than fully specif
 ```json
 {
   "operators": {
-    "DryDeposition": {
+    "DryDepGrid": {
       "operator_id": "WesleyDryDep",
       "reference": {
         "doi": "10.1016/0004-6981(89)90153-4",
@@ -935,7 +1002,7 @@ Like data loaders, operators are **registered by type** rather than fully specif
 }
 ```
 
-### 8.1 Operator Fields
+### 9.1 Operator Fields
 
 | Field | Required | Description |
 |---|---|---|
@@ -958,10 +1025,7 @@ The coupling section defines how models, reaction systems, data loaders, and ope
     {
       "type": "operator_compose",
       "systems": ["SuperFastReactions", "Advection"],
-      "description": "Add advection terms to all state variables in chemistry system",
-      "translate": {
-        "SuperFastReactions.O3": "Advection._var"
-      }
+      "description": "Add advection terms to all state variables in chemistry system"
     },
 
     {
@@ -1018,7 +1082,7 @@ The coupling section defines how models, reaction systems, data loaders, and ope
 
     {
       "type": "operator_apply",
-      "operator": "DryDeposition",
+      "operator": "DryDepGrid",
       "description": "Apply dry deposition operator during simulation"
     },
 
@@ -1031,7 +1095,7 @@ The coupling section defines how models, reaction systems, data loaders, and ope
 }
 ```
 
-### 9.1 Coupling Types
+### 10.1 Coupling Types
 
 | Type | EarthSciML Mechanism | Description |
 |---|---|---|
@@ -1042,9 +1106,9 @@ The coupling section defines how models, reaction systems, data loaders, and ope
 | `callback` | `init_callback` | Register a callback for simulation events |
 | `event` | Cross-system event | Continuous or discrete event involving multiple coupled systems (see Section 5.6) |
 
-### 9.2 The `translate` Field
+### 10.2 The `translate` Field
 
-For `operator_compose`, `translate` specifies variable mappings when LHS variables don't have matching names. Keys and values use scoped references (`"System.var"`):
+For `operator_compose`, `translate` specifies variable mappings when LHS variables don't have matching names. Keys and values use scoped references (`"System.var"`). Note that the `_var` placeholder (Section 6.4) is automatically expanded to all state variables in the target system, so `translate` is only needed when two non-placeholder systems have differently-named variables representing the same quantity:
 
 ```json
 "translate": {
@@ -1060,7 +1124,7 @@ Optionally with a conversion factor:
 }
 ```
 
-### 9.3 The `connector` Field
+### 10.3 The `connector` Field
 
 For `couple2`, `connector` defines the `ConnectorSystem` — the set of equations that link two systems. Each equation specifies which variable is affected and how:
 
@@ -1069,6 +1133,18 @@ For `couple2`, `connector` defines the `ConnectorSystem` — the set of equation
 | `additive` | Add expression as source/sink term |
 | `multiplicative` | Multiply existing tendency by expression |
 | `replacement` | Replace the variable value entirely |
+
+### 10.4 The `variable_map` Transforms
+
+For `variable_map` coupling entries, `transform` specifies how the source variable maps to the target:
+
+| Transform | Description |
+|---|---|
+| `param_to_var` | Replace a constant parameter with a time-varying variable from another system |
+| `identity` | Direct assignment without type change |
+| `additive` | Add the source variable as an additional term |
+| `multiplicative` | Multiply the target by the source variable |
+| `conversion_factor` | Apply a unit conversion factor (specified in the `factor` field) |
 
 ---
 
@@ -1129,10 +1205,6 @@ The domain section corresponds to `EarthSciMLBase.DomainInfo`. It specifies the 
         "dimensions": ["lon", "lat"]
       },
       {
-        "type": "periodic",
-        "dimensions": ["lon"]
-      },
-      {
         "type": "constant",
         "dimensions": ["lev"],
         "value": 0.0
@@ -1145,7 +1217,7 @@ The domain section corresponds to `EarthSciMLBase.DomainInfo`. It specifies the 
 }
 ```
 
-### 10.1 Initial Condition Types
+### 11.1 Initial Condition Types
 
 | Type | Fields | Description |
 |---|---|---|
@@ -1153,7 +1225,7 @@ The domain section corresponds to `EarthSciMLBase.DomainInfo`. It specifies the 
 | `per_variable` | `values: {var: value}` | Per-variable initial values |
 | `from_file` | `path`, `format` | Load from external file |
 
-### 10.2 Boundary Condition Types
+### 11.2 Boundary Condition Types
 
 | Type | Description |
 |---|---|
@@ -1186,7 +1258,7 @@ The solver section specifies the `SolverStrategy` for time integration.
 }
 ```
 
-### 11.1 Solver Strategies
+### 12.1 Solver Strategies
 
 | Strategy | EarthSciML Type | Description |
 |---|---|---|
@@ -1221,6 +1293,7 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
       },
       "parameters": {
         "T":    { "units": "K", "default": 298.15, "description": "Temperature" },
+        "M":    { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" },
         "jNO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
       },
       "reactions": [
@@ -1234,7 +1307,7 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
           "products": [
             { "species": "NO2", "stoichiometry": 1 }
           ],
-          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }] }
+          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }, "M"] }
         },
         {
           "id": "R2",
@@ -1308,7 +1381,7 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
 
   "solver": {
     "strategy": "strang_threads",
-    "config": { "stiff_algorithm": "Tsit5", "timestep": 1.0 }
+    "config": { "stiff_algorithm": "Rosenbrock23", "timestep": 1.0 }
   }
 }
 ```
