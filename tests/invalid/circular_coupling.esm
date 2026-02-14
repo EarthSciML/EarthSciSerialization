@@ -1,0 +1,41 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CircularCouplingTest",
+    "description": "Test file with circular coupling A→B→A",
+    "authors": ["Test"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+  "models": {
+    "ModelA": {
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.0
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.1, "ModelB.y"] }
+        }
+      ]
+    },
+    "ModelB": {
+      "variables": {
+        "y": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.0
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.1, "ModelA.x"] }
+        }
+      ]
+    }
+  }
+}
