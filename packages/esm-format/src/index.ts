@@ -26,6 +26,9 @@ export { save } from './serialize.js'
 export { validate } from './validate.js'
 export type { ValidationError, ValidationResult } from './validate.js'
 
+// Interactive editor components (SolidJS)
+export * from './interactive-editor/index.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
