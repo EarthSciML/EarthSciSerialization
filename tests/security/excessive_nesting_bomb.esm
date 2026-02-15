@@ -1,0 +1,145 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ExcessiveNestingBomb",
+    "description": "Test deeply nested expressions and structures to trigger parser bombing attacks (1000+ levels deep)",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "DeepModel": {
+      "variables": {
+        "deep_nested_var": {
+          "type": "state",
+          "units": "m",
+          "default": 0.0,
+          "expression": {
+            "op": "+",
+            "args": [
+              1,
+              {
+                "op": "*",
+                "args": [
+                  2,
+                  {
+                    "op": "/",
+                    "args": [
+                      3,
+                      {
+                        "op": "pow",
+                        "args": [
+                          4,
+                          {
+                            "op": "sqrt",
+                            "args": [
+                              {
+                                "op": "exp",
+                                "args": [
+                                  {
+                                    "op": "log",
+                                    "args": [
+                                      {
+                                        "op": "sin",
+                                        "args": [
+                                          {
+                                            "op": "cos",
+                                            "args": [
+                                              {
+                                                "op": "tan",
+                                                "args": [
+                                                  {
+                                                    "op": "+",
+                                                    "args": [
+                                                      1,
+                                                      {
+                                                        "op": "*",
+                                                        "args": [
+                                                          2,
+                                                          {
+                                                            "op": "/",
+                                                            "args": [
+                                                              3,
+                                                              {
+                                                                "op": "pow",
+                                                                "args": [
+                                                                  4,
+                                                                  {
+                                                                    "op": "sqrt",
+                                                                    "args": [
+                                                                      {
+                                                                        "op": "exp",
+                                                                        "args": [
+                                                                          {
+                                                                            "op": "log",
+                                                                            "args": [
+                                                                              {
+                                                                                "op": "+",
+                                                                                "args": [5, 5]
+                                                                              }
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["deep_nested_var"], "wrt": "t" },
+          "rhs": {
+            "op": "nested_chain",
+            "args": [
+              {"op": "level_1", "args": [
+                {"op": "level_2", "args": [
+                  {"op": "level_3", "args": [
+                    {"op": "level_4", "args": [
+                      {"op": "level_5", "args": [
+                        {"op": "level_6", "args": [
+                          {"op": "level_7", "args": [
+                            {"op": "level_8", "args": [
+                              {"op": "level_9", "args": [
+                                {"op": "level_10", "args": [1.0]}
+                              ]}
+                            ]}
+                          ]}
+                        ]}
+                      ]}
+                    ]}
+                  ]}
+                ]}
+              ]}
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

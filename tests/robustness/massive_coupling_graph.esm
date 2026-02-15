@@ -1,0 +1,450 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MassiveCouplingGraph",
+    "description": "Test complex inter-model coupling with thousands of connections, circular dependencies, deep coupling hierarchies, and massive coupling graphs",
+    "authors": ["Coupling Complexity Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "coupling", "graph_theory", "complexity", "inter_model", "scalability"]
+  },
+  "models": Object.fromEntries([
+    ...Array.from({length: 50}, (_, i) => [
+      `AtmosphericLayer_${i}`,
+      {
+        "reference": { "notes": `Atmospheric layer model ${i} for vertical coupling` },
+        "variables": Object.fromEntries(
+          Array.from({length: 20}, (_, j) => [
+            `layer_var_${j}`,
+            {
+              "type": j % 3 === 0 ? "differential" : (j % 3 === 1 ? "algebraic" : "parameter"),
+              "units": ["mol/mol", "K", "Pa", "m/s", "kg/kg"][j % 5],
+              "default": Math.random() * 1e-6,
+              "expression": j % 3 === 1 ? {
+                "op": "+",
+                "args": [
+                  { "op": "*", "args": [
+                    `layer_var_${(j + 1) % 20}`,
+                    { "op": "coupling_from", "args": [
+                      i > 0 ? `AtmosphericLayer_${i-1}.layer_var_${j}` : `OceanLayer_0.ocean_var_${j % 10}`,
+                      { "weight": 0.1 + (i * j) % 10 * 0.01 }
+                    ]}
+                  ]},
+                  { "op": "coupling_from", "args": [
+                    i < 49 ? `AtmosphericLayer_${i+1}.layer_var_${j}` : `SpaceLayer_0.space_var_${j % 5}`,
+                    { "weight": 0.05 + (i + j) % 8 * 0.01 }
+                  ]}
+                ]
+              } : undefined
+            }
+          ])
+        ),
+        "equations": Array.from({length: 7}, (_, j) => ({
+          "lhs": { "op": "D", "args": [`layer_var_${j * 3}`], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "vertical_diffusion", "args": [
+                `layer_var_${j * 3}`,
+                i > 0 ? `AtmosphericLayer_${i-1}.layer_var_${j * 3}` : 0,
+                i < 49 ? `AtmosphericLayer_${i+1}.layer_var_${j * 3}` : 0,
+                { "diffusion_coefficient": 0.001 * (i + 1) }
+              ]},
+              { "op": "horizontal_advection", "args": [
+                `layer_var_${j * 3}`,
+                { "op": "wind_coupling", "args": [
+                  `WindField_${i % 10}.u_wind`,
+                  `WindField_${i % 10}.v_wind`
+                ]}
+              ]},
+              { "op": "chemical_production", "args": [
+                { "op": "coupling_sum", "args": Array.from({length: 5}, (_, k) =>
+                  `ChemistryModel_${(i + k) % 25}.species_${j * 2 + k}`
+                )}
+              ]}
+            ]
+          }
+        }))
+      }
+    ]),
+    ...Array.from({length: 25}, (_, i) => [
+      `OceanLayer_${i}`,
+      {
+        "reference": { "notes": `Ocean layer model ${i} for ocean-atmosphere coupling` },
+        "variables": Object.fromEntries(
+          Array.from({length: 10}, (_, j) => [
+            `ocean_var_${j}`,
+            {
+              "type": j % 2 === 0 ? "differential" : "algebraic",
+              "units": ["mol/mol", "K", "m/s", "kg/m^3", "1/s"][j % 5],
+              "default": Math.random() * 1e-9,
+              "expression": j % 2 === 1 ? {
+                "op": "+",
+                "args": [
+                  { "op": "ocean_atmosphere_exchange", "args": [
+                    `AtmosphericLayer_${Math.min(i * 2, 49)}.layer_var_${j}`,
+                    `ocean_var_${(j + 1) % 10}`,
+                    { "exchange_coefficient": 0.001 }
+                  ]},
+                  { "op": "deep_ocean_coupling", "args": [
+                    i > 0 ? `OceanLayer_${i-1}.ocean_var_${j}` : 0,
+                    i < 24 ? `OceanLayer_${i+1}.ocean_var_${j}` : `SeafloorModel_0.sediment_var_${j % 3}`,
+                    { "mixing_rate": 1e-6 }
+                  ]}
+                ]
+              } : undefined
+            }
+          ])
+        ),
+        "equations": Array.from({length: 5}, (_, j) => ({
+          "lhs": { "op": "D", "args": [`ocean_var_${j * 2}`], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "ocean_circulation", "args": [
+                `ocean_var_${j * 2}`,
+                `CurrentField_${i % 5}.u_current`,
+                `CurrentField_${i % 5}.v_current`
+              ]},
+              { "op": "biogeochemical_cycling", "args": [
+                { "op": "coupling_network", "args": Array.from({length: 3}, (_, k) =>
+                  `BiochemModel_${(i + k) % 10}.nutrient_${j + k}`
+                )}
+              ]}
+            ]
+          }
+        }))
+      }
+    ]),
+    ...Array.from({length: 25}, (_, i) => [
+      `ChemistryModel_${i}`,
+      {
+        "reference": { "notes": `Chemistry model ${i} with multi-phase coupling` },
+        "variables": Object.fromEntries(
+          Array.from({length: 15}, (_, j) => [
+            `species_${j}`,
+            {
+              "type": "differential",
+              "units": "mol/mol",
+              "default": Math.random() * 1e-12
+            }
+          ])
+        ),
+        "equations": Array.from({length: 15}, (_, j) => ({
+          "lhs": { "op": "D", "args": [`species_${j}`], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "gas_phase_reactions", "args": [
+                `species_${j}`,
+                { "op": "temperature_coupling", "args": [
+                  `AtmosphericLayer_${(i * 2) % 50}.layer_var_1`
+                ]},
+                { "op": "pressure_coupling", "args": [
+                  `AtmosphericLayer_${(i * 2) % 50}.layer_var_2`
+                ]}
+              ]},
+              { "op": "aerosol_interactions", "args": [
+                { "op": "multi_model_coupling", "args": Array.from({length: 4}, (_, k) =>
+                  `AerosolModel_${(i + k) % 15}.particle_${j % 8}`
+                )}
+              ]},
+              { "op": "heterogeneous_chemistry", "args": [
+                `OceanLayer_${i % 25}.ocean_var_${j % 10}`,
+                `LandModel_${i % 20}.surface_var_${j % 12}`
+              ]}
+            ]
+          }
+        }))
+      }
+    ]),
+    ...Array.from({length: 15}, (_, i) => [
+      `AerosolModel_${i}`,
+      {
+        "reference": { "notes": `Aerosol model ${i} with size distribution coupling` },
+        "variables": Object.fromEntries(
+          Array.from({length: 8}, (_, j) => [
+            `particle_${j}`,
+            {
+              "type": "differential",
+              "units": "particles/cm^3",
+              "default": Math.random() * 1e6
+            }
+          ])
+        ),
+        "equations": Array.from({length: 8}, (_, j) => ({
+          "lhs": { "op": "D", "args": [`particle_${j}`], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "nucleation", "args": [
+                { "op": "vapor_coupling", "args": Array.from({length: 3}, (_, k) =>
+                  `ChemistryModel_${(i + k) % 25}.species_${j + k * 2}`
+                )}
+              ]},
+              { "op": "coagulation", "args": [
+                `particle_${j}`,
+                Array.from({length: 7}, (_, k) => k !== j ? `particle_${k}` : null).filter(Boolean)
+              ]},
+              { "op": "condensation", "args": [
+                { "op": "cross_model_vapor", "args": [
+                  `ChemistryModel_${i % 25}.species_${j * 2}`,
+                  `AtmosphericLayer_${(i * 3) % 50}.layer_var_3`
+                ]}
+              ]}
+            ]
+          }
+        }))
+      }
+    ]),
+    ...Array.from({length: 20}, (_, i) => [
+      `LandModel_${i}`,
+      {
+        "reference": { "notes": `Land surface model ${i} for land-atmosphere coupling` },
+        "variables": Object.fromEntries(
+          Array.from({length: 12}, (_, j) => [
+            `surface_var_${j}`,
+            {
+              "type": j < 8 ? "differential" : "algebraic",
+              "units": ["mol/mol", "K", "m^3/m^3", "kg/m^2", "W/m^2", "m/s"][j % 6],
+              "default": Math.random() * (j < 3 ? 1e-9 : 100),
+              "expression": j >= 8 ? {
+                "op": "+",
+                "args": [
+                  { "op": "land_atmosphere_flux", "args": [
+                    `AtmosphericLayer_${Math.min(i * 2.5, 49) | 0}.layer_var_${j % 20}`,
+                    `surface_var_${j - 8}`
+                  ]},
+                  { "op": "lateral_coupling", "args": Array.from({length: 4}, (_, k) => {
+                    const neighbor = (i + k + 1) % 20;
+                    return `LandModel_${neighbor}.surface_var_${j - 8}`;
+                  })}
+                ]
+              } : undefined
+            }
+          ])
+        ),
+        "equations": Array.from({length: 8}, (_, j) => ({
+          "lhs": { "op": "D", "args": [`surface_var_${j}`], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "surface_energy_balance", "args": [
+                `surface_var_${j}`,
+                `RadiationModel_${i % 10}.radiation_${j % 5}`,
+                `AtmosphericLayer_0.layer_var_1`
+              ]},
+              { "op": "biogeochemical_processes", "args": [
+                { "op": "vegetation_coupling", "args": [
+                  `VegetationModel_${i % 12}.biomass_${j % 6}`,
+                  `ChemistryModel_${i % 25}.species_0`
+                ]}
+              ]},
+              { "op": "soil_processes", "args": [
+                { "op": "depth_coupling", "args": Array.from({length: 3}, (_, k) =>
+                  `SoilLayer_${i * 3 + k}.soil_var_${j}`
+                )}
+              ]}
+            ]
+          }
+        }))
+      }
+    ])
+  ]),
+  "reaction_systems": Object.fromEntries([
+    ...Array.from({length: 10}, (_, i) => [
+      `MassiveAtmosphericChemistry_${i}`,
+      {
+        "coupletype": "MultiModelCoupler",
+        "reference": { "notes": `Massive atmospheric chemistry system ${i}` },
+        "species": Object.fromEntries(
+          Array.from({length: 1000}, (_, j) => [
+            `CHEM_${i}_${j}`,
+            {
+              "units": "mol/mol",
+              "default": Math.random() * 1e-15,
+              "description": `Chemical species ${j} in system ${i}`
+            }
+          ])
+        ),
+        "parameters": Object.fromEntries(
+          Array.from({length: 500}, (_, j) => [
+            `RATE_${i}_${j}`,
+            {
+              "units": "1/s",
+              "default": Math.random() * 1e-8,
+              "description": `Rate constant ${j} in system ${i}`
+            }
+          ])
+        ),
+        "reactions": Array.from({length: 2000}, (_, j) => ({
+          "id": `MASSIVE_R_${i}_${j}`,
+          "name": `massive_reaction_${i}_${j}`,
+          "substrates": Array.from({length: (j % 3) + 1}, (_, k) => ({
+            "species": `CHEM_${i}_${(j * 13 + k * 17) % 1000}`,
+            "stoichiometry": (k % 2) + 1
+          })),
+          "products": Array.from({length: (j % 4) + 1}, (_, k) => ({
+            "species": `CHEM_${i}_${(j * 19 + k * 23 + 100) % 1000}`,
+            "stoichiometry": (k % 3) + 1
+          })),
+          "rate": {
+            "op": "*",
+            "args": [
+              `RATE_${i}_${j % 500}`,
+              { "op": "multi_model_rate_modifier", "args": [
+                `AtmosphericLayer_${(i * 5 + j % 10) % 50}.layer_var_1`,
+                `ChemistryModel_${(i + j % 5) % 25}.species_${j % 15}`
+              ]},
+              { "op": "coupling_network_effect", "args": Array.from({length: 5}, (_, k) =>
+                `CHEM_${(i + k) % 10}_${(j + k * 100) % 1000}`
+              )}
+            ]
+          }
+        }))
+      }
+    ])
+  ]),
+  "data_loaders": Object.fromEntries(
+    Array.from({length: 100}, (_, i) => [
+      `MassiveDataSource_${i}`,
+      {
+        "type": "coupling_intensive_data",
+        "loader_id": `MASSIVE_DATA_${i}`,
+        "config": {
+          "coupling_fanout": (i % 20) + 1,
+          "update_frequency": (i % 10) + 1,
+          "dependency_depth": (i % 5) + 1
+        },
+        "provides": Object.fromEntries(
+          Array.from({length: (i % 30) + 10}, (_, j) => [
+            `massive_var_${j}`,
+            {
+              "units": ["mol/mol", "K", "Pa", "m/s", "kg/kg", "W/m^2"][j % 6],
+              "description": `Massive coupling variable ${j} from source ${i}`,
+              "coupling_targets": Array.from({length: (j % 10) + 1}, (_, k) => {
+                const targetModel = ["AtmosphericLayer", "OceanLayer", "ChemistryModel", "AerosolModel", "LandModel"][k % 5];
+                const targetIndex = (i + j + k) % (targetModel === "AtmosphericLayer" ? 50 :
+                                                    targetModel === "OceanLayer" ? 25 :
+                                                    targetModel === "ChemistryModel" ? 25 :
+                                                    targetModel === "AerosolModel" ? 15 : 20);
+                return `${targetModel}_${targetIndex}`;
+              })
+            }
+          ])
+        )
+      }
+    ])
+  ),
+  "coupling": Array.from({length: 5000}, (_, i) => {
+    const couplingTypes = [
+      "variable_map", "operator_compose", "bidirectional_exchange",
+      "mass_conserving_flux", "energy_conserving_transfer", "momentum_coupling",
+      "multi_way_coupling", "hierarchical_coupling", "network_coupling"
+    ];
+
+    const sourceModels = [
+      "AtmosphericLayer", "OceanLayer", "ChemistryModel", "AerosolModel", "LandModel"
+    ];
+    const targetModels = [...sourceModels];
+
+    const sourceType = sourceModels[i % sourceModels.length];
+    const targetType = targetModels[(i + 1) % targetModels.length];
+
+    const sourceCount = sourceType === "AtmosphericLayer" ? 50 :
+                       sourceType === "OceanLayer" ? 25 :
+                       sourceType === "ChemistryModel" ? 25 :
+                       sourceType === "AerosolModel" ? 15 : 20;
+
+    const targetCount = targetType === "AtmosphericLayer" ? 50 :
+                       targetType === "OceanLayer" ? 25 :
+                       targetType === "ChemistryModel" ? 25 :
+                       targetType === "AerosolModel" ? 15 : 20;
+
+    const sourceIndex = i % sourceCount;
+    const targetIndex = (i * 7) % targetCount;
+
+    const sourceVar = sourceType === "AtmosphericLayer" ? `layer_var_${i % 20}` :
+                     sourceType === "OceanLayer" ? `ocean_var_${i % 10}` :
+                     sourceType === "ChemistryModel" ? `species_${i % 15}` :
+                     sourceType === "AerosolModel" ? `particle_${i % 8}` :
+                     `surface_var_${i % 12}`;
+
+    const targetVar = targetType === "AtmosphericLayer" ? `layer_var_${(i + 1) % 20}` :
+                     targetType === "OceanLayer" ? `ocean_var_${(i + 1) % 10}` :
+                     targetType === "ChemistryModel" ? `species_${(i + 1) % 15}` :
+                     targetType === "AerosolModel" ? `particle_${(i + 1) % 8}` :
+                     `surface_var_${(i + 1) % 12}`;
+
+    const coupling = {
+      "type": couplingTypes[i % couplingTypes.length],
+      "from": `${sourceType}_${sourceIndex}.${sourceVar}`,
+      "to": `${targetType}_${targetIndex}.${targetVar}`,
+      "coupling_strength": 0.01 + (i % 100) * 0.0001,
+      "coupling_id": `COUPLING_${i}`,
+      "dependencies": Array.from({length: (i % 5) + 1}, (_, j) =>
+        `COUPLING_${Math.max(0, i - j - 1)}`
+      ).filter(dep => dep !== `COUPLING_${i}`)
+    };
+
+    if (i % 10 === 0) {
+      coupling.transform = {
+        "type": "nonlinear",
+        "expression": {
+          "op": "+",
+          "args": [
+            { "op": "*", "args": ["_source", 0.8 + (i % 20) * 0.01] },
+            { "op": "sin", "args": [{ "op": "*", "args": ["t", 0.001] }] }
+          ]
+        }
+      };
+    }
+
+    if (i % 15 === 0) {
+      coupling.feedback_loops = Array.from({length: (i % 3) + 1}, (_, j) => ({
+        "target": `${targetType}_${(targetIndex + j + 1) % targetCount}.${targetVar}`,
+        "delay": (j + 1) * 100,
+        "strength": 0.1 / (j + 1)
+      }));
+    }
+
+    return coupling;
+  }),
+  "domain": {
+    "temporal": {
+      "start": "2024-12-01T00:00:00Z",
+      "end": "2024-12-02T00:00:00Z",
+      "resolution": "PT1H"
+    },
+    "spatial": {
+      "lon": { "min": -180.0, "max": 180.0, "grid_spacing": 5.0, "units": "degrees" },
+      "lat": { "min": -90.0, "max": 90.0, "grid_spacing": 5.0, "units": "degrees" },
+      "lev": { "min": 1, "max": 50, "grid_spacing": 1, "units": "level" }
+    },
+    "coupling_graph_properties": {
+      "total_nodes": 285,
+      "total_edges": 5000,
+      "max_in_degree": 50,
+      "max_out_degree": 100,
+      "clustering_coefficient": 0.3,
+      "average_path_length": 4.2,
+      "strongly_connected_components": 15,
+      "weakly_connected_components": 1,
+      "topological_complexity": "very_high",
+      "coupling_density": 0.062
+    }
+  },
+  "solver": {
+    "strategy": "massive_coupling_aware",
+    "config": {
+      "coupling_graph_optimization": true,
+      "parallel_coupling_evaluation": true,
+      "coupling_cache_size": 10000,
+      "dependency_resolution_timeout": 30000,
+      "max_coupling_iterations": 100,
+      "coupling_convergence_tolerance": 1e-8,
+      "graph_partitioning": "metis",
+      "load_balancing": "dynamic",
+      "memory_optimization": "aggressive"
+    }
+  }
+}

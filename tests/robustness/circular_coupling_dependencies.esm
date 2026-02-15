@@ -1,0 +1,51 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CircularCouplingDependencies",
+    "description": "Test circular dependencies in coupling system references",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "ModelA": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.0 },
+        "y": { "type": "state", "units": "m", "default": 2.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "+", "args": ["y", { "op": "coupling", "model": "ModelB", "variable": "z" }] }
+        }
+      ]
+    },
+    "ModelB": {
+      "variables": {
+        "z": { "type": "state", "units": "m", "default": 3.0 },
+        "w": { "type": "state", "units": "m", "default": 4.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["z"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["w", { "op": "coupling", "model": "ModelC", "variable": "u" }] }
+        }
+      ]
+    },
+    "ModelC": {
+      "variables": {
+        "u": { "type": "state", "units": "m", "default": 5.0 },
+        "v": { "type": "state", "units": "m", "default": 6.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": { "op": "/", "args": ["v", { "op": "coupling", "model": "ModelA", "variable": "x" }] }
+        }
+      ]
+    }
+  },
+  "coupling": [
+    { "source": { "model": "ModelA", "variable": "x" }, "target": { "model": "ModelB", "variable": "z" } },
+    { "source": { "model": "ModelB", "variable": "z" }, "target": { "model": "ModelC", "variable": "u" } },
+    { "source": { "model": "ModelC", "variable": "u" }, "target": { "model": "ModelA", "variable": "x" } }
+  ]
+}

@@ -1,0 +1,343 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ExpressionEvaluationStress",
+    "description": "Stress test for expression evaluation with deeply nested mathematical operations, recursive functions, and complex operator precedence",
+    "authors": ["Expression Evaluation Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "expression", "evaluation", "mathematical", "nested"]
+  },
+  "models": {
+    "NestedExpressionModel": {
+      "reference": { "notes": "Model designed to test expression parser limits with extreme nesting depth" },
+      "variables": {
+        "base_var": { "type": "parameter", "units": "1", "default": 1.0 },
+        "deeply_nested_expr": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  { "op": "sin", "args": [
+                    { "op": "cos", "args": [
+                      { "op": "tan", "args": [
+                        { "op": "atan", "args": [
+                          { "op": "asin", "args": [
+                            { "op": "acos", "args": [
+                              { "op": "sinh", "args": [
+                                { "op": "cosh", "args": [
+                                  { "op": "tanh", "args": [
+                                    { "op": "atanh", "args": [
+                                      { "op": "asinh", "args": [
+                                        { "op": "acosh", "args": [
+                                          { "op": "sqrt", "args": [
+                                            { "op": "cbrt", "args": [
+                                              { "op": "pow", "args": [
+                                                { "op": "exp", "args": [
+                                                  { "op": "log", "args": [
+                                                    { "op": "log10", "args": [
+                                                      { "op": "abs", "args": [
+                                                        { "op": "+", "args": ["base_var", 1e-10] }
+                                                      ]}
+                                                    ]}
+                                                  ]}
+                                                ]},
+                                                { "op": "/", "args": [1, 7] }
+                                              ]}
+                                            ]}
+                                          ]}
+                                        ]}
+                                      ]}
+                                    ]}
+                                  ]}
+                                ]}
+                              ]}
+                            ]}
+                          ]}
+                        ]}
+                      ]}
+                    ]}
+                  ]},
+                  3.14159265358979
+                ]
+              },
+              {
+                "op": "/",
+                "args": [
+                  { "op": "pow", "args": [
+                    { "op": "+", "args": [
+                      { "op": "*", "args": [
+                        { "op": "sqrt", "args": [2] },
+                        { "op": "exp", "args": [{ "op": "/", "args": ["base_var", 10] }] }
+                      ]},
+                      { "op": "log", "args": [
+                        { "op": "+", "args": [
+                          { "op": "pow", "args": ["base_var", 2] },
+                          { "op": "pow", "args": [2.718281828, { "op": "*", "args": ["base_var", 0.5] }] }
+                        ]}
+                      ]}
+                    ]},
+                    { "op": "+", "args": [
+                      { "op": "sin", "args": [{ "op": "*", "args": ["base_var", 0.1] }] },
+                      { "op": "cos", "args": [{ "op": "*", "args": ["base_var", 0.2] }] }
+                    ]}
+                  ]},
+                  { "op": "sqrt", "args": [
+                    { "op": "+", "args": [
+                      { "op": "pow", "args": [
+                        { "op": "tan", "args": [{ "op": "*", "args": ["base_var", 0.3] }] },
+                        3
+                      ]},
+                      1
+                    ]}
+                  ]}
+                ]
+              }
+            ]
+          }
+        },
+        "recursive_factorial_approx": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "*",
+            "args": [
+              { "op": "sqrt", "args": [{ "op": "*", "args": [6.283185307, "base_var"] }] },
+              { "op": "pow", "args": [
+                { "op": "/", "args": ["base_var", 2.718281828] },
+                "base_var"
+              ]},
+              { "op": "exp", "args": [
+                { "op": "/", "args": [
+                  1,
+                  { "op": "*", "args": [12, "base_var"] }
+                ]}
+              ]}
+            ]
+          }
+        },
+        "fibonacci_generating_function": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              1,
+              { "op": "-", "args": [
+                1,
+                { "op": "+", "args": [
+                  "base_var",
+                  { "op": "pow", "args": ["base_var", 2] }
+                ]}
+              ]}
+            ]
+          }
+        },
+        "complex_rational_function": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "*", "args": [
+                  { "op": "pow", "args": ["base_var", 6] },
+                  2.5
+                ]},
+                { "op": "*", "args": [
+                  { "op": "pow", "args": ["base_var", 4] },
+                  -3.7
+                ]},
+                { "op": "*", "args": [
+                  { "op": "pow", "args": ["base_var", 2] },
+                  1.8
+                ]},
+                0.9
+              ]},
+              { "op": "+", "args": [
+                { "op": "*", "args": [
+                  { "op": "pow", "args": ["base_var", 8] },
+                  1.2
+                ]},
+                { "op": "*", "args": [
+                  { "op": "pow", "args": ["base_var", 6] },
+                  -2.1
+                ]},
+                { "op": "*", "args": [
+                  { "op": "pow", "args": ["base_var", 4] },
+                  3.4
+                ]},
+                { "op": "*", "args": [
+                  { "op": "pow", "args": ["base_var", 2] },
+                  -1.7
+                ]},
+                1.0
+              ]}
+            ]
+          }
+        },
+        "bessel_function_approx": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "*",
+            "args": [
+              { "op": "pow", "args": [
+                { "op": "/", "args": ["base_var", 2] },
+                0
+              ]},
+              { "op": "+", "args": [
+                1,
+                { "op": "*", "args": [
+                  { "op": "/", "args": [
+                    { "op": "pow", "args": [
+                      { "op": "/", "args": ["base_var", 2] },
+                      2
+                    ]},
+                    -4
+                  ]},
+                  { "op": "+", "args": [
+                    1,
+                    { "op": "/", "args": [
+                      { "op": "pow", "args": [
+                        { "op": "/", "args": ["base_var", 2] },
+                        2
+                      ]},
+                      -16
+                    ]}
+                  ]}
+                ]}
+              ]}
+            ]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["base_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [
+                "deeply_nested_expr",
+                { "op": "exp", "args": [
+                  { "op": "*", "args": [
+                    -0.001,
+                    { "op": "pow", "args": ["t", 2] }
+                  ]}
+                ]}
+              ]},
+              { "op": "*", "args": [
+                0.1,
+                { "op": "sin", "args": [
+                  { "op": "+", "args": [
+                    { "op": "*", "args": ["recursive_factorial_approx", 0.01] },
+                    { "op": "*", "args": [
+                      "fibonacci_generating_function",
+                      { "op": "cos", "args": [{ "op": "*", "args": ["t", 0.5] }] }
+                    ]}
+                  ]}
+                ]}
+              ]},
+              { "op": "*", "args": [
+                { "op": "/", "args": [
+                  "complex_rational_function",
+                  { "op": "+", "args": ["bessel_function_approx", 1e-10] }
+                ]},
+                { "op": "tanh", "args": [{ "op": "*", "args": ["t", 0.1] }] }
+              ]}
+            ]
+          }
+        }
+      ]
+    },
+    "OperatorPrecedenceStressModel": {
+      "reference": { "notes": "Tests complex operator precedence and associativity rules" },
+      "variables": {
+        "x": { "type": "parameter", "units": "1", "default": 2.0 },
+        "y": { "type": "parameter", "units": "1", "default": 3.0 },
+        "z": { "type": "parameter", "units": "1", "default": 5.0 },
+        "precedence_test_1": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [
+                { "op": "pow", "args": ["x", { "op": "+", "args": ["y", "z"] }] },
+                { "op": "/", "args": [
+                  { "op": "-", "args": [
+                    { "op": "*", "args": ["y", "z"] },
+                    { "op": "pow", "args": ["x", 2] }
+                  ]},
+                  { "op": "+", "args": [
+                    { "op": "sqrt", "args": ["x"] },
+                    { "op": "log", "args": ["y"] }
+                  ]}
+                ]}
+              ]},
+              { "op": "sin", "args": [
+                { "op": "*", "args": [
+                  { "op": "/", "args": [
+                    { "op": "+", "args": ["x", "y"] },
+                    { "op": "-", "args": ["z", "x"] }
+                  ]},
+                  3.14159
+                ]}
+              ]}
+            ]
+          }
+        },
+        "precedence_test_2": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "pow",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "/", "args": [
+                  { "op": "*", "args": [
+                    { "op": "-", "args": [
+                      { "op": "exp", "args": ["x"] },
+                      { "op": "log", "args": [{ "op": "+", "args": ["y", 1] }] }
+                    ]},
+                    { "op": "sin", "args": [
+                      { "op": "*", "args": [
+                        { "op": "/", "args": ["z", 2] },
+                        3.14159
+                      ]}
+                    ]}
+                  ]},
+                  { "op": "sqrt", "args": [
+                    { "op": "+", "args": [
+                      { "op": "pow", "args": ["x", 2] },
+                      { "op": "pow", "args": ["y", 2] }
+                    ]}
+                  ]}
+                ]},
+                { "op": "cos", "args": [
+                  { "op": "*", "args": [
+                    { "op": "+", "args": ["x", "y", "z"] },
+                    0.1
+                  ]}
+                ]}
+              ]},
+              { "op": "/", "args": [
+                { "op": "+", "args": [
+                  { "op": "abs", "args": [
+                    { "op": "-", "args": ["x", "y"] }
+                  ]},
+                  1e-10
+                ]},
+                3
+              ]}
+            ]
+          }
+        }
+      }
+    }
+  }
+}

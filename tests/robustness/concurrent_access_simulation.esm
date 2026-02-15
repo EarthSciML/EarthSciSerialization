@@ -1,0 +1,321 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ConcurrentAccessSimulation",
+    "description": "Simulation for testing thread-safety with concurrent read/write operations, shared variables, and race condition scenarios",
+    "authors": ["Concurrency Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "concurrency", "thread_safety", "race_conditions", "parallel_access"]
+  },
+  "models": {
+    "SharedVariableModel": {
+      "reference": { "notes": "Model with variables that will be accessed concurrently from multiple threads" },
+      "variables": {
+        "shared_counter": { "type": "differential", "units": "1", "default": 0.0 },
+        "read_write_var": { "type": "differential", "units": "mol/mol", "default": 1e-9 },
+        "thread_local_var_1": { "type": "parameter", "units": "1", "default": 1.0 },
+        "thread_local_var_2": { "type": "parameter", "units": "1", "default": 2.0 },
+        "thread_local_var_3": { "type": "parameter", "units": "1", "default": 3.0 },
+        "thread_local_var_4": { "type": "parameter", "units": "1", "default": 4.0 },
+        "concurrent_sum": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              "thread_local_var_1",
+              "thread_local_var_2",
+              "thread_local_var_3",
+              "thread_local_var_4",
+              { "op": "*", "args": ["shared_counter", 0.1] }
+            ]
+          }
+        },
+        "atomic_increment_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "*",
+            "args": [
+              { "op": "+", "args": ["shared_counter", 1] },
+              { "op": "sin", "args": [{ "op": "*", "args": ["t", 0.1] }] }
+            ]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["shared_counter"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [0.1, "concurrent_sum"] },
+              { "op": "*", "args": [0.05, "atomic_increment_test"] },
+              { "op": "sin", "args": [{ "op": "*", "args": ["read_write_var", 1000] }] }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["read_write_var"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              -0.001,
+              { "op": "+", "args": [
+                "read_write_var",
+                { "op": "/", "args": ["shared_counter", 1000] }
+              ]}
+            ]
+          }
+        }
+      ]
+    },
+    "RaceConditionModel": {
+      "reference": { "notes": "Model designed to expose race conditions in concurrent scenarios" },
+      "variables": Object.fromEntries(
+        Array.from({length: 100}, (_, i) => [
+          `race_var_${i}`,
+          {
+            "type": "differential",
+            "units": "1",
+            "default": i * 0.01
+          }
+        ])
+      ),
+      "equations": Array.from({length: 100}, (_, i) => ({
+        "lhs": { "op": "D", "args": [`race_var_${i}`], "wrt": "t" },
+        "rhs": {
+          "op": "+",
+          "args": [
+            { "op": "*", "args": [
+              0.01,
+              `race_var_${(i + 1) % 100}`
+            ]},
+            { "op": "*", "args": [
+              -0.005,
+              `race_var_${(i + 50) % 100}`
+            ]},
+            { "op": "*", "args": [
+              0.002,
+              { "op": "sin", "args": [{ "op": "*", "args": ["t", i * 0.1] }] }
+            ]}
+          ]
+        }
+      }))
+    },
+    "LockContentionModel": {
+      "reference": { "notes": "Model that simulates high lock contention scenarios" },
+      "variables": {
+        "critical_section_var": { "type": "differential", "units": "mol/mol", "default": 1e-12 },
+        "mutex_protected_counter": { "type": "parameter", "units": "1", "default": 0.0 },
+        "spinlock_test_var": { "type": "differential", "units": "Pa", "default": 101325.0 },
+        "reader_writer_shared": { "type": "parameter", "units": "K", "default": 298.15 },
+        "contention_metric": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              { "op": "abs", "args": [
+                { "op": "-", "args": [
+                  "critical_section_var",
+                  { "op": "*", "args": ["mutex_protected_counter", 1e-12] }
+                ]}
+              ]},
+              { "op": "+", "args": [
+                { "op": "abs", "args": ["critical_section_var"] },
+                1e-20
+              ]}
+            ]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["critical_section_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [
+                { "op": "/", "args": ["spinlock_test_var", 101325.0] },
+                { "op": "exp", "args": [
+                  { "op": "/", "args": [
+                    { "op": "-", "args": [1000] },
+                    "reader_writer_shared"
+                  ]}
+                ]}
+              ]},
+              { "op": "*", "args": [
+                -0.1,
+                { "op": "*", "args": [
+                  "critical_section_var",
+                  "contention_metric"
+                ]}
+              ]}
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["spinlock_test_var"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              { "op": "-", "args": [
+                { "op": "*", "args": ["reader_writer_shared", 287.0] },
+                "spinlock_test_var"
+              ]},
+              { "op": "+", "args": [
+                0.001,
+                { "op": "*", "args": [
+                  "contention_metric",
+                  { "op": "cos", "args": [{ "op": "*", "args": ["t", 0.5] }] }
+                ]}
+              ]}
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "ConcurrentChemistry": {
+      "coupletype": "ThreadSafeCoupler",
+      "reference": { "notes": "Chemistry system designed for concurrent access testing" },
+      "species": Object.fromEntries(
+        Array.from({length: 500}, (_, i) => [
+          `CONCURRENT_SPECIES_${i}`,
+          {
+            "units": "mol/mol",
+            "default": Math.random() * 1e-12,
+            "description": `Thread-safe species ${i}`,
+            "access_pattern": i % 3 === 0 ? "read_heavy" : (i % 3 === 1 ? "write_heavy" : "balanced"),
+            "lock_granularity": i % 4 === 0 ? "fine" : "coarse"
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 200}, (_, i) => [
+          `THREAD_SAFE_PARAM_${i}`,
+          {
+            "units": "1/s",
+            "default": Math.random() * 1e-6,
+            "description": `Thread-safe parameter ${i}`,
+            "synchronization": i % 2 === 0 ? "atomic" : "mutex",
+            "contention_level": ["low", "medium", "high"][i % 3]
+          }
+        ])
+      ),
+      "reactions": Array.from({length: 1000}, (_, i) => ({
+        "id": `CONCURRENT_R_${i}`,
+        "name": `thread_safe_reaction_${i}`,
+        "substrates": Array.from({length: (i % 3) + 1}, (_, j) => ({
+          "species": `CONCURRENT_SPECIES_${(i * 7 + j * 13) % 500}`,
+          "stoichiometry": (j % 2) + 1,
+          "access_order": j
+        })),
+        "products": Array.from({length: (i % 3) + 1}, (_, j) => ({
+          "species": `CONCURRENT_SPECIES_${(i * 11 + j * 17) % 500}`,
+          "stoichiometry": (j % 3) + 1,
+          "write_priority": j
+        })),
+        "rate": {
+          "op": "*",
+          "args": [
+            `THREAD_SAFE_PARAM_${i % 200}`,
+            { "op": "pow", "args": [
+              { "op": "/", "args": ["T", 298.15] },
+              i % 5
+            ]},
+            { "op": "exp", "args": [
+              { "op": "/", "args": [
+                { "op": "-", "args": [i * 50 + 2000] },
+                "T"
+              ]}
+            ]}
+          ]
+        },
+        "concurrency_metadata": {
+          "lock_order": i % 10,
+          "deadlock_prevention": i % 3 === 0 ? "timeout" : "hierarchy",
+          "thread_affinity": i % 8,
+          "memory_barrier": i % 2 === 0
+        }
+      }))
+    }
+  },
+  "data_loaders": Object.fromEntries(
+    Array.from({length: 50}, (_, i) => [
+      `CONCURRENT_LOADER_${i}`,
+      {
+        "type": "thread_safe_data",
+        "loader_id": `TSAFE_${i}`,
+        "config": {
+          "thread_pool_size": (i % 16) + 1,
+          "read_concurrency": (i % 8) + 1,
+          "write_concurrency": Math.max(1, (i % 4)),
+          "cache_coherency": i % 2 === 0 ? "strong" : "weak",
+          "consistency_model": ["sequential", "causal", "eventual"][i % 3],
+          "isolation_level": ["read_uncommitted", "read_committed", "repeatable_read", "serializable"][i % 4]
+        },
+        "provides": Object.fromEntries(
+          Array.from({length: (i % 20) + 1}, (_, j) => [
+            `concurrent_data_${j}`,
+            {
+              "units": ["kg/m^3", "mol/mol", "Pa", "K", "m/s"][j % 5],
+              "description": `Concurrently accessed data variable ${j}`,
+              "access_frequency": (i + j) % 100,
+              "update_frequency": (i * j + 1) % 50,
+              "contention_score": (i + j * 3) % 10
+            }
+          ])
+        )
+      }
+    ])
+  ),
+  "coupling": Array.from({length: 200}, (_, i) => ({
+    "type": "concurrent_map",
+    "from": `ConcurrentChemistry.CONCURRENT_SPECIES_${i % 500}`,
+    "to": `SharedVariableModel.race_var_${i % 100}`,
+    "transform": "thread_safe_linear",
+    "synchronization": {
+      "method": ["mutex", "spinlock", "atomic", "lockfree"][i % 4],
+      "priority": i % 10,
+      "timeout_ms": (i % 100) * 10,
+      "retry_count": (i % 5) + 1,
+      "backoff_strategy": ["linear", "exponential", "random"][i % 3]
+    }
+  })),
+  "domain": {
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-01T01:00:00Z",
+      "resolution": "PT1S"
+    },
+    "spatial": {
+      "lon": { "min": -10.0, "max": 10.0, "grid_spacing": 1.0, "units": "degrees" },
+      "lat": { "min": -10.0, "max": 10.0, "grid_spacing": 1.0, "units": "degrees" }
+    },
+    "concurrency_config": {
+      "thread_count": 32,
+      "thread_affinity": "numa_aware",
+      "scheduler": "work_stealing",
+      "load_balancing": "dynamic",
+      "memory_model": "relaxed",
+      "barrier_synchronization": true,
+      "lock_contention_monitoring": true,
+      "deadlock_detection": "enabled",
+      "livelock_prevention": "timeout_based"
+    }
+  },
+  "solver": {
+    "strategy": "parallel_strang",
+    "config": {
+      "thread_count": 32,
+      "chunk_size": "adaptive",
+      "work_stealing": true,
+      "numa_optimization": true,
+      "memory_pools": ["thread_local", "shared", "lockfree"],
+      "synchronization_points": ["timestep_boundary", "operator_boundary", "convergence_check"]
+    }
+  }
+}

@@ -1,0 +1,214 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MemoryFragmentationTest",
+    "description": "Test memory allocation patterns that could lead to fragmentation with many small allocations, deallocations, and varying object sizes",
+    "authors": ["Memory Management Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "memory", "fragmentation", "allocation", "gc_stress"]
+  },
+  "models": {
+    "SmallObjectModel": {
+      "reference": { "notes": "Many small variables to create memory fragmentation" },
+      "variables": Object.fromEntries(
+        Array.from({length: 10000}, (_, i) => [
+          `tiny_var_${i}`,
+          {
+            "type": "parameter",
+            "units": "1",
+            "default": Math.random() * 1e-20,
+            "description": `Tiny variable ${i}`
+          }
+        ])
+      )
+    },
+    "VariableSizeObjectModel": {
+      "reference": { "notes": "Mixed size allocations to stress memory allocator" },
+      "variables": Object.fromEntries(
+        Array.from({length: 1000}, (_, i) => [
+          `mixed_size_var_${i}`,
+          {
+            "type": "algebraic",
+            "units": "1",
+            "description": `Variable ${i} with ${i % 10 + 1} complexity levels`.repeat(i % 10 + 1),
+            "expression": i % 3 === 0 ? {
+              "op": "+",
+              "args": Array.from({length: i % 20 + 1}, (_, j) => ({ "op": "*", "args": [Math.random(), `tiny_var_${(i * 10 + j) % 10000}`] }))
+            } : (i % 3 === 1 ? {
+              "op": "*",
+              "args": [
+                { "op": "sin", "args": [`tiny_var_${i % 10000}`] },
+                { "op": "cos", "args": [`tiny_var_${(i + 1) % 10000}`] }
+              ]
+            } : {
+              "op": "exp",
+              "args": [{ "op": "/", "args": [`tiny_var_${i % 10000}`, 1000] }]
+            })
+          }
+        ])
+      ),
+      "equations": Array.from({length: 500}, (_, i) => ({
+        "lhs": { "op": "D", "args": [`tiny_var_${i * 20}`], "wrt": "t" },
+        "rhs": {
+          "op": "+",
+          "args": Array.from({length: i % 10 + 1}, (_, j) => ({
+            "op": "*",
+            "args": [
+              Math.random() * 1e-6,
+              `mixed_size_var_${(i * 2 + j) % 1000}`
+            ]
+          }))
+        }
+      }))
+    },
+    "StringFragmentationModel": {
+      "reference": { "notes": "Many different string lengths to fragment string pools" },
+      "variables": Object.fromEntries(
+        Array.from({length: 2000}, (_, i) => [
+          `string_var_${i}`,
+          {
+            "type": "parameter",
+            "units": "1",
+            "default": i * 1e-15,
+            "description": "x".repeat(i % 200 + 1) + `_description_for_variable_${i}_` + "y".repeat((i * 7) % 150 + 1),
+            "metadata": {
+              "long_string_field": "z".repeat((i * 13) % 300 + 1),
+              "medium_string_field": "a".repeat((i * 5) % 100 + 1),
+              "short_string_field": "b".repeat(i % 20 + 1),
+              "variable_length_array": Array.from({length: i % 30 + 1}, (_, j) => `element_${j}_${"c".repeat(j % 15 + 1)}`)
+            }
+          }
+        ])
+      )
+    }
+  },
+  "reaction_systems": {
+    "FragmentedChemistry": {
+      "coupletype": "FragmentedCoupler",
+      "reference": { "notes": "Chemistry system with many small species and fragmented memory patterns" },
+      "species": Object.fromEntries(
+        Array.from({length: 5000}, (_, i) => [
+          `SPECIES_${i}`,
+          {
+            "units": "mol/mol",
+            "default": Math.random() * 1e-18,
+            "description": "d".repeat(i % 50 + 1),
+            "properties": Object.fromEntries(
+              Array.from({length: i % 10 + 1}, (_, j) => [
+                `prop_${j}`,
+                Math.random() * (j + 1)
+              ])
+            )
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 1000}, (_, i) => [
+          `PARAM_${i}`,
+          {
+            "units": "1/s",
+            "default": Math.random() * 1e-8,
+            "description": "e".repeat((i * 3) % 75 + 1),
+            "temperature_dependence": Array.from({length: i % 5 + 1}, (_, j) => Math.random() * 1000),
+            "pressure_dependence": Array.from({length: (i * 2) % 7 + 1}, (_, j) => Math.random() * 10)
+          }
+        ])
+      ),
+      "reactions": Array.from({length: 3000}, (_, i) => ({
+        "id": `R${i}`,
+        "name": `reaction_${i}`,
+        "description": "f".repeat((i * 7) % 100 + 1),
+        "substrates": Array.from({length: (i % 5) + 1}, (_, j) => ({
+          "species": `SPECIES_${(i * 17 + j * 23) % 5000}`,
+          "stoichiometry": (j % 3) + 1
+        })),
+        "products": Array.from({length: (i % 4) + 1}, (_, j) => ({
+          "species": `SPECIES_${(i * 19 + j * 29) % 5000}`,
+          "stoichiometry": (j % 3) + 1
+        })),
+        "rate": {
+          "op": "*",
+          "args": [
+            `PARAM_${i % 1000}`,
+            { "op": "pow", "args": [
+              { "op": "/", "args": ["T", 298.15] },
+              (i % 10) * 0.1
+            ]}
+          ]
+        },
+        "metadata": {
+          "mechanism": "g".repeat((i * 11) % 80 + 1),
+          "references": Array.from({length: (i % 3) + 1}, (_, j) => `ref_${j}_${"h".repeat((i + j) % 25 + 1)}`),
+          "notes": Array.from({length: (i % 8) + 1}, (_, j) => "i".repeat((i * j + 7) % 60 + 1))
+        }
+      }))
+    }
+  },
+  "data_loaders": Object.fromEntries(
+    Array.from({length: 200}, (_, i) => [
+      `FRAGMENTED_LOADER_${i}`,
+      {
+        "type": "memory_stress",
+        "loader_id": `FRAG_${i}`,
+        "config": {
+          "allocation_pattern": i % 3 === 0 ? "random_sizes" : (i % 3 === 1 ? "growing_sizes" : "shrinking_sizes"),
+          "memory_pressure": i % 5,
+          "gc_frequency": (i % 10) + 1,
+          "fragmentation_level": (i % 7) * 0.1,
+          "object_lifetimes": Array.from({length: i % 20 + 1}, (_, j) => (i + j) * 100)
+        },
+        "provides": Object.fromEntries(
+          Array.from({length: (i % 25) + 1}, (_, j) => [
+            `fragmented_var_${j}`,
+            {
+              "units": "1",
+              "description": "j".repeat((i * j + 13) % 90 + 1),
+              "allocation_size": (i * j + 1) * 64,
+              "deallocation_pattern": j % 2 === 0 ? "immediate" : "delayed"
+            }
+          ])
+        )
+      }
+    ])
+  ),
+  "coupling": Array.from({length: 1000}, (_, i) => ({
+    "type": i % 3 === 0 ? "variable_map" : (i % 3 === 1 ? "operator_compose" : "memory_reference"),
+    "from": `FragmentedChemistry.SPECIES_${i % 5000}`,
+    "to": `SmallObjectModel.tiny_var_${i % 10000}`,
+    "transform": i % 4 === 0 ? "identity" : (i % 4 === 1 ? "scale" : (i % 4 === 2 ? "offset" : "nonlinear")),
+    "metadata": {
+      "allocation_hint": (i % 8) + 1,
+      "memory_pool": `pool_${i % 16}`,
+      "gc_policy": i % 2 === 0 ? "aggressive" : "conservative"
+    }
+  })),
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-02T00:00:00Z",
+      "resolution": "PT1M"
+    },
+    "spatial": {
+      "points": Array.from({length: 10000}, (_, i) => ({
+        "id": `point_${i}`,
+        "coordinates": [Math.random() * 360 - 180, Math.random() * 180 - 90],
+        "metadata": {
+          "elevation": Math.random() * 5000,
+          "surface_type": ["urban", "rural", "forest", "ocean", "desert"][i % 5],
+          "properties": Object.fromEntries(
+            Array.from({length: i % 15 + 1}, (_, j) => [
+              `prop_${j}`,
+              "k".repeat((i * j + 5) % 40 + 1)
+            ])
+          )
+        }
+      }))
+    },
+    "memory_layout": {
+      "fragmentation_strategy": "worst_case",
+      "allocation_sizes": [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
+      "deallocation_order": "reverse_chronological",
+      "gc_triggers": ["memory_pressure", "object_count", "fragmentation_ratio"]
+    }
+  }
+}

@@ -1,0 +1,467 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DenormalNumberHandling",
+    "description": "Test handling of denormal numbers, subnormal values, extreme precision, underflow scenarios, and numerical stability with very small numbers",
+    "authors": ["Numerical Precision Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "numerical", "denormal", "subnormal", "underflow", "precision"]
+  },
+  "models": {
+    "DenormalTestModel": {
+      "reference": { "notes": "Model with denormal and subnormal number scenarios" },
+      "variables": {
+        "tiny_concentration": { "type": "parameter", "units": "mol/mol", "default": 4.9406564584124654e-324 },
+        "subnormal_rate": { "type": "parameter", "units": "1/s", "default": 2.2250738585072014e-308 },
+        "underflow_test": { "type": "parameter", "units": "1", "default": 1e-400 },
+        "gradual_underflow": { "type": "parameter", "units": "1", "default": 5e-324 },
+        "almost_zero": { "type": "parameter", "units": "mol/mol", "default": 1e-1000 },
+        "denormal_product": {
+          "type": "algebraic",
+          "units": "mol^2/mol^2",
+          "expression": {
+            "op": "*",
+            "args": [
+              "tiny_concentration",
+              "subnormal_rate",
+              { "op": "exp", "args": [{ "op": "/", "args": [-1000000, "T"] }] }
+            ]
+          },
+          "numerical_handling": {
+            "denormal_detection": true,
+            "flush_to_zero": false,
+            "gradual_underflow": true,
+            "precision_tracking": true
+          }
+        },
+        "underflow_cascade": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              { "op": "*", "args": [
+                "underflow_test",
+                { "op": "pow", "args": ["gradual_underflow", 10] }
+              ]},
+              { "op": "+", "args": [
+                "almost_zero",
+                { "op": "pow", "args": [10, -500] }
+              ]}
+            ]
+          },
+          "underflow_protection": {
+            "min_representable": 2.2250738585072014e-308,
+            "denormal_threshold": 4.9406564584124654e-324,
+            "zero_substitution": 1e-300,
+            "warning_threshold": 1e-280
+          }
+        },
+        "precision_loss_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              1.0,
+              { "op": "*", "args": ["tiny_concentration", 1e300] },
+              { "op": "/", "args": ["subnormal_rate", 1e-100] }
+            ]
+          },
+          "precision_monitoring": {
+            "track_ulps": true,
+            "monitor_cancellation": true,
+            "relative_error_bound": 1e-15,
+            "absolute_error_bound": 1e-300
+          }
+        },
+        "subnormal_arithmetic": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [
+                { "op": "sqrt", "args": ["gradual_underflow"] },
+                { "op": "cbrt", "args": ["tiny_concentration"] }
+              ]},
+              { "op": "pow", "args": [
+                "subnormal_rate",
+                { "op": "/", "args": [1, 3] }
+              ]}
+            ]
+          },
+          "subnormal_handling": {
+            "preserve_subnormals": true,
+            "arithmetic_precision": "extended",
+            "rounding_mode": "to_nearest",
+            "exception_handling": "ignore_underflow"
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["tiny_concentration"], "wrt": "t" },
+          "rhs": {
+            "op": "denormal_safe_eval",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "*", "args": [
+                  "denormal_product",
+                  { "op": "exp", "args": [
+                    { "op": "clamp", "args": [
+                      { "op": "/", "args": ["t", 1e6] },
+                      -700,
+                      0
+                    ]}
+                  ]}
+                ]},
+                { "op": "*", "args": [
+                  -1e-20,
+                  { "op": "max", "args": [
+                    "underflow_cascade",
+                    1e-300
+                  ]}
+                ]}
+              ]},
+              { "numerical_safeguards": {
+                "flush_denormals": false,
+                "track_precision_loss": true,
+                "warn_on_underflow": true,
+                "substitute_zero_threshold": 1e-350
+              }}
+            ]
+          }
+        }
+      ]
+    },
+    "ExtremeScaleModel": {
+      "reference": { "notes": "Model testing extreme scale interactions between very large and very small numbers" },
+      "variables": {
+        "avogadro_scale": { "type": "parameter", "units": "1/mol", "default": 6.02214076e23 },
+        "planck_scale": { "type": "parameter", "units": "J*s", "default": 6.62607015e-34 },
+        "electron_mass": { "type": "parameter", "units": "kg", "default": 9.1093837015e-31 },
+        "proton_charge": { "type": "parameter", "units": "C", "default": 1.602176634e-19 },
+        "scale_mixing_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              { "op": "*", "args": [
+                "avogadro_scale",
+                "planck_scale",
+                { "op": "pow", "args": ["electron_mass", 2] }
+              ]},
+              { "op": "*", "args": [
+                { "op": "pow", "args": ["proton_charge", 4] },
+                1e100
+              ]}
+            ]
+          },
+          "scale_balancing": {
+            "use_logarithmic_arithmetic": true,
+            "intermediate_scaling": 1e50,
+            "result_normalization": true,
+            "overflow_protection": true
+          }
+        },
+        "quantum_classical_bridge": {
+          "type": "algebraic",
+          "units": "J",
+          "expression": {
+            "op": "*",
+            "args": [
+              { "op": "sqrt", "args": [
+                { "op": "*", "args": [
+                  "planck_scale",
+                  299792458,
+                  { "op": "pow", "args": [9.1093837015e-31, -1] }
+                ]}
+              ]},
+              { "op": "exp", "args": [
+                { "op": "/", "args": [
+                  { "op": "*", "args": ["electron_mass", -1e20] },
+                  { "op": "*", "args": ["planck_scale", 1e15] }
+                ]}
+              ]}
+            ]
+          },
+          "quantum_precision": {
+            "hbar_normalization": true,
+            "natural_units": false,
+            "precision_digits": 50,
+            "error_propagation": "monte_carlo"
+          }
+        }
+      }
+    },
+    "NumericalStabilityModel": {
+      "reference": { "notes": "Model for testing numerical stability with denormal numbers in iterative calculations" },
+      "variables": {
+        "iteration_seed": { "type": "parameter", "units": "1", "default": 1e-100 },
+        "decay_constant": { "type": "parameter", "units": "1/s", "default": 1e-50 },
+        "amplification_factor": { "type": "parameter", "units": "1", "default": 1.0000000000000002 },
+        "iterative_accumulator": {
+          "type": "differential",
+          "units": "1",
+          "default": 1e-200,
+          "numerical_properties": {
+            "maintains_precision": false,
+            "accumulates_error": true,
+            "denormal_prone": true
+          }
+        },
+        "stability_monitor": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              { "op": "abs", "args": [
+                { "op": "D", "args": ["iterative_accumulator"], "wrt": "t" }
+              ]},
+              { "op": "+", "args": [
+                { "op": "abs", "args": ["iterative_accumulator"] },
+                1e-400
+              ]}
+            ]
+          },
+          "stability_analysis": {
+            "lyapunov_exponent": true,
+            "condition_number": true,
+            "sensitivity_analysis": true,
+            "denormal_tracking": true
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["iterative_accumulator"], "wrt": "t" },
+          "rhs": {
+            "op": "stable_numerical_eval",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "*", "args": [
+                  "iterative_accumulator",
+                  { "op": "-", "args": [
+                    "amplification_factor",
+                    { "op": "*", "args": ["decay_constant", "t"] }
+                  ]}
+                ]},
+                { "op": "*", "args": [
+                  "iteration_seed",
+                  { "op": "sin", "args": [
+                    { "op": "*", "args": ["t", 1e-10] }
+                  ]}
+                ]},
+                { "op": "random_denormal", "args": [1e-250, 1e-200] }
+              ]},
+              { "stability_controls": {
+                "denormal_flush_threshold": 1e-300,
+                "renormalization_frequency": 1000,
+                "precision_recovery": "kahan_summation",
+                "error_compensation": true
+              }}
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "UltralowConcentrationChemistry": {
+      "coupletype": "DenormalTolerantCoupler",
+      "reference": { "notes": "Chemistry system with ultralow concentrations and subnormal kinetics" },
+      "species": Object.fromEntries(
+        Array.from({length: 200}, (_, i) => [
+          `ULTRA_TRACE_${i}`,
+          {
+            "units": "mol/mol",
+            "default": Math.pow(10, -300 - i * 5),
+            "description": `Ultra-trace species ${i} at denormal concentrations`,
+            "numerical_properties": {
+              "denormal_likely": true,
+              "precision_critical": true,
+              "underflow_sensitive": true
+            }
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 100}, (_, i) => [
+          `ULTRA_SLOW_RATE_${i}`,
+          {
+            "units": "1/s",
+            "default": Math.pow(10, -200 - i * 2),
+            "description": `Ultra-slow rate constant ${i}`,
+            "arrhenius_parameters": {
+              "A": Math.pow(10, -150 - i),
+              "Ea": 500000 + i * 1000,
+              "temperature_range": [200, 400]
+            }
+          }
+        ])
+      ),
+      "reactions": Array.from({length: 500}, (_, i) => ({
+        "id": `ULTRA_TRACE_R_${i}`,
+        "name": `ultralow_reaction_${i}`,
+        "substrates": Array.from({length: (i % 3) + 1}, (_, j) => ({
+          "species": `ULTRA_TRACE_${(i * 7 + j * 13) % 200}`,
+          "stoichiometry": 1
+        })),
+        "products": Array.from({length: (i % 2) + 1}, (_, j) => ({
+          "species": `ULTRA_TRACE_${(i * 11 + j * 17 + 50) % 200}`,
+          "stoichiometry": 1
+        })),
+        "rate": {
+          "op": "denormal_safe_kinetics",
+          "args": [
+            { "op": "*", "args": [
+              `ULTRA_SLOW_RATE_${i % 100}`,
+              { "op": "arrhenius_denormal_safe", "args": [
+                298.15,
+                i * 1000 + 50000,
+                { "underflow_protection": true }
+              ]},
+              { "op": "product", "args": Array.from({length: (i % 3) + 1}, (_, j) =>
+                { "op": "max", "args": [
+                  `ULTRA_TRACE_${(i * 7 + j * 13) % 200}`,
+                  1e-350
+                ]}
+              )}
+            ]},
+            { "numerical_safeguards": {
+              "min_rate": 1e-400,
+              "denormal_detection": true,
+              "precision_tracking": true,
+              "error_bounds": [1e-50, 1e50]
+            }}
+          ]
+        },
+        "kinetic_properties": {
+          "extremely_slow": true,
+          "denormal_products": i % 5 === 0,
+          "precision_requirements": "quad_precision",
+          "stability_analysis": "required"
+        }
+      })),
+      "numerical_methods": {
+        "concentration_floor": 1e-400,
+        "rate_floor": 1e-500,
+        "adaptive_precision": true,
+        "denormal_preservation": true,
+        "underflow_recovery": "graceful",
+        "precision_monitoring": {
+          "track_denormals": true,
+          "count_underflows": true,
+          "monitor_precision_loss": true,
+          "log_numerical_events": "verbose"
+        }
+      }
+    }
+  },
+  "data_loaders": {
+    "HighPrecisionDataLoader": {
+      "type": "extended_precision",
+      "loader_id": "HIGH_PREC",
+      "config": {
+        "precision": "quad",
+        "denormal_handling": "preserve",
+        "underflow_detection": true,
+        "precision_validation": "strict"
+      },
+      "provides": {
+        "ultra_precise_temperature": {
+          "units": "K",
+          "description": "Ultra-high precision temperature measurements",
+          "precision": 1e-15,
+          "range": [0.001, 10000],
+          "denormal_support": true
+        },
+        "quantum_scale_pressure": {
+          "units": "Pa",
+          "description": "Quantum-scale pressure variations",
+          "precision": 1e-30,
+          "typical_values": [1e-25, 1e-20],
+          "subnormal_handling": "preserve"
+        },
+        "femto_concentrations": {
+          "units": "mol/mol",
+          "description": "Femto-scale trace gas concentrations",
+          "precision": 1e-50,
+          "range": [1e-400, 1e-100],
+          "numerical_challenges": ["denormal", "underflow", "precision_loss"]
+        }
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "precision_aware_map",
+      "from": "HighPrecisionDataLoader.femto_concentrations",
+      "to": "DenormalTestModel.tiny_concentration",
+      "precision_handling": {
+        "preserve_denormals": true,
+        "error_propagation": "full",
+        "rounding_control": "to_nearest",
+        "underflow_strategy": "gradual"
+      }
+    },
+    {
+      "type": "numerically_stable_compose",
+      "systems": ["DenormalTestModel", "ExtremeScaleModel"],
+      "stability_requirements": {
+        "condition_number_limit": 1e12,
+        "relative_error_tolerance": 1e-10,
+        "denormal_tolerance": true,
+        "precision_monitoring": "continuous"
+      }
+    }
+  ],
+  "domain": {
+    "temporal": {
+      "start": "2024-11-01T00:00:00Z",
+      "end": "2024-11-01T24:00:00Z",
+      "resolution": "PT1H"
+    },
+    "spatial": {
+      "lon": { "min": 0.0, "max": 1.0, "grid_spacing": 0.5, "units": "degrees" },
+      "lat": { "min": 0.0, "max": 1.0, "grid_spacing": 0.5, "units": "degrees" }
+    },
+    "numerical_configuration": {
+      "floating_point_mode": "ieee754_compliant",
+      "denormal_handling": "preserve",
+      "underflow_mode": "gradual",
+      "precision": "quad",
+      "rounding_mode": "to_nearest",
+      "exception_handling": {
+        "underflow": "warn_and_continue",
+        "denormal": "track_and_continue",
+        "precision_loss": "monitor"
+      },
+      "stability_monitoring": {
+        "condition_numbers": true,
+        "precision_tracking": true,
+        "error_accumulation": true,
+        "denormal_statistics": true
+      }
+    }
+  },
+  "solver": {
+    "strategy": "extended_precision_adaptive",
+    "config": {
+      "precision": "quad",
+      "denormal_support": true,
+      "underflow_protection": true,
+      "numerical_stability": "high",
+      "error_control": {
+        "absolute_tolerance": 1e-300,
+        "relative_tolerance": 1e-15,
+        "denormal_tolerance": 1e-350
+      },
+      "precision_monitoring": true,
+      "stability_analysis": true
+    }
+  }
+}

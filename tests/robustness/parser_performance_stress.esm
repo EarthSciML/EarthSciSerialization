@@ -1,0 +1,174 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ParserPerformanceStress",
+    "description": "Stress test for parser performance with large file structures, deeply nested expressions, and extensive metadata",
+    "authors": ["Robustness Test Framework"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "performance", "parser", "stress_test", "large_scale"],
+    "license": "MIT",
+    "references": [
+      {"title": "Parser Performance Benchmarking", "authors": ["Performance Team"], "year": 2026},
+      {"title": "Large-Scale JSON Processing", "authors": ["Scaling Group"], "year": 2025}
+    ]
+  },
+  "models": {
+    "LargeScaleAtmosphericModel": {
+      "reference": {
+        "notes": "Massive atmospheric model with thousands of variables to stress test parser",
+        "doi": "10.1000/parser.stress.test",
+        "url": "https://example.com/parser-stress"
+      },
+      "variables": Object.fromEntries(
+        Array.from({length: 5000}, (_, i) => [
+          `VAR_${i.toString().padStart(5, '0')}`,
+          {
+            "type": i % 3 === 0 ? "parameter" : (i % 3 === 1 ? "algebraic" : "differential"),
+            "units": i % 10 === 0 ? "kg/m^3" : (i % 10 === 1 ? "mol/mol" : (i % 10 === 2 ? "m/s" : (i % 10 === 3 ? "Pa" : "K"))),
+            "default": Math.random() * 1e-6,
+            "description": `Variable ${i} for parser stress testing with long descriptions that contain many words to increase parsing complexity and memory usage during JSON processing`,
+            "expression": i % 3 === 1 ? {
+              "op": "+",
+              "args": [
+                { "op": "*", "args": [
+                  { "op": "sin", "args": [{ "op": "+", "args": [`VAR_${Math.max(0, i-1).toString().padStart(5, '0')}`, 0.1] }] },
+                  { "op": "cos", "args": [{ "op": "*", "args": [`VAR_${Math.max(0, i-2).toString().padStart(5, '0')}`, 2.0] }] }
+                ]},
+                { "op": "exp", "args": [{ "op": "/", "args": [
+                  { "op": "log", "args": [{ "op": "+", "args": [`VAR_${Math.max(0, i-3).toString().padStart(5, '0')}`, 1e-10] }] },
+                  { "op": "sqrt", "args": [{ "op": "abs", "args": [`VAR_${Math.max(0, i-4).toString().padStart(5, '0')}`] }] }
+                ]}]}
+              ]
+            } : undefined
+          }
+        ])
+      ),
+      "equations": Array.from({length: 1000}, (_, i) => ({
+        "lhs": { "op": "D", "args": [`VAR_${(i * 5 + 2).toString().padStart(5, '0')}`], "wrt": "t" },
+        "rhs": {
+          "op": "+",
+          "args": [
+            { "op": "*", "args": [
+              { "op": "pow", "args": [`VAR_${(i * 5 + 0).toString().padStart(5, '0')}`, 2] },
+              { "op": "exp", "args": [{ "op": "/", "args": [-1000, `VAR_${(i * 5 + 1).toString().padStart(5, '0')}`] }] }
+            ]},
+            { "op": "*", "args": [
+              -0.001,
+              { "op": "log", "args": [{ "op": "+", "args": [`VAR_${(i * 5 + 3).toString().padStart(5, '0')}`, 1e-12] }] }
+            ]},
+            { "op": "tanh", "args": [{ "op": "*", "args": [
+              `VAR_${(i * 5 + 4).toString().padStart(5, '0')}`,
+              { "op": "sin", "args": [{ "op": "*", "args": [0.1, "t"] }] }
+            ]}]}
+          ]
+        }
+      }))
+    }
+  },
+  "reaction_systems": {
+    "MassiveChemistrySystem": {
+      "coupletype": "MegaChemistryCoupler",
+      "reference": {
+        "notes": "Extremely large chemistry system to test parser memory limits",
+        "performance_notes": "Contains 10000+ species and reactions for stress testing"
+      },
+      "species": Object.fromEntries(
+        Array.from({length: 10000}, (_, i) => [
+          `CHEM_SPECIES_${i.toString().padStart(5, '0')}`,
+          {
+            "units": "mol/mol",
+            "default": Math.random() * 1e-15,
+            "description": `Chemical species ${i} with detailed molecular structure information, CAS registry numbers, and thermodynamic properties that make the JSON parsing more challenging due to string length and complexity`,
+            "molar_mass": 10 + Math.random() * 500,
+            "cas_number": `${Math.floor(Math.random() * 999999)}-${Math.floor(Math.random() * 99)}-${Math.floor(Math.random() * 9)}`,
+            "smiles": `C${Math.floor(Math.random() * 50)}H${Math.floor(Math.random() * 100)}O${Math.floor(Math.random() * 20)}N${Math.floor(Math.random() * 10)}`
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 2000}, (_, i) => [
+          `RATE_CONSTANT_${i.toString().padStart(4, '0')}`,
+          {
+            "units": "cm^3/(molec*s)",
+            "default": Math.random() * 1e-12,
+            "description": `Rate constant ${i} with temperature and pressure dependencies for stress testing parser with complex metadata structures`
+          }
+        ])
+      ),
+      "reactions": Array.from({length: 15000}, (_, i) => ({
+        "id": `REACTION_${i.toString().padStart(6, '0')}`,
+        "name": `complex_atmospheric_reaction_${i}`,
+        "description": `Complex multi-step atmospheric reaction ${i} involving multiple species and complex rate expressions designed to stress test the expression parser with deeply nested mathematical operations`,
+        "substrates": Array.from({length: Math.floor(Math.random() * 4) + 1}, (_, j) => ({
+          "species": `CHEM_SPECIES_${((i * 7 + j) % 10000).toString().padStart(5, '0')}`,
+          "stoichiometry": Math.floor(Math.random() * 3) + 1
+        })),
+        "products": Array.from({length: Math.floor(Math.random() * 5) + 1}, (_, j) => ({
+          "species": `CHEM_SPECIES_${((i * 11 + j + 5) % 10000).toString().padStart(5, '0')}`,
+          "stoichiometry": Math.floor(Math.random() * 4) + 1
+        })),
+        "rate": {
+          "op": "*",
+          "args": [
+            `RATE_CONSTANT_${(i % 2000).toString().padStart(4, '0')}`,
+            { "op": "pow", "args": [{ "op": "/", "args": ["T", 298.15] }, 2.5] },
+            { "op": "exp", "args": [{ "op": "/", "args": [{ "op": "-", "args": [i * 100 + 5000] }, "T"] }] },
+            { "op": "+", "args": [
+              1.0,
+              { "op": "*", "args": [0.1, { "op": "sin", "args": [{ "op": "*", "args": [0.001, "t"] }] }] }
+            ]}
+          ]
+        }
+      }))
+    }
+  },
+  "data_loaders": Object.fromEntries(
+    Array.from({length: 100}, (_, i) => [
+      `LARGE_DATASET_${i.toString().padStart(3, '0')}`,
+      {
+        "type": "gridded_data",
+        "loader_id": `STRESS_LOADER_${i}`,
+        "config": {
+          "resolution": `${0.1 + i * 0.01}x${0.1 + i * 0.01}_GLOBAL`,
+          "coord_defaults": { "lat": -90 + i * 1.8, "lon": -180 + i * 3.6, "lev": i + 1 },
+          "file_pattern": `/data/stress_test_${i}/year_%Y/month_%m/day_%d/hour_%H.nc`,
+          "caching_policy": "aggressive_memory",
+          "parallel_readers": i % 16 + 1
+        },
+        "provides": Object.fromEntries(
+          Array.from({length: 50}, (_, j) => [
+            `VAR_${j}_FROM_LOADER_${i}`,
+            {
+              "units": j % 5 === 0 ? "kg/kg" : (j % 5 === 1 ? "m/s" : (j % 5 === 2 ? "Pa" : (j % 5 === 3 ? "K" : "1/s"))),
+              "description": `Variable ${j} from large dataset loader ${i} designed to create parser stress through repetitive similar structures`
+            }
+          ])
+        )
+      }
+    ])
+  ),
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2025-12-31T23:59:59Z",
+      "resolution": "PT1H",
+      "calendar": "gregorian"
+    },
+    "spatial": {
+      "lon": { "min": -180.0, "max": 180.0, "grid_spacing": 0.125, "units": "degrees" },
+      "lat": { "min": -90.0, "max": 90.0, "grid_spacing": 0.125, "units": "degrees" },
+      "lev": { "min": 1, "max": 72, "grid_spacing": 1, "units": "level" }
+    },
+    "coordinate_transforms": [
+      { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"], "projection": "lambert_conformal_conic" },
+      { "id": "pressure_to_height", "dimensions": ["lev"], "reference_pressure": 1013.25 }
+    ],
+    "initial_conditions": { "type": "from_file", "file": "/data/stress_test/initial_conditions_large.nc" },
+    "boundary_conditions": [
+      { "type": "periodic", "dimensions": ["lon"] },
+      { "type": "zero_gradient", "dimensions": ["lat"] },
+      { "type": "fixed_value", "dimensions": ["lev"], "value": 1e-12 }
+    ],
+    "element_type": "Float64"
+  }
+}

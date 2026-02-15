@@ -1,0 +1,46 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MegaReactionSystem",
+    "description": "Test robustness with extremely large reaction systems (50,000+ species, 10,000+ reactions)",
+    "authors": ["Robustness Test"]
+  },
+  "reaction_systems": {
+    "MegaAtmosphericChemistry": {
+      "species": Object.fromEntries(
+        Array.from({length: 50000}, (_, i) => [
+          `CHEM_${i.toString().padStart(5, '0')}`,
+          {
+            "units": "mol/mol",
+            "default": Math.random() * 1e-12,
+            "description": `Chemical species ${i}`,
+            "molar_mass": 10 + Math.random() * 500
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 5000}, (_, i) => [
+          `RATE_${i.toString().padStart(4, '0')}`,
+          {
+            "units": "1/s",
+            "default": Math.random() * 1e-3,
+            "description": `Rate constant ${i}`
+          }
+        ])
+      ),
+      "reactions": Array.from({length: 10000}, (_, i) => ({
+        "id": `R_${i.toString().padStart(5, '0')}`,
+        "name": `atmospheric_reaction_${i}`,
+        "substrates": [
+          { "species": `CHEM_${(i * 3 % 50000).toString().padStart(5, '0')}`, "stoichiometry": Math.floor(Math.random() * 3) + 1 },
+          { "species": `CHEM_${((i * 3 + 1) % 50000).toString().padStart(5, '0')}`, "stoichiometry": Math.floor(Math.random() * 2) + 1 }
+        ],
+        "products": [
+          { "species": `CHEM_${((i * 3 + 2) % 50000).toString().padStart(5, '0')}`, "stoichiometry": Math.floor(Math.random() * 3) + 1 },
+          { "species": `CHEM_${((i * 3 + 3) % 50000).toString().padStart(5, '0')}`, "stoichiometry": Math.floor(Math.random() * 2) + 1 }
+        ],
+        "rate": { "op": "*", "args": [`RATE_${(i % 5000).toString().padStart(4, '0')}`, { "op": "arrhenius", "args": [298.15, i * 100 + 5000] }] }
+      }))
+    }
+  }
+}
