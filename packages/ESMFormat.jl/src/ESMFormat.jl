@@ -15,6 +15,7 @@ using JSONSchema
 
 # Include type definitions and functionality
 include("types.jl")
+include("error_handling.jl")
 include("validate.jl")
 include("parse.jl")
 include("serialize.jl")

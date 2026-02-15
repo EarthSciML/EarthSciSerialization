@@ -14,6 +14,9 @@ import jsonschema
 from jsonschema import ValidationError as JsonSchemaValidationError
 
 from .parse import load, SchemaValidationError, UnsupportedVersionError, _get_schema
+from .error_handling import (
+    ESMErrorFactory, ErrorCollector, ESMError, ErrorCode, Severity, ErrorContext, FixSuggestion
+)
 from .hierarchical_scope_resolution import HierarchicalScopeResolver, ScopeInfo, VariableResolution
 from .coupling_graph import ScopedReferenceResolver
 from .types import EsmFile
@@ -103,16 +106,17 @@ def validate(esm_file: EsmFile) -> ValidationResult:
     schema_errors = []
     structural_errors = []
     unit_warnings = []
+    error_collector = ErrorCollector()
 
     try:
         # Schema validation is assumed to have been done during parsing
         # Focus on structural validation
 
         # 1. Equation-Unknown Balance validation
-        _validate_equation_balance(esm_file, structural_errors)
+        _validate_equation_balance_enhanced(esm_file, error_collector)
 
         # 2. Reference Integrity validation
-        _validate_reference_integrity(esm_file, structural_errors)
+        _validate_reference_integrity_enhanced(esm_file, error_collector)
 
         # 3. Reaction Consistency validation
         _validate_reaction_consistency(esm_file, structural_errors)
@@ -122,6 +126,29 @@ def validate(esm_file: EsmFile) -> ValidationResult:
 
         # 5. Unit validation (warnings only)
         _validate_units(esm_file, unit_warnings)
+
+        # Convert enhanced errors back to old format for backward compatibility
+        for error in error_collector.errors:
+            structural_errors.append(ValidationError(
+                path=error.path,
+                message=error.message,
+                code=error.code.value,
+                details=error.debug_info
+            ))
+
+        for warning in error_collector.warnings:
+            if warning.code == ErrorCode.UNIT_MISMATCH:
+                unit_warnings.append(UnitWarning(
+                    path=warning.path,
+                    message=warning.message
+                ))
+            else:
+                structural_errors.append(ValidationError(
+                    path=warning.path,
+                    message=warning.message,
+                    code=warning.code.value,
+                    details=warning.debug_info
+                ))
 
     except Exception as e:
         # Catch-all for unexpected errors
@@ -244,6 +271,23 @@ def validate_raw(esm_data: Union[str, Dict[str, Any]]) -> ValidationResult:
     )
 
 
+def _validate_equation_balance_enhanced(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
+    """Enhanced equation-unknown balance validation with detailed suggestions."""
+    for i, model in enumerate(esm_file.models):
+        # Count state variables (unknowns)
+        state_vars = [name for name, var in model.variables.items() if var.type == 'state']
+        num_unknowns = len(state_vars)
+
+        # Count equations
+        num_equations = len(model.equations)
+
+        if num_equations != num_unknowns:
+            error = ESMErrorFactory.create_equation_imbalance_error(
+                model.name, num_equations, num_unknowns, state_vars
+            )
+            error_collector.add_error(error)
+
+
 def _validate_equation_balance(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
     """
     Validate equation-unknown balance in models.
@@ -272,6 +316,63 @@ def _validate_equation_balance(esm_file: EsmFile, structural_errors: List[Valida
                     "state_variables": state_vars
                 }
             ))
+
+
+def _validate_reference_integrity_enhanced(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
+    """Enhanced reference integrity validation with smart suggestions."""
+    # Build comprehensive variable lookup for smart suggestions
+    all_variables = {}
+    all_models = {}
+    all_reaction_systems = {}
+    all_operators = {}
+
+    # Collect all models and their variables
+    for model in esm_file.models:
+        all_models[model.name] = model
+        for var_name, var in model.variables.items():
+            scoped_name = f"{model.name}.{var_name}"
+            all_variables[scoped_name] = var
+            all_variables[var_name] = var  # Also allow unscoped references within model
+
+    # Collect all reaction systems and their species/parameters
+    for rs in esm_file.reaction_systems:
+        all_reaction_systems[rs.name] = rs
+        for species in rs.species:
+            scoped_name = f"{rs.name}.{species.name}"
+            all_variables[scoped_name] = species
+        for param in rs.parameters:
+            scoped_name = f"{rs.name}.{param.name}"
+            all_variables[scoped_name] = param
+
+    # Collect all operators
+    for op in esm_file.operators:
+        all_operators[op.name] = op
+
+    # Validate coupling references with enhanced error handling
+    for i, coupling in enumerate(esm_file.couplings):
+        coupling_path = f"/couplings/{i}"
+
+        # Check source model/system existence
+        if coupling.source_model not in all_models and coupling.source_model not in all_reaction_systems:
+            available_components = list(all_models.keys()) + list(all_reaction_systems.keys())
+            error = ESMErrorFactory.create_undefined_reference_error(
+                coupling.source_model,
+                available_components,
+                f"{coupling_path}/source_model"
+            )
+            error.message = f"Source model/system '{coupling.source_model}' not found"
+            error_collector.add_error(error)
+
+        # Check target model/system existence
+        if coupling.target_model not in all_models and coupling.target_model not in all_reaction_systems:
+            available_components = list(all_models.keys()) + list(all_reaction_systems.keys())
+            error = ESMErrorFactory.create_undefined_reference_error(
+                coupling.target_model,
+                available_components,
+                f"{coupling_path}/target_model"
+            )
+            error.message = f"Target model/system '{coupling.target_model}' not found"
+            error_collector.add_error(error)
 
 
 def _validate_reference_integrity(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
