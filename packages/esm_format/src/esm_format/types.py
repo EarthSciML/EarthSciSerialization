@@ -171,6 +171,7 @@ class OperatorType(Enum):
     TRANSFORMATION = "transformation"
     ARITHMETIC = "arithmetic"
     LOGICAL = "logical"
+    STATISTICAL = "statistical"
 
 
 @dataclass

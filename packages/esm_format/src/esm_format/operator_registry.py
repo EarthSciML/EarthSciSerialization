@@ -94,6 +94,13 @@ class OperatorRegistry:
             "temporal_average": OperatorPrecedence(1),
             "time_stepping": OperatorPrecedence(1),
 
+            # Statistical operators (same level as functions)
+            "mean": OperatorPrecedence(1),
+            "variance": OperatorPrecedence(1),
+            "std": OperatorPrecedence(1),
+            "percentile": OperatorPrecedence(1),
+            "median": OperatorPrecedence(1),
+
             # Level 2: Exponentiation (right-associative)
             "^": OperatorPrecedence(2, Associativity.RIGHT),
 
@@ -149,6 +156,9 @@ class OperatorRegistry:
         from .spatial_operators import GradientOperator, DivergenceOperator, LaplacianOperator
         from .temporal_operators import (
             DerivativeOperator, IntegralOperator, TemporalAveragingOperator, TimeSteppingOperator
+        )
+        from .statistical_operators import (
+            MeanOperator, VarianceOperator, PercentileOperator, StandardDeviationOperator, MedianOperator
         )
 
         # Register mathematical operators
@@ -293,6 +303,42 @@ class OperatorRegistry:
             name="time_stepping",
             operator_type=OperatorType.INTEGRATION,
             operator_class=TimeSteppingOperator,
+            version="1.0"
+        )
+
+        # Register statistical operators
+        self.register_operator(
+            name="mean",
+            operator_type=OperatorType.STATISTICAL,
+            operator_class=MeanOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="variance",
+            operator_type=OperatorType.STATISTICAL,
+            operator_class=VarianceOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="std",
+            operator_type=OperatorType.STATISTICAL,
+            operator_class=StandardDeviationOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="percentile",
+            operator_type=OperatorType.STATISTICAL,
+            operator_class=PercentileOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="median",
+            operator_type=OperatorType.STATISTICAL,
+            operator_class=MedianOperator,
             version="1.0"
         )
 
