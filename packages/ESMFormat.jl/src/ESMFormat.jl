@@ -18,6 +18,7 @@ include("types.jl")
 include("validate.jl")
 include("parse.jl")
 include("serialize.jl")
+include("display.jl")
 # Temporarily commenting out mtk_catalyst.jl due to precompilation issues
 # include("mtk_catalyst.jl")
 
