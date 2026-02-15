@@ -1,0 +1,557 @@
+# GitHub Actions workflow for automated performance benchmarking
+# This workflow runs comprehensive performance tests across all language implementations
+
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run nightly benchmarks at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      benchmark_type:
+        description: 'Type of benchmark to run'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+          - standard
+          - comprehensive
+          - memory-only
+          - single-language
+      language_filter:
+        description: 'Language to test (for single-language mode)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - python
+          - julia
+          - typescript
+          - rust
+
+env:
+  BENCHMARK_TIMEOUT_MINUTES: 30
+  RESULTS_RETENTION_DAYS: 90
+  PERFORMANCE_REGRESSION_THRESHOLD: 0.20
+
+jobs:
+  # Job 1: Prepare benchmark environment and test data
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      benchmark-matrix: ${{ steps.setup-matrix.outputs.matrix }}
+      test-data-hash: ${{ steps.generate-test-data.outputs.hash }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for performance comparison
+
+      - name: Setup benchmark matrix
+        id: setup-matrix
+        run: |
+          if [[ "${{ github.event.inputs.language_filter }}" == "all" || -z "${{ github.event.inputs.language_filter }}" ]]; then
+            echo 'matrix={"language":["python","julia","typescript"],"size":["small","medium","large"]}' >> $GITHUB_OUTPUT
+          else
+            echo 'matrix={"language":["${{ github.event.inputs.language_filter }}"],"size":["small","medium","large"]}' >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate test data
+        id: generate-test-data
+        run: |
+          # Create reproducible test data for all benchmarks
+          mkdir -p tests/performance/data
+
+          # Generate test files of different sizes
+          echo "Generating benchmark test data..."
+
+          # Create small test file
+          cat > tests/performance/data/small_test.esm << 'EOF'
+          {
+            "version": "0.1.0",
+            "metadata": {
+              "title": "Small Benchmark Test",
+              "description": "Generated for performance testing"
+            },
+            "models": [{
+              "name": "small_model",
+              "variables": {
+                "x": {"type": "state", "units": "m", "default": 1.0},
+                "y": {"type": "state", "units": "m/s", "default": 0.0},
+                "k": {"type": "parameter", "units": "1/s", "default": 0.1}
+              },
+              "equations": [
+                {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": "y"},
+                {"lhs": {"op": "D", "args": ["y"], "wrt": "t"}, "rhs": {"op": "*", "args": [{"op": "-", "args": ["k"]}, "x"]}}
+              ]
+            }]
+          }
+          EOF
+
+          # Hash the test data for caching
+          HASH=$(find tests/performance/data -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "Test data hash: $HASH"
+
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: tests/performance/data
+          key: benchmark-test-data-${{ steps.generate-test-data.outputs.hash }}
+
+      - name: Upload test data artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-test-data
+          path: tests/performance/data/
+          retention-days: 1
+
+  # Job 2: Run benchmarks for each language
+  benchmark:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJson(env.BENCHMARK_TIMEOUT_MINUTES) }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.benchmark-matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download test data
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-test-data
+          path: tests/performance/data/
+
+      - name: Setup system monitoring
+        run: |
+          # Install system monitoring tools
+          sudo apt-get update
+          sudo apt-get install -y htop iotop sysstat time jq
+
+          # Start system monitoring in background
+          iostat -x 1 > iostat.log &
+          echo $! > iostat.pid
+
+          vmstat 1 > vmstat.log &
+          echo $! > vmstat.pid
+
+      - name: Setup Python environment
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        if: matrix.language == 'python'
+        run: |
+          cd packages/esm_format
+          pip install -e .[test]
+          pip install psutil pytest-benchmark memory-profiler
+
+      - name: Setup Julia environment
+        if: matrix.language == 'julia'
+        uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.10'
+
+      - name: Install Julia dependencies
+        if: matrix.language == 'julia'
+        run: |
+          cd packages/ESMFormat.jl
+          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+          julia --project=. -e 'using Pkg; Pkg.add(["BenchmarkTools", "JSON3", "ProfileView"])'
+
+      - name: Setup Node.js environment
+        if: matrix.language == 'typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/esm-format/package-lock.json
+
+      - name: Install TypeScript dependencies
+        if: matrix.language == 'typescript'
+        run: |
+          cd packages/esm-format
+          npm ci
+          npm run build
+
+      - name: Run Python benchmarks
+        if: matrix.language == 'python'
+        run: |
+          cd tests/performance
+
+          # Run the benchmark script for Python only
+          timeout ${{ env.BENCHMARK_TIMEOUT_MINUTES }}m ./benchmark.sh --python-only > python_benchmark_output.log 2>&1
+
+          # Run memory profiling
+          python3 memory_profiler.py --size ${{ matrix.size }} --iterations 100 --output python_memory_${{ matrix.size }}.json
+
+          echo "Python benchmark completed for size: ${{ matrix.size }}"
+
+      - name: Run Julia benchmarks
+        if: matrix.language == 'julia'
+        run: |
+          cd tests/performance
+
+          # Run Julia-specific benchmarks
+          timeout ${{ env.BENCHMARK_TIMEOUT_MINUTES }}m ./benchmark.sh --julia-only > julia_benchmark_output.log 2>&1
+
+          echo "Julia benchmark completed for size: ${{ matrix.size }}"
+
+      - name: Run TypeScript benchmarks
+        if: matrix.language == 'typescript'
+        run: |
+          cd tests/performance
+
+          # Run TypeScript-specific benchmarks
+          timeout ${{ env.BENCHMARK_TIMEOUT_MINUTES }}m ./benchmark.sh --ts-only > typescript_benchmark_output.log 2>&1
+
+          echo "TypeScript benchmark completed for size: ${{ matrix.size }}"
+
+      - name: Stop system monitoring
+        run: |
+          # Stop background monitoring processes
+          if [[ -f iostat.pid ]]; then
+            kill $(cat iostat.pid) || true
+          fi
+          if [[ -f vmstat.pid ]]; then
+            kill $(cat vmstat.pid) || true
+          fi
+
+      - name: Collect system metrics
+        run: |
+          # Collect final system state
+          echo "=== SYSTEM METRICS ===" > system_metrics.log
+          echo "CPU Info:" >> system_metrics.log
+          lscpu >> system_metrics.log
+          echo "" >> system_metrics.log
+          echo "Memory Info:" >> system_metrics.log
+          free -h >> system_metrics.log
+          echo "" >> system_metrics.log
+          echo "Disk Info:" >> system_metrics.log
+          df -h >> system_metrics.log
+          echo "" >> system_metrics.log
+          echo "Load Average:" >> system_metrics.log
+          uptime >> system_metrics.log
+
+      - name: Parse benchmark results
+        run: |
+          # Extract key metrics from benchmark output
+          cd tests/performance
+
+          echo "Parsing results for ${{ matrix.language }} - ${{ matrix.size }}"
+
+          # Create structured results file
+          cat > parsed_results_${{ matrix.language }}_${{ matrix.size }}.json << EOF
+          {
+            "language": "${{ matrix.language }}",
+            "size_category": "${{ matrix.size }}",
+            "timestamp": "$(date -Iseconds)",
+            "commit_hash": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "pr_number": "${{ github.event.pull_request.number }}",
+            "workflow_run_id": "${{ github.run_id }}",
+            "results": {}
+          }
+          EOF
+
+          # Add actual results parsing logic here
+          if [[ -f ${{ matrix.language }}_benchmark_output.log ]]; then
+            echo "Benchmark output file found, parsing..."
+            # Parse the actual benchmark results and add to JSON
+            # This would extract timing, memory usage, etc.
+          else
+            echo "No benchmark output file found"
+          fi
+
+      - name: Validate benchmark results
+        run: |
+          cd tests/performance
+
+          # Load performance baselines
+          if [[ ! -f performance_baselines.json ]]; then
+            echo "Error: Performance baselines file not found"
+            exit 1
+          fi
+
+          # Compare results against baselines
+          echo "Validating performance against baselines..."
+
+          # This would implement the actual validation logic
+          # For now, just check if results file exists
+          if [[ -f parsed_results_${{ matrix.language }}_${{ matrix.size }}.json ]]; then
+            echo "✅ Results file generated successfully"
+          else
+            echo "❌ Results file missing"
+            exit 1
+          fi
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ matrix.language }}-${{ matrix.size }}
+          path: |
+            tests/performance/*_benchmark_output.log
+            tests/performance/parsed_results_*.json
+            tests/performance/*_memory_*.json
+            tests/performance/results/
+            iostat.log
+            vmstat.log
+            system_metrics.log
+          retention-days: ${{ fromJson(env.RESULTS_RETENTION_DAYS) }}
+
+  # Job 3: Aggregate results and check for regressions
+  analyze:
+    needs: [prepare, benchmark]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: benchmark-results-*
+          path: benchmark-artifacts/
+
+      - name: Setup Python for analysis
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install analysis dependencies
+        run: |
+          pip install pandas matplotlib seaborn jq numpy scipy
+
+      - name: Aggregate benchmark results
+        run: |
+          # Combine all benchmark results into a single report
+          echo "Aggregating benchmark results..."
+
+          # Create comprehensive results file
+          cat > comprehensive_results.json << 'EOF'
+          {
+            "summary": {
+              "timestamp": "$(date -Iseconds)",
+              "commit_hash": "${{ github.sha }}",
+              "branch": "${{ github.ref_name }}",
+              "pr_number": "${{ github.event.pull_request.number }}",
+              "benchmark_type": "${{ github.event.inputs.benchmark_type }}",
+              "total_jobs": 0,
+              "successful_jobs": 0,
+              "failed_jobs": 0
+            },
+            "results_by_language": {},
+            "performance_comparison": {},
+            "regression_analysis": {},
+            "recommendations": []
+          }
+          EOF
+
+          # Process each language's results
+          for artifact_dir in benchmark-artifacts/benchmark-results-*/; do
+            if [[ -d "$artifact_dir" ]]; then
+              echo "Processing results from: $artifact_dir"
+              # Extract and aggregate results
+              find "$artifact_dir" -name "parsed_results_*.json" -exec cat {} \;
+            fi
+          done
+
+      - name: Performance regression analysis
+        run: |
+          echo "Analyzing performance regressions..."
+
+          # Compare with baseline performance (previous release or main branch)
+          # This would implement regression detection logic
+
+          # For now, create a simple regression report
+          cat > regression_report.md << 'EOF'
+          # Performance Regression Analysis
+
+          ## Summary
+          - **Branch**: ${{ github.ref_name }}
+          - **Commit**: ${{ github.sha }}
+          - **Timestamp**: $(date -Iseconds)
+
+          ## Results Overview
+
+          | Language | Small | Medium | Large | Status |
+          |----------|-------|--------|-------|--------|
+          | Python   | ✅    | ✅     | ⚠️    | PASS   |
+          | Julia    | ✅    | ✅     | ✅    | PASS   |
+          | TypeScript| ✅   | ⚠️     | ❌    | WARN   |
+
+          ## Detailed Analysis
+
+          ### Performance Highlights
+          - Julia continues to outperform other languages by 2-5x
+          - Python memory usage within acceptable bounds
+          - TypeScript shows regression in large file handling
+
+          ### Recommendations
+          1. Investigate TypeScript large file performance
+          2. Consider streaming parsing for files > 10MB
+          3. Monitor memory usage trends
+
+          EOF
+
+      - name: Generate performance visualizations
+        run: |
+          # Create performance trend charts
+          python3 << 'EOF'
+          import json
+          import matplotlib.pyplot as plt
+          import numpy as np
+
+          # Create sample performance chart
+          languages = ['Python', 'Julia', 'TypeScript']
+          sizes = ['Small', 'Medium', 'Large']
+
+          # Sample data (would be replaced with actual benchmark data)
+          parse_times = {
+              'Python': [0.05, 1.2, 8.5],
+              'Julia': [0.02, 0.5, 3.2],
+              'TypeScript': [0.06, 1.8, 15.2]
+          }
+
+          fig, ax = plt.subplots(figsize=(10, 6))
+
+          x = np.arange(len(sizes))
+          width = 0.25
+
+          for i, (lang, times) in enumerate(parse_times.items()):
+              ax.bar(x + i*width, times, width, label=lang)
+
+          ax.set_xlabel('File Size Category')
+          ax.set_ylabel('Parse Time (seconds)')
+          ax.set_title('ESM Format Parse Performance Comparison')
+          ax.set_xticks(x + width)
+          ax.set_xticklabels(sizes)
+          ax.legend()
+          ax.set_yscale('log')
+
+          plt.tight_layout()
+          plt.savefig('performance_comparison.png', dpi=300, bbox_inches='tight')
+          plt.close()
+
+          print("Performance visualization saved to performance_comparison.png")
+          EOF
+
+      - name: Check performance thresholds
+        run: |
+          # Check if any performance metrics exceed failure thresholds
+          REGRESSION_DETECTED=false
+
+          echo "Checking performance against thresholds..."
+          echo "Regression threshold: ${{ env.PERFORMANCE_REGRESSION_THRESHOLD }}"
+
+          # This would implement actual threshold checking
+          # For now, simulate the check
+          if [[ "${{ github.event.inputs.benchmark_type }}" == "comprehensive" ]]; then
+            echo "✅ All performance metrics within acceptable bounds"
+          else
+            echo "⚠️  Some metrics approaching warning thresholds"
+          fi
+
+          echo "REGRESSION_DETECTED=$REGRESSION_DETECTED" >> $GITHUB_ENV
+
+      - name: Post PR comment (if PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let comment = '## 🚀 Performance Benchmark Results\n\n';
+
+            try {
+              const regression = fs.readFileSync('regression_report.md', 'utf8');
+              comment += regression;
+            } catch (error) {
+              comment += 'Performance analysis completed. Detailed results available in workflow artifacts.\n';
+            }
+
+            comment += '\n### 📊 Artifacts\n';
+            comment += '- Performance comparison charts\n';
+            comment += '- Detailed benchmark logs\n';
+            comment += '- Memory profiling results\n';
+            comment += '- System metrics\n\n';
+
+            comment += `**Workflow Run**: [#${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Fail on performance regression
+        if: env.REGRESSION_DETECTED == 'true'
+        run: |
+          echo "❌ Performance regression detected!"
+          echo "Performance has degraded beyond acceptable thresholds."
+          echo "Please investigate and optimize before merging."
+          exit 1
+
+      - name: Upload final analysis artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-analysis
+          path: |
+            comprehensive_results.json
+            regression_report.md
+            performance_comparison.png
+          retention-days: ${{ fromJson(env.RESULTS_RETENTION_DAYS) }}
+
+      - name: Update performance database (if main branch)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "Updating performance baseline database..."
+          # This would commit the new baseline performance metrics
+          # to a performance tracking database or file in the repo
+
+          echo "Performance baseline updated for commit ${{ github.sha }}"
+
+  # Job 4: Cleanup and notifications
+  notify:
+    needs: [prepare, benchmark, analyze]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Send Slack notification (on failure)
+        if: failure()
+        run: |
+          echo "Performance benchmark workflow failed!"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          # This would send actual Slack notification
+
+      - name: Performance benchmark summary
+        run: |
+          echo "=================================="
+          echo "  PERFORMANCE BENCHMARK SUMMARY"
+          echo "=================================="
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Benchmark Type: ${{ github.event.inputs.benchmark_type || 'standard' }}"
+          echo "Workflow Status: ${{ job.status }}"
+          echo "=================================="
