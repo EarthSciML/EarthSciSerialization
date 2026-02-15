@@ -33,6 +33,9 @@ export type { ComponentGraph, ComponentNode, CouplingEdge } from './graph.js'
 // Export pretty-printing utilities
 export { toUnicode, toLatex, toAscii } from './pretty-print.js'
 
+// Export substitution utilities
+export { substitute, substituteInModel, substituteInReactionSystem } from './substitute.js'
+
 // Interactive editor components (SolidJS)
 export * from './interactive-editor/index.js'
 
