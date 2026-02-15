@@ -357,7 +357,10 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
                 type=bc_type,
                 dimensions=bc_data["dimensions"],
                 value=bc_data.get("value"),
-                function=bc_data.get("function")
+                function=bc_data.get("function"),
+                robin_alpha=bc_data.get("robin_alpha"),
+                robin_beta=bc_data.get("robin_beta"),
+                robin_gamma=bc_data.get("robin_gamma")
             )
             domain.boundary_conditions.append(bc)
 
@@ -430,6 +433,11 @@ def _validate_domain(domain: Domain) -> None:
     for i, bc in enumerate(domain.boundary_conditions):
         if bc.type in [BoundaryConditionType.CONSTANT, BoundaryConditionType.DIRICHLET] and bc.value is None:
             errors.append(f"Boundary condition {i+1}: type '{bc.type.value}' requires a value")
+        elif bc.type == BoundaryConditionType.ROBIN:
+            if bc.robin_alpha is None or bc.robin_beta is None:
+                errors.append(f"Boundary condition {i+1}: Robin boundary condition requires robin_alpha and robin_beta coefficients")
+            if bc.robin_gamma is None:
+                errors.append(f"Boundary condition {i+1}: Robin boundary condition requires robin_gamma value")
 
     if errors:
         raise ValueError("Domain validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
