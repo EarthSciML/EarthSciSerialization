@@ -10,27 +10,53 @@ authors = [
     {name = "Chris Tessum", email = "ctessum@uw.edu"}
 ]
 readme = "README.md"
+keywords = ["earth-science", "modeling", "serialization", "atmospheric-chemistry", "climate"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
 license = {file = "LICENSE"}
 requires-python = ">=3.8"
+
 dependencies = [
-    "pytest",
-    "jsonschema",
-    "sympy",
-    "pint",
-    "numpy",
-    "scipy",
-    "matplotlib",
-    "xarray",
-    "netcdf4",
+    "jsonschema>=4.0",
+    "sympy>=1.9",
+    "pint>=0.20",
+    "numpy>=1.20",
+    "scipy>=1.7",
+    "matplotlib>=3.5",
+    "xarray>=0.20",
+    "netcdf4>=1.5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ctessum/EarthSciSerialization"
+Repository = "https://github.com/ctessum/EarthSciSerialization.git"
+Documentation = "https://github.com/ctessum/EarthSciSerialization#readme"
+Issues = "https://github.com/ctessum/EarthSciSerialization/issues"
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "pytest-cov",
-    "black",
-    "flake8",
-    "mypy",
+    "pytest>=6.0",
+    "pytest-cov>=3.0",
+    "black>=22.0",
+    "flake8>=4.0",
+    "mypy>=0.990",
+    "build>=0.8",
+    "twine>=4.0",
+]
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=3.0",
 ]
 simulation = [
     "jupyter",
