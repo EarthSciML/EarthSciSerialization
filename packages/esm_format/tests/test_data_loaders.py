@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 
 # Import the data loading functionality
-from esm_format.data_loaders import NetCDFLoader, JSONLoader, HDF5Loader, create_data_loader
+from esm_format.data_loaders import NetCDFLoader, JSONLoader, HDF5Loader, GRIBLoader, create_data_loader
 from esm_format.types import DataLoader, DataLoaderType
 
 # Try to import xarray for creating test data
@@ -18,6 +18,13 @@ try:
     XARRAY_AVAILABLE = True
 except ImportError:
     XARRAY_AVAILABLE = False
+
+# Try to import cfgrib for GRIB testing
+try:
+    import cfgrib
+    CFGRIB_AVAILABLE = True
+except ImportError:
+    CFGRIB_AVAILABLE = False
 
 
 @pytest.fixture
@@ -1150,3 +1157,176 @@ def test_hdf5_loader_without_backends(monkeypatch):
 
     with pytest.raises(ImportError, match="Either h5py or pytables is required"):
         HDF5Loader(config)
+
+
+# ========================================
+# GRIB Loader Tests
+# ========================================
+
+@pytest.fixture
+def sample_grib_file():
+    """Create a sample GRIB file for testing."""
+    if not CFGRIB_AVAILABLE:
+        pytest.skip("cfgrib not available")
+
+    # Since creating GRIB files programmatically is complex, we'll simulate
+    # the test by creating a mock file path that would normally exist
+    # In a real scenario, you would use actual GRIB test files
+    return Path(tempfile.mkdtemp()) / "sample.grib2"
+
+
+@pytest.fixture
+def sample_grib_data_loader_config():
+    """Sample GRIB data loader configuration."""
+    return DataLoader(
+        name="GRIB_TestData",
+        type=DataLoaderType.GRIB,
+        source="test_data.grib2",
+        variables=["temperature", "pressure"],
+        format_options={
+            "filter_by_keys": {"typeOfLevel": "surface"},
+            "chunks": {"time": 10}
+        }
+    )
+
+
+class TestGRIBLoader:
+    """Tests for GRIB data loading functionality."""
+
+    def test_grib_loader_initialization(self):
+        """Test GRIB loader initialization."""
+        config = DataLoader(
+            name="test",
+            type=DataLoaderType.GRIB,
+            source="test.grib2"
+        )
+
+        if CFGRIB_AVAILABLE:
+            loader = GRIBLoader(config)
+            assert loader.config == config
+            assert loader.dataset is None
+        else:
+            with pytest.raises(ImportError, match="cfgrib and xarray are required"):
+                GRIBLoader(config)
+
+    def test_grib_loader_wrong_type(self):
+        """Test GRIB loader with wrong data loader type."""
+        config = DataLoader(
+            name="test",
+            type=DataLoaderType.JSON,  # Wrong type
+            source="test.grib2"
+        )
+
+        if CFGRIB_AVAILABLE:
+            with pytest.raises(ValueError, match="Expected DataLoaderType.GRIB"):
+                GRIBLoader(config)
+
+    @pytest.mark.skipif(not CFGRIB_AVAILABLE, reason="cfgrib not available")
+    def test_grib_loader_file_not_found(self):
+        """Test GRIB loader with non-existent file."""
+        config = DataLoader(
+            name="test",
+            type=DataLoaderType.GRIB,
+            source="nonexistent.grib2"
+        )
+
+        loader = GRIBLoader(config)
+        with pytest.raises(FileNotFoundError, match="GRIB file not found"):
+            loader.load()
+
+    @pytest.mark.skipif(not CFGRIB_AVAILABLE, reason="cfgrib not available")
+    def test_grib_loader_methods_before_load(self):
+        """Test GRIB loader methods that require loaded data."""
+        config = DataLoader(
+            name="test",
+            type=DataLoaderType.GRIB,
+            source="test.grib2"
+        )
+
+        loader = GRIBLoader(config)
+
+        # These methods should raise RuntimeError before loading
+        with pytest.raises(RuntimeError, match="Dataset must be loaded"):
+            loader.get_parameter_info()
+
+        with pytest.raises(RuntimeError, match="Dataset must be loaded"):
+            loader.get_grid_info()
+
+        with pytest.raises(RuntimeError, match="Dataset must be loaded"):
+            loader.get_time_info()
+
+        with pytest.raises(RuntimeError, match="Dataset must be loaded"):
+            loader.list_available_parameters()
+
+        with pytest.raises(RuntimeError, match="Dataset must be loaded"):
+            loader.extract_ensemble_info()
+
+        with pytest.raises(RuntimeError, match="Dataset must be loaded"):
+            loader.validate_grib_conventions()
+
+    @pytest.mark.skipif(not CFGRIB_AVAILABLE, reason="cfgrib not available")
+    def test_grib_loader_close(self):
+        """Test GRIB loader close functionality."""
+        config = DataLoader(
+            name="test",
+            type=DataLoaderType.GRIB,
+            source="test.grib2"
+        )
+
+        loader = GRIBLoader(config)
+
+        # Should be safe to close even without loading
+        loader.close()
+        assert loader.dataset is None
+
+    @pytest.mark.skipif(not CFGRIB_AVAILABLE, reason="cfgrib not available")
+    def test_grib_loader_configuration(self, sample_grib_data_loader_config):
+        """Test GRIB loader configuration handling."""
+        loader = GRIBLoader(sample_grib_data_loader_config)
+
+        # Check that configuration is properly stored
+        assert loader.config.name == "GRIB_TestData"
+        assert loader.config.type == DataLoaderType.GRIB
+        assert loader.config.variables == ["temperature", "pressure"]
+        assert "filter_by_keys" in loader.config.format_options
+        assert "chunks" in loader.config.format_options
+
+
+class TestGRIBLoaderFactory:
+    """Tests for GRIB loader factory integration."""
+
+    @pytest.mark.skipif(not CFGRIB_AVAILABLE, reason="cfgrib not available")
+    def test_create_grib_loader(self, sample_grib_data_loader_config):
+        """Test creating GRIB loader through factory."""
+        loader = create_data_loader(sample_grib_data_loader_config)
+        assert isinstance(loader, GRIBLoader)
+        assert loader.config == sample_grib_data_loader_config
+
+    @pytest.mark.skipif(not CFGRIB_AVAILABLE, reason="cfgrib not available")
+    def test_factory_supports_grib(self):
+        """Test that factory now supports GRIB loaders."""
+        config = DataLoader(
+            name="test",
+            type=DataLoaderType.GRIB,
+            source="test.grib2"
+        )
+
+        # Should not raise "not registered" error
+        loader = create_data_loader(config)
+        assert isinstance(loader, GRIBLoader)
+
+
+# Test missing GRIB dependencies
+def test_grib_loader_without_cfgrib(monkeypatch):
+    """Test GRIB loader when cfgrib is not available."""
+    # Mock cfgrib as unavailable
+    monkeypatch.setattr("esm_format.data_loaders.CFGRIB_AVAILABLE", False)
+
+    config = DataLoader(
+        name="test",
+        type=DataLoaderType.GRIB,
+        source="test.grib2"
+    )
+
+    with pytest.raises(ImportError, match="cfgrib and xarray are required"):
+        GRIBLoader(config)

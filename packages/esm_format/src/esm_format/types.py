@@ -149,6 +149,7 @@ class DataLoaderType(Enum):
     HDF5 = "hdf5"
     BINARY = "binary"
     DATABASE = "database"
+    GRIB = "grib"
 
 
 @dataclass

@@ -45,6 +45,13 @@ try:
 except ImportError:
     PYTABLES_AVAILABLE = False
 
+try:
+    import cfgrib
+    import xarray as xr
+    CFGRIB_AVAILABLE = True
+except ImportError:
+    CFGRIB_AVAILABLE = False
+
 from .types import DataLoader, DataLoaderType
 
 
@@ -1511,7 +1518,356 @@ class HDF5Loader:
         self.data = None
 
 
-def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader]:
+class GRIBLoader:
+    """
+    GRIB data loader supporting GRIB1 and GRIB2 meteorological data formats.
+
+    Provides comprehensive support for GRIB files including parameter tables,
+    grid definitions, ensemble data handling, and metadata extraction. Essential
+    for weather and climate model data ingestion.
+    """
+
+    def __init__(self, data_loader: DataLoader):
+        """
+        Initialize GRIB loader with configuration.
+
+        Args:
+            data_loader: DataLoader configuration object
+
+        Raises:
+            ImportError: If cfgrib and xarray are not available
+            ValueError: If data_loader type is not GRIB
+        """
+        if not CFGRIB_AVAILABLE:
+            raise ImportError("cfgrib and xarray are required for GRIB loading. "
+                            "Install with: pip install cfgrib xarray")
+
+        if data_loader.type != DataLoaderType.GRIB:
+            raise ValueError(f"Expected DataLoaderType.GRIB, got {data_loader.type}")
+
+        self.config = data_loader
+        self.dataset: Optional[xr.Dataset] = None
+
+    def load(self) -> xr.Dataset:
+        """
+        Load the GRIB dataset from the configured source.
+
+        Returns:
+            xarray Dataset containing the loaded GRIB data
+
+        Raises:
+            FileNotFoundError: If the source file doesn't exist
+            OSError: If the file can't be opened or read
+            ValueError: If requested variables are not found
+        """
+        source_path = Path(self.config.source)
+
+        if not source_path.exists():
+            raise FileNotFoundError(f"GRIB file not found: {source_path}")
+
+        try:
+            # Load with cfgrib through xarray
+            format_options = self.config.format_options or {}
+
+            # Extract cfgrib-specific options
+            backend_kwargs = format_options.get('backend_kwargs', {})
+            filter_by_keys = format_options.get('filter_by_keys', {})
+            chunks = format_options.get('chunks', None)
+
+            # Set up backend kwargs for cfgrib
+            if filter_by_keys:
+                backend_kwargs['filter_by_keys'] = filter_by_keys
+
+            # Load the dataset
+            self.dataset = xr.open_dataset(
+                source_path,
+                engine='cfgrib',
+                backend_kwargs=backend_kwargs,
+                chunks=chunks
+            )
+
+            # Filter to requested variables if specified
+            if self.config.variables:
+                available_vars = set(self.dataset.data_vars.keys())
+                requested_vars = set(self.config.variables)
+
+                # Check for missing variables
+                missing_vars = requested_vars - available_vars
+                if missing_vars:
+                    raise ValueError(f"Requested variables not found in GRIB dataset: {missing_vars}")
+
+                # Select only requested variables, keep all coordinates
+                self.dataset = self.dataset[list(requested_vars)]
+
+            return self.dataset
+
+        except ValueError:
+            # Re-raise ValueError without wrapping
+            raise
+        except Exception as e:
+            raise OSError(f"Failed to load GRIB file {source_path}: {e}") from e
+
+    def get_parameter_info(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Extract GRIB parameter information for all variables.
+
+        Returns:
+            Dictionary mapping variable names to their GRIB parameter metadata
+
+        Raises:
+            RuntimeError: If dataset must be loaded before extracting parameter info
+        """
+        if self.dataset is None:
+            raise RuntimeError("Dataset must be loaded before extracting parameter info")
+
+        param_info = {}
+
+        for var_name, var in self.dataset.data_vars.items():
+            # Extract GRIB-specific attributes
+            attrs = dict(var.attrs) if hasattr(var, 'attrs') else {}
+
+            info = {
+                'dimensions': list(var.dims),
+                'shape': var.shape,
+                'dtype': str(var.dtype),
+                'long_name': attrs.get('long_name', ''),
+                'units': attrs.get('units', ''),
+                'standard_name': attrs.get('standard_name', ''),
+                'GRIB_paramId': attrs.get('GRIB_paramId', ''),
+                'GRIB_shortName': attrs.get('GRIB_shortName', ''),
+                'GRIB_name': attrs.get('GRIB_name', ''),
+                'GRIB_cfName': attrs.get('GRIB_cfName', ''),
+                'GRIB_cfVarName': attrs.get('GRIB_cfVarName', ''),
+                'GRIB_dataType': attrs.get('GRIB_dataType', ''),
+                'GRIB_numberOfPoints': attrs.get('GRIB_numberOfPoints', ''),
+                'GRIB_typeOfLevel': attrs.get('GRIB_typeOfLevel', ''),
+                'GRIB_level': attrs.get('GRIB_level', '')
+            }
+
+            # Add coordinate information
+            coords = {}
+            for dim in var.dims:
+                if dim in self.dataset.coords:
+                    coord = self.dataset.coords[dim]
+                    coord_attrs = dict(coord.attrs) if hasattr(coord, 'attrs') else {}
+                    coords[dim] = {
+                        'size': coord.size,
+                        'units': coord_attrs.get('units', ''),
+                        'long_name': coord_attrs.get('long_name', ''),
+                        'standard_name': coord_attrs.get('standard_name', '')
+                    }
+            info['coordinates'] = coords
+
+            param_info[var_name] = info
+
+        return param_info
+
+    def get_grid_info(self) -> Dict[str, Any]:
+        """
+        Extract GRIB grid definition information.
+
+        Returns:
+            Dictionary containing grid information and metadata
+
+        Raises:
+            RuntimeError: If dataset must be loaded before extracting grid info
+        """
+        if self.dataset is None:
+            raise RuntimeError("Dataset must be loaded before extracting grid info")
+
+        grid_info = {
+            'grid_type': 'unknown',
+            'dimensions': {},
+            'coordinate_info': {},
+            'global_attributes': {}
+        }
+
+        # Extract global attributes
+        if hasattr(self.dataset, 'attrs'):
+            grid_info['global_attributes'] = dict(self.dataset.attrs)
+
+        # Analyze coordinate dimensions
+        for coord_name, coord in self.dataset.coords.items():
+            coord_attrs = dict(coord.attrs) if hasattr(coord, 'attrs') else {}
+            grid_info['dimensions'][coord_name] = coord.size
+            grid_info['coordinate_info'][coord_name] = {
+                'size': coord.size,
+                'dtype': str(coord.dtype),
+                'min_value': float(coord.min()) if coord.size > 0 else None,
+                'max_value': float(coord.max()) if coord.size > 0 else None,
+                'units': coord_attrs.get('units', ''),
+                'long_name': coord_attrs.get('long_name', ''),
+                'standard_name': coord_attrs.get('standard_name', ''),
+            }
+
+        # Determine grid type based on coordinates
+        if 'latitude' in self.dataset.coords and 'longitude' in self.dataset.coords:
+            grid_info['grid_type'] = 'regular_lat_lon'
+        elif 'x' in self.dataset.coords and 'y' in self.dataset.coords:
+            grid_info['grid_type'] = 'projected'
+
+        return grid_info
+
+    def get_time_info(self) -> Dict[str, Any]:
+        """
+        Extract temporal information from the GRIB dataset.
+
+        Returns:
+            Dictionary containing time dimension information
+
+        Raises:
+            RuntimeError: If dataset must be loaded before extracting time info
+        """
+        if self.dataset is None:
+            raise RuntimeError("Dataset must be loaded before extracting time info")
+
+        time_info = {}
+
+        if 'time' in self.dataset.coords:
+            time_coord = self.dataset.coords['time']
+            time_attrs = dict(time_coord.attrs) if hasattr(time_coord, 'attrs') else {}
+
+            time_info = {
+                'num_times': time_coord.size,
+                'start_time': str(time_coord.values[0]) if time_coord.size > 0 else None,
+                'end_time': str(time_coord.values[-1]) if time_coord.size > 0 else None,
+                'units': time_attrs.get('units', ''),
+                'calendar': time_attrs.get('calendar', ''),
+                'long_name': time_attrs.get('long_name', ''),
+            }
+
+            # Calculate time step if possible
+            if time_coord.size > 1:
+                time_diff = time_coord.values[1] - time_coord.values[0]
+                time_info['time_step'] = str(time_diff)
+
+        return time_info
+
+    def list_available_parameters(self) -> List[Dict[str, str]]:
+        """
+        List all available parameters in the GRIB file.
+
+        Returns:
+            List of dictionaries containing parameter information
+
+        Raises:
+            RuntimeError: If dataset must be loaded before listing parameters
+        """
+        if self.dataset is None:
+            raise RuntimeError("Dataset must be loaded before listing parameters")
+
+        parameters = []
+
+        for var_name, var in self.dataset.data_vars.items():
+            attrs = dict(var.attrs) if hasattr(var, 'attrs') else {}
+
+            param_info = {
+                'variable_name': var_name,
+                'long_name': attrs.get('long_name', ''),
+                'units': attrs.get('units', ''),
+                'GRIB_shortName': attrs.get('GRIB_shortName', ''),
+                'GRIB_paramId': str(attrs.get('GRIB_paramId', '')),
+                'GRIB_typeOfLevel': attrs.get('GRIB_typeOfLevel', ''),
+                'dimensions': list(var.dims),
+                'shape': var.shape
+            }
+
+            parameters.append(param_info)
+
+        return parameters
+
+    def extract_ensemble_info(self) -> Dict[str, Any]:
+        """
+        Extract ensemble information if available in the GRIB data.
+
+        Returns:
+            Dictionary containing ensemble metadata
+
+        Raises:
+            RuntimeError: If dataset must be loaded before extracting ensemble info
+        """
+        if self.dataset is None:
+            raise RuntimeError("Dataset must be loaded before extracting ensemble info")
+
+        ensemble_info = {
+            'has_ensemble': False,
+            'ensemble_dimension': None,
+            'num_members': 0,
+            'member_info': []
+        }
+
+        # Check for ensemble dimensions
+        if 'number' in self.dataset.dims:
+            ensemble_info['has_ensemble'] = True
+            ensemble_info['ensemble_dimension'] = 'number'
+            ensemble_info['num_members'] = self.dataset.dims['number']
+
+            # Get ensemble member information
+            if 'number' in self.dataset.coords:
+                number_coord = self.dataset.coords['number']
+                for i, member_num in enumerate(number_coord.values):
+                    ensemble_info['member_info'].append({
+                        'index': i,
+                        'number': int(member_num)
+                    })
+
+        return ensemble_info
+
+    def validate_grib_conventions(self) -> Dict[str, Any]:
+        """
+        Validate GRIB format conventions and metadata completeness.
+
+        Returns:
+            Dictionary with validation results and warnings
+        """
+        if self.dataset is None:
+            raise RuntimeError("Dataset must be loaded before validation")
+
+        validation_result = {
+            'grib_compliant': True,
+            'warnings': [],
+            'errors': [],
+            'metadata': {}
+        }
+
+        # Check for essential GRIB attributes in variables
+        for var_name, var in self.dataset.data_vars.items():
+            attrs = dict(var.attrs) if hasattr(var, 'attrs') else {}
+
+            # Check for essential GRIB metadata
+            if not attrs.get('GRIB_paramId'):
+                validation_result['warnings'].append(f"Variable '{var_name}' missing GRIB_paramId")
+
+            if not attrs.get('GRIB_shortName'):
+                validation_result['warnings'].append(f"Variable '{var_name}' missing GRIB_shortName")
+
+            if not attrs.get('units'):
+                validation_result['warnings'].append(f"Variable '{var_name}' missing units")
+
+            if not attrs.get('GRIB_typeOfLevel'):
+                validation_result['warnings'].append(f"Variable '{var_name}' missing GRIB_typeOfLevel")
+
+        # Check coordinate completeness
+        required_coords = ['latitude', 'longitude']
+        for coord in required_coords:
+            if coord not in self.dataset.coords:
+                validation_result['warnings'].append(f"Missing coordinate: {coord}")
+
+        # Set overall compliance
+        validation_result['grib_compliant'] = len(validation_result['errors']) == 0
+        validation_result['metadata']['num_variables'] = len(self.dataset.data_vars)
+        validation_result['metadata']['num_coordinates'] = len(self.dataset.coords)
+
+        return validation_result
+
+    def close(self):
+        """Close the dataset and free resources."""
+        if self.dataset is not None:
+            self.dataset.close()
+            self.dataset = None
+
+
+def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader, GRIBLoader]:
     """
     Factory function to create appropriate data loader based on type.
 

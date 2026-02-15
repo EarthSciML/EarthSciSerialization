@@ -14,7 +14,7 @@ from importlib import import_module
 import warnings
 
 from .types import DataLoader, DataLoaderType
-from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader
+from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader, GRIBLoader
 
 
 class DataLoaderRegistry:
@@ -67,6 +67,14 @@ class DataLoaderRegistry:
             HDF5Loader,
             extensions=['.h5', '.hdf5', '.hdf'],
             mime_types=['application/x-hdf', 'application/x-hdf5']
+        )
+
+        # Register GRIB loader
+        self.register_loader(
+            DataLoaderType.GRIB,
+            GRIBLoader,
+            extensions=['.grib', '.grib1', '.grib2', '.grb', '.grb2'],
+            mime_types=['application/x-grib']
         )
 
     def register_loader(
