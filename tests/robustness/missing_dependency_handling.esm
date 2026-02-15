@@ -1,0 +1,446 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MissingDependencyHandling",
+    "description": "Test handling of missing variable references, broken dependencies, unresolved symbols, and dependency resolution failures",
+    "authors": ["Dependency Resolution Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "dependencies", "references", "resolution", "missing_variables"]
+  },
+  "models": {
+    "BrokenDependencyModel": {
+      "reference": { "notes": "Model with intentionally broken variable dependencies" },
+      "variables": {
+        "valid_var": { "type": "parameter", "units": "mol/mol", "default": 1e-9 },
+        "depends_on_missing": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              "valid_var",
+              "completely_missing_variable",
+              "another_nonexistent_var"
+            ]
+          },
+          "dependency_resolution": {
+            "missing_variables": {
+              "completely_missing_variable": { "fallback": 0.0, "units": "mol/mol" },
+              "another_nonexistent_var": { "fallback": 1e-12, "units": "mol/mol" }
+            },
+            "resolution_strategy": "substitute_fallbacks"
+          }
+        },
+        "circular_dependency_a": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "*",
+            "args": [
+              "circular_dependency_b",
+              2.0
+            ]
+          },
+          "cycle_detection": true
+        },
+        "circular_dependency_b": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              "circular_dependency_a",
+              1.0
+            ]
+          },
+          "cycle_detection": true,
+          "cycle_breaker": {
+            "op": "*",
+            "args": ["valid_var", 3.0]
+          }
+        },
+        "cross_model_missing": {
+          "type": "algebraic",
+          "units": "kg/kg",
+          "expression": {
+            "op": "+",
+            "args": [
+              "NonexistentModel.phantom_variable",
+              "AnotherMissingModel.ghost_parameter",
+              { "op": "*", "args": ["valid_var", 1000] }
+            ]
+          },
+          "cross_model_resolution": {
+            "missing_models": {
+              "NonexistentModel": {
+                "fallback_type": "placeholder_model",
+                "variables": {
+                  "phantom_variable": { "type": "parameter", "units": "kg/kg", "default": 1e-6 }
+                }
+              },
+              "AnotherMissingModel": {
+                "fallback_type": "zero_model",
+                "default_value": 0.0
+              }
+            }
+          }
+        },
+        "partial_dependency_chain": {
+          "type": "algebraic",
+          "units": "Pa",
+          "expression": {
+            "op": "*",
+            "args": [
+              "intermediate_var_1",
+              { "op": "+", "args": ["intermediate_var_2", "missing_link"] }
+            ]
+          },
+          "dependency_chain": [
+            { "var": "intermediate_var_1", "status": "missing", "fallback": 101325.0 },
+            { "var": "intermediate_var_2", "status": "missing", "fallback": 100.0 },
+            { "var": "missing_link", "status": "missing", "fallback": 0.0 }
+          ]
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["valid_var"], "wrt": "t" },
+          "rhs": {
+            "op": "dependency_safe_eval",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "resolve_or_fallback", "args": [
+                  "depends_on_missing",
+                  { "fallback": { "op": "*", "args": ["valid_var", -0.001] } }
+                ]},
+                { "op": "cycle_safe_eval", "args": [
+                  "circular_dependency_a",
+                  { "max_iterations": 10, "convergence_tolerance": 1e-10 }
+                ]},
+                { "op": "cross_model_safe", "args": [
+                  "cross_model_missing",
+                  { "timeout_ms": 1000, "default_on_timeout": 1e-9 }
+                ]}
+              ]},
+              { "validation": {
+                "dependency_completeness": 0.8,
+                "allow_partial_resolution": true,
+                "warn_on_fallbacks": true
+              }}
+            ]
+          }
+        }
+      ]
+    },
+    "UnresolvedReferenceModel": {
+      "reference": { "notes": "Model testing various types of unresolved references" },
+      "variables": {
+        "anchor_var": { "type": "parameter", "units": "K", "default": 298.15 },
+        "scoped_reference_missing": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              "BrokenDependencyModel.nonexistent_variable",
+              { "op": "+", "args": ["anchor_var", 273.15] }
+            ]
+          },
+          "scope_resolution": {
+            "missing_scoped_vars": {
+              "BrokenDependencyModel.nonexistent_variable": {
+                "fallback": "BrokenDependencyModel.valid_var",
+                "warn": true
+              }
+            },
+            "scope_search_order": ["local", "parent", "global", "fallback"]
+          }
+        },
+        "dynamic_reference_failure": {
+          "type": "algebraic",
+          "units": "m/s",
+          "expression": {
+            "op": "dynamic_lookup",
+            "args": [
+              { "variable_name": "wind_speed_at_runtime" },
+              { "context": "atmospheric_data" },
+              { "fallback_chain": ["wind_u", "wind_v", "default_wind"] }
+            ]
+          },
+          "dynamic_resolution": {
+            "lookup_timeout": 500,
+            "cache_misses": "use_last_known",
+            "complete_failure": { "op": "*", "args": [0.0, "anchor_var"] }
+          }
+        },
+        "nested_missing_references": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "nested_resolve",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "resolve", "args": ["level1.missing_var"] },
+                { "op": "resolve", "args": [
+                  { "op": "resolve", "args": ["level2.also_missing"] },
+                  "level3.deeply_missing"
+                ]}
+              ]}
+            ]
+          },
+          "nested_resolution": {
+            "max_depth": 5,
+            "resolution_cache": true,
+            "fallback_strategy": "breadth_first",
+            "default_substitutions": {
+              "level1.missing_var": 1.0,
+              "level2.also_missing": 2.0,
+              "level3.deeply_missing": 3.0
+            }
+          }
+        }
+      }
+    },
+    "LazyResolutionModel": {
+      "reference": { "notes": "Model that tests lazy evaluation and deferred dependency resolution" },
+      "variables": {
+        "base_temp": { "type": "parameter", "units": "K", "default": 288.15 },
+        "lazy_dependent": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "lazy_eval",
+            "args": [
+              { "op": "*", "args": [
+                "deferred_calculation",
+                { "op": "if_available", "args": [
+                  "optional_enhancement",
+                  { "op": "+", "args": ["optional_enhancement", 1.0] },
+                  1.0
+                ]}
+              ]}
+            ]
+          },
+          "lazy_evaluation": {
+            "defer_until_needed": true,
+            "cache_results": true,
+            "invalidation_triggers": ["base_temp"],
+            "missing_dependency_behavior": "defer_evaluation"
+          }
+        },
+        "conditional_dependency": {
+          "type": "algebraic",
+          "units": "mol/mol",
+          "expression": {
+            "op": "conditional_resolve",
+            "condition": { "op": ">", "args": ["base_temp", 300.0] },
+            "true_branch": {
+              "op": "*",
+              "args": ["high_temp_species", 1.5]
+            },
+            "false_branch": {
+              "op": "*",
+              "args": ["low_temp_species", 0.8]
+            },
+            "fallback": {
+              "op": "*",
+              "args": [1e-12, { "op": "/", "args": ["base_temp", 298.15] }]
+            }
+          },
+          "conditional_resolution": {
+            "evaluate_all_branches": false,
+            "missing_vars_in_unused_branches": "ignore",
+            "missing_vars_in_active_branch": "use_fallback",
+            "fallback_vars": {
+              "high_temp_species": 2e-9,
+              "low_temp_species": 5e-10
+            }
+          }
+        }
+      }
+    }
+  },
+  "reaction_systems": {
+    "IncompleteChemistry": {
+      "coupletype": "MissingDependencyCoupler",
+      "reference": { "notes": "Chemistry system with missing species and parameter references" },
+      "species": Object.fromEntries(
+        Array.from({length: 50}, (_, i) => [
+          `EXISTING_SPECIES_${i}`,
+          {
+            "units": "mol/mol",
+            "default": Math.random() * 1e-12,
+            "description": `Existing species ${i}`
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 25}, (_, i) => [
+          `EXISTING_PARAM_${i}`,
+          {
+            "units": "1/s",
+            "default": Math.random() * 1e-6,
+            "description": `Existing parameter ${i}`
+          }
+        ])
+      ),
+      "reactions": [
+        ...Array.from({length: 100}, (_, i) => ({
+          "id": `MISSING_DEP_R_${i}`,
+          "name": `reaction_with_missing_deps_${i}`,
+          "substrates": [
+            { "species": i % 2 === 0 ? `EXISTING_SPECIES_${i % 50}` : `MISSING_SPECIES_${i}`, "stoichiometry": 1 },
+            { "species": i % 3 === 0 ? `EXISTING_SPECIES_${(i + 10) % 50}` : `PHANTOM_SPECIES_${i}`, "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": i % 4 === 0 ? `EXISTING_SPECIES_${(i + 25) % 50}` : `NONEXISTENT_PRODUCT_${i}`, "stoichiometry": 1 }
+          ],
+          "rate": {
+            "op": "*",
+            "args": [
+              i % 5 === 0 ? `EXISTING_PARAM_${i % 25}` : `MISSING_RATE_PARAM_${i}`,
+              { "op": "arrhenius", "args": [298.15, i * 100 + 1000] }
+            ]
+          },
+          "dependency_resolution": {
+            "missing_species": {
+              "default_concentration": 0.0,
+              "warn_on_missing": true,
+              "auto_create": false
+            },
+            "missing_parameters": {
+              "default_value": 1e-12,
+              "units": "1/s",
+              "estimation_method": "similar_reactions"
+            }
+          }
+        }))
+      ],
+      "dependency_management": {
+        "missing_species_handling": "create_placeholder",
+        "missing_parameter_handling": "estimate_from_similar",
+        "broken_references": "substitute_defaults",
+        "validation_level": "warn_only",
+        "auto_repair": true,
+        "repair_log": "detailed"
+      }
+    }
+  },
+  "data_loaders": {
+    "BrokenDataLoader": {
+      "type": "dependency_failure_simulation",
+      "loader_id": "BROKEN_DEPS",
+      "config": {
+        "simulate_missing_files": true,
+        "broken_reference_rate": 0.3,
+        "network_failures": true,
+        "partial_data_corruption": true
+      },
+      "provides": {
+        "unreliable_temperature": {
+          "units": "K",
+          "description": "Temperature with unreliable data dependencies",
+          "dependency_chain": [
+            "external_sensor_1",
+            "backup_sensor_2",
+            "model_fallback"
+          ]
+        },
+        "missing_pressure_data": {
+          "units": "Pa",
+          "description": "Pressure data with missing dependencies",
+          "missing_dependencies": ["calibration_constants", "sensor_metadata"]
+        },
+        "partial_wind_field": {
+          "units": "m/s",
+          "description": "Wind field with partial dependency resolution",
+          "incomplete_dependencies": {
+            "u_component": "available",
+            "v_component": "missing",
+            "w_component": "corrupted"
+          }
+        }
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "fault_tolerant_map",
+      "from": "BrokenDataLoader.unreliable_temperature",
+      "to": "BrokenDependencyModel.valid_var",
+      "dependency_handling": {
+        "missing_source": "use_last_known_good",
+        "stale_data_threshold": "PT30M",
+        "fallback_value": 288.15
+      }
+    },
+    {
+      "type": "partial_coupling",
+      "systems": ["BrokenDependencyModel", "UnresolvedReferenceModel"],
+      "require_complete_resolution": false,
+      "minimum_resolution_rate": 0.7,
+      "degraded_mode": {
+        "reduced_functionality": true,
+        "simplified_calculations": true,
+        "increased_uncertainty": 2.0
+      }
+    },
+    {
+      "type": "dependency_injection",
+      "target": "IncompleteChemistry",
+      "injected_dependencies": {
+        "missing_species": {
+          "MISSING_SPECIES_0": { "units": "mol/mol", "default": 1e-15 },
+          "PHANTOM_SPECIES_1": { "units": "mol/mol", "default": 5e-14 },
+          "NONEXISTENT_PRODUCT_2": { "units": "mol/mol", "default": 2e-13 }
+        },
+        "missing_parameters": {
+          "MISSING_RATE_PARAM_0": { "units": "1/s", "default": 1e-8 },
+          "MISSING_RATE_PARAM_1": { "units": "1/s", "default": 3e-7 }
+        }
+      },
+      "injection_policy": {
+        "create_on_demand": true,
+        "validate_injected": true,
+        "log_injections": true
+      }
+    }
+  ],
+  "domain": {
+    "temporal": {
+      "start": "2024-10-01T00:00:00Z",
+      "end": "2024-10-01T12:00:00Z",
+      "resolution": "PT15M"
+    },
+    "spatial": {
+      "lon": { "min": -2.0, "max": 2.0, "grid_spacing": 1.0, "units": "degrees" },
+      "lat": { "min": -2.0, "max": 2.0, "grid_spacing": 1.0, "units": "degrees" }
+    },
+    "dependency_resolution": {
+      "resolution_timeout": "PT10S",
+      "max_resolution_attempts": 3,
+      "dependency_cache_size": 1000,
+      "lazy_evaluation": true,
+      "parallel_resolution": true,
+      "resolution_logging": "verbose",
+      "fallback_strategies": [
+        "use_defaults",
+        "interpolate_from_neighbors",
+        "use_historical_data",
+        "model_estimation",
+        "zero_substitution"
+      ]
+    }
+  },
+  "solver": {
+    "strategy": "robust_dependency_aware",
+    "config": {
+      "dependency_validation": "runtime",
+      "missing_dependency_tolerance": 0.3,
+      "resolution_parallelism": 8,
+      "dependency_caching": true,
+      "graceful_degradation": true,
+      "diagnostic_dependencies": true
+    }
+  }
+}

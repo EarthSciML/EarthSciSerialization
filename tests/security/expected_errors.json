@@ -94,5 +94,77 @@
     "structural_errors": [],
     "is_valid": false,
     "security_notes": "Unicode homograph attacks and zero-width characters in identifiers should be detected and rejected"
+  },
+
+  "mega_payload_attack.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "performance_notes": "Should handle very large payloads (>100MB) with reasonable memory usage and parsing time limits",
+    "security_notes": "Memory exhaustion attacks with massive arrays and repeated content should be detected and mitigated"
+  },
+
+  "schema_bypass_attempts.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/TestModel/equations/0/rhs/op",
+        "message": "'call' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "security_notes": "JavaScript prototype pollution attempts and reserved identifiers should be rejected"
+  },
+
+  "excessive_nesting_bomb.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/DeepModel/equations/0/rhs/op",
+        "message": "'nested_chain' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "security_notes": "Deeply nested expressions (>1000 levels) should be rejected to prevent parser bombing"
+  },
+
+  "unicode_normalization_attack.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": false,
+    "security_notes": "Unicode normalization forms that create visually identical but different identifiers should be detected and rejected"
+  },
+
+  "json_polyglot_attack.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/PolyglotModel/variables/script_like/expression/op",
+        "message": "'eval_attempt' is not a valid operator",
+        "keyword": "enum"
+      },
+      {
+        "path": "/models/PolyglotModel/equations/0/rhs/op",
+        "message": "'unsafe_eval' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "security_notes": "Polyglot attacks with content interpretable as other formats (HTML, XML, JavaScript) should be sanitized"
+  },
+
+  "billion_laughs_json.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/ExpansionModel/variables/lol2/expression/op",
+        "message": "'concat' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "security_notes": "Exponential expansion attacks (billion laughs) should be detected and resource consumption limited"
   }
 }

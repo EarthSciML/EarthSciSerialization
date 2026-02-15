@@ -1,0 +1,298 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "PartialCorruptionRecovery",
+    "description": "Test recovery from partial file corruption scenarios including incomplete JSON, malformed numbers, and truncated structures",
+    "authors": ["Error Recovery Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "corruption", "recovery", "error_handling", "resilience"],
+    "corruption_simulation": {
+      "type": "intentional_test_corruption",
+      "scenarios": ["truncated_json", "malformed_numbers", "missing_brackets", "invalid_unicode", "partial_overwrites"]
+    }
+  },
+  "models": {
+    "CorruptionToleranceModel": {
+      "reference": { "notes": "Model with redundant data structures for corruption recovery testing" },
+      "variables": {
+        "primary_var": { "type": "parameter", "units": "mol/mol", "default": 1e-9 },
+        "backup_var": { "type": "parameter", "units": "mol/mol", "default": 1e-9 },
+        "checksum_var": { "type": "parameter", "units": "1", "default": 0.0 },
+        "corrupted_number_test": { "type": "parameter", "units": "1", "default": 1.7976931348623157e+308 },
+        "malformed_float_test": { "type": "parameter", "units": "1", "default": "INF" },
+        "nan_handling_test": { "type": "parameter", "units": "1", "default": "NaN" },
+        "extreme_precision_test": { "type": "parameter", "units": "1", "default": 1.23456789012345678901234567890123456789e-323 },
+        "recovery_expression": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              { "op": "if_valid", "args": [
+                "primary_var",
+                "primary_var",
+                "backup_var"
+              ]},
+              { "op": "checksum_verify", "args": [
+                "checksum_var",
+                { "op": "*", "args": ["primary_var", 1000] }
+              ]}
+            ]
+          }
+        },
+        "corruption_detector": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "corruption_score", "args": [
+              { "op": "abs", "args": [
+                { "op": "-", "args": ["primary_var", "backup_var"] }
+              ]},
+              { "op": "is_finite", "args": ["corrupted_number_test"] },
+              { "op": "is_normal", "args": ["malformed_float_test"] }
+            ]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["primary_var"], "wrt": "t" },
+          "rhs": {
+            "op": "robust_eval",
+            "args": [
+              { "op": "*", "args": [
+                { "op": "safe_divide", "args": [
+                  "recovery_expression",
+                  { "op": "+", "args": ["corruption_detector", 1e-20] }
+                ]},
+                { "op": "exp", "args": [
+                  { "op": "clamp", "args": [
+                    { "op": "/", "args": ["t", 1000] },
+                    -10.0,
+                    10.0
+                  ]}
+                ]}
+              ]},
+              "backup_var"
+            ]
+          }
+        }
+      ]
+    },
+    "IncompleteStructureModel": {
+      "reference": { "notes": "Model that tests handling of incomplete or corrupted data structures" },
+      "variables": Object.fromEntries(
+        Array.from({length: 100}, (_, i) => [
+          `var_${i}`,
+          {
+            "type": i < 50 ? "parameter" : "differential",
+            "units": ["mol/mol", "kg/kg", "Pa", "K", "m/s"][i % 5],
+            "default": i < 80 ? Math.random() * 1e-9 : null,
+            "fallback_value": Math.random() * 1e-12,
+            "corruption_tolerance": i % 3,
+            "recovery_method": ["interpolation", "last_known_good", "default_value"][i % 3],
+            "integrity_check": {
+              "method": "range_check",
+              "min_value": -1e6,
+              "max_value": 1e6,
+              "nan_handling": "replace_with_default",
+              "inf_handling": "clamp_to_range"
+            }
+          }
+        ])
+      ),
+      "equations": Array.from({length: 50}, (_, i) => ({
+        "lhs": { "op": "D", "args": [`var_${i + 50}`], "wrt": "t" },
+        "rhs": {
+          "op": "safe_eval",
+          "args": [
+            { "op": "+", "args": [
+              { "op": "validate_and_recover", "args": [`var_${i}`, `var_${(i + 10) % 50}`] },
+              { "op": "*", "args": [
+                { "op": "sin", "args": [
+                  { "op": "safe_multiply", "args": ["t", i * 0.01] }
+                ]},
+                1e-6
+              ]}
+            ]},
+            `var_${(i + 25) % 50}`
+          ]
+        }
+      })),
+      "corruption_metadata": {
+        "expected_corruptions": [
+          { "location": "variables.var_15.default", "type": "truncated_number" },
+          { "location": "variables.var_23.units", "type": "missing_quotes" },
+          { "location": "variables.var_47.type", "type": "invalid_value" },
+          { "location": "equations[10].rhs", "type": "incomplete_expression" },
+          { "location": "equations[25]", "type": "missing_closing_bracket" }
+        ],
+        "recovery_strategies": [
+          "substitute_defaults",
+          "interpolate_from_neighbors",
+          "use_backup_values",
+          "skip_corrupted_entries",
+          "validate_and_sanitize"
+        ]
+      }
+    }
+  },
+  "reaction_systems": {
+    "RobustChemistry": {
+      "coupletype": "CorruptionTolerantCoupler",
+      "reference": { "notes": "Chemistry system with built-in corruption detection and recovery" },
+      "species": Object.fromEntries(
+        Array.from({length: 200}, (_, i) => [
+          `ROBUST_SPECIES_${i}`,
+          {
+            "units": "mol/mol",
+            "default": i < 150 ? Math.random() * 1e-12 : "CORRUPTED_VALUE",
+            "backup_default": Math.random() * 1e-12,
+            "description": i < 180 ? `Robust species ${i}` : "TRUNCATED_DESC",
+            "validation": {
+              "range": [1e-20, 1e-3],
+              "type_check": "numeric",
+              "corruption_signature": i.toString(16),
+              "recovery_priority": i % 10
+            }
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 100}, (_, i) => [
+          `ROBUST_PARAM_${i}`,
+          {
+            "units": i < 80 ? "1/s" : null,
+            "default": i < 90 ? Math.random() * 1e-6 : "INVALID_NUMBER",
+            "backup_default": Math.random() * 1e-6,
+            "error_bounds": {
+              "lower": 1e-12,
+              "upper": 1e-2,
+              "nan_replacement": 1e-8,
+              "inf_replacement": 1e-3,
+              "negative_handling": "absolute_value"
+            }
+          }
+        ])
+      ),
+      "reactions": Array.from({length: 150}, (_, i) => {
+        const reaction = {
+          "id": `ROBUST_R_${i}`,
+          "name": i < 130 ? `robust_reaction_${i}` : null,
+          "substrates": Array.from({length: (i % 3) + 1}, (_, j) => ({
+            "species": `ROBUST_SPECIES_${(i * 7 + j * 13) % 200}`,
+            "stoichiometry": i < 140 ? (j % 3) + 1 : "INVALID_STOICH"
+          })),
+          "products": Array.from({length: (i % 3) + 1}, (_, j) => ({
+            "species": `ROBUST_SPECIES_${(i * 11 + j * 17) % 200}`,
+            "stoichiometry": (j % 3) + 1
+          })),
+          "rate": i < 120 ? {
+            "op": "*",
+            "args": [
+              `ROBUST_PARAM_${i % 100}`,
+              { "op": "pow", "args": [
+                { "op": "/", "args": ["T", 298.15] },
+                i % 5
+              ]}
+            ]
+          } : "CORRUPTED_RATE_EXPRESSION"
+        };
+
+        if (i >= 145) {
+          delete reaction.products;
+        }
+        if (i >= 148) {
+          reaction.substrates = "CORRUPTED_SUBSTRATES";
+        }
+
+        return reaction;
+      }),
+      "corruption_recovery": {
+        "validation_rules": [
+          { "field": "species.*.default", "type": "numeric", "action": "use_backup" },
+          { "field": "parameters.*.default", "type": "numeric", "action": "use_backup" },
+          { "field": "reactions.*.substrates", "type": "array", "action": "reconstruct_minimal" },
+          { "field": "reactions.*.rate", "type": "expression", "action": "use_fallback_kinetics" }
+        ],
+        "integrity_checks": {
+          "mass_balance": true,
+          "stoichiometry_validation": true,
+          "rate_positivity": true,
+          "species_existence": true
+        }
+      }
+    }
+  },
+  "data_loaders": {
+    "CorruptedDataLoader": {
+      "type": "corruption_simulation",
+      "loader_id": "CORRUPT_SIM",
+      "config": {
+        "corruption_rate": 0.15,
+        "corruption_types": ["bit_flip", "truncation", "insertion", "deletion", "substitution"],
+        "recovery_mechanisms": ["checksum", "redundancy", "interpolation", "fallback"],
+        "validation_level": "strict"
+      },
+      "provides": {
+        "temperature_corrupted": {
+          "units": "K",
+          "description": "Temperature data with simulated corruption",
+          "corruption_pattern": "random_bit_flips",
+          "recovery_method": "median_filter"
+        },
+        "pressure_partial": {
+          "units": "Pa",
+          "description": "Partially corrupted pressure data",
+          "corruption_pattern": "truncated_values",
+          "recovery_method": "linear_interpolation"
+        },
+        "wind_malformed": {
+          "units": "m/s",
+          "description": "Wind data with malformed entries",
+          "corruption_pattern": "format_errors",
+          "recovery_method": "schema_validation_repair"
+        }
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "robust_variable_map",
+      "from": "CorruptedDataLoader.temperature_corrupted",
+      "to": "CorruptionToleranceModel.primary_var",
+      "validation": {
+        "pre_transform": "range_check",
+        "post_transform": "consistency_check",
+        "error_handling": "graceful_degradation"
+      }
+    },
+    {
+      "type": "error_tolerant_compose",
+      "systems": ["RobustChemistry", "IncompleteStructureModel"],
+      "fallback_behavior": "continue_with_warnings",
+      "corruption_threshold": 0.25
+    }
+  ],
+  "domain": {
+    "temporal": {
+      "start": "2024-07-01T00:00:00Z",
+      "end": "2024-07-01T06:00:00Z",
+      "resolution": "PT5M"
+    },
+    "spatial": {
+      "lon": { "min": 0.0, "max": 5.0, "grid_spacing": 1.0, "units": "degrees" },
+      "lat": { "min": 0.0, "max": 5.0, "grid_spacing": 1.0, "units": "degrees" }
+    },
+    "error_recovery": {
+      "corruption_detection": "automatic",
+      "recovery_strategy": "best_effort",
+      "fallback_domain": {
+        "temporal": { "resolution": "PT1H" },
+        "spatial": { "grid_spacing": 2.0 }
+      },
+      "integrity_monitoring": true,
+      "repair_logging": "verbose"
+    }
+  }
+}

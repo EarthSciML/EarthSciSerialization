@@ -1,0 +1,397 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SchemaEvolutionStress",
+    "description": "Test handling of mixed schema versions, deprecated fields, forward/backward compatibility, and schema migration scenarios",
+    "authors": ["Schema Evolution Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "schema", "evolution", "compatibility", "migration", "versioning"],
+    "schema_compatibility": {
+      "version_range": ["0.0.1", "0.1.0", "0.2.0-beta", "1.0.0-rc1"],
+      "migration_paths": ["0.0.1->0.1.0", "0.1.0->0.2.0", "0.2.0->1.0.0"],
+      "deprecated_features": ["old_unit_syntax", "legacy_operators", "v0_coupling_format"]
+    }
+  },
+  "models": {
+    "LegacyFormatModel": {
+      "reference": { "notes": "Model using legacy format features for backward compatibility testing" },
+      "schema_version": "0.0.1",
+      "variables": {
+        "old_style_var": {
+          "type": "state",
+          "unit": "ppm",
+          "initial": 1e-6,
+          "bounds": [0, 1e-3]
+        },
+        "deprecated_syntax_var": {
+          "category": "parameter",
+          "dimension": "concentration",
+          "value": 2.5e-9,
+          "uncertainty": 0.1
+        },
+        "forward_compat_var": {
+          "type": "differential",
+          "units": "mol/mol",
+          "default": 1e-12,
+          "future_field": "this_will_be_ignored_in_v0_1",
+          "new_validation": { "range": [1e-20, 1e-6] }
+        }
+      },
+      "differential_equations": [
+        {
+          "variable": "old_style_var",
+          "time_derivative": {
+            "operator": "multiply",
+            "operands": [
+              -0.001,
+              { "operator": "add", "operands": ["old_style_var", "deprecated_syntax_var"] }
+            ]
+          }
+        }
+      ]
+    },
+    "ModernFormatModel": {
+      "reference": { "notes": "Model using current schema format" },
+      "schema_version": "0.1.0",
+      "variables": {
+        "current_style_var": { "type": "differential", "units": "mol/mol", "default": 1e-9 },
+        "enhanced_var": {
+          "type": "algebraic",
+          "units": "kg/kg",
+          "expression": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": ["current_style_var", 1.5] },
+              { "op": "legacy_convert", "args": ["LegacyFormatModel.old_style_var"] }
+            ]
+          },
+          "metadata": {
+            "conversion_factor": 1e-6,
+            "legacy_mapping": "old_style_var"
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["current_style_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [
+                "enhanced_var",
+                { "op": "exp", "args": [{ "op": "/", "args": [-500, "T"] }] }
+              ]},
+              { "op": "backward_compat", "args": [
+                "LegacyFormatModel.deprecated_syntax_var",
+                { "unit_conversion": "ppm_to_mol_per_mol" }
+              ]}
+            ]
+          }
+        }
+      ]
+    },
+    "FutureFormatModel": {
+      "reference": { "notes": "Model using experimental future format features" },
+      "schema_version": "0.2.0-beta",
+      "variables": {
+        "next_gen_var": {
+          "type": "differential",
+          "units": { "base": "mol/mol", "display": "ppbv", "conversion": 1e9 },
+          "default": { "value": 1e-12, "uncertainty": { "type": "normal", "std": 1e-13 } },
+          "constraints": {
+            "physical": { "min": 0, "max": 1e-3 },
+            "numerical": { "precision": "float64", "tolerance": 1e-15 }
+          }
+        },
+        "ml_enhanced_var": {
+          "type": "ml_algebraic",
+          "units": "1",
+          "model": {
+            "type": "neural_network",
+            "architecture": "feedforward",
+            "inputs": ["next_gen_var", "T", "P"],
+            "fallback_expression": {
+              "op": "*",
+              "args": [
+                { "op": "pow", "args": ["next_gen_var", 0.5] },
+                { "op": "exp", "args": [{ "op": "/", "args": [-1000, "T"] }] }
+              ]
+            }
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["next_gen_var"], "wrt": "t" },
+          "rhs": {
+            "op": "adaptive_operator",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "*", "args": [
+                  "ml_enhanced_var",
+                  { "op": "uncertainty_propagation", "args": ["next_gen_var"] }
+                ]},
+                { "op": "legacy_compatibility", "args": [
+                  "ModernFormatModel.current_style_var",
+                  { "version_adaptation": "0.1.0_to_0.2.0" }
+                ]}
+              ]},
+              { "fallback_mode": "deterministic" }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "MixedVersionChemistry": {
+      "coupletype": "SchemaAdaptiveCoupler",
+      "schema_version": "mixed",
+      "reference": { "notes": "Chemistry system combining multiple schema versions" },
+      "species": Object.fromEntries([
+        ...Array.from({length: 50}, (_, i) => [
+          `LEGACY_SPEC_${i}`,
+          {
+            "unit": "ppm",
+            "initial_concentration": Math.random() * 1e-6,
+            "molecular_weight": 20 + Math.random() * 200,
+            "deprecation_notice": "Use 'units' instead of 'unit' in v0.1.0+"
+          }
+        ]),
+        ...Array.from({length: 50}, (_, i) => [
+          `MODERN_SPEC_${i}`,
+          {
+            "units": "mol/mol",
+            "default": Math.random() * 1e-12,
+            "molar_mass": 20 + Math.random() * 200,
+            "description": `Modern format species ${i}`
+          }
+        ]),
+        ...Array.from({length: 50}, (_, i) => [
+          `FUTURE_SPEC_${i}`,
+          {
+            "units": { "base": "mol/mol", "display": "pptv" },
+            "default": { "value": Math.random() * 1e-15, "source": "measurement" },
+            "molecular_properties": {
+              "mass": 20 + Math.random() * 200,
+              "structure": `C${Math.floor(Math.random() * 10)}H${Math.floor(Math.random() * 20)}`,
+              "thermodynamics": { "enthalpy_formation": Math.random() * 1000 - 500 }
+            },
+            "experimental_features": true
+          }
+        ])
+      ]),
+      "parameters": Object.fromEntries([
+        ...Array.from({length: 30}, (_, i) => [
+          `LEGACY_RATE_${i}`,
+          {
+            "unit": "1/s",
+            "value": Math.random() * 1e-6,
+            "temperature_dependence": "arrhenius",
+            "activation_energy": Math.random() * 10000 + 1000
+          }
+        ]),
+        ...Array.from({length: 30}, (_, i) => [
+          `MODERN_RATE_${i}`,
+          {
+            "units": "1/s",
+            "default": Math.random() * 1e-6,
+            "description": `Modern rate constant ${i}`,
+            "arrhenius": { "A": Math.random() * 1e-10, "Ea": Math.random() * 10000 + 1000 }
+          }
+        ]),
+        ...Array.from({length: 30}, (_, i) => [
+          `FUTURE_RATE_${i}`,
+          {
+            "units": { "base": "1/s", "temperature_dependent": true },
+            "default": { "value": Math.random() * 1e-6, "confidence": 0.95 },
+            "kinetics": {
+              "type": "extended_arrhenius",
+              "parameters": {
+                "A": Math.random() * 1e-10,
+                "Ea": Math.random() * 10000 + 1000,
+                "n": Math.random() * 2 - 1
+              }
+            }
+          }
+        ])
+      ]),
+      "reactions": [
+        ...Array.from({length: 100}, (_, i) => ({
+          "reaction_id": `LEGACY_R_${i}`,
+          "reactants": [
+            { "species": `LEGACY_SPEC_${i % 50}`, "coefficient": 1 },
+            { "species": `MODERN_SPEC_${(i + 10) % 50}`, "coefficient": 1 }
+          ],
+          "products": [
+            { "species": `FUTURE_SPEC_${(i + 20) % 50}`, "coefficient": 1 }
+          ],
+          "rate_expression": {
+            "operator": "multiply",
+            "operands": [
+              `LEGACY_RATE_${i % 30}`,
+              { "operator": "power", "operands": [
+                { "operator": "divide", "operands": ["T", 298.15] },
+                2
+              ]}
+            ]
+          }
+        })),
+        ...Array.from({length: 100}, (_, i) => ({
+          "id": `MODERN_R_${i}`,
+          "name": `modern_reaction_${i}`,
+          "substrates": [
+            { "species": `MODERN_SPEC_${i % 50}`, "stoichiometry": 1 },
+            { "species": `FUTURE_SPEC_${(i + 15) % 50}`, "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": `LEGACY_SPEC_${(i + 25) % 50}`, "stoichiometry": 1 }
+          ],
+          "rate": {
+            "op": "*",
+            "args": [
+              `MODERN_RATE_${i % 30}`,
+              { "op": "arrhenius", "args": [298.15, i * 100 + 2000] }
+            ]
+          }
+        })),
+        ...Array.from({length: 100}, (_, i) => ({
+          "id": `FUTURE_R_${i}`,
+          "metadata": { "reaction_type": "gas_phase", "mechanism": "advanced" },
+          "reactant_complex": [
+            { "species": `FUTURE_SPEC_${i % 50}`, "stoichiometry": 1, "role": "primary" },
+            { "species": `LEGACY_SPEC_${(i + 5) % 50}`, "stoichiometry": 1, "role": "catalyst", "legacy_format": true }
+          ],
+          "product_complex": [
+            { "species": `MODERN_SPEC_${(i + 35) % 50}`, "stoichiometry": 1 }
+          ],
+          "kinetic_model": {
+            "type": "ml_enhanced",
+            "primary_rate": {
+              "op": "*",
+              "args": [`FUTURE_RATE_${i % 30}`, { "op": "adaptive_correction", "args": ["T", "P"] }]
+            },
+            "fallback_rate": {
+              "op": "legacy_convert",
+              "args": [`LEGACY_RATE_${i % 30}`, { "conversion": "v0_0_1_to_v0_2_0" }]
+            }
+          }
+        }))
+      ],
+      "schema_migration": {
+        "auto_convert": true,
+        "conversion_rules": [
+          { "from": "unit", "to": "units", "scope": "species" },
+          { "from": "initial_concentration", "to": "default", "scope": "species" },
+          { "from": "molecular_weight", "to": "molar_mass", "scope": "species" },
+          { "from": "value", "to": "default", "scope": "parameters" },
+          { "from": "reaction_id", "to": "id", "scope": "reactions" },
+          { "from": "reactants", "to": "substrates", "scope": "reactions" },
+          { "from": "coefficient", "to": "stoichiometry", "scope": "reactions" }
+        ],
+        "deprecated_operators": {
+          "multiply": { "replacement": "*", "version": "0.1.0" },
+          "divide": { "replacement": "/", "version": "0.1.0" },
+          "power": { "replacement": "pow", "version": "0.1.0" }
+        }
+      }
+    }
+  },
+  "data_loaders": {
+    "VersionedDataLoader": {
+      "type": "schema_evolution_test",
+      "loader_id": "SCHEMA_EVOLUTION",
+      "config": {
+        "version_compatibility": "multi",
+        "migration_strategy": "automatic",
+        "fallback_behavior": "best_effort",
+        "validation_strictness": "lenient"
+      },
+      "provides": {
+        "legacy_temperature": {
+          "unit": "Celsius",
+          "conversion_required": true,
+          "target_units": "K",
+          "description": "Legacy temperature data requiring unit conversion"
+        },
+        "modern_pressure": {
+          "units": "Pa",
+          "description": "Modern format pressure data"
+        },
+        "future_wind": {
+          "units": { "base": "m/s", "display": "km/h" },
+          "metadata": { "measurement_quality": "high", "source": "lidar" },
+          "description": "Future format wind data with enhanced metadata"
+        }
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "schema_adaptive_map",
+      "from": "VersionedDataLoader.legacy_temperature",
+      "to": "LegacyFormatModel.deprecated_syntax_var",
+      "migration": {
+        "unit_conversion": "celsius_to_kelvin",
+        "value_scaling": 0.01,
+        "validation": "range_check"
+      }
+    },
+    {
+      "type": "version_bridge",
+      "legacy_system": "LegacyFormatModel",
+      "modern_system": "ModernFormatModel",
+      "compatibility_layer": {
+        "variable_mapping": {
+          "old_style_var": "current_style_var",
+          "deprecated_syntax_var": "enhanced_var"
+        },
+        "operator_translation": {
+          "multiply": "*",
+          "add": "+",
+          "time_derivative": "D"
+        }
+      }
+    },
+    {
+      "type": "future_compatibility",
+      "systems": ["ModernFormatModel", "FutureFormatModel"],
+      "forward_compatibility": {
+        "ignore_unknown_fields": true,
+        "graceful_degradation": true,
+        "feature_detection": "automatic"
+      }
+    }
+  ],
+  "domain": {
+    "temporal": {
+      "start": "2024-08-01T00:00:00Z",
+      "end": "2024-08-01T12:00:00Z",
+      "resolution": "PT30M"
+    },
+    "spatial": {
+      "lon": { "min": -5.0, "max": 5.0, "grid_spacing": 2.0, "units": "degrees" },
+      "lat": { "min": -5.0, "max": 5.0, "grid_spacing": 2.0, "units": "degrees" }
+    },
+    "schema_handling": {
+      "version_detection": "automatic",
+      "migration_on_load": true,
+      "compatibility_warnings": true,
+      "strict_validation": false,
+      "feature_flags": {
+        "experimental_operators": true,
+        "ml_integration": false,
+        "uncertainty_propagation": false
+      }
+    }
+  },
+  "solver": {
+    "strategy": "adaptive_versioned",
+    "config": {
+      "legacy_compatibility": true,
+      "modern_optimizations": true,
+      "future_feature_detection": true,
+      "migration_overhead_tolerance": 0.1
+    }
+  }
+}

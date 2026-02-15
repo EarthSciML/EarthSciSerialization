@@ -1,0 +1,53 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnicodeNormalizationAttack",
+    "description": "Test Unicode normalization vulnerabilities with visually similar but different codepoints",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "UnicodeModel": {
+      "variables": {
+        "normal_var": { "type": "state", "units": "m", "default": 1.0 },
+        "nоrmal_var": { "type": "state", "units": "m", "default": 2.0 },
+        "А": { "type": "parameter", "units": "1", "default": 3.0 },
+        "A": { "type": "parameter", "units": "1", "default": 4.0 },
+        "café": { "type": "state", "units": "mol", "default": 5.0 },
+        "cafe\u0301": { "type": "state", "units": "mol", "default": 6.0 },
+        "ℌ𝒆𝓁𝓁𝑜": { "type": "parameter", "units": "1", "default": 7.0 },
+        "Hello": { "type": "parameter", "units": "1", "default": 8.0 },
+        "tеst": { "type": "state", "units": "kg", "default": 9.0 },
+        "test": { "type": "state", "units": "kg", "default": 10.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["normal_var"], "wrt": "t" },
+          "rhs": { "op": "+", "args": ["nоrmal_var", 1.0] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["А"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["A", 2.0] }
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "HomoglyphSystem": {
+      "species": {
+        "СО₂": { "units": "mol/mol", "default": 1e-6, "description": "Cyrillic CO2 lookalike" },
+        "CO₂": { "units": "mol/mol", "default": 2e-6, "description": "Latin CO2" },
+        "Н₂О": { "units": "mol/mol", "default": 3e-6, "description": "Cyrillic H2O lookalike" },
+        "H₂O": { "units": "mol/mol", "default": 4e-6, "description": "Latin H2O" }
+      },
+      "reactions": [
+        {
+          "id": "homoglyph_confusion",
+          "name": "unicode_attack",
+          "substrates": [{ "species": "СО₂", "stoichiometry": 1 }],
+          "products": [{ "species": "CO₂", "stoichiometry": 1 }],
+          "rate": 1e-3
+        }
+      ]
+    }
+  }
+}

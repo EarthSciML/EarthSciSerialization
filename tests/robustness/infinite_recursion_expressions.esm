@@ -1,0 +1,48 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "InfiniteRecursionExpressions",
+    "description": "Test infinite recursion detection in expression evaluation",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "RecursiveModel": {
+      "variables": {
+        "a": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "+", "args": ["b", 1] }
+        },
+        "b": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "*", "args": ["c", 2] }
+        },
+        "c": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "/", "args": ["a", 3] }
+        },
+        "factorial_bomb": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "factorial",
+            "args": [{ "op": "factorial", "args": ["factorial_bomb"] }]
+          }
+        },
+        "self_reference": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "pow", "args": ["self_reference", 2] }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["a"], "wrt": "t" },
+          "rhs": { "op": "recursive_call", "args": ["a"] }
+        }
+      ]
+    }
+  }
+}

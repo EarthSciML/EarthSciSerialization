@@ -1,0 +1,406 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MalformedExpressionRecovery",
+    "description": "Test recovery from malformed expressions, invalid operators, syntax errors, and graceful fallback to alternative expressions",
+    "authors": ["Expression Recovery Test Suite"],
+    "created": "2026-02-15T00:00:00Z",
+    "tags": ["robustness", "expressions", "error_recovery", "syntax_errors", "fallback_mechanisms"]
+  },
+  "models": {
+    "ExpressionErrorModel": {
+      "reference": { "notes": "Model with intentionally malformed expressions to test error recovery" },
+      "variables": {
+        "base_value": { "type": "parameter", "units": "mol/mol", "default": 1e-9 },
+        "backup_value": { "type": "parameter", "units": "mol/mol", "default": 1e-10 },
+        "malformed_syntax": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "INVALID_OPERATOR",
+            "args": ["base_value", "backup_value"]
+          },
+          "fallback_expression": {
+            "op": "+",
+            "args": ["base_value", "backup_value"]
+          }
+        },
+        "missing_parentheses": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "*",
+            "args": [
+              { "op": "+", "args": ["base_value"] },
+              { "op": "-", "args": ["backup_value", "nonexistent_var"] }
+            ]
+          },
+          "error_recovery": {
+            "missing_args": "use_zero",
+            "undefined_vars": "use_fallback",
+            "fallback_vars": { "nonexistent_var": "backup_value" }
+          }
+        },
+        "circular_reference_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              "circular_reference_test",
+              "base_value"
+            ]
+          },
+          "cycle_detection": true,
+          "cycle_breaker": {
+            "op": "*",
+            "args": ["base_value", 2.0]
+          }
+        },
+        "type_mismatch_expr": {
+          "type": "algebraic",
+          "units": "kg/m^3",
+          "expression": {
+            "op": "sin",
+            "args": [
+              { "op": "+", "args": ["base_value", "this_is_a_string"] }
+            ]
+          },
+          "type_coercion": {
+            "strings": "parse_as_number",
+            "invalid_strings": "use_zero",
+            "fallback_expression": {
+              "op": "*",
+              "args": ["base_value", 1000.0]
+            }
+          }
+        },
+        "division_by_zero_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              "base_value",
+              { "op": "-", "args": ["base_value", "base_value"] }
+            ]
+          },
+          "zero_handling": {
+            "division_by_zero": "return_infinity",
+            "limit_behavior": "use_epsilon",
+            "epsilon": 1e-20
+          }
+        },
+        "nested_error_expr": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "sqrt",
+            "args": [
+              { "op": "log", "args": [
+                { "op": "+", "args": [
+                  { "op": "/", "args": [
+                    "base_value",
+                    { "op": "UNDEFINED_OP", "args": ["backup_value"] }
+                  ]},
+                  -1e-6
+                ]}
+              ]}
+            ]
+          },
+          "nested_recovery": {
+            "propagate_errors": false,
+            "isolate_failures": true,
+            "recovery_strategy": "substitute_safe_defaults",
+            "safe_defaults": {
+              "UNDEFINED_OP": { "op": "abs", "args": ["backup_value"] },
+              "negative_log": 1e-15,
+              "negative_sqrt": 0.0
+            }
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["base_value"], "wrt": "t" },
+          "rhs": {
+            "op": "robust_evaluate",
+            "args": [
+              { "op": "+", "args": [
+                { "op": "safe_expr", "args": [
+                  "malformed_syntax",
+                  { "fallback": { "op": "*", "args": ["backup_value", -0.001] } }
+                ]},
+                { "op": "error_tolerant", "args": [
+                  "missing_parentheses",
+                  { "continue_on_error": true, "default_result": 0.0 }
+                ]},
+                { "op": "cycle_safe", "args": [
+                  "circular_reference_test",
+                  { "max_depth": 10, "timeout_ms": 100 }
+                ]}
+              ]},
+              { "validation": {
+                "result_finite": true,
+                "result_range": [-1e6, 1e6],
+                "fallback_on_invalid": { "op": "*", "args": ["backup_value", -0.1] }
+              }}
+            ]
+          }
+        }
+      ]
+    },
+    "OperatorErrorModel": {
+      "reference": { "notes": "Model testing various operator-related errors and recovery" },
+      "variables": {
+        "x": { "type": "parameter", "units": "1", "default": 2.0 },
+        "y": { "type": "parameter", "units": "1", "default": 3.0 },
+        "z": { "type": "parameter", "units": "1", "default": 0.0 },
+        "wrong_arity_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "sin",
+            "args": ["x", "y", "z"]
+          },
+          "arity_correction": {
+            "strategy": "use_first_arg",
+            "warn": true
+          }
+        },
+        "missing_args_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": ["x"]
+          },
+          "missing_arg_handling": {
+            "strategy": "identity",
+            "default_second_arg": 0.0
+          }
+        },
+        "invalid_math_domain": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "asin",
+            "args": [
+              { "op": "*", "args": ["x", "y"] }
+            ]
+          },
+          "domain_checking": {
+            "asin": { "range": [-1, 1], "out_of_range": "clamp" },
+            "acos": { "range": [-1, 1], "out_of_range": "clamp" },
+            "sqrt": { "range": [0, "inf"], "out_of_range": "abs" },
+            "log": { "range": [1e-100, "inf"], "out_of_range": "epsilon" }
+          }
+        },
+        "operator_precedence_error": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "MALFORMED_PRECEDENCE",
+            "left": { "op": "*", "args": ["x", "y"] },
+            "right": { "op": "/", "args": ["z", 2.0] },
+            "precedence_error": true
+          },
+          "precedence_recovery": {
+            "strategy": "explicit_parentheses",
+            "fallback": {
+              "op": "+",
+              "args": [
+                { "op": "*", "args": ["x", "y"] },
+                { "op": "/", "args": ["z", 2.0] }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "reaction_systems": {
+    "ErrorProneChemistry": {
+      "coupletype": "ErrorRecoveryCoupler",
+      "reference": { "notes": "Chemistry system with various expression errors for testing recovery mechanisms" },
+      "species": Object.fromEntries(
+        Array.from({length: 100}, (_, i) => [
+          `ERROR_SPECIES_${i}`,
+          {
+            "units": "mol/mol",
+            "default": Math.random() * 1e-12,
+            "description": `Error-prone species ${i} for expression recovery testing`
+          }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 50}, (_, i) => [
+          `ERROR_PARAM_${i}`,
+          {
+            "units": "1/s",
+            "default": Math.random() * 1e-6,
+            "description": `Error-prone parameter ${i}`
+          }
+        ])
+      ),
+      "reactions": [
+        ...Array.from({length: 50}, (_, i) => ({
+          "id": `SYNTAX_ERROR_R_${i}`,
+          "name": `syntax_error_reaction_${i}`,
+          "substrates": [
+            { "species": `ERROR_SPECIES_${i % 100}`, "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": `ERROR_SPECIES_${(i + 1) % 100}`, "stoichiometry": 1 }
+          ],
+          "rate": {
+            "op": "INVALID_RATE_OP",
+            "args": [
+              `ERROR_PARAM_${i % 50}`,
+              { "op": "MISSING_CLOSING_PAREN", "args": ["T", 298.15 }
+            ],
+            "syntax_recovery": {
+              "invalid_operators": {
+                "INVALID_RATE_OP": "*",
+                "MISSING_CLOSING_PAREN": "/"
+              },
+              "fallback_rate": {
+                "op": "*",
+                "args": [`ERROR_PARAM_${i % 50}`, 1.0]
+              }
+            }
+          }
+        })),
+        ...Array.from({length: 50}, (_, i) => ({
+          "id": `TYPE_ERROR_R_${i}`,
+          "name": `type_error_reaction_${i}`,
+          "substrates": [
+            { "species": `ERROR_SPECIES_${(i + 50) % 100}`, "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": `ERROR_SPECIES_${(i + 75) % 100}`, "stoichiometry": 1 }
+          ],
+          "rate": {
+            "op": "+",
+            "args": [
+              `ERROR_PARAM_${i % 50}`,
+              "this_should_be_a_number",
+              { "op": "sin", "args": [{ "array": [1, 2, 3] }] }
+            ],
+            "type_recovery": {
+              "string_to_number": "attempt_parse",
+              "invalid_parse": "use_zero",
+              "wrong_type_args": "skip_arg",
+              "fallback_rate": {
+                "op": "*",
+                "args": [`ERROR_PARAM_${i % 50}`, 0.5]
+              }
+            }
+          }
+        }))
+      ],
+      "expression_validation": {
+        "strict_mode": false,
+        "auto_correction": true,
+        "error_logging": "verbose",
+        "recovery_statistics": true,
+        "fallback_mechanisms": [
+          "operator_substitution",
+          "argument_correction",
+          "type_coercion",
+          "safe_defaults",
+          "expression_simplification"
+        ]
+      }
+    }
+  },
+  "data_loaders": {
+    "MalformedExpressionLoader": {
+      "type": "expression_error_test",
+      "loader_id": "EXPR_ERROR_TEST",
+      "config": {
+        "inject_errors": true,
+        "error_types": [
+          "syntax_errors",
+          "type_mismatches",
+          "undefined_references",
+          "circular_dependencies",
+          "domain_errors"
+        ],
+        "recovery_mode": "best_effort",
+        "error_rate": 0.2
+      },
+      "provides": {
+        "corrupted_temperature": {
+          "units": "K",
+          "description": "Temperature with corrupted expression calculations",
+          "expression_errors": ["division_by_zero", "invalid_operators"]
+        },
+        "malformed_pressure": {
+          "units": "Pa",
+          "description": "Pressure with malformed rate expressions",
+          "expression_errors": ["syntax_errors", "type_mismatches"]
+        },
+        "broken_wind": {
+          "units": "m/s",
+          "description": "Wind data with broken mathematical expressions",
+          "expression_errors": ["circular_references", "undefined_variables"]
+        }
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "error_tolerant_map",
+      "from": "MalformedExpressionLoader.corrupted_temperature",
+      "to": "ExpressionErrorModel.base_value",
+      "error_handling": {
+        "expression_errors": "use_fallback",
+        "validation_errors": "skip_timestep",
+        "critical_errors": "halt_with_diagnostics"
+      }
+    },
+    {
+      "type": "robust_coupling",
+      "systems": ["ExpressionErrorModel", "OperatorErrorModel"],
+      "cross_validation": true,
+      "consensus_voting": {
+        "min_agreement": 0.6,
+        "tie_breaking": "use_fallback"
+      }
+    }
+  ],
+  "domain": {
+    "temporal": {
+      "start": "2024-09-01T00:00:00Z",
+      "end": "2024-09-01T06:00:00Z",
+      "resolution": "PT10M"
+    },
+    "spatial": {
+      "lon": { "min": 0.0, "max": 3.0, "grid_spacing": 1.0, "units": "degrees" },
+      "lat": { "min": 0.0, "max": 3.0, "grid_spacing": 1.0, "units": "degrees" }
+    },
+    "error_handling": {
+      "expression_timeout": "PT5S",
+      "max_recovery_attempts": 3,
+      "error_accumulation_threshold": 0.5,
+      "graceful_degradation": true,
+      "diagnostic_output": "detailed",
+      "recovery_logging": {
+        "level": "debug",
+        "include_stack_traces": true,
+        "performance_metrics": true
+      }
+    }
+  },
+  "solver": {
+    "strategy": "fault_tolerant_integration",
+    "config": {
+      "expression_validation": "runtime",
+      "error_recovery": "automatic",
+      "fallback_expressions": "enabled",
+      "diagnostic_mode": true,
+      "recovery_statistics": true
+    }
+  }
+}

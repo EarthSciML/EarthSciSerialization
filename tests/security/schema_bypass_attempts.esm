@@ -1,0 +1,47 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SchemaBypassAttempts",
+    "description": "Test various attempts to bypass JSON schema validation with edge case field names and structures",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "__proto__": { "type": "state", "units": "m", "default": 1.0 },
+        "constructor": { "type": "parameter", "units": "1", "default": 0.0 },
+        "toString": { "type": "state", "units": "kg", "default": 2.0 },
+        "valueOf": { "type": "parameter", "units": "s", "default": 3.0 },
+        "hasOwnProperty": { "type": "state", "units": "A", "default": 4.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["__proto__"], "wrt": "t" },
+          "rhs": { "op": "call", "args": ["constructor", "toString"] }
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "PrototypeSystem": {
+      "species": {
+        "prototype": { "units": "mol/mol", "default": 1e-9 },
+        "__defineProperty__": { "units": "mol/mol", "default": 2e-9 }
+      },
+      "reactions": [
+        {
+          "id": "prototype_pollution",
+          "name": "prototype_attack",
+          "substrates": [{ "species": "prototype", "stoichiometry": 1 }],
+          "products": [{ "species": "__defineProperty__", "stoichiometry": 1 }],
+          "rate": 1e-3
+        }
+      ]
+    }
+  },
+  "extra_fields_attempt": {
+    "malicious_code": "eval('console.log(\"pwned\")')",
+    "script_tag": "<script>alert('xss')</script>",
+    "sql_injection": "'; DROP TABLE users; --"
+  }
+}
