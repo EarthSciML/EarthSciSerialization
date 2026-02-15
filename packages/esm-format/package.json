@@ -9,6 +9,12 @@
     "build": "tsc",
     "test": "vitest",
     "test:watch": "vitest --watch",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:accessibility": "playwright test tests/interactive/accessibility/",
+    "test:performance": "playwright test tests/interactive/performance/",
+    "test:all": "npm run test && npm run test:e2e",
+    "dev:demo": "node -e \"require('./dist/demo/demo-pages.js').createDemoServer()\"",
     "generate-types": "json2ts -i ../../esm-schema.json -o src/generated.ts",
     "dev": "tsc --watch"
   },
@@ -17,11 +23,13 @@
     "src"
   ],
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@solidjs/testing-library": "^0.8.10",
     "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "^20.0.0",
     "jsdom": "^22.0.0",
     "json-schema-to-typescript": "^13.0.0",
+    "playwright": "^1.58.2",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"
   },
