@@ -5,6 +5,7 @@ using ESMFormat
 
     include("parse_test.jl")
     include("validate_test.jl")
+    include("structural_validation_test.jl")
     include("expression_test.jl")
     # Temporarily disabled due to precompilation issues
     # include("mtk_catalyst_test.jl")
