@@ -8,7 +8,11 @@ data formats, with support for CF conventions and proper metadata handling.
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 import json
+import sqlite3
 import numpy as np
+import threading
+from contextlib import contextmanager
+from urllib.parse import urlparse
 
 try:
     import xarray as xr
@@ -21,6 +25,13 @@ try:
     JSONSCHEMA_AVAILABLE = True
 except ImportError:
     JSONSCHEMA_AVAILABLE = False
+
+try:
+    import psycopg2
+    import psycopg2.pool
+    POSTGRESQL_AVAILABLE = True
+except ImportError:
+    POSTGRESQL_AVAILABLE = False
 
 from .types import DataLoader, DataLoaderType
 
@@ -524,7 +535,484 @@ class JSONLoader:
         return size_info
 
 
-def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader]:
+class DatabaseLoader:
+    """
+    Database data loader supporting SQLite and PostgreSQL.
+
+    Provides connection pooling, query optimization, transaction handling,
+    and support for both local SQLite databases and remote PostgreSQL instances.
+    Essential for persistent data storage integration.
+    """
+
+    def __init__(self, data_loader: DataLoader):
+        """
+        Initialize database loader with configuration.
+
+        Args:
+            data_loader: DataLoader configuration object
+
+        Raises:
+            ValueError: If data_loader type is not DATABASE
+            ImportError: If required database drivers are not available
+        """
+        if data_loader.type != DataLoaderType.DATABASE:
+            raise ValueError(f"Expected DataLoaderType.DATABASE, got {data_loader.type}")
+
+        self.config = data_loader
+        self.connection_pool = None
+        self.db_type = None
+        self.data: Optional[List[Dict[str, Any]]] = None
+        self._thread_local = threading.local()
+
+        # Parse connection string to determine database type
+        self._parse_connection_string()
+        self._initialize_connection_pool()
+
+    def _parse_connection_string(self):
+        """Parse the connection string to determine database type and parameters."""
+        source = self.config.source
+
+        if source.startswith('sqlite://') or source.endswith('.db') or source.endswith('.sqlite'):
+            self.db_type = 'sqlite'
+            if source.startswith('sqlite://'):
+                self.db_path = source.replace('sqlite://', '')
+            else:
+                self.db_path = source
+        elif source.startswith('postgresql://') or source.startswith('postgres://'):
+            self.db_type = 'postgresql'
+            if not POSTGRESQL_AVAILABLE:
+                raise ImportError(
+                    "psycopg2 is required for PostgreSQL connections. "
+                    "Install with: pip install psycopg2-binary"
+                )
+            self.connection_params = self._parse_postgres_url(source)
+        else:
+            # Try to detect by URL format
+            try:
+                parsed = urlparse(source)
+                if parsed.scheme in ('postgresql', 'postgres'):
+                    self.db_type = 'postgresql'
+                    if not POSTGRESQL_AVAILABLE:
+                        raise ImportError(
+                            "psycopg2 is required for PostgreSQL connections. "
+                            "Install with: pip install psycopg2-binary"
+                        )
+                    self.connection_params = self._parse_postgres_url(source)
+                else:
+                    # Default to SQLite
+                    self.db_type = 'sqlite'
+                    self.db_path = source
+            except Exception:
+                # If parsing fails, assume SQLite file path
+                self.db_type = 'sqlite'
+                self.db_path = source
+
+    def _parse_postgres_url(self, url: str) -> Dict[str, Any]:
+        """Parse PostgreSQL connection URL into parameters."""
+        parsed = urlparse(url)
+        return {
+            'host': parsed.hostname or 'localhost',
+            'port': parsed.port or 5432,
+            'database': parsed.path.lstrip('/') if parsed.path else 'postgres',
+            'user': parsed.username,
+            'password': parsed.password,
+        }
+
+    def _initialize_connection_pool(self):
+        """Initialize connection pool based on database type."""
+        format_options = self.config.format_options or {}
+
+        if self.db_type == 'sqlite':
+            # SQLite doesn't need a connection pool, but we simulate one for consistency
+            self.pool_size = 1
+            self.timeout = format_options.get('timeout', 30.0)
+
+            # Test connection
+            try:
+                conn = sqlite3.connect(self.db_path, timeout=self.timeout)
+                conn.close()
+            except sqlite3.Error as e:
+                raise OSError(f"Cannot connect to SQLite database {self.db_path}: {e}")
+
+        elif self.db_type == 'postgresql':
+            # Initialize PostgreSQL connection pool
+            pool_size = format_options.get('pool_size', 5)
+            max_connections = format_options.get('max_connections', 20)
+
+            try:
+                if POSTGRESQL_AVAILABLE:
+                    self.connection_pool = psycopg2.pool.ThreadedConnectionPool(
+                        pool_size, max_connections, **self.connection_params
+                    )
+                else:
+                    raise OSError("PostgreSQL support not available")
+            except Exception as e:
+                if POSTGRESQL_AVAILABLE and hasattr(e, '__module__') and 'psycopg2' in str(e.__module__):
+                    raise OSError(f"Cannot create PostgreSQL connection pool: {e}")
+                else:
+                    raise OSError(f"Cannot create PostgreSQL connection pool: {e}")
+
+    @contextmanager
+    def _get_connection(self):
+        """Get a database connection from the pool."""
+        if self.db_type == 'sqlite':
+            conn = sqlite3.connect(self.db_path, timeout=self.timeout)
+            try:
+                conn.row_factory = sqlite3.Row  # Enable column name access
+                yield conn
+            finally:
+                conn.close()
+
+        elif self.db_type == 'postgresql' and POSTGRESQL_AVAILABLE:
+            conn = self.connection_pool.getconn()
+            try:
+                yield conn
+            finally:
+                self.connection_pool.putconn(conn)
+
+    def load(self) -> List[Dict[str, Any]]:
+        """
+        Load data from the database using the configured query.
+
+        Returns:
+            List of dictionaries containing the loaded data
+
+        Raises:
+            ValueError: If no query is specified or if variables are missing
+            OSError: If database connection or query execution fails
+        """
+        format_options = self.config.format_options or {}
+        query = format_options.get('query')
+        table = format_options.get('table')
+
+        if not query and not table:
+            raise ValueError("Either 'query' or 'table' must be specified in format_options")
+
+        # Build query from table name if not explicitly provided
+        if not query:
+            columns = "*"
+            if self.config.variables:
+                columns = ", ".join(self.config.variables)
+
+            query = f"SELECT {columns} FROM {table}"
+
+            # Add WHERE conditions if specified
+            if format_options.get('where'):
+                query += f" WHERE {format_options['where']}"
+
+            # Add ORDER BY if specified
+            if format_options.get('order_by'):
+                query += f" ORDER BY {format_options['order_by']}"
+
+            # Add LIMIT if specified
+            if format_options.get('limit'):
+                query += f" LIMIT {format_options['limit']}"
+
+        try:
+            with self._get_connection() as conn:
+                if self.db_type == 'sqlite':
+                    cursor = conn.cursor()
+                    cursor.execute(query)
+
+                    # Get column names
+                    columns = [description[0] for description in cursor.description]
+
+                    # Fetch all rows
+                    rows = cursor.fetchall()
+
+                    # Convert to list of dictionaries
+                    self.data = [dict(zip(columns, row)) for row in rows]
+
+                elif self.db_type == 'postgresql':
+                    with conn.cursor() as cursor:
+                        cursor.execute(query)
+
+                        # Get column names
+                        columns = [desc[0] for desc in cursor.description]
+
+                        # Fetch all rows
+                        rows = cursor.fetchall()
+
+                        # Convert to list of dictionaries
+                        self.data = [dict(zip(columns, row)) for row in rows]
+
+        except sqlite3.OperationalError as e:
+            if "no such column" in str(e):
+                # Extract requested variables from error context
+                if self.config.variables:
+                    raise ValueError(f"Requested variables not found in table '{table}': {self.config.variables}")
+                else:
+                    raise ValueError(f"Database query failed: {e}")
+            else:
+                raise OSError(f"Failed to execute database query: {e}")
+        except Exception as e:
+            raise OSError(f"Failed to execute database query: {e}")
+
+        # Filter variables if specified and not already handled in query
+        if self.config.variables and not format_options.get('table'):
+            # Variables were not used in query building, so filter results
+            filtered_data = []
+            for row in self.data:
+                filtered_row = {var: row.get(var) for var in self.config.variables if var in row}
+                missing_vars = set(self.config.variables) - set(filtered_row.keys())
+                if missing_vars:
+                    raise ValueError(f"Requested variables not found in query results: {missing_vars}")
+                filtered_data.append(filtered_row)
+            self.data = filtered_data
+
+        return self.data
+
+    def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Execute a custom SQL query with parameters.
+
+        Args:
+            query: SQL query to execute
+            params: Query parameters for safe parameterized queries
+
+        Returns:
+            List of dictionaries containing the query results
+
+        Raises:
+            OSError: If query execution fails
+        """
+        try:
+            with self._get_connection() as conn:
+                if self.db_type == 'sqlite':
+                    cursor = conn.cursor()
+                    if params:
+                        cursor.execute(query, params)
+                    else:
+                        cursor.execute(query)
+
+                    columns = [description[0] for description in cursor.description]
+                    rows = cursor.fetchall()
+                    return [dict(zip(columns, row)) for row in rows]
+
+                elif self.db_type == 'postgresql':
+                    with conn.cursor() as cursor:
+                        if params:
+                            cursor.execute(query, params)
+                        else:
+                            cursor.execute(query)
+
+                        if cursor.description:  # SELECT queries
+                            columns = [desc[0] for desc in cursor.description]
+                            rows = cursor.fetchall()
+                            return [dict(zip(columns, row)) for row in rows]
+                        else:  # INSERT/UPDATE/DELETE queries
+                            return []
+
+        except Exception as e:
+            raise OSError(f"Failed to execute custom query: {e}")
+
+    def get_table_info(self, table_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get information about database tables and their structure.
+
+        Args:
+            table_name: Specific table to inspect, or None for all tables
+
+        Returns:
+            Dictionary with table structure information
+
+        Raises:
+            RuntimeError: If no connection is established
+        """
+        table_info = {}
+
+        try:
+            with self._get_connection() as conn:
+                if self.db_type == 'sqlite':
+                    cursor = conn.cursor()
+
+                    # Get table names
+                    if table_name:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+                        tables = [row[0] for row in cursor.fetchall()]
+                    else:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                        tables = [row[0] for row in cursor.fetchall()]
+
+                    # Get column information for each table
+                    for table in tables:
+                        cursor.execute(f"PRAGMA table_info({table})")
+                        columns = cursor.fetchall()
+
+                        table_info[table] = {
+                            'columns': [
+                                {
+                                    'name': col[1],
+                                    'type': col[2],
+                                    'nullable': not col[3],
+                                    'default': col[4],
+                                    'primary_key': bool(col[5])
+                                }
+                                for col in columns
+                            ]
+                        }
+
+                        # Get row count
+                        cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                        table_info[table]['row_count'] = cursor.fetchone()[0]
+
+                elif self.db_type == 'postgresql':
+                    with conn.cursor() as cursor:
+                        # Get table names
+                        if table_name:
+                            cursor.execute("""
+                                SELECT table_name
+                                FROM information_schema.tables
+                                WHERE table_schema = 'public' AND table_name = %s
+                            """, (table_name,))
+                        else:
+                            cursor.execute("""
+                                SELECT table_name
+                                FROM information_schema.tables
+                                WHERE table_schema = 'public'
+                            """)
+
+                        tables = [row[0] for row in cursor.fetchall()]
+
+                        # Get column information for each table
+                        for table in tables:
+                            cursor.execute("""
+                                SELECT column_name, data_type, is_nullable, column_default
+                                FROM information_schema.columns
+                                WHERE table_schema = 'public' AND table_name = %s
+                                ORDER BY ordinal_position
+                            """, (table,))
+
+                            columns = cursor.fetchall()
+
+                            table_info[table] = {
+                                'columns': [
+                                    {
+                                        'name': col[0],
+                                        'type': col[1],
+                                        'nullable': col[2] == 'YES',
+                                        'default': col[3],
+                                        'primary_key': False  # Would need additional query for PK info
+                                    }
+                                    for col in columns
+                                ]
+                            }
+
+                            # Get row count
+                            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                            table_info[table]['row_count'] = cursor.fetchone()[0]
+
+        except Exception as e:
+            raise OSError(f"Failed to get table information: {e}")
+
+        return table_info
+
+    def begin_transaction(self):
+        """
+        Begin a database transaction.
+
+        Note: This creates a connection that should be used with execute_transaction_query
+        and closed with commit_transaction or rollback_transaction.
+        """
+        if not hasattr(self._thread_local, 'transaction_conn'):
+            if self.db_type == 'sqlite':
+                self._thread_local.transaction_conn = sqlite3.connect(self.db_path, timeout=self.timeout)
+                self._thread_local.transaction_conn.row_factory = sqlite3.Row
+                # SQLite doesn't have autocommit attribute - transactions are automatic
+            elif self.db_type == 'postgresql' and POSTGRESQL_AVAILABLE:
+                self._thread_local.transaction_conn = self.connection_pool.getconn()
+                self._thread_local.transaction_conn.autocommit = False
+
+    def commit_transaction(self):
+        """Commit the current transaction and close the connection."""
+        if hasattr(self._thread_local, 'transaction_conn'):
+            try:
+                self._thread_local.transaction_conn.commit()
+            finally:
+                if self.db_type == 'sqlite':
+                    self._thread_local.transaction_conn.close()
+                elif self.db_type == 'postgresql':
+                    self.connection_pool.putconn(self._thread_local.transaction_conn)
+                delattr(self._thread_local, 'transaction_conn')
+
+    def rollback_transaction(self):
+        """Rollback the current transaction and close the connection."""
+        if hasattr(self._thread_local, 'transaction_conn'):
+            try:
+                self._thread_local.transaction_conn.rollback()
+            finally:
+                if self.db_type == 'sqlite':
+                    self._thread_local.transaction_conn.close()
+                elif self.db_type == 'postgresql':
+                    self.connection_pool.putconn(self._thread_local.transaction_conn)
+                delattr(self._thread_local, 'transaction_conn')
+
+    def execute_transaction_query(self, query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Execute a query within the current transaction.
+
+        Args:
+            query: SQL query to execute
+            params: Query parameters for safe parameterized queries
+
+        Returns:
+            List of dictionaries containing the query results
+        """
+        if not hasattr(self._thread_local, 'transaction_conn'):
+            raise RuntimeError("No active transaction. Call begin_transaction() first.")
+
+        conn = self._thread_local.transaction_conn
+
+        try:
+            if self.db_type == 'sqlite':
+                cursor = conn.cursor()
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+
+                if cursor.description:  # SELECT queries
+                    columns = [description[0] for description in cursor.description]
+                    rows = cursor.fetchall()
+                    return [dict(zip(columns, row)) for row in rows]
+                else:  # INSERT/UPDATE/DELETE queries
+                    return []
+
+            elif self.db_type == 'postgresql':
+                with conn.cursor() as cursor:
+                    if params:
+                        cursor.execute(query, params)
+                    else:
+                        cursor.execute(query)
+
+                    if cursor.description:  # SELECT queries
+                        columns = [desc[0] for desc in cursor.description]
+                        rows = cursor.fetchall()
+                        return [dict(zip(columns, row)) for row in rows]
+                    else:  # INSERT/UPDATE/DELETE queries
+                        return []
+
+        except Exception as e:
+            raise OSError(f"Failed to execute transaction query: {e}")
+
+    def close(self):
+        """Close database connections and clean up resources."""
+        if self.connection_pool and self.db_type == 'postgresql':
+            self.connection_pool.closeall()
+            self.connection_pool = None
+
+        # Clean up any active transaction connections
+        if hasattr(self._thread_local, 'transaction_conn'):
+            if self.db_type == 'sqlite':
+                self._thread_local.transaction_conn.close()
+            elif self.db_type == 'postgresql':
+                self.connection_pool.putconn(self._thread_local.transaction_conn)
+            delattr(self._thread_local, 'transaction_conn')
+
+        self.data = None
+
+
+def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, DatabaseLoader]:
     """
     Factory function to create appropriate data loader based on type.
 
