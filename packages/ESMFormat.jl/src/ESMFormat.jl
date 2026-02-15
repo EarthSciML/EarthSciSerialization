@@ -51,6 +51,8 @@ export
     serialize_solver, serialize_solver_configuration, coerce_solver, coerce_solver_configuration,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
+    # Structural validation
+    StructuralError, ValidationResult, validate_structural, validate,
     # Expression operations
     substitute, free_variables, contains, evaluate, simplify, UnboundVariableError,
     # Qualified reference resolution
