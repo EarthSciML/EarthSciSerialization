@@ -1,0 +1,44 @@
+[package]
+name = "esm-format"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chris Tessum with Claude <noreply@anthropic.com>"]
+description = "Rust implementation of EarthSciML Serialization Format"
+license = "MIT"
+repository = "https://github.com/ctessum/EarthSciSerialization"
+documentation = "https://docs.rs/esm-format"
+keywords = ["earth-science", "modeling", "serialization", "json"]
+categories = ["science", "parsing", "simulation"]
+readme = "README.md"
+
+# Support both library and CLI binary
+[[bin]]
+name = "esm"
+path = "src/bin/esm.rs"
+
+[lib]
+name = "esm_format"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonschema = "0.19"
+uom = { version = "0.36", features = ["serde"] }
+thiserror = "2.0"
+clap = { version = "4.0", features = ["derive"], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true }
+
+[dev-dependencies]
+serde_test = "1.0"
+
+[features]
+default = ["cli"]
+cli = ["clap"]
+wasm = ["wasm-bindgen", "js-sys", "web-sys"]
+
+# WASM target configuration
+[package.metadata.wasm-pack.profile.release]
+wee_alloc = false
