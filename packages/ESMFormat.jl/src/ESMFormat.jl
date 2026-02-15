@@ -18,6 +18,7 @@ include("types.jl")
 include("validate.jl")
 include("parse.jl")
 include("serialize.jl")
+include("expression.jl")
 include("display.jl")
 # Temporarily commenting out mtk_catalyst.jl due to precompilation issues
 # include("mtk_catalyst.jl")
@@ -50,6 +51,8 @@ export
     serialize_solver, serialize_solver_configuration, coerce_solver, coerce_solver_configuration,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
+    # Expression operations
+    substitute, free_variables, contains, evaluate, simplify, UnboundVariableError,
     # Qualified reference resolution
     resolve_qualified_reference, QualifiedReferenceError, ReferenceResolution,
     validate_reference_syntax, is_valid_identifier
