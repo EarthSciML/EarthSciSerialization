@@ -26,6 +26,10 @@ export { save } from './serialize.js'
 export { validate } from './validate.js'
 export type { ValidationError, ValidationResult } from './validate.js'
 
+// Export graph utilities
+export { component_graph, componentExists, getComponentType } from './graph.js'
+export type { ComponentGraph, ComponentNode, CouplingEdge } from './graph.js'
+
 // Interactive editor components (SolidJS)
 export * from './interactive-editor/index.js'
 
