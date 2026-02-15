@@ -14,7 +14,7 @@ from importlib import import_module
 import warnings
 
 from .types import DataLoader, DataLoaderType
-from .data_loaders import NetCDFLoader, JSONLoader
+from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader
 
 
 class DataLoaderRegistry:
@@ -51,6 +51,14 @@ class DataLoaderRegistry:
             JSONLoader,
             extensions=['.json', '.jsonl'],
             mime_types=['application/json', 'application/jsonl']
+        )
+
+        # Register Database loader
+        self.register_loader(
+            DataLoaderType.DATABASE,
+            DatabaseLoader,
+            extensions=['.db', '.sqlite', '.sqlite3'],
+            mime_types=['application/x-sqlite3']
         )
 
     def register_loader(
