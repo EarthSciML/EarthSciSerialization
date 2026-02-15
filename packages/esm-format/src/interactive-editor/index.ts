@@ -12,6 +12,7 @@
 // Core component exports
 export { ExpressionNode as ExpressionNodeComponent, type ExpressionNodeProps } from './ExpressionNode.tsx';
 export { ModelEditor, type ModelEditorProps } from './ModelEditor.tsx';
+export { CouplingGraph, type CouplingGraphProps } from './CouplingGraph.tsx';
 
 // Type definitions for interactive editing
 export interface EditorState {

@@ -17,19 +17,22 @@
     "src"
   ],
   "devDependencies": {
+    "@solidjs/testing-library": "^0.8.10",
+    "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "^20.0.0",
+    "jsdom": "^22.0.0",
     "json-schema-to-typescript": "^13.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^1.0.0",
-    "@solidjs/testing-library": "^0.8.7",
-    "jsdom": "^22.0.0"
+    "vitest": "^1.0.0"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "@types/d3-force": "^3.0.10",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "d3-force": "^3.0.0",
     "solid-js": "^1.8.0"
   },
   "peerDependencies": {
