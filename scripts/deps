@@ -1,0 +1,302 @@
+#!/bin/bash
+
+# EarthSciSerialization Unified Dependency Management CLI
+# Provides cross-language dependency resolution and management
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+print_help() {
+    cat << EOF
+EarthSciSerialization Dependency Manager
+
+Usage: ./scripts/deps <command> [options]
+
+Commands:
+  check [type]           Check for dependency conflicts (all, js, py, jl)
+  install [package]      Install dependencies for package or all packages
+  update [package]       Update dependencies for package or all packages
+  resolve [type]         Show conflict resolutions (all, js, py, jl)
+  report                 Generate comprehensive dependency report
+  tree                   Show dependency tree
+  list                   List all packages
+
+Package types:
+  js, typescript         TypeScript/JavaScript packages
+  py, python            Python packages
+  jl, julia             Julia packages
+
+Examples:
+  ./scripts/deps check                  # Check all packages
+  ./scripts/deps check py               # Check Python packages only
+  ./scripts/deps install esm-format-js  # Install dependencies for specific package
+  ./scripts/deps update                 # Update all packages
+  ./scripts/deps report                 # Generate full report
+
+EOF
+}
+
+check_dependencies() {
+    local package_type="${1:-all}"
+
+    echo -e "${BLUE}🔍 Checking dependencies...${NC}"
+
+    case $package_type in
+        "all")
+            echo -e "${YELLOW}Checking TypeScript packages...${NC}"
+            node "$SCRIPT_DIR/dependency-manager.js" conflicts
+
+            echo -e "\n${YELLOW}Checking Python packages...${NC}"
+            if command -v python3 &> /dev/null; then
+                python3 "$SCRIPT_DIR/dependency_resolver.py" check
+            else
+                echo -e "${RED}Python3 not found, skipping Python dependency check${NC}"
+            fi
+
+            echo -e "\n${YELLOW}Checking Julia packages...${NC}"
+            if command -v julia &> /dev/null; then
+                julia "$SCRIPT_DIR/julia_deps.jl" check
+            else
+                echo -e "${RED}Julia not found, skipping Julia dependency check${NC}"
+            fi
+            ;;
+        "js"|"typescript")
+            node "$SCRIPT_DIR/dependency-manager.js" conflicts
+            ;;
+        "py"|"python")
+            if command -v python3 &> /dev/null; then
+                python3 "$SCRIPT_DIR/dependency_resolver.py" check
+            else
+                echo -e "${RED}Python3 not found${NC}"
+                exit 1
+            fi
+            ;;
+        "jl"|"julia")
+            if command -v julia &> /dev/null; then
+                julia "$SCRIPT_DIR/julia_deps.jl" check
+            else
+                echo -e "${RED}Julia not found${NC}"
+                exit 1
+            fi
+            ;;
+        *)
+            echo -e "${RED}Unknown package type: $package_type${NC}"
+            print_help
+            exit 1
+            ;;
+    esac
+}
+
+install_dependencies() {
+    local package_name="$1"
+
+    echo -e "${BLUE}📦 Installing dependencies...${NC}"
+
+    if [[ -n "$package_name" ]]; then
+        echo -e "${YELLOW}Installing dependencies for $package_name...${NC}"
+
+        # Determine package type from workspace config
+        local package_type
+        package_type=$(node -e "
+            const config = require('$WORKSPACE_ROOT/workspace.json');
+            const pkg = config.dependencies['$package_name'];
+            if (pkg) console.log(pkg.type);
+            else { console.error('Package not found'); process.exit(1); }
+        " 2>/dev/null) || {
+            echo -e "${RED}Package $package_name not found${NC}"
+            exit 1
+        }
+
+        case $package_type in
+            "typescript")
+                node "$SCRIPT_DIR/dependency-manager.js" install "$package_name"
+                ;;
+            "python")
+                cd "$WORKSPACE_ROOT"
+                python3 "$SCRIPT_DIR/dependency_resolver.py" lockfile "$package_name"
+                ;;
+            "julia")
+                julia "$SCRIPT_DIR/julia_deps.jl" install "$package_name"
+                ;;
+        esac
+    else
+        echo -e "${YELLOW}Installing all package dependencies...${NC}"
+        node "$SCRIPT_DIR/dependency-manager.js" install
+    fi
+}
+
+update_dependencies() {
+    local package_name="$1"
+
+    echo -e "${BLUE}🔄 Updating dependencies...${NC}"
+
+    if [[ -n "$package_name" ]]; then
+        echo -e "${YELLOW}Updating dependencies for $package_name...${NC}"
+
+        # Determine package type from workspace config
+        local package_type
+        package_type=$(node -e "
+            const config = require('$WORKSPACE_ROOT/workspace.json');
+            const pkg = config.dependencies['$package_name'];
+            if (pkg) console.log(pkg.type);
+            else { console.error('Package not found'); process.exit(1); }
+        " 2>/dev/null) || {
+            echo -e "${RED}Package $package_name not found${NC}"
+            exit 1
+        }
+
+        case $package_type in
+            "typescript")
+                node "$SCRIPT_DIR/dependency-manager.js" update "$package_name"
+                ;;
+            "python")
+                python3 "$SCRIPT_DIR/dependency_resolver.py" update "$package_name"
+                ;;
+            "julia")
+                julia "$SCRIPT_DIR/julia_deps.jl" update "$package_name"
+                ;;
+        esac
+    else
+        echo -e "${YELLOW}Updating all package dependencies...${NC}"
+        node "$SCRIPT_DIR/dependency-manager.js" update
+    fi
+}
+
+resolve_conflicts() {
+    local package_type="${1:-all}"
+
+    echo -e "${BLUE}🔧 Resolving dependency conflicts...${NC}"
+
+    case $package_type in
+        "all")
+            echo -e "${YELLOW}TypeScript conflict resolutions:${NC}"
+            node "$SCRIPT_DIR/dependency-manager.js" conflicts
+
+            echo -e "\n${YELLOW}Python conflict resolutions:${NC}"
+            if command -v python3 &> /dev/null; then
+                python3 "$SCRIPT_DIR/dependency_resolver.py" resolve
+            fi
+
+            echo -e "\n${YELLOW}Julia conflict resolutions:${NC}"
+            if command -v julia &> /dev/null; then
+                julia "$SCRIPT_DIR/julia_deps.jl" resolve
+            fi
+            ;;
+        "js"|"typescript")
+            node "$SCRIPT_DIR/dependency-manager.js" conflicts
+            ;;
+        "py"|"python")
+            python3 "$SCRIPT_DIR/dependency_resolver.py" resolve
+            ;;
+        "jl"|"julia")
+            julia "$SCRIPT_DIR/julia_deps.jl" resolve
+            ;;
+    esac
+}
+
+generate_report() {
+    echo -e "${BLUE}📊 Generating comprehensive dependency report...${NC}"
+
+    local timestamp=$(date -Iseconds)
+    local report_file="$WORKSPACE_ROOT/dependency-report-$timestamp.json"
+
+    # Combine reports from all package managers
+    cat > "$report_file" << EOF
+{
+  "timestamp": "$timestamp",
+  "workspace": "EarthSciSerialization",
+  "reports": {
+EOF
+
+    echo -e "${YELLOW}Generating TypeScript report...${NC}"
+    echo '    "typescript": ' >> "$report_file"
+    node "$SCRIPT_DIR/dependency-manager.js" report >> "$report_file"
+    echo ',' >> "$report_file"
+
+    if command -v julia &> /dev/null; then
+        echo -e "${YELLOW}Generating Julia report...${NC}"
+        echo '    "julia": ' >> "$report_file"
+        julia "$SCRIPT_DIR/julia_deps.jl" report >> "$report_file"
+    else
+        echo '    "julia": null' >> "$report_file"
+    fi
+
+    cat >> "$report_file" << EOF
+  }
+}
+EOF
+
+    echo -e "${GREEN}✅ Report generated: $report_file${NC}"
+
+    # Display summary
+    echo -e "\n${BLUE}📋 Report Summary:${NC}"
+    if command -v jq &> /dev/null; then
+        jq -r '.reports.typescript | "TypeScript packages: \(.packages // 0), conflicts: \(.conflicts // 0)"' "$report_file" 2>/dev/null || true
+        jq -r '.reports.julia | if . then "Julia packages: \(.julia_packages // 0), conflicts: \(.conflicts // 0)" else "Julia: not available" end' "$report_file" 2>/dev/null || true
+    else
+        echo "Install jq for formatted report summary"
+    fi
+}
+
+show_tree() {
+    echo -e "${BLUE}🌳 Dependency Tree:${NC}"
+    node "$SCRIPT_DIR/dependency-manager.js" tree
+}
+
+list_packages() {
+    echo -e "${BLUE}📋 Workspace Packages:${NC}"
+    node "$SCRIPT_DIR/dependency-manager.js" list
+}
+
+main() {
+    if [[ $# -eq 0 ]]; then
+        print_help
+        exit 0
+    fi
+
+    local command="$1"
+    shift
+
+    case "$command" in
+        "check")
+            check_dependencies "$1"
+            ;;
+        "install")
+            install_dependencies "$1"
+            ;;
+        "update")
+            update_dependencies "$1"
+            ;;
+        "resolve")
+            resolve_conflicts "$1"
+            ;;
+        "report")
+            generate_report
+            ;;
+        "tree")
+            show_tree
+            ;;
+        "list")
+            list_packages
+            ;;
+        "help"|"--help"|"-h")
+            print_help
+            ;;
+        *)
+            echo -e "${RED}Unknown command: $command${NC}"
+            print_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
