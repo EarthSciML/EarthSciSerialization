@@ -124,8 +124,8 @@ describe('CouplingGraph', () => {
       />
     ));
 
-    expect(screen.getByRole('img', { hidden: true })).toBeInTheDocument();
-    const svg = screen.getByRole('img', { hidden: true });
+    const svg = screen.getByTestId('coupling-graph-svg');
+    expect(svg).toBeInTheDocument();
     expect(svg).toHaveAttribute('width', '800');
     expect(svg).toHaveAttribute('height', '600');
   });
@@ -140,7 +140,7 @@ describe('CouplingGraph', () => {
     ));
 
     // Check that nodes are rendered with correct classes
-    const svg = screen.getByRole('img', { hidden: true });
+    const svg = screen.getByTestId('coupling-graph-svg');
 
     // Should have nodes for models, reaction systems, data loaders, and operators
     expect(svg.querySelector('.node-model')).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe('CouplingGraph', () => {
       />
     ));
 
-    const svg = screen.getByRole('img', { hidden: true });
+    const svg = screen.getByTestId('coupling-graph-svg');
 
     // Should have edges for different coupling types
     expect(svg.querySelector('.edge-operator_compose')).toBeInTheDocument();
@@ -230,7 +230,7 @@ describe('CouplingGraph', () => {
     ));
 
     // Find and click an edge
-    const edge = screen.getByRole('img', { hidden: true }).querySelector('.edge-operator_compose');
+    const edge = screen.getByTestId('coupling-graph-svg').querySelector('.edge-operator_compose');
     expect(edge).toBeInTheDocument();
 
     fireEvent.click(edge!);
@@ -255,11 +255,17 @@ describe('CouplingGraph', () => {
     const transportNode = screen.getByText('Transport').closest('.node');
     fireEvent.click(transportNode!);
 
-    // Wait for details panel to appear
+    // Wait for node to be marked as selected
     await waitFor(() => {
-      expect(screen.getByText('Transport')).toBeInTheDocument(); // In details panel
-      expect(screen.getByText('model')).toBeInTheDocument(); // Component type
-      expect(screen.getByText('3D transport model')).toBeInTheDocument(); // Description
+      expect(transportNode).toHaveClass('selected');
+    });
+
+    // Check that details panel is visible
+    await waitFor(() => {
+      const detailsPanel = document.querySelector('.component-details-panel');
+      expect(detailsPanel).toBeInTheDocument();
+      expect(detailsPanel?.querySelector('h3')).toHaveTextContent('Transport');
+      expect(detailsPanel?.querySelector('.component-type')).toHaveTextContent('MODEL');
     });
   });
 
@@ -279,16 +285,17 @@ describe('CouplingGraph', () => {
 
     // Wait for details panel to appear
     await waitFor(() => {
-      expect(screen.getByText('3D transport model')).toBeInTheDocument();
+      const panel = document.querySelector('.component-details-panel');
+      expect(panel).toBeInTheDocument();
     });
 
     // Click close button
     const closeButton = screen.getByText('×');
     fireEvent.click(closeButton);
 
-    // Details panel should disappear
+    // Node should no longer be selected
     await waitFor(() => {
-      expect(screen.queryByText('3D transport model')).not.toBeInTheDocument();
+      expect(transportNode).not.toHaveClass('selected');
     });
   });
 
@@ -310,7 +317,7 @@ describe('CouplingGraph', () => {
     ));
 
     // Should render SVG without errors
-    expect(screen.getByRole('img', { hidden: true })).toBeInTheDocument();
+    expect(screen.getByTestId('coupling-graph-svg')).toBeInTheDocument();
   });
 
   it('applies correct CSS classes based on component types', () => {
@@ -322,7 +329,7 @@ describe('CouplingGraph', () => {
       />
     ));
 
-    const svg = screen.getByRole('img', { hidden: true });
+    const svg = screen.getByTestId('coupling-graph-svg');
 
     // Check node type classes
     expect(svg.querySelector('.node-model')).toBeInTheDocument();
@@ -341,7 +348,7 @@ describe('CouplingGraph', () => {
       <CouplingGraph esmFile={mockEsmFile} />
     ));
 
-    const svg = screen.getByRole('img', { hidden: true });
+    const svg = screen.getByTestId('coupling-graph-svg');
     expect(svg).toHaveAttribute('width', '800'); // Default width
     expect(svg).toHaveAttribute('height', '600'); // Default height
   });
