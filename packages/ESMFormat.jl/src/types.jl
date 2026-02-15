@@ -366,22 +366,278 @@ struct Domain
 end
 
 """
-    Solver
+    @enum SolverStrategy
 
-Solver strategy and configuration.
+Enumeration of supported solver strategies:
+- StrangThreads: Strang splitting with parallel processing
+- StrangSerial: Strang splitting with serial processing
+- IMEX: Implicit-Explicit method
 """
-struct Solver
-    algorithm::String
-    tolerances::Dict{String,Float64}
-    max_iterations::Union{Int,Nothing}
-    parameters::Dict{String,Any}
+@enum SolverStrategy begin
+    StrangThreads
+    StrangSerial
+    IMEX
+end
+
+"""
+    @enum NumericalMethod
+
+Enumeration of supported numerical methods:
+- FiniteDifferenceMethod (FDM): Finite difference discretization
+- FiniteElementMethod (FEM): Finite element discretization
+- FiniteVolumeMethod (FVM): Finite volume discretization
+"""
+@enum NumericalMethod begin
+    FiniteDifferenceMethod
+    FiniteElementMethod
+    FiniteVolumeMethod
+end
+
+"""
+    SolverConfiguration
+
+Strategy-specific configuration for solver methods.
+Contains method-specific parameters, tolerances, and algorithms.
+"""
+struct SolverConfiguration
+    # Core configuration
+    threads::Union{Int,Nothing}
+    timestep::Union{Float64,Nothing}
+
+    # Algorithm selection
+    stiff_algorithm::Union{String,Nothing}
+    nonstiff_algorithm::Union{String,Nothing}
+    map_algorithm::Union{String,Nothing}
+
+    # Convergence criteria
+    stiff_kwargs::Dict{String,Any}
+
+    # Numerical method information
+    numerical_method::Union{NumericalMethod,Nothing}
+
+    # Additional parameters
+    extra_parameters::Dict{String,Any}
 
     # Constructor with optional parameters
-    Solver(algorithm::String;
-           tolerances=Dict("rtol"=>1e-6, "atol"=>1e-8),
-           max_iterations=nothing,
-           parameters=Dict{String,Any}()) =
-        new(algorithm, tolerances, max_iterations, parameters)
+    SolverConfiguration(;
+                       threads=nothing,
+                       timestep=nothing,
+                       stiff_algorithm=nothing,
+                       nonstiff_algorithm=nothing,
+                       map_algorithm=nothing,
+                       stiff_kwargs=Dict{String,Any}("abstol"=>1e-8, "reltol"=>1e-6),
+                       numerical_method=nothing,
+                       extra_parameters=Dict{String,Any}()) =
+        new(threads, timestep, stiff_algorithm, nonstiff_algorithm, map_algorithm,
+            stiff_kwargs, numerical_method, extra_parameters)
+end
+
+"""
+    Solver
+
+Enhanced solver strategy and configuration supporting different numerical methods,
+solver parameters, convergence criteria, and method compatibility checking.
+"""
+struct Solver
+    strategy::SolverStrategy
+    config::SolverConfiguration
+
+    # Constructor with strategy and configuration
+    Solver(strategy::SolverStrategy, config::SolverConfiguration) =
+        new(strategy, config)
+
+    # Convenience constructor with strategy string
+    function Solver(strategy_str::String; kwargs...)
+        strategy = parse_solver_strategy(strategy_str)
+        config = SolverConfiguration(; kwargs...)
+        return new(strategy, config)
+    end
+end
+
+"""
+    parse_solver_strategy(strategy_str::String) -> SolverStrategy
+
+Parse solver strategy string to enum value.
+"""
+function parse_solver_strategy(strategy_str::String)::SolverStrategy
+    strategy_map = Dict{String,SolverStrategy}(
+        "strang_threads" => StrangThreads,
+        "strang_serial" => StrangSerial,
+        "imex" => IMEX
+    )
+
+    if !haskey(strategy_map, strategy_str)
+        throw(ArgumentError("Unknown solver strategy: $strategy_str. Supported strategies: $(keys(strategy_map))"))
+    end
+
+    return strategy_map[strategy_str]
+end
+
+"""
+    solver_strategy_to_string(strategy::SolverStrategy) -> String
+
+Convert solver strategy enum to string representation.
+"""
+function solver_strategy_to_string(strategy::SolverStrategy)::String
+    strategy_map = Dict{SolverStrategy,String}(
+        StrangThreads => "strang_threads",
+        StrangSerial => "strang_serial",
+        IMEX => "imex"
+    )
+
+    return strategy_map[strategy]
+end
+
+"""
+    parse_numerical_method(method_str::String) -> NumericalMethod
+
+Parse numerical method string to enum value.
+"""
+function parse_numerical_method(method_str::String)::NumericalMethod
+    method_map = Dict{String,NumericalMethod}(
+        "fdm" => FiniteDifferenceMethod,
+        "finite_difference" => FiniteDifferenceMethod,
+        "fem" => FiniteElementMethod,
+        "finite_element" => FiniteElementMethod,
+        "fvm" => FiniteVolumeMethod,
+        "finite_volume" => FiniteVolumeMethod
+    )
+
+    if !haskey(method_map, lowercase(method_str))
+        throw(ArgumentError("Unknown numerical method: $method_str. Supported methods: $(keys(method_map))"))
+    end
+
+    return method_map[lowercase(method_str)]
+end
+
+"""
+    numerical_method_to_string(method::NumericalMethod) -> String
+
+Convert numerical method enum to string representation.
+"""
+function numerical_method_to_string(method::NumericalMethod)::String
+    method_map = Dict{NumericalMethod,String}(
+        FiniteDifferenceMethod => "fdm",
+        FiniteElementMethod => "fem",
+        FiniteVolumeMethod => "fvm"
+    )
+
+    return method_map[method]
+end
+
+"""
+    validate_solver_compatibility(solver::Solver) -> Bool
+
+Check compatibility between solver strategy and configuration.
+Returns true if configuration is compatible with strategy.
+"""
+function validate_solver_compatibility(solver::Solver)::Bool
+    strategy = solver.strategy
+    config = solver.config
+
+    # Strategy-specific validation
+    if strategy == StrangThreads
+        # Strang with threads requires thread count
+        if config.threads === nothing || config.threads < 1
+            return false
+        end
+
+        # Should have both stiff and nonstiff algorithms for splitting
+        if config.stiff_algorithm === nothing && config.nonstiff_algorithm === nothing
+            return false
+        end
+    elseif strategy == StrangSerial
+        # Strang serial shouldn't specify threads > 1
+        if config.threads !== nothing && config.threads > 1
+            return false
+        end
+
+        # Should have both stiff and nonstiff algorithms for splitting
+        if config.stiff_algorithm === nothing && config.nonstiff_algorithm === nothing
+            return false
+        end
+    elseif strategy == IMEX
+        # IMEX should have stiff algorithm specified
+        if config.stiff_algorithm === nothing
+            return false
+        end
+    end
+
+    # Timestep validation
+    if config.timestep !== nothing && config.timestep <= 0
+        return false
+    end
+
+    # Tolerance validation
+    if haskey(config.stiff_kwargs, "abstol") && config.stiff_kwargs["abstol"] <= 0
+        return false
+    end
+    if haskey(config.stiff_kwargs, "reltol") && config.stiff_kwargs["reltol"] <= 0
+        return false
+    end
+
+    return true
+end
+
+"""
+    get_recommended_algorithms(strategy::SolverStrategy, method::NumericalMethod) -> Dict{String,String}
+
+Get recommended algorithm combinations for a given strategy and numerical method.
+"""
+function get_recommended_algorithms(strategy::SolverStrategy, method::NumericalMethod)::Dict{String,String}
+    recommendations = Dict{String,String}()
+
+    if strategy == StrangThreads || strategy == StrangSerial
+        if method == FiniteDifferenceMethod
+            recommendations["stiff_algorithm"] = "QNDF"
+            recommendations["nonstiff_algorithm"] = "Tsit5"
+        elseif method == FiniteElementMethod
+            recommendations["stiff_algorithm"] = "KenCarp4"
+            recommendations["nonstiff_algorithm"] = "Tsit5"
+        elseif method == FiniteVolumeMethod
+            recommendations["stiff_algorithm"] = "QBDF"
+            recommendations["nonstiff_algorithm"] = "Tsit5"
+        end
+    elseif strategy == IMEX
+        if method == FiniteDifferenceMethod
+            recommendations["stiff_algorithm"] = "KenCarp4"
+        elseif method == FiniteElementMethod
+            recommendations["stiff_algorithm"] = "ARKODE"
+        elseif method == FiniteVolumeMethod
+            recommendations["stiff_algorithm"] = "KenCarp5"
+        end
+    end
+
+    return recommendations
+end
+
+"""
+    create_solver_with_method(strategy_str::String, method_str::String; kwargs...) -> Solver
+
+Convenience constructor to create a solver with recommended settings for a given
+strategy and numerical method combination.
+"""
+function create_solver_with_method(strategy_str::String, method_str::String; kwargs...)::Solver
+    strategy = parse_solver_strategy(strategy_str)
+    method = parse_numerical_method(method_str)
+
+    # Get recommended algorithms
+    recommendations = get_recommended_algorithms(strategy, method)
+
+    # Merge recommendations with user-provided kwargs
+    config_args = merge(recommendations, kwargs)
+    config_args[:numerical_method] = method
+
+    config = SolverConfiguration(; NamedTuple(Symbol(k) => v for (k, v) in config_args)...)
+
+    solver = Solver(strategy, config)
+
+    # Validate compatibility
+    if !validate_solver_compatibility(solver)
+        @warn "Solver configuration may not be compatible with strategy $strategy_str and method $method_str"
+    end
+
+    return solver
 end
 
 """

@@ -7,6 +7,7 @@ using ESMFormat
     # Temporarily disabled due to precompilation issues
     # include("mtk_catalyst_test.jl")
     include("reference_resolution_test.jl")
+    include("solver_test.jl")
 
     @testset "Expression Types" begin
         # Test NumExpr
@@ -131,10 +132,12 @@ using ESMFormat
         @test domain.spatial isa Dict
         @test domain.temporal isa Dict
 
-        # Test Solver
-        solver = Solver("Tsit5", tolerances=Dict("rtol"=>1e-8))
-        @test solver.algorithm == "Tsit5"
-        @test solver.tolerances["rtol"] == 1e-8
+        # Test Solver (new format)
+        solver = Solver("imex", stiff_algorithm="Tsit5")
+        solver.config.stiff_kwargs["rtol"] = 1e-8
+        @test solver.strategy == IMEX
+        @test solver.config.stiff_algorithm == "Tsit5"
+        @test solver.config.stiff_kwargs["rtol"] == 1e-8
 
         # Test EsmFile
         esm_file = EsmFile("0.1.0", metadata)

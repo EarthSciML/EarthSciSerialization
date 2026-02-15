@@ -36,6 +36,16 @@ export
     DataLoader, Operator, CouplingEntry,
     # System types
     Domain, Solver, Reference, Metadata, EsmFile,
+    # Solver types and enums
+    SolverStrategy, StrangThreads, StrangSerial, IMEX,
+    NumericalMethod, FiniteDifferenceMethod, FiniteElementMethod, FiniteVolumeMethod,
+    SolverConfiguration,
+    # Solver utility functions
+    parse_solver_strategy, solver_strategy_to_string,
+    parse_numerical_method, numerical_method_to_string,
+    validate_solver_compatibility, get_recommended_algorithms, create_solver_with_method,
+    # Serialization functions for solver (internal)
+    serialize_solver, serialize_solver_configuration, coerce_solver, coerce_solver_configuration,
     # JSON functionality
     load, save, ParseError, SchemaValidationError,
     # Qualified reference resolution

@@ -368,19 +368,65 @@ end
 """
     serialize_solver(solver::Solver) -> Dict{String,Any}
 
-Serialize Solver to JSON-compatible format.
+Serialize Solver to JSON-compatible format matching the ESM schema.
 """
 function serialize_solver(solver::Solver)::Dict{String,Any}
-    result = Dict{String,Any}("algorithm" => solver.algorithm)
+    result = Dict{String,Any}("strategy" => solver_strategy_to_string(solver.strategy))
 
-    if !isempty(solver.tolerances)
-        result["tolerances"] = solver.tolerances
+    # Serialize configuration
+    config_dict = serialize_solver_configuration(solver.config)
+    if !isempty(config_dict)
+        result["config"] = config_dict
     end
-    if solver.max_iterations !== nothing
-        result["max_iterations"] = solver.max_iterations
+
+    return result
+end
+
+"""
+    serialize_solver_configuration(config::SolverConfiguration) -> Dict{String,Any}
+
+Serialize SolverConfiguration to JSON-compatible format.
+"""
+function serialize_solver_configuration(config::SolverConfiguration)::Dict{String,Any}
+    result = Dict{String,Any}()
+
+    # Add basic configuration
+    if config.threads !== nothing
+        result["threads"] = config.threads
     end
-    if !isempty(solver.parameters)
-        result["parameters"] = solver.parameters
+
+    if config.timestep !== nothing
+        result["timestep"] = config.timestep
+    end
+
+    # Add algorithm selections
+    if config.stiff_algorithm !== nothing
+        result["stiff_algorithm"] = config.stiff_algorithm
+    end
+
+    if config.nonstiff_algorithm !== nothing
+        result["nonstiff_algorithm"] = config.nonstiff_algorithm
+    end
+
+    if config.map_algorithm !== nothing
+        result["map_algorithm"] = config.map_algorithm
+    end
+
+    # Add stiff solver parameters
+    if !isempty(config.stiff_kwargs)
+        result["stiff_kwargs"] = config.stiff_kwargs
+    end
+
+    # Add numerical method if specified
+    if config.numerical_method !== nothing
+        result["numerical_method"] = numerical_method_to_string(config.numerical_method)
+    end
+
+    # Add extra parameters
+    for (key, value) in config.extra_parameters
+        if !haskey(result, key)  # Don't overwrite existing keys
+            result[key] = value
+        end
     end
 
     return result
