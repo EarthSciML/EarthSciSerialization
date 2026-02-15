@@ -1,0 +1,149 @@
+name: Go CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.19', '1.20', '1.21', '1.22']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('packages/esm-format-go/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      working-directory: packages/esm-format-go
+      run: go mod download
+
+    - name: Verify dependencies
+      working-directory: packages/esm-format-go
+      run: go mod verify
+
+    - name: Run go vet
+      working-directory: packages/esm-format-go
+      run: go vet ./...
+
+    - name: Run tests
+      working-directory: packages/esm-format-go
+      run: go test -v -race -coverprofile=coverage.out ./...
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      if: matrix.go-version == '1.22'
+      with:
+        file: packages/esm-format-go/coverage.out
+        flags: go
+
+    - name: Build binary
+      working-directory: packages/esm-format-go
+      run: go build -v ./...
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      if: matrix.go-version == '1.22'
+      with:
+        version: latest
+        working-directory: packages/esm-format-go
+
+  build-release:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Update version
+      working-directory: packages/esm-format-go
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "Building version: $VERSION"
+
+        # Update version in code if needed
+        sed -i "s/Version = \"[^\"]*\"/Version = \"$VERSION\"/" pkg/esm/version.go 2>/dev/null || true
+
+    - name: Build for multiple platforms
+      working-directory: packages/esm-format-go
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+
+        # Build for different platforms
+        GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=$VERSION" -o esm-go-linux-amd64 ./main.go
+        GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=$VERSION" -o esm-go-darwin-amd64 ./main.go
+        GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=$VERSION" -o esm-go-darwin-arm64 ./main.go
+        GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=$VERSION" -o esm-go-windows-amd64.exe ./main.go
+
+    - name: Create release assets
+      working-directory: packages/esm-format-go
+      run: |
+        mkdir -p dist
+        mv esm-go-* dist/
+
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: packages/esm-format-go/dist/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-module:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Tag Go module
+      working-directory: packages/esm-format-go
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+
+        # Create module-specific tag
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag -a "esm-format-go/v$VERSION" -m "Go module v$VERSION"
+        git push origin "esm-format-go/v$VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set GOPROXY
+      run: echo "GOPROXY=https://proxy.golang.org,direct" >> $GITHUB_ENV
+
+    - name: Trigger module indexing
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        MODULE_PATH="github.com/ctessum/EarthSciSerialization/packages/esm-format-go"
+
+        # Make a request to trigger module indexing
+        curl -X GET "https://proxy.golang.org/$MODULE_PATH/@v/v$VERSION.info" || true
