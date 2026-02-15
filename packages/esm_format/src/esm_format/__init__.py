@@ -116,6 +116,19 @@ from .boundary_conditions import (
     create_periodic_boundary,
     validate_domain_boundary_consistency,
 )
+from .time_synchronization import (
+    TimeSynchronizer,
+    TimeStep,
+    TimePoint,
+    TimeSeries,
+    ComponentTimeState,
+    TimeInterpolationMethod,
+    TimeExtrapolationMethod,
+    TimeAlignmentStrategy,
+    synchronize_coupled_system,
+    create_subcycling_synchronizer,
+    validate_time_synchronization_config,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -215,4 +228,15 @@ __all__ = [
     "ExpansionContext",
     "CircularReferenceError",
     "PlaceholderExpansionError",
+    "TimeSynchronizer",
+    "TimeStep",
+    "TimePoint",
+    "TimeSeries",
+    "ComponentTimeState",
+    "TimeInterpolationMethod",
+    "TimeExtrapolationMethod",
+    "TimeAlignmentStrategy",
+    "synchronize_coupled_system",
+    "create_subcycling_synchronizer",
+    "validate_time_synchronization_config",
 ]
