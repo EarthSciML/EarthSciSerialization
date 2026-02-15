@@ -13,6 +13,9 @@
 export { ExpressionNode as ExpressionNodeComponent, type ExpressionNodeProps } from './ExpressionNode.tsx';
 export { ModelEditor, type ModelEditorProps } from './ModelEditor.tsx';
 export { CouplingGraph, type CouplingGraphProps } from './CouplingGraph.tsx';
+export { ValidationPanel, type ValidationPanelProps } from './ValidationPanel.tsx';
+export { FileSummary, type FileSummaryProps } from './FileSummary.tsx';
+export { SimulationControls, type SimulationControlsProps } from './SimulationControls.tsx';
 
 // Type definitions for interactive editing
 export interface EditorState {
