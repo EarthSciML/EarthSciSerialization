@@ -1,0 +1,23 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnicodeAttacksTest",
+    "description": "Test Unicode normalization attacks and homograph attacks: аdmin vs admin (Cyrillic vs Latin), mathematical symbols ∞ ∑ ∫, emoji 💀💣🔥, right-to-left override ‮drowssap‬, zero-width characters​​​​​",
+    "authors": ["Security Test 🔒"]
+  },
+  "models": {
+    "Tеst‮Mοdеl": {
+      "variables": {
+        "х": { "type": "state", "units": "m", "default": 0.0 },
+        "∞": { "type": "parameter", "units": "1", "default": 1.0 },
+        "​hidden​var​": { "type": "parameter", "units": "1", "default": 2.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["х"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["∞", "​hidden​var​"] }
+        }
+      ]
+    }
+  }
+}
