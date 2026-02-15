@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config'
+import solidPlugin from 'vite-plugin-solid'
 
 export default defineConfig({
+  plugins: [solidPlugin({ ssr: false, dev: true })],
   test: {
     environment: 'jsdom',
     globals: true,
@@ -12,11 +14,6 @@ export default defineConfig({
       '**/.{idea,git,cache,output,temp}/**',
       '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*'
     ]
-  },
-  esbuild: {
-    jsx: 'automatic',
-    jsxImportSource: 'solid-js',
-    target: 'esnext'
   },
   define: {
     'import.meta.vitest': 'undefined'
