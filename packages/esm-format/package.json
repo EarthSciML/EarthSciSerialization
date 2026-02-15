@@ -89,9 +89,13 @@
   },
   "dependencies": {
     "@types/d3-force": "^3.0.10",
+    "@types/d3-selection": "^3.0.11",
+    "@types/d3-zoom": "^3.0.8",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "d3-force": "^3.0.0",
+    "d3-selection": "^3.0.0",
+    "d3-zoom": "^3.0.0",
     "solid-element": "^1.9.1",
     "solid-js": "^1.8.0"
   },
