@@ -42,6 +42,9 @@ export { freeVariables, freeParameters, contains, evaluate, simplify } from './e
 // Interactive editor components (SolidJS)
 export * from './interactive-editor/index.js'
 
+// Web Components (framework-agnostic usage)
+export * from './web-components.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
