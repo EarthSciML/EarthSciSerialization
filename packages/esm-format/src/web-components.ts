@@ -14,7 +14,10 @@ import { customElement } from 'solid-element';
 import { ExpressionNode, type ExpressionNodeProps } from './interactive-editor/ExpressionNode.js';
 import { ModelEditor, type ModelEditorProps } from './interactive-editor/ModelEditor.js';
 import { CouplingGraph, type CouplingGraphProps } from './interactive-editor/CouplingGraph.js';
-import type { Expression, Model, EsmFile } from './types.js';
+import { ValidationPanel, type ValidationPanelProps } from './interactive-editor/ValidationPanel.js';
+import { FileSummary, type FileSummaryProps } from './interactive-editor/FileSummary.js';
+import { SimulationControls, type SimulationControlsProps } from './interactive-editor/SimulationControls.js';
+import type { Expression, Model, EsmFile, ValidationError } from './types.js';
 import { createSignal } from 'solid-js';
 
 // Import CSS styles
@@ -90,6 +93,88 @@ export interface EsmCouplingGraphProps {
 
   /** Whether the visualization should be interactive */
   interactive?: boolean;
+}
+
+/**
+ * Web component wrapper for ValidationPanel
+ *
+ * Usage:
+ * <esm-validation-panel
+ *   model='{"variables": {...}, "equations": [...]}'
+ *   validation-errors='[{"message": "Error", "path": "..."}]'
+ *   show-details="true">
+ * </esm-validation-panel>
+ */
+export interface EsmValidationPanelProps {
+  /** JSON string of the model being validated */
+  model: string;
+
+  /** JSON array string of validation errors */
+  'validation-errors': string;
+
+  /** JSON array string of validation warnings */
+  'validation-warnings'?: string;
+
+  /** Whether the panel should auto-update when model changes */
+  'auto-validate'?: boolean;
+
+  /** Whether to show detailed error information */
+  'show-details'?: boolean;
+}
+
+/**
+ * Web component wrapper for FileSummary
+ *
+ * Usage:
+ * <esm-file-summary
+ *   esm-file='{"components": [...], "coupling": [...]}'
+ *   show-details="true"
+ *   show-export-options="true">
+ * </esm-file-summary>
+ */
+export interface EsmFileSummaryProps {
+  /** JSON string of the ESM file to summarize */
+  'esm-file': string;
+
+  /** Whether to show detailed statistics */
+  'show-details'?: boolean;
+
+  /** Whether to show export options */
+  'show-export-options'?: boolean;
+}
+
+/**
+ * Web component wrapper for SimulationControls
+ *
+ * Usage:
+ * <esm-simulation-controls
+ *   esm-file='{"components": [...], "coupling": [...]}'
+ *   is-running="false"
+ *   progress="50"
+ *   available-backends='["julia", "python"]'>
+ * </esm-simulation-controls>
+ */
+export interface EsmSimulationControlsProps {
+  /** JSON string of the ESM file to simulate */
+  'esm-file': string;
+
+  /** Whether simulation is currently running */
+  'is-running'?: boolean;
+
+  /** Current simulation progress (0-100) */
+  progress?: number;
+
+  /** Simulation status message */
+  'status-message'?: string;
+
+  /** JSON array string of available simulation backends */
+  'available-backends'?: string;
+
+  /** Current selected backend */
+  'selected-backend'?: string;
+
+  /** JSON string of simulation parameters */
+  'simulation-params'?: string;
 }
 
 /**
@@ -293,6 +378,203 @@ export const EsmCouplingGraphComponent = (props: any) => {
   }
 };
 
+export const EsmValidationPanelComponent = (props: any) => {
+  // Validate required props
+  if (!props.model) {
+    return () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-state';
+      errorDiv.textContent = 'Missing required attribute: model';
+      return errorDiv;
+    };
+  }
+
+  if (!props['validation-errors']) {
+    return () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-state';
+      errorDiv.textContent = 'Missing required attribute: validation-errors';
+      return errorDiv;
+    };
+  }
+
+  try {
+    // Parse JSON strings
+    const model: Model = JSON.parse(props.model);
+    const validationErrors: ValidationError[] = JSON.parse(props['validation-errors']);
+    const validationWarnings: ValidationError[] = props['validation-warnings']
+      ? JSON.parse(props['validation-warnings'])
+      : [];
+
+    // Convert props
+    const componentProps: ValidationPanelProps = {
+      model: model,
+      validationErrors: validationErrors,
+      validationWarnings: validationWarnings,
+      autoValidate: props['auto-validate'] !== 'false',
+      showDetails: props['show-details'] !== 'false',
+      onErrorClick: (error: ValidationError) => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('errorClick', {
+            detail: error,
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      }
+    };
+
+    return () => ValidationPanel(componentProps);
+  } catch (error) {
+    return () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-state';
+      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      return errorDiv;
+    };
+  }
+};
+
+export const EsmFileSummaryComponent = (props: any) => {
+  // Validate required props
+  const esmFileValue = props['esm-file'] || props.esmFile;
+  if (!esmFileValue) {
+    return () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-state';
+      errorDiv.textContent = 'Missing required attribute: esm-file';
+      return errorDiv;
+    };
+  }
+
+  try {
+    // Parse JSON strings
+    const esmFile: EsmFile = JSON.parse(esmFileValue);
+
+    // Convert props
+    const componentProps: FileSummaryProps = {
+      esmFile: esmFile,
+      showDetails: props['show-details'] !== 'false',
+      showExportOptions: props['show-export-options'] !== 'false',
+      onComponentTypeClick: (componentType: string) => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('componentTypeClick', {
+            detail: { componentType },
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      },
+      onExport: (format: 'json' | 'yaml' | 'toml') => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('export', {
+            detail: { format },
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      }
+    };
+
+    return () => FileSummary(componentProps);
+  } catch (error) {
+    return () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-state';
+      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      return errorDiv;
+    };
+  }
+};
+
+export const EsmSimulationControlsComponent = (props: any) => {
+  // Validate required props
+  const esmFileValue = props['esm-file'] || props.esmFile;
+  if (!esmFileValue) {
+    return () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-state';
+      errorDiv.textContent = 'Missing required attribute: esm-file';
+      return errorDiv;
+    };
+  }
+
+  try {
+    // Parse JSON strings
+    const esmFile: EsmFile = JSON.parse(esmFileValue);
+    const availableBackends: string[] = props['available-backends']
+      ? JSON.parse(props['available-backends'])
+      : [];
+    const simulationParams = props['simulation-params']
+      ? JSON.parse(props['simulation-params'])
+      : undefined;
+
+    // Convert props
+    const componentProps: SimulationControlsProps = {
+      esmFile: esmFile,
+      isRunning: props['is-running'] === 'true' || props['is-running'] === true,
+      progress: props.progress ? parseFloat(props.progress) : undefined,
+      statusMessage: props['status-message'],
+      availableBackends: availableBackends.length > 0 ? availableBackends : undefined,
+      selectedBackend: props['selected-backend'],
+      simulationParams: simulationParams,
+      onStartSimulation: (params) => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('startSimulation', {
+            detail: params,
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      },
+      onStopSimulation: () => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('stopSimulation', {
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      },
+      onPauseResume: (isPaused: boolean) => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('pauseResume', {
+            detail: { isPaused },
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      },
+      onParametersChange: (params) => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('parametersChange', {
+            detail: params,
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      },
+      onBackendChange: (backend: string) => {
+        if (typeof window !== 'undefined' && props.element) {
+          const event = new CustomEvent('backendChange', {
+            detail: { backend },
+            bubbles: true
+          });
+          props.element.dispatchEvent(event);
+        }
+      }
+    };
+
+    return () => SimulationControls(componentProps);
+  } catch (error) {
+    return () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-state';
+      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      return errorDiv;
+    };
+  }
+};
+
 // Register web components
 export function registerWebComponents() {
   if (typeof window === 'undefined' || typeof customElements === 'undefined') {
@@ -316,6 +598,21 @@ export function registerWebComponents() {
       element: null  // Will be set by solid-element
     }, ['esm-file', 'width', 'height', 'interactive']);
 
+    customElement('esm-validation-panel', {
+      ...EsmValidationPanelComponent,
+      element: null  // Will be set by solid-element
+    }, ['model', 'validation-errors', 'validation-warnings', 'auto-validate', 'show-details']);
+
+    customElement('esm-file-summary', {
+      ...EsmFileSummaryComponent,
+      element: null  // Will be set by solid-element
+    }, ['esm-file', 'show-details', 'show-export-options']);
+
+    customElement('esm-simulation-controls', {
+      ...EsmSimulationControlsComponent,
+      element: null  // Will be set by solid-element
+    }, ['esm-file', 'is-running', 'progress', 'status-message', 'available-backends', 'selected-backend', 'simulation-params']);
+
   } catch (error) {
     console.warn('Failed to register ESM web components:', error);
   }
@@ -330,5 +627,8 @@ if (typeof window !== 'undefined') {
 export type {
   EsmExpressionNodeProps,
   EsmModelEditorProps,
-  EsmCouplingGraphProps
+  EsmCouplingGraphProps,
+  EsmValidationPanelProps,
+  EsmFileSummaryProps,
+  EsmSimulationControlsProps
 };
