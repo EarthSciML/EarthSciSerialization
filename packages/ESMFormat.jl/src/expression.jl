@@ -1,0 +1,444 @@
+"""
+Expression substitution and structural operations module.
+
+This module provides functions for working with ESM format expressions:
+- Variable substitution with scoped reference support
+- Free variable analysis
+- Expression evaluation with variable bindings
+- Expression simplification through constant folding
+
+All operations are non-mutating and return new Expr objects.
+"""
+
+# ========================================
+# 1. Variable Substitution
+# ========================================
+
+"""
+    substitute(expr::Expr, bindings::Dict{String,Expr})::Expr
+
+Recursively replace variables in an expression with provided bindings.
+Supports scoped reference resolution - if a variable is not found in bindings,
+it remains unchanged. Returns a new Expr object (non-mutating).
+
+# Arguments
+- `expr`: The expression to perform substitution on
+- `bindings`: Dictionary mapping variable names to replacement expressions
+
+# Examples
+```julia
+# Simple substitution
+x = VarExpr("x")
+y = VarExpr("y")
+sum_expr = OpExpr("+", [x, y])
+bindings = Dict("x" => NumExpr(2.0))
+result = substitute(sum_expr, bindings)  # OpExpr("+", [NumExpr(2.0), VarExpr("y")])
+
+# Nested substitution
+nested = OpExpr("*", [OpExpr("+", [x, NumExpr(1.0)]), y])
+result = substitute(nested, bindings)  # OpExpr("*", [OpExpr("+", [NumExpr(2.0), NumExpr(1.0)]), VarExpr("y")])
+```
+"""
+function substitute(expr::NumExpr, bindings::Dict{String,Expr})::Expr
+    return expr  # Numeric literals are unchanged
+end
+
+function substitute(expr::VarExpr, bindings::Dict{String,Expr})::Expr
+    return get(bindings, expr.name, expr)  # Replace if bound, otherwise keep original
+end
+
+function substitute(expr::OpExpr, bindings::Dict{String,Expr})::Expr
+    # Recursively substitute arguments
+    new_args = Expr[substitute(arg, bindings) for arg in expr.args]
+    return OpExpr(expr.op, new_args, wrt=expr.wrt, dim=expr.dim)
+end
+
+# ========================================
+# 2. Free Variable Analysis
+# ========================================
+
+"""
+    free_variables(expr::Expr)::Set{String}
+
+Extract all free (unbound) variable names from an expression.
+Returns a set of variable names that appear in the expression.
+
+# Examples
+```julia
+x = VarExpr("x")
+y = VarExpr("y")
+sum_expr = OpExpr("+", [x, y])
+vars = free_variables(sum_expr)  # Set(["x", "y"])
+
+nested = OpExpr("*", [OpExpr("+", [x, NumExpr(1.0)]), y])
+vars = free_variables(nested)  # Set(["x", "y"])
+```
+"""
+function free_variables(expr::NumExpr)::Set{String}
+    return Set{String}()  # No variables in numeric literals
+end
+
+function free_variables(expr::VarExpr)::Set{String}
+    return Set([expr.name])  # Single variable
+end
+
+function free_variables(expr::OpExpr)::Set{String}
+    # Union of free variables from all arguments
+    result = Set{String}()
+    for arg in expr.args
+        union!(result, free_variables(arg))
+    end
+
+    # Add variables from wrt field if present
+    if expr.wrt !== nothing
+        push!(result, expr.wrt)
+    end
+
+    return result
+end
+
+# ========================================
+# 3. Variable Containment Check
+# ========================================
+
+"""
+    contains(expr::Expr, var::String)::Bool
+
+Check if an expression contains a specific variable name.
+Returns true if the variable appears anywhere in the expression.
+
+# Examples
+```julia
+x = VarExpr("x")
+y = VarExpr("y")
+sum_expr = OpExpr("+", [x, y])
+contains(sum_expr, "x")  # true
+contains(sum_expr, "z")  # false
+```
+"""
+function contains(expr::NumExpr, var::String)::Bool
+    return false  # Numeric literals don't contain variables
+end
+
+function contains(expr::VarExpr, var::String)::Bool
+    return expr.name == var
+end
+
+function contains(expr::OpExpr, var::String)::Bool
+    # Check if any argument contains the variable
+    for arg in expr.args
+        if contains(arg, var)
+            return true
+        end
+    end
+
+    # Check wrt field
+    if expr.wrt !== nothing && expr.wrt == var
+        return true
+    end
+
+    return false
+end
+
+# ========================================
+# 4. Expression Evaluation
+# ========================================
+
+"""
+    UnboundVariableError
+
+Exception thrown when trying to evaluate an expression with unbound variables.
+"""
+struct UnboundVariableError <: Exception
+    variable_name::String
+    message::String
+end
+
+Base.show(io::IO, e::UnboundVariableError) = print(io, "UnboundVariableError: $(e.message)")
+
+"""
+    evaluate(expr::Expr, bindings::Dict{String,Float64})::Float64
+
+Numerically evaluate an expression using provided variable bindings.
+Throws UnboundVariableError if any variable is not found in bindings.
+
+# Arguments
+- `expr`: The expression to evaluate
+- `bindings`: Dictionary mapping variable names to numeric values
+
+# Examples
+```julia
+x = VarExpr("x")
+y = VarExpr("y")
+sum_expr = OpExpr("+", [x, y])
+bindings = Dict("x" => 2.0, "y" => 3.0)
+result = evaluate(sum_expr, bindings)  # 5.0
+```
+
+# Supported Operations
+- Arithmetic: "+", "-", "*", "/", "^"
+- Mathematical functions: "sin", "cos", "tan", "exp", "log", "sqrt", "abs"
+- Constants: "π", "e"
+"""
+function evaluate(expr::NumExpr, bindings::Dict{String,Float64})::Float64
+    return expr.value
+end
+
+function evaluate(expr::VarExpr, bindings::Dict{String,Float64})::Float64
+    if !haskey(bindings, expr.name)
+        throw(UnboundVariableError(expr.name, "Variable '$(expr.name)' not found in bindings"))
+    end
+    return bindings[expr.name]
+end
+
+function evaluate(expr::OpExpr, bindings::Dict{String,Float64})::Float64
+    args = [evaluate(arg, bindings) for arg in expr.args]
+
+    # Handle different operators
+    op = expr.op
+
+    # Arithmetic operators
+    if op == "+"
+        if length(args) == 1
+            return args[1]  # Unary plus
+        elseif length(args) == 2
+            return args[1] + args[2]
+        else
+            return sum(args)  # n-ary addition
+        end
+    elseif op == "-"
+        if length(args) == 1
+            return -args[1]  # Unary minus
+        elseif length(args) == 2
+            return args[1] - args[2]
+        else
+            throw(ArgumentError("Subtraction requires 1 or 2 arguments, got $(length(args))"))
+        end
+    elseif op == "*"
+        if length(args) == 1
+            return args[1]
+        elseif length(args) == 2
+            return args[1] * args[2]
+        else
+            return prod(args)  # n-ary multiplication
+        end
+    elseif op == "/"
+        if length(args) == 2
+            if args[2] == 0.0
+                throw(DivideError())
+            end
+            return args[1] / args[2]
+        else
+            throw(ArgumentError("Division requires exactly 2 arguments, got $(length(args))"))
+        end
+    elseif op == "^"
+        if length(args) == 2
+            return args[1] ^ args[2]
+        else
+            throw(ArgumentError("Exponentiation requires exactly 2 arguments, got $(length(args))"))
+        end
+
+    # Mathematical functions
+    elseif op == "sin"
+        if length(args) == 1
+            return sin(args[1])
+        else
+            throw(ArgumentError("sin requires exactly 1 argument, got $(length(args))"))
+        end
+    elseif op == "cos"
+        if length(args) == 1
+            return cos(args[1])
+        else
+            throw(ArgumentError("cos requires exactly 1 argument, got $(length(args))"))
+        end
+    elseif op == "tan"
+        if length(args) == 1
+            return tan(args[1])
+        else
+            throw(ArgumentError("tan requires exactly 1 argument, got $(length(args))"))
+        end
+    elseif op == "exp"
+        if length(args) == 1
+            return exp(args[1])
+        else
+            throw(ArgumentError("exp requires exactly 1 argument, got $(length(args))"))
+        end
+    elseif op == "log"
+        if length(args) == 1
+            if args[1] <= 0.0
+                throw(DomainError(args[1], "log argument must be positive"))
+            end
+            return log(args[1])
+        else
+            throw(ArgumentError("log requires exactly 1 argument, got $(length(args))"))
+        end
+    elseif op == "sqrt"
+        if length(args) == 1
+            if args[1] < 0.0
+                throw(DomainError(args[1], "sqrt argument must be non-negative"))
+            end
+            return sqrt(args[1])
+        else
+            throw(ArgumentError("sqrt requires exactly 1 argument, got $(length(args))"))
+        end
+    elseif op == "abs"
+        if length(args) == 1
+            return abs(args[1])
+        else
+            throw(ArgumentError("abs requires exactly 1 argument, got $(length(args))"))
+        end
+
+    # Constants (handled as zero-argument functions)
+    elseif op == "π" || op == "pi"
+        if length(args) == 0
+            return π
+        else
+            throw(ArgumentError("π constant takes no arguments, got $(length(args))"))
+        end
+    elseif op == "e"
+        if length(args) == 0
+            return ℯ
+        else
+            throw(ArgumentError("e constant takes no arguments, got $(length(args))"))
+        end
+
+    else
+        throw(ArgumentError("Unsupported operator: $op"))
+    end
+end
+
+# ========================================
+# 5. Expression Simplification
+# ========================================
+
+"""
+    simplify(expr::Expr)::Expr
+
+Perform constant folding and algebraic simplification on an expression.
+Returns a new simplified Expr object (non-mutating).
+
+# Simplification Rules
+- Constant folding: `2 + 3` → `5`
+- Additive identity: `x + 0` → `x`, `0 + x` → `x`
+- Multiplicative identity: `x * 1` → `x`, `1 * x` → `x`
+- Multiplicative zero: `x * 0` → `0`, `0 * x` → `0`
+- Exponentiation: `x^0` → `1`, `x^1` → `x`
+
+# Examples
+```julia
+# Constant folding
+expr = OpExpr("+", [NumExpr(2.0), NumExpr(3.0)])
+result = simplify(expr)  # NumExpr(5.0)
+
+# Identity elimination
+expr = OpExpr("*", [VarExpr("x"), NumExpr(1.0)])
+result = simplify(expr)  # VarExpr("x")
+```
+"""
+function simplify(expr::NumExpr)::Expr
+    return expr  # Already simplified
+end
+
+function simplify(expr::VarExpr)::Expr
+    return expr  # Already simplified
+end
+
+function simplify(expr::OpExpr)::Expr
+    # First recursively simplify all arguments
+    simplified_args = Expr[simplify(arg) for arg in expr.args]
+
+    op = expr.op
+
+    # Try constant folding first - if all arguments are numeric, evaluate
+    if all(arg -> isa(arg, NumExpr), simplified_args)
+        try
+            # Convert to bindings for evaluation
+            bindings = Dict{String,Float64}()
+            result_value = evaluate(OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim), bindings)
+            return NumExpr(result_value)
+        catch
+            # If evaluation fails, continue with algebraic simplification
+        end
+    end
+
+    # Algebraic simplification rules
+    if op == "+"
+        # Remove zeros: x + 0 = x, 0 + x = x
+        non_zero_args = filter(arg -> !(isa(arg, NumExpr) && arg.value == 0.0), simplified_args)
+        if length(non_zero_args) == 0
+            return NumExpr(0.0)
+        elseif length(non_zero_args) == 1
+            return non_zero_args[1]
+        else
+            return OpExpr(op, Expr[non_zero_args...], wrt=expr.wrt, dim=expr.dim)
+        end
+
+    elseif op == "*"
+        # Check for zeros: x * 0 = 0, 0 * x = 0
+        for arg in simplified_args
+            if isa(arg, NumExpr) && arg.value == 0.0
+                return NumExpr(0.0)
+            end
+        end
+
+        # Remove ones: x * 1 = x, 1 * x = x
+        non_one_args = filter(arg -> !(isa(arg, NumExpr) && arg.value == 1.0), simplified_args)
+        if length(non_one_args) == 0
+            return NumExpr(1.0)
+        elseif length(non_one_args) == 1
+            return non_one_args[1]
+        else
+            return OpExpr(op, Expr[non_one_args...], wrt=expr.wrt, dim=expr.dim)
+        end
+
+    elseif op == "^" && length(simplified_args) == 2
+        base = simplified_args[1]
+        exponent = simplified_args[2]
+
+        # x^0 = 1
+        if isa(exponent, NumExpr) && exponent.value == 0.0
+            return NumExpr(1.0)
+        end
+
+        # x^1 = x
+        if isa(exponent, NumExpr) && exponent.value == 1.0
+            return base
+        end
+
+        # 0^x = 0 (for x > 0)
+        if isa(base, NumExpr) && base.value == 0.0 && isa(exponent, NumExpr) && exponent.value > 0.0
+            return NumExpr(0.0)
+        end
+
+        # 1^x = 1
+        if isa(base, NumExpr) && base.value == 1.0
+            return NumExpr(1.0)
+        end
+
+        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+
+    elseif op == "-" && length(simplified_args) == 2
+        # x - 0 = x
+        if isa(simplified_args[2], NumExpr) && simplified_args[2].value == 0.0
+            return simplified_args[1]
+        end
+
+        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+
+    elseif op == "/" && length(simplified_args) == 2
+        # x / 1 = x
+        if isa(simplified_args[2], NumExpr) && simplified_args[2].value == 1.0
+            return simplified_args[1]
+        end
+
+        # 0 / x = 0 (for x != 0)
+        if isa(simplified_args[1], NumExpr) && simplified_args[1].value == 0.0
+            return NumExpr(0.0)
+        end
+
+        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+    end
+
+    # If no simplification rules apply, return the expression with simplified arguments
+    return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+end
