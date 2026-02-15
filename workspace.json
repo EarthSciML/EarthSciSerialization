@@ -1,0 +1,26 @@
+{
+  "name": "EarthSciSerialization",
+  "version": "0.1.0",
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ]
+  },
+  "dependencies": {
+    "esm-format-js": {
+      "path": "./packages/esm-format",
+      "version": "0.1.0",
+      "type": "typescript"
+    },
+    "esm-format-py": {
+      "path": "./packages/esm_format",
+      "version": "0.1.0",
+      "type": "python"
+    },
+    "esm-format-jl": {
+      "path": "./packages/ESMFormat.jl",
+      "version": "0.1.0",
+      "type": "julia"
+    }
+  }
+}
