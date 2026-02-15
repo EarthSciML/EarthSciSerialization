@@ -443,14 +443,124 @@ end
     coerce_solver(data::Any) -> Solver
 
 Coerce JSON data into Solver type.
+Supports both old format (algorithm field) and new format (strategy/config fields).
 """
 function coerce_solver(data::Any)::Solver
-    algorithm = string(data.algorithm)
-    tolerances = haskey(data, :tolerances) ? Dict{String,Float64}(string(k) => Float64(v) for (k, v) in pairs(data.tolerances)) : Dict("rtol"=>1e-6, "atol"=>1e-8)
-    max_iterations = haskey(data, :max_iterations) && data.max_iterations !== nothing ? Int(data.max_iterations) : nothing
-    parameters = haskey(data, :parameters) ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.parameters)) : Dict{String,Any}()
+    # Handle legacy format with algorithm field
+    if haskey(data, :algorithm)
+        @warn "Legacy Solver format with 'algorithm' field is deprecated. Use 'strategy' and 'config' fields instead."
+        algorithm = string(data[:algorithm])
 
-    return Solver(algorithm, tolerances=tolerances, max_iterations=max_iterations, parameters=parameters)
+        # Convert legacy tolerances to stiff_kwargs format
+        tolerances = haskey(data, :tolerances) ?
+            Dict{String,Float64}(string(k) => Float64(v) for (k, v) in pairs(data[:tolerances])) :
+            Dict("reltol"=>1e-6, "abstol"=>1e-8)
+
+        stiff_kwargs = Dict{String,Any}()
+        if haskey(tolerances, "reltol")
+            stiff_kwargs["reltol"] = tolerances["reltol"]
+        end
+        if haskey(tolerances, "abstol")
+            stiff_kwargs["abstol"] = tolerances["abstol"]
+        end
+        # Ensure we always have both tolerances for legacy format
+        if !haskey(stiff_kwargs, "reltol")
+            stiff_kwargs["reltol"] = 1e-6
+        end
+        if !haskey(stiff_kwargs, "abstol")
+            stiff_kwargs["abstol"] = 1e-8
+        end
+
+        # Create configuration from legacy parameters
+        extra_parameters = haskey(data, :parameters) ?
+            Dict{String,Any}(string(k) => v for (k, v) in pairs(data[:parameters])) :
+            Dict{String,Any}()
+
+        config = SolverConfiguration(
+            stiff_algorithm=algorithm,
+            stiff_kwargs=stiff_kwargs,
+            extra_parameters=extra_parameters
+        )
+
+        # Default to IMEX strategy for legacy format
+        return Solver(IMEX, config)
+    end
+
+    # Handle new format with strategy and config
+    if !haskey(data, :strategy)
+        throw(ArgumentError("Solver must have 'strategy' field"))
+    end
+
+    strategy_str = string(data[:strategy])
+    strategy = parse_solver_strategy(strategy_str)
+
+    # Parse configuration if present
+    config_data = haskey(data, :config) ? data[:config] : nothing
+    config = coerce_solver_configuration(config_data)
+
+    return Solver(strategy, config)
+end
+
+"""
+    coerce_solver_configuration(data::Any) -> SolverConfiguration
+
+Coerce JSON data into SolverConfiguration type.
+"""
+function coerce_solver_configuration(data)::SolverConfiguration
+    if data === nothing
+        return SolverConfiguration()
+    end
+
+    # Extract basic configuration
+    threads = haskey(data, :threads) && data[:threads] !== nothing ? Int(data[:threads]) : nothing
+    timestep = haskey(data, :timestep) && data[:timestep] !== nothing ? Float64(data[:timestep]) : nothing
+
+    # Extract algorithm selections
+    stiff_algorithm = haskey(data, :stiff_algorithm) && data[:stiff_algorithm] !== nothing ?
+        string(data[:stiff_algorithm]) : nothing
+    nonstiff_algorithm = haskey(data, :nonstiff_algorithm) && data[:nonstiff_algorithm] !== nothing ?
+        string(data[:nonstiff_algorithm]) : nothing
+    map_algorithm = haskey(data, :map_algorithm) && data[:map_algorithm] !== nothing ?
+        string(data[:map_algorithm]) : nothing
+
+    # Extract stiff solver parameters
+    stiff_kwargs = Dict{String,Any}()
+    if haskey(data, :stiff_kwargs) && data[:stiff_kwargs] !== nothing
+        for (k, v) in pairs(data[:stiff_kwargs])
+            stiff_kwargs[string(k)] = v
+        end
+    else
+        # Default tolerances
+        stiff_kwargs["abstol"] = 1e-8
+        stiff_kwargs["reltol"] = 1e-6
+    end
+
+    # Extract numerical method if specified
+    numerical_method = nothing
+    if haskey(data, :numerical_method) && data[:numerical_method] !== nothing
+        numerical_method = parse_numerical_method(string(data[:numerical_method]))
+    end
+
+    # Collect any additional parameters
+    extra_parameters = Dict{String,Any}()
+    for (key, value) in pairs(data)
+        key_str = string(key)
+        if !(key_str in ["threads", "timestep", "stiff_algorithm", "nonstiff_algorithm",
+                        "map_algorithm", "stiff_kwargs", "numerical_method"])
+            extra_parameters[key_str] = value
+        end
+    end
+
+    return SolverConfiguration(
+        threads=threads,
+        timestep=timestep,
+        stiff_algorithm=stiff_algorithm,
+        nonstiff_algorithm=nonstiff_algorithm,
+        map_algorithm=map_algorithm,
+        stiff_kwargs=stiff_kwargs,
+        numerical_method=numerical_method,
+        extra_parameters=extra_parameters
+    )
 end
 
 """
