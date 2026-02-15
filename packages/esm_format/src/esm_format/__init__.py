@@ -145,6 +145,15 @@ from .error_handling import (
     get_profiler,
     setup_error_logging,
 )
+from .temporal_operators import (
+    DerivativeOperator,
+    IntegralOperator,
+    TemporalAveragingOperator,
+    TimeSteppingOperator,
+    TemporalScheme,
+    IntegrationMethod,
+    TemporalOperatorConfig,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -275,4 +284,12 @@ __all__ = [
     "profile_operation",
     "get_profiler",
     "setup_error_logging",
+    # Temporal operators
+    "DerivativeOperator",
+    "IntegralOperator",
+    "TemporalAveragingOperator",
+    "TimeSteppingOperator",
+    "TemporalScheme",
+    "IntegrationMethod",
+    "TemporalOperatorConfig",
 ]

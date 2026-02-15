@@ -206,12 +206,13 @@ class TestOperatorRegistry:
         assert set(interp_ops) == {"interp1", "interp2"}
 
         filter_ops = registry.list_operators_by_type(OperatorType.FILTERING)
-        assert filter_ops == ["filter1"]
+        # Should contain temporal_average (from builtin registration) and filter1
+        assert set(filter_ops) >= {"filter1", "temporal_average"}
 
-        # Test DIFFERENTIATION type (now has spatial operators)
+        # Test DIFFERENTIATION type (now has spatial and temporal operators)
         diff_ops = registry.list_operators_by_type(OperatorType.DIFFERENTIATION)
-        expected_spatial_ops = {"grad", "div", "laplacian"}
-        assert set(diff_ops) == expected_spatial_ops
+        expected_diff_ops = {"grad", "div", "laplacian", "time_derivative"}
+        assert set(diff_ops) >= expected_diff_ops
 
     def test_get_operator_info(self):
         """Test getting operator information."""

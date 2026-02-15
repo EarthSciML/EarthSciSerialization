@@ -89,6 +89,10 @@ class OperatorRegistry:
             "grad": OperatorPrecedence(1),
             "div": OperatorPrecedence(1),
             "laplacian": OperatorPrecedence(1),
+            "time_derivative": OperatorPrecedence(1),
+            "time_integral": OperatorPrecedence(1),
+            "temporal_average": OperatorPrecedence(1),
+            "time_stepping": OperatorPrecedence(1),
 
             # Level 2: Exponentiation (right-associative)
             "^": OperatorPrecedence(2, Associativity.RIGHT),
@@ -143,6 +147,9 @@ class OperatorRegistry:
             LessThanOrEqualOperator, GreaterThanOperator, GreaterThanOrEqualOperator
         )
         from .spatial_operators import GradientOperator, DivergenceOperator, LaplacianOperator
+        from .temporal_operators import (
+            DerivativeOperator, IntegralOperator, TemporalAveragingOperator, TimeSteppingOperator
+        )
 
         # Register mathematical operators
         self.register_operator(
@@ -257,6 +264,35 @@ class OperatorRegistry:
             name="laplacian",
             operator_type=OperatorType.DIFFERENTIATION,
             operator_class=LaplacianOperator,
+            version="1.0"
+        )
+
+        # Register temporal operators
+        self.register_operator(
+            name="time_derivative",
+            operator_type=OperatorType.DIFFERENTIATION,
+            operator_class=DerivativeOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="time_integral",
+            operator_type=OperatorType.INTEGRATION,
+            operator_class=IntegralOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="temporal_average",
+            operator_type=OperatorType.FILTERING,
+            operator_class=TemporalAveragingOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="time_stepping",
+            operator_type=OperatorType.INTEGRATION,
+            operator_class=TimeSteppingOperator,
             version="1.0"
         )
 
