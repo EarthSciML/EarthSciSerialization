@@ -45,6 +45,9 @@ export * from './interactive-editor/index.js'
 // Web Components (framework-agnostic usage)
 export * from './web-components.js'
 
+// Error handling and diagnostics
+export * from './error-handling.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'

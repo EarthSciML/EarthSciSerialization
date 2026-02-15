@@ -131,6 +131,20 @@ from .time_synchronization import (
     create_subcycling_synchronizer,
     validate_time_synchronization_config,
 )
+from .error_handling import (
+    ErrorCode,
+    Severity,
+    ErrorContext,
+    FixSuggestion,
+    ESMError,
+    ErrorCollector,
+    ESMErrorFactory,
+    PerformanceProfiler,
+    InteractiveErrorExplorer,
+    profile_operation,
+    get_profiler,
+    setup_error_logging,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -248,4 +262,17 @@ __all__ = [
     "substitute",
     "substitute_in_model",
     "substitute_in_reaction_system",
+    # Error handling and diagnostics
+    "ErrorCode",
+    "Severity",
+    "ErrorContext",
+    "FixSuggestion",
+    "ESMError",
+    "ErrorCollector",
+    "ESMErrorFactory",
+    "PerformanceProfiler",
+    "InteractiveErrorExplorer",
+    "profile_operation",
+    "get_profiler",
+    "setup_error_logging",
 ]
