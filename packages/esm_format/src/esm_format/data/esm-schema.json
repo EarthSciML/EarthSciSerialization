@@ -929,8 +929,8 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["constant", "zero_gradient", "periodic"],
-          "description": "constant = fixed value (Dirichlet); zero_gradient = ∂u/∂n = 0 (Neumann); periodic = wrap-around."
+          "enum": ["constant", "zero_gradient", "periodic", "dirichlet", "neumann", "robin"],
+          "description": "constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n = 0; periodic = wrap-around; robin = αu + β∂u/∂n = γ."
         },
         "dimensions": {
           "type": "array",
@@ -940,6 +940,22 @@
         "value": {
           "type": "number",
           "description": "Boundary value (for constant type)."
+        },
+        "function": {
+          "type": "string",
+          "description": "Function specification for time/space-varying boundaries."
+        },
+        "robin_alpha": {
+          "type": "number",
+          "description": "Robin BC coefficient α for u term in αu + β∂u/∂n = γ."
+        },
+        "robin_beta": {
+          "type": "number",
+          "description": "Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ."
+        },
+        "robin_gamma": {
+          "type": "number",
+          "description": "Robin BC RHS value γ in αu + β∂u/∂n = γ."
         }
       }
     },

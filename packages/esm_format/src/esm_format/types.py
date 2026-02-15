@@ -253,6 +253,7 @@ class BoundaryConditionType(Enum):
     PERIODIC = "periodic"
     DIRICHLET = "dirichlet"
     NEUMANN = "neumann"
+    ROBIN = "robin"
 
 
 @dataclass
@@ -262,6 +263,10 @@ class BoundaryCondition:
     dimensions: List[str]
     value: Optional[Union[float, Expr]] = None
     function: Optional[str] = None
+    # Robin boundary condition parameters (αu + β∂u/∂n = γ)
+    robin_alpha: Optional[float] = None  # Coefficient for u
+    robin_beta: Optional[float] = None   # Coefficient for ∂u/∂n
+    robin_gamma: Optional[Union[float, Expr]] = None  # RHS value/expression
 
 
 @dataclass

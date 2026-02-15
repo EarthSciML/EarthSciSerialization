@@ -105,6 +105,17 @@ from .placeholder_expansion import (
     CircularReferenceError,
     PlaceholderExpansionError,
 )
+from .boundary_conditions import (
+    BoundaryConditionProcessor,
+    BoundaryProcessorConfig,
+    BoundaryConstraint,
+    BoundaryLocationError,
+    BoundaryValueError,
+    create_dirichlet_boundary,
+    create_neumann_boundary,
+    create_periodic_boundary,
+    validate_domain_boundary_consistency,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -135,6 +146,15 @@ __all__ = [
     "InitialConditionType",
     "BoundaryCondition",
     "BoundaryConditionType",
+    "BoundaryConditionProcessor",
+    "BoundaryProcessorConfig",
+    "BoundaryConstraint",
+    "BoundaryLocationError",
+    "BoundaryValueError",
+    "create_dirichlet_boundary",
+    "create_neumann_boundary",
+    "create_periodic_boundary",
+    "validate_domain_boundary_consistency",
     "Solver",
     "Reference",
     "Metadata",
