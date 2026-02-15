@@ -118,7 +118,7 @@ class TestDataLoaderRegistry:
         registry = DataLoaderRegistry()
 
         with pytest.raises(ValueError, match="is not registered"):
-            registry.unregister_loader(DataLoaderType.HDF5)
+            registry.unregister_loader(DataLoaderType.CSV)
 
     def test_get_loader_class(self):
         """Test getting loader class by type."""
@@ -138,7 +138,7 @@ class TestDataLoaderRegistry:
         registry = DataLoaderRegistry()
 
         with pytest.raises(ValueError, match="is not registered"):
-            registry.get_loader_class(DataLoaderType.HDF5)
+            registry.get_loader_class(DataLoaderType.CSV)
 
     def test_detect_loader_type_by_extension(self):
         """Test loader type detection by file extension."""
@@ -191,14 +191,14 @@ class TestDataLoaderRegistry:
         assert isinstance(loader, NetCDFLoader)
 
         # Test with unregistered loader type
-        hdf5_config = DataLoader(
+        csv_config = DataLoader(
             name="test",
-            type=DataLoaderType.HDF5,
-            source="test.h5"
+            type=DataLoaderType.CSV,
+            source="test.csv"
         )
 
         with pytest.raises(ValueError, match="is not registered"):
-            registry.create_loader(hdf5_config)
+            registry.create_loader(csv_config)
 
     def test_create_auto_loader(self):
         """Test automatic loader creation."""
@@ -255,7 +255,7 @@ class TestDataLoaderRegistry:
 
         # Test with unregistered loader type
         with pytest.raises(ValueError, match="in chain is not registered"):
-            registry.register_loader_chain("invalid", [DataLoaderType.HDF5])
+            registry.register_loader_chain("invalid", [DataLoaderType.CSV])
 
         # Test retrieving non-existent chain
         with pytest.raises(KeyError, match="is not registered"):

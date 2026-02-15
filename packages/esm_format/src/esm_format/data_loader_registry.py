@@ -14,7 +14,7 @@ from importlib import import_module
 import warnings
 
 from .types import DataLoader, DataLoaderType
-from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader
+from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader
 
 
 class DataLoaderRegistry:
@@ -59,6 +59,14 @@ class DataLoaderRegistry:
             DatabaseLoader,
             extensions=['.db', '.sqlite', '.sqlite3'],
             mime_types=['application/x-sqlite3']
+        )
+
+        # Register HDF5 loader
+        self.register_loader(
+            DataLoaderType.HDF5,
+            HDF5Loader,
+            extensions=['.h5', '.hdf5', '.hdf'],
+            mime_types=['application/x-hdf', 'application/x-hdf5']
         )
 
     def register_loader(

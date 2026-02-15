@@ -33,6 +33,18 @@ try:
 except ImportError:
     POSTGRESQL_AVAILABLE = False
 
+try:
+    import h5py
+    H5PY_AVAILABLE = True
+except ImportError:
+    H5PY_AVAILABLE = False
+
+try:
+    import tables
+    PYTABLES_AVAILABLE = True
+except ImportError:
+    PYTABLES_AVAILABLE = False
+
 from .types import DataLoader, DataLoaderType
 
 
@@ -1012,7 +1024,494 @@ class DatabaseLoader:
         self.data = None
 
 
-def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, DatabaseLoader]:
+class HDF5Loader:
+    """
+    HDF5 data loader supporting hierarchical data structures with h5py/pytables integration.
+
+    Provides comprehensive support for HDF5 files including group navigation, dataset chunking,
+    compression handling, and metadata extraction. Essential for large-scale scientific
+    dataset ingestion with hierarchical organization.
+    """
+
+    def __init__(self, data_loader: DataLoader):
+        """
+        Initialize HDF5 loader with configuration.
+
+        Args:
+            data_loader: DataLoader configuration object
+
+        Raises:
+            ImportError: If neither h5py nor pytables is available
+            ValueError: If data_loader type is not HDF5
+        """
+        if data_loader.type != DataLoaderType.HDF5:
+            raise ValueError(f"Expected DataLoaderType.HDF5, got {data_loader.type}")
+
+        if not H5PY_AVAILABLE and not PYTABLES_AVAILABLE:
+            raise ImportError("Either h5py or pytables is required for HDF5 loading. "
+                            "Install with: pip install h5py or pip install tables")
+
+        self.config = data_loader
+        self.file_handle = None
+        self.data: Optional[Dict[str, Any]] = None
+        self.backend = 'h5py' if H5PY_AVAILABLE else 'pytables'
+
+        # Prefer h5py if both are available, unless specified otherwise
+        format_options = self.config.format_options or {}
+        preferred_backend = format_options.get('backend', 'h5py')
+        if preferred_backend == 'h5py' and H5PY_AVAILABLE:
+            self.backend = 'h5py'
+        elif preferred_backend == 'pytables' and PYTABLES_AVAILABLE:
+            self.backend = 'pytables'
+        elif preferred_backend == 'h5py' and not H5PY_AVAILABLE:
+            if PYTABLES_AVAILABLE:
+                self.backend = 'pytables'
+            else:
+                raise ImportError("h5py is not available. Install with: pip install h5py")
+        elif preferred_backend == 'pytables' and not PYTABLES_AVAILABLE:
+            if H5PY_AVAILABLE:
+                self.backend = 'h5py'
+            else:
+                raise ImportError("pytables is not available. Install with: pip install tables")
+
+    def load(self) -> Dict[str, Any]:
+        """
+        Load data from the HDF5 file.
+
+        Returns:
+            Dictionary containing the loaded data with group/dataset structure preserved
+
+        Raises:
+            FileNotFoundError: If the source file doesn't exist
+            OSError: If the file can't be opened or read
+            ValueError: If requested variables are not found
+        """
+        source_path = Path(self.config.source)
+
+        if not source_path.exists():
+            raise FileNotFoundError(f"HDF5 file not found: {source_path}")
+
+        try:
+            format_options = self.config.format_options or {}
+
+            if self.backend == 'h5py':
+                self.data = self._load_with_h5py(source_path, format_options)
+            else:
+                self.data = self._load_with_pytables(source_path, format_options)
+
+            # Filter to requested variables if specified
+            if self.config.variables:
+                filtered_data = {}
+                for var in self.config.variables:
+                    if var in self.data:
+                        filtered_data[var] = self.data[var]
+                        # Also include attributes if they exist
+                        attr_key = f"{var}_attrs"
+                        if attr_key in self.data:
+                            filtered_data[attr_key] = self.data[attr_key]
+                    else:
+                        # Try hierarchical access using '/' as separator
+                        nested_value = self._get_nested_dataset(self.data, var)
+                        if nested_value is not None:
+                            filtered_data[var] = nested_value
+                            # Also try to include attributes for nested datasets
+                            attr_key = f"{var}_attrs"
+                            if attr_key in self.data:
+                                filtered_data[attr_key] = self.data[attr_key]
+
+                missing_vars = set(self.config.variables) - set([k for k in filtered_data.keys() if not k.endswith('_attrs')])
+                if missing_vars:
+                    raise ValueError(f"Requested variables not found in HDF5 file: {missing_vars}")
+
+                self.data = filtered_data
+
+            return self.data
+
+        except ValueError:
+            # Re-raise ValueError without wrapping
+            raise
+        except Exception as e:
+            raise OSError(f"Failed to load HDF5 file {source_path}: {e}") from e
+
+    def _load_with_h5py(self, file_path: Path, format_options: Dict[str, Any]) -> Dict[str, Any]:
+        """Load HDF5 data using h5py backend."""
+        import h5py
+
+        mode = format_options.get('mode', 'r')
+        self.file_handle = h5py.File(file_path, mode)
+
+        data = {}
+
+        def visit_func(name, obj):
+            if isinstance(obj, h5py.Dataset):
+                # Load dataset data
+                dataset_data = obj[...]
+
+                # Convert to numpy array if needed
+                if hasattr(dataset_data, 'shape'):
+                    data[name] = np.array(dataset_data)
+                else:
+                    data[name] = dataset_data
+
+                # Store metadata as attributes - use the dataset name without path
+                if obj.attrs:
+                    # For datasets at root level, use simple name
+                    # For nested datasets, use full path
+                    attr_key = f"{name}_attrs"
+                    data[attr_key] = dict(obj.attrs)
+            elif isinstance(obj, h5py.Group):
+                # Store group metadata
+                if obj.attrs:
+                    data[f"{name}_attrs"] = dict(obj.attrs)
+
+        self.file_handle.visititems(visit_func)
+        return data
+
+    def _load_with_pytables(self, file_path: Path, format_options: Dict[str, Any]) -> Dict[str, Any]:
+        """Load HDF5 data using pytables backend."""
+        import tables
+
+        mode = format_options.get('mode', 'r')
+        self.file_handle = tables.open_file(str(file_path), mode)
+
+        data = {}
+
+        def visit_nodes(node, path=""):
+            for child in node:
+                child_path = f"{path}/{child._v_name}" if path else child._v_name
+
+                if isinstance(child, tables.Array):
+                    # Load array data
+                    data[child_path] = np.array(child.read())
+
+                    # Store metadata
+                    if child._v_attrs:
+                        attrs = {}
+                        for attr_name in child._v_attrs._f_list():
+                            attrs[attr_name] = child._v_attrs[attr_name]
+                        data[f"{child_path}_attrs"] = attrs
+
+                elif isinstance(child, tables.Table):
+                    # Load table data as structured array
+                    data[child_path] = child.read()
+
+                    # Store metadata
+                    if child._v_attrs:
+                        attrs = {}
+                        for attr_name in child._v_attrs._f_list():
+                            attrs[attr_name] = child._v_attrs[attr_name]
+                        data[f"{child_path}_attrs"] = attrs
+
+                elif isinstance(child, tables.Group):
+                    # Recursively process groups
+                    if child._v_attrs:
+                        attrs = {}
+                        for attr_name in child._v_attrs._f_list():
+                            attrs[attr_name] = child._v_attrs[attr_name]
+                        data[f"{child_path}_attrs"] = attrs
+
+                    visit_nodes(child, child_path)
+
+        visit_nodes(self.file_handle.root)
+        return data
+
+    def _get_nested_dataset(self, data: Dict[str, Any], path: str) -> Any:
+        """
+        Get a nested dataset using hierarchical path.
+
+        Args:
+            data: Dictionary to search in
+            path: Hierarchical path (e.g., 'group1/dataset1' or 'group1.dataset1')
+
+        Returns:
+            The nested dataset or None if not found
+        """
+        # Try both '/' and '.' as separators
+        for separator in ['/', '.']:
+            if separator in path:
+                keys = path.split(separator)
+                current = data
+
+                for key in keys:
+                    if isinstance(current, dict) and key in current:
+                        current = current[key]
+                    else:
+                        break
+                else:
+                    return current
+
+        return None
+
+    def get_file_structure(self) -> Dict[str, Any]:
+        """
+        Get the hierarchical structure of the HDF5 file.
+
+        Returns:
+            Dictionary describing the file structure with groups and datasets
+
+        Raises:
+            RuntimeError: If file must be loaded before extracting structure
+        """
+        if self.file_handle is None:
+            raise RuntimeError("File must be loaded before extracting structure")
+
+        structure = {}
+
+        if self.backend == 'h5py':
+            def build_structure(name, obj):
+                parts = name.split('/')
+                current = structure
+
+                for part in parts[:-1]:
+                    if part not in current:
+                        current[part] = {'type': 'group', 'children': {}}
+                    current = current[part]['children']
+
+                final_name = parts[-1]
+                if hasattr(obj, 'shape'):  # Dataset
+                    current[final_name] = {
+                        'type': 'dataset',
+                        'shape': obj.shape,
+                        'dtype': str(obj.dtype),
+                        'chunks': obj.chunks,
+                        'compression': obj.compression,
+                        'attrs': dict(obj.attrs) if obj.attrs else {}
+                    }
+                else:  # Group
+                    if final_name not in current:
+                        current[final_name] = {'type': 'group', 'children': {}}
+                    current[final_name]['attrs'] = dict(obj.attrs) if obj.attrs else {}
+
+            self.file_handle.visititems(build_structure)
+
+        else:  # pytables
+            def build_structure_pytables(node, current_dict, path=""):
+                for child in node:
+                    child_name = child._v_name
+
+                    if isinstance(child, (tables.Array, tables.Table)):
+                        current_dict[child_name] = {
+                            'type': 'dataset',
+                            'shape': child.shape,
+                            'dtype': str(child.dtype),
+                            'attrs': {attr: child._v_attrs[attr]
+                                    for attr in child._v_attrs._f_list()} if child._v_attrs else {}
+                        }
+
+                        if isinstance(child, tables.Array) and hasattr(child, 'chunkshape'):
+                            current_dict[child_name]['chunks'] = child.chunkshape
+
+                    elif isinstance(child, tables.Group):
+                        current_dict[child_name] = {
+                            'type': 'group',
+                            'children': {},
+                            'attrs': {attr: child._v_attrs[attr]
+                                    for attr in child._v_attrs._f_list()} if child._v_attrs else {}
+                        }
+                        build_structure_pytables(child, current_dict[child_name]['children'],
+                                              f"{path}/{child_name}" if path else child_name)
+
+            build_structure_pytables(self.file_handle.root, structure)
+
+        return structure
+
+    def get_dataset_info(self, dataset_path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get detailed information about datasets in the file.
+
+        Args:
+            dataset_path: Specific dataset path to inspect, or None for all datasets
+
+        Returns:
+            Dictionary with dataset information
+
+        Raises:
+            RuntimeError: If file must be loaded before extracting info
+            ValueError: If specified dataset path is not found
+        """
+        if self.file_handle is None:
+            raise RuntimeError("File must be loaded before extracting dataset info")
+
+        info = {}
+
+        if self.backend == 'h5py':
+            def collect_dataset_info(name, obj):
+                if hasattr(obj, 'shape'):  # It's a dataset
+                    if dataset_path is None or name == dataset_path:
+                        info[name] = {
+                            'shape': obj.shape,
+                            'dtype': str(obj.dtype),
+                            'size_bytes': obj.size * obj.dtype.itemsize,
+                            'chunks': obj.chunks,
+                            'compression': obj.compression,
+                            'compression_opts': obj.compression_opts,
+                            'shuffle': obj.shuffle,
+                            'fletcher32': obj.fletcher32,
+                            'fillvalue': obj.fillvalue,
+                            'attributes': dict(obj.attrs) if obj.attrs else {}
+                        }
+
+            self.file_handle.visititems(collect_dataset_info)
+
+        else:  # pytables
+            def collect_dataset_info_pytables(node, path=""):
+                for child in node:
+                    child_path = f"{path}/{child._v_name}" if path else child._v_name
+
+                    if isinstance(child, (tables.Array, tables.Table)):
+                        if dataset_path is None or child_path == dataset_path:
+                            dataset_info = {
+                                'shape': child.shape,
+                                'dtype': str(child.dtype),
+                                'size_bytes': child.size_in_memory,
+                                'attributes': {attr: child._v_attrs[attr]
+                                             for attr in child._v_attrs._f_list()} if child._v_attrs else {}
+                            }
+
+                            if hasattr(child, 'chunkshape'):
+                                dataset_info['chunks'] = child.chunkshape
+                            if hasattr(child, 'filters'):
+                                dataset_info['compression'] = str(child.filters)
+
+                            info[child_path] = dataset_info
+
+                    elif isinstance(child, tables.Group):
+                        collect_dataset_info_pytables(child, child_path)
+
+            collect_dataset_info_pytables(self.file_handle.root)
+
+        if dataset_path and dataset_path not in info:
+            raise ValueError(f"Dataset path '{dataset_path}' not found in file")
+
+        return info
+
+    def read_dataset(self, dataset_path: str, slice_obj: Optional[tuple] = None) -> np.ndarray:
+        """
+        Read a specific dataset with optional slicing.
+
+        Args:
+            dataset_path: Path to the dataset
+            slice_obj: Optional tuple defining slice (e.g., (slice(0, 10), slice(None)))
+
+        Returns:
+            NumPy array containing the dataset data
+
+        Raises:
+            RuntimeError: If file must be loaded before reading
+            ValueError: If dataset path is not found
+        """
+        if self.file_handle is None:
+            raise RuntimeError("File must be loaded before reading datasets")
+
+        if self.backend == 'h5py':
+            if dataset_path not in self.file_handle:
+                raise ValueError(f"Dataset '{dataset_path}' not found in file")
+
+            dataset = self.file_handle[dataset_path]
+            if slice_obj:
+                return np.array(dataset[slice_obj])
+            else:
+                return np.array(dataset[...])
+
+        else:  # pytables
+            try:
+                node = self.file_handle.get_node(f"/{dataset_path}")
+                if slice_obj:
+                    return np.array(node[slice_obj])
+                else:
+                    return np.array(node.read())
+            except tables.NoSuchNodeError:
+                raise ValueError(f"Dataset '{dataset_path}' not found in file")
+
+    def list_groups(self, group_path: str = "/") -> List[str]:
+        """
+        List all groups under the specified path.
+
+        Args:
+            group_path: Path to the group (default: root)
+
+        Returns:
+            List of group names
+
+        Raises:
+            RuntimeError: If file must be loaded before listing groups
+        """
+        if self.file_handle is None:
+            raise RuntimeError("File must be loaded before listing groups")
+
+        groups = []
+
+        if self.backend == 'h5py':
+            if group_path in self.file_handle:
+                group = self.file_handle[group_path]
+                for key in group.keys():
+                    if isinstance(group[key], h5py.Group):
+                        groups.append(key)
+
+        else:  # pytables
+            try:
+                if group_path == "/":
+                    group = self.file_handle.root
+                else:
+                    group = self.file_handle.get_node(group_path)
+
+                for child in group:
+                    if isinstance(child, tables.Group):
+                        groups.append(child._v_name)
+            except tables.NoSuchNodeError:
+                pass
+
+        return groups
+
+    def list_datasets(self, group_path: str = "/") -> List[str]:
+        """
+        List all datasets under the specified path.
+
+        Args:
+            group_path: Path to the group (default: root)
+
+        Returns:
+            List of dataset names
+
+        Raises:
+            RuntimeError: If file must be loaded before listing datasets
+        """
+        if self.file_handle is None:
+            raise RuntimeError("File must be loaded before listing datasets")
+
+        datasets = []
+
+        if self.backend == 'h5py':
+            if group_path in self.file_handle:
+                group = self.file_handle[group_path]
+                for key in group.keys():
+                    if isinstance(group[key], h5py.Dataset):
+                        datasets.append(key)
+
+        else:  # pytables
+            try:
+                if group_path == "/":
+                    group = self.file_handle.root
+                else:
+                    group = self.file_handle.get_node(group_path)
+
+                for child in group:
+                    if isinstance(child, (tables.Array, tables.Table)):
+                        datasets.append(child._v_name)
+            except tables.NoSuchNodeError:
+                pass
+
+        return datasets
+
+    def close(self):
+        """Close the HDF5 file and free resources."""
+        if self.file_handle is not None:
+            self.file_handle.close()
+            self.file_handle = None
+        self.data = None
+
+
+def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader]:
     """
     Factory function to create appropriate data loader based on type.
 
