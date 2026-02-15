@@ -36,6 +36,9 @@ export { toUnicode, toLatex, toAscii } from './pretty-print.js'
 // Export substitution utilities
 export { substitute, substituteInModel, substituteInReactionSystem } from './substitute.js'
 
+// Export expression structural operations
+export { freeVariables, freeParameters, contains, evaluate, simplify } from './expression.js'
+
 // Interactive editor components (SolidJS)
 export * from './interactive-editor/index.js'
 
