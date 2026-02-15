@@ -6,6 +6,11 @@
  * from the interactive test suite.
  */
 
+import expressionInteractionFixtures from './fixtures/expression-interaction-fixtures.json';
+import undoRedoScenarios from './fixtures/undo-redo-scenarios.json';
+import dragDropTestCases from './fixtures/drag-drop-test-cases.json';
+import accessibilityInteractionFixtures from './fixtures/accessibility-interaction-fixtures.json';
+
 // Test data fixtures
 export const expressionTestCases = {
   simple: {
@@ -252,11 +257,21 @@ export const accessibilityStandards = {
   }
 };
 
+// Interactive expression editing fixtures
+export const interactiveExpressionFixtures = expressionInteractionFixtures;
+export const undoRedoFixtures = undoRedoScenarios;
+export const dragDropFixtures = dragDropTestCases;
+export const accessibilityFixtures = accessibilityInteractionFixtures;
+
 export default {
   expressionTestCases,
   modelTestData,
   couplingTestData,
   testHelpers,
   performanceTargets,
-  accessibilityStandards
+  accessibilityStandards,
+  interactiveExpressionFixtures,
+  undoRedoFixtures,
+  dragDropFixtures,
+  accessibilityFixtures
 };
