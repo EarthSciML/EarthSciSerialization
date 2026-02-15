@@ -15,6 +15,7 @@ using JSONSchema
 
 # Include type definitions and functionality
 include("types.jl")
+include("validate.jl")
 include("parse.jl")
 include("serialize.jl")
 # Temporarily commenting out mtk_catalyst.jl due to precompilation issues
@@ -47,7 +48,7 @@ export
     # Serialization functions for solver (internal)
     serialize_solver, serialize_solver_configuration, coerce_solver, coerce_solver_configuration,
     # JSON functionality
-    load, save, ParseError, SchemaValidationError,
+    load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
     # Qualified reference resolution
     resolve_qualified_reference, QualifiedReferenceError, ReferenceResolution,
     validate_reference_syntax, is_valid_identifier

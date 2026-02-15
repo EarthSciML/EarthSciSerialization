@@ -8,16 +8,6 @@ Uses manual JSON parsing and type coercion for full control over the deserializa
 using JSON3
 using JSONSchema
 
-"""
-    SchemaValidationError
-
-Exception thrown when schema validation fails.
-Contains detailed error information including paths and messages.
-"""
-struct SchemaValidationError <: Exception
-    message::String
-    errors::Vector{Dict{String,Any}}
-end
 
 """
     ParseError
@@ -31,46 +21,6 @@ struct ParseError <: Exception
     ParseError(message::String, original_error=nothing) = new(message, original_error)
 end
 
-# Load schema at module initialization
-const SCHEMA_PATH = joinpath(@__DIR__, "..", "..", "..", "esm-schema.json")
-
-# Global schema validator
-const ESM_SCHEMA = if isfile(SCHEMA_PATH)
-    try
-        Schema(JSON3.read(read(SCHEMA_PATH, String)))
-    catch e
-        @warn "Failed to load ESM schema: $e"
-        nothing
-    end
-else
-    @warn "ESM schema file not found at $SCHEMA_PATH"
-    nothing
-end
-
-"""
-    validate_schema(data::Any) -> Vector{Dict{String,Any}}
-
-Validate data against the ESM schema.
-Returns empty vector if valid, otherwise returns validation errors.
-"""
-function validate_schema(data::Any)
-    if ESM_SCHEMA === nothing
-        @warn "Schema validation skipped - schema not loaded"
-        return Dict{String,Any}[]
-    end
-
-    try
-        result = JSONSchema.validate(ESM_SCHEMA, data)
-        if result === nothing
-            return Dict{String,Any}[]
-        else
-            # Convert validation result to error format
-            return [Dict("message" => string(result), "path" => "/")]
-        end
-    catch e
-        return [Dict("message" => "Schema validation error: $(e)", "path" => "/")]
-    end
-end
 
 """
     parse_expression(data::Any) -> Expr
@@ -590,7 +540,7 @@ function load(io::IO)::EsmFile
         if !isempty(schema_errors)
             error_msg = "Schema validation failed with $(length(schema_errors)) error(s):\\n"
             for error in schema_errors
-                error_msg *= "  - $(error["path"]): $(error["message"])\\n"
+                error_msg *= "  - $(error.path): $(error.message) ($(error.keyword))\\n"
             end
             throw(SchemaValidationError(error_msg, schema_errors))
         end
