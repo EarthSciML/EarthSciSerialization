@@ -30,6 +30,9 @@ export type { ValidationError, ValidationResult } from './validate.js'
 export { component_graph, componentExists, getComponentType } from './graph.js'
 export type { ComponentGraph, ComponentNode, CouplingEdge } from './graph.js'
 
+// Export pretty-printing utilities
+export { toUnicode, toLatex, toAscii } from './pretty-print.js'
+
 // Interactive editor components (SolidJS)
 export * from './interactive-editor/index.js'
 
