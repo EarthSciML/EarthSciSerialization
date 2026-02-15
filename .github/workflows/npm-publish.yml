@@ -1,0 +1,105 @@
+name: NPM Package Build and Publish
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 21]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: packages/esm-format/package-lock.json
+
+    - name: Install dependencies
+      working-directory: packages/esm-format
+      run: npm ci
+
+    - name: Run tests
+      working-directory: packages/esm-format
+      run: npm run test:ci
+
+    - name: Build package
+      working-directory: packages/esm-format
+      run: npm run build
+
+  publish-npm:
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+        cache-dependency-path: packages/esm-format/package-lock.json
+
+    - name: Install dependencies
+      working-directory: packages/esm-format
+      run: npm ci
+
+    - name: Build package
+      working-directory: packages/esm-format
+      run: npm run build
+
+    - name: Publish to NPM
+      working-directory: packages/esm-format
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-npm-beta:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+        cache-dependency-path: packages/esm-format/package-lock.json
+
+    - name: Install dependencies
+      working-directory: packages/esm-format
+      run: npm ci
+
+    - name: Build package
+      working-directory: packages/esm-format
+      run: npm run build
+
+    - name: Update version to beta
+      working-directory: packages/esm-format
+      run: |
+        CURRENT_VERSION=$(node -p "require('./package.json').version")
+        BETA_VERSION="${CURRENT_VERSION}-beta.$(date +%s)"
+        npm version $BETA_VERSION --no-git-tag-version
+        echo "Publishing version: $BETA_VERSION"
+
+    - name: Publish beta to NPM
+      working-directory: packages/esm-format
+      run: npm publish --tag beta
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
