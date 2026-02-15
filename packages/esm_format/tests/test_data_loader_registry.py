@@ -148,9 +148,15 @@ class TestDataLoaderRegistry:
         assert registry.detect_loader_type('test.nc') == DataLoaderType.NETCDF
         assert registry.detect_loader_type('test.json') == DataLoaderType.JSON
         assert registry.detect_loader_type('test.jsonl') == DataLoaderType.JSON
+        assert registry.detect_loader_type('test.grib') == DataLoaderType.GRIB
+        assert registry.detect_loader_type('test.grib1') == DataLoaderType.GRIB
+        assert registry.detect_loader_type('test.grib2') == DataLoaderType.GRIB
+        assert registry.detect_loader_type('test.grb') == DataLoaderType.GRIB
+        assert registry.detect_loader_type('test.grb2') == DataLoaderType.GRIB
 
         # Test case insensitive
         assert registry.detect_loader_type('TEST.NC') == DataLoaderType.NETCDF
+        assert registry.detect_loader_type('TEST.GRIB2') == DataLoaderType.GRIB
 
         # Test custom extension
         registry.register_loader(DataLoaderType.CSV, MockLoader, extensions=['.csv'])
