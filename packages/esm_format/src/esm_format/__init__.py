@@ -169,6 +169,32 @@ from .reactions import (
     substrate_matrix,
     product_matrix,
 )
+from .graph import (
+    component_graph,
+    expression_graph,
+    Graph,
+    GraphNode,
+    GraphEdge,
+)
+from .units import (
+    validate_units,
+    convert_units,
+    UnitValidator,
+    UnitValidationResult,
+    UnitConversionResult,
+)
+from .edit import (
+    ESMEditor,
+    EditOperation,
+    EditResult,
+    add_model_to_file,
+    add_variable_to_model,
+    rename_variable_in_model,
+)
+from .display import (
+    explore,
+    ESMExplorer,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -320,4 +346,26 @@ __all__ = [
     "stoichiometric_matrix",
     "substrate_matrix",
     "product_matrix",
+    # Graph representations
+    "component_graph",
+    "expression_graph",
+    "Graph",
+    "GraphNode",
+    "GraphEdge",
+    # Unit validation
+    "validate_units",
+    "convert_units",
+    "UnitValidator",
+    "UnitValidationResult",
+    "UnitConversionResult",
+    # Editing operations
+    "ESMEditor",
+    "EditOperation",
+    "EditResult",
+    "add_model_to_file",
+    "add_variable_to_model",
+    "rename_variable_in_model",
+    # Jupyter integration
+    "explore",
+    "ESMExplorer",
 ]
