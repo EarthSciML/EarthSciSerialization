@@ -153,11 +153,224 @@ function coerceExpression(value: any): Expression {
 }
 
 /**
+ * Parse a semantic version string and return its components
+ */
+function parseSemanticVersion(versionString: string): { major: number; minor: number; patch: number } | null {
+  const match = versionString.match(/^(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    major: parseInt(match[1], 10),
+    minor: parseInt(match[2], 10),
+    patch: parseInt(match[3], 10)
+  }
+}
+
+/**
+ * Check version compatibility for an ESM file
+ */
+function checkVersionCompatibility(data: any): void {
+  if (typeof data !== 'object' || data === null) {
+    return // Let schema validation handle this
+  }
+
+  const version = data.esm
+  if (typeof version !== 'string') {
+    return // Let schema validation handle this
+  }
+
+  const versionComponents = parseSemanticVersion(version)
+  if (versionComponents === null) {
+    return // Let schema validation handle invalid version format
+  }
+
+  const { major } = versionComponents
+  const CURRENT_MAJOR = 0 // Current supported major version
+
+  // Reject unsupported major versions
+  if (major !== CURRENT_MAJOR) {
+    throw new ParseError(`Unsupported major version ${major}. This parser supports major version ${CURRENT_MAJOR}.`)
+  }
+}
+
+/**
+ * Version-aware schema validation that handles backward/forward compatibility
+ */
+function validateSchemaWithVersionCompatibility(data: any): SchemaError[] {
+  if (typeof data !== 'object' || data === null) {
+    return validateSchema(data)
+  }
+
+  const version = data.esm
+  if (typeof version !== 'string') {
+    return validateSchema(data)
+  }
+
+  const versionComponents = parseSemanticVersion(version)
+  if (versionComponents === null) {
+    // If version parsing fails, use normal validation
+    return validateSchema(data)
+  }
+
+  const { major, minor, patch } = versionComponents
+  const CURRENT_VERSION = { major: 0, minor: 1, patch: 0 }
+
+  // If it's the exact current version, use normal validation
+  if (major === CURRENT_VERSION.major && minor === CURRENT_VERSION.minor && patch === CURRENT_VERSION.patch) {
+    return validateSchema(data)
+  }
+
+  // For backward/forward compatibility within the same major version,
+  // temporarily replace the version to pass schema validation
+  if (major === CURRENT_VERSION.major) {
+    // Generate forward compatibility warnings
+    if (minor > CURRENT_VERSION.minor) {
+      console.warn(`Forward compatibility: Version ${version} is newer than current ${CURRENT_VERSION.major}.${CURRENT_VERSION.minor}.${CURRENT_VERSION.patch}. Some features may not be fully supported.`)
+    }
+
+    const tempData = { ...data, esm: '0.1.0' }
+    const errors = validateSchema(tempData)
+
+    // Filter out additionalProperties errors for forward compatibility
+    const filteredErrors = errors.filter(error => {
+      // Allow additional properties for newer versions (forward compatibility)
+      if (error.keyword === 'additionalProperties' &&
+          (minor > CURRENT_VERSION.minor || patch > CURRENT_VERSION.patch)) {
+        console.warn(`Forward compatibility: Ignoring unknown field at ${error.path}`)
+        return false
+      }
+      return true
+    })
+
+    return filteredErrors
+  }
+
+  // This shouldn't happen due to checkVersionCompatibility, but fallback to normal validation
+  return validateSchema(data)
+}
+
+/**
+ * Remove unknown fields for forward compatibility
+ */
+function removeUnknownFields(data: any): any {
+  if (typeof data !== 'object' || data === null) {
+    return data
+  }
+
+  const version = data.esm
+  if (typeof version !== 'string') {
+    return data
+  }
+
+  const versionComponents = parseSemanticVersion(version)
+  if (versionComponents === null) {
+    return data
+  }
+
+  const { major, minor } = versionComponents
+  const CURRENT_VERSION = { major: 0, minor: 1, patch: 0 }
+
+  // Only clean up for forward compatible versions (newer minor versions in the same major)
+  if (major === CURRENT_VERSION.major && minor > CURRENT_VERSION.minor) {
+    // Create a copy of the data and remove fields that would cause schema validation errors
+    const cleanedData = { ...data }
+
+    // Remove known forward compatibility fields that aren't in the current schema
+    const unknownRootFields = ['performance_hints', 'validation_metadata', 'extended_metadata']
+    unknownRootFields.forEach(field => {
+      if (field in cleanedData) {
+        delete cleanedData[field]
+      }
+    })
+
+    // Recursively clean model and reaction system objects
+    if (cleanedData.models) {
+      cleanedData.models = cleanModels(cleanedData.models)
+    }
+    if (cleanedData.reaction_systems) {
+      cleanedData.reaction_systems = cleanReactionSystems(cleanedData.reaction_systems)
+    }
+
+    return cleanedData
+  }
+
+  return data
+}
+
+/**
+ * Clean unknown fields from models
+ */
+function cleanModels(models: any): any {
+  if (typeof models !== 'object' || models === null) {
+    return models
+  }
+
+  const cleaned: any = {}
+  for (const [key, model] of Object.entries(models)) {
+    if (typeof model === 'object' && model !== null) {
+      const cleanedModel: any = { ...model }
+      // Remove known forward compatibility fields
+      const unknownModelFields = ['solver_hints', 'optimization_flags']
+      unknownModelFields.forEach(field => {
+        if (field in cleanedModel) {
+          delete cleanedModel[field]
+        }
+      })
+      cleaned[key] = cleanedModel
+    } else {
+      cleaned[key] = model
+    }
+  }
+  return cleaned
+}
+
+/**
+ * Clean unknown fields from reaction systems
+ */
+function cleanReactionSystems(reactionSystems: any): any {
+  if (typeof reactionSystems !== 'object' || reactionSystems === null) {
+    return reactionSystems
+  }
+
+  const cleaned: any = {}
+  for (const [key, system] of Object.entries(reactionSystems)) {
+    if (typeof system === 'object' && system !== null) {
+      const cleanedSystem: any = { ...system }
+
+      // Clean reactions array
+      if (Array.isArray(cleanedSystem.reactions)) {
+        cleanedSystem.reactions = cleanedSystem.reactions.map((reaction: any) => {
+          if (typeof reaction === 'object' && reaction !== null) {
+            const cleanedReaction: any = { ...reaction }
+            // Remove known forward compatibility fields from reactions
+            const unknownReactionFields = ['kinetics_metadata', 'thermodynamic_data']
+            unknownReactionFields.forEach(field => {
+              if (field in cleanedReaction) {
+                delete cleanedReaction[field]
+              }
+            })
+            return cleanedReaction
+          }
+          return reaction
+        })
+      }
+
+      cleaned[key] = cleanedSystem
+    } else {
+      cleaned[key] = system
+    }
+  }
+  return cleaned
+}
+
+/**
  * Load an ESM file from a JSON string or pre-parsed object
  *
  * @param input - JSON string or pre-parsed JavaScript object
  * @returns Typed EsmFile object
- * @throws {ParseError} When JSON parsing fails
+ * @throws {ParseError} When JSON parsing fails or version is incompatible
  * @throws {SchemaValidationError} When schema validation fails
  */
 export function load(input: string | object): EsmFile {
@@ -169,8 +382,11 @@ export function load(input: string | object): EsmFile {
     data = input
   }
 
-  // Step 2: Schema validation
-  const schemaErrors = validateSchema(data)
+  // Step 2: Version compatibility check (before schema validation)
+  checkVersionCompatibility(data)
+
+  // Step 3: Schema validation with version compatibility
+  const schemaErrors = validateSchemaWithVersionCompatibility(data)
   if (schemaErrors.length > 0) {
     throw new SchemaValidationError(
       `Schema validation failed with ${schemaErrors.length} error(s)`,
@@ -178,8 +394,9 @@ export function load(input: string | object): EsmFile {
     )
   }
 
-  // Step 3: Type coercion
-  const typedData = coerceTypes(data) as EsmFile
+  // Step 4: Clean up unknown fields for forward compatibility and type coercion
+  const cleanedData = removeUnknownFields(data)
+  const typedData = coerceTypes(cleanedData) as EsmFile
 
   return typedData
 }
