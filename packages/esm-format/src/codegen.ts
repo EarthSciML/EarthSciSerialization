@@ -1,9 +1,10 @@
 /**
- * Julia code generation for the ESM format
+ * Code generation for the ESM format
  *
- * This module provides functions to generate self-contained Julia scripts
- * from ESM files, compatible with ModelingToolkit, Catalyst, EarthSciMLBase,
- * and OrdinaryDiffEq packages.
+ * This module provides functions to generate self-contained scripts
+ * from ESM files in multiple target languages:
+ * - Julia: compatible with ModelingToolkit, Catalyst, EarthSciMLBase, and OrdinaryDiffEq
+ * - Python: compatible with SymPy, esm_format, and SciPy
  */
 
 import type { EsmFile, Model, ReactionSystem, Expression, ExpressionNode, Equation, ModelVariable, Species, Reaction, ContinuousEvent, DiscreteEvent, CouplingEntry, Domain, Solver, DataLoader } from './types.js'
@@ -93,6 +94,84 @@ export function toJuliaCode(file: EsmFile): string {
     for (const [name, dataLoader] of Object.entries(file.data_loaders)) {
       lines.push(...generateDataLoaderComment(name, dataLoader))
     }
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Generate a self-contained Python script from an ESM file
+ * @param file ESM file to generate Python code for
+ * @returns Python script as a string
+ */
+export function toPythonCode(file: EsmFile): string {
+  const lines: string[] = []
+
+  // Header comment
+  lines.push(`# Generated Python script from ESM file`)
+  lines.push(`# ESM version: ${file.esm}`)
+  if (file.metadata?.title) {
+    lines.push(`# Title: ${file.metadata.title}`)
+  }
+  if (file.metadata?.description) {
+    lines.push(`# Description: ${file.metadata.description}`)
+  }
+  lines.push('')
+
+  // Import statements
+  lines.push('# Package imports')
+  lines.push('import sympy as sp')
+  lines.push('import esm_format as esm')
+  lines.push('import scipy')
+  lines.push('from sympy import Function')
+  lines.push('')
+
+  // Generate models
+  if (file.models && Object.keys(file.models).length > 0) {
+    lines.push('# Models')
+    for (const [name, model] of Object.entries(file.models)) {
+      lines.push(...generatePythonModelCode(name, model))
+      lines.push('')
+    }
+  }
+
+  // Generate reaction systems
+  if (file.reaction_systems && Object.keys(file.reaction_systems).length > 0) {
+    lines.push('# Reaction Systems')
+    for (const [name, reactionSystem] of Object.entries(file.reaction_systems)) {
+      lines.push(...generatePythonReactionSystemCode(name, reactionSystem))
+      lines.push('')
+    }
+  }
+
+  // Generate simulation stub
+  lines.push('# Simulation setup (TODO: Configure parameters)')
+  lines.push('tspan = (0, 10)  # time span')
+  lines.push('parameters = {}  # parameter values')
+  lines.push('initial_conditions = {}  # initial values')
+  lines.push('')
+  lines.push('# result = esm.simulate(tspan=tspan, parameters=parameters, initial_conditions=initial_conditions)')
+  lines.push('')
+
+  // Generate TODO comments for other features
+  if (file.coupling && file.coupling.length > 0) {
+    lines.push('# Coupling (TODO)')
+    for (const coupling of file.coupling) {
+      lines.push(...generatePythonCouplingComment(coupling))
+    }
+    lines.push('')
+  }
+
+  if (file.domain) {
+    lines.push('# Domain (TODO)')
+    lines.push(...generatePythonDomainComment(file.domain))
+    lines.push('')
+  }
+
+  if (file.solver) {
+    lines.push('# Solver (TODO)')
+    lines.push(...generatePythonSolverComment(file.solver))
     lines.push('')
   }
 
@@ -491,4 +570,273 @@ function extractParameterNames(expr: Expression): Set<string> {
   }
 
   return params
+}
+
+/**
+ * Generate Python code for a model
+ */
+function generatePythonModelCode(name: string, model: Model): string[] {
+  const lines: string[] = []
+
+  lines.push(`# Model: ${name}`)
+
+  // Collect state variables and parameters
+  const stateVars: ModelVariable[] = []
+  const parameters: ModelVariable[] = []
+
+  if (model.variables) {
+    for (const variable of Object.values(model.variables)) {
+      if (variable.type === 'state') {
+        stateVars.push(variable)
+      } else if (variable.type === 'parameter') {
+        parameters.push(variable)
+      }
+    }
+  }
+
+  // Generate time symbol if needed
+  const hasDerivatives = model.equations && model.equations.some(eq =>
+    hasDerivativeInExpression(eq.lhs) || hasDerivativeInExpression(eq.rhs)
+  )
+  if (hasDerivatives) {
+    lines.push('# Time variable')
+    lines.push('t = sp.Symbol(\'t\')')
+    lines.push('')
+  }
+
+  // Generate symbol/function definitions
+  if (stateVars.length > 0) {
+    lines.push('# State variables')
+    for (const variable of stateVars) {
+      const comment = variable.unit ? `  # ${variable.unit}` : ''
+      if (variable.name && variable.name.includes('(')) {
+        // Function symbol (e.g., contains parentheses)
+        lines.push(`${variable.name} = sp.Function('${variable.name.split('(')[0]}')${comment}`)
+      } else {
+        // Regular symbol - but make it a function if derivatives are present
+        if (hasDerivatives) {
+          lines.push(`${variable.name} = sp.Function('${variable.name}')${comment}`)
+        } else {
+          lines.push(`${variable.name} = sp.Symbol('${variable.name}')${comment}`)
+        }
+      }
+    }
+    lines.push('')
+  }
+
+  if (parameters.length > 0) {
+    lines.push('# Parameters')
+    for (const parameter of parameters) {
+      const comment = parameter.unit ? `  # ${parameter.unit}` : ''
+      lines.push(`${parameter.name} = sp.Symbol('${parameter.name}')${comment}`)
+    }
+    lines.push('')
+  }
+
+  // Generate equations
+  if (model.equations && model.equations.length > 0) {
+    lines.push('# Equations')
+    for (const [i, equation] of model.equations.entries()) {
+      const lhs = formatPythonExpression(equation.lhs)
+      const rhs = formatPythonExpression(equation.rhs)
+      lines.push(`eq${i + 1} = sp.Eq(${lhs}, ${rhs})`)
+    }
+  }
+
+  return lines
+}
+
+/**
+ * Generate Python code for a reaction system
+ */
+function generatePythonReactionSystemCode(name: string, reactionSystem: ReactionSystem): string[] {
+  const lines: string[] = []
+
+  lines.push(`# Reaction System: ${name}`)
+
+  // Generate species symbols
+  if (reactionSystem.species && Object.keys(reactionSystem.species).length > 0) {
+    lines.push('# Species')
+    for (const species of Object.values(reactionSystem.species)) {
+      lines.push(`${species.name} = sp.Symbol('${species.name}')`)
+    }
+    lines.push('')
+  }
+
+  // Generate reaction rate expressions
+  if (reactionSystem.reactions && Object.keys(reactionSystem.reactions).length > 0) {
+    lines.push('# Rate expressions')
+    for (const [reactionName, reaction] of Object.entries(reactionSystem.reactions)) {
+      if (reaction.rate) {
+        const rateExpr = formatPythonExpression(reaction.rate)
+        lines.push(`${reactionName}_rate = ${rateExpr}`)
+      }
+    }
+    lines.push('')
+
+    lines.push('# Stoichiometry setup (TODO: Implement reaction network)')
+    for (const [reactionName, reaction] of Object.entries(reactionSystem.reactions)) {
+      lines.push(`# Reaction: ${reactionName}`)
+      if (reaction.reactants) {
+        const reactantStr = reaction.reactants
+          .map(r => r.stoichiometry && r.stoichiometry !== 1 ? `${r.stoichiometry}*${r.species}` : r.species)
+          .join(' + ')
+        lines.push(`#   Reactants: ${reactantStr}`)
+      }
+      if (reaction.products) {
+        const productStr = reaction.products
+          .map(p => p.stoichiometry && p.stoichiometry !== 1 ? `${p.stoichiometry}*${p.species}` : p.species)
+          .join(' + ')
+        lines.push(`#   Products: ${productStr}`)
+      }
+    }
+  }
+
+  return lines
+}
+
+/**
+ * Generate coupling TODO comments for Python
+ */
+function generatePythonCouplingComment(coupling: CouplingEntry): string[] {
+  const lines: string[] = []
+  lines.push(`# TODO: Implement coupling ${coupling.type}`)
+  lines.push(`#   From: ${coupling.from}`)
+  lines.push(`#   To: ${coupling.to}`)
+  if (coupling.variables && coupling.variables.length > 0) {
+    lines.push(`#   Variables: ${coupling.variables.join(', ')}`)
+  }
+  return lines
+}
+
+/**
+ * Generate domain TODO comments for Python
+ */
+function generatePythonDomainComment(domain: Domain): string[] {
+  const lines: string[] = []
+  lines.push(`# TODO: Implement domain`)
+  if (domain.spatial_coordinates && domain.spatial_coordinates.length > 0) {
+    lines.push(`#   Spatial coordinates: ${domain.spatial_coordinates.join(', ')}`)
+  }
+  if (domain.temporal_coordinates && domain.temporal_coordinates.length > 0) {
+    lines.push(`#   Temporal coordinates: ${domain.temporal_coordinates.join(', ')}`)
+  }
+  return lines
+}
+
+/**
+ * Generate solver TODO comments for Python
+ */
+function generatePythonSolverComment(solver: Solver): string[] {
+  const lines: string[] = []
+  lines.push(`# TODO: Implement solver`)
+  if (solver.algorithm) {
+    lines.push(`#   Algorithm: ${solver.algorithm}`)
+  }
+  if (solver.tolerances) {
+    lines.push(`#   Tolerances: ${JSON.stringify(solver.tolerances)}`)
+  }
+  return lines
+}
+
+/**
+ * Format an expression for Python code generation
+ */
+function formatPythonExpression(expr: Expression): string {
+  if (typeof expr === 'number') {
+    return expr.toString()
+  }
+
+  if (typeof expr === 'string') {
+    return expr
+  }
+
+  if (typeof expr === 'object' && expr.op) {
+    return formatPythonExpressionNode(expr)
+  }
+
+  throw new Error(`Unsupported expression type: ${typeof expr}`)
+}
+
+/**
+ * Format an expression node for Python, applying operator mappings
+ */
+function formatPythonExpressionNode(node: ExpressionNode): string {
+  const { op, args } = node
+
+  // Apply expression mappings as specified in task description
+  switch (op) {
+    case '+':
+      return args.map(formatPythonExpression).join(' + ')
+    case '*':
+      return args.map(formatPythonExpression).join(' * ')
+    case 'D':
+      // D(x,t) → Derivative(x(t), t)
+      if (args.length >= 1) {
+        const varName = formatPythonExpression(args[0])
+        // Assume time variable t
+        return `sp.Derivative(${varName}(t), t)`
+      }
+      return 'sp.Derivative()'
+    case 'exp':
+      return `sp.exp(${args.map(formatPythonExpression).join(', ')})`
+    case 'ifelse':
+      // ifelse(condition, true_val, false_val) → sp.Piecewise((true_val, condition), (false_val, True))
+      if (args.length >= 3) {
+        const condition = formatPythonExpression(args[0])
+        const trueVal = formatPythonExpression(args[1])
+        const falseVal = formatPythonExpression(args[2])
+        return `sp.Piecewise((${trueVal}, ${condition}), (${falseVal}, True))`
+      }
+      return `sp.Piecewise((0, True))`
+    case 'Pre':
+      // Pre → Function('Pre')
+      return `Function('Pre')(${args.map(formatPythonExpression).join(', ')})`
+    case '^':
+      // ^ → **
+      return args.map(formatPythonExpression).join(' ** ')
+    case 'grad':
+      // grad(x,y) → sp.Derivative(x, y)
+      if (args.length >= 2) {
+        const func = formatPythonExpression(args[0])
+        const var_ = formatPythonExpression(args[1])
+        return `sp.Derivative(${func}, ${var_})`
+      } else if (args.length === 1) {
+        // Default to x if dimension not specified
+        return `sp.Derivative(${formatPythonExpression(args[0])}, x)`
+      }
+      return 'sp.Derivative()'
+    case '-':
+      if (args.length === 1) {
+        return `-${formatPythonExpression(args[0])}`
+      } else {
+        return args.map(formatPythonExpression).join(' - ')
+      }
+    case '/':
+      return args.map(formatPythonExpression).join(' / ')
+    case '<': case '>': case '<=': case '>=': case '==': case '!=':
+      return args.map(formatPythonExpression).join(` ${op} `)
+    case 'and':
+      return args.map(formatPythonExpression).join(' & ')
+    case 'or':
+      return args.map(formatPythonExpression).join(' | ')
+    case 'not':
+      return `~(${formatPythonExpression(args[0])})`
+    default:
+      // For other operators, use function call syntax
+      return `${op}(${args.map(formatPythonExpression).join(', ')})`
+  }
+}
+
+/**
+ * Check if an expression contains derivatives
+ */
+function hasDerivativeInExpression(expr: Expression): boolean {
+  if (typeof expr === 'object' && expr.op) {
+    if (expr.op === 'D') {
+      return true
+    }
+    return expr.args.some(arg => hasDerivativeInExpression(arg))
+  }
+  return false
 }

@@ -1,9 +1,9 @@
 /**
- * Tests for Julia code generation
+ * Tests for code generation (Julia and Python)
  */
 
 import { describe, it, expect } from 'vitest'
-import { toJuliaCode } from './codegen.js'
+import { toJuliaCode, toPythonCode } from './codegen.js'
 import type { EsmFile, Model, ReactionSystem, Expression, ExpressionNode } from './types.js'
 
 describe('toJuliaCode', () => {
@@ -314,5 +314,191 @@ describe('toJuliaCode', () => {
     const code = toJuliaCode(file)
 
     expect(code).toContain('Reaction(k * CH4 * O2, [CH4 + 2*O2], [CO2 + 2*H2O])')
+  })
+})
+
+describe('toPythonCode', () => {
+  it('should generate basic Python script structure', () => {
+    const file: EsmFile = {
+      esm: '0.1.0',
+      metadata: {
+        title: 'Test Model',
+        description: 'A test model for Python code generation'
+      },
+      models: {},
+      reaction_systems: {}
+    }
+
+    const code = toPythonCode(file)
+
+    expect(code).toContain('import sympy as sp')
+    expect(code).toContain('import esm_format as esm')
+    expect(code).toContain('import scipy')
+    expect(code).toContain('# Title: Test Model')
+    expect(code).toContain('# Description: A test model for Python code generation')
+    expect(code).toContain('tspan = (0, 10)')
+    expect(code).toContain('parameters = {}')
+    expect(code).toContain('initial_conditions = {}')
+  })
+
+  it('should generate model code with variables and equations', () => {
+    const file: EsmFile = {
+      esm: '0.1.0',
+      models: {
+        atmospheric: {
+          variables: {
+            O3: {
+              name: 'O3',
+              type: 'state',
+              default: 50.0,
+              unit: 'ppb'
+            },
+            k1: {
+              name: 'k1',
+              type: 'parameter',
+              default: 1e-3
+            }
+          },
+          equations: [
+            {
+              lhs: {
+                op: 'D',
+                args: ['O3'],
+                wrt: 't'
+              } as ExpressionNode,
+              rhs: {
+                op: '*',
+                args: ['k1', 'O3']
+              } as ExpressionNode
+            }
+          ]
+        }
+      },
+      reaction_systems: {}
+    }
+
+    const code = toPythonCode(file)
+
+    expect(code).toContain('t = sp.Symbol(\'t\')')
+    expect(code).toContain('O3 = sp.Function(\'O3\')  # ppb')
+    expect(code).toContain('k1 = sp.Symbol(\'k1\')')
+    expect(code).toContain('eq1 = sp.Eq(sp.Derivative(O3(t), t), k1 * O3)')
+  })
+
+  it('should generate reaction system code', () => {
+    const file: EsmFile = {
+      esm: '0.1.0',
+      models: {},
+      reaction_systems: {
+        chemistry: {
+          species: {
+            NO: {
+              name: 'NO',
+              initial_value: 10.0
+            },
+            NO2: {
+              name: 'NO2',
+              initial_value: 5.0
+            }
+          },
+          reactions: {
+            r1: {
+              reactants: [
+                { species: 'NO', stoichiometry: 1 }
+              ],
+              products: [
+                { species: 'NO2', stoichiometry: 1 }
+              ],
+              rate: 'k1'
+            }
+          }
+        }
+      }
+    }
+
+    const code = toPythonCode(file)
+
+    expect(code).toContain('NO = sp.Symbol(\'NO\')')
+    expect(code).toContain('NO2 = sp.Symbol(\'NO2\')')
+    expect(code).toContain('r1_rate = k1')
+    expect(code).toContain('# Stoichiometry setup (TODO: Implement reaction network)')
+  })
+
+  it('should handle expression mappings correctly for Python', () => {
+    const expressions: { [key: string]: Expression } = {
+      addition: { op: '+', args: ['a', 'b'] } as ExpressionNode,
+      multiplication: { op: '*', args: ['x', 'y'] } as ExpressionNode,
+      derivative: { op: 'D', args: ['u'], wrt: 't' } as ExpressionNode,
+      exponential: { op: 'exp', args: ['z'] } as ExpressionNode,
+      ifelse: { op: 'ifelse', args: [{ op: '>', args: ['x', 0] } as ExpressionNode, 'a', 'b'] } as ExpressionNode,
+      pre: { op: 'Pre', args: ['signal'] } as ExpressionNode,
+      power: { op: '^', args: ['x', 2] } as ExpressionNode,
+      gradient: { op: 'grad', args: ['u', 'x'] } as ExpressionNode
+    }
+
+    const file: EsmFile = {
+      esm: '0.1.0',
+      models: {
+        test: {
+          variables: {
+            a: { name: 'a', type: 'state' },
+            b: { name: 'b', type: 'state' },
+            x: { name: 'x', type: 'state' },
+            y: { name: 'y', type: 'state' },
+            u: { name: 'u', type: 'state' },
+            z: { name: 'z', type: 'state' },
+            signal: { name: 'signal', type: 'state' }
+          },
+          equations: Object.entries(expressions).map(([key, expr], i) => ({
+            lhs: `var${i}` as Expression,
+            rhs: expr
+          }))
+        }
+      },
+      reaction_systems: {}
+    }
+
+    const code = toPythonCode(file)
+
+    expect(code).toContain('a + b')
+    expect(code).toContain('x * y')
+    expect(code).toContain('sp.Derivative(u(t), t)')
+    expect(code).toContain('sp.exp(z)')
+    expect(code).toContain('sp.Piecewise((a, x > 0), (b, True))')
+    expect(code).toContain('Function(\'Pre\')(signal)')
+    expect(code).toContain('x ** 2')
+    expect(code).toContain('sp.Derivative(u, x)')
+  })
+
+  it('should generate TODO comments for unsupported features in Python', () => {
+    const file: EsmFile = {
+      esm: '0.1.0',
+      models: {},
+      reaction_systems: {},
+      coupling: [
+        {
+          type: 'explicit',
+          from: 'model1',
+          to: 'model2',
+          variables: ['x', 'y']
+        }
+      ],
+      domain: {
+        spatial_coordinates: ['x', 'y'],
+        temporal_coordinates: ['t']
+      },
+      solver: {
+        algorithm: 'CVODE_BDF',
+        tolerances: { abstol: 1e-6, reltol: 1e-3 }
+      }
+    }
+
+    const code = toPythonCode(file)
+
+    expect(code).toContain('# TODO: Implement coupling explicit')
+    expect(code).toContain('# TODO: Implement domain')
+    expect(code).toContain('# TODO: Implement solver')
+    expect(code).toContain('#   Spatial coordinates: x, y')
+    expect(code).toContain('#   Algorithm: CVODE_BDF')
   })
 })

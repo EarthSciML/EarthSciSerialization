@@ -50,7 +50,7 @@ export { parseUnit, checkDimensions, validateUnits } from './units.js'
 export type { DimensionalRep, UnitResult, UnitWarning } from './units.js'
 
 // Export code generation utilities
-export { toJuliaCode } from './codegen.js'
+export { toJuliaCode, toPythonCode } from './codegen.js'
 
 // Interactive editor components (SolidJS)
 export * from './interactive-editor/index.js'
