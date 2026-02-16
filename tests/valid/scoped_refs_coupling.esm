@@ -1,0 +1,343 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ScopedReferencesCouplingTest",
+    "description": "Test fixture for scoped references in coupling transformations and cross-system dependencies",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z",
+    "license": "CC0",
+    "tags": ["test", "scoped_references", "coupling", "cross_system"]
+  },
+
+  "models": {
+    "AtmosphericChemistry": {
+      "reference": { "notes": "Atmospheric chemistry model with gas-phase and aerosol processes" },
+      "variables": {
+        "OH_concentration": { "type": "state", "units": "molec/cm^3", "default": 1e6, "description": "Hydroxyl radical concentration" },
+        "temperature": { "type": "state", "units": "K", "default": 298.0, "description": "Atmospheric temperature" }
+      },
+      "subsystems": {
+        "GasPhase": {
+          "reference": { "notes": "Gas-phase chemistry" },
+          "variables": {
+            "NO2": { "type": "state", "units": "ppbv", "default": 10.0, "description": "Nitrogen dioxide concentration" },
+            "O3": { "type": "state", "units": "ppbv", "default": 50.0, "description": "Ozone concentration" },
+            "photolysis_rate": { "type": "parameter", "units": "1/s", "default": 1e-4, "description": "NO2 photolysis rate" }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["NO2"], "wrt": "t" },
+              "rhs": {
+                "op": "+", "args": [
+                  { "op": "*", "args": [-1, { "scoped_ref": "AtmosphericChemistry.GasPhase.photolysis_rate" }, "NO2"] },
+                  { "op": "*", "args": [0.1, { "scoped_ref": "EmissionSources.Transportation.NOx_emissions" }] },
+                  { "op": "*", "args": [-0.01, "NO2", { "scoped_ref": "AtmosphericChemistry.OH_concentration" }] }
+                ]
+              }
+            }
+          ]
+        },
+        "Aerosols": {
+          "reference": { "notes": "Aerosol processes" },
+          "variables": {
+            "PM25": { "type": "state", "units": "μg/m^3", "default": 15.0, "description": "PM2.5 concentration" },
+            "nucleation_rate": { "type": "parameter", "units": "1/(cm^3*s)", "default": 1e-3, "description": "New particle formation rate" }
+          },
+          "subsystems": {
+            "SecondaryOrganic": {
+              "reference": { "notes": "Secondary organic aerosol formation" },
+              "variables": {
+                "SOA_precursor": { "type": "state", "units": "ppbv", "default": 5.0, "description": "SOA precursor concentration" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["SOA_precursor"], "wrt": "t" },
+                  "rhs": {
+                    "op": "+", "args": [
+                      { "op": "*", "args": [0.05, { "scoped_ref": "EmissionSources.Biogenic.VOC_emissions" }] },
+                      { "op": "*", "args": [
+                        -0.001,
+                        "SOA_precursor",
+                        { "scoped_ref": "AtmosphericChemistry.OH_concentration" },
+                        { "op": "exp", "args": [{ "op": "/", "args": [-1000, { "scoped_ref": "AtmosphericChemistry.temperature" }] }] }
+                      ]}
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["PM25"], "wrt": "t" },
+              "rhs": {
+                "op": "+", "args": [
+                  { "op": "*", "args": [{ "scoped_ref": "AtmosphericChemistry.Aerosols.nucleation_rate" }, 1e6] },
+                  { "op": "*", "args": [0.1, { "scoped_ref": "EmissionSources.Industrial.PM_emissions" }] },
+                  { "op": "*", "args": [0.5, { "scoped_ref": "AtmosphericChemistry.Aerosols.SecondaryOrganic.SOA_precursor" }] },
+                  { "op": "*", "args": [-0.01, "PM25"] }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["OH_concentration"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [
+                { "scoped_ref": "AtmosphericChemistry.GasPhase.photolysis_rate" },
+                { "scoped_ref": "Meteorology.SolarRadiation.UV_intensity" },
+                1e3
+              ]},
+              { "op": "*", "args": [-0.1, { "scoped_ref": "AtmosphericChemistry.OH_concentration" }, { "scoped_ref": "AtmosphericChemistry.GasPhase.NO2" }] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "EmissionSources": {
+      "reference": { "notes": "Various emission source categories" },
+      "variables": {
+        "total_emissions": { "type": "state", "units": "kg/s", "default": 0.0, "description": "Total emission rate" }
+      },
+      "subsystems": {
+        "Transportation": {
+          "reference": { "notes": "Vehicle emissions" },
+          "variables": {
+            "NOx_emissions": { "type": "parameter", "units": "g/(s*km^2)", "default": 0.1, "description": "NOx emission rate" },
+            "traffic_density": { "type": "state", "units": "vehicles/km^2", "default": 100.0, "description": "Traffic density" }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["traffic_density"], "wrt": "t" },
+              "rhs": {
+                "op": "*", "args": [
+                  0.01,
+                  { "op": "sin", "args": [{ "op": "*", "args": [{ "op": "*", "args": [2, 3.14159] }, { "op": "/", "args": ["t", 86400] }] }] }
+                ]
+              }
+            }
+          ]
+        },
+        "Industrial": {
+          "reference": { "notes": "Industrial emissions" },
+          "variables": {
+            "PM_emissions": { "type": "parameter", "units": "μg/(m^3*s)", "default": 0.5, "description": "Particulate matter emissions" },
+            "production_rate": { "type": "state", "units": "units/s", "default": 1.0, "description": "Industrial production rate" }
+          }
+        },
+        "Biogenic": {
+          "reference": { "notes": "Natural biogenic emissions" },
+          "variables": {
+            "VOC_emissions": { "type": "parameter", "units": "g/(s*m^2)", "default": 1e-6, "description": "Biogenic VOC emissions" }
+          },
+          "subsystems": {
+            "Forest": {
+              "reference": { "notes": "Forest emissions" },
+              "variables": {
+                "isoprene_flux": { "type": "state", "units": "mg/(m^2*h)", "default": 5.0, "description": "Isoprene emission flux" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["isoprene_flux"], "wrt": "t" },
+                  "rhs": {
+                    "op": "*", "args": [
+                      0.1,
+                      { "op": "*", "args": [
+                        { "scoped_ref": "Meteorology.Temperature.surface_temp" },
+                        { "scoped_ref": "Meteorology.SolarRadiation.PAR_intensity" }
+                      ]},
+                      { "op": "exp", "args": [{ "op": "/", "args": [
+                        { "op": "-", "args": [{ "scoped_ref": "Meteorology.Temperature.surface_temp" }, 298] },
+                        10
+                      ] }] }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+
+    "Meteorology": {
+      "reference": { "notes": "Meteorological conditions affecting chemistry and emissions" },
+      "variables": {
+        "wind_speed": { "type": "state", "units": "m/s", "default": 5.0, "description": "Wind speed" }
+      },
+      "subsystems": {
+        "Temperature": {
+          "reference": { "notes": "Temperature fields" },
+          "variables": {
+            "surface_temp": { "type": "state", "units": "K", "default": 298.0, "description": "Surface temperature" }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["surface_temp"], "wrt": "t" },
+              "rhs": {
+                "op": "+", "args": [
+                  { "op": "*", "args": [1e-5, { "scoped_ref": "Meteorology.SolarRadiation.total_irradiance" }] },
+                  { "op": "*", "args": [-1e-4, { "op": "-", "args": ["surface_temp", 298.0] }] }
+                ]
+              }
+            }
+          ]
+        },
+        "SolarRadiation": {
+          "reference": { "notes": "Solar radiation components" },
+          "variables": {
+            "total_irradiance": { "type": "parameter", "units": "W/m^2", "default": 800.0, "description": "Total solar irradiance" },
+            "UV_intensity": { "type": "parameter", "units": "W/m^2", "default": 50.0, "description": "UV radiation intensity" },
+            "PAR_intensity": { "type": "parameter", "units": "μmol/(m^2*s)", "default": 1500.0, "description": "Photosynthetically active radiation" }
+          }
+        }
+      }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "Meteorology.Temperature.surface_temp",
+      "to": "AtmosphericChemistry.temperature",
+      "transform": {
+        "op": "+", "args": [
+          { "scoped_ref": "Meteorology.Temperature.surface_temp" },
+          { "op": "*", "args": [
+            0.1,
+            { "op": "-", "args": [{ "scoped_ref": "Meteorology.Temperature.surface_temp" }, 298.0] }
+          ]}
+        ]
+      }
+    },
+    {
+      "type": "variable_map",
+      "from": "EmissionSources.Transportation.traffic_density",
+      "to": "EmissionSources.Transportation.NOx_emissions",
+      "transform": {
+        "op": "*", "args": [
+          0.001,
+          { "op": "+", "args": [
+            { "scoped_ref": "EmissionSources.Transportation.traffic_density" },
+            { "op": "*", "args": [
+              0.5,
+              { "op": "max", "args": [
+                0,
+                { "op": "-", "args": [{ "scoped_ref": "AtmosphericChemistry.temperature" }, 293.0] }
+              ]}
+            ]}
+          ]}
+        ]
+      }
+    },
+    {
+      "type": "operator_apply",
+      "operator_id": "atmospheric_mixing",
+      "inputs": {
+        "concentration": "AtmosphericChemistry.GasPhase.NO2",
+        "wind_speed": "Meteorology.wind_speed",
+        "temperature": "AtmosphericChemistry.temperature"
+      },
+      "outputs": {
+        "mixed_concentration": "AtmosphericChemistry.GasPhase.O3"
+      },
+      "transform": {
+        "op": "*", "args": [
+          { "scoped_ref": "AtmosphericChemistry.GasPhase.NO2" },
+          { "op": "+", "args": [
+            1.0,
+            { "op": "*", "args": [
+              0.01,
+              { "scoped_ref": "Meteorology.wind_speed" },
+              { "op": "exp", "args": [{ "op": "/", "args": [
+                { "op": "-", "args": [1000, { "scoped_ref": "AtmosphericChemistry.temperature" }] },
+                { "scoped_ref": "AtmosphericChemistry.temperature" }
+              ] }] }
+            ]}
+          ]}
+        ]
+      }
+    },
+    {
+      "type": "couple2",
+      "system1": "AtmosphericChemistry.Aerosols",
+      "system2": "EmissionSources.Biogenic.Forest",
+      "connector_equations": [
+        {
+          "lhs": { "scoped_ref": "AtmosphericChemistry.Aerosols.nucleation_rate" },
+          "rhs": {
+            "op": "*", "args": [
+              1e-4,
+              { "scoped_ref": "EmissionSources.Biogenic.Forest.isoprene_flux" },
+              { "op": "/", "args": [
+                { "scoped_ref": "AtmosphericChemistry.OH_concentration" },
+                1e6
+              ]}
+            ]
+          }
+        },
+        {
+          "lhs": { "scoped_ref": "EmissionSources.Biogenic.VOC_emissions" },
+          "rhs": {
+            "op": "*", "args": [
+              { "scoped_ref": "EmissionSources.Biogenic.Forest.isoprene_flux" },
+              { "op": "+", "args": [
+                1.0,
+                { "op": "*", "args": [
+                  0.1,
+                  { "op": "/", "args": [
+                    { "scoped_ref": "AtmosphericChemistry.Aerosols.PM25" },
+                    100.0
+                  ]}
+                ]}
+              ]}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "callback",
+      "source_system": "EmissionSources.Industrial",
+      "target_system": "AtmosphericChemistry.Aerosols",
+      "callback_function": "industrial_aerosol_formation",
+      "parameters": {
+        "emission_rate": { "scoped_ref": "EmissionSources.Industrial.PM_emissions" },
+        "production_scaling": { "scoped_ref": "EmissionSources.Industrial.production_rate" },
+        "atmospheric_conditions": {
+          "temperature": { "scoped_ref": "AtmosphericChemistry.temperature" },
+          "oxidant_level": { "scoped_ref": "AtmosphericChemistry.OH_concentration" }
+        }
+      },
+      "affects": ["AtmosphericChemistry.Aerosols.PM25"]
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-02T00:00:00Z"
+    },
+    "spatial": {
+      "grid": { "type": "regular", "nx": 10, "ny": 10 },
+      "boundaries": "periodic"
+    },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "TRBDF2",
+      "adaptive": true,
+      "reltol": 1e-6,
+      "abstol": 1e-9
+    }
+  }
+}

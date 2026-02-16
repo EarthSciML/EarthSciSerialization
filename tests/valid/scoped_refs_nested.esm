@@ -1,0 +1,290 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ScopedReferencesNestedTest",
+    "description": "Test fixture for deeply nested scoped reference notation (A.B.C.D.variable)",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z",
+    "license": "CC0",
+    "tags": ["test", "scoped_references", "hierarchical", "nesting"]
+  },
+
+  "models": {
+    "EarthSystem": {
+      "reference": { "notes": "Top-level Earth system model" },
+      "variables": {
+        "global_forcing": { "type": "parameter", "units": "W/m^2", "default": 1361.0, "description": "Solar constant" },
+        "system_energy": { "type": "state", "units": "J", "default": 0.0, "description": "Total system energy" }
+      },
+      "subsystems": {
+        "Atmosphere": {
+          "reference": { "notes": "Atmospheric component" },
+          "variables": {
+            "atm_temperature": { "type": "state", "units": "K", "default": 288.0, "description": "Mean atmospheric temperature" },
+            "atm_pressure": { "type": "state", "units": "Pa", "default": 101325.0, "description": "Surface pressure" }
+          },
+          "subsystems": {
+            "Troposphere": {
+              "reference": { "notes": "Lower atmospheric layer" },
+              "variables": {
+                "trop_water_vapor": { "type": "state", "units": "kg/m^3", "default": 0.01, "description": "Water vapor density" },
+                "convection_rate": { "type": "parameter", "units": "1/s", "default": 1e-4, "description": "Convection rate" }
+              },
+              "subsystems": {
+                "BoundaryLayer": {
+                  "reference": { "notes": "Atmospheric boundary layer" },
+                  "variables": {
+                    "boundary_height": { "type": "state", "units": "m", "default": 1000.0, "description": "Boundary layer height" },
+                    "friction_velocity": { "type": "parameter", "units": "m/s", "default": 0.1, "description": "Surface friction velocity" }
+                  },
+                  "equations": [
+                    {
+                      "lhs": { "op": "D", "args": ["boundary_height"], "wrt": "t" },
+                      "rhs": {
+                        "op": "+", "args": [
+                          { "op": "*", "args": [
+                            { "scoped_ref": "EarthSystem.Atmosphere.Troposphere.BoundaryLayer.friction_velocity" },
+                            { "op": "*", "args": [0.1, { "scoped_ref": "EarthSystem.Atmosphere.Troposphere.convection_rate" }] }
+                          ]},
+                          { "op": "*", "args": [
+                            -0.001,
+                            { "op": "-", "args": ["boundary_height", { "scoped_ref": "EarthSystem.Ocean.MixedLayer.mixing_depth" }] }
+                          ]}
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["trop_water_vapor"], "wrt": "t" },
+                  "rhs": {
+                    "op": "+", "args": [
+                      { "op": "*", "args": [
+                        { "scoped_ref": "EarthSystem.Ocean.Surface.evaporation_rate" },
+                        { "op": "/", "args": [
+                          { "scoped_ref": "EarthSystem.Atmosphere.Troposphere.BoundaryLayer.boundary_height" },
+                          1000.0
+                        ]}
+                      ]},
+                      { "op": "*", "args": [
+                        -0.01,
+                        "trop_water_vapor"
+                      ]}
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["atm_temperature"], "wrt": "t" },
+              "rhs": {
+                "op": "+", "args": [
+                  { "op": "*", "args": [
+                    1e-6,
+                    { "scoped_ref": "EarthSystem.global_forcing" }
+                  ]},
+                  { "op": "*", "args": [
+                    -2e-4,
+                    { "op": "-", "args": ["atm_temperature", { "scoped_ref": "EarthSystem.Ocean.Surface.sst" }] }
+                  ]},
+                  { "op": "*", "args": [
+                    0.1,
+                    { "scoped_ref": "EarthSystem.Atmosphere.Troposphere.trop_water_vapor" }
+                  ]}
+                ]
+              }
+            }
+          ]
+        },
+
+        "Ocean": {
+          "reference": { "notes": "Oceanic component" },
+          "variables": {
+            "ocean_heat_content": { "type": "state", "units": "J", "default": 1e21, "description": "Ocean heat content" }
+          },
+          "subsystems": {
+            "Surface": {
+              "reference": { "notes": "Ocean surface layer" },
+              "variables": {
+                "sst": { "type": "state", "units": "K", "default": 285.0, "description": "Sea surface temperature" },
+                "evaporation_rate": { "type": "parameter", "units": "kg/(m^2*s)", "default": 1e-6, "description": "Evaporation rate" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["sst"], "wrt": "t" },
+                  "rhs": {
+                    "op": "+", "args": [
+                      { "op": "*", "args": [
+                        5e-7,
+                        { "scoped_ref": "EarthSystem.global_forcing" }
+                      ]},
+                      { "op": "*", "args": [
+                        1e-4,
+                        { "op": "-", "args": [{ "scoped_ref": "EarthSystem.Atmosphere.atm_temperature" }, "sst"] }
+                      ]},
+                      { "op": "*", "args": [
+                        -0.01,
+                        { "scoped_ref": "EarthSystem.Ocean.MixedLayer.upwelling_velocity" }
+                      ]}
+                    ]
+                  }
+                }
+              ]
+            },
+            "MixedLayer": {
+              "reference": { "notes": "Ocean mixed layer" },
+              "variables": {
+                "mixing_depth": { "type": "state", "units": "m", "default": 100.0, "description": "Mixed layer depth" },
+                "upwelling_velocity": { "type": "parameter", "units": "m/s", "default": 1e-5, "description": "Upwelling velocity" }
+              },
+              "subsystems": {
+                "Thermocline": {
+                  "reference": { "notes": "Ocean thermocline" },
+                  "variables": {
+                    "stratification": { "type": "state", "units": "K/m", "default": 0.01, "description": "Temperature gradient" },
+                    "buoyancy_frequency": { "type": "parameter", "units": "1/s", "default": 1e-3, "description": "Brunt-Väisälä frequency" }
+                  },
+                  "equations": [
+                    {
+                      "lhs": { "op": "D", "args": ["stratification"], "wrt": "t" },
+                      "rhs": {
+                        "op": "+", "args": [
+                          { "op": "*", "args": [
+                            { "scoped_ref": "EarthSystem.Ocean.MixedLayer.Thermocline.buoyancy_frequency" },
+                            { "op": "/", "args": [
+                              { "op": "-", "args": [
+                                { "scoped_ref": "EarthSystem.Ocean.Surface.sst" },
+                                { "scoped_ref": "EarthSystem.Ocean.DeepOcean.deep_temperature" }
+                              ]},
+                              { "scoped_ref": "EarthSystem.Ocean.MixedLayer.mixing_depth" }
+                            ]}
+                          ]},
+                          { "op": "*", "args": [-0.001, "stratification"] }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["mixing_depth"], "wrt": "t" },
+                  "rhs": {
+                    "op": "+", "args": [
+                      { "op": "*", "args": [
+                        0.01,
+                        { "op": "sqrt", "args": [
+                          { "op": "*", "args": [
+                            { "scoped_ref": "EarthSystem.Atmosphere.Troposphere.BoundaryLayer.friction_velocity" },
+                            { "scoped_ref": "EarthSystem.Ocean.MixedLayer.Thermocline.buoyancy_frequency" }
+                          ]}
+                        ]}
+                      ]},
+                      { "op": "*", "args": [
+                        -0.001,
+                        { "op": "-", "args": ["mixing_depth", 50.0] }
+                      ]}
+                    ]
+                  }
+                }
+              ]
+            },
+            "DeepOcean": {
+              "reference": { "notes": "Deep ocean layer" },
+              "variables": {
+                "deep_temperature": { "type": "state", "units": "K", "default": 278.0, "description": "Deep ocean temperature" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["deep_temperature"], "wrt": "t" },
+                  "rhs": {
+                    "op": "+", "args": [
+                      { "op": "*", "args": [
+                        1e-8,
+                        { "scoped_ref": "EarthSystem.global_forcing" }
+                      ]},
+                      { "op": "*", "args": [
+                        { "scoped_ref": "EarthSystem.Ocean.MixedLayer.upwelling_velocity" },
+                        { "op": "/", "args": [
+                          { "op": "-", "args": [
+                            { "scoped_ref": "EarthSystem.Ocean.Surface.sst" },
+                            "deep_temperature"
+                          ]},
+                          1000.0
+                        ]}
+                      ]}
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["ocean_heat_content"], "wrt": "t" },
+              "rhs": {
+                "op": "+", "args": [
+                  { "op": "*", "args": [
+                    4.18e6,
+                    { "op": "*", "args": [
+                      { "scoped_ref": "EarthSystem.Ocean.Surface.sst" },
+                      { "scoped_ref": "EarthSystem.Ocean.MixedLayer.mixing_depth" }
+                    ]}
+                  ]},
+                  { "op": "*", "args": [
+                    1.0e6,
+                    { "op": "*", "args": [
+                      { "scoped_ref": "EarthSystem.Ocean.DeepOcean.deep_temperature" },
+                      1000.0
+                    ]}
+                  ]}
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["system_energy"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "scoped_ref": "EarthSystem.global_forcing" },
+              { "op": "*", "args": [
+                -5.67e-8,
+                { "op": "^", "args": [{ "scoped_ref": "EarthSystem.Atmosphere.atm_temperature" }, 4] }
+              ]},
+              { "op": "*", "args": [
+                0.1,
+                { "op": "D", "args": [{ "scoped_ref": "EarthSystem.Ocean.ocean_heat_content" }], "wrt": "t" }
+              ]}
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-02T00:00:00Z"
+    },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "Tsit5",
+      "adaptive": true,
+      "reltol": 1e-6,
+      "abstol": 1e-8
+    }
+  }
+}
