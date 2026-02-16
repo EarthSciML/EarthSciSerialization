@@ -168,7 +168,7 @@ export const ExpressionNode: Component<ExpressionNodeProps> = (props) => {
     }
 
     // Render operator node
-    if (typeof props.expr === 'object' && 'op' in props.expr) {
+    if (typeof props.expr === 'object' && props.expr !== null && 'op' in props.expr) {
       return renderOperatorNode(props.expr as ExprNode);
     }
 
@@ -446,7 +446,7 @@ export const ExpressionNode: Component<ExpressionNodeProps> = (props) => {
     if (typeof props.expr === 'string') {
       return `Variable: ${props.expr}`;
     }
-    if (typeof props.expr === 'object' && 'op' in props.expr) {
+    if (typeof props.expr === 'object' && props.expr !== null && 'op' in props.expr) {
       return `Operator: ${(props.expr as ExprNode).op}`;
     }
     return 'Expression';
