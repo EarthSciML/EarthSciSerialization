@@ -22,9 +22,8 @@ include("serialize.jl")
 include("expression.jl")
 include("display.jl")
 include("reactions.jl")
-# Include MTK conversion module
-include("mtk.jl")
-# Temporarily commenting out mtk_catalyst.jl due to precompilation issues
+# Temporarily commenting out MTK modules due to precompilation issues
+# include("mtk.jl")
 # include("mtk_catalyst.jl")
 
 # Export main types
@@ -63,11 +62,9 @@ export
     resolve_qualified_reference, QualifiedReferenceError, ReferenceResolution,
     validate_reference_syntax, is_valid_identifier,
     # Reaction system ODE derivation
-    derive_odes, stoichiometric_matrix, mass_action_rate,
-    # MTK conversion functions
-    to_mtk_system
-    # Other MTK/Catalyst conversion functions temporarily disabled
-    # to_catalyst_system, from_mtk_system, from_catalyst_system,
+    derive_odes, stoichiometric_matrix, mass_action_rate
+    # MTK conversion functions temporarily disabled due to precompilation issues
+    # to_mtk_system, to_catalyst_system, from_mtk_system, from_catalyst_system,
     # to_coupled_system,
     # Expression conversion utilities
     # esm_to_symbolic, symbolic_to_esm,
