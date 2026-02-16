@@ -208,3 +208,127 @@ function addReactionContribution(
     }
   }
 }
+
+/**
+ * Compute stoichiometric matrix from a reaction system
+ *
+ * Returns the net stoichiometric matrix (species × reactions) where:
+ * - Rows are species (in declaration order)
+ * - Columns are reactions (in array order)
+ * - Entry [i][j] = (stoichiometry as product) - (stoichiometry as substrate) for species i in reaction j
+ * - Null substrates contribute 0 to substrate stoichiometry
+ * - Null products contribute 0 to product stoichiometry
+ *
+ * @param system ReactionSystem to compute matrix from
+ * @returns Object containing matrix, species list, and reactions list
+ */
+export function stoichiometricMatrix(system: ReactionSystem): {
+  matrix: number[][]
+  species: string[]
+  reactions: string[]
+} {
+  const species = Object.keys(system.species)
+  const reactions = system.reactions.map(r => r.id)
+
+  // Initialize matrix with zeros
+  const matrix: number[][] = species.map(() => new Array(reactions.length).fill(0))
+
+  // Fill matrix with net stoichiometry
+  system.reactions.forEach((reaction, reactionIndex) => {
+    species.forEach((speciesName, speciesIndex) => {
+      let substrateCoeff = 0
+      let productCoeff = 0
+
+      // Get substrate stoichiometry
+      if (reaction.substrates) {
+        for (const substrate of reaction.substrates) {
+          if (substrate.species === speciesName) {
+            substrateCoeff += substrate.stoichiometry
+          }
+        }
+      }
+
+      // Get product stoichiometry
+      if (reaction.products) {
+        for (const product of reaction.products) {
+          if (product.species === speciesName) {
+            productCoeff += product.stoichiometry
+          }
+        }
+      }
+
+      // Net stoichiometry = product - substrate
+      matrix[speciesIndex][reactionIndex] = productCoeff - substrateCoeff
+    })
+  })
+
+  return { matrix, species, reactions }
+}
+
+/**
+ * Compute substrate stoichiometric matrix from a reaction system
+ *
+ * Returns the substrate stoichiometric matrix (species × reactions) where:
+ * - Rows are species (in declaration order)
+ * - Columns are reactions (in array order)
+ * - Entry [i][j] = substrate stoichiometry for species i in reaction j
+ * - Null substrates contribute 0
+ *
+ * @param system ReactionSystem to compute matrix from
+ * @returns Substrate stoichiometric matrix
+ */
+export function substrateMatrix(system: ReactionSystem): number[][] {
+  const species = Object.keys(system.species)
+  const numReactions = system.reactions.length
+
+  // Initialize matrix with zeros
+  const matrix: number[][] = species.map(() => new Array(numReactions).fill(0))
+
+  // Fill matrix with substrate stoichiometry
+  system.reactions.forEach((reaction, reactionIndex) => {
+    if (reaction.substrates) {
+      for (const substrate of reaction.substrates) {
+        const speciesIndex = species.indexOf(substrate.species)
+        if (speciesIndex >= 0) {
+          matrix[speciesIndex][reactionIndex] += substrate.stoichiometry
+        }
+      }
+    }
+  })
+
+  return matrix
+}
+
+/**
+ * Compute product stoichiometric matrix from a reaction system
+ *
+ * Returns the product stoichiometric matrix (species × reactions) where:
+ * - Rows are species (in declaration order)
+ * - Columns are reactions (in array order)
+ * - Entry [i][j] = product stoichiometry for species i in reaction j
+ * - Null products contribute 0
+ *
+ * @param system ReactionSystem to compute matrix from
+ * @returns Product stoichiometric matrix
+ */
+export function productMatrix(system: ReactionSystem): number[][] {
+  const species = Object.keys(system.species)
+  const numReactions = system.reactions.length
+
+  // Initialize matrix with zeros
+  const matrix: number[][] = species.map(() => new Array(numReactions).fill(0))
+
+  // Fill matrix with product stoichiometry
+  system.reactions.forEach((reaction, reactionIndex) => {
+    if (reaction.products) {
+      for (const product of reaction.products) {
+        const speciesIndex = species.indexOf(product.species)
+        if (speciesIndex >= 0) {
+          matrix[speciesIndex][reactionIndex] += product.stoichiometry
+        }
+      }
+    }
+  })
+
+  return matrix
+}
