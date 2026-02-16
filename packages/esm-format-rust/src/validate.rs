@@ -4,9 +4,10 @@ use crate::EsmFile;
 use crate::parse::validate_schema;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
+use serde::{Serialize, Deserialize};
 
 /// Result of structural validation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationResult {
     /// Schema validation errors
     pub schema_errors: Vec<SchemaError>,
@@ -19,7 +20,7 @@ pub struct ValidationResult {
 }
 
 /// A schema validation error
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchemaError {
     /// Path to the problematic element
     pub path: String,
@@ -30,7 +31,7 @@ pub struct SchemaError {
 }
 
 /// A structural validation error
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructuralError {
     /// Path to the problematic element
     pub path: String,
@@ -43,7 +44,7 @@ pub struct StructuralError {
 }
 
 /// Error codes for structural validation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StructuralErrorCode {
     /// Undefined variable reference
     UndefinedVariable,
