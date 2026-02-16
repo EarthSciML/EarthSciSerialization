@@ -13,6 +13,7 @@ export { ExpressionPalette, type ExpressionPaletteProps } from './components/Exp
 export { EquationEditor, type EquationEditorProps } from './components/EquationEditor';
 export { ModelEditor, type ModelEditorProps } from './components/ModelEditor';
 export { ReactionEditor, type ReactionEditorProps } from './components/ReactionEditor';
+export { CouplingGraph, type CouplingGraphProps } from './components/CouplingGraph';
 
 // Variable highlighting primitives
 export {
@@ -57,4 +58,10 @@ export {
 } from './primitives/structural-editing';
 
 // Re-export types from esm-format for convenience
-export type { Expression, ExpressionNode as ExprNode } from 'esm-format';
+export type {
+  Expression,
+  ExpressionNode as ExprNode,
+  ComponentNode,
+  CouplingEdge,
+  Graph
+} from 'esm-format';
