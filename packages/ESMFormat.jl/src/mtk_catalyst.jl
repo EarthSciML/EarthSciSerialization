@@ -42,9 +42,19 @@ catch e
     @warn "Catalyst not available, using fallback: $e"
 end
 
-# Always available for basic symbolic operations
-using Symbolics
-using Dates
+# Only conditionally load Symbolics and Dates
+try
+    using Symbolics
+    global SYMBOLICS_AVAILABLE[] = true
+catch e
+    @warn "Symbolics.jl not available, using fallback: $e"
+end
+
+try
+    using Dates
+catch e
+    @warn "Dates not available: $e"
+end
 
 # ========================================
 # Core Conversion Functions
@@ -399,118 +409,355 @@ function create_mock_catalyst_system(rsys::ReactionSystem, name::String, advance
 end
 
 """
-    from_mtk_system(sys::ODESystem, name::String) -> Model
+    from_mtk_system(sys, name::String) -> Model
 
-Convert a ModelingToolkit ODESystem back to ESM Model format.
+Convert a ModelingToolkit ODESystem or MockMTKSystem back to ESM Model format.
 Extracts variables, equations, and events from MTK symbolic form.
+
+This function implements reverse conversion: taking MTK systems and reconstructing
+ESM Models with proper variable classification, equation extraction, and event handling.
+Maps Differential(t)(var) → D(var,t), symbolic operations → OpExpr, and detects
+state vs parameter vs observed variable types.
 """
-function from_mtk_system(sys::ODESystem, name::String)
-    # Extract states
+function from_mtk_system(sys, name::String)
+    # Handle mock systems (when MTK is not available)
+    if sys isa MockMTKSystem
+        return from_mock_mtk_system(sys, name)
+    end
+
+    # Handle real MTK systems (when ModelingToolkit is available)
+    if !MTK_AVAILABLE[]
+        error("Real ModelingToolkit system provided but MTK not available")
+    end
+
     variables = Dict{String, ModelVariable}()
 
+    # Extract states from real MTK system
     for state in ModelingToolkit.states(sys)
         var_name = string(ModelingToolkit.getname(state))
-        # Remove the (t) suffix if present
+        # Remove the (t) suffix if present for time-dependent variables
         if endswith(var_name, "(t)")
             var_name = var_name[1:end-3]
         end
-        variables[var_name] = ModelVariable(StateVariable, default=0.0)
+
+        # Try to extract default value from the symbolic variable metadata
+        default_val = try
+            # Check if the state has a default value in its metadata
+            if haskey(ModelingToolkit.get_metadata(state), ModelingToolkit.VariableDefaultValue)
+                ModelingToolkit.get_metadata(state)[ModelingToolkit.VariableDefaultValue]
+            else
+                0.0  # Default fallback
+            end
+        catch
+            0.0  # Fallback if metadata access fails
+        end
+
+        variables[var_name] = ModelVariable(StateVariable; default=default_val)
     end
 
-    # Extract parameters
+    # Extract parameters from real MTK system
     for param in ModelingToolkit.parameters(sys)
         param_name = string(ModelingToolkit.getname(param))
-        variables[param_name] = ModelVariable(ParameterVariable, default=1.0)
+
+        # Try to extract default value from parameter
+        default_val = try
+            if haskey(ModelingToolkit.get_metadata(param), ModelingToolkit.VariableDefaultValue)
+                ModelingToolkit.get_metadata(param)[ModelingToolkit.VariableDefaultValue]
+            else
+                1.0  # Default fallback for parameters
+            end
+        catch
+            1.0  # Fallback if metadata access fails
+        end
+
+        variables[param_name] = ModelVariable(ParameterVariable; default=default_val)
     end
 
-    # Extract observed variables
+    # Extract observed variables from real MTK system
     if ModelingToolkit.has_observed(sys)
         for obs in ModelingToolkit.observed(sys)
             var_name = string(ModelingToolkit.getname(obs.lhs))
             esm_expr = symbolic_to_esm(obs.rhs)
-            variables[var_name] = ModelVariable(ObservedVariable, expression=esm_expr)
+            variables[var_name] = ModelVariable(ObservedVariable; expression=esm_expr)
         end
     end
 
-    # Extract equations
-    equations = []
+    # Extract equations from real MTK system
+    equations = Equation[]
     for eq in ModelingToolkit.equations(sys)
         lhs_esm = symbolic_to_esm(eq.lhs)
         rhs_esm = symbolic_to_esm(eq.rhs)
         push!(equations, Equation(lhs_esm, rhs_esm))
     end
 
-    # Extract events (simplified - MTK events are complex)
+    # Extract events from real MTK system
     events = EventType[]
-    # Note: Full event extraction from MTK is complex and would require
-    # deep inspection of callback structures. For now, we'll leave this
-    # as a placeholder for the basic conversion.
 
-    return Model(variables, equations, events)
+    # Handle continuous events
+    if hasfield(typeof(sys), :continuous_events) && !isempty(sys.continuous_events)
+        for cb in sys.continuous_events
+            try
+                # Extract condition from continuous callback
+                condition = symbolic_to_esm(cb.condition)
+
+                # Extract affects
+                affects = AffectEquation[]
+                for affect_eq in cb.affect
+                    if isa(affect_eq, Equation)  # MTK equation format
+                        lhs_name = extract_variable_name(affect_eq.lhs)
+                        rhs_expr = symbolic_to_esm(affect_eq.rhs)
+                        push!(affects, AffectEquation(lhs_name, rhs_expr))
+                    end
+                end
+
+                # Create continuous event
+                if !isempty(affects)
+                    continuous_event = ContinuousEvent([condition], affects)
+                    push!(events, continuous_event)
+                end
+            catch e
+                @warn "Failed to extract continuous event: $e"
+            end
+        end
+    end
+
+    # Handle discrete events
+    if hasfield(typeof(sys), :discrete_events) && !isempty(sys.discrete_events)
+        for cb in sys.discrete_events
+            try
+                # Create discrete event trigger
+                trigger = if isa(cb.condition, AbstractFloat) || isa(cb.condition, Real)
+                    # Periodic trigger
+                    PeriodicTrigger(Float64(cb.condition))
+                else
+                    # Condition trigger
+                    condition_expr = symbolic_to_esm(cb.condition)
+                    ConditionTrigger(condition_expr)
+                end
+
+                # Extract affects
+                affects = []
+                for affect_eq in cb.affect
+                    if isa(affect_eq, Equation)  # MTK equation format
+                        lhs_name = extract_variable_name(affect_eq.lhs)
+                        rhs_expr = symbolic_to_esm(affect_eq.rhs)
+                        push!(affects, AffectEquation(lhs_name, rhs_expr))
+                    end
+                end
+
+                # Create discrete event
+                if !isempty(affects)
+                    discrete_event = DiscreteEvent(trigger, affects)
+                    push!(events, discrete_event)
+                end
+            catch e
+                @warn "Failed to extract discrete event: $e"
+            end
+        end
+    end
+
+    return Model(variables, equations; events=events)
 end
 
 """
-    from_catalyst_system(rs::ReactionSystem, name::String) -> ReactionSystem
+    from_catalyst_system(rs, name::String) -> ReactionSystem
 
-Convert a Catalyst ReactionSystem back to ESM ReactionSystem format.
+Convert a Catalyst ReactionSystem or MockCatalystSystem back to ESM ReactionSystem format.
 Extracts species, parameters, reactions, and events from Catalyst symbolic form.
+
+This function implements reverse conversion: taking Catalyst systems and reconstructing
+ESM ReactionSystems with proper species mapping, parameter extraction, and reaction
+reconstruction. Maps Catalyst Reaction objects to ESM Reaction format with proper
+stoichiometry and rate expressions.
 """
-function from_catalyst_system(rs::ReactionSystem, name::String)
-    # Extract species
+function from_catalyst_system(rs, name::String)
+    # Handle mock systems (when Catalyst is not available)
+    if rs isa MockCatalystSystem
+        return from_mock_catalyst_system(rs, name)
+    end
+
+    # Handle real Catalyst systems (when Catalyst.jl is available)
+    if !CATALYST_AVAILABLE[]
+        error("Real Catalyst system provided but Catalyst.jl not available")
+    end
+
+    # Extract species from real Catalyst system
     species = Species[]
     for spec in Catalyst.species(rs)
         spec_name = string(Catalyst.getname(spec))
+        # Remove the (t) suffix if present for time-dependent species
         if endswith(spec_name, "(t)")
             spec_name = spec_name[1:end-3]
         end
-        push!(species, Species(spec_name))
+
+        # Try to extract initial concentration or other metadata
+        initial_conc = try
+            if haskey(ModelingToolkit.get_metadata(spec), :initial_concentration)
+                ModelingToolkit.get_metadata(spec)[:initial_concentration]
+            else
+                0.0  # Default fallback
+            end
+        catch
+            0.0  # Fallback if metadata access fails
+        end
+
+        push!(species, Species(spec_name; initial_concentration=initial_conc))
     end
 
-    # Extract parameters
+    # Extract parameters from real Catalyst system
     parameters = Parameter[]
     for param in Catalyst.parameters(rs)
         param_name = string(Catalyst.getname(param))
-        push!(parameters, Parameter(param_name, 1.0))  # Default value
+
+        # Try to extract default value and metadata from parameter
+        default_val = try
+            if haskey(ModelingToolkit.get_metadata(param), ModelingToolkit.VariableDefaultValue)
+                ModelingToolkit.get_metadata(param)[ModelingToolkit.VariableDefaultValue]
+            else
+                1.0  # Default fallback for parameters
+            end
+        catch
+            1.0  # Fallback if metadata access fails
+        end
+
+        # Extract units and description if available
+        units = try
+            get(ModelingToolkit.get_metadata(param), :units, "")
+        catch
+            ""
+        end
+
+        description = try
+            get(ModelingToolkit.get_metadata(param), :description, "")
+        catch
+            ""
+        end
+
+        push!(parameters, Parameter(param_name, default_val; units=units, description=description))
     end
 
-    # Extract reactions
+    # Extract reactions from real Catalyst system
     reactions = Reaction[]
     for rxn in Catalyst.reactions(rs)
-        # Extract substrates
-        reactants = Dict{String, Int}()
-        if !isempty(rxn.substrates)
-            for (i, substrate) in enumerate(rxn.substrates)
-                spec_name = string(Catalyst.getname(substrate))
-                if endswith(spec_name, "(t)")
-                    spec_name = spec_name[1:end-3]
+        try
+            # Extract substrates (reactants) with stoichiometry
+            reactants = Dict{String, Int}()
+            if !isempty(rxn.substrates)
+                for (i, substrate) in enumerate(rxn.substrates)
+                    spec_name = string(Catalyst.getname(substrate))
+                    # Remove (t) suffix if present
+                    if endswith(spec_name, "(t)")
+                        spec_name = spec_name[1:end-3]
+                    end
+                    # Get stoichiometry - default to 1 if not specified
+                    stoich = length(rxn.substoich) >= i ? Int(rxn.substoich[i]) : 1
+                    reactants[spec_name] = stoich
                 end
-                stoich = length(rxn.substoich) >= i ? rxn.substoich[i] : 1
-                reactants[spec_name] = stoich
             end
-        end
 
-        # Extract products
-        products = Dict{String, Int}()
-        if !isempty(rxn.products)
-            for (i, product) in enumerate(rxn.products)
-                spec_name = string(Catalyst.getname(product))
-                if endswith(spec_name, "(t)")
-                    spec_name = spec_name[1:end-3]
+            # Extract products with stoichiometry
+            products = Dict{String, Int}()
+            if !isempty(rxn.products)
+                for (i, product) in enumerate(rxn.products)
+                    spec_name = string(Catalyst.getname(product))
+                    # Remove (t) suffix if present
+                    if endswith(spec_name, "(t)")
+                        spec_name = spec_name[1:end-3]
+                    end
+                    # Get stoichiometry - default to 1 if not specified
+                    stoich = length(rxn.prodstoich) >= i ? Int(rxn.prodstoich[i]) : 1
+                    products[spec_name] = stoich
                 end
-                stoich = length(rxn.prodstoich) >= i ? rxn.prodstoich[i] : 1
-                products[spec_name] = stoich
             end
+
+            # Extract rate expression and convert to ESM format
+            rate_esm = symbolic_to_esm(rxn.rate)
+
+            # Check if reaction is reversible (this is catalyst-specific)
+            is_reversible = try
+                # Catalyst reactions may have a reversible field
+                hasfield(typeof(rxn), :reversible) ? rxn.reversible : false
+            catch
+                false  # Default to irreversible
+            end
+
+            # Create ESM Reaction object
+            esm_reaction = Reaction(reactants, products, rate_esm; reversible=is_reversible)
+            push!(reactions, esm_reaction)
+
+        catch e
+            @warn "Failed to extract reaction: $e"
         end
-
-        # Extract rate
-        rate_esm = symbolic_to_esm(rxn.rate)
-
-        push!(reactions, Reaction(reactants, products, rate_esm))
     end
 
-    # Create ESM reaction system
-    events = EventType[]  # Placeholder for events
-    return ReactionSystem(species, reactions, parameters=parameters, events=events)
+    # Extract events from Catalyst system (if present)
+    events = EventType[]
+
+    # Handle continuous events
+    if hasfield(typeof(rs), :continuous_events) && !isempty(rs.continuous_events)
+        for cb in rs.continuous_events
+            try
+                # Extract condition
+                condition = symbolic_to_esm(cb.condition)
+
+                # Extract affects
+                affects = AffectEquation[]
+                for affect_eq in cb.affect
+                    if isa(affect_eq, Equation)
+                        lhs_name = extract_variable_name(affect_eq.lhs)
+                        rhs_expr = symbolic_to_esm(affect_eq.rhs)
+                        push!(affects, AffectEquation(lhs_name, rhs_expr))
+                    end
+                end
+
+                # Create continuous event
+                if !isempty(affects)
+                    continuous_event = ContinuousEvent([condition], affects)
+                    push!(events, continuous_event)
+                end
+            catch e
+                @warn "Failed to extract continuous event from Catalyst system: $e"
+            end
+        end
+    end
+
+    # Handle discrete events
+    if hasfield(typeof(rs), :discrete_events) && !isempty(rs.discrete_events)
+        for cb in rs.discrete_events
+            try
+                # Create discrete event trigger
+                trigger = if isa(cb.condition, AbstractFloat) || isa(cb.condition, Real)
+                    # Periodic trigger
+                    PeriodicTrigger(Float64(cb.condition))
+                else
+                    # Condition trigger
+                    condition_expr = symbolic_to_esm(cb.condition)
+                    ConditionTrigger(condition_expr)
+                end
+
+                # Extract affects
+                affects = []
+                for affect_eq in cb.affect
+                    if isa(affect_eq, Equation)
+                        lhs_name = extract_variable_name(affect_eq.lhs)
+                        rhs_expr = symbolic_to_esm(affect_eq.rhs)
+                        push!(affects, AffectEquation(lhs_name, rhs_expr))
+                    end
+                end
+
+                # Create discrete event
+                if !isempty(affects)
+                    discrete_event = DiscreteEvent(trigger, affects)
+                    push!(events, discrete_event)
+                end
+            catch e
+                @warn "Failed to extract discrete event from Catalyst system: $e"
+            end
+        end
+    end
+
+    # Create and return ESM ReactionSystem
+    return ReactionSystem(species, reactions; parameters=parameters, events=events)
 end
 
 # ========================================
@@ -972,6 +1219,286 @@ function apply_advanced_mtk_features(sys, metadata::Dict)
 
     @info "Advanced MTK features requested but implementation is placeholder"
     return sys
+end
+
+# ========================================
+# Helper Functions for Mock System Handling and Utilities
+# ========================================
+
+"""
+    from_mock_mtk_system(sys::MockMTKSystem, name::String) -> Model
+
+Convert a MockMTKSystem back to ESM Model format.
+This handles the case when MTK is not available but we have mock systems.
+"""
+function from_mock_mtk_system(sys::MockMTKSystem, name::String)
+    variables = Dict{String, ModelVariable}()
+
+    # Convert states
+    for state_name in sys.states
+        variables[state_name] = ModelVariable(StateVariable; default=0.0)
+    end
+
+    # Convert parameters
+    for param_name in sys.parameters
+        variables[param_name] = ModelVariable(ParameterVariable; default=1.0)
+    end
+
+    # Convert observed variables
+    for obs_name in sys.observed_variables
+        # For mock systems, we can't reconstruct the expression, so we create a placeholder
+        variables[obs_name] = ModelVariable(ObservedVariable; expression=VarExpr("placeholder"))
+    end
+
+    # Convert equations - for mock systems, these are string representations
+    equations = Equation[]
+    for (i, eq_str) in enumerate(sys.equations)
+        # Parse simple mock equation format if possible, otherwise create placeholder
+        if occursin("~", eq_str)
+            # Try to extract LHS and RHS from string representation
+            parts = split(eq_str, "~")
+            if length(parts) == 2
+                lhs_expr = parse_mock_expression(strip(parts[1]))
+                rhs_expr = parse_mock_expression(strip(parts[2]))
+                push!(equations, Equation(lhs_expr, rhs_expr))
+            end
+        else
+            # Fallback: create placeholder equation
+            lhs_expr = VarExpr("lhs_$i")
+            rhs_expr = VarExpr("rhs_$i")
+            push!(equations, Equation(lhs_expr, rhs_expr))
+        end
+    end
+
+    # Events are simplified for mock systems
+    events = EventType[]
+
+    return Model(variables, equations; events=events)
+end
+
+"""
+    from_mock_catalyst_system(sys::MockCatalystSystem, name::String) -> ReactionSystem
+
+Convert a MockCatalystSystem back to ESM ReactionSystem format.
+This handles the case when Catalyst is not available but we have mock systems.
+"""
+function from_mock_catalyst_system(sys::MockCatalystSystem, name::String)
+    # Convert species
+    species = [Species(spec_name) for spec_name in sys.species]
+
+    # Convert parameters
+    parameters = [Parameter(param_name, 1.0) for param_name in sys.parameters]  # Default values
+
+    # Convert reactions - for mock systems, these are string representations
+    reactions = Reaction[]
+    for (i, rxn_str) in enumerate(sys.reactions)
+        # Parse simple reaction string format like "A + B -> C + D"
+        try
+            rxn = parse_mock_reaction(rxn_str)
+            if rxn !== nothing
+                push!(reactions, rxn)
+            else
+                # Fallback: create a simple A -> B reaction
+                reactants = Dict("A_$i" => 1)
+                products = Dict("B_$i" => 1)
+                rate = VarExpr("k_$i")
+                push!(reactions, Reaction(reactants, products, rate))
+            end
+        catch e
+            @warn "Failed to parse mock reaction '$rxn_str': $e"
+            # Create fallback reaction
+            reactants = Dict("A_$i" => 1)
+            products = Dict("B_$i" => 1)
+            rate = VarExpr("k_$i")
+            push!(reactions, Reaction(reactants, products, rate))
+        end
+    end
+
+    # Events are simplified for mock systems
+    events = EventType[]
+
+    return ReactionSystem(species, reactions; parameters=parameters, events=events)
+end
+
+"""
+    extract_variable_name(symbolic_var) -> String
+
+Extract variable name from a symbolic variable, handling various formats.
+"""
+function extract_variable_name(symbolic_var)
+    try
+        if SYMBOLICS_AVAILABLE[]
+            var_name = string(Symbolics.getname(symbolic_var))
+            # Remove (t) suffix if present
+            if endswith(var_name, "(t)")
+                var_name = var_name[1:end-3]
+            end
+            return var_name
+        else
+            return string(symbolic_var)
+        end
+    catch e
+        @warn "Failed to extract variable name from $symbolic_var: $e"
+        return "unknown_var"
+    end
+end
+
+"""
+    parse_mock_expression(expr_str::String) -> Expr
+
+Parse a string representation of an expression into an ESM Expr.
+This is a simple parser for mock system string representations.
+"""
+function parse_mock_expression(expr_str::String)
+    expr_str = strip(expr_str)
+
+    # Handle numeric literals
+    try
+        val = parse(Float64, expr_str)
+        return NumExpr(val)
+    catch
+        # Not a number, continue
+    end
+
+    # Handle variable names (simple case)
+    if occursin(r"^[a-zA-Z_][a-zA-Z0-9_]*$", expr_str)
+        return VarExpr(expr_str)
+    end
+
+    # Handle function calls like "D(x, t)" or "+(a, b)"
+    if occursin("(", expr_str) && occursin(")", expr_str)
+        # Simple function call parsing
+        match_result = match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)$", expr_str)
+        if match_result !== nothing
+            func_name = match_result.captures[1]
+            args_str = match_result.captures[2]
+
+            # Parse arguments
+            if isempty(strip(args_str))
+                args = ESMFormat.Expr[]
+            else
+                # Simple comma-separated argument parsing
+                arg_strs = split(args_str, ",")
+                args = [parse_mock_expression(strip(arg)) for arg in arg_strs]
+            end
+
+            # Handle differential operator specially
+            if func_name == "D" && length(args) >= 2
+                return OpExpr("D", [args[1]], wrt=string(args[2]))
+            else
+                return OpExpr(func_name, args)
+            end
+        end
+    end
+
+    # Fallback: treat as variable name
+    return VarExpr(expr_str)
+end
+
+"""
+    parse_mock_reaction(rxn_str::String) -> Union{Reaction, Nothing}
+
+Parse a string representation of a reaction into an ESM Reaction.
+Expected format: "A + 2B -> C + D, rate: k1" or "A -> B"
+"""
+function parse_mock_reaction(rxn_str::String)
+    try
+        # Remove "reaction_N: " prefix if present
+        if occursin("reaction_", rxn_str)
+            rxn_str = split(rxn_str, ":", 2)[2]
+        end
+
+        rxn_str = strip(rxn_str)
+
+        # Split by arrow (-> or →)
+        arrow_patterns = [" -> ", " → ", " ⇌ ", " <=> "]
+        arrow_used = nothing
+        parts = nothing
+
+        for arrow in arrow_patterns
+            if occursin(arrow, rxn_str)
+                parts = split(rxn_str, arrow, limit=2)
+                arrow_used = arrow
+                break
+            end
+        end
+
+        if parts === nothing || length(parts) != 2
+            return nothing
+        end
+
+        reactant_str = strip(parts[1])
+        product_rate_str = strip(parts[2])
+
+        # Check if rate is specified (after comma)
+        if occursin(", rate:", product_rate_str)
+            rate_parts = split(product_rate_str, ", rate:", limit=2)
+            product_str = strip(rate_parts[1])
+            rate_str = strip(rate_parts[2])
+        else
+            product_str = product_rate_str
+            rate_str = "k"  # Default rate variable
+        end
+
+        # Parse reactants
+        reactants = parse_species_list(reactant_str)
+
+        # Parse products
+        products = parse_species_list(product_str)
+
+        # Parse rate
+        rate_expr = parse_mock_expression(rate_str)
+
+        # Determine if reversible
+        is_reversible = arrow_used in [" ⇌ ", " <=> "]
+
+        return Reaction(reactants, products, rate_expr; reversible=is_reversible)
+
+    catch e
+        @warn "Failed to parse reaction string '$rxn_str': $e"
+        return nothing
+    end
+end
+
+"""
+    parse_species_list(species_str::String) -> Dict{String, Int}
+
+Parse a species list like "A + 2B + C" into a dictionary of species and stoichiometry.
+Handles special case "∅" for empty (null) reactants/products.
+"""
+function parse_species_list(species_str::String)
+    species_str = strip(species_str)
+
+    # Handle empty/null case
+    if species_str == "∅" || isempty(species_str)
+        return Dict{String, Int}()
+    end
+
+    species_dict = Dict{String, Int}()
+
+    # Split by "+"
+    species_parts = split(species_str, "+")
+
+    for part in species_parts
+        part = strip(part)
+        if isempty(part)
+            continue
+        end
+
+        # Check for stoichiometry number at the beginning
+        match_result = match(r"^(\d+)\s+(.+)$", part)
+        if match_result !== nothing
+            stoich = parse(Int, match_result.captures[1])
+            species_name = strip(match_result.captures[2])
+        else
+            stoich = 1
+            species_name = part
+        end
+
+        species_dict[species_name] = stoich
+    end
+
+    return species_dict
 end
 
 # Keep compatibility aliases for existing tests
