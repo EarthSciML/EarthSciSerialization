@@ -1,0 +1,244 @@
+[
+  {
+    "description": "Add coupling entry to existing file",
+    "operation": "add_coupling",
+    "input_file": {
+      "esm": "0.1.0",
+      "reaction_systems": {
+        "Chemistry": {
+          "species": {
+            "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+            "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+          },
+          "parameters": {
+            "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+          },
+          "reactions": [
+            {
+              "id": "R1",
+              "name": "NO_O3",
+              "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+              "products": [{ "species": "NO2", "stoichiometry": 1 }],
+              "rate": 1.8e-12
+            }
+          ]
+        }
+      },
+      "models": {
+        "Transport": {
+          "variables": {
+            "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0 },
+            "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0 }
+          },
+          "equations": [
+            { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+          ]
+        }
+      },
+      "data_loaders": {
+        "MetData": {
+          "type": "gridded_data",
+          "loader_id": "GEOSFP",
+          "config": { "resolution": "0.25x0.3125" },
+          "provides": {
+            "T": { "units": "K", "description": "Temperature" },
+            "u": { "units": "m/s", "description": "Eastward wind" }
+          }
+        }
+      },
+      "coupling": [
+        { "type": "operator_compose", "systems": ["Chemistry", "Transport"] }
+      ]
+    },
+    "parameters": {
+      "entry": { "type": "variable_map", "from": "MetData.T", "to": "Chemistry.T", "transform": "param_to_var" }
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "reaction_systems": {
+        "Chemistry": {
+          "species": {
+            "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+            "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+          },
+          "parameters": {
+            "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+          },
+          "reactions": [
+            {
+              "id": "R1",
+              "name": "NO_O3",
+              "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+              "products": [{ "species": "NO2", "stoichiometry": 1 }],
+              "rate": 1.8e-12
+            }
+          ]
+        }
+      },
+      "models": {
+        "Transport": {
+          "variables": {
+            "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0 },
+            "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0 }
+          },
+          "equations": [
+            { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+          ]
+        }
+      },
+      "data_loaders": {
+        "MetData": {
+          "type": "gridded_data",
+          "loader_id": "GEOSFP",
+          "config": { "resolution": "0.25x0.3125" },
+          "provides": {
+            "T": { "units": "K", "description": "Temperature" },
+            "u": { "units": "m/s", "description": "Eastward wind" }
+          }
+        }
+      },
+      "coupling": [
+        { "type": "operator_compose", "systems": ["Chemistry", "Transport"] },
+        { "type": "variable_map", "from": "MetData.T", "to": "Chemistry.T", "transform": "param_to_var" }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove coupling entry by index",
+    "operation": "remove_coupling",
+    "input_file": {
+      "esm": "0.1.0",
+      "reaction_systems": {
+        "Chemistry": {
+          "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" } },
+          "parameters": { "T": { "units": "K", "default": 298.15, "description": "Temperature" } },
+          "reactions": []
+        }
+      },
+      "models": {
+        "Transport": {
+          "variables": { "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0 } },
+          "equations": []
+        }
+      },
+      "data_loaders": {
+        "MetData": {
+          "type": "gridded_data", "loader_id": "GEOSFP", "config": {},
+          "provides": { "T": { "units": "K", "description": "Temperature" }, "u": { "units": "m/s", "description": "Wind" } }
+        }
+      },
+      "coupling": [
+        { "type": "operator_compose", "systems": ["Chemistry", "Transport"] },
+        { "type": "variable_map", "from": "MetData.T", "to": "Chemistry.T", "transform": "param_to_var" },
+        { "type": "variable_map", "from": "MetData.u", "to": "Transport.u_wind", "transform": "param_to_var" }
+      ]
+    },
+    "parameters": {
+      "index": 1
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "reaction_systems": {
+        "Chemistry": {
+          "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" } },
+          "parameters": { "T": { "units": "K", "default": 298.15, "description": "Temperature" } },
+          "reactions": []
+        }
+      },
+      "models": {
+        "Transport": {
+          "variables": { "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0 } },
+          "equations": []
+        }
+      },
+      "data_loaders": {
+        "MetData": {
+          "type": "gridded_data", "loader_id": "GEOSFP", "config": {},
+          "provides": { "T": { "units": "K", "description": "Temperature" }, "u": { "units": "m/s", "description": "Wind" } }
+        }
+      },
+      "coupling": [
+        { "type": "operator_compose", "systems": ["Chemistry", "Transport"] },
+        { "type": "variable_map", "from": "MetData.u", "to": "Transport.u_wind", "transform": "param_to_var" }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Compose operation - add new system to existing compose",
+    "operation": "compose",
+    "input_file": {
+      "esm": "0.1.0",
+      "reaction_systems": { "Chemistry": { "species": {}, "parameters": {}, "reactions": [] } },
+      "models": {
+        "Transport": { "variables": {}, "equations": [] },
+        "Boundary": { "variables": {}, "equations": [] }
+      },
+      "coupling": [
+        { "type": "operator_compose", "systems": ["Chemistry", "Transport"] }
+      ]
+    },
+    "parameters": {
+      "systems": ["Chemistry", "Transport", "Boundary"]
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "reaction_systems": { "Chemistry": { "species": {}, "parameters": {}, "reactions": [] } },
+      "models": {
+        "Transport": { "variables": {}, "equations": [] },
+        "Boundary": { "variables": {}, "equations": [] }
+      },
+      "coupling": [
+        { "type": "operator_compose", "systems": ["Chemistry", "Transport", "Boundary"] }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Map variable operation - establish new coupling",
+    "operation": "map_variable",
+    "input_file": {
+      "esm": "0.1.0",
+      "reaction_systems": {
+        "AtmChem": {
+          "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" } },
+          "parameters": { "j_O1D": { "units": "1/s", "default": 1e-5, "description": "O1D photolysis rate" } },
+          "reactions": []
+        }
+      },
+      "data_loaders": {
+        "SolarData": {
+          "type": "timeseries", "loader_id": "FAST-JX", "config": {},
+          "provides": { "j_O1D": { "units": "1/s", "description": "O1D photolysis rate" } }
+        }
+      },
+      "coupling": []
+    },
+    "parameters": {
+      "from": "SolarData.j_O1D",
+      "to": "AtmChem.j_O1D",
+      "transform": "param_to_var"
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "reaction_systems": {
+        "AtmChem": {
+          "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" } },
+          "parameters": { "j_O1D": { "units": "1/s", "default": 1e-5, "description": "O1D photolysis rate" } },
+          "reactions": []
+        }
+      },
+      "data_loaders": {
+        "SolarData": {
+          "type": "timeseries", "loader_id": "FAST-JX", "config": {},
+          "provides": { "j_O1D": { "units": "1/s", "description": "O1D photolysis rate" } }
+        }
+      },
+      "coupling": [
+        { "type": "variable_map", "from": "SolarData.j_O1D", "to": "AtmChem.j_O1D", "transform": "param_to_var" }
+      ]
+    },
+    "expected_warnings": []
+  }
+]

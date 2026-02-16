@@ -1,0 +1,315 @@
+[
+  {
+    "description": "Merge two ESM files with non-overlapping systems",
+    "operation": "merge",
+    "parameters": {
+      "file_a": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "ChemistryOnly",
+          "description": "Simple chemistry reactions",
+          "authors": ["Author A"]
+        },
+        "reaction_systems": {
+          "SimpleChemistry": {
+            "species": {
+              "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+              "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+            },
+            "parameters": {
+              "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+            },
+            "reactions": [
+              {
+                "id": "R1",
+                "name": "NO_O3",
+                "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+                "products": [{ "species": "NO2", "stoichiometry": 1 }],
+                "rate": 1.8e-12
+              }
+            ]
+          }
+        }
+      },
+      "file_b": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "TransportOnly",
+          "description": "Advection model",
+          "authors": ["Author B"]
+        },
+        "models": {
+          "Advection": {
+            "variables": {
+              "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
+              "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+            },
+            "equations": [
+              { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+            ]
+          }
+        },
+        "data_loaders": {
+          "WindData": {
+            "type": "gridded_data",
+            "loader_id": "GEOSFP",
+            "config": { "resolution": "0.25x0.3125" },
+            "provides": {
+              "u": { "units": "m/s", "description": "Eastward wind" },
+              "v": { "units": "m/s", "description": "Northward wind" }
+            }
+          }
+        }
+      }
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "metadata": {
+        "name": "ChemistryOnly",
+        "description": "Simple chemistry reactions",
+        "authors": ["Author A"]
+      },
+      "reaction_systems": {
+        "SimpleChemistry": {
+          "species": {
+            "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+            "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+          },
+          "parameters": {
+            "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+          },
+          "reactions": [
+            {
+              "id": "R1",
+              "name": "NO_O3",
+              "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+              "products": [{ "species": "NO2", "stoichiometry": 1 }],
+              "rate": 1.8e-12
+            }
+          ]
+        }
+      },
+      "models": {
+        "Advection": {
+          "variables": {
+            "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
+            "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+          },
+          "equations": [
+            { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+          ]
+        }
+      },
+      "data_loaders": {
+        "WindData": {
+          "type": "gridded_data",
+          "loader_id": "GEOSFP",
+          "config": { "resolution": "0.25x0.3125" },
+          "provides": {
+            "u": { "units": "m/s", "description": "Eastward wind" },
+            "v": { "units": "m/s", "description": "Northward wind" }
+          }
+        }
+      }
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Merge files with overlapping systems (should warn about conflicts)",
+    "operation": "merge",
+    "parameters": {
+      "file_a": {
+        "esm": "0.1.0",
+        "reaction_systems": {
+          "Chemistry": {
+            "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone from file A" } },
+            "parameters": {},
+            "reactions": []
+          }
+        }
+      },
+      "file_b": {
+        "esm": "0.1.0",
+        "reaction_systems": {
+          "Chemistry": {
+            "species": { "O3": { "units": "mol/mol", "default": 35e-9, "description": "Ozone from file B" } },
+            "parameters": {},
+            "reactions": []
+          }
+        }
+      }
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "reaction_systems": {
+        "Chemistry": {
+          "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone from file A" } },
+          "parameters": {},
+          "reactions": []
+        }
+      }
+    },
+    "expected_warnings": ["Conflicting definitions for system 'Chemistry' - keeping file_a version"]
+  },
+  {
+    "description": "Extract component from ESM file",
+    "operation": "extract",
+    "parameters": {
+      "file": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "FullModel",
+          "description": "Chemistry and transport model",
+          "authors": ["Full Model Author"]
+        },
+        "reaction_systems": {
+          "AtmosphericChemistry": {
+            "species": {
+              "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+              "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+              "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+            },
+            "parameters": {
+              "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+              "j_NO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
+            },
+            "reactions": [
+              {
+                "id": "R1",
+                "name": "NO_O3",
+                "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+                "products": [{ "species": "NO2", "stoichiometry": 1 }],
+                "rate": 1.8e-12
+              },
+              {
+                "id": "R2",
+                "name": "NO2_photolysis",
+                "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+                "products": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+                "rate": "j_NO2"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Transport": {
+            "variables": {
+              "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" }
+            },
+            "equations": [
+              { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+            ]
+          }
+        },
+        "coupling": [
+          { "type": "operator_compose", "systems": ["AtmosphericChemistry", "Transport"] }
+        ]
+      },
+      "component_name": "AtmosphericChemistry"
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "metadata": {
+        "name": "AtmosphericChemistry",
+        "description": "Extracted from FullModel",
+        "authors": ["Full Model Author"]
+      },
+      "reaction_systems": {
+        "AtmosphericChemistry": {
+          "species": {
+            "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+            "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+            "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+          },
+          "parameters": {
+            "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+            "j_NO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
+          },
+          "reactions": [
+            {
+              "id": "R1",
+              "name": "NO_O3",
+              "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+              "products": [{ "species": "NO2", "stoichiometry": 1 }],
+              "rate": 1.8e-12
+            },
+            {
+              "id": "R2",
+              "name": "NO2_photolysis",
+              "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+              "products": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+              "rate": "j_NO2"
+            }
+          ]
+        }
+      }
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Extract model component from ESM file",
+    "operation": "extract",
+    "parameters": {
+      "file": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "CoupledSystem",
+          "description": "Coupled chemistry and transport",
+          "authors": ["System Author"]
+        },
+        "reaction_systems": {
+          "Chemistry": {
+            "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" } },
+            "parameters": {},
+            "reactions": []
+          }
+        },
+        "models": {
+          "Advection": {
+            "variables": {
+              "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
+              "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+            },
+            "equations": [
+              { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "+", "args": [
+                { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
+                { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
+              ]} }
+            ]
+          },
+          "Boundary": {
+            "variables": { "bc_flux": { "type": "parameter", "units": "mol/mol/s", "default": 1e-12, "description": "Boundary flux" } },
+            "equations": []
+          }
+        },
+        "coupling": [
+          { "type": "operator_compose", "systems": ["Chemistry", "Advection"] }
+        ]
+      },
+      "component_name": "Advection"
+    },
+    "expected_file": {
+      "esm": "0.1.0",
+      "metadata": {
+        "name": "Advection",
+        "description": "Extracted from CoupledSystem",
+        "authors": ["System Author"]
+      },
+      "models": {
+        "Advection": {
+          "variables": {
+            "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
+            "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+          },
+          "equations": [
+            { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
+            ]} }
+          ]
+        }
+      }
+    },
+    "expected_warnings": []
+  }
+]
