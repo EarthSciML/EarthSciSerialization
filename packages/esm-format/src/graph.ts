@@ -651,3 +651,301 @@ export function expressionGraph(
     }
   };
 }
+
+/**
+ * Convert a node name to include chemical subscripts where appropriate.
+ * Handles common chemical formulas like H2O, CO2, O3, NO2, etc.
+ */
+function formatChemicalSubscripts(text: string): string {
+  // Common chemical formulas that need subscript formatting
+  const subscriptMap: Record<string, string> = {
+    '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+    '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
+  };
+
+  let result = text;
+
+  // Replace digits with subscript versions for chemical formulas
+  // Only replace digits that follow letters (chemical element symbols)
+  result = result.replace(/([A-Za-z])(\d+)/g, (match, element, digits) => {
+    const subscriptDigits = digits.split('').map(d => subscriptMap[d] || d).join('');
+    return element + subscriptDigits;
+  });
+
+  return result;
+}
+
+/**
+ * Export graph as Graphviz DOT format.
+ * Node shapes: box for models, ellipse for data_loaders, diamond for operators.
+ * Edge styles: solid for compose, dashed for variable_map.
+ */
+export function toDot<N, E>(graph: Graph<N, E>): string {
+  const lines: string[] = [];
+
+  lines.push('digraph {');
+  lines.push('  rankdir=TB;');
+  lines.push('  node [fontname="Arial"];');
+  lines.push('  edge [fontname="Arial"];');
+  lines.push('');
+
+  // Add nodes
+  for (const node of graph.nodes) {
+    let shape = 'ellipse';
+    let color = 'lightblue';
+
+    // Type-specific formatting for ComponentNode
+    if ('type' in node) {
+      const componentNode = node as any;
+      switch (componentNode.type) {
+        case 'model':
+          shape = 'box';
+          color = 'lightgreen';
+          break;
+        case 'reaction_system':
+          shape = 'box';
+          color = 'lightcoral';
+          break;
+        case 'data_loader':
+          shape = 'ellipse';
+          color = 'lightyellow';
+          break;
+        case 'operator':
+          shape = 'diamond';
+          color = 'lightgray';
+          break;
+      }
+    }
+    // Type-specific formatting for VariableNode
+    else if ('kind' in node) {
+      const variableNode = node as any;
+      switch (variableNode.kind) {
+        case 'state':
+          shape = 'box';
+          color = 'lightgreen';
+          break;
+        case 'parameter':
+          shape = 'ellipse';
+          color = 'lightblue';
+          break;
+        case 'observed':
+          shape = 'box';
+          color = 'lightyellow';
+          break;
+        case 'species':
+          shape = 'ellipse';
+          color = 'lightcoral';
+          break;
+      }
+    }
+
+    const nodeId = 'id' in node ? (node as any).id : ('name' in node ? (node as any).name : String(node));
+    const nodeLabel = 'name' in node ? formatChemicalSubscripts((node as any).name) : formatChemicalSubscripts(nodeId);
+
+    lines.push(`  "${nodeId}" [label="${nodeLabel}", shape=${shape}, fillcolor=${color}, style=filled];`);
+  }
+
+  lines.push('');
+
+  // Add edges
+  for (const edge of graph.edges) {
+    let style = 'solid';
+    let color = 'black';
+    let label = '';
+
+    // Edge-specific formatting for CouplingEdge
+    if (edge.data && typeof edge.data === 'object' && 'type' in edge.data) {
+      const couplingEdge = edge.data as any;
+      switch (couplingEdge.type) {
+        case 'operator_compose':
+        case 'couple2':
+          style = 'solid';
+          color = 'blue';
+          label = couplingEdge.label || '';
+          break;
+        case 'variable_map':
+          style = 'dashed';
+          color = 'green';
+          label = formatChemicalSubscripts(couplingEdge.label || '');
+          break;
+        case 'operator_apply':
+          style = 'solid';
+          color = 'purple';
+          label = couplingEdge.label || '';
+          break;
+        case 'callback':
+          style = 'dotted';
+          color = 'orange';
+          label = couplingEdge.label || '';
+          break;
+      }
+    }
+    // Edge-specific formatting for DependencyEdge
+    else if (edge.data && typeof edge.data === 'object' && 'relationship' in edge.data) {
+      const depEdge = edge.data as any;
+      switch (depEdge.relationship) {
+        case 'additive':
+          style = 'solid';
+          color = 'blue';
+          label = '+';
+          break;
+        case 'multiplicative':
+          style = 'solid';
+          color = 'red';
+          label = '*';
+          break;
+        case 'rate':
+          style = 'dashed';
+          color = 'purple';
+          label = 'rate';
+          break;
+        case 'stoichiometric':
+          style = 'dotted';
+          color = 'green';
+          label = 'stoich';
+          break;
+      }
+    }
+
+    const labelAttr = label ? `, label="${label}"` : '';
+    lines.push(`  "${edge.source}" -> "${edge.target}" [style=${style}, color=${color}${labelAttr}];`);
+  }
+
+  lines.push('}');
+  return lines.join('\n');
+}
+
+/**
+ * Export graph as Mermaid flowchart format for Markdown embedding.
+ */
+export function toMermaid<N, E>(graph: Graph<N, E>): string {
+  const lines: string[] = [];
+
+  lines.push('flowchart TD');
+
+  // Add node definitions with shapes
+  for (const node of graph.nodes) {
+    const nodeId = 'id' in node ? (node as any).id : ('name' in node ? (node as any).name : String(node));
+    const nodeLabel = 'name' in node ? formatChemicalSubscripts((node as any).name) : formatChemicalSubscripts(nodeId);
+
+    let shape = '';
+
+    // Type-specific shapes for ComponentNode
+    if ('type' in node) {
+      const componentNode = node as any;
+      switch (componentNode.type) {
+        case 'model':
+        case 'reaction_system':
+          shape = `[${nodeLabel}]`; // Rectangle
+          break;
+        case 'data_loader':
+          shape = `((${nodeLabel}))`; // Circle
+          break;
+        case 'operator':
+          shape = `{${nodeLabel}}`; // Diamond
+          break;
+        default:
+          shape = `[${nodeLabel}]`;
+      }
+    }
+    // Type-specific shapes for VariableNode
+    else if ('kind' in node) {
+      const variableNode = node as any;
+      switch (variableNode.kind) {
+        case 'state':
+        case 'observed':
+          shape = `[${nodeLabel}]`; // Rectangle
+          break;
+        case 'parameter':
+        case 'species':
+          shape = `((${nodeLabel}))`; // Circle
+          break;
+        default:
+          shape = `[${nodeLabel}]`;
+      }
+    } else {
+      shape = `[${nodeLabel}]`;
+    }
+
+    lines.push(`  ${nodeId}${shape}`);
+  }
+
+  lines.push('');
+
+  // Add edges
+  for (const edge of graph.edges) {
+    let arrowStyle = '-->';
+    let label = '';
+
+    // Edge-specific formatting
+    if (edge.data && typeof edge.data === 'object' && 'type' in edge.data) {
+      const couplingEdge = edge.data as any;
+      switch (couplingEdge.type) {
+        case 'variable_map':
+          arrowStyle = '-.->';
+          label = formatChemicalSubscripts(couplingEdge.label || '');
+          break;
+        case 'operator_compose':
+        case 'couple2':
+        case 'operator_apply':
+        case 'callback':
+          arrowStyle = '-->';
+          label = couplingEdge.label || '';
+          break;
+      }
+    } else if (edge.data && typeof edge.data === 'object' && 'relationship' in edge.data) {
+      const depEdge = edge.data as any;
+      switch (depEdge.relationship) {
+        case 'additive':
+          label = '+';
+          break;
+        case 'multiplicative':
+          label = '*';
+          break;
+        case 'rate':
+          arrowStyle = '-.->';
+          label = 'rate';
+          break;
+        case 'stoichiometric':
+          arrowStyle = '-..->';
+          label = 'stoich';
+          break;
+      }
+    }
+
+    const labelPart = label ? `|${label}|` : '';
+    lines.push(`  ${edge.source} ${arrowStyle}${labelPart} ${edge.target}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Export graph as JSON adjacency list format for web consumption.
+ */
+export function toJsonGraph<N, E>(graph: Graph<N, E>): string {
+  const jsonGraph = {
+    nodes: graph.nodes.map(node => {
+      const baseNode = {
+        id: 'id' in node ? (node as any).id : ('name' in node ? (node as any).name : String(node))
+      };
+
+      // Include all node properties
+      return { ...baseNode, ...node };
+    }),
+    edges: graph.edges.map(edge => ({
+      source: edge.source,
+      target: edge.target,
+      data: edge.data
+    })),
+    adjacency: {} as Record<string, string[]>
+  };
+
+  // Build adjacency list
+  for (const node of graph.nodes) {
+    const nodeId = 'id' in node ? (node as any).id : ('name' in node ? (node as any).name : String(node));
+    jsonGraph.adjacency[nodeId] = graph.adjacency(nodeId);
+  }
+
+  return JSON.stringify(jsonGraph, null, 2);
+}
