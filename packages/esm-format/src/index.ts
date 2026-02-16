@@ -39,8 +39,8 @@ export { substitute, substituteInModel, substituteInReactionSystem } from './sub
 // Export expression structural operations
 export { freeVariables, freeParameters, contains, evaluate, simplify } from './expression.js'
 
-// Export reaction system ODE derivation
-export { deriveODEs } from './reactions.js'
+// Export reaction system ODE derivation and stoichiometric matrix computation
+export { deriveODEs, stoichiometricMatrix, substrateMatrix, productMatrix } from './reactions.js'
 
 // Export unit parsing and dimensional analysis
 export { parseUnit, checkDimensions, validateUnits } from './units.js'
