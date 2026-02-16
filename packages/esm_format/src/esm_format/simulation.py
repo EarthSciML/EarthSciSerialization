@@ -22,8 +22,10 @@ from dataclasses import dataclass
 
 from .types import (
     Model, ModelVariable, ReactionSystem, Reaction, Species, Parameter,
-    ContinuousEvent, DiscreteEvent, Expr, ExprNode
+    ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile
 )
+from .reactions import derive_odes, stoichiometric_matrix
+from .expression import to_sympy
 
 
 @dataclass
@@ -31,12 +33,74 @@ class SimulationResult:
     """Result of a simulation run."""
     t: np.ndarray
     y: np.ndarray
+    vars: List[str]  # Variable names corresponding to y rows
     success: bool
     message: str
     nfev: int
     njev: int
     nlu: int
     events: List[np.ndarray] = None
+
+    def plot(self, variables: Optional[List[str]] = None, **kwargs):
+        """
+        Plot simulation results using matplotlib.
+
+        Args:
+            variables: Optional list of variable names to plot. If None, plots all.
+            **kwargs: Additional arguments passed to matplotlib.pyplot
+        """
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib")
+
+        if not self.success:
+            raise RuntimeError(f"Cannot plot failed simulation: {self.message}")
+
+        # Determine which variables to plot
+        if variables is None:
+            plot_vars = self.vars
+            plot_indices = list(range(len(self.vars)))
+        else:
+            plot_vars = []
+            plot_indices = []
+            for var in variables:
+                if var in self.vars:
+                    plot_vars.append(var)
+                    plot_indices.append(self.vars.index(var))
+                else:
+                    print(f"Warning: Variable '{var}' not found in simulation results")
+
+        if not plot_vars:
+            raise ValueError("No valid variables to plot")
+
+        # Create the plot
+        fig, ax = plt.subplots(figsize=kwargs.get('figsize', (10, 6)))
+
+        for var, idx in zip(plot_vars, plot_indices):
+            ax.plot(self.t, self.y[idx, :], label=var, linewidth=kwargs.get('linewidth', 2))
+
+        ax.set_xlabel(kwargs.get('xlabel', 'Time'))
+        ax.set_ylabel(kwargs.get('ylabel', 'Concentration'))
+        ax.set_title(kwargs.get('title', 'Simulation Results'))
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Apply any additional formatting
+        if 'xlim' in kwargs:
+            ax.set_xlim(kwargs['xlim'])
+        if 'ylim' in kwargs:
+            ax.set_ylim(kwargs['ylim'])
+
+        plt.tight_layout()
+
+        if kwargs.get('save_path'):
+            plt.savefig(kwargs['save_path'], dpi=kwargs.get('dpi', 150), bbox_inches='tight')
+
+        if kwargs.get('show', True):
+            plt.show()
+
+        return fig, ax
 
 
 class SimulationError(Exception):
@@ -199,7 +263,170 @@ def _create_event_functions(events: List[ContinuousEvent], symbol_map: Dict[str,
     return event_functions
 
 
+# Backward compatibility: provide old function signature as alias
+def simulate_legacy(
+    reaction_system: ReactionSystem,
+    initial_conditions: Dict[str, float],
+    time_span: Tuple[float, float],
+    events: Optional[List[ContinuousEvent]] = None,
+    **solver_options
+) -> SimulationResult:
+    """Legacy simulate function for backward compatibility."""
+    return simulate_reaction_system(reaction_system, initial_conditions, time_span, events, **solver_options)
+
+
 def simulate(
+    file: EsmFile,
+    tspan: Tuple[float, float],
+    parameters: Dict[str, float],
+    initial_conditions: Dict[str, float],
+    method: str = 'BDF'
+) -> SimulationResult:
+    """
+    Simulate an ESM file using SciPy's solve_ivp.
+
+    This is the main simulation function that:
+    1. Resolves coupling to single ODE system
+    2. Converts expressions to SymPy
+    3. Generates mass-action ODEs from reaction systems
+    4. Lambdifies for fast NumPy RHS function
+    5. Calls scipy.integrate.solve_ivp()
+
+    Args:
+        file: ESM file containing models and reaction systems
+        tspan: Tuple of (t_start, t_end)
+        parameters: Parameter values {param_name: value}
+        initial_conditions: Initial concentrations {species_name: concentration}
+        method: Integration method (default 'BDF')
+
+    Returns:
+        SimulationResult: Results of the simulation
+
+    Limitations:
+        - 0D box model only (no spatial operators)
+        - Limited event support
+        - Mass-action kinetics only
+
+    Raises:
+        SimulationError: If spatial operators are present or other simulation issues occur
+    """
+    try:
+        # Check for spatial operators - raise error if present
+        for operator in file.operators:
+            if operator.type.value in ['spatial', 'differentiation', 'integration']:
+                raise SimulationError(f"Spatial operators not supported in 0D simulation. Found: {operator.name}")
+
+        # Variable mapping and operator composition for 0D only
+        # For now, we'll focus on reaction systems as they are well-defined
+        if not file.reaction_systems:
+            raise SimulationError("No reaction systems found in ESM file")
+
+        if len(file.reaction_systems) > 1:
+            raise SimulationError("Multiple reaction systems not yet supported. Use coupling resolution.")
+
+        reaction_system = file.reaction_systems[0]
+
+        # Update reaction system parameters with provided values
+        updated_reactions = []
+        for reaction in reaction_system.reactions:
+            updated_reaction = Reaction(
+                name=reaction.name,
+                reactants=reaction.reactants.copy(),
+                products=reaction.products.copy(),
+                rate_constant=parameters.get(str(reaction.rate_constant), reaction.rate_constant),
+                conditions=reaction.conditions.copy()
+            )
+            updated_reactions.append(updated_reaction)
+
+        updated_system = ReactionSystem(
+            name=reaction_system.name,
+            species=reaction_system.species.copy(),
+            parameters=reaction_system.parameters.copy(),
+            reactions=updated_reactions
+        )
+
+        # Generate mass-action ODEs using the dependency
+        species_names, ode_exprs = _generate_mass_action_odes(updated_system)
+
+        if not species_names:
+            raise SimulationError("No species found in reaction system")
+
+        # Create symbol map
+        symbol_map = {name: sp.Symbol(name) for name in species_names}
+
+        # Create initial condition vector
+        y0 = np.array([initial_conditions.get(name, 0.0) for name in species_names])
+
+        # Lambdify ODEs for fast evaluation
+        variables = [symbol_map[name] for name in species_names]
+
+        # Create RHS function
+        if variables and ode_exprs:
+            rhs_funcs = [sp.lambdify(variables, expr, 'numpy') for expr in ode_exprs]
+
+            def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
+                """Right-hand side function for the ODE system."""
+                try:
+                    # Ensure y has the right shape and no negative concentrations
+                    y_clipped = np.maximum(y, 0.0)  # Clip to prevent negative concentrations
+
+                    # Evaluate each ODE expression
+                    dydt = np.array([func(*y_clipped) for func in rhs_funcs])
+
+                    # Ensure result is finite
+                    if not np.all(np.isfinite(dydt)):
+                        raise SimulationError("Non-finite derivatives encountered")
+
+                    return dydt
+
+                except Exception as e:
+                    raise SimulationError(f"Error in RHS evaluation: {e}")
+        else:
+            def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
+                return np.zeros_like(y)
+
+        # Set solver options based on method
+        solver_options = {
+            'method': method,
+            'rtol': 1e-6,
+            'atol': 1e-8,
+            'dense_output': False,
+        }
+
+        # Solve the ODE system
+        sol = solve_ivp(
+            fun=rhs_function,
+            t_span=tspan,
+            y0=y0,
+            **solver_options
+        )
+
+        return SimulationResult(
+            t=sol.t,
+            y=sol.y,
+            vars=species_names,  # Add variable names
+            success=sol.success,
+            message=sol.message,
+            nfev=sol.nfev,
+            njev=sol.njev,
+            nlu=sol.nlu,
+            events=sol.t_events if sol.t_events is not None and len(sol.t_events) > 0 else None
+        )
+
+    except Exception as e:
+        return SimulationResult(
+            t=np.array([]),
+            y=np.array([[]]),
+            vars=[],
+            success=False,
+            message=f"Simulation failed: {e}",
+            nfev=0,
+            njev=0,
+            nlu=0
+        )
+
+
+def simulate_reaction_system(
     reaction_system: ReactionSystem,
     initial_conditions: Dict[str, float],
     time_span: Tuple[float, float],
@@ -303,6 +530,7 @@ def simulate(
         return SimulationResult(
             t=sol.t,
             y=sol.y,
+            vars=species_names,  # Add variable names
             success=sol.success,
             message=sol.message,
             nfev=sol.nfev,
@@ -315,6 +543,7 @@ def simulate(
         return SimulationResult(
             t=np.array([]),
             y=np.array([[]]),
+            vars=[],  # Empty variable list
             success=False,
             message=f"Simulation failed: {e}",
             nfev=0,
@@ -348,11 +577,11 @@ def simulate_with_discrete_events(
     """
     if not discrete_events:
         # No discrete events, use regular simulation
-        return simulate(reaction_system, initial_conditions, time_span, **solver_options)
+        return simulate_reaction_system(reaction_system, initial_conditions, time_span, **solver_options)
 
     # TODO: Implement discrete event handling with manual stepping
     # For now, just run regular simulation and warn
-    result = simulate(reaction_system, initial_conditions, time_span, **solver_options)
+    result = simulate_reaction_system(reaction_system, initial_conditions, time_span, **solver_options)
     if result.success:
         result.message += " (Warning: Discrete events not yet implemented)"
 
