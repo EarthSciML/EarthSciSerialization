@@ -105,17 +105,17 @@ mod tests {
     #[test]
     fn test_save_with_model() {
         let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), ModelVariable {
+            var_type: VariableType::State,
+            units: Some("m".to_string()),
+            default: Some(0.0),
+            description: None,
+        });
+
         models.insert("test".to_string(), Model {
             name: Some("Test Model".to_string()),
-            variables: vec![
-                ModelVariable {
-                    name: "x".to_string(),
-                    var_type: VariableType::State,
-                    units: Some("m".to_string()),
-                    default: Some(0.0),
-                    description: None,
-                }
-            ],
+            variables,
             equations: vec![
                 Equation {
                     lhs: Expr::Variable("d(x)/dt".to_string()),

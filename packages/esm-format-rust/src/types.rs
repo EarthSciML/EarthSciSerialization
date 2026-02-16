@@ -110,8 +110,8 @@ pub struct Model {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    /// State variables, parameters, and observed quantities
-    pub variables: Vec<ModelVariable>,
+    /// State variables, parameters, and observed quantities (keyed by name)
+    pub variables: HashMap<String, ModelVariable>,
 
     /// Differential equations
     pub equations: Vec<Equation>,
@@ -128,9 +128,6 @@ pub struct Model {
 /// Variable within a model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelVariable {
-    /// Variable name (unique within the model)
-    pub name: String,
-
     /// Variable type
     #[serde(rename = "type")]
     pub var_type: VariableType,
