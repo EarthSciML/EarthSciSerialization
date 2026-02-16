@@ -1,0 +1,204 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "FullCoupledSystem",
+    "description": "Comprehensive ESM test exercising all sections: models, reaction_systems, data_loaders, operators, coupling (all 6 types), domain with spatial+temporal+ICs+BCs, and solver",
+    "authors": ["Claude Test Generator"],
+    "created": "2026-02-16T16:00:00Z",
+    "tags": ["comprehensive", "test", "all-sections"],
+    "license": "MIT"
+  },
+
+  "reaction_systems": {
+    "AtmosphericChemistry": {
+      "coupletype": "AtmChemCoupler",
+      "reference": { "notes": "Simplified atmospheric chemistry" },
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" },
+        "OH": { "units": "mol/mol", "default": 0.05e-9, "description": "Hydroxyl radical" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "M": { "units": "molec/cm^3", "default": 2.46e19, "description": "Air density" },
+        "jNO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3_reaction",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }, "M"] }
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "Transport": {
+      "reference": { "notes": "3D transport model" },
+      "variables": {
+        "u": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Eastward wind" },
+        "v": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Northward wind" },
+        "w": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Vertical wind" },
+        "K_h": { "type": "parameter", "units": "m^2/s", "default": 100.0, "description": "Horizontal diffusion" },
+        "K_v": { "type": "parameter", "units": "m^2/s", "default": 10.0, "description": "Vertical diffusion" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["w"] }, { "op": "grad", "args": ["_var"], "dim": "z" }] },
+              { "op": "*", "args": ["K_h", { "op": "laplacian", "args": ["_var"], "dim": "horizontal" }] },
+              { "op": "*", "args": ["K_v", { "op": "laplacian", "args": ["_var"], "dim": "vertical" }] }
+            ]
+          }
+        }
+      ],
+      "events": {
+        "continuous": [
+          {
+            "name": "concentration_limit",
+            "conditions": [{ "op": "-", "args": ["_var", 1e-3] }],
+            "affects": [
+              { "lhs": "_var", "rhs": 1e-3 }
+            ],
+            "affect_neg": [
+              { "lhs": "_var", "rhs": { "op": "max", "args": [0.0, { "op": "Pre", "args": ["_var"] }] } }
+            ],
+            "root_find": true
+          }
+        ],
+        "discrete": [
+          {
+            "name": "hourly_reset",
+            "trigger": { "type": "periodic", "interval": 3600.0 },
+            "affects": [
+              { "lhs": "K_h", "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["K_h"] }, 1.1] } }
+            ],
+            "discrete_parameters": ["K_h"],
+            "functional_affect": {
+              "handler_id": "hourly_diffusion_update",
+              "read_vars": ["_var"],
+              "read_params": ["K_h"],
+              "modified_params": ["K_h"],
+              "config": { "factor": 1.1 }
+            }
+          },
+          {
+            "name": "preset_events",
+            "trigger": { "type": "preset_times", "times": [86400, 172800, 259200] },
+            "affects": [
+              { "lhs": "K_v", "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["K_v"] }, 0.9] } }
+            ],
+            "discrete_parameters": ["K_v"]
+          }
+        ]
+      }
+    }
+  },
+
+  "data_loaders": {
+    "MeteoData": {
+      "type": "gridded_data",
+      "loader_id": "GEOSFP",
+      "config": {
+        "resolution": "0.25x0.3125_NA",
+        "coord_defaults": { "lat": 34.0, "lon": -118.0, "lev": 1 },
+        "interpolation": "linear"
+      },
+      "provides": {
+        "u": { "units": "m/s", "description": "Eastward wind" },
+        "v": { "units": "m/s", "description": "Northward wind" },
+        "w": { "units": "m/s", "description": "Vertical wind" },
+        "T": { "units": "K", "description": "Temperature" },
+        "P": { "units": "Pa", "description": "Pressure" }
+      }
+    },
+    "EmissionsData": {
+      "type": "emissions",
+      "loader_id": "EDGAR_v5",
+      "config": { "year": 2020, "sectors": ["power", "transport"] },
+      "provides": {
+        "NOx_emissions": { "units": "kg/m^2/s", "description": "NOx emissions" }
+      }
+    }
+  },
+
+  "operators": {
+    "SpatialInterpolator": {
+      "operator_id": "bilinear_interp",
+      "config": { "method": "bilinear", "extrapolation": "nearest" },
+      "reference": { "notes": "Spatial interpolation operator" }
+    },
+    "UnitConverter": {
+      "operator_id": "unit_conversion",
+      "config": { "from": "kg/m^2/s", "to": "mol/mol/s", "molecular_weight": 46.0 },
+      "reference": { "notes": "NOx unit conversion" }
+    }
+  },
+
+  "coupling": [
+    { "type": "operator_compose", "systems": ["AtmosphericChemistry", "Transport"] },
+    { "type": "couple2", "systems": ["AtmosphericChemistry", "Transport"], "coupling_vars": [["O3", "O3"], ["NO", "NO"], ["NO2", "NO2"]] },
+    { "type": "variable_map", "from": "MeteoData.T", "to": "AtmosphericChemistry.T", "transform": "param_to_var" },
+    { "type": "variable_map", "from": "MeteoData.u", "to": "Transport.u", "transform": "param_to_var" },
+    { "type": "variable_map", "from": "MeteoData.v", "to": "Transport.v", "transform": "param_to_var" },
+    { "type": "operator_apply", "operator": "UnitConverter", "input": "EmissionsData.NOx_emissions", "output": "NOx_converted" },
+    { "type": "callback", "name": "emissions_callback", "handler_id": "apply_emissions", "read_vars": ["NO", "NO2"], "write_vars": ["NO", "NO2"], "read_params": ["NOx_converted"] },
+    { "type": "event", "name": "chemistry_transport_sync", "condition": { "op": ">", "args": ["t", 3600] }, "action": "synchronize_fields" }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-07-01T00:00:00Z",
+      "end": "2024-07-08T00:00:00Z",
+      "timestep": 60.0
+    },
+    "spatial": {
+      "lon": { "min": -125.0, "max": -110.0, "grid_spacing": 0.25, "units": "degrees" },
+      "lat": { "min": 32.0, "max": 42.0, "grid_spacing": 0.25, "units": "degrees" },
+      "lev": { "min": 1, "max": 10, "grid_spacing": 1, "units": "sigma_levels" }
+    },
+    "coordinate_transforms": [
+      { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] },
+      { "id": "sigma_to_pressure", "dimensions": ["lev"] }
+    ],
+    "initial_conditions": {
+      "type": "from_data_loader",
+      "loader": "MeteoData",
+      "variable_mapping": {
+        "O3": "O3_init",
+        "NO": "NO_init",
+        "NO2": "NO2_init"
+      }
+    },
+    "boundary_conditions": [
+      { "type": "periodic", "dimensions": ["lon"] },
+      { "type": "zero_gradient", "dimensions": ["lat"] },
+      { "type": "constant", "dimensions": ["lev"], "value": { "O3": 20e-9, "NO": 0.05e-9, "NO2": 0.5e-9 } }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "operator_splitting",
+    "config": {
+      "chemistry_algorithm": "Rosenbrock23",
+      "transport_algorithm": "ROCK4",
+      "timestep": 60.0,
+      "adaptive": true,
+      "tolerances": { "rtol": 1e-6, "atol": 1e-9 }
+    }
+  }
+}

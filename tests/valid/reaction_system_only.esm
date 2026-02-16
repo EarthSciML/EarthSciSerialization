@@ -1,0 +1,194 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ReactionSystemOnly",
+    "description": "Valid ESM file containing only reaction_systems section, no models",
+    "authors": ["Claude Test Generator"],
+    "created": "2026-02-16T16:00:00Z",
+    "tags": ["reaction-only", "validation", "minimal"]
+  },
+
+  "reaction_systems": {
+    "PureChemistry": {
+      "coupletype": "PureChemCoupler",
+      "reference": {
+        "doi": "10.1021/jp994164h",
+        "citation": "Sander et al. Chemical kinetics and photochemical data for use in atmospheric studies",
+        "notes": "Standalone atmospheric chemistry mechanism"
+      },
+      "species": {
+        "O": { "units": "mol/mol", "default": 1e-12, "description": "Atomic oxygen" },
+        "O2": { "units": "mol/mol", "default": 0.21, "description": "Molecular oxygen" },
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" },
+        "NO3": { "units": "mol/mol", "default": 0.01e-9, "description": "Nitrogen trioxide" },
+        "N2O5": { "units": "mol/mol", "default": 0.005e-9, "description": "Dinitrogen pentoxide" },
+        "HO2": { "units": "mol/mol", "default": 0.02e-9, "description": "Hydroperoxyl radical" },
+        "OH": { "units": "mol/mol", "default": 0.01e-9, "description": "Hydroxyl radical" },
+        "H2O2": { "units": "mol/mol", "default": 0.1e-9, "description": "Hydrogen peroxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "P": { "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "M": { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" },
+        "H2O": { "units": "mol/mol", "default": 0.01, "description": "Water vapor" },
+        "jO3": { "units": "1/s", "default": 1e-5, "description": "O3 photolysis rate" },
+        "jNO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" },
+        "jNO3": { "units": "1/s", "default": 0.002, "description": "NO3 photolysis rate" },
+        "jH2O2": { "units": "1/s", "default": 1e-6, "description": "H2O2 photolysis rate" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "O3_photolysis",
+          "substrates": [{ "species": "O3", "stoichiometry": 1 }],
+          "products": [
+            { "species": "O", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "rate": "jO3"
+        },
+        {
+          "id": "R2",
+          "name": "O_O2_recombination",
+          "substrates": [
+            { "species": "O", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "products": [{ "species": "O3", "stoichiometry": 1 }],
+          "rate": { "op": "*", "args": [6.0e-34, { "op": "^", "args": [{ "op": "/", "args": ["T", 298.15] }, -2.4] }, "M"] }
+        },
+        {
+          "id": "R3",
+          "name": "NO_O3_reaction",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }] }
+        },
+        {
+          "id": "R4",
+          "name": "NO2_photolysis",
+          "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O", "stoichiometry": 1 }
+          ],
+          "rate": "jNO2"
+        },
+        {
+          "id": "R5",
+          "name": "NO2_O3_reaction",
+          "substrates": [
+            { "species": "NO2", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO3", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [3.2e-17, { "op": "exp", "args": [{ "op": "/", "args": [530, "T"] }] }] }
+        },
+        {
+          "id": "R6",
+          "name": "NO3_NO2_equilibrium",
+          "substrates": [
+            { "species": "NO3", "stoichiometry": 1 },
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "products": [{ "species": "N2O5", "stoichiometry": 1 }],
+          "rate": { "op": "*", "args": [2.0e-30, { "op": "^", "args": [{ "op": "/", "args": ["T", 298.15] }, -4.4] }, "M"] }
+        },
+        {
+          "id": "R7",
+          "name": "OH_NO2_reaction",
+          "substrates": [
+            { "species": "OH", "stoichiometry": 1 },
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "products": [{ "species": "HO2", "stoichiometry": 1 }],
+          "rate": { "op": "*", "args": [1.0e-11, { "op": "exp", "args": [{ "op": "/", "args": [240, "T"] }] }] }
+        },
+        {
+          "id": "R8",
+          "name": "HO2_NO_reaction",
+          "substrates": [
+            { "species": "HO2", "stoichiometry": 1 },
+            { "species": "NO", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "OH", "stoichiometry": 1 },
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [3.5e-12, { "op": "exp", "args": [{ "op": "/", "args": [250, "T"] }] }] }
+        },
+        {
+          "id": "R9",
+          "name": "H2O2_photolysis",
+          "substrates": [{ "species": "H2O2", "stoichiometry": 1 }],
+          "products": [{ "species": "OH", "stoichiometry": 2 }],
+          "rate": "jH2O2"
+        },
+        {
+          "id": "R10",
+          "name": "HO2_self_reaction",
+          "substrates": [{ "species": "HO2", "stoichiometry": 2 }],
+          "products": [
+            { "species": "H2O2", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [2.3e-13, { "op": "exp", "args": [{ "op": "/", "args": [600, "T"] }] }] }
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "PhotolysisRates": {
+      "type": "photolysis_data",
+      "loader_id": "TUV_rates",
+      "config": {
+        "model": "TUV_v5.2",
+        "wavelength_grid": "fast_TUV",
+        "aerosol_optical_depth": 0.235
+      },
+      "provides": {
+        "jO3": { "units": "1/s", "description": "O3 photolysis rate" },
+        "jNO2": { "units": "1/s", "description": "NO2 photolysis rate" },
+        "jNO3": { "units": "1/s", "description": "NO3 photolysis rate" },
+        "jH2O2": { "units": "1/s", "description": "H2O2 photolysis rate" }
+      }
+    }
+  },
+
+  "coupling": [
+    { "type": "variable_map", "from": "PhotolysisRates.jO3", "to": "PureChemistry.jO3", "transform": "param_to_var" },
+    { "type": "variable_map", "from": "PhotolysisRates.jNO2", "to": "PureChemistry.jNO2", "transform": "param_to_var" },
+    { "type": "variable_map", "from": "PhotolysisRates.jNO3", "to": "PureChemistry.jNO3", "transform": "param_to_var" },
+    { "type": "variable_map", "from": "PhotolysisRates.jH2O2", "to": "PureChemistry.jH2O2", "transform": "param_to_var" }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-06-21T12:00:00Z",
+      "end": "2024-06-21T18:00:00Z"
+    },
+    "initial_conditions": { "type": "constant", "value": 1.0 },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "chemistry_only",
+    "config": {
+      "algorithm": "CVODE_BDF",
+      "timestep": 60.0,
+      "tolerances": { "rtol": 1e-6, "atol": 1e-12 }
+    }
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventsAllTypes",
+    "description": "Test fixture exercising continuous events (with affect_neg, root_find options), discrete events (condition, periodic, preset_times triggers), discrete_parameters, functional affects, and cross-system events",
+    "authors": ["Claude Test Generator"],
+    "created": "2026-02-16T16:00:00Z",
+    "tags": ["events", "continuous", "discrete", "comprehensive"]
+  },
+
+  "reaction_systems": {
+    "EventTestChem": {
+      "coupletype": "EventChemCoupler",
+      "reference": { "notes": "Chemistry system with events" },
+      "species": {
+        "A": { "units": "mol/mol", "default": 1e-6, "description": "Species A" },
+        "B": { "units": "mol/mol", "default": 0.5e-6, "description": "Species B" },
+        "C": { "units": "mol/mol", "default": 0.1e-6, "description": "Species C" }
+      },
+      "parameters": {
+        "k1": { "units": "1/s", "default": 0.01, "description": "Rate constant 1" },
+        "k2": { "units": "1/s", "default": 0.005, "description": "Rate constant 2" },
+        "threshold": { "units": "mol/mol", "default": 1e-7, "description": "Event threshold" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "A_to_B",
+          "substrates": [{ "species": "A", "stoichiometry": 1 }],
+          "products": [{ "species": "B", "stoichiometry": 1 }],
+          "rate": "k1"
+        },
+        {
+          "id": "R2",
+          "name": "B_to_C",
+          "substrates": [{ "species": "B", "stoichiometry": 1 }],
+          "products": [{ "species": "C", "stoichiometry": 1 }],
+          "rate": "k2"
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "EventTestModel": {
+      "reference": { "notes": "ODE model with comprehensive event testing" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0, "description": "State variable x" },
+        "y": { "type": "state", "units": "dimensionless", "default": 0.5, "description": "State variable y" },
+        "control_param": { "type": "parameter", "units": "dimensionless", "default": 1.0, "description": "Control parameter" },
+        "trigger_level": { "type": "parameter", "units": "dimensionless", "default": 0.1, "description": "Trigger level" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["control_param", { "op": "-", "args": ["x", "y"] }] }
+        }
+      ],
+      "events": {
+        "continuous": [
+          {
+            "name": "threshold_crossing_bidirectional",
+            "conditions": [{ "op": "-", "args": ["x", "trigger_level"] }],
+            "affects": [
+              { "lhs": "y", "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["y"] }, 0.1] } }
+            ],
+            "affect_neg": [
+              { "lhs": "y", "rhs": { "op": "-", "args": [{ "op": "Pre", "args": ["y"] }, 0.05] } }
+            ],
+            "root_find": true
+          },
+          {
+            "name": "complex_condition",
+            "conditions": [
+              { "op": "-", "args": [{ "op": "*", "args": ["x", "y"] }, 0.25] }
+            ],
+            "affects": [
+              { "lhs": "x", "rhs": { "op": "max", "args": [0.0, { "op": "*", "args": [{ "op": "Pre", "args": ["x"] }, 0.8] }] } }
+            ]
+          },
+          {
+            "name": "detection_only_event",
+            "conditions": [{ "op": "-", "args": ["y", 1.0] }],
+            "affects": []
+          }
+        ],
+        "discrete": [
+          {
+            "name": "condition_based_discrete",
+            "trigger": {
+              "type": "condition",
+              "condition": { "op": ">", "args": [{ "op": "+", "args": ["x", "y"] }, 1.5] }
+            },
+            "affects": [
+              { "lhs": "control_param", "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["control_param"] }, 1.2] } }
+            ],
+            "discrete_parameters": ["control_param"],
+            "reinitialize": true
+          },
+          {
+            "name": "periodic_parameter_update",
+            "trigger": {
+              "type": "periodic",
+              "interval": 100.0,
+              "offset": 10.0
+            },
+            "functional_affect": {
+              "handler_id": "periodic_update_handler",
+              "read_vars": ["x", "y"],
+              "read_params": ["control_param", "trigger_level"],
+              "modified_params": ["trigger_level"],
+              "config": {
+                "update_type": "exponential_decay",
+                "decay_factor": 0.95,
+                "min_value": 0.01
+              }
+            },
+            "discrete_parameters": ["trigger_level"]
+          },
+          {
+            "name": "preset_time_events",
+            "trigger": {
+              "type": "preset_times",
+              "times": [50.0, 150.0, 300.0, 500.0]
+            },
+            "affects": [
+              { "lhs": "x", "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["x"] }, 0.2] } },
+              { "lhs": "control_param", "rhs": { "op": "ifelse", "args": [{ "op": ">", "args": ["t", 300.0] }, 0.5, 2.0] } }
+            ],
+            "discrete_parameters": ["control_param"],
+            "description": "Preset time injections and parameter changes"
+          },
+          {
+            "name": "functional_only_event",
+            "trigger": {
+              "type": "condition",
+              "condition": { "op": "and", "args": [{ "op": ">", "args": ["x", 0.8] }, { "op": "<", "args": ["y", 0.2] }] }
+            },
+            "functional_affect": {
+              "handler_id": "complex_functional_handler",
+              "read_vars": ["x", "y"],
+              "read_params": ["control_param", "trigger_level"],
+              "modified_params": ["control_param", "trigger_level"],
+              "config": {
+                "algorithm": "adaptive_control",
+                "target_ratio": 0.5,
+                "gain": 0.1
+              }
+            },
+            "discrete_parameters": ["control_param", "trigger_level"]
+          }
+        ]
+      }
+    }
+  },
+
+  "coupling": [
+    { "type": "operator_compose", "systems": ["EventTestChem", "EventTestModel"] },
+    { "type": "variable_map", "from": "EventTestModel.x", "to": "EventTestChem.threshold", "transform": "var_to_param" },
+    { "type": "event", "name": "cross_system_event", "condition": { "op": ">", "args": ["EventTestChem.A", 0.5e-6] }, "action": "trigger_model_reset" }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T02:00:00Z",
+      "timestep": 1.0
+    },
+    "spatial": {
+      "x": { "min": 0.0, "max": 1.0, "grid_spacing": 0.1, "units": "m" }
+    },
+    "initial_conditions": { "type": "constant", "value": 1.0 },
+    "boundary_conditions": [
+      { "type": "periodic", "dimensions": ["x"] }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "event_handling",
+    "config": {
+      "base_algorithm": "Tsit5",
+      "event_detection": "root_finding",
+      "event_tolerance": 1e-8,
+      "timestep": 1.0,
+      "adaptive": true
+    }
+  }
+}
