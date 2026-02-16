@@ -19,6 +19,15 @@ export interface ComponentNode {
   description?: string;
   /** Optional reference information */
   reference?: any;
+  /** Metadata with counts for this component */
+  metadata: {
+    /** Number of variables */
+    var_count: number;
+    /** Number of equations */
+    eq_count: number;
+    /** Number of species (for reaction systems) */
+    species_count: number;
+  };
 }
 
 /** Graph edge representing a coupling relationship */
@@ -47,6 +56,20 @@ export interface ComponentGraph {
   edges: CouplingEdge[];
 }
 
+/** Graph interface with adjacency methods as specified in task */
+export interface Graph<N, E> {
+  /** All nodes in the graph */
+  nodes: N[];
+  /** All edges in the graph */
+  edges: Array<{ source: string; target: string; data: E }>;
+  /** Get adjacent nodes for a given node */
+  adjacency(node: string): string[];
+  /** Get predecessor nodes for a given node */
+  predecessors(node: string): string[];
+  /** Get successor nodes for a given node */
+  successors(node: string): string[];
+}
+
 /**
  * Extract the system graph from an ESM file.
  * Returns a directed graph where nodes are model components and edges are coupling rules.
@@ -65,7 +88,12 @@ export function component_graph(esmFile: EsmFile): ComponentGraph {
         name: id,
         type: 'model',
         description: model.reference?.notes,
-        reference: model.reference
+        reference: model.reference,
+        metadata: {
+          var_count: model.variables ? Object.keys(model.variables).length : 0,
+          eq_count: model.equations ? model.equations.length : 0,
+          species_count: 0
+        }
       });
     }
   }
@@ -78,7 +106,12 @@ export function component_graph(esmFile: EsmFile): ComponentGraph {
         name: id,
         type: 'reaction_system',
         description: reactionSystem.reference?.notes,
-        reference: reactionSystem.reference
+        reference: reactionSystem.reference,
+        metadata: {
+          var_count: 0,
+          eq_count: reactionSystem.reactions ? reactionSystem.reactions.length : 0,
+          species_count: reactionSystem.species ? Object.keys(reactionSystem.species).length : 0
+        }
       });
     }
   }
@@ -91,7 +124,12 @@ export function component_graph(esmFile: EsmFile): ComponentGraph {
         name: id,
         type: 'data_loader',
         description: dataLoader.reference?.notes,
-        reference: dataLoader.reference
+        reference: dataLoader.reference,
+        metadata: {
+          var_count: dataLoader.variables ? dataLoader.variables.length : 0,
+          eq_count: 0,
+          species_count: 0
+        }
       });
     }
   }
@@ -104,7 +142,12 @@ export function component_graph(esmFile: EsmFile): ComponentGraph {
         name: id,
         type: 'operator',
         description: operator.reference?.notes,
-        reference: operator.reference
+        reference: operator.reference,
+        metadata: {
+          var_count: 0,
+          eq_count: 0,
+          species_count: 0
+        }
       });
     }
   }
@@ -210,6 +253,67 @@ export function component_graph(esmFile: EsmFile): ComponentGraph {
   }
 
   return { nodes, edges };
+}
+
+/**
+ * Extract the system graph from an ESM file as specified in task.
+ * Returns a directed graph where nodes are model components and edges are coupling rules.
+ * Implements the Graph interface with adjacency methods.
+ */
+export function componentGraph(file: EsmFile): Graph<ComponentNode, CouplingEdge> {
+  // Reuse the existing component_graph logic to get nodes and edges
+  const componentGraphData = component_graph(file);
+
+  // Convert CouplingEdge format to Graph edge format
+  const graphEdges = componentGraphData.edges.map(edge => ({
+    source: edge.from,
+    target: edge.to,
+    data: edge
+  }));
+
+  // Build adjacency lists for efficient lookups
+  const adjacencyMap = new Map<string, Set<string>>();
+  const predecessorMap = new Map<string, Set<string>>();
+  const successorMap = new Map<string, Set<string>>();
+
+  // Initialize maps for all nodes
+  for (const node of componentGraphData.nodes) {
+    adjacencyMap.set(node.id, new Set());
+    predecessorMap.set(node.id, new Set());
+    successorMap.set(node.id, new Set());
+  }
+
+  // Build adjacency relationships from edges
+  for (const edge of graphEdges) {
+    const { source, target } = edge;
+
+    // Adjacency includes both predecessors and successors
+    adjacencyMap.get(source)?.add(target);
+    adjacencyMap.get(target)?.add(source);
+
+    // Predecessors (nodes that point TO this node)
+    predecessorMap.get(target)?.add(source);
+
+    // Successors (nodes that this node points TO)
+    successorMap.get(source)?.add(target);
+  }
+
+  return {
+    nodes: componentGraphData.nodes,
+    edges: graphEdges,
+
+    adjacency(node: string): string[] {
+      return Array.from(adjacencyMap.get(node) || []);
+    },
+
+    predecessors(node: string): string[] {
+      return Array.from(predecessorMap.get(node) || []);
+    },
+
+    successors(node: string): string[] {
+      return Array.from(successorMap.get(node) || []);
+    }
+  };
 }
 
 /**
