@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { componentGraph } from './graph.js';
-import type { EsmFile } from './types.js';
+import { componentGraph, expressionGraph } from './graph.js';
+import type { EsmFile, Model, ReactionSystem, Equation, Reaction } from './types.js';
 
 describe('componentGraph function', () => {
   const mockEsmFile: EsmFile = {
@@ -305,5 +305,314 @@ describe('componentGraph function', () => {
       expect(graph.predecessors(node.id)).toEqual([]);
       expect(graph.successors(node.id)).toEqual([]);
     }
+  });
+});
+
+describe('expressionGraph function', () => {
+  const mockModel: Model = {
+    variables: {
+      u: { type: 'state', units: 'm/s', default: 0.0 },
+      v: { type: 'parameter', units: 'm/s', default: 1.0 },
+      w: { type: 'observed', units: 'm/s', expression: { op: '+', args: ['u', 'v'] } }
+    },
+    equations: [
+      { lhs: 'du_dt', rhs: { op: '*', args: ['k1', 'u'] } },
+      { lhs: 'dv_dt', rhs: 0 }
+    ]
+  };
+
+  const mockReactionSystem: ReactionSystem = {
+    species: {
+      A: { units: 'mol/mol', default: 1e-6 },
+      B: { units: 'mol/mol', default: 2e-6 },
+      C: { units: 'mol/mol', default: 0e-6 }
+    },
+    parameters: {
+      k1: { units: 's-1', default: 1e-3 },
+      k2: { units: 's-1', default: 2e-3 }
+    },
+    reactions: [
+      {
+        reactants: [{ species: 'A', stoichiometry: 1 }],
+        products: [{ species: 'B', stoichiometry: 1 }],
+        rate: 'k1'
+      },
+      {
+        reactants: [{ species: 'B', stoichiometry: 1 }],
+        products: [{ species: 'C', stoichiometry: 1 }],
+        rate: 'k2'
+      }
+    ]
+  };
+
+  it('should return a Graph interface with correct structure for a Model', () => {
+    const graph = expressionGraph(mockModel);
+
+    // Check the graph has the required properties
+    expect(graph).toHaveProperty('nodes');
+    expect(graph).toHaveProperty('edges');
+    expect(graph).toHaveProperty('adjacency');
+    expect(graph).toHaveProperty('predecessors');
+    expect(graph).toHaveProperty('successors');
+
+    // Check methods are functions
+    expect(typeof graph.adjacency).toBe('function');
+    expect(typeof graph.predecessors).toBe('function');
+    expect(typeof graph.successors).toBe('function');
+  });
+
+  it('should extract variable nodes from a Model', () => {
+    const graph = expressionGraph(mockModel);
+
+    expect(graph.nodes.length).toBeGreaterThan(0);
+
+    // Check for state variable
+    const uNode = graph.nodes.find(n => n.name === 'u');
+    expect(uNode).toBeDefined();
+    expect(uNode?.kind).toBe('state');
+    expect(uNode?.units).toBe('m/s');
+    expect(uNode?.system).toBe('default');
+
+    // Check for parameter variable
+    const vNode = graph.nodes.find(n => n.name === 'v');
+    expect(vNode).toBeDefined();
+    expect(vNode?.kind).toBe('parameter');
+    expect(vNode?.units).toBe('m/s');
+
+    // Check for observed variable
+    const wNode = graph.nodes.find(n => n.name === 'w');
+    expect(wNode).toBeDefined();
+    expect(wNode?.kind).toBe('observed');
+    expect(wNode?.units).toBe('m/s');
+
+    // Check for derived variables from equations
+    const duDtNode = graph.nodes.find(n => n.name === 'du_dt');
+    expect(duDtNode).toBeDefined();
+    expect(duDtNode?.kind).toBe('state');
+
+    const k1Node = graph.nodes.find(n => n.name === 'k1');
+    expect(k1Node).toBeDefined();
+    expect(k1Node?.kind).toBe('parameter');
+  });
+
+  it('should create dependency edges for Model equations', () => {
+    const graph = expressionGraph(mockModel);
+
+    expect(graph.edges.length).toBeGreaterThan(0);
+
+    // Check for edge from observed variable dependency (u, v -> w)
+    const uToWEdge = graph.edges.find(e => e.source === 'u' && e.target === 'w');
+    expect(uToWEdge).toBeDefined();
+    expect(uToWEdge?.data.relationship).toBe('multiplicative');
+    expect(uToWEdge?.data.equation_index).toBe(-1); // observed variable
+
+    const vToWEdge = graph.edges.find(e => e.source === 'v' && e.target === 'w');
+    expect(vToWEdge).toBeDefined();
+    expect(vToWEdge?.data.relationship).toBe('multiplicative');
+
+    // Check for edge from equation (k1, u -> du_dt)
+    const k1ToDuDtEdge = graph.edges.find(e => e.source === 'k1' && e.target === 'du_dt');
+    expect(k1ToDuDtEdge).toBeDefined();
+    expect(k1ToDuDtEdge?.data.relationship).toBe('additive');
+    expect(k1ToDuDtEdge?.data.equation_index).toBe(0);
+
+    const uToDuDtEdge = graph.edges.find(e => e.source === 'u' && e.target === 'du_dt');
+    expect(uToDuDtEdge).toBeDefined();
+    expect(uToDuDtEdge?.data.relationship).toBe('additive');
+    expect(uToDuDtEdge?.data.equation_index).toBe(0);
+  });
+
+  it('should extract species and parameters from a ReactionSystem', () => {
+    const graph = expressionGraph(mockReactionSystem);
+
+    // Check species nodes
+    const aNode = graph.nodes.find(n => n.name === 'A');
+    expect(aNode).toBeDefined();
+    expect(aNode?.kind).toBe('species');
+    expect(aNode?.units).toBe('mol/mol');
+
+    const bNode = graph.nodes.find(n => n.name === 'B');
+    expect(bNode).toBeDefined();
+    expect(bNode?.kind).toBe('species');
+
+    const cNode = graph.nodes.find(n => n.name === 'C');
+    expect(cNode).toBeDefined();
+    expect(cNode?.kind).toBe('species');
+
+    // Check parameter nodes
+    const k1Node = graph.nodes.find(n => n.name === 'k1');
+    expect(k1Node).toBeDefined();
+    expect(k1Node?.kind).toBe('parameter');
+    expect(k1Node?.units).toBe('s-1');
+
+    const k2Node = graph.nodes.find(n => n.name === 'k2');
+    expect(k2Node).toBeDefined();
+    expect(k2Node?.kind).toBe('parameter');
+  });
+
+  it('should create rate and stoichiometric dependencies for ReactionSystem', () => {
+    const graph = expressionGraph(mockReactionSystem);
+
+    // Check rate dependencies (k1 -> A, k1 -> B for first reaction)
+    const k1ToAEdge = graph.edges.find(e => e.source === 'k1' && e.target === 'A');
+    expect(k1ToAEdge).toBeDefined();
+    expect(k1ToAEdge?.data.relationship).toBe('rate');
+    expect(k1ToAEdge?.data.equation_index).toBe(0);
+
+    const k1ToBEdge = graph.edges.find(e => e.source === 'k1' && e.target === 'B');
+    expect(k1ToBEdge).toBeDefined();
+    expect(k1ToBEdge?.data.relationship).toBe('rate');
+
+    // Check stoichiometric dependencies (A -> B for first reaction)
+    const aToBEdge = graph.edges.find(e => e.source === 'A' && e.target === 'B');
+    expect(aToBEdge).toBeDefined();
+    expect(aToBEdge?.data.relationship).toBe('stoichiometric');
+
+    // Check second reaction (k2 -> B, k2 -> C, B -> C)
+    const k2ToBEdge = graph.edges.find(e => e.source === 'k2' && e.target === 'B');
+    expect(k2ToBEdge).toBeDefined();
+    expect(k2ToBEdge?.data.relationship).toBe('rate');
+    expect(k2ToBEdge?.data.equation_index).toBe(1);
+
+    const k2ToCEdge = graph.edges.find(e => e.source === 'k2' && e.target === 'C');
+    expect(k2ToCEdge).toBeDefined();
+    expect(k2ToCEdge?.data.relationship).toBe('rate');
+
+    const bToCEdge = graph.edges.find(e => e.source === 'B' && e.target === 'C');
+    expect(bToCEdge).toBeDefined();
+    expect(bToCEdge?.data.relationship).toBe('stoichiometric');
+  });
+
+  it('should handle single Equation input', () => {
+    const equation: Equation = { lhs: 'dy_dt', rhs: { op: '*', args: ['a', 'y'] } };
+    const graph = expressionGraph(equation);
+
+    // Should have nodes for dy_dt, a, and y
+    expect(graph.nodes).toHaveLength(3);
+
+    const dyDtNode = graph.nodes.find(n => n.name === 'dy_dt');
+    expect(dyDtNode).toBeDefined();
+    expect(dyDtNode?.kind).toBe('state');
+
+    const aNode = graph.nodes.find(n => n.name === 'a');
+    expect(aNode).toBeDefined();
+    expect(aNode?.kind).toBe('parameter');
+
+    const yNode = graph.nodes.find(n => n.name === 'y');
+    expect(yNode).toBeDefined();
+    expect(yNode?.kind).toBe('parameter');
+
+    // Should have dependencies a -> dy_dt and y -> dy_dt
+    expect(graph.edges).toHaveLength(2);
+
+    const aToYEdge = graph.edges.find(e => e.source === 'a' && e.target === 'dy_dt');
+    expect(aToYEdge).toBeDefined();
+    expect(aToYEdge?.data.relationship).toBe('additive');
+
+    const yToYEdge = graph.edges.find(e => e.source === 'y' && e.target === 'dy_dt');
+    expect(yToYEdge).toBeDefined();
+    expect(yToYEdge?.data.relationship).toBe('additive');
+  });
+
+  it('should handle single Reaction input', () => {
+    const reaction: Reaction = {
+      reactants: [{ species: 'X', stoichiometry: 2 }],
+      products: [{ species: 'Y', stoichiometry: 1 }],
+      rate: { op: '*', args: ['k', 'X'] }
+    };
+    const graph = expressionGraph(reaction);
+
+    // Should have nodes for species X, Y and parameters k, X (as parameter in rate)
+    const xSpeciesNode = graph.nodes.find(n => n.name === 'X' && n.kind === 'species');
+    expect(xSpeciesNode).toBeDefined();
+
+    const ySpeciesNode = graph.nodes.find(n => n.name === 'Y' && n.kind === 'species');
+    expect(ySpeciesNode).toBeDefined();
+
+    const kParamNode = graph.nodes.find(n => n.name === 'k' && n.kind === 'parameter');
+    expect(kParamNode).toBeDefined();
+
+    // Should have rate dependencies and stoichiometric dependencies
+    const rateDeps = graph.edges.filter(e => e.data.relationship === 'rate');
+    expect(rateDeps.length).toBeGreaterThan(0);
+
+    const stoichDeps = graph.edges.filter(e => e.data.relationship === 'stoichiometric');
+    expect(stoichDeps.length).toBeGreaterThan(0);
+  });
+
+  it('should handle Expression input', () => {
+    const expr = { op: '+', args: ['x', { op: '*', args: ['y', 'z'] }] };
+    const graph = expressionGraph(expr);
+
+    // Should have nodes for expr_result, x, y, z
+    expect(graph.nodes).toHaveLength(4);
+
+    const resultNode = graph.nodes.find(n => n.name === 'expr_result');
+    expect(resultNode).toBeDefined();
+    expect(resultNode?.kind).toBe('observed');
+
+    const xNode = graph.nodes.find(n => n.name === 'x');
+    expect(xNode).toBeDefined();
+    expect(xNode?.kind).toBe('parameter');
+
+    // Should have dependencies x -> expr_result, y -> expr_result, z -> expr_result
+    expect(graph.edges).toHaveLength(3);
+
+    const xDep = graph.edges.find(e => e.source === 'x' && e.target === 'expr_result');
+    expect(xDep).toBeDefined();
+    expect(xDep?.data.relationship).toBe('multiplicative');
+  });
+
+  it('should implement adjacency methods correctly', () => {
+    const graph = expressionGraph(mockModel);
+
+    // Test adjacency (bidirectional)
+    const adjacentToU = graph.adjacency('u');
+    expect(adjacentToU.length).toBeGreaterThan(0);
+
+    // Test predecessors and successors
+    const predecessorsOfDuDt = graph.predecessors('du_dt');
+    expect(predecessorsOfDuDt).toContain('k1');
+    expect(predecessorsOfDuDt).toContain('u');
+
+    const successorsOfU = graph.successors('u');
+    expect(successorsOfU.length).toBeGreaterThan(0);
+
+    // Non-existent node should return empty arrays
+    expect(graph.adjacency('nonexistent')).toEqual([]);
+    expect(graph.predecessors('nonexistent')).toEqual([]);
+    expect(graph.successors('nonexistent')).toEqual([]);
+  });
+
+  it('should handle scoped variables in EsmFile', () => {
+    const esmFile: EsmFile = {
+      esm: '0.1.0',
+      metadata: { name: 'Test', authors: [] },
+      models: {
+        'ModelA': {
+          variables: { temp: { type: 'state', units: 'K', default: 300 } },
+          equations: [{ lhs: 'dtemp_dt', rhs: { op: '*', args: ['rate', 'temp'] } }]
+        },
+        'ModelB': {
+          variables: { press: { type: 'parameter', units: 'Pa', default: 101325 } },
+          equations: [{ lhs: 'dpress_dt', rhs: 'zero' }]
+        }
+      }
+    };
+
+    const graph = expressionGraph(esmFile);
+
+    // Check scoped variable names
+    const modelATempNode = graph.nodes.find(n => n.name === 'ModelA.temp');
+    expect(modelATempNode).toBeDefined();
+    expect(modelATempNode?.system).toBe('ModelA');
+
+    const modelBPressNode = graph.nodes.find(n => n.name === 'ModelB.press');
+    expect(modelBPressNode).toBeDefined();
+    expect(modelBPressNode?.system).toBe('ModelB');
+
+    const modelARateNode = graph.nodes.find(n => n.name === 'ModelA.rate');
+    expect(modelARateNode).toBeDefined();
+    expect(modelARateNode?.system).toBe('ModelA');
   });
 });
