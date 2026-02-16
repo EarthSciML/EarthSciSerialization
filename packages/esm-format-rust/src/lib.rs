@@ -63,7 +63,7 @@ pub use types::{
     Domain, Solver
 };
 pub use parse::{load, ParseError, SchemaValidationError};
-pub use serialize::save;
+pub use serialize::{save, save_compact};
 pub use validate::{validate, ValidationResult, StructuralError, StructuralErrorCode, SchemaError};
 pub use substitute::{substitute_in_model, substitute_in_reaction_system};
 pub use display::{to_unicode, to_latex, to_ascii};
