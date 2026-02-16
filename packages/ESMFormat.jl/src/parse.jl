@@ -369,12 +369,188 @@ end
 """
     coerce_coupling_entry(data::Any) -> CouplingEntry
 
-Coerce JSON data into CouplingEntry type (placeholder for now).
+Coerce JSON data into concrete CouplingEntry subtype based on the 'type' field.
 """
 function coerce_coupling_entry(data::Any)::CouplingEntry
-    # CouplingEntry is abstract - this needs to be implemented based on actual subtypes
-    # For now, return a dummy implementation
-    throw(ParseError("CouplingEntry parsing not yet implemented"))
+    if !(data isa AbstractDict) || !haskey(data, "type")
+        throw(ParseError("CouplingEntry must be an object with 'type' field"))
+    end
+
+    coupling_type = data["type"]
+
+    if coupling_type == "operator_compose"
+        return coerce_operator_compose(data)
+    elseif coupling_type == "couple2"
+        return coerce_couple2(data)
+    elseif coupling_type == "variable_map"
+        return coerce_variable_map(data)
+    elseif coupling_type == "operator_apply"
+        return coerce_operator_apply(data)
+    elseif coupling_type == "callback"
+        return coerce_callback(data)
+    elseif coupling_type == "event"
+        return coerce_event(data)
+    else
+        throw(ParseError("Unknown coupling type: $coupling_type"))
+    end
+end
+
+"""
+    coerce_operator_compose(data::AbstractDict) -> CouplingOperatorCompose
+
+Parse operator_compose coupling entry.
+"""
+function coerce_operator_compose(data::AbstractDict)::CouplingOperatorCompose
+    if !haskey(data, "systems")
+        throw(ParseError("operator_compose requires 'systems' field"))
+    end
+
+    systems = Vector{String}(data["systems"])
+    translate = get(data, "translate", nothing)
+    description = get(data, "description", nothing)
+
+    return CouplingOperatorCompose(systems; translate=translate, description=description)
+end
+
+"""
+    coerce_couple2(data::AbstractDict) -> CouplingCouple2
+
+Parse couple2 coupling entry.
+"""
+function coerce_couple2(data::AbstractDict)::CouplingCouple2
+    required_fields = ["systems", "coupletype_pair", "connector"]
+    for field in required_fields
+        if !haskey(data, field)
+            throw(ParseError("couple2 requires '$field' field"))
+        end
+    end
+
+    systems = Vector{String}(data["systems"])
+    coupletype_pair = Vector{String}(data["coupletype_pair"])
+    connector = Dict{String,Any}(data["connector"])
+    description = get(data, "description", nothing)
+
+    return CouplingCouple2(systems, coupletype_pair, connector; description=description)
+end
+
+"""
+    coerce_variable_map(data::AbstractDict) -> CouplingVariableMap
+
+Parse variable_map coupling entry.
+"""
+function coerce_variable_map(data::AbstractDict)::CouplingVariableMap
+    required_fields = ["from", "to", "transform"]
+    for field in required_fields
+        if !haskey(data, field)
+            throw(ParseError("variable_map requires '$field' field"))
+        end
+    end
+
+    from = String(data["from"])
+    to = String(data["to"])
+    transform = String(data["transform"])
+    factor = get(data, "factor", nothing)
+    if factor !== nothing
+        factor = Float64(factor)
+    end
+    description = get(data, "description", nothing)
+
+    return CouplingVariableMap(from, to, transform; factor=factor, description=description)
+end
+
+"""
+    coerce_operator_apply(data::AbstractDict) -> CouplingOperatorApply
+
+Parse operator_apply coupling entry.
+"""
+function coerce_operator_apply(data::AbstractDict)::CouplingOperatorApply
+    if !haskey(data, "operator")
+        throw(ParseError("operator_apply requires 'operator' field"))
+    end
+
+    operator = String(data["operator"])
+    description = get(data, "description", nothing)
+
+    return CouplingOperatorApply(operator; description=description)
+end
+
+"""
+    coerce_callback(data::AbstractDict) -> CouplingCallback
+
+Parse callback coupling entry.
+"""
+function coerce_callback(data::AbstractDict)::CouplingCallback
+    if !haskey(data, "callback_id")
+        throw(ParseError("callback requires 'callback_id' field"))
+    end
+
+    callback_id = String(data["callback_id"])
+    config = get(data, "config", nothing)
+    if config !== nothing
+        config = Dict{String,Any}(config)
+    end
+    description = get(data, "description", nothing)
+
+    return CouplingCallback(callback_id; config=config, description=description)
+end
+
+"""
+    coerce_event(data::AbstractDict) -> CouplingEvent
+
+Parse event coupling entry.
+"""
+function coerce_event(data::AbstractDict)::CouplingEvent
+    if !haskey(data, "event_type")
+        throw(ParseError("event requires 'event_type' field"))
+    end
+
+    event_type = String(data["event_type"])
+
+    # Parse conditions for continuous events
+    conditions = nothing
+    if haskey(data, "conditions")
+        conditions = [coerce_expression(c) for c in data["conditions"]]
+    end
+
+    # Parse trigger for discrete events
+    trigger = nothing
+    if haskey(data, "trigger")
+        trigger = coerce_discrete_event_trigger(data["trigger"])
+    end
+
+    # Parse affects (required)
+    if !haskey(data, "affects")
+        throw(ParseError("event requires 'affects' field"))
+    end
+    affects = [coerce_affect_equation(a) for a in data["affects"]]
+
+    # Parse optional fields
+    affect_neg = nothing
+    if haskey(data, "affect_neg") && data["affect_neg"] !== nothing
+        affect_neg = [coerce_affect_equation(a) for a in data["affect_neg"]]
+    end
+
+    discrete_parameters = nothing
+    if haskey(data, "discrete_parameters")
+        discrete_parameters = Vector{String}(data["discrete_parameters"])
+    end
+
+    root_find = get(data, "root_find", nothing)
+    if root_find !== nothing
+        root_find = String(root_find)
+    end
+
+    reinitialize = get(data, "reinitialize", nothing)
+    if reinitialize !== nothing
+        reinitialize = Bool(reinitialize)
+    end
+
+    description = get(data, "description", nothing)
+
+    return CouplingEvent(event_type, affects;
+                        conditions=conditions, trigger=trigger, affect_neg=affect_neg,
+                        discrete_parameters=discrete_parameters, root_find=root_find,
+                        reinitialize=reinitialize, description=description)
 end
 
 """
