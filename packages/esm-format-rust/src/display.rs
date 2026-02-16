@@ -1,0 +1,843 @@
+//! Display formatting implementations for ESM expressions, models, and files
+//!
+//! This module implements `std::fmt::Display` and other formatting functions
+//! for expressions with Unicode mathematical notation, chemical subscripts,
+//! LaTeX output, and summary displays for models and reaction systems.
+
+use crate::types::*;
+use std::fmt;
+
+// Element table - periodic table symbols for chemical subscript detection
+const ELEMENTS: &[&str; 118] = &[
+    "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
+    "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca",
+    "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
+    "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn",
+    "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd",
+    "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb",
+    "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th",
+    "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm",
+    "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds",
+    "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
+];
+
+// Unicode subscript digits
+const UNICODE_SUBSCRIPTS: [char; 10] = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+
+// Unicode superscript digits
+const UNICODE_SUPERSCRIPTS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+
+// Operator precedence levels (higher = tighter binding)
+const PRECEDENCE: &[(&str, i32)] = &[
+    ("+", 1), ("-", 1),
+    ("*", 2), ("/", 2),
+    ("^", 3),
+];
+
+/// Get operator precedence (higher means tighter binding)
+fn get_precedence(op: &str) -> i32 {
+    for (operator, prec) in PRECEDENCE {
+        if operator == &op {
+            return *prec;
+        }
+    }
+    0 // Default for unknown operators
+}
+
+/// Convert a string with chemical subscripts to Unicode
+fn format_chemical_subscripts(s: &str) -> String {
+    let mut result = String::new();
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        let ch = chars[i];
+
+        if ch.is_alphabetic() {
+            // Try to match 2-letter element symbol first
+            if i + 1 < chars.len() {
+                let two_letter = format!("{}{}", ch, chars[i + 1]);
+                if ELEMENTS.contains(&two_letter.as_str()) {
+                    result.push_str(&two_letter);
+                    i += 2;
+
+                    // Convert following digits to subscripts
+                    while i < chars.len() && chars[i].is_ascii_digit() {
+                        let digit = chars[i].to_digit(10).unwrap();
+                        result.push(UNICODE_SUBSCRIPTS[digit as usize]);
+                        i += 1;
+                    }
+                    continue;
+                }
+            }
+
+            // Try 1-letter element symbol
+            if ELEMENTS.contains(&ch.to_string().as_str()) {
+                result.push(ch);
+                i += 1;
+
+                // Convert following digits to subscripts
+                while i < chars.len() && chars[i].is_ascii_digit() {
+                    let digit = chars[i].to_digit(10).unwrap();
+                    result.push(UNICODE_SUBSCRIPTS[digit as usize]);
+                    i += 1;
+                }
+                continue;
+            }
+
+            // Not an element symbol, just add the character
+            result.push(ch);
+            i += 1;
+        } else {
+            result.push(ch);
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Find if there's a valid element symbol at the given position
+fn find_element_at_position(s: &str, pos: usize) -> Option<usize> {
+    // Look backwards from position to find potential element start
+    let chars: Vec<char> = s.chars().collect();
+
+    // Try 2-letter elements first (at pos-1, pos)
+    if pos > 0 && pos < chars.len() {
+        let two_letter = format!("{}{}", chars[pos-1], chars[pos]);
+        if ELEMENTS.contains(&two_letter.as_str()) {
+            return Some(pos);
+        }
+    }
+
+    // Try 1-letter elements (at pos)
+    if pos < chars.len() {
+        let one_letter = chars[pos].to_string();
+        if ELEMENTS.contains(&one_letter.as_str()) {
+            return Some(pos);
+        }
+    }
+
+    None
+}
+
+/// Format a number according to the specification
+fn format_number_unicode(n: f64) -> String {
+    let abs_n = n.abs();
+
+    // Use scientific notation for very large or very small numbers
+    if abs_n >= 10000.0 || abs_n < 0.0001 && abs_n != 0.0 {
+        let sci = format!("{:.2e}", n);
+        return format_scientific_unicode(&sci);
+    }
+
+    // For integers in normal range
+    if n.fract() == 0.0 {
+        format!("{}", n as i64)
+    } else {
+        // 1-4 significant digits in decimal notation
+        let formatted = format!("{:.4}", n);
+        // Remove trailing zeros
+        formatted.trim_end_matches('0').trim_end_matches('.').to_string()
+    }
+}
+
+/// Convert scientific notation to Unicode with superscripts
+fn format_scientific_unicode(sci: &str) -> String {
+    if let Some(e_pos) = sci.find('e') {
+        let (mantissa, exponent) = sci.split_at(e_pos);
+        let exp_part = &exponent[1..]; // Skip 'e'
+
+        let mut unicode_exp = String::new();
+        let mut exp_chars = exp_part.chars();
+
+        // Handle sign
+        if let Some(first) = exp_chars.next() {
+            match first {
+                '+' => {}, // Skip plus
+                '-' => unicode_exp.push('⁻'),
+                d if d.is_ascii_digit() => {
+                    if let Some(digit) = d.to_digit(10) {
+                        unicode_exp.push(UNICODE_SUPERSCRIPTS[digit as usize]);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Convert remaining digits
+        for ch in exp_chars {
+            if let Some(digit) = ch.to_digit(10) {
+                unicode_exp.push(UNICODE_SUPERSCRIPTS[digit as usize]);
+            }
+        }
+
+        format!("{}×10{}", mantissa, unicode_exp)
+    } else {
+        sci.to_string()
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_unicode())
+    }
+}
+
+impl Expr {
+    /// Convert expression to Unicode mathematical notation
+    pub fn to_unicode(&self) -> String {
+        self.to_unicode_with_precedence(0)
+    }
+
+    fn to_unicode_with_precedence(&self, parent_prec: i32) -> String {
+        match self {
+            Expr::Number(n) => format_number_unicode(*n),
+            Expr::Variable(name) => format_chemical_subscripts(name),
+            Expr::Operator(node) => {
+                format_operator_unicode(&node.op, &node.args, &node.wrt, parent_prec)
+            }
+        }
+    }
+}
+
+fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent_prec: i32) -> String {
+    let op_prec = get_precedence(op);
+    let needs_parens = op_prec > 0 && op_prec <= parent_prec;
+
+    let result = match op {
+        "+" => {
+            if args.len() == 2 {
+                format!("{} + {}",
+                    args[0].to_unicode_with_precedence(op_prec),
+                    args[1].to_unicode_with_precedence(op_prec))
+            } else {
+                format!("+({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "-" => {
+            if args.len() == 1 {
+                format!("−{}", args[0].to_unicode_with_precedence(op_prec))
+            } else if args.len() == 2 {
+                // Special handling for subtraction to use minus sign
+                format!("{} − {}",
+                    args[0].to_unicode_with_precedence(op_prec),
+                    args[1].to_unicode_with_precedence(op_prec + 1))
+            } else {
+                format!("−({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "*" => {
+            if args.len() == 2 {
+                format!("{}·{}",
+                    args[0].to_unicode_with_precedence(op_prec),
+                    args[1].to_unicode_with_precedence(op_prec))
+            } else {
+                format!("·({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "/" => {
+            if args.len() == 2 {
+                format!("{}/{}",
+                    args[0].to_unicode_with_precedence(op_prec),
+                    args[1].to_unicode_with_precedence(op_prec + 1))
+            } else {
+                format!("÷({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "^" => {
+            if args.len() == 2 {
+                if let Expr::Number(n) = &args[1] {
+                    if *n == 2.0 {
+                        format!("{}²", args[0].to_unicode_with_precedence(op_prec))
+                    } else if *n == 3.0 {
+                        format!("{}³", args[0].to_unicode_with_precedence(op_prec))
+                    } else {
+                        format!("{}^{}",
+                            args[0].to_unicode_with_precedence(op_prec),
+                            args[1].to_unicode_with_precedence(op_prec + 1))
+                    }
+                } else {
+                    format!("{}^{}",
+                        args[0].to_unicode_with_precedence(op_prec),
+                        args[1].to_unicode_with_precedence(op_prec + 1))
+                }
+            } else {
+                format!("^({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "D" => {
+            // Derivative operator
+            if let Some(wrt_var) = wrt {
+                if args.len() == 1 {
+                    format!("∂{}/∂{}",
+                        args[0].to_unicode_with_precedence(0),
+                        format_chemical_subscripts(wrt_var))
+                } else {
+                    format!("D({})", args.iter()
+                        .map(|arg| arg.to_unicode_with_precedence(0))
+                        .collect::<Vec<_>>().join(", "))
+                }
+            } else {
+                format!("D({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "grad" => {
+            // Gradient - use dim field if available
+            if args.len() == 1 {
+                format!("∂{}/∂y", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("grad({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "exp" => {
+            if args.len() == 1 {
+                format!("exp({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("exp({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "ifelse" => {
+            if args.len() == 3 {
+                format!("ifelse({}, {}, {})",
+                    args[0].to_unicode_with_precedence(0),
+                    args[1].to_unicode_with_precedence(0),
+                    args[2].to_unicode_with_precedence(0))
+            } else {
+                format!("ifelse({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        ">" => {
+            if args.len() == 2 {
+                format!("{} > {}",
+                    args[0].to_unicode_with_precedence(0),
+                    args[1].to_unicode_with_precedence(0))
+            } else {
+                format!(">({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        _ => {
+            format!("{}({})", op, args.iter()
+                .map(|arg| arg.to_unicode_with_precedence(0))
+                .collect::<Vec<_>>().join(", "))
+        }
+    };
+
+    if needs_parens {
+        format!("({})", result)
+    } else {
+        result
+    }
+}
+
+/// Convert an expression to Unicode mathematical notation
+pub fn to_unicode(expr: &Expr) -> String {
+    expr.to_unicode()
+}
+
+/// Convert an expression to LaTeX notation
+pub fn to_latex(expr: &Expr) -> String {
+    match expr {
+        Expr::Number(n) => {
+            if n.fract() == 0.0 {
+                format!("{}", *n as i64)
+            } else {
+                let abs_n = n.abs();
+                if abs_n >= 0.0001 && abs_n < 10000.0 {
+                    let formatted = format!("{:.4}", n);
+                    formatted.trim_end_matches('0').trim_end_matches('.').to_string()
+                } else {
+                    format!("{:.2} \\times 10^{{{}}}",
+                        n / 10_f64.powf(n.abs().log10().floor()),
+                        n.abs().log10().floor() as i32)
+                }
+            }
+        },
+        Expr::Variable(name) => {
+            if name.len() > 1 || name.chars().any(|c| c.is_ascii_digit()) {
+                format!("\\mathrm{{{}}}", format_chemical_latex(name))
+            } else {
+                name.clone()
+            }
+        },
+        Expr::Operator(node) => {
+            format_operator_latex(&node.op, &node.args, &node.wrt)
+        }
+    }
+}
+
+fn format_chemical_latex(s: &str) -> String {
+    let mut result = String::new();
+    let mut chars = s.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch.is_alphabetic() {
+            result.push(ch);
+
+            // Check if this starts an element symbol and convert following digits
+            let current_pos = result.len() - 1;
+            if find_element_at_position(&result, current_pos).is_some() {
+                // Collect consecutive digits after the element
+                let mut digits = String::new();
+                while let Some(&next_ch) = chars.peek() {
+                    if next_ch.is_ascii_digit() {
+                        digits.push(chars.next().unwrap());
+                    } else {
+                        break;
+                    }
+                }
+
+                // Convert digits to LaTeX subscripts
+                if !digits.is_empty() {
+                    result.push('_');
+                    if digits.len() > 1 {
+                        result.push('{');
+                        result.push_str(&digits);
+                        result.push('}');
+                    } else {
+                        result.push_str(&digits);
+                    }
+                }
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+
+    result
+}
+
+fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> String {
+    match op {
+        "+" => {
+            if args.len() == 2 {
+                format!("{} + {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("+({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "-" => {
+            if args.len() == 1 {
+                format!("-{}", to_latex(&args[0]))
+            } else if args.len() == 2 {
+                format!("{} - {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("-({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "*" => {
+            if args.len() == 2 {
+                format!("{} \\cdot {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("\\cdot({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "/" => {
+            if args.len() == 2 {
+                format!("\\frac{{{}}}{{{}}}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("\\div({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "^" => {
+            if args.len() == 2 {
+                format!("{{{}}}^{{{}}}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("^({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "D" => {
+            if let Some(wrt_var) = wrt {
+                if args.len() == 1 {
+                    format!("\\frac{{\\partial {}}}{{\\partial {}}}",
+                        to_latex(&args[0]), wrt_var)
+                } else {
+                    format!("D({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+                }
+            } else {
+                format!("D({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "grad" => {
+            if args.len() == 1 {
+                format!("\\frac{{\\partial {}}}{{\\partial y}}", to_latex(&args[0]))
+            } else {
+                format!("\\grad({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "exp" => {
+            if args.len() == 1 {
+                if matches!(&args[0], Expr::Operator(_)) {
+                    format!("\\exp\\left({}\\right)", to_latex(&args[0]))
+                } else {
+                    format!("\\exp({})", to_latex(&args[0]))
+                }
+            } else {
+                format!("\\exp({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "ifelse" => {
+            if args.len() == 3 {
+                format!("\\begin{{cases}} {} & \\text{{if }} {} \\\\\\\\ {} & \\text{{otherwise}} \\end{{cases}}",
+                    to_latex(&args[1]), to_latex(&args[0]), to_latex(&args[2]))
+            } else {
+                format!("\\mathrm{{ifelse}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "sin" | "cos" | "tan" | "log" | "sqrt" => {
+            if args.len() == 1 {
+                format!("\\{}({})", op, to_latex(&args[0]))
+            } else {
+                format!("\\{}({})", op, args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        _ => {
+            format!("\\mathrm{{{}}}({})", op, args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        }
+    }
+}
+
+/// Convert an expression to ASCII representation
+pub fn to_ascii(expr: &Expr) -> String {
+    match expr {
+        Expr::Number(n) => {
+            if n.fract() == 0.0 {
+                format!("{}", *n as i64)
+            } else {
+                let abs_n = n.abs();
+                if abs_n >= 0.0001 && abs_n < 10000.0 {
+                    let formatted = format!("{:.4}", n);
+                    formatted.trim_end_matches('0').trim_end_matches('.').to_string()
+                } else {
+                    format!("{:.2e}", n)
+                }
+            }
+        },
+        Expr::Variable(name) => name.clone(),
+        Expr::Operator(node) => {
+            format_operator_ascii(&node.op, &node.args, &node.wrt)
+        }
+    }
+}
+
+fn format_operator_ascii(op: &str, args: &[Expr], wrt: &Option<String>) -> String {
+    match op {
+        "+" => {
+            if args.len() == 2 {
+                format!("{} + {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("+({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "-" => {
+            if args.len() == 1 {
+                format!("-{}", to_ascii(&args[0]))
+            } else if args.len() == 2 {
+                format!("{} - {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("-({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "*" => {
+            if args.len() == 2 {
+                format!("{} * {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("*({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "/" => {
+            if args.len() == 2 {
+                format!("{} / {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("/({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "^" => {
+            if args.len() == 2 {
+                format!("{}^{}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("^({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "D" => {
+            if let Some(wrt_var) = wrt {
+                if args.len() == 1 {
+                    format!("D({})/D{}", to_ascii(&args[0]), wrt_var)
+                } else {
+                    format!("D({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+                }
+            } else {
+                format!("D({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "grad" => {
+            if args.len() == 1 {
+                format!("d({})/dy", to_ascii(&args[0]))
+            } else {
+                format!("grad({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        _ => {
+            format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        }
+    }
+}
+
+impl fmt::Display for Model {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = self.name.as_deref().unwrap_or("Unnamed");
+        let param_count = self.variables.iter().filter(|(_, v)| matches!(v.var_type, VariableType::Parameter)).count();
+        let eq_count = self.equations.len();
+
+        writeln!(f, "  {} ({} parameters, {} equation{})",
+            name, param_count, eq_count, if eq_count == 1 { "" } else { "s" })?;
+
+        // Display equations
+        for eq in &self.equations {
+            writeln!(f, "    {} = {}", eq.lhs, eq.rhs)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for ReactionSystem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = self.name.as_deref().unwrap_or("Unnamed");
+        let species_count = self.species.len();
+        let param_count = 0; // TODO: Count parameters if they exist
+        let reaction_count = self.reactions.len();
+
+        writeln!(f, "  {} ({} species, {} parameters, {} reaction{})",
+            name, species_count, param_count, reaction_count,
+            if reaction_count == 1 { "" } else { "s" })?;
+
+        // Display reactions
+        for (i, reaction) in self.reactions.iter().enumerate() {
+            let default_name = format!("R{}", i + 1);
+            let reaction_name = reaction.name.as_deref().unwrap_or(&default_name);
+
+            // Format substrates
+            let substrates = reaction.substrates.iter()
+                .map(|s| {
+                    if let Some(coeff) = s.coefficient {
+                        if coeff == 1.0 {
+                            format_chemical_subscripts(&s.species)
+                        } else {
+                            format!("{}{}", coeff, format_chemical_subscripts(&s.species))
+                        }
+                    } else {
+                        format_chemical_subscripts(&s.species)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" + ");
+
+            // Format products
+            let products = reaction.products.iter()
+                .map(|p| {
+                    if let Some(coeff) = p.coefficient {
+                        if coeff == 1.0 {
+                            format_chemical_subscripts(&p.species)
+                        } else {
+                            format!("{}{}", coeff, format_chemical_subscripts(&p.species))
+                        }
+                    } else {
+                        format_chemical_subscripts(&p.species)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" + ");
+
+            writeln!(f, "    {}: {} → {}    rate: {}",
+                reaction_name, substrates, products, reaction.rate)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for EsmFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = self.metadata.name.as_deref().unwrap_or("Unnamed");
+        let description = self.metadata.description.as_deref().unwrap_or("");
+        let authors = self.metadata.authors.as_ref()
+            .map(|a| a.join(", "))
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        writeln!(f, "ESM v{}: {}", self.esm, name)?;
+        if !description.is_empty() {
+            writeln!(f, "  \"{}\"", description)?;
+        }
+        writeln!(f, "  Authors: {}", authors)?;
+        writeln!(f)?;
+
+        // Display reaction systems
+        if let Some(ref reaction_systems) = self.reaction_systems {
+            if !reaction_systems.is_empty() {
+                writeln!(f, "  Reaction Systems:")?;
+                for system in reaction_systems.values() {
+                    write!(f, "{}", system)?;
+                    writeln!(f)?;
+                }
+            }
+        }
+
+        // Display models
+        if let Some(ref models) = self.models {
+            if !models.is_empty() {
+                writeln!(f, "  Models:")?;
+                for model in models.values() {
+                    write!(f, "{}", model)?;
+                    writeln!(f)?;
+                }
+            }
+        }
+
+        // Display data loaders
+        if let Some(ref data_loaders) = self.data_loaders {
+            if !data_loaders.is_empty() {
+                writeln!(f, "  Data Loaders:")?;
+                for (name, loader) in data_loaders {
+                    writeln!(f, "    {}: {} ({})", name,
+                        loader.description.as_deref().unwrap_or("No description"),
+                        loader.loader_type)?;
+                }
+                writeln!(f)?;
+            }
+        }
+
+        // Display coupling
+        if let Some(ref coupling) = self.coupling {
+            if !coupling.is_empty() {
+                writeln!(f, "  Coupling:")?;
+                for (i, entry) in coupling.iter().enumerate() {
+                    match entry {
+                        CouplingEntry::OperatorCompose { source, target, .. } => {
+                            writeln!(f, "    {}. operator_compose: {} + {}", i + 1, source, target)?;
+                        },
+                        CouplingEntry::VariableMap { source, target, mappings } => {
+                            for mapping in mappings {
+                                writeln!(f, "    {}. variable_map: {}.{} → {}.{}",
+                                    i + 1, source, mapping.source_var, target, mapping.target_var)?;
+                            }
+                        },
+                        _ => {
+                            writeln!(f, "    {}. {:?}", i + 1, entry)?;
+                        }
+                    }
+                }
+                writeln!(f)?;
+            }
+        }
+
+        // Display domain info (simplified)
+        if let Some(_domain) = &self.domain {
+            writeln!(f, "  Domain: [Domain information]")?;
+        }
+
+        // Display solver info
+        if let Some(ref solver) = self.solver {
+            if let Some(ref algorithm) = solver.algorithm {
+                writeln!(f, "  Solver: {}", algorithm)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::ExpressionNode;
+
+    #[test]
+    fn test_chemical_subscripts() {
+        assert_eq!(format_chemical_subscripts("O3"), "O₃");
+        assert_eq!(format_chemical_subscripts("NO2"), "NO₂");
+        assert_eq!(format_chemical_subscripts("CH4"), "CH₄");
+        assert_eq!(format_chemical_subscripts("C2H6"), "C₂H₆");
+        assert_eq!(format_chemical_subscripts("H2O2"), "H₂O₂");
+    }
+
+    #[test]
+    fn test_number_formatting_unicode() {
+        assert_eq!(format_number_unicode(42.0), "42");
+        assert_eq!(format_number_unicode(3.14), "3.14");
+        assert_eq!(format_number_unicode(1.8e-12), "1.80×10⁻¹²");
+        assert_eq!(format_number_unicode(2.46e19), "2.46×10¹⁹");
+    }
+
+    #[test]
+    fn test_scientific_unicode() {
+        assert_eq!(format_scientific_unicode("1.80e-12"), "1.80×10⁻¹²");
+        assert_eq!(format_scientific_unicode("2.46e+19"), "2.46×10¹⁹");
+    }
+
+    #[test]
+    fn test_expr_display() {
+        let expr = Expr::Variable("O3".to_string());
+        assert_eq!(format!("{}", expr), "O₃");
+
+        let expr = Expr::Number(1.8e-12);
+        assert_eq!(format!("{}", expr), "1.80×10⁻¹²");
+    }
+
+    #[test]
+    fn test_operator_precedence() {
+        let add = Expr::Operator(ExpressionNode {
+            op: "+".to_string(),
+            args: vec![
+                Expr::Operator(ExpressionNode {
+                    op: "*".to_string(),
+                    args: vec![Expr::Variable("a".to_string()), Expr::Variable("b".to_string())],
+                    wrt: None,
+                    dim: None,
+                }),
+                Expr::Variable("c".to_string()),
+            ],
+            wrt: None,
+            dim: None,
+        });
+        assert_eq!(format!("{}", add), "a·b + c");
+
+        let mul = Expr::Operator(ExpressionNode {
+            op: "*".to_string(),
+            args: vec![
+                Expr::Operator(ExpressionNode {
+                    op: "+".to_string(),
+                    args: vec![Expr::Variable("a".to_string()), Expr::Variable("b".to_string())],
+                    wrt: None,
+                    dim: None,
+                }),
+                Expr::Variable("c".to_string()),
+            ],
+            wrt: None,
+            dim: None,
+        });
+        assert_eq!(format!("{}", mul), "(a + b)·c");
+    }
+}
