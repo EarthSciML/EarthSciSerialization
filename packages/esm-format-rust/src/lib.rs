@@ -61,7 +61,7 @@ pub use types::{
 };
 pub use parse::{load, ParseError, SchemaValidationError};
 pub use serialize::save;
-pub use validate::{validate, ValidationError, ValidationResult};
+pub use validate::{validate, ValidationResult, StructuralError, StructuralErrorCode, SchemaError};
 pub use substitute::{substitute_in_model, substitute_in_reaction_system};
 pub use display::{to_unicode, to_latex, to_ascii};
 pub use expression::{free_variables, free_parameters, contains, evaluate, simplify, substitute};
