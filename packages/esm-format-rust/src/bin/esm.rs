@@ -5,7 +5,7 @@
 #[cfg(feature = "cli")]
 use clap::{Parser, Subcommand};
 #[cfg(feature = "cli")]
-use esm_format::{load, save, validate, component_graph, component_exists};
+use esm_format::{load, save, save_compact, validate, component_graph, component_exists};
 #[cfg(feature = "cli")]
 use std::fs;
 #[cfg(feature = "cli")]
@@ -470,7 +470,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let output_content = match format.as_str() {
                 "json" => save(&esm_file)?,
-                "compact-json" => esm_format::serialize::save_compact(&esm_file)?,
+                "compact-json" => save_compact(&esm_file)?,
                 _ => {
                     eprintln!("Unsupported format: {}", format);
                     std::process::exit(1);
