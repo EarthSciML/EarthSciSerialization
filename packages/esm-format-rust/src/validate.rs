@@ -115,8 +115,8 @@ fn validate_model(
 ) {
     // Create a map of defined variables
     let mut defined_vars = std::collections::HashSet::new();
-    for var in &model.variables {
-        defined_vars.insert(&var.name);
+    for (var_name, _var) in &model.variables {
+        defined_vars.insert(var_name);
     }
 
     // Check that all equation references are defined
@@ -248,17 +248,17 @@ mod tests {
     #[test]
     fn test_validate_model_with_undefined_variable() {
         let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), ModelVariable {
+            var_type: VariableType::State,
+            units: None,
+            default: None,
+            description: None,
+        });
+
         models.insert("test".to_string(), Model {
             name: Some("Test Model".to_string()),
-            variables: vec![
-                ModelVariable {
-                    name: "x".to_string(),
-                    var_type: VariableType::State,
-                    units: None,
-                    default: None,
-                    description: None,
-                }
-            ],
+            variables,
             equations: vec![
                 Equation {
                     lhs: Expr::Variable("d(x)/dt".to_string()),
