@@ -14,6 +14,8 @@ export { EquationEditor, type EquationEditorProps } from './components/EquationE
 export { ModelEditor, type ModelEditorProps } from './components/ModelEditor';
 export { ReactionEditor, type ReactionEditorProps } from './components/ReactionEditor';
 export { CouplingGraph, type CouplingGraphProps } from './components/CouplingGraph';
+export { ValidationPanel, type ValidationPanelProps } from './components/ValidationPanel';
+export { FileSummary, type FileSummaryProps } from './components/FileSummary';
 
 // Variable highlighting primitives
 export {
