@@ -1,0 +1,238 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DiscreteEventExamples",
+    "description": "Test fixtures for discrete event handling (periodic, preset, threshold)",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "PeriodicDosing": {
+      "reference": { "notes": "Periodic drug dosing with clearance" },
+      "variables": {
+        "C": { "type": "state", "units": "mg/L", "default": 0.0, "description": "Drug concentration" }
+      },
+      "parameters": {
+        "dose": { "units": "mg", "default": 100.0, "description": "Dose amount" },
+        "V": { "units": "L", "default": 70.0, "description": "Volume of distribution" },
+        "k": { "units": "1/h", "default": 0.1, "description": "Elimination rate constant" },
+        "period": { "units": "h", "default": 8.0, "description": "Dosing interval" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["C"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [{ "op": "-", "args": ["k"] }, "C"] }
+        }
+      ],
+      "events": [
+        {
+          "type": "discrete",
+          "trigger": {
+            "type": "periodic",
+            "period": "period",
+            "phase": 0.0
+          },
+          "affect": [
+            {
+              "variable": "C",
+              "value": { "op": "+", "args": ["C", { "op": "/", "args": ["dose", "V"] }] }
+            }
+          ]
+        }
+      ]
+    },
+
+    "PresetTreatment": {
+      "reference": { "notes": "Treatment at specific preset times" },
+      "variables": {
+        "infection": { "type": "state", "units": "1", "default": 1.0, "description": "Infection level" },
+        "immunity": { "type": "state", "units": "1", "default": 0.0, "description": "Immune response" }
+      },
+      "parameters": {
+        "growth_rate": { "units": "1/day", "default": 0.5, "description": "Infection growth rate" },
+        "decay_rate": { "units": "1/day", "default": 0.1, "description": "Immunity decay rate" },
+        "treatment_strength": { "units": "1", "default": 0.8, "description": "Treatment effectiveness" },
+        "immune_boost": { "units": "1", "default": 0.3, "description": "Immunity boost from treatment" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["infection"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              "growth_rate",
+              "infection",
+              { "op": "-", "args": [1, "immunity"] }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["immunity"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [{ "op": "-", "args": ["decay_rate"] }, "immunity"] }
+        }
+      ],
+      "events": [
+        {
+          "type": "discrete",
+          "trigger": {
+            "type": "preset_times",
+            "times": [2.0, 5.0, 10.0, 15.0]
+          },
+          "affect": [
+            {
+              "variable": "infection",
+              "value": { "op": "*", "args": ["infection", { "op": "-", "args": [1, "treatment_strength"] }] }
+            },
+            {
+              "variable": "immunity",
+              "value": { "op": "+", "args": ["immunity", "immune_boost"] }
+            }
+          ]
+        }
+      ]
+    },
+
+    "ThresholdSampling": {
+      "reference": { "notes": "Sample system state when thresholds are crossed" },
+      "variables": {
+        "temperature": { "type": "state", "units": "°C", "default": 20.0, "description": "System temperature" },
+        "sample_count": { "type": "discrete", "units": "1", "default": 0, "description": "Number of samples taken" }
+      },
+      "parameters": {
+        "heating_rate": { "units": "°C/min", "default": 2.0, "description": "Heating rate" },
+        "cooling_rate": { "units": "°C/min", "default": -1.0, "description": "Cooling rate" },
+        "switch_temp": { "units": "°C", "default": 80.0, "description": "Temperature switch point" },
+        "sample_threshold": { "units": "°C", "default": 50.0, "description": "Sampling threshold" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": {
+            "op": "ifelse", "args": [
+              { "op": "<", "args": ["temperature", "switch_temp"] },
+              "heating_rate",
+              "cooling_rate"
+            ]
+          }
+        }
+      ],
+      "events": [
+        {
+          "type": "discrete",
+          "trigger": {
+            "type": "threshold",
+            "variable": "temperature",
+            "value": "sample_threshold",
+            "direction": "up"
+          },
+          "affect": [
+            {
+              "variable": "sample_count",
+              "value": { "op": "+", "args": ["sample_count", 1] }
+            }
+          ]
+        },
+        {
+          "type": "discrete",
+          "trigger": {
+            "type": "threshold",
+            "variable": "temperature",
+            "value": "sample_threshold",
+            "direction": "down"
+          },
+          "affect": [
+            {
+              "variable": "sample_count",
+              "value": { "op": "+", "args": ["sample_count", 1] }
+            }
+          ]
+        }
+      ]
+    },
+
+    "ConditionalEvent": {
+      "reference": { "notes": "Event triggered by complex logical conditions" },
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 0.0, "description": "System state x" },
+        "y": { "type": "state", "units": "1", "default": 5.0, "description": "System state y" },
+        "active": { "type": "discrete", "units": "1", "default": true, "description": "System activity flag" }
+      },
+      "parameters": {
+        "rate_x": { "units": "1/s", "default": 1.0, "description": "Rate constant for x" },
+        "rate_y": { "units": "1/s", "default": -0.5, "description": "Rate constant for y" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": {
+            "op": "ifelse", "args": [
+              "active",
+              "rate_x",
+              0
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": {
+            "op": "ifelse", "args": [
+              "active",
+              "rate_y",
+              0
+            ]
+          }
+        }
+      ],
+      "events": [
+        {
+          "type": "discrete",
+          "trigger": {
+            "type": "condition",
+            "condition": {
+              "op": "and", "args": [
+                { "op": ">", "args": ["x", 3] },
+                { "op": "<", "args": ["y", 2] },
+                "active"
+              ]
+            }
+          },
+          "affect": [
+            { "variable": "active", "value": false },
+            { "variable": "x", "value": 0 },
+            { "variable": "y", "value": 5 }
+          ]
+        },
+        {
+          "type": "discrete",
+          "trigger": {
+            "type": "condition",
+            "condition": {
+              "op": "and", "args": [
+                { "op": "not", "args": ["active"] },
+                { "op": ">", "args": [{ "op": "+", "args": ["x", "y"] }, 4] }
+              ]
+            }
+          },
+          "affect": [
+            { "variable": "active", "value": true }
+          ]
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T24:00:00Z" },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "Tsit5",
+      "adaptive": true,
+      "event_handling": "precise_callbacks"
+    }
+  }
+}
