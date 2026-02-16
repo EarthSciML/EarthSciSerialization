@@ -17,6 +17,7 @@ using JSONSchema
 include("types.jl")
 include("error_handling.jl")
 include("validate.jl")
+include("coupled.jl")  # Include before parse.jl and serialize.jl since they use coupling types
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
@@ -41,6 +42,11 @@ export
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger,
     # Data and operator types
     DataLoader, Operator, CouplingEntry,
+    # Concrete coupling types
+    CouplingOperatorCompose, CouplingCouple2, CouplingVariableMap,
+    CouplingOperatorApply, CouplingCallback, CouplingEvent,
+    # Coupled system
+    MockCoupledSystem,
     # System types
     Domain, Solver, Reference, Metadata, EsmFile,
     # Solver types and enums
@@ -55,6 +61,8 @@ export
     serialize_solver, serialize_solver_configuration, coerce_solver, coerce_solver_configuration,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
+    # Coupling serialization functions
+    serialize_coupling_entry, coerce_coupling_entry,
     # Structural validation
     StructuralError, ValidationResult, validate_structural, validate,
     # Expression operations

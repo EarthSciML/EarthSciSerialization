@@ -910,47 +910,7 @@ end
 # Coupled System Assembly
 # ========================================
 
-"""
-    to_coupled_system(file::EsmFile) -> Any
-
-Convert an ESM file with coupling rules into a coupled system.
-This implements the Full tier capability for coupled system assembly
-handling operator_compose, couple2, variable_map, and operator_apply.
-"""
-function to_coupled_system(file::EsmFile)
-    # This is a complex function that would require EarthSciMLBase.jl
-    # For now, we'll provide a placeholder that demonstrates the interface
-
-    systems = Dict()
-
-    # Convert individual systems
-    if file.models !== nothing
-        for (name, model) in file.models
-            systems[name] = to_mtk_system(model, name)
-        end
-    end
-
-    if file.reaction_systems !== nothing
-        for (name, rsys) in file.reaction_systems
-            systems[name] = to_catalyst_system(rsys, name)
-        end
-    end
-
-    # Apply coupling rules in order
-    for coupling in file.coupling
-        if coupling.type == "operator_compose"
-            # This would implement operator composition
-            # Requires EarthSciMLBase.jl for full implementation
-            @info "Processing operator_compose coupling: $(coupling.systems)"
-        elseif coupling.type == "variable_map"
-            # This would implement variable mapping
-            @info "Processing variable_map coupling: $(coupling.from) -> $(coupling.to)"
-        end
-        # Add other coupling types as needed
-    end
-
-    return systems
-end
+# Note: to_coupled_system is now implemented in coupled.jl
 
 # ========================================
 # Enhanced Support Structures

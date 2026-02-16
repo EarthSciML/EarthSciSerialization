@@ -287,11 +287,155 @@ end
 """
     serialize_coupling_entry(entry::CouplingEntry) -> Dict{String,Any}
 
-Serialize CouplingEntry to JSON-compatible format (placeholder).
+Serialize CouplingEntry to JSON-compatible format based on concrete type.
 """
 function serialize_coupling_entry(entry::CouplingEntry)::Dict{String,Any}
-    # CouplingEntry is abstract - this needs implementation based on subtypes
-    throw(ArgumentError("CouplingEntry serialization not yet implemented"))
+    if entry isa CouplingOperatorCompose
+        return serialize_operator_compose(entry)
+    elseif entry isa CouplingCouple2
+        return serialize_couple2(entry)
+    elseif entry isa CouplingVariableMap
+        return serialize_variable_map(entry)
+    elseif entry isa CouplingOperatorApply
+        return serialize_operator_apply(entry)
+    elseif entry isa CouplingCallback
+        return serialize_callback(entry)
+    elseif entry isa CouplingEvent
+        return serialize_event(entry)
+    else
+        throw(ArgumentError("Unknown CouplingEntry type: $(typeof(entry))"))
+    end
+end
+
+"""
+    serialize_operator_compose(entry::CouplingOperatorCompose) -> Dict{String,Any}
+
+Serialize operator_compose coupling entry.
+"""
+function serialize_operator_compose(entry::CouplingOperatorCompose)::Dict{String,Any}
+    result = Dict{String,Any}("type" => "operator_compose", "systems" => entry.systems)
+
+    if entry.translate !== nothing
+        result["translate"] = entry.translate
+    end
+    if entry.description !== nothing
+        result["description"] = entry.description
+    end
+
+    return result
+end
+
+"""
+    serialize_couple2(entry::CouplingCouple2) -> Dict{String,Any}
+
+Serialize couple2 coupling entry.
+"""
+function serialize_couple2(entry::CouplingCouple2)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "type" => "couple2",
+        "systems" => entry.systems,
+        "coupletype_pair" => entry.coupletype_pair,
+        "connector" => entry.connector
+    )
+
+    if entry.description !== nothing
+        result["description"] = entry.description
+    end
+
+    return result
+end
+
+"""
+    serialize_variable_map(entry::CouplingVariableMap) -> Dict{String,Any}
+
+Serialize variable_map coupling entry.
+"""
+function serialize_variable_map(entry::CouplingVariableMap)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "type" => "variable_map",
+        "from" => entry.from,
+        "to" => entry.to,
+        "transform" => entry.transform
+    )
+
+    if entry.factor !== nothing
+        result["factor"] = entry.factor
+    end
+    if entry.description !== nothing
+        result["description"] = entry.description
+    end
+
+    return result
+end
+
+"""
+    serialize_operator_apply(entry::CouplingOperatorApply) -> Dict{String,Any}
+
+Serialize operator_apply coupling entry.
+"""
+function serialize_operator_apply(entry::CouplingOperatorApply)::Dict{String,Any}
+    result = Dict{String,Any}("type" => "operator_apply", "operator" => entry.operator)
+
+    if entry.description !== nothing
+        result["description"] = entry.description
+    end
+
+    return result
+end
+
+"""
+    serialize_callback(entry::CouplingCallback) -> Dict{String,Any}
+
+Serialize callback coupling entry.
+"""
+function serialize_callback(entry::CouplingCallback)::Dict{String,Any}
+    result = Dict{String,Any}("type" => "callback", "callback_id" => entry.callback_id)
+
+    if entry.config !== nothing
+        result["config"] = entry.config
+    end
+    if entry.description !== nothing
+        result["description"] = entry.description
+    end
+
+    return result
+end
+
+"""
+    serialize_event(entry::CouplingEvent) -> Dict{String,Any}
+
+Serialize event coupling entry.
+"""
+function serialize_event(entry::CouplingEvent)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "type" => "event",
+        "event_type" => entry.event_type,
+        "affects" => [serialize_affect_equation(a) for a in entry.affects]
+    )
+
+    if entry.conditions !== nothing
+        result["conditions"] = [serialize_expression(c) for c in entry.conditions]
+    end
+    if entry.trigger !== nothing
+        result["trigger"] = serialize_discrete_event_trigger(entry.trigger)
+    end
+    if entry.affect_neg !== nothing
+        result["affect_neg"] = [serialize_affect_equation(a) for a in entry.affect_neg]
+    end
+    if entry.discrete_parameters !== nothing
+        result["discrete_parameters"] = entry.discrete_parameters
+    end
+    if entry.root_find !== nothing
+        result["root_find"] = entry.root_find
+    end
+    if entry.reinitialize !== nothing
+        result["reinitialize"] = entry.reinitialize
+    end
+    if entry.description !== nothing
+        result["description"] = entry.description
+    end
+
+    return result
 end
 
 """
