@@ -1,0 +1,170 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "HierarchicalScopedReferences",
+    "description": "Test fixtures for hierarchical scoped reference resolution (A.B.C.variable)",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "ParentSystem": {
+      "reference": { "notes": "Top-level system containing nested subsystems" },
+      "variables": {
+        "global_parameter": { "type": "parameter", "units": "1", "default": 1.0, "description": "Global scaling parameter" },
+        "system_output": { "type": "state", "units": "units", "default": 0.0, "description": "Combined system output" }
+      },
+      "subsystems": {
+        "SubsystemA": {
+          "reference": { "notes": "First nested subsystem" },
+          "variables": {
+            "local_state": { "type": "state", "units": "units", "default": 1.0, "description": "Local state A" },
+            "coupling_var": { "type": "parameter", "units": "1", "default": 0.5, "description": "Coupling parameter" }
+          },
+          "subsystems": {
+            "DeepSubA": {
+              "reference": { "notes": "Deeply nested subsystem A" },
+              "variables": {
+                "deep_variable": { "type": "state", "units": "units", "default": 0.1, "description": "Deep variable A" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["deep_variable"], "wrt": "t" },
+                  "rhs": {
+                    "op": "*", "args": [
+                      { "scoped_ref": "ParentSystem.global_parameter" },
+                      { "scoped_ref": "ParentSystem.SubsystemA.coupling_var" },
+                      { "op": "-", "args": [1, "deep_variable"] }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["local_state"], "wrt": "t" },
+              "rhs": {
+                "op": "+", "args": [
+                  { "op": "*", "args": [0.1, { "scoped_ref": "ParentSystem.SubsystemA.DeepSubA.deep_variable" }] },
+                  { "op": "*", "args": [{ "scoped_ref": "ParentSystem.SubsystemB.influence_factor" }, { "op": "-", "args": ["local_state", 0.5] }] }
+                ]
+              }
+            }
+          ]
+        },
+
+        "SubsystemB": {
+          "reference": { "notes": "Second nested subsystem" },
+          "variables": {
+            "local_state": { "type": "state", "units": "units", "default": 2.0, "description": "Local state B" },
+            "influence_factor": { "type": "parameter", "units": "1/s", "default": 0.1, "description": "Influence on other systems" }
+          },
+          "subsystems": {
+            "DeepSubB1": {
+              "reference": { "notes": "First deeply nested subsystem B" },
+              "variables": {
+                "oscillator": { "type": "state", "units": "units", "default": 1.0, "description": "Oscillating variable" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["oscillator"], "wrt": "t" },
+                  "rhs": {
+                    "op": "*", "args": [
+                      { "scoped_ref": "ParentSystem.SubsystemB.DeepSubB2.phase_shift" },
+                      { "op": "sin", "args": [{ "op": "*", "args": [0.5, "t"] }] }
+                    ]
+                  }
+                }
+              ]
+            },
+
+            "DeepSubB2": {
+              "reference": { "notes": "Second deeply nested subsystem B" },
+              "variables": {
+                "phase_shift": { "type": "parameter", "units": "1", "default": 1.0, "description": "Phase shift parameter" },
+                "feedback_state": { "type": "state", "units": "units", "default": 0.0, "description": "Feedback state" }
+              },
+              "equations": [
+                {
+                  "lhs": { "op": "D", "args": ["feedback_state"], "wrt": "t" },
+                  "rhs": {
+                    "op": "+", "args": [
+                      { "op": "*", "args": [0.2, { "scoped_ref": "ParentSystem.SubsystemA.local_state" }] },
+                      { "op": "*", "args": [-0.1, "feedback_state"] },
+                      { "op": "*", "args": [0.05, { "scoped_ref": "ParentSystem.SubsystemB.DeepSubB1.oscillator" }] }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["local_state"], "wrt": "t" },
+              "rhs": {
+                "op": "+", "args": [
+                  { "op": "*", "args": [0.3, { "scoped_ref": "ParentSystem.SubsystemB.DeepSubB1.oscillator" }] },
+                  { "op": "*", "args": [0.1, { "scoped_ref": "ParentSystem.SubsystemB.DeepSubB2.feedback_state" }] },
+                  { "op": "*", "args": [-0.2, "local_state"] }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["system_output"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "scoped_ref": "ParentSystem.SubsystemA.local_state" },
+              { "scoped_ref": "ParentSystem.SubsystemB.local_state" },
+              { "op": "*", "args": [0.1, { "scoped_ref": "ParentSystem.SubsystemA.DeepSubA.deep_variable" }] },
+              { "op": "*", "args": [0.05, { "scoped_ref": "ParentSystem.SubsystemB.DeepSubB2.feedback_state" }] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "ParentSystem.SubsystemA.local_state",
+      "to": "ParentSystem.SubsystemB.influence_factor",
+      "transform": {
+        "op": "*", "args": [
+          0.1,
+          { "op": "+", "args": [1, { "scoped_ref": "ParentSystem.SubsystemA.local_state" }] }
+        ]
+      }
+    },
+    {
+      "type": "variable_map",
+      "from": "ParentSystem.SubsystemB.DeepSubB2.feedback_state",
+      "to": "ParentSystem.SubsystemA.coupling_var",
+      "transform": {
+        "op": "max", "args": [
+          0.1,
+          { "op": "min", "args": [1.0, { "scoped_ref": "ParentSystem.SubsystemB.DeepSubB2.feedback_state" }] }
+        ]
+      }
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T12:00:00Z" },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "Tsit5",
+      "adaptive": true
+    }
+  }
+}

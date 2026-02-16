@@ -1,0 +1,199 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CrossSystemEventExamples",
+    "description": "Test fixtures for events that affect multiple coupled systems",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "PredatorSystem": {
+      "reference": { "notes": "Predator population dynamics" },
+      "variables": {
+        "predator": { "type": "state", "units": "individuals", "default": 10.0, "description": "Predator population" }
+      },
+      "parameters": {
+        "death_rate": { "units": "1/time", "default": 0.1, "description": "Predator death rate" },
+        "hunting_efficiency": { "units": "L/(ind·time)", "default": 0.01, "description": "Hunting efficiency" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["predator"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              {
+                "op": "*", "args": [
+                  "hunting_efficiency",
+                  "predator",
+                  { "scoped_ref": "PreySystem.prey" }
+                ]
+              },
+              { "op": "*", "args": ["death_rate", "predator"] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "PreySystem": {
+      "reference": { "notes": "Prey population dynamics" },
+      "variables": {
+        "prey": { "type": "state", "units": "individuals", "default": 100.0, "description": "Prey population" }
+      },
+      "parameters": {
+        "growth_rate": { "units": "1/time", "default": 0.5, "description": "Prey growth rate" },
+        "carrying_capacity": { "units": "individuals", "default": 500.0, "description": "Prey carrying capacity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["prey"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              {
+                "op": "*", "args": [
+                  "growth_rate",
+                  "prey",
+                  { "op": "-", "args": [1, { "op": "/", "args": ["prey", "carrying_capacity"] }] }
+                ]
+              },
+              {
+                "op": "*", "args": [
+                  0.01,
+                  "prey",
+                  { "scoped_ref": "PredatorSystem.predator" }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+
+    "EnvironmentSystem": {
+      "reference": { "notes": "Environmental conditions affecting both populations" },
+      "variables": {
+        "resource_level": { "type": "state", "units": "units", "default": 1.0, "description": "Environmental resource level" }
+      },
+      "parameters": {
+        "resource_recovery": { "units": "1/time", "default": 0.2, "description": "Resource recovery rate" },
+        "base_consumption": { "units": "1/time", "default": 0.05, "description": "Base resource consumption" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["resource_level"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              { "op": "*", "args": ["resource_recovery", { "op": "-", "args": [1, "resource_level"] }] },
+              {
+                "op": "*", "args": [
+                  "base_consumption",
+                  "resource_level",
+                  { "scoped_ref": "PreySystem.prey" }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "events": [
+    {
+      "type": "discrete",
+      "trigger": {
+        "type": "condition",
+        "condition": { "op": "<", "args": [{ "scoped_ref": "PreySystem.prey" }, 20] }
+      },
+      "affect": [
+        {
+          "system": "EnvironmentSystem",
+          "variable": "resource_level",
+          "value": { "op": "min", "args": [1.0, { "op": "+", "args": [{ "scoped_ref": "EnvironmentSystem.resource_level" }, 0.5] }] }
+        }
+      ],
+      "description": "Boost resources when prey population is low"
+    },
+
+    {
+      "type": "continuous",
+      "condition": { "op": "-", "args": [{ "scoped_ref": "EnvironmentSystem.resource_level" }, 0.1] },
+      "affect": [
+        {
+          "system": "PreySystem",
+          "variable": "prey",
+          "value": { "op": "*", "args": [{ "scoped_ref": "PreySystem.prey" }, 0.8] }
+        },
+        {
+          "system": "PredatorSystem",
+          "variable": "predator",
+          "value": { "op": "*", "args": [{ "scoped_ref": "PredatorSystem.predator" }, 0.9] }
+        }
+      ],
+      "affect_neg": true,
+      "description": "Environmental crash affects both populations"
+    },
+
+    {
+      "type": "discrete",
+      "trigger": {
+        "type": "periodic",
+        "period": 10.0,
+        "phase": 0.0
+      },
+      "affect": [
+        {
+          "system": "PreySystem",
+          "variable": "prey",
+          "value": { "op": "+", "args": [{ "scoped_ref": "PreySystem.prey" }, 5] }
+        }
+      ],
+      "condition": { "op": ">", "args": [{ "scoped_ref": "EnvironmentSystem.resource_level" }, 0.8] },
+      "description": "Periodic immigration of prey when resources are abundant"
+    },
+
+    {
+      "type": "discrete",
+      "trigger": {
+        "type": "condition",
+        "condition": {
+          "op": "and", "args": [
+            { "op": ">", "args": [{ "scoped_ref": "PredatorSystem.predator" }, 50] },
+            { "op": ">", "args": [{ "scoped_ref": "PreySystem.prey" }, 200] }
+          ]
+        }
+      },
+      "affect": [
+        {
+          "system": "PredatorSystem",
+          "variable": "predator",
+          "value": { "op": "*", "args": [{ "scoped_ref": "PredatorSystem.predator" }, 0.7] }
+        }
+      ],
+      "description": "Disease outbreak in predators when both populations are high"
+    }
+  ],
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["PredatorSystem", "PreySystem", "EnvironmentSystem"]
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z" },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "Tsit5",
+      "adaptive": true,
+      "event_handling": "precise_callbacks"
+    }
+  }
+}
