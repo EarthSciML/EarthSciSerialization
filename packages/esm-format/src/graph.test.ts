@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { componentGraph, expressionGraph } from './graph.js';
+import { componentGraph, expressionGraph, toDot, toMermaid, toJsonGraph } from './graph.js';
 import type { EsmFile, Model, ReactionSystem, Equation, Reaction } from './types.js';
 
 describe('componentGraph function', () => {
@@ -614,5 +614,291 @@ describe('expressionGraph function', () => {
     const modelARateNode = graph.nodes.find(n => n.name === 'ModelA.rate');
     expect(modelARateNode).toBeDefined();
     expect(modelARateNode?.system).toBe('ModelA');
+  });
+});
+
+describe('Graph export functions', () => {
+  const mockEsmFile: EsmFile = {
+    esm: '0.1.0',
+    metadata: {
+      name: 'Test System',
+      description: 'Test graph export',
+      authors: ['Test Author']
+    },
+    models: {
+      'Transport': {
+        reference: { notes: '3D transport model' },
+        variables: {
+          u_wind: { type: 'parameter', units: 'm/s', default: 5.0 },
+          O3: { type: 'state', units: 'mol/mol', default: 40e-9 }
+        },
+        equations: [
+          { lhs: 'du_dt', rhs: '0' }
+        ]
+      },
+      'Chemistry': {
+        reference: { notes: 'Atmospheric chemistry' },
+        variables: {
+          NO2: { type: 'state', units: 'mol/mol', default: 20e-9 }
+        },
+        equations: [
+          { lhs: 'dNO2_dt', rhs: '-k1 * NO2' }
+        ]
+      }
+    },
+    data_loaders: {
+      'WeatherData': {
+        type: 'netcdf',
+        path: '/data/weather.nc',
+        variables: ['temperature', 'pressure']
+      }
+    },
+    operators: {
+      'Diffusion': {
+        type: 'spatial',
+        config: { method: 'finite_difference' }
+      }
+    },
+    coupling: [
+      {
+        type: 'operator_compose',
+        systems: ['Transport', 'Chemistry'],
+        description: 'Couple transport with chemistry'
+      },
+      {
+        type: 'variable_map',
+        from: 'WeatherData.temperature',
+        to: 'Chemistry.T',
+        description: 'Map temperature data'
+      },
+      {
+        type: 'operator_apply',
+        operator: 'Diffusion',
+        system: 'Transport',
+        description: 'Apply diffusion to transport'
+      }
+    ]
+  };
+
+  describe('toDot function', () => {
+    it('should export component graph as DOT format', () => {
+      const graph = componentGraph(mockEsmFile);
+      const dotOutput = toDot(graph);
+
+      expect(dotOutput).toContain('digraph {');
+      expect(dotOutput).toContain('rankdir=TB;');
+      expect(dotOutput).toContain('}');
+
+      // Check for nodes with correct shapes and colors
+      expect(dotOutput).toContain('"Transport"');
+      expect(dotOutput).toContain('shape=box');
+      expect(dotOutput).toContain('shape=ellipse');
+      expect(dotOutput).toContain('shape=diamond');
+
+      // Check for edges with correct styles
+      expect(dotOutput).toContain('->');
+      expect(dotOutput).toContain('style=solid');
+      expect(dotOutput).toContain('style=dashed');
+
+      // Component graph shows component names, not variable names
+      // Chemical subscripts would appear in variable mapping edge labels or expression graphs
+      expect(dotOutput).toContain('label="temperature"');
+    });
+
+    it('should export expression graph as DOT format', () => {
+      const model: Model = {
+        variables: {
+          CO2: { type: 'state', units: 'ppm', default: 400 },
+          H2O: { type: 'parameter', units: 'g/kg', default: 10 }
+        },
+        equations: [
+          { lhs: 'dCO2_dt', rhs: { op: '*', args: ['k', 'CO2'] } }
+        ]
+      };
+
+      const graph = expressionGraph(model);
+      const dotOutput = toDot(graph);
+
+      expect(dotOutput).toContain('digraph {');
+      expect(dotOutput).toContain('CO₂');
+      expect(dotOutput).toContain('H₂O');
+      expect(dotOutput).toContain('->');
+    });
+  });
+
+  describe('toMermaid function', () => {
+    it('should export component graph as Mermaid format', () => {
+      const graph = componentGraph(mockEsmFile);
+      const mermaidOutput = toMermaid(graph);
+
+      expect(mermaidOutput).toContain('flowchart TD');
+
+      // Check for nodes with correct shapes
+      expect(mermaidOutput).toContain('['); // Rectangle
+      expect(mermaidOutput).toContain('(('); // Circle
+      expect(mermaidOutput).toContain('{'); // Diamond
+
+      // Check for edges with correct styles
+      expect(mermaidOutput).toContain('-->');
+      expect(mermaidOutput).toContain('-.->');
+
+      // Component graph shows component names, not variable names
+      // Chemical subscripts would appear in variable mapping edge labels or expression graphs
+      expect(mermaidOutput).toContain('|temperature|');
+    });
+
+    it('should export expression graph as Mermaid format', () => {
+      const model: Model = {
+        variables: {
+          NH3: { type: 'species', units: 'mol/mol', default: 1e-9 }
+        },
+        equations: [
+          { lhs: 'dNH3_dt', rhs: { op: '*', args: ['rate', 'NH3'] } }
+        ]
+      };
+
+      const graph = expressionGraph(model);
+      const mermaidOutput = toMermaid(graph);
+
+      expect(mermaidOutput).toContain('flowchart TD');
+      expect(mermaidOutput).toContain('NH₃');
+    });
+  });
+
+  describe('toJsonGraph function', () => {
+    it('should export component graph as JSON format', () => {
+      const graph = componentGraph(mockEsmFile);
+      const jsonOutput = toJsonGraph(graph);
+
+      // Parse to verify valid JSON
+      const jsonGraph = JSON.parse(jsonOutput);
+
+      expect(jsonGraph).toHaveProperty('nodes');
+      expect(jsonGraph).toHaveProperty('edges');
+      expect(jsonGraph).toHaveProperty('adjacency');
+
+      expect(Array.isArray(jsonGraph.nodes)).toBe(true);
+      expect(Array.isArray(jsonGraph.edges)).toBe(true);
+      expect(typeof jsonGraph.adjacency).toBe('object');
+
+      // Check nodes have id and other properties
+      const transportNode = jsonGraph.nodes.find((n: any) => n.id === 'Transport');
+      expect(transportNode).toBeDefined();
+      expect(transportNode.type).toBe('model');
+
+      // Check edges have source, target, and data
+      expect(jsonGraph.edges.length).toBeGreaterThan(0);
+      const firstEdge = jsonGraph.edges[0];
+      expect(firstEdge).toHaveProperty('source');
+      expect(firstEdge).toHaveProperty('target');
+      expect(firstEdge).toHaveProperty('data');
+
+      // Check adjacency list
+      expect(jsonGraph.adjacency.Transport).toBeDefined();
+      expect(Array.isArray(jsonGraph.adjacency.Transport)).toBe(true);
+    });
+
+    it('should export expression graph as JSON format', () => {
+      const model: Model = {
+        variables: {
+          CH4: { type: 'state', units: 'ppm', default: 1.8 }
+        },
+        equations: [
+          { lhs: 'dCH4_dt', rhs: { op: '*', args: ['sink', 'CH4'] } }
+        ]
+      };
+
+      const graph = expressionGraph(model);
+      const jsonOutput = toJsonGraph(graph);
+
+      // Parse to verify valid JSON
+      const jsonGraph = JSON.parse(jsonOutput);
+
+      expect(jsonGraph).toHaveProperty('nodes');
+      expect(jsonGraph).toHaveProperty('edges');
+      expect(jsonGraph).toHaveProperty('adjacency');
+
+      // Check for scoped variable names
+      const ch4Node = jsonGraph.nodes.find((n: any) => n.name === 'CH4');
+      expect(ch4Node).toBeDefined();
+      expect(ch4Node.kind).toBe('state');
+    });
+
+    it('should handle empty graphs', () => {
+      const emptyEsmFile: EsmFile = {
+        esm: '0.1.0',
+        metadata: { name: 'Empty', authors: [] }
+      };
+
+      const graph = componentGraph(emptyEsmFile);
+      const jsonOutput = toJsonGraph(graph);
+
+      const jsonGraph = JSON.parse(jsonOutput);
+      expect(jsonGraph.nodes).toHaveLength(0);
+      expect(jsonGraph.edges).toHaveLength(0);
+      expect(Object.keys(jsonGraph.adjacency)).toHaveLength(0);
+    });
+  });
+
+  describe('Chemical subscript formatting', () => {
+    it('should format chemical formulas correctly in expression graphs', () => {
+      const model: Model = {
+        variables: {
+          H2SO4: { type: 'state', units: 'mol/mol', default: 1e-12 },
+          Ca2plus: { type: 'parameter', units: 'mol/mol', default: 1e-6 }
+        },
+        equations: [
+          { lhs: 'dH2SO4_dt', rhs: { op: '*', args: ['k1', 'H2SO4'] } }
+        ]
+      };
+
+      const graph = expressionGraph(model);
+
+      // Test DOT format - should show variable names with subscripts
+      const dotOutput = toDot(graph);
+      expect(dotOutput).toContain('H₂SO₄');
+      expect(dotOutput).toContain('Ca₂plus');
+
+      // Test Mermaid format
+      const mermaidOutput = toMermaid(graph);
+      expect(mermaidOutput).toContain('H₂SO₄');
+      expect(mermaidOutput).toContain('Ca₂plus');
+
+      // JSON format should preserve original names in node data
+      const jsonOutput = toJsonGraph(graph);
+      const jsonGraph = JSON.parse(jsonOutput);
+      const h2so4Node = jsonGraph.nodes.find((n: any) => n.name === 'H2SO4');
+      expect(h2so4Node).toBeDefined();
+      expect(h2so4Node.kind).toBe('state');
+    });
+
+    it('should format chemical formulas in variable mapping edge labels', () => {
+      const mockFile: EsmFile = {
+        esm: '0.1.0',
+        metadata: { name: 'Chemical Test', authors: [] },
+        models: {
+          'ModelA': { variables: { O3: { type: 'state', units: 'mol/mol' } } },
+          'ModelB': { variables: { NO2: { type: 'state', units: 'mol/mol' } } }
+        },
+        coupling: [
+          {
+            type: 'variable_map',
+            from: 'ModelA.O3',
+            to: 'ModelB.O3_input',
+            description: 'Map ozone'
+          }
+        ]
+      };
+
+      const graph = componentGraph(mockFile);
+
+      // Test DOT format - should show formatted chemical in edge label
+      const dotOutput = toDot(graph);
+      expect(dotOutput).toContain('O₃');
+
+      // Test Mermaid format
+      const mermaidOutput = toMermaid(graph);
+      expect(mermaidOutput).toContain('O₃');
+    });
   });
 });
