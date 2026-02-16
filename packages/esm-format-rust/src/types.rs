@@ -93,6 +93,14 @@ pub struct ExpressionNode {
 
     /// Operand expressions
     pub args: Vec<Expr>,
+
+    /// Differentiation variable (for derivatives)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wrt: Option<String>,
+
+    /// Dimensional analysis hint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dim: Option<String>,
 }
 
 /// ODE-based model component
@@ -214,6 +222,56 @@ pub struct AffectEquation {
     pub rhs: Expr,
 }
 
+/// Continuous event that fires on zero-crossings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContinuousEvent {
+    /// Human-readable identifier
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
+    /// Condition expression (zero-crossing detection)
+    pub condition: Expr,
+
+    /// What happens when the event fires
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub affects: Option<Vec<AffectEquation>>,
+
+    /// Functional affect specification
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub functional_affect: Option<FunctionalAffect>,
+
+    /// Root finding direction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root_find: Option<RootFindDirection>,
+
+    /// Brief description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Functional affect specification for events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionalAffect {
+    /// Function name or code
+    pub function: String,
+
+    /// Function parameters
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<serde_json::Value>,
+}
+
+/// Root finding direction for continuous events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RootFindDirection {
+    /// Detect positive-going zero crossings
+    Left,
+    /// Detect negative-going zero crossings
+    Right,
+    /// Detect all zero crossings
+    All,
+}
+
 /// Reaction network component
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReactionSystem {
@@ -315,16 +373,80 @@ pub struct Operator {
     pub description: Option<String>,
 }
 
-/// Coupling entry (simplified for now)
+/// Coupling entry with discriminated union based on type field
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CouplingEntry {
-    /// Coupling type
-    #[serde(rename = "type")]
-    pub coupling_type: String,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CouplingEntry {
+    /// Operator composition coupling
+    OperatorCompose {
+        /// Source operator reference
+        source: String,
+        /// Target operator reference
+        target: String,
+        /// Additional parameters
+        #[serde(skip_serializing_if = "Option::is_none")]
+        config: Option<serde_json::Value>,
+    },
+    /// Two-way coupling between systems
+    Couple2 {
+        /// First system reference
+        system1: String,
+        /// Second system reference
+        system2: String,
+        /// Variable mappings
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mappings: Option<Vec<VariableMapping>>,
+    },
+    /// Variable mapping between systems
+    VariableMap {
+        /// Source system reference
+        source: String,
+        /// Target system reference
+        target: String,
+        /// Variable mappings
+        mappings: Vec<VariableMapping>,
+    },
+    /// Apply operator to system
+    OperatorApply {
+        /// Operator reference
+        operator: String,
+        /// Target system reference
+        target: String,
+        /// Application parameters
+        #[serde(skip_serializing_if = "Option::is_none")]
+        config: Option<serde_json::Value>,
+    },
+    /// Callback coupling
+    Callback {
+        /// Callback function reference
+        callback: String,
+        /// Source system reference
+        source: String,
+        /// Target system reference
+        target: String,
+    },
+    /// Event-based coupling
+    Event {
+        /// Event reference
+        event: String,
+        /// Systems involved
+        systems: Vec<String>,
+        /// Event configuration
+        #[serde(skip_serializing_if = "Option::is_none")]
+        config: Option<serde_json::Value>,
+    },
+}
 
-    /// Additional coupling data
-    #[serde(flatten)]
-    pub data: serde_json::Value,
+/// Variable mapping between systems
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VariableMapping {
+    /// Source variable name
+    pub source_var: String,
+    /// Target variable name
+    pub target_var: String,
+    /// Optional scaling factor
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub factor: Option<f64>,
 }
 
 /// Spatial/temporal domain specification

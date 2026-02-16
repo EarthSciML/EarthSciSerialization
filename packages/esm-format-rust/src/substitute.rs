@@ -31,6 +31,8 @@ pub fn substitute(expr: &Expr, substitutions: &std::collections::HashMap<String,
             Expr::Operator(ExpressionNode {
                 op: op_node.op.clone(),
                 args: new_args,
+                wrt: op_node.wrt.clone(),
+                dim: op_node.dim.clone(),
             })
         }
     }
@@ -141,6 +143,8 @@ mod tests {
                 Expr::Variable("x".to_string()),
                 Expr::Variable("y".to_string()),
             ],
+            wrt: None,
+            dim: None,
         });
 
         let result = substitute(&expr, &subs);

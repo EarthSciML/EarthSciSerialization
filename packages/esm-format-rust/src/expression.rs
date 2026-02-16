@@ -222,15 +222,19 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                     // a + b = (a + b) for numbers
                     (Expr::Number(a), Expr::Number(b)) => Expr::Number(a + b),
                     _ => Expr::Operator(ExpressionNode {
-                        op: op.to_string(),
-                        args: args.to_vec(),
-                    }),
+                op: op.to_string(),
+                args: args.to_vec(),
+                wrt: None,
+                dim: None,
+            }),
                 }
             } else {
                 Expr::Operator(ExpressionNode {
-                    op: op.to_string(),
-                    args: args.to_vec(),
-                })
+                op: op.to_string(),
+                args: args.to_vec(),
+                wrt: None,
+                dim: None,
+            })
             }
         },
         "*" => {
@@ -247,15 +251,19 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                     // a * b = (a * b) for numbers
                     (Expr::Number(a), Expr::Number(b)) => Expr::Number(a * b),
                     _ => Expr::Operator(ExpressionNode {
-                        op: op.to_string(),
-                        args: args.to_vec(),
-                    }),
+                op: op.to_string(),
+                args: args.to_vec(),
+                wrt: None,
+                dim: None,
+            }),
                 }
             } else {
                 Expr::Operator(ExpressionNode {
-                    op: op.to_string(),
-                    args: args.to_vec(),
-                })
+                op: op.to_string(),
+                args: args.to_vec(),
+                wrt: None,
+                dim: None,
+            })
             }
         },
         "^" => {
@@ -268,21 +276,27 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                     // a^b = (a^b) for numbers
                     (Expr::Number(a), Expr::Number(b)) => Expr::Number(a.powf(*b)),
                     _ => Expr::Operator(ExpressionNode {
-                        op: op.to_string(),
-                        args: args.to_vec(),
-                    }),
+                op: op.to_string(),
+                args: args.to_vec(),
+                wrt: None,
+                dim: None,
+            }),
                 }
             } else {
                 Expr::Operator(ExpressionNode {
-                    op: op.to_string(),
-                    args: args.to_vec(),
-                })
+                op: op.to_string(),
+                args: args.to_vec(),
+                wrt: None,
+                dim: None,
+            })
             }
         },
         _ => {
             Expr::Operator(ExpressionNode {
                 op: op.to_string(),
                 args: args.to_vec(),
+                wrt: None,
+                dim: None,
             })
         }
     }
@@ -297,12 +311,14 @@ mod tests {
     #[test]
     fn test_free_variables() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "+".to_string(),
-            args: vec![
+                op: "+".to_string(),
+                args: vec![
                 Expr::Variable("x".to_string()),
                 Expr::Variable("y".to_string()),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         let vars = free_variables(&expr);
         assert_eq!(vars.len(), 2);
@@ -313,12 +329,14 @@ mod tests {
     #[test]
     fn test_contains() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "*".to_string(),
-            args: vec![
+                op: "*".to_string(),
+                args: vec![
                 Expr::Number(2.0),
                 Expr::Variable("x".to_string()),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         assert!(contains(&expr, "x"));
         assert!(!contains(&expr, "y"));
@@ -327,12 +345,14 @@ mod tests {
     #[test]
     fn test_evaluate_simple() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "+".to_string(),
-            args: vec![
+                op: "+".to_string(),
+                args: vec![
                 Expr::Variable("x".to_string()),
                 Expr::Number(5.0),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         let mut values = HashMap::new();
         values.insert("x".to_string(), 3.0);
@@ -354,12 +374,14 @@ mod tests {
     #[test]
     fn test_simplify_zero_addition() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "+".to_string(),
-            args: vec![
+                op: "+".to_string(),
+                args: vec![
                 Expr::Variable("x".to_string()),
                 Expr::Number(0.0),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         let simplified = simplify(&expr);
         match simplified {
@@ -371,12 +393,14 @@ mod tests {
     #[test]
     fn test_simplify_one_multiplication() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "*".to_string(),
-            args: vec![
+                op: "*".to_string(),
+                args: vec![
                 Expr::Number(1.0),
                 Expr::Variable("x".to_string()),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         let simplified = simplify(&expr);
         match simplified {
@@ -388,12 +412,14 @@ mod tests {
     #[test]
     fn test_simplify_zero_multiplication() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "*".to_string(),
-            args: vec![
+                op: "*".to_string(),
+                args: vec![
                 Expr::Number(0.0),
                 Expr::Variable("x".to_string()),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         let simplified = simplify(&expr);
         match simplified {

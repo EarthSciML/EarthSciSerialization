@@ -257,12 +257,14 @@ mod tests {
     #[test]
     fn test_addition_formatting() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "+".to_string(),
-            args: vec![
+                op: "+".to_string(),
+                args: vec![
                 Expr::Variable("x".to_string()),
                 Expr::Number(1.0),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         assert_eq!(to_unicode(&expr), "x + 1");
         assert_eq!(to_latex(&expr), "x + 1");
@@ -272,12 +274,14 @@ mod tests {
     #[test]
     fn test_multiplication_formatting() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "*".to_string(),
-            args: vec![
+                op: "*".to_string(),
+                args: vec![
                 Expr::Number(2.0),
                 Expr::Variable("x".to_string()),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         assert_eq!(to_unicode(&expr), "2 × x");
         assert_eq!(to_latex(&expr), "2 \\cdot x");
@@ -287,12 +291,14 @@ mod tests {
     #[test]
     fn test_fraction_formatting() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "/".to_string(),
-            args: vec![
+                op: "/".to_string(),
+                args: vec![
                 Expr::Variable("a".to_string()),
                 Expr::Variable("b".to_string()),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         assert_eq!(to_unicode(&expr), "a ÷ b");
         assert_eq!(to_latex(&expr), "\\frac{a}{b}");
@@ -302,12 +308,14 @@ mod tests {
     #[test]
     fn test_power_formatting() {
         let expr = Expr::Operator(ExpressionNode {
-            op: "^".to_string(),
-            args: vec![
+                op: "^".to_string(),
+                args: vec![
                 Expr::Variable("x".to_string()),
                 Expr::Number(2.0),
             ],
-        });
+                wrt: None,
+                dim: None,
+            });
 
         assert_eq!(to_unicode(&expr), "x^2");
         assert_eq!(to_latex(&expr), "{x}^{2}");
