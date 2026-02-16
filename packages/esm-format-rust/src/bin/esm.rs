@@ -125,19 +125,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Perform structural validation
                     let validation_result = validate(&esm_file);
 
-                    if validation_result.valid {
+                    if validation_result.is_valid {
                         println!("✓ Structural validation passed");
-                        if verbose && !validation_result.warnings.is_empty() {
+                        if verbose && !validation_result.unit_warnings.is_empty() {
                             println!("Warnings:");
-                            for warning in validation_result.warnings {
+                            for warning in validation_result.unit_warnings {
                                 println!("  ⚠ {}", warning);
                             }
                         }
                     } else {
                         println!("✗ Structural validation failed");
-                        for error in validation_result.errors {
-                            println!("  ✗ {}: {}", error.path, error.message);
+
+                        if !validation_result.schema_errors.is_empty() {
+                            println!("Schema errors:");
+                            for error in &validation_result.schema_errors {
+                                println!("  ✗ {}: {}", error.path, error.message);
+                            }
                         }
+
+                        if !validation_result.structural_errors.is_empty() {
+                            println!("Structural errors:");
+                            for error in &validation_result.structural_errors {
+                                println!("  ✗ {}: {}", error.path, error.message);
+                            }
+                        }
+
                         std::process::exit(1);
                     }
                 },
