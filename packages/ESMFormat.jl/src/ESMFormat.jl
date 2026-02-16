@@ -24,6 +24,10 @@ include("expression.jl")
 include("display.jl")
 include("reactions.jl")
 include("catalyst.jl")
+# Analysis features
+include("graph.jl")
+include("units.jl")
+include("edit.jl")
 # MTK modules - conditionally loaded to avoid precompilation issues
 include("mtk.jl")
 include("mtk_catalyst.jl")
@@ -73,12 +77,27 @@ export
     # Reaction system ODE derivation
     derive_odes, stoichiometric_matrix, mass_action_rate,
     # Catalyst conversion functions
-    to_catalyst_system, MockCatalystSystem
+    to_catalyst_system, MockCatalystSystem,
     # MTK conversion functions
     to_mtk_system, from_mtk_system, from_catalyst_system,
     to_coupled_system,
     # Expression conversion utilities
     esm_to_symbolic, symbolic_to_esm,
+    # Graph analysis (Section 4.8)
+    Graph, ComponentNode, CouplingEdge, VariableNode, DependencyEdge,
+    component_graph, expression_graph, adjacency, predecessors, successors,
+    to_dot, to_mermaid, to_json,
+    # Unit validation
+    parse_units, get_expression_dimensions, validate_equation_dimensions,
+    validate_model_dimensions, validate_reaction_system_dimensions, validate_file_dimensions,
+    infer_variable_units,
+    # Editing operations (Section 4)
+    add_variable, remove_variable, rename_variable,
+    add_equation, remove_equation, substitute_in_equations,
+    add_reaction, remove_reaction, add_species, remove_species,
+    add_continuous_event, add_discrete_event, remove_event,
+    add_coupling, remove_coupling, compose, map_variable,
+    merge, extract,
     # Legacy compatibility aliases (for tests)
     MockMTKSystem,
     esm_to_mock_symbolic, mock_symbolic_to_esm
