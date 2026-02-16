@@ -163,6 +163,12 @@ from .interpolation_operators import (
     BaseInterpolationOperator,
     create_interpolation_operator,
 )
+from .reactions import (
+    derive_odes,
+    stoichiometric_matrix,
+    substrate_matrix,
+    product_matrix,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -309,4 +315,9 @@ __all__ = [
     "InterpolationConfig",
     "BaseInterpolationOperator",
     "create_interpolation_operator",
+    # Reaction system analysis
+    "derive_odes",
+    "stoichiometric_matrix",
+    "substrate_matrix",
+    "product_matrix",
 ]
