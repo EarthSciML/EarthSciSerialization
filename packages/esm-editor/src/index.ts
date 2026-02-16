@@ -7,6 +7,7 @@
 
 // Core components
 export { ExpressionNode, type ExpressionNodeProps } from './components/ExpressionNode';
+export { ExpressionPalette, type ExpressionPaletteProps } from './components/ExpressionPalette';
 
 // Variable highlighting primitives
 export {
