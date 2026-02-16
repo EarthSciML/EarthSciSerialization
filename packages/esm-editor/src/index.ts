@@ -35,5 +35,20 @@ export {
   type NodeDetails
 } from './primitives/selection';
 
+// Structural editing primitives
+export {
+  StructuralEditingProvider,
+  useStructuralEditingContext,
+  StructuralEditingMenu,
+  DraggableExpression,
+  WRAP_OPERATORS,
+  COMMUTATIVE_OPERATORS,
+  type StructuralEditingContextValue,
+  type StructuralEditingProviderProps,
+  type StructuralEditingMenuProps,
+  type DraggableExpressionProps,
+  type DragState
+} from './primitives/structural-editing';
+
 // Re-export types from esm-format for convenience
 export type { Expression, ExpressionNode as ExprNode } from 'esm-format';
