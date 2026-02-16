@@ -59,7 +59,10 @@ function formatChemicalSubscripts(variable: string, format: 'unicode' | 'latex')
     if (hasElements) {
       // Chemical formula: wrap in \mathrm{} and convert digits to subscripts
       let result = variable
-      result = result.replace(/(\d+)/g, '_{$1}')
+      result = result.replace(/(\d+)/g, (match, digits) => {
+        // Single digits don't need braces in LaTeX subscripts
+        return digits.length === 1 ? `_${digits}` : `_{${digits}}`
+      })
       return `\\mathrm{${result}}`
     } else {
       // Regular variable: return as-is

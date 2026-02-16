@@ -96,6 +96,28 @@ export const ModelEditor: Component<ModelEditorProps> = (props) => {
     setSelectedEquationIndex(index === selectedEquationIndex() ? null : index);
   };
 
+  // Handle keyboard navigation between tabs
+  const handleTabKeyDown = (e: KeyboardEvent, currentTab: 'variables' | 'equations' | 'events') => {
+    const tabs = ['variables', 'equations', 'events'] as const;
+    const currentIndex = tabs.indexOf(currentTab);
+
+    if (e.key === 'ArrowRight' && currentIndex < tabs.length - 1) {
+      e.preventDefault();
+      const nextTab = tabs[currentIndex + 1];
+      setActiveTab(nextTab);
+      // Move focus to the next tab button
+      const nextButton = (e.target as HTMLElement).parentElement?.children[currentIndex + 1] as HTMLButtonElement;
+      nextButton?.focus();
+    } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      e.preventDefault();
+      const prevTab = tabs[currentIndex - 1];
+      setActiveTab(prevTab);
+      // Move focus to the previous tab button
+      const prevButton = (e.target as HTMLElement).parentElement?.children[currentIndex - 1] as HTMLButtonElement;
+      prevButton?.focus();
+    }
+  };
+
   // Handle expression replacement in equations
   const handleExpressionReplace = (equationIndex: number, side: 'lhs' | 'rhs', path: (string | number)[], newExpr: Expression) => {
     const updatedModel = { ...props.model };
@@ -195,6 +217,7 @@ export const ModelEditor: Component<ModelEditorProps> = (props) => {
           role="tab"
           aria-selected={activeTab() === 'variables'}
           onClick={() => setActiveTab('variables')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'variables')}
         >
           Variables ({Object.keys(props.model.variables).length})
         </button>
@@ -203,6 +226,7 @@ export const ModelEditor: Component<ModelEditorProps> = (props) => {
           role="tab"
           aria-selected={activeTab() === 'equations'}
           onClick={() => setActiveTab('equations')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'equations')}
         >
           Equations ({props.model.equations.length})
         </button>
@@ -210,6 +234,8 @@ export const ModelEditor: Component<ModelEditorProps> = (props) => {
           class={`esm-tab ${activeTab() === 'events' ? 'active' : ''}`}
           role="tab"
           aria-selected={activeTab() === 'events'}
+          onClick={() => setActiveTab('events')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'events')}
         >
           Events ({(props.model.discrete_events?.length || 0) + (props.model.continuous_events?.length || 0)})
         </button>
