@@ -1,6 +1,6 @@
 //! Graph utilities for analyzing model structure and coupling
 
-use crate::EsmFile;
+use crate::{EsmFile, CouplingEntry};
 
 /// Component graph representing model structure
 #[derive(Debug, Clone)]
@@ -108,13 +108,34 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
     // Add coupling edges
     if let Some(ref coupling_entries) = esm_file.coupling {
         for entry in coupling_entries {
-            // For now, we'll extract basic coupling relationships
-            // In a full implementation, we'd parse the different coupling types
+            // Extract coupling relationships based on the coupling type
+            let (from, to, coupling_type_str) = match entry {
+                CouplingEntry::OperatorCompose { source, target, .. } =>
+                    (source.clone(), target.clone(), "operator_compose".to_string()),
+                CouplingEntry::Couple2 { system1, system2, .. } =>
+                    (system1.clone(), system2.clone(), "couple2".to_string()),
+                CouplingEntry::VariableMap { source, target, .. } =>
+                    (source.clone(), target.clone(), "variable_map".to_string()),
+                CouplingEntry::OperatorApply { operator, target, .. } =>
+                    (operator.clone(), target.clone(), "operator_apply".to_string()),
+                CouplingEntry::Callback { source, target, .. } =>
+                    (source.clone(), target.clone(), "callback".to_string()),
+                CouplingEntry::Event { event, systems, .. } => {
+                    if systems.len() >= 2 {
+                        (systems[0].clone(), systems[1].clone(), "event".to_string())
+                    } else if systems.len() == 1 {
+                        (event.clone(), systems[0].clone(), "event".to_string())
+                    } else {
+                        (event.clone(), "unknown".to_string(), "event".to_string())
+                    }
+                }
+            };
+
             edges.push(CouplingEdge {
-                from: "unknown".to_string(), // TODO: Extract from coupling data
-                to: "unknown".to_string(),   // TODO: Extract from coupling data
-                coupling_type: entry.coupling_type.clone(),
-                data: entry.data.clone(),
+                from,
+                to,
+                coupling_type: coupling_type_str,
+                data: serde_json::Value::Null, // Simplified for now
             });
         }
     }
