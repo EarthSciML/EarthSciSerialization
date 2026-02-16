@@ -59,11 +59,44 @@ export {
   type DragState
 } from './primitives/structural-editing';
 
+// Undo/redo history management
+export {
+  createUndoHistory,
+  createUndoKeyboardHandler,
+  type UndoHistory,
+  type UndoHistoryConfig,
+  type HistoryEntry
+} from './primitives/history';
+
+// AST store for centralized state management
+export {
+  createAstStore,
+  PathUtils,
+  CommonPaths,
+  type AstStore,
+  type AstStoreConfig,
+  type Path,
+  type PathSegment
+} from './primitives/ast-store';
+
+// Web components for framework integration
+export {
+  registerWebComponents,
+  type EsmExpressionEditorProps,
+  type EsmModelEditorProps,
+  type EsmFileEditorProps,
+  type EsmReactionEditorProps,
+  type EsmCouplingGraphProps
+} from './web-components';
+
 // Re-export types from esm-format for convenience
 export type {
   Expression,
   ExpressionNode as ExprNode,
   ComponentNode,
   CouplingEdge,
-  Graph
+  Graph,
+  EsmFile,
+  Model,
+  ReactionSystem
 } from 'esm-format';
