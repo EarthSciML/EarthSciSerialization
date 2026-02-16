@@ -684,9 +684,9 @@ export interface CoordinateTransform {
  */
 export interface BoundaryCondition {
     /**
-     * constant = fixed value (Dirichlet); zero_gradient = ∂u/∂n = 0 (Neumann); periodic = wrap-around.
+     * constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n = 0; periodic = wrap-around; robin = αu + β∂u/∂n = γ.
      */
-    type: "constant" | "zero_gradient" | "periodic";
+    type: "constant" | "zero_gradient" | "periodic" | "dirichlet" | "neumann" | "robin";
     /**
      * @minItems 1
      */
@@ -695,6 +695,22 @@ export interface BoundaryCondition {
      * Boundary value (for constant type).
      */
     value?: number;
+    /**
+     * Function specification for time/space-varying boundaries.
+     */
+    function?: string;
+    /**
+     * Robin BC coefficient α for u term in αu + β∂u/∂n = γ.
+     */
+    robin_alpha?: number;
+    /**
+     * Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ.
+     */
+    robin_beta?: number;
+    /**
+     * Robin BC RHS value γ in αu + β∂u/∂n = γ.
+     */
+    robin_gamma?: number;
 }
 /**
  * Solver strategy for time integration.
@@ -721,4 +737,3 @@ export interface Solver {
         [k: string]: unknown;
     };
 }
-//# sourceMappingURL=generated.d.ts.map

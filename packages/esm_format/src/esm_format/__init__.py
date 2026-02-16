@@ -154,6 +154,15 @@ from .temporal_operators import (
     IntegrationMethod,
     TemporalOperatorConfig,
 )
+from .interpolation_operators import (
+    LinearInterpolationOperator,
+    CubicInterpolationOperator,
+    SplineInterpolationOperator,
+    GridInterpolationOperator,
+    InterpolationConfig,
+    BaseInterpolationOperator,
+    create_interpolation_operator,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -292,4 +301,12 @@ __all__ = [
     "TemporalScheme",
     "IntegrationMethod",
     "TemporalOperatorConfig",
+    # Interpolation operators
+    "LinearInterpolationOperator",
+    "CubicInterpolationOperator",
+    "SplineInterpolationOperator",
+    "GridInterpolationOperator",
+    "InterpolationConfig",
+    "BaseInterpolationOperator",
+    "create_interpolation_operator",
 ]

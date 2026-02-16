@@ -101,6 +101,12 @@ class OperatorRegistry:
             "percentile": OperatorPrecedence(1),
             "median": OperatorPrecedence(1),
 
+            # Interpolation operators (same level as functions)
+            "linear_interpolation": OperatorPrecedence(1),
+            "cubic_interpolation": OperatorPrecedence(1),
+            "spline_interpolation": OperatorPrecedence(1),
+            "grid_interpolation": OperatorPrecedence(1),
+
             # Level 2: Exponentiation (right-associative)
             "^": OperatorPrecedence(2, Associativity.RIGHT),
 
@@ -159,6 +165,9 @@ class OperatorRegistry:
         )
         from .statistical_operators import (
             MeanOperator, VarianceOperator, PercentileOperator, StandardDeviationOperator, MedianOperator
+        )
+        from .interpolation_operators import (
+            LinearInterpolationOperator, CubicInterpolationOperator, SplineInterpolationOperator, GridInterpolationOperator
         )
 
         # Register mathematical operators
@@ -339,6 +348,35 @@ class OperatorRegistry:
             name="median",
             operator_type=OperatorType.STATISTICAL,
             operator_class=MedianOperator,
+            version="1.0"
+        )
+
+        # Register interpolation operators
+        self.register_operator(
+            name="linear_interpolation",
+            operator_type=OperatorType.INTERPOLATION,
+            operator_class=LinearInterpolationOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="cubic_interpolation",
+            operator_type=OperatorType.INTERPOLATION,
+            operator_class=CubicInterpolationOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="spline_interpolation",
+            operator_type=OperatorType.INTERPOLATION,
+            operator_class=SplineInterpolationOperator,
+            version="1.0"
+        )
+
+        self.register_operator(
+            name="grid_interpolation",
+            operator_type=OperatorType.INTERPOLATION,
+            operator_class=GridInterpolationOperator,
             version="1.0"
         )
 

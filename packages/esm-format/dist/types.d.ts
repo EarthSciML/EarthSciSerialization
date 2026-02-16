@@ -21,4 +21,3 @@ export type EsmFile = ESMFormat;
 export type { CouplingEntry } from './generated.js';
 export type { DiscreteEventTrigger } from './generated.js';
 export type { ESMFormat as EsmFormat, Metadata, Model, ReactionSystem, ModelVariable, Species, Reaction, ContinuousEvent, DiscreteEvent, Expression, ExpressionNode as ExprNode, Equation, AffectEquation, FunctionalAffect, DataLoader, Operator, Domain, Solver, Reference, } from './generated.js';
-//# sourceMappingURL=types.d.ts.map

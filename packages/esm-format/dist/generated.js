@@ -5,4 +5,3 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 export {};
-//# sourceMappingURL=generated.js.map
