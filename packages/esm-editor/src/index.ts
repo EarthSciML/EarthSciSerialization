@@ -8,5 +8,18 @@
 // Core components
 export { ExpressionNode, type ExpressionNodeProps } from './components/ExpressionNode';
 
+// Variable highlighting primitives
+export {
+  buildVarEquivalences,
+  normalizeScopedReference,
+  HighlightProvider,
+  useHighlightContext,
+  createHighlightContext,
+  isHighlighted,
+  type HighlightContextValue,
+  type ScopingMode,
+  type HighlightProviderProps
+} from './primitives/highlighted-var';
+
 // Re-export types from esm-format for convenience
 export type { Expression, ExpressionNode as ExprNode } from 'esm-format';
