@@ -1,0 +1,480 @@
+package esm
+
+import (
+	"fmt"
+	"math"
+	"regexp"
+	"strings"
+)
+
+// ToUnicode converts an expression to Unicode string with chemical subscripts and operator precedence
+func ToUnicode(target interface{}) string {
+	return formatExpression(target, "unicode")
+}
+
+// ToLatex converts an expression to LaTeX string with chemical subscripts and operator precedence
+func ToLatex(target interface{}) string {
+	return formatExpression(target, "latex")
+}
+
+// formatExpression is the internal function that handles different output formats
+func formatExpression(target interface{}, format string) string {
+	switch expr := target.(type) {
+	case float64:
+		return formatNumber(expr, format)
+	case int:
+		return formatNumber(float64(expr), format)
+	case string:
+		return formatVariable(expr, format)
+	case ExprNode:
+		return formatExprNode(expr, format, 0)
+	case *ExprNode:
+		return formatExprNode(*expr, format, 0)
+	default:
+		return fmt.Sprintf("%v", target)
+	}
+}
+
+// formatNumber formats numeric values with scientific notation when appropriate
+func formatNumber(num float64, format string) string {
+	if num == 0 {
+		return "0"
+	}
+
+	// Handle scientific notation for very large or very small numbers
+	abs := math.Abs(num)
+	if abs >= 1e4 || abs < 1e-3 {
+		// Calculate exponent manually for better control
+		exp := int(math.Floor(math.Log10(abs)))
+		mantissa := num / math.Pow(10, float64(exp))
+
+		switch format {
+		case "unicode":
+			expStr := formatSuperscript(exp)
+			return fmt.Sprintf("%.3g×10%s", mantissa, expStr)
+		case "latex":
+			return fmt.Sprintf("%.3g \\times 10^{%d}", mantissa, exp)
+		default:
+			return fmt.Sprintf("%.2g", num)
+		}
+	}
+
+	return fmt.Sprintf("%g", num)
+}
+
+// formatVariable formats variable names with chemical subscripts
+func formatVariable(varName string, format string) string {
+	switch format {
+	case "unicode":
+		return formatChemicalSubscripts(varName, format)
+	case "latex":
+		// In LaTeX, put chemical variables in \mathrm{}
+		formatted := formatChemicalSubscripts(varName, format)
+		if isChemicalSpecies(varName) {
+			return "\\mathrm{" + formatted + "}"
+		}
+		return formatted
+	default:
+		return varName
+	}
+}
+
+// isChemicalSpecies detects if a variable name represents a chemical species
+func isChemicalSpecies(name string) bool {
+	// Simple heuristic: contains numbers or common chemical patterns
+	matched, _ := regexp.MatchString(`[A-Z][a-z]?[0-9]|O[0-9]|NO[0-9]?|CO[0-9]?|SO[0-9]?|H[0-9]?O|CH[0-9]?`, name)
+	return matched
+}
+
+// formatChemicalSubscripts converts numbers in chemical formulas to subscripts
+func formatChemicalSubscripts(name string, format string) string {
+	// Pattern to match numbers that should become subscripts
+	re := regexp.MustCompile(`([A-Za-z])([0-9]+)`)
+
+	switch format {
+	case "unicode":
+		return re.ReplaceAllStringFunc(name, func(match string) string {
+			parts := re.FindStringSubmatch(match)
+			if len(parts) == 3 {
+				letter := parts[1]
+				number := parts[2]
+				return letter + formatSubscript(number)
+			}
+			return match
+		})
+	case "latex":
+		return re.ReplaceAllString(name, `${1}_{${2}}`)
+	default:
+		return name
+	}
+}
+
+// formatSubscript converts numbers to Unicode subscript characters
+func formatSubscript(num string) string {
+	subscripts := map[rune]rune{
+		'0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+		'5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+	}
+
+	result := strings.Builder{}
+	for _, char := range num {
+		if sub, ok := subscripts[char]; ok {
+			result.WriteRune(sub)
+		} else {
+			result.WriteRune(char)
+		}
+	}
+	return result.String()
+}
+
+// formatSuperscript converts numbers to Unicode superscript characters
+func formatSuperscript(num int) string {
+	superscripts := map[rune]rune{
+		'0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+		'5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+		'-': '⁻', '+': '⁺',
+	}
+
+	numStr := fmt.Sprintf("%d", num)
+	result := strings.Builder{}
+	for _, char := range numStr {
+		if sup, ok := superscripts[char]; ok {
+			result.WriteRune(sup)
+		} else {
+			result.WriteRune(char)
+		}
+	}
+	return result.String()
+}
+
+// Operator precedence levels (higher number = higher precedence)
+func getOperatorPrecedence(op string) int {
+	switch op {
+	case "or":
+		return 1
+	case "and":
+		return 2
+	case "==", "!=", "<", ">", "<=", ">=":
+		return 3
+	case "+", "-":
+		return 4
+	case "*", "/":
+		return 5
+	case "^":
+		return 6
+	case "exp", "log", "log10", "sqrt", "abs", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sign":
+		return 7
+	case "D", "grad", "div", "laplacian":
+		return 8
+	default:
+		return 9 // Functions and other operators
+	}
+}
+
+// needsParentheses determines if an expression needs parentheses based on operator precedence
+func needsParentheses(childOp string, parentOp string, isRightChild bool) bool {
+	childPrec := getOperatorPrecedence(childOp)
+	parentPrec := getOperatorPrecedence(parentOp)
+
+	if childPrec < parentPrec {
+		return true
+	}
+
+	// Right-associative operators (like ^) need special handling
+	if childPrec == parentPrec && isRightChild && (parentOp == "^" || parentOp == "/") {
+		return false
+	}
+
+	// Same precedence on the right side of non-associative operators needs parentheses
+	if childPrec == parentPrec && isRightChild && (parentOp == "-" || parentOp == "/") {
+		return true
+	}
+
+	return false
+}
+
+// formatExprNode formats an expression node with proper precedence and parentheses
+func formatExprNode(node ExprNode, format string, parentPrecedence int) string {
+	op := node.Op
+	args := node.Args
+
+	switch op {
+	case "+":
+		if len(args) < 2 {
+			return op + "(...)"
+		}
+
+		parts := make([]string, len(args))
+		for i, arg := range args {
+			parts[i] = formatExpression(arg, format)
+		}
+
+		return strings.Join(parts, " + ")
+
+	case "-":
+		if len(args) == 1 {
+			// Unary minus
+			arg := formatExpression(args[0], format)
+			switch format {
+			case "unicode":
+				return "−" + arg
+			case "latex":
+				return "-" + arg
+			default:
+				return "-" + arg
+			}
+		}
+		// Binary subtraction - format as a + (-b)
+		if len(args) == 2 {
+			left := formatExpression(args[0], format)
+			right := formatExpression(args[1], format)
+
+			// Check if we need to add parentheses around the right argument
+			if node, ok := args[1].(ExprNode); ok && needsParenthesesForSubtraction(node) {
+				right = "(" + right + ")"
+			}
+
+			switch format {
+			case "unicode":
+				return left + " − " + right
+			case "latex":
+				return left + " - " + right
+			default:
+				return left + " - " + right
+			}
+		}
+
+	case "*":
+		return formatMultiplication(args, format)
+
+	case "/":
+		return formatDivision(args, format)
+
+	case "^":
+		return formatExponentiation(args, format)
+
+	case "D":
+		return formatDerivative(args, node.Wrt, format)
+
+	case "grad":
+		return formatGradient(args, node.Dim, format)
+
+	case "exp":
+		arg := formatExpression(args[0], format)
+		switch format {
+		case "unicode":
+			return "exp(" + arg + ")"
+		case "latex":
+			if shouldUseExpLeft(args[0]) {
+				return "\\exp\\left(" + arg + "\\right)"
+			}
+			return "\\exp(" + arg + ")"
+		default:
+			return "exp(" + arg + ")"
+		}
+
+	case "ifelse":
+		if len(args) >= 3 {
+			condition := formatExpression(args[0], format)
+			trueVal := formatExpression(args[1], format)
+			falseVal := formatExpression(args[2], format)
+
+			switch format {
+			case "latex":
+				return fmt.Sprintf("\\begin{cases} %s & \\text{if } %s \\\\ %s & \\text{otherwise} \\end{cases}",
+					trueVal, condition, falseVal)
+			default:
+				return fmt.Sprintf("ifelse(%s, %s, %s)", condition, trueVal, falseVal)
+			}
+		}
+
+	case "Pre":
+		arg := formatExpression(args[0], format)
+		switch format {
+		case "latex":
+			return "\\mathrm{Pre}(" + arg + ")"
+		default:
+			return "Pre(" + arg + ")"
+		}
+
+	// Comparison operators
+	case ">", "<", ">=", "<=", "==", "!=":
+		if len(args) >= 2 {
+			left := formatExpression(args[0], format)
+			right := formatExpression(args[1], format)
+			return left + " " + op + " " + right
+		}
+
+	// Other functions
+	default:
+		if len(args) == 1 {
+			arg := formatExpression(args[0], format)
+			return op + "(" + arg + ")"
+		} else if len(args) > 1 {
+			argStrs := make([]string, len(args))
+			for i, arg := range args {
+				argStrs[i] = formatExpression(arg, format)
+			}
+			return op + "(" + strings.Join(argStrs, ", ") + ")"
+		}
+	}
+
+	// Fallback
+	return op + "(...)"
+}
+
+// Helper functions for specific formatting cases
+
+func formatBinaryOp(op string, args []interface{}, format string, unicodeOp, latexOp, asciiOp string) string {
+	if len(args) < 2 {
+		return op + "(...)"
+	}
+
+	parts := make([]string, len(args))
+	for i, arg := range args {
+		parts[i] = formatExpression(arg, format)
+	}
+
+	switch format {
+	case "unicode":
+		return strings.Join(parts, " " + unicodeOp + " ")
+	case "latex":
+		return strings.Join(parts, latexOp)
+	default:
+		return strings.Join(parts, asciiOp)
+	}
+}
+
+func formatMultiplication(args []interface{}, format string) string {
+	if len(args) < 2 {
+		return "*(...)"
+	}
+
+	parts := make([]string, len(args))
+	for i, arg := range args {
+		formatted := formatExpression(arg, format)
+
+		// Add parentheses if needed for addition/subtraction terms
+		if node, ok := arg.(ExprNode); ok {
+			if node.Op == "+" || (node.Op == "-" && len(node.Args) == 2) {
+				formatted = "(" + formatted + ")"
+			}
+		}
+
+		parts[i] = formatted
+	}
+
+	switch format {
+	case "unicode":
+		return strings.Join(parts, "·")
+	case "latex":
+		return strings.Join(parts, " \\cdot ")
+	default:
+		return strings.Join(parts, " * ")
+	}
+}
+
+func formatDivision(args []interface{}, format string) string {
+	if len(args) != 2 {
+		return "/(...)"
+	}
+
+	left := formatExpression(args[0], format)
+	right := formatExpression(args[1], format)
+
+	switch format {
+	case "latex":
+		return "\\frac{" + left + "}{" + right + "}"
+	default:
+		// Add parentheses if the right side is complex
+		if node, ok := args[1].(ExprNode); ok {
+			if node.Op == "+" || node.Op == "-" || node.Op == "*" || node.Op == "/" {
+				right = "(" + right + ")"
+			}
+		}
+		return left + "/" + right
+	}
+}
+
+func formatExponentiation(args []interface{}, format string) string {
+	if len(args) != 2 {
+		return "^(...)"
+	}
+
+	base := formatExpression(args[0], format)
+	exp := formatExpression(args[1], format)
+
+	// Add parentheses to base if it's a complex expression
+	if node, ok := args[0].(ExprNode); ok {
+		if node.Op == "+" || node.Op == "-" || node.Op == "*" || node.Op == "/" {
+			base = "(" + base + ")"
+		}
+	}
+
+	switch format {
+	case "unicode":
+		if exp == "2" {
+			return base + "²"
+		} else if exp == "3" {
+			return base + "³"
+		} else if numExp, ok := args[1].(float64); ok {
+			return base + formatSuperscript(int(numExp))
+		}
+		return base + "^" + exp
+	case "latex":
+		return base + "^{" + exp + "}"
+	default:
+		return base + "^" + exp
+	}
+}
+
+func formatDerivative(args []interface{}, wrt *string, format string) string {
+	if len(args) != 1 || wrt == nil {
+		return "D(...)"
+	}
+
+	variable := formatExpression(args[0], format)
+	timeVar := *wrt
+
+	switch format {
+	case "unicode":
+		return "∂" + variable + "/∂" + timeVar
+	case "latex":
+		formattedVar := formatExpression(args[0], format)
+		return "\\frac{\\partial " + formattedVar + "}{\\partial " + timeVar + "}"
+	default:
+		return "D(" + variable + ")/D" + timeVar
+	}
+}
+
+func formatGradient(args []interface{}, dim *string, format string) string {
+	if len(args) != 1 || dim == nil {
+		return "grad(...)"
+	}
+
+	variable := formatExpression(args[0], format)
+	dimension := *dim
+
+	switch format {
+	case "unicode":
+		return "∂" + variable + "/∂" + dimension
+	case "latex":
+		return "\\frac{\\partial " + variable + "}{\\partial " + dimension + "}"
+	default:
+		return "d(" + variable + ")/d" + dimension
+	}
+}
+
+// Helper functions for specific formatting decisions
+
+func needsParenthesesForSubtraction(node ExprNode) bool {
+	return node.Op == "+" || (node.Op == "-" && len(node.Args) == 2)
+}
+
+func shouldUseExpLeft(arg interface{}) bool {
+	// Use \left( \right) for complex expressions in exp()
+	if node, ok := arg.(ExprNode); ok {
+		return node.Op == "/" || node.Op == "+" || node.Op == "-"
+	}
+	return false
+}
