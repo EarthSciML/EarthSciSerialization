@@ -48,9 +48,9 @@ pub use types::{
 pub use parse::{load, ParseError, SchemaValidationError};
 pub use serialize::save;
 pub use validate::{validate, ValidationError, ValidationResult};
-pub use substitute::{substitute, substitute_in_model, substitute_in_reaction_system};
+pub use substitute::{substitute_in_model, substitute_in_reaction_system};
 pub use pretty_print::{to_unicode, to_latex, to_ascii};
-pub use expression::{free_variables, free_parameters, contains, evaluate, simplify};
+pub use expression::{free_variables, free_parameters, contains, evaluate, simplify, substitute};
 pub use graph::{component_graph, component_exists, get_component_type, ComponentGraph, ComponentNode, CouplingEdge, ComponentType};
 pub use error::EsmError;
 
