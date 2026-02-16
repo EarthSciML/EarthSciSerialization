@@ -1,0 +1,253 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ModelOnly",
+    "description": "Valid ESM file containing only models section, no reaction_systems",
+    "authors": ["Claude Test Generator"],
+    "created": "2026-02-16T16:00:00Z",
+    "tags": ["model-only", "validation", "ode-system"]
+  },
+
+  "models": {
+    "FluidDynamics": {
+      "reference": {
+        "citation": "Navier-Stokes equations for incompressible flow",
+        "notes": "2D fluid dynamics with heat transfer"
+      },
+      "variables": {
+        "u": { "type": "state", "units": "m/s", "default": 0.0, "description": "Velocity x-component" },
+        "v": { "type": "state", "units": "m/s", "default": 0.0, "description": "Velocity y-component" },
+        "p": { "type": "state", "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "T": { "type": "state", "units": "K", "default": 298.15, "description": "Temperature" },
+        "rho": { "type": "parameter", "units": "kg/m^3", "default": 1.225, "description": "Density" },
+        "mu": { "type": "parameter", "units": "Pa*s", "default": 1.8e-5, "description": "Dynamic viscosity" },
+        "nu": { "type": "parameter", "units": "m^2/s", "default": 1.5e-5, "description": "Kinematic viscosity" },
+        "alpha": { "type": "parameter", "units": "m^2/s", "default": 2.0e-5, "description": "Thermal diffusivity" },
+        "beta": { "type": "parameter", "units": "1/K", "default": 3.3e-3, "description": "Thermal expansion coefficient" },
+        "g": { "type": "parameter", "units": "m/s^2", "default": 9.81, "description": "Gravitational acceleration" },
+        "f_x": { "type": "parameter", "units": "N/m^3", "default": 0.0, "description": "Body force x-component" },
+        "f_y": { "type": "parameter", "units": "N/m^3", "default": 0.0, "description": "Body force y-component" },
+        "Q_heat": { "type": "parameter", "units": "W/m^3", "default": 0.0, "description": "Heat source term" }
+      },
+      "equations": [
+        {
+          "_comment": "Momentum equation x-direction with viscous terms and pressure gradient",
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u"] }, { "op": "grad", "args": ["u"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v"] }, { "op": "grad", "args": ["u"], "dim": "y" }] },
+              { "op": "*", "args": [{ "op": "/", "args": [{ "op": "-", "args": [1] }, "rho"] }, { "op": "grad", "args": ["p"], "dim": "x" }] },
+              { "op": "*", "args": ["nu", { "op": "laplacian", "args": ["u"] }] },
+              { "op": "/", "args": ["f_x", "rho"] }
+            ]
+          }
+        },
+        {
+          "_comment": "Momentum equation y-direction with buoyancy term",
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u"] }, { "op": "grad", "args": ["v"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v"] }, { "op": "grad", "args": ["v"], "dim": "y" }] },
+              { "op": "*", "args": [{ "op": "/", "args": [{ "op": "-", "args": [1] }, "rho"] }, { "op": "grad", "args": ["p"], "dim": "y" }] },
+              { "op": "*", "args": ["nu", { "op": "laplacian", "args": ["v"] }] },
+              { "op": "/", "args": ["f_y", "rho"] },
+              { "op": "*", "args": ["g", "beta", { "op": "-", "args": ["T", 298.15] }] }
+            ]
+          }
+        },
+        {
+          "_comment": "Continuity equation (incompressible flow)",
+          "lhs": { "op": "D", "args": ["p"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              { "op": "-", "args": [{ "op": "*", "args": ["rho", 343.0, 343.0] }] },
+              { "op": "+", "args": [
+                { "op": "grad", "args": ["u"], "dim": "x" },
+                { "op": "grad", "args": ["v"], "dim": "y" }
+              ] }
+            ]
+          }
+        },
+        {
+          "_comment": "Energy equation with heat diffusion and convection",
+          "lhs": { "op": "D", "args": ["T"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u"] }, { "op": "grad", "args": ["T"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v"] }, { "op": "grad", "args": ["T"], "dim": "y" }] },
+              { "op": "*", "args": ["alpha", { "op": "laplacian", "args": ["T"] }] },
+              { "op": "/", "args": ["Q_heat", { "op": "*", "args": ["rho", 1005.0] }] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "WaveEquation": {
+      "reference": {
+        "citation": "Classical wave equation in 2D",
+        "notes": "Acoustic wave propagation model"
+      },
+      "variables": {
+        "phi": { "type": "state", "units": "m", "default": 0.0, "description": "Wave displacement" },
+        "phi_t": { "type": "state", "units": "m/s", "default": 0.0, "description": "Wave velocity" },
+        "c": { "type": "parameter", "units": "m/s", "default": 343.0, "description": "Wave speed" },
+        "damping": { "type": "parameter", "units": "1/s", "default": 0.01, "description": "Damping coefficient" },
+        "source": { "type": "parameter", "units": "m/s^2", "default": 0.0, "description": "External source term" }
+      },
+      "equations": [
+        {
+          "_comment": "First-order form: phi_t = d(phi)/dt",
+          "lhs": { "op": "D", "args": ["phi"], "wrt": "t" },
+          "rhs": "phi_t"
+        },
+        {
+          "_comment": "Second-order wave equation with damping",
+          "lhs": { "op": "D", "args": ["phi_t"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "^", "args": ["c", 2] }, { "op": "laplacian", "args": ["phi"] }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["damping"] }, "phi_t"] },
+              "source"
+            ]
+          }
+        }
+      ]
+    },
+
+    "PopulationDynamics": {
+      "reference": {
+        "citation": "Lotka-Volterra predator-prey model with spatial diffusion",
+        "notes": "Classical population dynamics with migration"
+      },
+      "variables": {
+        "prey": { "type": "state", "units": "individuals/km^2", "default": 100.0, "description": "Prey population density" },
+        "predator": { "type": "state", "units": "individuals/km^2", "default": 10.0, "description": "Predator population density" },
+        "r": { "type": "parameter", "units": "1/year", "default": 1.0, "description": "Prey growth rate" },
+        "a": { "type": "parameter", "units": "km^2/(individuals*year)", "default": 0.01, "description": "Predation rate" },
+        "b": { "type": "parameter", "units": "dimensionless", "default": 0.5, "description": "Predation efficiency" },
+        "m": { "type": "parameter", "units": "1/year", "default": 0.2, "description": "Predator mortality rate" },
+        "D_prey": { "type": "parameter", "units": "km^2/year", "default": 10.0, "description": "Prey diffusion coefficient" },
+        "D_predator": { "type": "parameter", "units": "km^2/year", "default": 5.0, "description": "Predator diffusion coefficient" }
+      },
+      "equations": [
+        {
+          "_comment": "Prey dynamics: growth minus predation plus diffusion",
+          "lhs": { "op": "D", "args": ["prey"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": ["r", "prey"] },
+              { "op": "*", "args": [{ "op": "-", "args": ["a"] }, "prey", "predator"] },
+              { "op": "*", "args": ["D_prey", { "op": "laplacian", "args": ["prey"] }] }
+            ]
+          }
+        },
+        {
+          "_comment": "Predator dynamics: conversion efficiency minus mortality plus diffusion",
+          "lhs": { "op": "D", "args": ["predator"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": ["b", "a", "prey", "predator"] },
+              { "op": "*", "args": [{ "op": "-", "args": ["m"] }, "predator"] },
+              { "op": "*", "args": ["D_predator", { "op": "laplacian", "args": ["predator"] }] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "WindField": {
+      "type": "gridded_data",
+      "loader_id": "ERA5_reanalysis",
+      "config": {
+        "resolution": "0.25x0.25",
+        "variables": ["u10", "v10", "t2m"],
+        "pressure_levels": [1000, 850, 500]
+      },
+      "provides": {
+        "wind_u": { "units": "m/s", "description": "10m eastward wind" },
+        "wind_v": { "units": "m/s", "description": "10m northward wind" },
+        "temperature_2m": { "units": "K", "description": "2m temperature" }
+      }
+    },
+    "InitialConditions": {
+      "type": "initial_data",
+      "loader_id": "analytical_fields",
+      "config": {
+        "field_type": "gaussian_pulse",
+        "center": [0.5, 0.5],
+        "width": 0.1,
+        "amplitude": 1.0
+      },
+      "provides": {
+        "initial_phi": { "units": "m", "description": "Initial wave displacement" },
+        "initial_prey": { "units": "individuals/km^2", "description": "Initial prey density" },
+        "initial_predator": { "units": "individuals/km^2", "description": "Initial predator density" }
+      }
+    }
+  },
+
+  "operators": {
+    "BoundaryInterpolator": {
+      "operator_id": "boundary_interpolation",
+      "config": {
+        "method": "cubic_spline",
+        "boundary_treatment": "extrapolate"
+      },
+      "reference": { "notes": "Boundary condition interpolation" }
+    }
+  },
+
+  "coupling": [
+    { "type": "operator_compose", "systems": ["FluidDynamics", "WaveEquation"] },
+    { "type": "variable_map", "from": "WindField.wind_u", "to": "FluidDynamics.f_x", "transform": "wind_to_force" },
+    { "type": "variable_map", "from": "WindField.wind_v", "to": "FluidDynamics.f_y", "transform": "wind_to_force" },
+    { "type": "variable_map", "from": "WindField.temperature_2m", "to": "FluidDynamics.T", "transform": "param_to_var" },
+    { "type": "operator_apply", "operator": "BoundaryInterpolator", "input": "InitialConditions.initial_phi", "output": "WaveEquation.phi" }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-03-01T00:00:00Z",
+      "end": "2024-03-02T00:00:00Z",
+      "timestep": 10.0
+    },
+    "spatial": {
+      "x": { "min": 0.0, "max": 10.0, "grid_spacing": 0.1, "units": "km" },
+      "y": { "min": 0.0, "max": 10.0, "grid_spacing": 0.1, "units": "km" }
+    },
+    "coordinate_transforms": [
+      { "id": "cartesian_2d", "dimensions": ["x", "y"] }
+    ],
+    "initial_conditions": {
+      "type": "from_data_loader",
+      "loader": "InitialConditions",
+      "variable_mapping": {
+        "phi": "initial_phi",
+        "prey": "initial_prey",
+        "predator": "initial_predator"
+      }
+    },
+    "boundary_conditions": [
+      { "type": "dirichlet", "dimensions": ["x"], "value": { "u": 0.0, "v": 0.0, "phi": 0.0 } },
+      { "type": "neumann", "dimensions": ["y"], "value": { "T": 0.0, "prey": 0.0, "predator": 0.0 } }
+    ],
+    "element_type": "Float32"
+  },
+
+  "solver": {
+    "strategy": "coupled_ode_pde",
+    "config": {
+      "ode_algorithm": "Tsit5",
+      "pde_discretization": "finite_differences",
+      "spatial_order": 2,
+      "timestep": 10.0,
+      "adaptive": true,
+      "tolerances": { "rtol": 1e-5, "atol": 1e-8 }
+    }
+  }
+}
