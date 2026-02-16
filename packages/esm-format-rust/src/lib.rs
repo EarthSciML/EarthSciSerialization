@@ -15,8 +15,21 @@
 //! use esm_format::{EsmFile, load, save};
 //!
 //! // Load an ESM file
-//! let esm_data = std::fs::read_to_string("model.esm")?;
-//! let esm_file: EsmFile = load(&esm_data)?;
+//! let esm_data = r#"
+//! {
+//!   "esm": "0.1.0",
+//!   "metadata": {
+//!     "name": "test_model"
+//!   },
+//!   "models": {
+//!     "simple": {
+//!       "variables": {},
+//!       "equations": []
+//!     }
+//!   }
+//! }
+//! "#;
+//! let esm_file: EsmFile = load(esm_data)?;
 //!
 //! // Save back to JSON
 //! let json = save(&esm_file)?;

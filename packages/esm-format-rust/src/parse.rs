@@ -3,6 +3,8 @@
 use crate::{EsmFile, error::EsmError};
 use serde_json::Value;
 use thiserror::Error;
+use jsonschema::JSONSchema;
+use std::sync::OnceLock;
 
 /// Error type for JSON parsing failures
 #[derive(Error, Debug)]
@@ -24,6 +26,20 @@ impl From<serde_json::Error> for ParseError {
 #[error("Schema validation failed: {errors:?}")]
 pub struct SchemaValidationError {
     pub errors: Vec<String>,
+}
+
+/// Bundled ESM JSON Schema
+const ESM_SCHEMA_JSON: &str = include_str!("esm-schema.json");
+
+/// Get the compiled JSON schema (cached for performance)
+fn get_schema() -> &'static JSONSchema {
+    static SCHEMA: OnceLock<JSONSchema> = OnceLock::new();
+    SCHEMA.get_or_init(|| {
+        let schema_value: Value = serde_json::from_str(ESM_SCHEMA_JSON)
+            .expect("Bundled schema should be valid JSON");
+        JSONSchema::compile(&schema_value)
+            .expect("Bundled schema should compile successfully")
+    })
 }
 
 /// Load and parse an ESM file from JSON string
@@ -53,7 +69,7 @@ pub struct SchemaValidationError {
 ///   },
 ///   "models": {
 ///     "simple": {
-///       "variables": [],
+///       "variables": {},
 ///       "equations": []
 ///     }
 ///   }
@@ -91,37 +107,20 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
 /// * `Ok(())` - JSON passes schema validation
 /// * `Err(EsmError::SchemaValidation)` - Schema validation errors
 pub fn validate_schema(json_value: &Value) -> Result<(), EsmError> {
-    // For now, we'll implement basic validation
-    // In a complete implementation, we would load the actual JSON schema
-    // and use jsonschema crate to validate against it
+    let schema = get_schema();
+    let validation_result = schema.validate(json_value);
 
-    // Basic validation: check required fields
-    let obj = json_value.as_object()
-        .ok_or_else(|| EsmError::SchemaValidation("Root must be an object".to_string()))?;
-
-    // Check required 'esm' field
-    let esm_version = obj.get("esm")
-        .ok_or_else(|| EsmError::SchemaValidation("Missing required field 'esm'".to_string()))?
-        .as_str()
-        .ok_or_else(|| EsmError::SchemaValidation("Field 'esm' must be a string".to_string()))?;
-
-    // Check ESM version
-    if esm_version != "0.1.0" {
-        return Err(EsmError::SchemaValidation(format!("Unsupported ESM version: {}", esm_version)));
+    match validation_result {
+        Ok(_) => Ok(()),
+        Err(errors) => {
+            let error_messages: Vec<String> = errors
+                .map(|error| error.to_string())
+                .collect();
+            Err(EsmError::SchemaValidation(
+                error_messages.join("; ")
+            ))
+        }
     }
-
-    // Check required 'metadata' field
-    obj.get("metadata")
-        .ok_or_else(|| EsmError::SchemaValidation("Missing required field 'metadata'".to_string()))?;
-
-    // Check that at least one of 'models' or 'reaction_systems' is present
-    if !obj.contains_key("models") && !obj.contains_key("reaction_systems") {
-        return Err(EsmError::SchemaValidation(
-            "At least one of 'models' or 'reaction_systems' must be present".to_string()
-        ));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -138,7 +137,7 @@ mod tests {
           },
           "models": {
             "simple": {
-              "variables": [],
+              "variables": {},
               "equations": []
             }
           }
@@ -220,5 +219,46 @@ mod tests {
             EsmError::SchemaValidation(_) => {}, // Expected
             _ => panic!("Expected SchemaValidation error"),
         }
+    }
+
+    #[test]
+    fn test_round_trip() {
+        use crate::save;
+
+        let json = r#"
+        {
+          "esm": "0.1.0",
+          "metadata": {
+            "name": "test_model"
+          },
+          "models": {
+            "simple": {
+              "variables": {},
+              "equations": []
+            }
+          }
+        }
+        "#;
+
+        // Load the JSON
+        let esm_file = load(json).expect("Failed to load ESM file");
+
+        // Save it back to JSON
+        let serialized_json = save(&esm_file).expect("Failed to save ESM file");
+
+        // Load it again
+        let round_trip_file = load(&serialized_json).expect("Failed to load round-trip ESM file");
+
+        // Verify the structure is preserved
+        assert_eq!(esm_file.esm, round_trip_file.esm);
+        assert_eq!(esm_file.metadata.name, round_trip_file.metadata.name);
+        assert!(esm_file.models.is_some());
+        assert!(round_trip_file.models.is_some());
+
+        let models1 = esm_file.models.as_ref().unwrap();
+        let models2 = round_trip_file.models.as_ref().unwrap();
+        assert_eq!(models1.len(), models2.len());
+        assert!(models1.contains_key("simple"));
+        assert!(models2.contains_key("simple"));
     }
 }
