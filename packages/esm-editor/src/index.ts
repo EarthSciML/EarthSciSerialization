@@ -9,6 +9,11 @@
 export { ExpressionNode, type ExpressionNodeProps } from './components/ExpressionNode';
 export { ExpressionPalette, type ExpressionPaletteProps } from './components/ExpressionPalette';
 
+// Editor components
+export { EquationEditor, type EquationEditorProps } from './components/EquationEditor';
+export { ModelEditor, type ModelEditorProps } from './components/ModelEditor';
+export { ReactionEditor, type ReactionEditorProps } from './components/ReactionEditor';
+
 // Variable highlighting primitives
 export {
   buildVarEquivalences,
