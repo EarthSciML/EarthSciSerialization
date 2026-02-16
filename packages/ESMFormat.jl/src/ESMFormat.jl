@@ -22,6 +22,7 @@ include("serialize.jl")
 include("expression.jl")
 include("display.jl")
 include("reactions.jl")
+include("catalyst.jl")
 # Temporarily commenting out MTK modules due to precompilation issues
 # include("mtk.jl")
 # include("mtk_catalyst.jl")
@@ -62,14 +63,16 @@ export
     resolve_qualified_reference, QualifiedReferenceError, ReferenceResolution,
     validate_reference_syntax, is_valid_identifier,
     # Reaction system ODE derivation
-    derive_odes, stoichiometric_matrix, mass_action_rate
+    derive_odes, stoichiometric_matrix, mass_action_rate,
+    # Catalyst conversion functions
+    to_catalyst_system, MockCatalystSystem
     # MTK conversion functions temporarily disabled due to precompilation issues
-    # to_mtk_system, to_catalyst_system, from_mtk_system, from_catalyst_system,
+    # to_mtk_system, from_mtk_system, from_catalyst_system,
     # to_coupled_system,
     # Expression conversion utilities
     # esm_to_symbolic, symbolic_to_esm,
     # Legacy compatibility aliases (for tests)
-    # MockMTKSystem, MockCatalystSystem,
+    # MockMTKSystem,
     # esm_to_mock_symbolic, mock_symbolic_to_esm
 
 end # module ESMFormat
