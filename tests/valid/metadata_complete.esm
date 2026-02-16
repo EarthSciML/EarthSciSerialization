@@ -2,59 +2,263 @@
   "esm": "0.1.0",
   "metadata": {
     "name": "CompleteMetadataExample",
-    "description": "A complete example demonstrating all ESM metadata fields with proper formatting",
+    "description": "Comprehensive example demonstrating all ESM metadata fields and variations including extended references, funding information, validation details, and software requirements",
     "authors": [
       "Dr. Jane Smith <jane.smith@university.edu>",
       "Prof. Robert Chen",
-      "Alex Johnson (ORCID: 0000-0000-0000-0000)"
+      "Alex Johnson (ORCID: 0000-0000-0000-0000)",
+      "Maria Rodriguez",
+      "ESM Development Team"
     ],
     "license": "MIT",
     "created": "2024-01-15T10:30:00Z",
     "modified": "2024-02-14T16:45:30Z",
+    "version": "1.2.3",
+    "doi": "10.5281/zenodo.1234567",
+    "url": "https://github.com/esm-community/comprehensive-metadata-example",
+    "keywords": [
+      "atmospheric chemistry",
+      "earth system modeling",
+      "coupled systems",
+      "ozone chemistry",
+      "NOx photochemistry",
+      "chemical kinetics"
+    ],
     "tags": [
       "atmospheric-chemistry",
       "ozone",
       "NOx",
-      "photochemistry"
+      "photochemistry",
+      "validation",
+      "benchmark"
     ],
+    "funding": [
+      {
+        "agency": "National Science Foundation",
+        "grant_number": "AGS-2024-1234",
+        "program": "Earth System Modeling",
+        "title": "Advanced Atmospheric Chemistry Modeling"
+      },
+      {
+        "agency": "Department of Energy",
+        "grant_number": "DE-SC0024-5678",
+        "program": "Earth System Modeling",
+        "title": "Coupled Climate-Chemistry Interactions"
+      }
+    ],
+    "contact": {
+      "name": "Dr. Jane Smith",
+      "email": "jane.smith@university.edu",
+      "orcid": "0000-0002-1234-5678",
+      "institution": "University of Atmospheric Sciences",
+      "department": "Department of Earth System Science"
+    },
     "references": [
       {
+        "type": "journal",
         "doi": "10.1029/2023JD038742",
         "citation": "Smith, J. et al. (2023). Advanced ozone-NOx chemistry for Earth system models. Journal of Geophysical Research: Atmospheres, 128(12), e2023JD038742.",
         "notes": "Primary reference for chemical mechanism"
       },
       {
+        "type": "journal",
         "url": "https://acp.copernicus.org/articles/21/1809/2021/",
         "citation": "Chen, R. & Johnson, A. (2021). Photolysis rate calculations in complex atmospheric environments. Atmospheric Chemistry and Physics, 21, 1809-1825.",
         "notes": "Photolysis rate methodology"
       },
       {
-        "citation": "Williams, M. (2020). Chemical kinetics database v2.1. Personal communication.",
+        "type": "book",
+        "citation": "Finlayson-Pitts, B. J., & Pitts Jr, J. N. (2000). Chemistry of the upper and lower atmosphere. Academic Press.",
+        "isbn": "978-0122570605",
+        "notes": "Fundamental atmospheric chemistry principles"
+      },
+      {
+        "type": "report",
+        "citation": "Williams, M. (2020). Chemical kinetics database v2.1. National Center for Atmospheric Research Technical Note.",
+        "institution": "NCAR",
+        "report_number": "NCAR/TN-556+STR",
         "notes": "Rate constant compilation"
+      },
+      {
+        "type": "dataset",
+        "doi": "10.5281/zenodo.7891234",
+        "citation": "Atmospheric Chemistry Community (2023). Global atmospheric chemistry validation dataset v1.0. Zenodo.",
+        "notes": "Validation data used for model evaluation"
       }
+    ],
+    "validation": {
+      "status": "peer_reviewed",
+      "method": "comparison_with_observations",
+      "datasets": [
+        "EMEP ground-based measurements",
+        "TROPOMI satellite observations",
+        "TOAR ozone database"
+      ],
+      "metrics": {
+        "correlation": 0.85,
+        "rmse": "12.3 ppbv",
+        "bias": "-2.1 ppbv"
+      },
+      "validation_period": {
+        "start": "2019-01-01T00:00:00Z",
+        "end": "2021-12-31T23:59:59Z"
+      },
+      "notes": "Model performance within acceptable ranges for all validation metrics"
+    },
+    "software_requirements": {
+      "minimum_versions": {
+        "python": "3.8",
+        "julia": "1.8",
+        "rust": "1.65"
+      },
+      "dependencies": [
+        "numpy>=1.20.0",
+        "scipy>=1.7.0",
+        "pandas>=1.3.0",
+        "ModelingToolkit.jl@8.0-9.0",
+        "Catalyst.jl@13.0-15.0"
+      ],
+      "optional_dependencies": [
+        "matplotlib>=3.5.0",
+        "plotly>=5.0.0",
+        "Plots.jl@1.30-1.40"
+      ]
+    },
+    "computational_requirements": {
+      "memory": "minimum 4GB, recommended 16GB",
+      "cpu": "multi-core recommended",
+      "disk_space": "~500MB for installation, ~2GB for typical runs",
+      "typical_runtime": "5-30 minutes depending on domain size"
+    },
+    "data_sources": [
+      {
+        "name": "GEOS-FP Meteorological Fields",
+        "provider": "NASA GMAO",
+        "url": "https://gmao.gsfc.nasa.gov/geos/",
+        "version": "5.29.4",
+        "variables": ["temperature", "humidity", "winds"],
+        "spatial_resolution": "0.25° × 0.3125°",
+        "temporal_resolution": "hourly"
+      },
+      {
+        "name": "JPL Chemical Kinetics Database",
+        "provider": "NASA JPL",
+        "url": "https://jpldataeval.jpl.nasa.gov/",
+        "version": "19-5",
+        "variables": ["reaction_rates", "photolysis_rates"],
+        "last_updated": "2019-07-01"
+      }
+    ],
+    "quality_control": {
+      "code_review": "completed",
+      "unit_tests": "passed",
+      "integration_tests": "passed",
+      "performance_tests": "passed",
+      "documentation_review": "completed",
+      "last_qa_date": "2024-02-10T14:30:00Z"
+    },
+    "usage_notes": [
+      "This model is suitable for regional and global simulations",
+      "Validate against local observations when possible",
+      "Performance scales well with domain size",
+      "Contact authors for questions about parameterizations"
     ]
   },
 
   "reaction_systems": {
-    "SimpleOzone": {
-      "coupletype": "SimpleOzoneCoupler",
-      "reference": { "notes": "Minimal O3-NOx photochemical cycle" },
+    "ComprehensiveOzoneChemistry": {
+      "coupletype": "OzoneChemistryCoupler",
+      "reference": {
+        "notes": "Complete O3-NOx-HOx photochemical cycle with metadata demonstration",
+        "doi": "10.1029/2023JD038742"
+      },
       "species": {
-        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
-        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone mixing ratio" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide mixing ratio" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide mixing ratio" },
+        "HO2": { "units": "mol/mol", "default": 0.01e-9, "description": "Hydroperoxyl radical mixing ratio" },
+        "OH": { "units": "mol/mol", "default": 0.001e-9, "description": "Hydroxyl radical mixing ratio" }
       },
       "parameters": {
-        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "M": { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" },
+        "j_NO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate coefficient" },
+        "j_O3": { "units": "1/s", "default": 2.0e-5, "description": "O3 photolysis rate coefficient" }
       },
       "reactions": [
         {
           "id": "R1",
-          "name": "test_reaction",
-          "substrates": [{ "species": "O3", "stoichiometry": 1 }],
-          "products": [{ "species": "NO", "stoichiometry": 1 }],
-          "rate": 0.001
+          "name": "NO_O3_reaction",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": {
+            "op": "*",
+            "args": [
+              1.8e-12,
+              { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] },
+              "M"
+            ]
+          },
+          "reference": "JPL 19-5"
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": "j_NO2",
+          "reference": "TUV model calculations"
+        },
+        {
+          "id": "R3",
+          "name": "HO2_NO_reaction",
+          "substrates": [
+            { "species": "HO2", "stoichiometry": 1 },
+            { "species": "NO", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "OH", "stoichiometry": 1 },
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [8.1e-12, { "op": "exp", "args": [{ "op": "/", "args": [270, "T"] }] }] },
+          "reference": "IUPAC 2021"
         }
       ]
+    }
+  },
+
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-02T00:00:00Z"
+    },
+    "spatial": {
+      "lon": { "min": -130.0, "max": -100.0, "grid_spacing": 0.5, "units": "degrees" },
+      "lat": { "min": 30.0, "max": 50.0, "grid_spacing": 0.5, "units": "degrees" },
+      "lev": { "min": 1, "max": 10, "grid_spacing": 1, "units": "level" }
+    },
+    "initial_conditions": { "type": "default" },
+    "boundary_conditions": [
+      { "type": "fixed", "variable": "O3", "value": 40e-9, "location": "boundaries" }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "Rosenbrock23",
+      "abstol": 1e-8,
+      "reltol": 1e-6,
+      "maxiters": 10000
     }
   }
 }

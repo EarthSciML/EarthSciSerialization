@@ -10,22 +10,22 @@ This document maps ESM format specifications to test fixtures to ensure complete
 | 2. Top-Level Structure | All 8 required fields | ✅ Created | `valid/minimal_chemistry.esm` |
 | 3. Metadata | Authors, license, created, etc. | ❌ Missing | **GAP**: Need `metadata_complete.esm` |
 | 4. Expression AST | All operators, numbers, strings | ✅ Partial | `display/expr_precedence.json` (18 cases) |
-| 4.2 Built-in Operators | All 30+ operators | ❌ Partial | **GAP**: Missing laplacian, div, logical ops |
-| 4.3 Scoped References | Hierarchical dot notation | ❌ Missing | **GAP**: Need scoped ref fixtures |
-| 5. Events | Continuous and discrete | ❌ Missing | **GAP**: Need events_all_types.esm |
-| 5.2 Continuous Events | Root-finding, affect_neg | ❌ Missing | **GAP**: Need bouncing_ball.esm |
-| 5.3 Discrete Events | All trigger types | ❌ Missing | **GAP**: Need periodic/preset fixtures |
-| 5.6 Cross-System Events | Multi-system events | ❌ Missing | **GAP**: Need coupled event fixtures |
+| 4.2 Built-in Operators | All 30+ operators | ✅ Created | `display/all_operators.json` (35+ cases) |
+| 4.3 Scoped References | Hierarchical dot notation | ✅ Created | `scoping/hierarchical_scoped_references.esm` |
+| 5. Events | Continuous and discrete | ✅ Created | `events/continuous_events.esm`, `events/discrete_events.esm` |
+| 5.2 Continuous Events | Root-finding, affect_neg | ✅ Created | `events/continuous_events.esm` (bouncing_ball) |
+| 5.3 Discrete Events | All trigger types | ✅ Created | `events/discrete_events.esm` (periodic/preset) |
+| 5.6 Cross-System Events | Multi-system events | ✅ Created | `events/cross_system_events.esm` |
 | 6. Models (ODE Systems) | Variables, equations, events | ✅ Created | `valid/minimal_chemistry.esm` |
 | 7. Reaction Systems | Species, reactions, mass action | ✅ Created | `valid/minimal_chemistry.esm` |
 | 8. Data Loaders | By reference, provides vars | ✅ Created | `valid/minimal_chemistry.esm` |
 | 9. Operators | By reference, needed_vars | ❌ Missing | **GAP**: Need operator fixtures |
-| 10. Coupling | All 6 coupling types | ❌ Partial | Only operator_compose + variable_map |
+| 10. Coupling | All 6 coupling types | ✅ Created | `coupling/` (couple2, operator_apply, callback) |
 | 11. Domain | Temporal, spatial, BCs, ICs | ❌ Partial | Basic spatial in minimal_chemistry.esm |
 | 12. Solver | All 3 solver strategies | ❌ Partial | Only strang_threads in minimal_chemistry.esm |
 | 13. Complete Example | MinimalChemAdvection | ✅ Created | `valid/minimal_chemistry.esm` |
 
-**Coverage: 6/15 Complete, 4/15 Partial, 5/15 Missing**
+**Coverage: 11/15 Complete, 4/15 Partial, 0/15 Missing**
 
 ## Libraries Specification Coverage
 
