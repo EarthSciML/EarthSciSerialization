@@ -1,0 +1,145 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ExpressionGraphVariableDependencies",
+    "description": "Complex variable-level dependency graph test case",
+    "created": "2026-02-16"
+  },
+
+  "models": {
+    "VariableDependencyModel": {
+      "reference": { "notes": "Model demonstrating complex variable dependency chains" },
+      "variables": {
+        "x": { "type": "state", "units": "mol/L", "default": 1.0 },
+        "y": { "type": "state", "units": "mol/L", "default": 2.0 },
+        "z": { "type": "state", "units": "mol/L", "default": 0.5 },
+        "T": { "type": "parameter", "units": "K", "default": 298.15 },
+        "P": { "type": "parameter", "units": "atm", "default": 1.0 },
+        "k1": { "type": "parameter", "units": "L/mol/s", "default": 0.1 },
+        "k2": { "type": "parameter", "units": "L^2/mol^2/s", "default": 0.01 },
+        "alpha": { "type": "parameter", "units": "dimensionless", "default": 0.5 },
+        "beta": { "type": "parameter", "units": "dimensionless", "default": 2.0 }
+      },
+      "equations": [
+        {
+          "comment": "x depends on itself, y, z, T (through exp), P, and k1",
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": ["k1", "x", "y"] },
+              { "op": "*", "args": [
+                { "op": "exp", "args": [{ "op": "/", "args": [-1000, "T"] }] },
+                "P",
+                "z"
+              ]}
+            ]
+          }
+        },
+        {
+          "comment": "y depends on x^alpha, y, z^beta, T, and k2",
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": {
+            "op": "-",
+            "args": [
+              { "op": "*", "args": [
+                "k2",
+                { "op": "^", "args": ["x", "alpha"] },
+                { "op": "^", "args": ["z", "beta"] }
+              ]},
+              { "op": "*", "args": [
+                { "op": "/", "args": [298.15, "T"] },
+                "y"
+              ]}
+            ]
+          }
+        },
+        {
+          "comment": "z depends on x, y through complex nested expression, and all parameters",
+          "lhs": { "op": "D", "args": ["z"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              { "op": "sqrt", "args": [
+                { "op": "+", "args": [
+                  { "op": "*", "args": ["x", "y"] },
+                  { "op": "^", "args": ["T", 2] }
+                ]}
+              ]},
+              { "op": "log", "args": [
+                { "op": "+", "args": [
+                  1.0,
+                  { "op": "*", "args": ["P", "alpha", "beta"] }
+                ]}
+              ]}
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "reaction_systems": {
+    "ComplexKinetics": {
+      "reference": { "notes": "Reaction system with interdependent rate expressions" },
+      "species": [
+        { "name": "A", "units": "mol/L" },
+        { "name": "B", "units": "mol/L" },
+        { "name": "C", "units": "mol/L" },
+        { "name": "D", "units": "mol/L" }
+      ],
+      "parameters": [
+        { "name": "k_forward", "units": "L/mol/s", "default": 0.2 },
+        { "name": "k_reverse", "units": "L^2/mol^2/s", "default": 0.05 },
+        { "name": "T_reaction", "units": "K", "default": 300.0 },
+        { "name": "activation_energy", "units": "kJ/mol", "default": 50.0 }
+      ],
+      "reactions": [
+        {
+          "id": "R1",
+          "equation": "A + B → C + D",
+          "rate": {
+            "op": "*",
+            "args": [
+              "k_forward",
+              { "op": "exp", "args": [
+                { "op": "/", "args": [
+                  { "op": "-", "args": ["activation_energy"] },
+                  { "op": "*", "args": [8.314, "T_reaction"] }
+                ]}
+              ]},
+              "A",
+              "B"
+            ]
+          }
+        },
+        {
+          "id": "R2",
+          "equation": "C + D → A + B",
+          "rate": {
+            "op": "*",
+            "args": [
+              "k_reverse",
+              { "op": "^", "args": [
+                { "op": "+", "args": [1.0, { "op": "/", "args": ["T_reaction", 298.15] }] },
+                2
+              ]},
+              "C",
+              "D"
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "systems": ["VariableDependencyModel", "ComplexKinetics"],
+      "variable_map": {
+        "VariableDependencyModel.T": "ComplexKinetics.T_reaction"
+      }
+    }
+  ]
+}
