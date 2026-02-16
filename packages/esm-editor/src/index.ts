@@ -21,5 +21,19 @@ export {
   type HighlightProviderProps
 } from './primitives/highlighted-var';
 
+// Selection and inline editing primitives
+export {
+  SelectionProvider,
+  useSelectionContext,
+  createSelectionContext,
+  getVariableSuggestions,
+  pathsEqual,
+  pathToString,
+  stringToPath,
+  type SelectionContextValue,
+  type SelectionProviderProps,
+  type NodeDetails
+} from './primitives/selection';
+
 // Re-export types from esm-format for convenience
 export type { Expression, ExpressionNode as ExprNode } from 'esm-format';
