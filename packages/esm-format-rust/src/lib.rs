@@ -47,6 +47,9 @@ pub mod display;
 pub mod expression;
 pub mod graph;
 pub mod error;
+pub mod reactions;
+pub mod units;
+pub mod edit;
 
 #[cfg(feature = "wasm")]
 pub mod wasm;
@@ -65,7 +68,21 @@ pub use validate::{validate, ValidationResult, StructuralError, StructuralErrorC
 pub use substitute::{substitute_in_model, substitute_in_reaction_system};
 pub use display::{to_unicode, to_latex, to_ascii};
 pub use expression::{free_variables, free_parameters, contains, evaluate, simplify, substitute};
-pub use graph::{component_graph, component_exists, get_component_type, ComponentGraph, ComponentNode, CouplingEdge, ComponentType};
+pub use graph::{
+    component_graph, component_exists, get_component_type, expression_graph,
+    ComponentGraph, ComponentNode, CouplingEdge, ComponentType,
+    ExpressionGraph, ExpressionNodeType, DependencyEdge,
+    ExpressionGraphInput
+};
+// Note: ExpressionNode from graph module is different from types::ExpressionNode
+pub use graph::ExpressionNode as GraphExpressionNode;
+pub use reactions::{derive_odes, stoichiometric_matrix};
+pub use units::{parse_unit, check_dimensional_consistency, convert_units, Unit, Dimension, UnitError};
+pub use edit::{
+    add_model, remove_model, add_variable, remove_variable, add_equation, remove_equation,
+    replace_equation, add_reaction_system, add_species, remove_species, add_reaction,
+    remove_reaction, update_model_metadata, substitute_in_expression, EditError
+};
 pub use error::EsmError;
 
 /// Package version
