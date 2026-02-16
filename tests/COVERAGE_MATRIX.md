@@ -38,10 +38,10 @@ This document maps ESM format specifications to test fixtures to ensure complete
 | **Core** | Pretty-print | Required | Required | Required | Required | Required | ✅ Display format tests |
 | **Core** | Substitute | Required | Required | Required | Required | Required | ✅ Substitution tests |
 | **Analysis** | Unit checking | Required | Required | Required | Required | Optional | ❌ Missing unit test fixtures |
-| **Analysis** | Derive ODEs | Required | Required | Required | Required | Optional | ❌ Missing reaction→ODE fixtures |
-| **Analysis** | Stoich matrix | Required | Required | Required | Required | Optional | ❌ Missing stoich fixtures |
+| **Analysis** | Derive ODEs | Required | Required | Required | Required | Optional | ✅ Created `expected_trajectories/ode_derivation_examples.json` |
+| **Analysis** | Stoich matrix | Required | Required | Required | Required | Optional | ✅ Created (included in ODE examples) |
 | **Analysis** | System graphs | Required | Required | Required | Required | Required | ✅ Partial (1 case) |
-| **Analysis** | Expression graphs | Required | Required | Required | Required | Required | ❌ Missing |
+| **Analysis** | Expression graphs | Required | Required | Required | Required | Required | ✅ Created `graphs/expression_graphs.json` |
 | **Interactive** | Click-to-edit | SolidJS | — | — | — | — | ❌ Missing interaction fixtures |
 | **Interactive** | Structural editing | SolidJS | — | — | — | — | ❌ Missing |
 | **Interactive** | Coupling graph | SolidJS | — | — | — | — | ❌ Missing |
