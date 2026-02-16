@@ -1,7 +1,7 @@
 //! Expression manipulation utilities
 
 use crate::Expr;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 /// Extract all free variables from an expression
 ///
@@ -54,27 +54,81 @@ pub fn contains(expr: &Expr, var_name: &str) -> bool {
     }
 }
 
+/// Substitute variables in an expression
+///
+/// Performs recursive replacement of variables with expressions, with support for
+/// scoped reference resolution. Returns a new expression (immutable).
+///
+/// # Arguments
+///
+/// * `expr` - The expression to substitute variables in
+/// * `bindings` - Map from variable names to replacement expressions
+///
+/// # Returns
+///
+/// * New expression with substitutions applied
+pub fn substitute(expr: &Expr, bindings: &HashMap<String, Expr>) -> Expr {
+    match expr {
+        Expr::Number(n) => Expr::Number(*n),
+        Expr::Variable(var_name) => {
+            if let Some(replacement) = bindings.get(var_name) {
+                replacement.clone()
+            } else {
+                Expr::Variable(var_name.clone())
+            }
+        },
+        Expr::Operator(op_node) => {
+            let new_args: Vec<Expr> = op_node.args.iter()
+                .map(|arg| substitute(arg, bindings))
+                .collect();
+
+            Expr::Operator(crate::types::ExpressionNode {
+                op: op_node.op.clone(),
+                args: new_args,
+                wrt: op_node.wrt.clone(),
+                dim: op_node.dim.clone(),
+            })
+        }
+    }
+}
+
 /// Evaluate an expression with given variable values
 ///
 /// # Arguments
 ///
 /// * `expr` - The expression to evaluate
-/// * `values` - Map from variable names to numeric values
+/// * `bindings` - Map from variable names to numeric values
 ///
 /// # Returns
 ///
 /// * `Ok(f64)` if evaluation succeeds
-/// * `Err(String)` if evaluation fails (undefined variable, math error, etc.)
-pub fn evaluate(expr: &Expr, values: &std::collections::HashMap<String, f64>) -> Result<f64, String> {
+/// * `Err(Vec<String>)` with unbound variable names if evaluation fails
+pub fn evaluate(expr: &Expr, bindings: &HashMap<String, f64>) -> Result<f64, Vec<String>> {
+    let mut unbound_vars = Vec::new();
+    match evaluate_with_unbound_tracking(expr, bindings, &mut unbound_vars) {
+        Ok(value) => Ok(value),
+        Err(_) => Err(unbound_vars),
+    }
+}
+
+/// Helper function to evaluate expression while tracking unbound variables
+fn evaluate_with_unbound_tracking(
+    expr: &Expr,
+    bindings: &HashMap<String, f64>,
+    unbound_vars: &mut Vec<String>
+) -> Result<f64, ()> {
     match expr {
         Expr::Number(n) => Ok(*n),
         Expr::Variable(name) => {
-            values.get(name)
-                .copied()
-                .ok_or_else(|| format!("Undefined variable: {}", name))
+            if let Some(value) = bindings.get(name) {
+                Ok(*value)
+            } else {
+                unbound_vars.push(name.clone());
+                Err(())
+            }
         },
         Expr::Operator(op_node) => {
-            evaluate_operator(&op_node.op, &op_node.args, values)
+            evaluate_operator_with_unbound_tracking(&op_node.op, &op_node.args, bindings, unbound_vars)
         }
     }
 }
@@ -118,93 +172,326 @@ fn collect_variables(expr: &Expr, vars: &mut HashSet<String>) {
     }
 }
 
-fn evaluate_operator(
+fn evaluate_operator_with_unbound_tracking(
     op: &str,
     args: &[Expr],
-    values: &std::collections::HashMap<String, f64>
-) -> Result<f64, String> {
+    bindings: &HashMap<String, f64>,
+    unbound_vars: &mut Vec<String>
+) -> Result<f64, ()> {
     match op {
+        // Arithmetic operators
         "+" => {
-            if args.len() != 2 {
-                return Err(format!("Addition requires exactly 2 arguments, got {}", args.len()));
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(a + b),
+                _ => Err(())
             }
-            let a = evaluate(&args[0], values)?;
-            let b = evaluate(&args[1], values)?;
-            Ok(a + b)
         },
         "-" => {
             if args.len() == 1 {
-                let a = evaluate(&args[0], values)?;
-                Ok(-a)
+                let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+                match a_result {
+                    Ok(a) => Ok(-a),
+                    _ => Err(())
+                }
             } else if args.len() == 2 {
-                let a = evaluate(&args[0], values)?;
-                let b = evaluate(&args[1], values)?;
-                Ok(a - b)
+                let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+                let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+                match (a_result, b_result) {
+                    (Ok(a), Ok(b)) => Ok(a - b),
+                    _ => Err(())
+                }
             } else {
-                Err(format!("Subtraction requires 1 or 2 arguments, got {}", args.len()))
+                Err(())
             }
         },
         "*" => {
-            if args.len() != 2 {
-                return Err(format!("Multiplication requires exactly 2 arguments, got {}", args.len()));
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(a * b),
+                _ => Err(())
             }
-            let a = evaluate(&args[0], values)?;
-            let b = evaluate(&args[1], values)?;
-            Ok(a * b)
         },
         "/" => {
-            if args.len() != 2 {
-                return Err(format!("Division requires exactly 2 arguments, got {}", args.len()));
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => {
+                    if b == 0.0 { Err(()) } else { Ok(a / b) }
+                },
+                _ => Err(())
             }
-            let a = evaluate(&args[0], values)?;
-            let b = evaluate(&args[1], values)?;
-            if b == 0.0 {
-                return Err("Division by zero".to_string());
-            }
-            Ok(a / b)
         },
         "^" => {
-            if args.len() != 2 {
-                return Err(format!("Power requires exactly 2 arguments, got {}", args.len()));
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(a.powf(b)),
+                _ => Err(())
             }
-            let a = evaluate(&args[0], values)?;
-            let b = evaluate(&args[1], values)?;
-            Ok(a.powf(b))
         },
-        "sin" => {
-            if args.len() != 1 {
-                return Err(format!("sin requires exactly 1 argument, got {}", args.len()));
-            }
-            let a = evaluate(&args[0], values)?;
-            Ok(a.sin())
-        },
-        "cos" => {
-            if args.len() != 1 {
-                return Err(format!("cos requires exactly 1 argument, got {}", args.len()));
-            }
-            let a = evaluate(&args[0], values)?;
-            Ok(a.cos())
-        },
+
+        // Mathematical functions
         "exp" => {
-            if args.len() != 1 {
-                return Err(format!("exp requires exactly 1 argument, got {}", args.len()));
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.exp()),
+                _ => Err(())
             }
-            let a = evaluate(&args[0], values)?;
-            Ok(a.exp())
         },
         "log" => {
-            if args.len() != 1 {
-                return Err(format!("log requires exactly 1 argument, got {}", args.len()));
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => if a <= 0.0 { Err(()) } else { Ok(a.ln()) },
+                _ => Err(())
             }
-            let a = evaluate(&args[0], values)?;
-            if a <= 0.0 {
-                return Err("log of non-positive number".to_string());
-            }
-            Ok(a.ln())
         },
-        _ => {
-            Err(format!("Unknown operator: {}", op))
-        }
+        "log10" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => if a <= 0.0 { Err(()) } else { Ok(a.log10()) },
+                _ => Err(())
+            }
+        },
+        "sqrt" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => if a < 0.0 { Err(()) } else { Ok(a.sqrt()) },
+                _ => Err(())
+            }
+        },
+        "abs" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.abs()),
+                _ => Err(())
+            }
+        },
+
+        // Trigonometric functions
+        "sin" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.sin()),
+                _ => Err(())
+            }
+        },
+        "cos" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.cos()),
+                _ => Err(())
+            }
+        },
+        "tan" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.tan()),
+                _ => Err(())
+            }
+        },
+        "asin" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => if a < -1.0 || a > 1.0 { Err(()) } else { Ok(a.asin()) },
+                _ => Err(())
+            }
+        },
+        "acos" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => if a < -1.0 || a > 1.0 { Err(()) } else { Ok(a.acos()) },
+                _ => Err(())
+            }
+        },
+        "atan" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.atan()),
+                _ => Err(())
+            }
+        },
+        "atan2" => {
+            if args.len() != 2 { return Err(()); }
+            let y_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let x_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (y_result, x_result) {
+                (Ok(y), Ok(x)) => Ok(y.atan2(x)),
+                _ => Err(())
+            }
+        },
+
+        // Min/max and rounding
+        "min" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(a.min(b)),
+                _ => Err(())
+            }
+        },
+        "max" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(a.max(b)),
+                _ => Err(())
+            }
+        },
+        "floor" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.floor()),
+                _ => Err(())
+            }
+        },
+        "ceil" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(a.ceil()),
+                _ => Err(())
+            }
+        },
+        "sign" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(if a > 0.0 { 1.0 } else if a < 0.0 { -1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+
+        // Conditional
+        "ifelse" => {
+            if args.len() != 3 { return Err(()); }
+            let cond_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match cond_result {
+                Ok(cond) => {
+                    if cond != 0.0 {
+                        evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars)
+                    } else {
+                        evaluate_with_unbound_tracking(&args[2], bindings, unbound_vars)
+                    }
+                },
+                _ => Err(())
+            }
+        },
+
+        // Comparison operators (return 1.0 for true, 0.0 for false)
+        ">" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if a > b { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+        "<" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if a < b { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+        ">=" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if a >= b { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+        "<=" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if a <= b { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+        "==" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if (a - b).abs() < f64::EPSILON { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+        "!=" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if (a - b).abs() >= f64::EPSILON { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+
+        // Logical operators (treat non-zero as true)
+        "and" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if a != 0.0 && b != 0.0 { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+        "or" => {
+            if args.len() != 2 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
+            match (a_result, b_result) {
+                (Ok(a), Ok(b)) => Ok(if a != 0.0 || b != 0.0 { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+        "not" => {
+            if args.len() != 1 { return Err(()); }
+            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
+            match a_result {
+                Ok(a) => Ok(if a == 0.0 { 1.0 } else { 0.0 }),
+                _ => Err(())
+            }
+        },
+
+        // Differential operators - for now return 0 (these would need special handling)
+        "D" | "grad" | "div" | "laplacian" => Ok(0.0),
+
+        // Pre operator - just return the argument for now
+        "Pre" => {
+            if args.len() != 1 { return Err(()); }
+            evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars)
+        },
+
+        _ => Err(())
     }
 }
 
@@ -354,21 +641,22 @@ mod tests {
                 dim: None,
             });
 
-        let mut values = HashMap::new();
-        values.insert("x".to_string(), 3.0);
+        let mut bindings = HashMap::new();
+        bindings.insert("x".to_string(), 3.0);
 
-        let result = evaluate(&expr, &values);
+        let result = evaluate(&expr, &bindings);
         assert_eq!(result.unwrap(), 8.0);
     }
 
     #[test]
     fn test_evaluate_undefined_variable() {
         let expr = Expr::Variable("undefined".to_string());
-        let values = HashMap::new();
+        let bindings = HashMap::new();
 
-        let result = evaluate(&expr, &values);
+        let result = evaluate(&expr, &bindings);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Undefined variable"));
+        let unbound_vars = result.unwrap_err();
+        assert_eq!(unbound_vars, vec!["undefined"]);
     }
 
     #[test]
@@ -426,5 +714,111 @@ mod tests {
             Expr::Number(n) => assert_eq!(n, 0.0),
             _ => panic!("Expected number 0"),
         }
+    }
+
+    #[test]
+    fn test_substitute_variable() {
+        let mut bindings = HashMap::new();
+        bindings.insert("x".to_string(), Expr::Number(42.0));
+
+        let expr = Expr::Variable("x".to_string());
+        let result = substitute(&expr, &bindings);
+
+        match result {
+            Expr::Number(n) => assert_eq!(n, 42.0),
+            _ => panic!("Expected number"),
+        }
+    }
+
+    #[test]
+    fn test_substitute_no_match() {
+        let bindings = HashMap::new();
+        let expr = Expr::Variable("y".to_string());
+        let result = substitute(&expr, &bindings);
+
+        match result {
+            Expr::Variable(name) => assert_eq!(name, "y"),
+            _ => panic!("Expected variable"),
+        }
+    }
+
+    #[test]
+    fn test_substitute_in_operator() {
+        let mut bindings = HashMap::new();
+        bindings.insert("x".to_string(), Expr::Number(2.0));
+        bindings.insert("y".to_string(), Expr::Number(3.0));
+
+        let expr = Expr::Operator(ExpressionNode {
+            op: "+".to_string(),
+            args: vec![
+                Expr::Variable("x".to_string()),
+                Expr::Variable("y".to_string()),
+            ],
+            wrt: None,
+            dim: None,
+        });
+
+        let result = substitute(&expr, &bindings);
+
+        match result {
+            Expr::Operator(op_node) => {
+                assert_eq!(op_node.op, "+");
+                assert_eq!(op_node.args.len(), 2);
+                match &op_node.args[0] {
+                    Expr::Number(n) => assert_eq!(*n, 2.0),
+                    _ => panic!("Expected number"),
+                }
+                match &op_node.args[1] {
+                    Expr::Number(n) => assert_eq!(*n, 3.0),
+                    _ => panic!("Expected number"),
+                }
+            },
+            _ => panic!("Expected operator"),
+        }
+    }
+
+    #[test]
+    fn test_evaluate_multiple_unbound_variables() {
+        let expr = Expr::Operator(ExpressionNode {
+                op: "+".to_string(),
+                args: vec![
+                Expr::Variable("x".to_string()),
+                Expr::Variable("y".to_string()),
+            ],
+                wrt: None,
+                dim: None,
+            });
+
+        let bindings = HashMap::new();
+        let result = evaluate(&expr, &bindings);
+
+        assert!(result.is_err());
+        let mut unbound_vars = result.unwrap_err();
+        unbound_vars.sort();
+        assert_eq!(unbound_vars, vec!["x", "y"]);
+    }
+
+    #[test]
+    fn test_evaluate_new_operators() {
+        let mut bindings = HashMap::new();
+        bindings.insert("x".to_string(), 2.0);
+
+        // Test sqrt
+        let expr = Expr::Operator(ExpressionNode {
+            op: "sqrt".to_string(),
+            args: vec![Expr::Number(9.0)],
+            wrt: None,
+            dim: None,
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 3.0);
+
+        // Test max
+        let expr = Expr::Operator(ExpressionNode {
+            op: "max".to_string(),
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(5.0)],
+            wrt: None,
+            dim: None,
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 5.0);
     }
 }
