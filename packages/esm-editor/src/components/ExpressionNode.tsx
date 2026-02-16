@@ -8,8 +8,9 @@
  * - Operator nodes that dispatch to OperatorLayout components
  */
 
-import { Component, Accessor, createSignal, createMemo } from 'solid-js';
+import { Component, Accessor, createSignal, createMemo, Show } from 'solid-js';
 import type { Expression, ExpressionNode as ExprNode } from 'esm-format';
+import { useStructuralEditingContext, DraggableExpression, StructuralEditingMenu, COMMUTATIVE_OPERATORS } from '../primitives/structural-editing';
 
 export interface ExpressionNodeProps {
   /** The expression to render (reactive from Solid store) */
@@ -29,6 +30,15 @@ export interface ExpressionNodeProps {
 
   /** Callback when replacing a node with new expression */
   onReplace: (path: (string | number)[], newExpr: Expression) => void;
+
+  /** Currently selected path (for showing structural editing menu) */
+  selectedPath?: (string | number)[] | null;
+
+  /** Parent path for drag operations */
+  parentPath?: (string | number)[];
+
+  /** Index within parent for drag operations */
+  indexInParent?: number;
 }
 
 /**
@@ -47,25 +57,64 @@ function renderChemicalName(name: string): string {
 }
 
 /**
- * Placeholder for OperatorLayout component
- * TODO: Implement proper operator layout selection
+ * Enhanced OperatorLayout component with drag-and-drop support
  */
-function OperatorLayout(props: { node: ExprNode; path: (string | number)[]; highlightedVars: Accessor<Set<string>>; onHoverVar: (name: string | null) => void; onSelect: (path: (string | number)[]) => void; onReplace: (path: (string | number)[], newExpr: Expression) => void; }) {
-  // Placeholder implementation - just render operator name and args
+function OperatorLayout(props: {
+  node: ExprNode;
+  path: (string | number)[];
+  highlightedVars: Accessor<Set<string>>;
+  onHoverVar: (name: string | null) => void;
+  onSelect: (path: (string | number)[]) => void;
+  onReplace: (path: (string | number)[], newExpr: Expression) => void;
+  selectedPath?: (string | number)[] | null;
+}) {
+  // Get structural editing context if available
+  let structuralEditing: ReturnType<typeof useStructuralEditingContext> | undefined;
+  try {
+    structuralEditing = useStructuralEditingContext();
+  } catch {
+    // Not in structural editing context
+  }
+
+  const isCommutative = COMMUTATIVE_OPERATORS.has(props.node.op);
+
   return (
     <span class="esm-operator-layout" data-operator={props.node.op}>
       <span class="esm-operator-name">{props.node.op}</span>
       <span class="esm-operator-args">
-        ({props.node.args?.map((arg: Expression, index: number) => (
-          <ExpressionNode
-            expr={arg}
-            path={[...props.path, 'args', index]}
-            highlightedVars={props.highlightedVars}
-            onHoverVar={props.onHoverVar}
-            onSelect={props.onSelect}
-            onReplace={props.onReplace}
-          />
-        )).join(', ')})
+        ({props.node.args?.map((arg: Expression, index: number) => {
+          const argPath = [...props.path, 'args', index];
+          const childNode = (
+            <ExpressionNode
+              expr={arg}
+              path={argPath}
+              highlightedVars={props.highlightedVars}
+              onHoverVar={props.onHoverVar}
+              onSelect={props.onSelect}
+              onReplace={props.onReplace}
+              selectedPath={props.selectedPath}
+              parentPath={props.path}
+              indexInParent={index}
+            />
+          );
+
+          // Wrap in draggable component for commutative operations
+          if (structuralEditing && isCommutative && (props.node.args?.length || 0) > 1) {
+            return (
+              <DraggableExpression
+                path={argPath}
+                index={index}
+                parentPath={props.path}
+                canDrag={true}
+              >
+                {childNode}
+              </DraggableExpression>
+            );
+          }
+
+          return childNode;
+        })}
+        )
       </span>
     </span>
   );
@@ -76,6 +125,16 @@ function OperatorLayout(props: { node: ExprNode; path: (string | number)[]; high
  */
 export const ExpressionNode: Component<ExpressionNodeProps> = (props) => {
   const [isHovered, setIsHovered] = createSignal(false);
+  const [showStructuralMenu, setShowStructuralMenu] = createSignal(false);
+  const [menuPosition, setMenuPosition] = createSignal({ x: 0, y: 0 });
+
+  // Get structural editing context if available
+  let structuralEditing: ReturnType<typeof useStructuralEditingContext> | undefined;
+  try {
+    structuralEditing = useStructuralEditingContext();
+  } catch {
+    // Not in structural editing context, continue without
+  }
 
   // Determine if this expression is a variable reference
   const isVariable = createMemo(() =>
@@ -87,12 +146,28 @@ export const ExpressionNode: Component<ExpressionNodeProps> = (props) => {
     isVariable() && props.highlightedVars().has(props.expr as string)
   );
 
+  // Check if this node is currently selected
+  const isSelected = createMemo(() =>
+    props.selectedPath &&
+    props.selectedPath.length === props.path.length &&
+    props.selectedPath.every((segment, i) => segment === props.path[i])
+  );
+
+  // Check if this can be dragged (is in a commutative operation with siblings)
+  const canDrag = createMemo(() =>
+    structuralEditing &&
+    props.parentPath &&
+    typeof props.indexInParent === 'number' &&
+    props.parentPath.length > 0
+  );
+
   // CSS classes for styling
   const nodeClasses = createMemo(() => {
     const classes = ['esm-expression-node'];
 
     if (isHovered()) classes.push('hovered');
     if (shouldHighlight()) classes.push('highlighted');
+    if (isSelected()) classes.push('selected');
     if (isVariable()) classes.push('variable');
     if (typeof props.expr === 'number') classes.push('number');
     if (typeof props.expr === 'object') classes.push('operator');
@@ -118,6 +193,21 @@ export const ExpressionNode: Component<ExpressionNodeProps> = (props) => {
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation();
     props.onSelect(props.path);
+  };
+
+  const handleContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (structuralEditing) {
+      props.onSelect(props.path); // Select the node first
+      setMenuPosition({ x: e.clientX, y: e.clientY });
+      setShowStructuralMenu(true);
+    }
+  };
+
+  const handleCloseMenu = () => {
+    setShowStructuralMenu(false);
   };
 
   // Render based on expression type
@@ -150,6 +240,7 @@ export const ExpressionNode: Component<ExpressionNodeProps> = (props) => {
           onHoverVar={props.onHoverVar}
           onSelect={props.onSelect}
           onReplace={props.onReplace}
+          selectedPath={props.selectedPath}
         />
       );
     }
@@ -158,20 +249,49 @@ export const ExpressionNode: Component<ExpressionNodeProps> = (props) => {
     return <span class="esm-unknown">?</span>;
   };
 
-  return (
-    <span
-      class={nodeClasses()}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-      tabIndex={0}
-      role="button"
-      aria-label={getAriaLabel()}
-      data-path={props.path.join('.')}
-    >
-      {renderContent()}
-    </span>
+  const content = (
+    <>
+      <span
+        class={nodeClasses()}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        tabIndex={0}
+        role="button"
+        aria-label={getAriaLabel()}
+        data-path={props.path.join('.')}
+      >
+        {renderContent()}
+      </span>
+
+      <Show when={showStructuralMenu() && structuralEditing}>
+        <StructuralEditingMenu
+          selectedPath={props.path}
+          selectedExpr={props.expr}
+          isVisible={showStructuralMenu()}
+          position={menuPosition()}
+          onClose={handleCloseMenu}
+        />
+      </Show>
+    </>
   );
+
+  // Wrap in draggable component if this can be dragged
+  if (canDrag() && structuralEditing && props.parentPath && typeof props.indexInParent === 'number') {
+    return (
+      <DraggableExpression
+        path={props.path}
+        index={props.indexInParent}
+        parentPath={props.parentPath}
+        canDrag={true}
+      >
+        {content}
+      </DraggableExpression>
+    );
+  }
+
+  return content;
 
   // Get ARIA label for accessibility
   function getAriaLabel(): string {
