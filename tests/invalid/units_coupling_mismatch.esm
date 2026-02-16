@@ -1,0 +1,28 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnitsCouplingMismatch",
+    "description": "Invalid file demonstrating unit mismatch in coupling",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "SystemA": {
+      "variables": {
+        "pressure": { "type": "parameter", "units": "Pa", "default": 101325.0, "description": "Pressure" }
+      },
+      "equations": []
+    },
+    "SystemB": {
+      "variables": {
+        "temperature": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "equations": []
+    }
+  },
+
+  "coupling": [
+    { "type": "variable_map", "from": "SystemA.pressure", "to": "SystemB.temperature", "transform": "direct_map" }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnitsPropagation",
+    "description": "Test fixtures for unit propagation through mathematical operations",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-02-16T00:00:00Z",
+    "tags": ["units", "validation", "propagation", "dimensional_analysis"]
+  },
+
+  "models": {
+    "UnitPropagationModel": {
+      "reference": { "notes": "Model testing unit propagation through various mathematical operations" },
+      "variables": {
+        "mass": { "type": "state", "units": "kg", "default": 1.0, "description": "Mass" },
+        "volume": { "type": "state", "units": "m^3", "default": 0.001, "description": "Volume" },
+        "time": { "type": "parameter", "units": "s", "default": 1.0, "description": "Time parameter" },
+        "length": { "type": "parameter", "units": "m", "default": 1.0, "description": "Length parameter" },
+        "temperature": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" },
+        "pressure": { "type": "parameter", "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "density": { "type": "observed", "units": "kg/m^3", "description": "Density from mass/volume",
+          "expression": { "op": "/", "args": ["mass", "volume"] }
+        },
+        "velocity": { "type": "observed", "units": "m/s", "description": "Velocity from length/time",
+          "expression": { "op": "/", "args": ["length", "time"] }
+        },
+        "acceleration": { "type": "observed", "units": "m/s^2", "description": "Acceleration from velocity/time",
+          "expression": { "op": "/", "args": [{ "op": "/", "args": ["length", "time"] }, "time"] }
+        },
+        "force": { "type": "observed", "units": "kg*m/s^2", "description": "Force from mass*acceleration",
+          "expression": { "op": "*", "args": ["mass", { "op": "/", "args": [{ "op": "/", "args": ["length", "time"] }, "time"] }] }
+        },
+        "energy": { "type": "observed", "units": "kg*m^2/s^2", "description": "Energy from force*length",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": ["mass", { "op": "/", "args": [{ "op": "/", "args": ["length", "time"] }, "time"] }] },
+            "length"
+          ] }
+        },
+        "power": { "type": "observed", "units": "kg*m^2/s^3", "description": "Power from energy/time",
+          "expression": { "op": "/", "args": [
+            { "op": "*", "args": [
+              { "op": "*", "args": ["mass", { "op": "/", "args": [{ "op": "/", "args": ["length", "time"] }, "time"] }] },
+              "length"
+            ] },
+            "time"
+          ] }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["mass"], "wrt": "t" },
+          "rhs": { "op": "/", "args": [
+            { "op": "*", "args": ["density", "volume"] },
+            "time"
+          ] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["volume"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "/", "args": ["length", "time"] },
+            { "op": "*", "args": ["length", "length"] }
+          ] }
+        }
+      ]
+    },
+
+    "ThermodynamicsModel": {
+      "reference": { "notes": "Model testing unit propagation in thermodynamic calculations" },
+      "variables": {
+        "n": { "type": "parameter", "units": "mol", "default": 1.0, "description": "Amount of substance" },
+        "R": { "type": "parameter", "units": "J/(mol*K)", "default": 8.314, "description": "Gas constant" },
+        "T": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" },
+        "P": { "type": "parameter", "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "V": { "type": "observed", "units": "m^3", "description": "Volume from ideal gas law",
+          "expression": { "op": "/", "args": [
+            { "op": "*", "args": [{ "op": "*", "args": ["n", "R"] }, "T"] },
+            "P"
+          ] }
+        },
+        "entropy": { "type": "observed", "units": "J/K", "description": "Entropy calculation",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": ["n", "R"] },
+            { "op": "ln", "args": [{ "op": "/", "args": ["V", { "op": "*", "args": ["n", 0.0224] }] }] }
+          ] }
+        }
+      },
+      "equations": []
+    },
+
+    "FluidDynamicsModel": {
+      "reference": { "notes": "Model testing unit propagation in fluid dynamics" },
+      "variables": {
+        "rho": { "type": "parameter", "units": "kg/m^3", "default": 1000.0, "description": "Fluid density" },
+        "v": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Fluid velocity" },
+        "A": { "type": "parameter", "units": "m^2", "default": 0.01, "description": "Cross-sectional area" },
+        "mu": { "type": "parameter", "units": "Pa*s", "default": 0.001, "description": "Dynamic viscosity" },
+        "L": { "type": "parameter", "units": "m", "default": 1.0, "description": "Characteristic length" },
+        "mass_flow": { "type": "observed", "units": "kg/s", "description": "Mass flow rate",
+          "expression": { "op": "*", "args": [{ "op": "*", "args": ["rho", "v"] }, "A"] }
+        },
+        "reynolds": { "type": "observed", "units": "1", "description": "Reynolds number (dimensionless)",
+          "expression": { "op": "/", "args": [
+            { "op": "*", "args": [{ "op": "*", "args": ["rho", "v"] }, "L"] },
+            "mu"
+          ] }
+        },
+        "pressure_drop": { "type": "observed", "units": "Pa", "description": "Pressure drop",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": [
+              { "op": "/", "args": ["mu", "rho"] },
+              { "op": "/", "args": ["rho", "L"] }
+            ] },
+            { "op": "^", "args": ["v", 2] }
+          ] }
+        }
+      },
+      "equations": []
+    }
+  }
+}
