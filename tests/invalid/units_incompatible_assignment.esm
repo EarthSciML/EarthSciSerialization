@@ -1,0 +1,24 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnitsIncompatibleAssignment",
+    "description": "Invalid file demonstrating unit mismatch in equation assignment",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "BadUnitsModel": {
+      "variables": {
+        "velocity": { "type": "state", "units": "m/s", "default": 0.0, "description": "Velocity" },
+        "mass": { "type": "parameter", "units": "kg", "default": 10.0, "description": "Mass" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["velocity"], "wrt": "t" },
+          "rhs": "mass"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,291 @@
+{
+  "units_inconsistent_addition.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_sum",
+        "code": "unit_inconsistency",
+        "message": "Cannot add quantities with different units: 'm' + 'kg'",
+        "details": {
+          "operation": "addition",
+          "left_units": "m",
+          "right_units": "kg",
+          "variable": "invalid_sum"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_inconsistent_subtraction.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_diff",
+        "code": "unit_inconsistency",
+        "message": "Cannot subtract quantities with different units: 'Pa' - 'K'",
+        "details": {
+          "operation": "subtraction",
+          "left_units": "Pa",
+          "right_units": "K",
+          "variable": "invalid_diff"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_exponent.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_power",
+        "code": "unit_inconsistency",
+        "message": "Exponent must be dimensionless, got 'kg' for base with units 'm'",
+        "details": {
+          "operation": "exponentiation",
+          "base_units": "m",
+          "exponent_units": "kg",
+          "variable": "invalid_power"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_incompatible_assignment.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Left-hand side has units 'm/s' but right-hand side has units 'kg'",
+        "details": {
+          "lhs_units": "m/s",
+          "rhs_units": "kg",
+          "equation_index": 0
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_derivative.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Derivative d(x)/dt has units 'm/s' but assigned expression has units 'kg'",
+        "details": {
+          "derivative_variable": "x",
+          "derivative_variable_units": "m",
+          "wrt_variable": "t",
+          "wrt_variable_units": "s",
+          "expected_units": "m/s",
+          "actual_units": "kg",
+          "equation_index": 0
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_logarithm.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_log",
+        "code": "unit_inconsistency",
+        "message": "Logarithm argument must be dimensionless, got units 'kg'",
+        "details": {
+          "operation": "logarithm",
+          "function": "ln",
+          "argument_units": "kg",
+          "variable": "invalid_log"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_exponential.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_exp",
+        "code": "unit_inconsistency",
+        "message": "Exponential argument must be dimensionless, got units 'K'",
+        "details": {
+          "operation": "exponential",
+          "function": "exp",
+          "argument_units": "K",
+          "variable": "invalid_exp"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_trigonometry.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_sin",
+        "code": "unit_inconsistency",
+        "message": "Trigonometric function argument must be dimensionless or in radians, got units 'mol'",
+        "details": {
+          "operation": "trigonometry",
+          "function": "sin",
+          "argument_units": "mol",
+          "variable": "invalid_sin"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_reaction_rate_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/reaction_systems/BadReactions/reactions/0",
+        "code": "unit_inconsistency",
+        "message": "Reaction rate expression has incompatible units for reaction stoichiometry",
+        "details": {
+          "reaction_id": "bad_rate_units",
+          "expected_rate_units": "mol/(m^3*s)",
+          "actual_rate_units": "kg/s",
+          "rate_constant_units": "kg/(mol*s)",
+          "substrate_concentration_units": "mol/m^3"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_parameter_default_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/temperature",
+        "code": "unit_inconsistency",
+        "message": "Parameter default value units do not match declared units",
+        "details": {
+          "variable": "temperature",
+          "declared_units": "K",
+          "default_value": 25.0,
+          "inferred_default_units": "degC",
+          "note": "Default value appears to be in different unit system"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_conversion_factor_error.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/converted_pressure",
+        "code": "unit_inconsistency",
+        "message": "Unit conversion factor is incorrect for specified unit transformation",
+        "details": {
+          "variable": "converted_pressure",
+          "from_units": "Pa",
+          "to_units": "atm",
+          "conversion_factor_used": 100.0,
+          "correct_conversion_factor": 9.869e-6,
+          "error_magnitude": "factor of ~10000 off"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_coupling_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "unit_inconsistency",
+        "message": "Variable mapping between systems has incompatible units",
+        "details": {
+          "coupling_type": "variable_map",
+          "from": "SystemA.pressure",
+          "from_units": "Pa",
+          "to": "SystemB.temperature",
+          "to_units": "K",
+          "transform": "direct_map"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_mixed_dimensional_operations.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ComplexUnitsModel/variables/invalid_complex_expr",
+        "code": "unit_inconsistency",
+        "message": "Complex expression contains multiple unit inconsistencies",
+        "details": {
+          "variable": "invalid_complex_expr",
+          "errors": [
+            {
+              "operation": "addition",
+              "left_units": "m^2",
+              "right_units": "kg*m/s^2"
+            },
+            {
+              "operation": "division",
+              "numerator_units": "mixed",
+              "denominator_units": "s^2"
+            }
+          ]
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_gradient_operator_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/SpatialModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Gradient operator applied to variable with incompatible spatial units",
+        "details": {
+          "variable": "concentration",
+          "variable_units": "mol/m^3",
+          "gradient_dimension": "x",
+          "spatial_coordinate_units": "degrees",
+          "expected_result_units": "mol/(m^3*m)",
+          "problematic_result_units": "mol/(m^3*degrees)"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_dimensional_constant_error.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ConstantUnitsModel/variables/gas_law_calculation",
+        "code": "unit_inconsistency",
+        "message": "Physical constant used with incorrect dimensional analysis",
+        "details": {
+          "variable": "gas_law_calculation",
+          "constant": "R",
+          "declared_constant_units": "J/(mol*K)",
+          "used_as_units": "L*atm/(mol*K)",
+          "context": "Mixing unit systems in gas law calculation"
+        }
+      }
+    ],
+    "is_valid": false
+  }
+}
