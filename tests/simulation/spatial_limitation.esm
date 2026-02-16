@@ -1,0 +1,101 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SpatialLimitationTest",
+    "description": "Test case with spatial operators to verify Python simulation error handling",
+    "authors": ["Test Suite"],
+    "created": "2026-02-16T00:00:00Z",
+    "tags": ["test", "spatial", "error-handling", "limitation", "2D"]
+  },
+  "models": {
+    "SpatialDiffusion": {
+      "reference": {
+        "notes": "2D diffusion equation with spatial operators that should cause Python to error gracefully"
+      },
+      "variables": {
+        "concentration": { "type": "state", "units": "kg/m^3", "default": 1.0, "description": "Scalar concentration field" },
+        "diffusivity": { "type": "parameter", "units": "m^2/s", "default": 0.01, "description": "Diffusion coefficient" },
+        "source_rate": { "type": "parameter", "units": "kg/(m^3*s)", "default": 0.1, "description": "Point source emission rate" },
+        "decay_rate": { "type": "parameter", "units": "s^-1", "default": 0.001, "description": "First-order decay rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["concentration"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": [
+              "diffusivity",
+              { "op": "laplacian", "args": ["concentration"] }
+            ]},
+            { "op": "-", "args": [
+              "source_rate",
+              { "op": "*", "args": ["decay_rate", "concentration"] }
+            ]}
+          ]}
+        }
+      ]
+    },
+    "AdvectionDiffusion": {
+      "reference": {
+        "notes": "Advection-diffusion with gradient operators"
+      },
+      "variables": {
+        "tracer": { "type": "state", "units": "kg/m^3", "default": 0.5, "description": "Passive tracer concentration" },
+        "velocity_x": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "X-velocity component" },
+        "velocity_y": { "type": "parameter", "units": "m/s", "default": 1.0, "description": "Y-velocity component" },
+        "diffusion_coeff": { "type": "parameter", "units": "m^2/s", "default": 0.005, "description": "Turbulent diffusion coefficient" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["tracer"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": [
+              "diffusion_coeff",
+              { "op": "laplacian", "args": ["tracer"] }
+            ]},
+            { "op": "-", "args": [
+              { "op": "dot", "args": [
+                { "op": "vec", "args": ["velocity_x", "velocity_y"] },
+                { "op": "grad", "args": ["tracer"] }
+              ]}
+            ]}
+          ]}
+        }
+      ]
+    }
+  },
+  "domain": {
+    "spatial": {
+      "dimensions": ["x", "y"],
+      "x": { "min": 0.0, "max": 100.0, "resolution": 1.0 },
+      "y": { "min": 0.0, "max": 50.0, "resolution": 1.0 },
+      "boundary_conditions": {
+        "concentration": {
+          "x_min": { "type": "dirichlet", "value": 0.0 },
+          "x_max": { "type": "neumann", "value": 0.0 },
+          "y_min": { "type": "dirichlet", "value": 0.0 },
+          "y_max": { "type": "dirichlet", "value": 0.0 }
+        },
+        "tracer": {
+          "x_min": { "type": "dirichlet", "value": 1.0 },
+          "x_max": { "type": "neumann", "value": 0.0 },
+          "y_min": { "type": "neumann", "value": 0.0 },
+          "y_max": { "type": "neumann", "value": 0.0 }
+        }
+      }
+    },
+    "temporal": { "start": 0.0, "end": 100.0, "step": 1.0 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "SpatialDiffusion.concentration": 1.0,
+      "AdvectionDiffusion.tracer": 0.5
+    }}
+  },
+  "solver": {
+    "strategy": "finite_difference",
+    "config": {
+      "algorithm": "Tsit5",
+      "rtol": 1e-4,
+      "atol": 1e-6,
+      "spatial_scheme": "central_difference"
+    }
+  }
+}
