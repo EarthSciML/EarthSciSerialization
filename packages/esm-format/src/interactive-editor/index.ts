@@ -17,6 +17,9 @@ export { ValidationPanel, type ValidationPanelProps } from './ValidationPanel.ts
 export { FileSummary, type FileSummaryProps } from './FileSummary.tsx';
 export { SimulationControls, type SimulationControlsProps } from './SimulationControls.tsx';
 
+// Layout components for mathematical typography
+export * from '../layout/index.js';
+
 // Type definitions for interactive editing
 export interface EditorState {
   editMode: boolean;
