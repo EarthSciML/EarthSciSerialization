@@ -41,7 +41,7 @@ func validateFile(filename string) {
 		log.Fatalf("Failed to read file: %v", err)
 	}
 
-	var esmData esm.ESMFile
+	var esmData esm.EsmFile
 	if err := json.Unmarshal(data, &esmData); err != nil {
 		log.Fatalf("Failed to parse ESM file: %v", err)
 	}
@@ -59,7 +59,7 @@ func convertFile(filename string) {
 		log.Fatalf("Failed to read file: %v", err)
 	}
 
-	var esmData esm.ESMFile
+	var esmData esm.EsmFile
 	if err := json.Unmarshal(data, &esmData); err != nil {
 		log.Fatalf("Failed to parse ESM file: %v", err)
 	}
