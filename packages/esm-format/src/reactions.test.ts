@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveODEs } from './reactions.js'
+import { deriveODEs, stoichiometricMatrix, substrateMatrix, productMatrix } from './reactions.js'
 import type { ReactionSystem, Model, Equation } from './types.js'
 
 describe('Reaction system ODE derivation', () => {
@@ -399,6 +399,361 @@ describe('Reaction system ODE derivation', () => {
           ]
         }]
       })
+    })
+  })
+
+  describe('stoichiometricMatrix', () => {
+    it('should compute net stoichiometric matrix for simple reaction', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k1: { default: 0.1, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: [{ species: 'B', stoichiometry: 1 }],
+            rate: 'k1',
+          },
+        ],
+      }
+
+      const result = stoichiometricMatrix(system)
+
+      expect(result.species).toEqual(['A', 'B'])
+      expect(result.reactions).toEqual(['R1'])
+      expect(result.matrix).toEqual([
+        [-1], // A: -1 (substrate)
+        [1],  // B: +1 (product)
+      ])
+    })
+
+    it('should handle multiple reactions and species', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+          C: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k1: { default: 0.1, units: '1/s' },
+          k2: { default: 0.05, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: [{ species: 'B', stoichiometry: 1 }],
+            rate: 'k1',
+          },
+          {
+            id: 'R2',
+            substrates: [{ species: 'B', stoichiometry: 1 }],
+            products: [{ species: 'C', stoichiometry: 1 }],
+            rate: 'k2',
+          },
+        ],
+      }
+
+      const result = stoichiometricMatrix(system)
+
+      expect(result.species).toEqual(['A', 'B', 'C'])
+      expect(result.reactions).toEqual(['R1', 'R2'])
+      expect(result.matrix).toEqual([
+        [-1, 0],  // A: -1 in R1, 0 in R2
+        [1, -1],  // B: +1 in R1, -1 in R2
+        [0, 1],   // C: 0 in R1, +1 in R2
+      ])
+    })
+
+    it('should handle source reactions (null substrates)', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k_source: { default: 0.5, units: 'mol/L/s' },
+        },
+        reactions: [
+          {
+            id: 'R_source',
+            substrates: null,
+            products: [{ species: 'A', stoichiometry: 1 }],
+            rate: 'k_source',
+          },
+        ],
+      }
+
+      const result = stoichiometricMatrix(system)
+
+      expect(result.matrix).toEqual([
+        [1], // A: 0 (no substrates) - 0 + 1 (product) = +1
+      ])
+    })
+
+    it('should handle sink reactions (null products)', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+        },
+        parameters: {
+          k_sink: { default: 0.1, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R_sink',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: null,
+            rate: 'k_sink',
+          },
+        ],
+      }
+
+      const result = stoichiometricMatrix(system)
+
+      expect(result.matrix).toEqual([
+        [-1], // A: 0 (no products) - 1 (substrate) = -1
+      ])
+    })
+
+    it('should handle reactions with stoichiometry > 1', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k1: { default: 0.1, units: 'L/mol/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 2 }],
+            products: [{ species: 'B', stoichiometry: 1 }],
+            rate: 'k1',
+          },
+        ],
+      }
+
+      const result = stoichiometricMatrix(system)
+
+      expect(result.matrix).toEqual([
+        [-2], // A: 0 - 2 = -2
+        [1],  // B: 1 - 0 = +1
+      ])
+    })
+
+    it('should handle species not involved in reactions', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+          C: { units: 'mol/L', default: 0.0 }, // Not in any reactions
+        },
+        parameters: {
+          k1: { default: 0.1, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: [{ species: 'B', stoichiometry: 1 }],
+            rate: 'k1',
+          },
+        ],
+      }
+
+      const result = stoichiometricMatrix(system)
+
+      expect(result.matrix).toEqual([
+        [-1], // A: -1
+        [1],  // B: +1
+        [0],  // C: 0 (not involved)
+      ])
+    })
+  })
+
+  describe('substrateMatrix', () => {
+    it('should compute substrate stoichiometric matrix', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k1: { default: 0.1, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 2 }],
+            products: [{ species: 'B', stoichiometry: 1 }],
+            rate: 'k1',
+          },
+        ],
+      }
+
+      const result = substrateMatrix(system)
+
+      expect(result).toEqual([
+        [2], // A: substrate with stoichiometry 2
+        [0], // B: not a substrate
+      ])
+    })
+
+    it('should handle null substrates (source reactions)', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k_source: { default: 0.5, units: 'mol/L/s' },
+        },
+        reactions: [
+          {
+            id: 'R_source',
+            substrates: null,
+            products: [{ species: 'A', stoichiometry: 1 }],
+            rate: 'k_source',
+          },
+        ],
+      }
+
+      const result = substrateMatrix(system)
+
+      expect(result).toEqual([
+        [0], // A: no substrates
+      ])
+    })
+
+    it('should handle multiple reactions', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+          C: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k1: { default: 0.1, units: '1/s' },
+          k2: { default: 0.05, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: [{ species: 'B', stoichiometry: 1 }],
+            rate: 'k1',
+          },
+          {
+            id: 'R2',
+            substrates: [{ species: 'B', stoichiometry: 2 }],
+            products: [{ species: 'C', stoichiometry: 1 }],
+            rate: 'k2',
+          },
+        ],
+      }
+
+      const result = substrateMatrix(system)
+
+      expect(result).toEqual([
+        [1, 0], // A: substrate in R1 with stoich 1, not in R2
+        [0, 2], // B: not substrate in R1, substrate in R2 with stoich 2
+        [0, 0], // C: not a substrate in either reaction
+      ])
+    })
+  })
+
+  describe('productMatrix', () => {
+    it('should compute product stoichiometric matrix', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k1: { default: 0.1, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: [{ species: 'B', stoichiometry: 2 }],
+            rate: 'k1',
+          },
+        ],
+      }
+
+      const result = productMatrix(system)
+
+      expect(result).toEqual([
+        [0], // A: not a product
+        [2], // B: product with stoichiometry 2
+      ])
+    })
+
+    it('should handle null products (sink reactions)', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+        },
+        parameters: {
+          k_sink: { default: 0.1, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R_sink',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: null,
+            rate: 'k_sink',
+          },
+        ],
+      }
+
+      const result = productMatrix(system)
+
+      expect(result).toEqual([
+        [0], // A: no products
+      ])
+    })
+
+    it('should handle multiple reactions', () => {
+      const system: ReactionSystem = {
+        species: {
+          A: { units: 'mol/L', default: 1.0 },
+          B: { units: 'mol/L', default: 0.0 },
+          C: { units: 'mol/L', default: 0.0 },
+        },
+        parameters: {
+          k1: { default: 0.1, units: '1/s' },
+          k2: { default: 0.05, units: '1/s' },
+        },
+        reactions: [
+          {
+            id: 'R1',
+            substrates: [{ species: 'A', stoichiometry: 1 }],
+            products: [{ species: 'B', stoichiometry: 2 }],
+            rate: 'k1',
+          },
+          {
+            id: 'R2',
+            substrates: [{ species: 'B', stoichiometry: 1 }],
+            products: [{ species: 'C', stoichiometry: 3 }],
+            rate: 'k2',
+          },
+        ],
+      }
+
+      const result = productMatrix(system)
+
+      expect(result).toEqual([
+        [0, 0], // A: not a product in either reaction
+        [2, 0], // B: product in R1 with stoich 2, not in R2
+        [0, 3], // C: not product in R1, product in R2 with stoich 3
+      ])
     })
   })
 })
