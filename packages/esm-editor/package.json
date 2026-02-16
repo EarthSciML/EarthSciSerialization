@@ -52,7 +52,8 @@
   },
   "homepage": "https://github.com/user/EarthSciSerialization#readme",
   "dependencies": {
-    "solid-js": "^1.8.0"
+    "solid-js": "^1.8.0",
+    "d3-force": "^3.0.0"
   },
   "peerDependencies": {
     "solid-js": "^1.8.0",
@@ -62,6 +63,7 @@
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.10",
     "@testing-library/jest-dom": "^6.9.1",
+    "@types/d3-force": "^3.0.0",
     "@types/node": "^20.0.0",
     "jsdom": "^22.0.0",
     "typescript": "^5.0.0",
