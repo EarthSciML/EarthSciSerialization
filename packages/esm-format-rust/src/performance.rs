@@ -445,14 +445,19 @@ impl CompactExpr {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Expr, ExpressionNode};
 
     #[test]
     fn test_compact_expr_creation() {
-        let expr = Expr::BinaryOp {
+        let expr = Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            left: Box::new(Expr::Variable("x".to_string())),
-            right: Box::new(Expr::Number(1.0)),
-        };
+            args: vec![
+                Expr::Variable("x".to_string()),
+                Expr::Number(1.0)
+            ],
+            wrt: None,
+            dim: None,
+        });
 
         let compact = CompactExpr::from_expr(&expr);
         assert_eq!(compact.nodes.len(), 3);
@@ -463,11 +468,15 @@ mod tests {
     #[cfg(feature = "parallel")]
     #[test]
     fn test_fast_evaluation() {
-        let expr = Expr::BinaryOp {
+        let expr = Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            left: Box::new(Expr::Variable("x".to_string())),
-            right: Box::new(Expr::Number(1.0)),
-        };
+            args: vec![
+                Expr::Variable("x".to_string()),
+                Expr::Number(1.0)
+            ],
+            wrt: None,
+            dim: None,
+        });
 
         let compact = CompactExpr::from_expr(&expr);
         let mut variables = HashMap::new();
