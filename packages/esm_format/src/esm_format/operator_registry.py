@@ -14,6 +14,7 @@ from enum import Enum
 from collections import defaultdict, deque
 
 from .types import Operator, OperatorType
+from .operator_validation import get_validator, ValidationLevel
 
 
 class Associativity(Enum):
@@ -68,6 +69,10 @@ class OperatorRegistry:
         self._precedence: Dict[str, OperatorPrecedence] = {}
         self._dependencies: Dict[str, Set[str]] = defaultdict(set)  # operator -> set of operators it depends on
         self._dependents: Dict[str, Set[str]] = defaultdict(set)    # operator -> set of operators that depend on it
+
+        # Validation system
+        self._validator = get_validator()
+        self._validation_results: Dict[str, Any] = {}  # Store validation results
 
         # Initialize precedence rules based on mathematical conventions
         self._initialize_default_precedence()
@@ -170,215 +175,58 @@ class OperatorRegistry:
             LinearInterpolationOperator, CubicInterpolationOperator, SplineInterpolationOperator, GridInterpolationOperator
         )
 
+        # Helper method for registering built-in operators (skips validation)
+        def register_builtin(name, operator_type, operator_class, version="1.0"):
+            self.register_operator(
+                name=name,
+                operator_type=operator_type,
+                operator_class=operator_class,
+                version=version,
+                skip_validation=True
+            )
+
         # Register mathematical operators
-        self.register_operator(
-            name="add",
-            operator_type=OperatorType.ARITHMETIC,
-            operator_class=AddOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="subtract",
-            operator_type=OperatorType.ARITHMETIC,
-            operator_class=SubtractOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="multiply",
-            operator_type=OperatorType.ARITHMETIC,
-            operator_class=MultiplyOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="divide",
-            operator_type=OperatorType.ARITHMETIC,
-            operator_class=DivideOperator,
-            version="1.0"
-        )
+        register_builtin("add", OperatorType.ARITHMETIC, AddOperator)
+        register_builtin("subtract", OperatorType.ARITHMETIC, SubtractOperator)
+        register_builtin("multiply", OperatorType.ARITHMETIC, MultiplyOperator)
+        register_builtin("divide", OperatorType.ARITHMETIC, DivideOperator)
 
         # Register logical operators
-        self.register_operator(
-            name="and",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=AndOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="or",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=OrOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="not",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=NotOperator,
-            version="1.0"
-        )
+        register_builtin("and", OperatorType.LOGICAL, AndOperator)
+        register_builtin("or", OperatorType.LOGICAL, OrOperator)
+        register_builtin("not", OperatorType.LOGICAL, NotOperator)
 
         # Register comparison operators
-        self.register_operator(
-            name="eq",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=EqualOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="ne",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=NotEqualOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="lt",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=LessThanOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="le",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=LessThanOrEqualOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="gt",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=GreaterThanOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="ge",
-            operator_type=OperatorType.LOGICAL,
-            operator_class=GreaterThanOrEqualOperator,
-            version="1.0"
-        )
+        register_builtin("eq", OperatorType.LOGICAL, EqualOperator)
+        register_builtin("ne", OperatorType.LOGICAL, NotEqualOperator)
+        register_builtin("lt", OperatorType.LOGICAL, LessThanOperator)
+        register_builtin("le", OperatorType.LOGICAL, LessThanOrEqualOperator)
+        register_builtin("gt", OperatorType.LOGICAL, GreaterThanOperator)
+        register_builtin("ge", OperatorType.LOGICAL, GreaterThanOrEqualOperator)
 
         # Register spatial differential operators
-        self.register_operator(
-            name="grad",
-            operator_type=OperatorType.DIFFERENTIATION,
-            operator_class=GradientOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="div",
-            operator_type=OperatorType.DIFFERENTIATION,
-            operator_class=DivergenceOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="laplacian",
-            operator_type=OperatorType.DIFFERENTIATION,
-            operator_class=LaplacianOperator,
-            version="1.0"
-        )
+        register_builtin("grad", OperatorType.DIFFERENTIATION, GradientOperator)
+        register_builtin("div", OperatorType.DIFFERENTIATION, DivergenceOperator)
+        register_builtin("laplacian", OperatorType.DIFFERENTIATION, LaplacianOperator)
 
         # Register temporal operators
-        self.register_operator(
-            name="time_derivative",
-            operator_type=OperatorType.DIFFERENTIATION,
-            operator_class=DerivativeOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="time_integral",
-            operator_type=OperatorType.INTEGRATION,
-            operator_class=IntegralOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="temporal_average",
-            operator_type=OperatorType.FILTERING,
-            operator_class=TemporalAveragingOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="time_stepping",
-            operator_type=OperatorType.INTEGRATION,
-            operator_class=TimeSteppingOperator,
-            version="1.0"
-        )
+        register_builtin("time_derivative", OperatorType.DIFFERENTIATION, DerivativeOperator)
+        register_builtin("time_integral", OperatorType.INTEGRATION, IntegralOperator)
+        register_builtin("temporal_average", OperatorType.FILTERING, TemporalAveragingOperator)
+        register_builtin("time_stepping", OperatorType.INTEGRATION, TimeSteppingOperator)
 
         # Register statistical operators
-        self.register_operator(
-            name="mean",
-            operator_type=OperatorType.STATISTICAL,
-            operator_class=MeanOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="variance",
-            operator_type=OperatorType.STATISTICAL,
-            operator_class=VarianceOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="std",
-            operator_type=OperatorType.STATISTICAL,
-            operator_class=StandardDeviationOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="percentile",
-            operator_type=OperatorType.STATISTICAL,
-            operator_class=PercentileOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="median",
-            operator_type=OperatorType.STATISTICAL,
-            operator_class=MedianOperator,
-            version="1.0"
-        )
+        register_builtin("mean", OperatorType.STATISTICAL, MeanOperator)
+        register_builtin("variance", OperatorType.STATISTICAL, VarianceOperator)
+        register_builtin("std", OperatorType.STATISTICAL, StandardDeviationOperator)
+        register_builtin("percentile", OperatorType.STATISTICAL, PercentileOperator)
+        register_builtin("median", OperatorType.STATISTICAL, MedianOperator)
 
         # Register interpolation operators
-        self.register_operator(
-            name="linear_interpolation",
-            operator_type=OperatorType.INTERPOLATION,
-            operator_class=LinearInterpolationOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="cubic_interpolation",
-            operator_type=OperatorType.INTERPOLATION,
-            operator_class=CubicInterpolationOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="spline_interpolation",
-            operator_type=OperatorType.INTERPOLATION,
-            operator_class=SplineInterpolationOperator,
-            version="1.0"
-        )
-
-        self.register_operator(
-            name="grid_interpolation",
-            operator_type=OperatorType.INTERPOLATION,
-            operator_class=GridInterpolationOperator,
-            version="1.0"
-        )
+        register_builtin("linear_interpolation", OperatorType.INTERPOLATION, LinearInterpolationOperator)
+        register_builtin("cubic_interpolation", OperatorType.INTERPOLATION, CubicInterpolationOperator)
+        register_builtin("spline_interpolation", OperatorType.INTERPOLATION, SplineInterpolationOperator)
+        register_builtin("grid_interpolation", OperatorType.INTERPOLATION, GridInterpolationOperator)
 
     def set_operator_precedence(
         self,
@@ -649,10 +497,11 @@ class OperatorRegistry:
         precedence_level: Optional[int] = None,
         associativity: Associativity = Associativity.LEFT,
         is_unary: bool = False,
-        is_prefix: bool = True
+        is_prefix: bool = True,
+        skip_validation: bool = False
     ) -> None:
         """
-        Register an operator implementation.
+        Register an operator implementation with validation.
 
         Args:
             name: Unique name for the operator
@@ -663,10 +512,24 @@ class OperatorRegistry:
             associativity: How the operator associates
             is_unary: Whether this is a unary operator
             is_prefix: Whether unary operator is prefix (True) or postfix (False)
+            skip_validation: Skip validation (for built-in operators)
 
         Raises:
             ValueError: If the same version is already registered with a different class
+                       or if validation fails in strict mode
         """
+        # Perform validation unless skipped (for built-in operators)
+        if not skip_validation:
+            validation_result = self._validator.validate_operator(operator_class, operator_type, name)
+
+            # Store validation results
+            self._validation_results[f"{name}@{version}"] = validation_result
+
+            # Check if registration should be allowed
+            if not self._validator.should_allow_registration(validation_result):
+                error_summary = '; '.join(validation_result.errors)
+                raise ValueError(f"Operator '{name}' failed validation: {error_summary}")
+
         # Store version mapping first
         if name not in self._version_mapping:
             self._version_mapping[name] = {}
