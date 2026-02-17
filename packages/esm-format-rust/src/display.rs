@@ -209,10 +209,11 @@ fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent
 
     let result = match op {
         "+" => {
-            if args.len() == 2 {
-                format!("{} + {}",
-                    args[0].to_unicode_with_precedence(op_prec),
-                    args[1].to_unicode_with_precedence(op_prec))
+            if args.len() >= 2 {
+                args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(op_prec))
+                    .collect::<Vec<_>>()
+                    .join(" + ")
             } else {
                 format!("+({})", args.iter()
                     .map(|arg| arg.to_unicode_with_precedence(0))
@@ -234,10 +235,11 @@ fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent
             }
         },
         "*" => {
-            if args.len() == 2 {
-                format!("{}·{}",
-                    args[0].to_unicode_with_precedence(op_prec),
-                    args[1].to_unicode_with_precedence(op_prec))
+            if args.len() >= 2 {
+                args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(op_prec))
+                    .collect::<Vec<_>>()
+                    .join("·")
             } else {
                 format!("·({})", args.iter()
                     .map(|arg| arg.to_unicode_with_precedence(0))
@@ -506,8 +508,11 @@ fn format_chemical_latex(s: &str) -> String {
 fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> String {
     match op {
         "+" => {
-            if args.len() == 2 {
-                format!("{} + {}", to_latex(&args[0]), to_latex(&args[1]))
+            if args.len() >= 2 {
+                args.iter()
+                    .map(to_latex)
+                    .collect::<Vec<_>>()
+                    .join(" + ")
             } else {
                 format!("+({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
@@ -522,8 +527,11 @@ fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> Strin
             }
         },
         "*" => {
-            if args.len() == 2 {
-                format!("{} \\cdot {}", to_latex(&args[0]), to_latex(&args[1]))
+            if args.len() >= 2 {
+                args.iter()
+                    .map(to_latex)
+                    .collect::<Vec<_>>()
+                    .join(" \\cdot ")
             } else {
                 format!("\\cdot({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
