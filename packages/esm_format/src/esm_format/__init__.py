@@ -102,6 +102,19 @@ from .coupling_graph import (
     resolve_coupling_dependencies,
     build_execution_order_from_dependencies,
 )
+from .coupling_iteration import (
+    CouplingIterator,
+    ConvergenceConfig,
+    RelaxationConfig,
+    AccelerationConfig,
+    IterationState,
+    CouplingResult,
+    ConvergenceMethod,
+    RelaxationMethod,
+    AccelerationMethod,
+    create_default_coupling_iterator,
+    create_adaptive_coupling_iterator,
+)
 from .hierarchical_scope_resolution import (
     HierarchicalScopeResolver,
     ScopeInfo,
@@ -314,6 +327,18 @@ __all__ = [
     "ScopedReferenceResolver",
     "resolve_coupling_dependencies",
     "build_execution_order_from_dependencies",
+    # Coupling iteration and convergence control
+    "CouplingIterator",
+    "ConvergenceConfig",
+    "RelaxationConfig",
+    "AccelerationConfig",
+    "IterationState",
+    "CouplingResult",
+    "ConvergenceMethod",
+    "RelaxationMethod",
+    "AccelerationMethod",
+    "create_default_coupling_iterator",
+    "create_adaptive_coupling_iterator",
     "HierarchicalScopeResolver",
     "ScopeInfo",
     "VariableResolution",
