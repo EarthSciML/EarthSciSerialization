@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 
 # Import the data loading functionality
-from esm_format.data_loaders import NetCDFLoader, JSONLoader, HDF5Loader, GRIBLoader, create_data_loader
+from esm_format.data_loaders import NetCDFLoader, JSONLoader, HDF5Loader, GRIBLoader, StreamingLoader, create_data_loader
 from esm_format.types import DataLoader, DataLoaderType
 
 # Try to import xarray for creating test data
@@ -1330,3 +1330,320 @@ def test_grib_loader_without_cfgrib(monkeypatch):
 
     with pytest.raises(ImportError, match="cfgrib and xarray are required"):
         GRIBLoader(config)
+
+
+class TestStreamingLoader:
+    """Test cases for StreamingLoader."""
+
+    def test_streaming_loader_initialization(self):
+        """Test basic initialization of StreamingLoader."""
+        config = DataLoader(
+            name="test_stream",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+        assert loader.config == config
+        assert not loader.is_running
+        assert loader.buffer == []
+        assert loader.data_count == 0
+        assert loader.error_count == 0
+
+    def test_streaming_loader_wrong_type(self):
+        """Test StreamingLoader with wrong data loader type."""
+        config = DataLoader(
+            name="test",
+            type=DataLoaderType.JSON,
+            source="ws://localhost:8080/stream"
+        )
+
+        with pytest.raises(ValueError, match="Expected DataLoaderType.STREAMING"):
+            StreamingLoader(config)
+
+    def test_detect_websocket_source_type(self):
+        """Test detection of WebSocket source type."""
+        config = DataLoader(
+            name="test_ws",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+        assert loader.source_type == 'websocket'
+
+    def test_detect_http_stream_source_type(self):
+        """Test detection of HTTP stream source type."""
+        config = DataLoader(
+            name="test_http",
+            type=DataLoaderType.STREAMING,
+            source="http://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+        assert loader.source_type == 'http_stream'
+
+    def test_detect_queue_source_type(self):
+        """Test detection of message queue source type."""
+        config = DataLoader(
+            name="test_queue",
+            type=DataLoaderType.STREAMING,
+            source="kafka://localhost:9092/topic"
+        )
+
+        loader = StreamingLoader(config)
+        assert loader.source_type == 'queue'
+
+    def test_detect_tcp_source_type(self):
+        """Test detection of TCP source type."""
+        config = DataLoader(
+            name="test_tcp",
+            type=DataLoaderType.STREAMING,
+            source="tcp://localhost:9999"
+        )
+
+        loader = StreamingLoader(config)
+        assert loader.source_type == 'tcp'
+
+    def test_configuration_options(self):
+        """Test configuration options for streaming loader."""
+        config = DataLoader(
+            name="test_config",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream",
+            format_options={
+                'buffer_size': 2000,
+                'reconnect_attempts': 10,
+                'reconnect_delay': 2.0,
+                'timeout': 60.0
+            }
+        )
+
+        loader = StreamingLoader(config)
+        assert loader.buffer_size == 2000
+        assert loader.reconnect_attempts == 10
+        assert loader.reconnect_delay == 2.0
+        assert loader.timeout == 60.0
+
+    def test_start_stop_streaming(self):
+        """Test starting and stopping streaming."""
+        config = DataLoader(
+            name="test_start_stop",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+        assert not loader.is_running
+
+        # Start streaming
+        loader.start_streaming()
+        assert loader.is_running
+        assert loader.connection is not None
+
+        # Stop streaming
+        loader.stop_streaming()
+        assert not loader.is_running
+        assert loader.connection is None
+
+    def test_start_streaming_already_running(self):
+        """Test starting streaming when already running."""
+        config = DataLoader(
+            name="test_already_running",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+        loader.start_streaming()
+
+        with pytest.raises(RuntimeError, match="Streaming is already running"):
+            loader.start_streaming()
+
+        loader.stop_streaming()
+
+    def test_mock_data_buffering(self):
+        """Test adding and reading mock data from buffer."""
+        config = DataLoader(
+            name="test_buffer",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+
+        # Add mock data
+        test_data_1 = {"timestamp": "2023-01-01T12:00:00", "value": 42.5}
+        test_data_2 = {"timestamp": "2023-01-01T12:01:00", "value": 43.1}
+
+        loader.add_mock_data(test_data_1)
+        loader.add_mock_data(test_data_2)
+
+        assert len(loader.buffer) == 2
+        assert loader.data_count == 2
+
+        # Read data
+        data = loader.read_data()
+        assert len(data) == 2
+        assert data[0] == test_data_1
+        assert data[1] == test_data_2
+        assert len(loader.buffer) == 0
+
+    def test_backpressure_handling(self):
+        """Test backpressure handling when buffer is full."""
+        config = DataLoader(
+            name="test_backpressure",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream",
+            format_options={'buffer_size': 2}
+        )
+
+        loader = StreamingLoader(config)
+
+        # Fill buffer beyond capacity
+        loader.add_mock_data({"id": 1})
+        loader.add_mock_data({"id": 2})
+        loader.add_mock_data({"id": 3})  # Should push out first item
+
+        assert len(loader.buffer) == 2
+        assert loader.buffer[0]["id"] == 2  # First item was dropped
+        assert loader.buffer[1]["id"] == 3
+
+    def test_read_data_with_limit(self):
+        """Test reading data with item limit."""
+        config = DataLoader(
+            name="test_read_limit",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+
+        # Add test data
+        for i in range(5):
+            loader.add_mock_data({"id": i})
+
+        # Read with limit
+        data = loader.read_data(max_items=2)
+        assert len(data) == 2
+        assert data[0]["id"] == 0
+        assert data[1]["id"] == 1
+
+        # Buffer should still have remaining items
+        assert len(loader.buffer) == 3
+        assert loader.buffer[0]["id"] == 2
+
+    def test_get_status(self):
+        """Test getting streaming status."""
+        config = DataLoader(
+            name="test_status",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+        loader.add_mock_data({"test": "data"})
+
+        status = loader.get_status()
+        assert status['is_running'] == False
+        assert status['source_type'] == 'websocket'
+        assert status['source'] == "ws://localhost:8080/stream"
+        assert status['buffer_size'] == 1
+        assert status['data_count'] == 1
+        assert status['error_count'] == 0
+        assert status['connection_status'] == 'disconnected'
+
+    def test_clear_buffer(self):
+        """Test clearing the data buffer."""
+        config = DataLoader(
+            name="test_clear",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+
+        # Add test data
+        for i in range(3):
+            loader.add_mock_data({"id": i})
+
+        assert len(loader.buffer) == 3
+
+        # Clear buffer
+        cleared_count = loader.clear_buffer()
+        assert cleared_count == 3
+        assert len(loader.buffer) == 0
+
+    def test_configure_backpressure(self):
+        """Test configuring backpressure settings."""
+        config = DataLoader(
+            name="test_backpressure_config",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream",
+            format_options={'buffer_size': 5}
+        )
+
+        loader = StreamingLoader(config)
+
+        # Fill buffer
+        for i in range(5):
+            loader.add_mock_data({"id": i})
+
+        assert len(loader.buffer) == 5
+
+        # Reduce buffer size
+        loader.configure_backpressure(3)
+        assert loader.buffer_size == 3
+        assert len(loader.buffer) == 3
+        # Should keep the last 3 items
+        assert loader.buffer[0]["id"] == 2
+
+    def test_close_streaming_loader(self):
+        """Test closing streaming loader."""
+        config = DataLoader(
+            name="test_close",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = StreamingLoader(config)
+        loader.start_streaming()
+        loader.add_mock_data({"test": "data"})
+
+        assert loader.is_running
+        assert len(loader.buffer) > 0
+
+        # Close loader
+        loader.close()
+        assert not loader.is_running
+        assert len(loader.buffer) == 0
+        assert loader.connection is None
+
+
+class TestStreamingLoaderFactory:
+    """Test factory function with StreamingLoader."""
+
+    def test_create_streaming_loader(self):
+        """Test factory creates StreamingLoader correctly."""
+        config = DataLoader(
+            name="test_factory_streaming",
+            type=DataLoaderType.STREAMING,
+            source="ws://localhost:8080/stream"
+        )
+
+        loader = create_data_loader(config)
+        assert isinstance(loader, StreamingLoader)
+        assert loader.config == config
+
+    def test_factory_supports_streaming(self):
+        """Test factory supports STREAMING type."""
+        # This test ensures that the factory has been updated
+        config = DataLoader(
+            name="test_factory_support",
+            type=DataLoaderType.STREAMING,
+            source="http://localhost:8080/events"
+        )
+
+        # Should not raise "not supported" error
+        loader = create_data_loader(config)
+        assert isinstance(loader, StreamingLoader)
