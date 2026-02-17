@@ -138,63 +138,69 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
     node_map = Dict{String, ComponentNode}()
 
     # Create nodes for models
-    for (name, model) in file.models
+    if file.models !== nothing
+        for (name, model) in file.models
         metadata = Dict{String, Any}(
             "var_count" => length(model.variables),
             "eq_count" => length(model.equations),
             "species_count" => 0
         )
 
-        node = ComponentNode(
-            name,
-            name,
-            "model",
-            nothing,  # Model doesn't have description field
-            model,
-            metadata
-        )
-        push!(nodes, node)
-        node_map[name] = node
+            node = ComponentNode(
+                name,
+                name,
+                "model",
+                nothing,  # Model doesn't have description field
+                model,
+                metadata
+            )
+            push!(nodes, node)
+            node_map[name] = node
+        end
     end
 
     # Create nodes for reaction systems
-    for (name, rxn_sys) in file.reaction_systems
+    if file.reaction_systems !== nothing
+        for (name, rxn_sys) in file.reaction_systems
         metadata = Dict{String, Any}(
             "var_count" => length(rxn_sys.parameters),
             "eq_count" => length(rxn_sys.reactions),
             "species_count" => length(rxn_sys.species)
         )
 
-        node = ComponentNode(
-            name,
-            name,
-            "reaction_system",
-            nothing,  # ReactionSystem doesn't have description field
-            rxn_sys,
-            metadata
-        )
-        push!(nodes, node)
-        node_map[name] = node
+            node = ComponentNode(
+                name,
+                name,
+                "reaction_system",
+                nothing,  # ReactionSystem doesn't have description field
+                rxn_sys,
+                metadata
+            )
+            push!(nodes, node)
+            node_map[name] = node
+        end
     end
 
     # Create nodes for data loaders
-    for (name, loader) in file.data_loaders
+    if file.data_loaders !== nothing
+        for (name, loader) in file.data_loaders
         metadata = Dict{String, Any}(
             "var_count" => 0,
             "eq_count" => 0,
             "species_count" => 0
         )
 
-        node = ComponentNode(
-            name,
-            name,
-            "data_loader",
-            loader.description,  # DataLoader has description field
-            loader,
-            metadata
-        )
-        push!(nodes, node)
-        node_map[name] = node
+            node = ComponentNode(
+                name,
+                name,
+                "data_loader",
+                loader.description,  # DataLoader has description field
+                loader,
+                metadata
+            )
+            push!(nodes, node)
+            node_map[name] = node
+        end
     end
 
     # Create edges from coupling entries
@@ -204,67 +210,75 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
         # Handle different coupling types
         if coupling isa CouplingOperatorCompose
             # Bidirectional edge for operator composition
-            from_node = get(node_map, coupling.system_a, nothing)
-            to_node = get(node_map, coupling.system_b, nothing)
-
-            if from_node !== nothing && to_node !== nothing
-                edge = CouplingEdge(
-                    edge_id,
-                    coupling.system_a,
-                    coupling.system_b,
-                    "operator_compose",
-                    "compose",
-                    "System composition coupling",
-                    coupling
-                )
-                push!(edges, (source=from_node, target=to_node, data=edge))
-            end
-
-        elseif coupling isa CouplingCouple2
-            # Bidirectional edge for couple2
-            from_node = get(node_map, coupling.system_a, nothing)
-            to_node = get(node_map, coupling.system_b, nothing)
-
-            if from_node !== nothing && to_node !== nothing
-                label = "couple2"
-                if haskey(coupling, :coupletype) && coupling.coupletype !== nothing
-                    label = "couple2(\$(coupling.coupletype))"
-                end
-
-                edge = CouplingEdge(
-                    edge_id,
-                    coupling.system_a,
-                    coupling.system_b,
-                    "couple2",
-                    label,
-                    "Bidirectional coupling",
-                    coupling
-                )
-                push!(edges, (source=from_node, target=to_node, data=edge))
-            end
-
-        elseif coupling isa CouplingVariableMap
-            # Directed edge for variable mapping
-            # Parse source from "system.variable" format
-            source_parts = split(coupling.source, ".")
-            target_parts = split(coupling.target, ".")
-
-            if length(source_parts) >= 1 && length(target_parts) >= 1
-                source_system = source_parts[1]
-                target_system = target_parts[1]
-                variable_name = length(source_parts) > 1 ? source_parts[2] : "var"
-
-                from_node = get(node_map, source_system, nothing)
-                to_node = get(node_map, target_system, nothing)
+            if length(coupling.systems) >= 2
+                system_a = coupling.systems[1]
+                system_b = coupling.systems[2]
+                from_node = get(node_map, system_a, nothing)
+                to_node = get(node_map, system_b, nothing)
 
                 if from_node !== nothing && to_node !== nothing
                     edge = CouplingEdge(
                         edge_id,
-                        source_system,
-                        target_system,
+                        system_a,
+                        system_b,
+                        "operator_compose",
+                        "compose",
+                        "System composition coupling",
+                        coupling
+                    )
+                    push!(edges, (source=from_node, target=to_node, data=edge))
+                end
+            end
+
+        elseif coupling isa CouplingCouple2
+            # Bidirectional edge for couple2
+            if length(coupling.systems) >= 2
+                system_a = coupling.systems[1]
+                system_b = coupling.systems[2]
+                from_node = get(node_map, system_a, nothing)
+                to_node = get(node_map, system_b, nothing)
+
+                if from_node !== nothing && to_node !== nothing
+                    label = "couple2"
+                    if length(coupling.coupletype_pair) >= 1 && coupling.coupletype_pair[1] !== nothing
+                        label = "couple2(\$(coupling.coupletype_pair[1]))"
+                    end
+
+                    edge = CouplingEdge(
+                        edge_id,
+                        system_a,
+                        system_b,
+                        "couple2",
+                        label,
+                        "Bidirectional coupling",
+                        coupling
+                    )
+                    push!(edges, (source=from_node, target=to_node, data=edge))
+                end
+            end
+
+        elseif coupling isa CouplingVariableMap
+            # Directed edge for variable mapping
+            # Parse from "system.variable" format
+            from_parts = split(coupling.from, ".")
+            to_parts = split(coupling.to, ".")
+
+            if length(from_parts) >= 1 && length(to_parts) >= 1
+                from_system = from_parts[1]
+                to_system = to_parts[1]
+                variable_name = length(from_parts) > 1 ? from_parts[2] : "var"
+
+                from_node = get(node_map, from_system, nothing)
+                to_node = get(node_map, to_system, nothing)
+
+                if from_node !== nothing && to_node !== nothing
+                    edge = CouplingEdge(
+                        edge_id,
+                        from_system,
+                        to_system,
                         "variable_map",
                         "[$variable_name]",
-                        "Variable mapping: \$(coupling.source) -> \$(coupling.target)",
+                        "Variable mapping: \$(coupling.from) -> \$(coupling.to)",
                         coupling
                     )
                     push!(edges, (source=from_node, target=to_node, data=edge))
@@ -272,24 +286,9 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
             end
 
         elseif coupling isa CouplingOperatorApply
-            # Directed edge from operator to systems
-            for system in coupling.systems
-                from_node = get(node_map, coupling.operator, nothing)
-                to_node = get(node_map, system, nothing)
-
-                if from_node !== nothing && to_node !== nothing
-                    edge = CouplingEdge(
-                        "$(edge_id)_$system",
-                        coupling.operator,
-                        system,
-                        "operator_apply",
-                        "apply",
-                        "Operator application",
-                        coupling
-                    )
-                    push!(edges, (source=from_node, target=to_node, data=edge))
-                end
-            end
+            # CouplingOperatorApply just registers an operator, no edges needed
+            # The operator itself should be in the operators section, not as a system node
+            @info "Operator application registered: $(coupling.operator)"
         end
     end
 
@@ -413,23 +412,23 @@ function expression_graph(file::EsmFile)::Graph{VariableNode, DependencyEdge}
     # Add cross-system coupling edges
     for coupling in file.coupling
         if coupling isa CouplingVariableMap
-            # Parse source and target
-            source_parts = split(coupling.source, ".")
-            target_parts = split(coupling.target, ".")
+            # Parse from and to
+            from_parts = split(coupling.from, ".")
+            to_parts = split(coupling.to, ".")
 
-            if length(source_parts) >= 2 && length(target_parts) >= 2
-                source_node = get(node_map, coupling.source, nothing)
-                target_node = get(node_map, coupling.target, nothing)
+            if length(from_parts) >= 2 && length(to_parts) >= 2
+                from_node = get(node_map, coupling.from, nothing)
+                to_node = get(node_map, coupling.to, nothing)
 
-                if source_node !== nothing && target_node !== nothing
+                if from_node !== nothing && to_node !== nothing
                     coupling_edge = DependencyEdge(
-                        coupling.source,
-                        coupling.target,
+                        coupling.from,
+                        coupling.to,
                         "coupling",
                         nothing,
-                        coupling.transform
+                        nothing  # transform field doesn't exist in ESMFormat.Expr
                     )
-                    push!(edges, (source=source_node, target=target_node, data=coupling_edge))
+                    push!(edges, (source=from_node, target=to_node, data=coupling_edge))
                 end
             end
         end
