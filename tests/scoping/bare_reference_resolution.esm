@@ -1,0 +1,199 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BareReferenceResolutionTest",
+    "description": "Test fixture for bare reference resolution within system contexts (no dots in variable names)",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["scoping", "bare-references", "local-context"]
+  },
+
+  "models": {
+    "SimpleChemistry": {
+      "variables": {
+        "O3": {"type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone"},
+        "NO": {"type": "state", "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide"},
+        "NO2": {"type": "state", "units": "mol/mol", "default": 1e-9, "description": "Nitrogen dioxide"},
+        "k_rate": {"type": "parameter", "units": "cm^3/molec/s", "default": 1.8e-12, "description": "Rate constant"},
+        "temperature": {"type": "parameter", "units": "K", "default": 298.15, "description": "Temperature"}
+      },
+      "equations": [
+        {
+          "_comment": "All variable references are bare (no dots) - should resolve within current system context",
+          "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["k_rate"]}, "O3", "NO"]}
+        },
+        {
+          "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["k_rate"]}, "O3", "NO"]}
+        },
+        {
+          "lhs": {"op": "D", "args": ["NO2"], "wrt": "t"},
+          "rhs": {"op": "*", "args": ["k_rate", "O3", "NO"]}
+        }
+      ],
+      "continuous_events": [
+        {
+          "name": "temperature_adjustment",
+          "conditions": [
+            {
+              "_comment": "Bare reference in event condition - should resolve to SimpleChemistry.temperature",
+              "op": ">",
+              "args": ["temperature", 310.0]
+            }
+          ],
+          "affects": [
+            {
+              "_comment": "Bare references in event affects - should resolve within current system",
+              "lhs": "k_rate",
+              "rhs": {"op": "*", "args": [0.8, {"op": "Pre", "args": ["k_rate"]}]}
+            }
+          ],
+          "description": "High temperature reduces reaction rate"
+        }
+      ],
+
+      "subsystems": {
+        "Photochemistry": {
+          "variables": {
+            "photolysis_rate": {"type": "parameter", "units": "1/s", "default": 1e-5, "description": "Photolysis rate"},
+            "solar_zenith": {"type": "parameter", "units": "rad", "default": 0.5, "description": "Solar zenith angle"},
+            "NO2_photo": {"type": "state", "units": "mol/mol", "default": 1e-9, "description": "NO2 for photolysis"}
+          },
+          "equations": [
+            {
+              "_comment": "Bare references within subsystem context - should resolve to Photochemistry variables",
+              "lhs": {"op": "D", "args": ["NO2_photo"], "wrt": "t"},
+              "rhs": {"op": "*", "args": [
+                {"op": "-", "args": ["photolysis_rate"]},
+                "NO2_photo",
+                {"op": "cos", "args": ["solar_zenith"]}
+              ]}
+            }
+          ],
+          "discrete_events": [
+            {
+              "name": "daily_reset",
+              "trigger": {"op": "&&", "args": [
+                {"op": ">", "args": ["solar_zenith", 1.57]},
+                {"op": "<", "args": [{"op": "Pre", "args": ["solar_zenith"]}, 1.57]}
+              ]},
+              "affects": [
+                {
+                  "_comment": "Bare reference in discrete event - should resolve to current subsystem context",
+                  "lhs": "photolysis_rate",
+                  "rhs": 0.0
+                }
+              ],
+              "description": "Reset photolysis at sunset using bare references"
+            }
+          ]
+        }
+      }
+    },
+
+    "Transport": {
+      "variables": {
+        "diffusivity": {"type": "parameter", "units": "m^2/s", "default": 100.0, "description": "Diffusion coefficient"},
+        "velocity": {"type": "parameter", "units": "m/s", "default": 5.0, "description": "Advection velocity"},
+        "_var": {"type": "placeholder", "description": "Placeholder for transported species"}
+      },
+      "equations": [
+        {
+          "_comment": "Transport equation with bare references and placeholder",
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "+", "args": [
+            {"op": "*", "args": ["diffusivity", {"op": "laplacian", "args": ["_var"]}]},
+            {"op": "*", "args": [{"op": "-", "args": ["velocity"]}, {"op": "gradient", "args": ["_var"]}]}
+          ]}
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "MeteoData": {
+      "type": "gridded_data",
+      "loader_id": "WRF_output",
+      "provides": {
+        "wind_speed": {"units": "m/s", "description": "Wind speed field"},
+        "boundary_layer_height": {"units": "m", "description": "PBL height"}
+      }
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "Coupling must use fully qualified scoped references - no bare references allowed",
+      "type": "variable_map",
+      "from": "MeteoData.wind_speed",
+      "to": "Transport.velocity",
+      "transform": "identity",
+      "description": "Wind speed drives transport velocity"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["SimpleChemistry", "Transport"],
+      "translate": {
+        "_comment": "All references in coupling must be fully scoped",
+        "SimpleChemistry.O3": "Transport._var",
+        "SimpleChemistry.NO": "Transport._var",
+        "SimpleChemistry.NO2": "Transport._var"
+      },
+      "description": "Add transport to chemistry - demonstrates scoped vs bare reference contexts"
+    },
+
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "name": "cross_system_coupling",
+      "conditions": [
+        {
+          "_comment": "Event conditions in coupling context require fully scoped references",
+          "op": ">",
+          "args": ["Transport.diffusivity", 50.0]
+        }
+      ],
+      "affects": [
+        {
+          "_comment": "Event affects in coupling context require fully scoped references",
+          "lhs": "SimpleChemistry.temperature",
+          "rhs": {"op": "+", "args": [
+            {"op": "Pre", "args": ["SimpleChemistry.temperature"]},
+            2.0
+          ]}
+        }
+      ],
+      "description": "Cross-system event showing required scoped references in coupling context"
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-07-01T00:00:00Z",
+      "end": "2024-07-01T06:00:00Z"
+    },
+    "spatial": {
+      "x": {"min": 0.0, "max": 1000.0, "units": "m", "grid_spacing": 10.0}
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "_comment": "Initial conditions must use fully scoped references",
+        "SimpleChemistry.O3": 40e-9,
+        "SimpleChemistry.NO": 0.1e-9,
+        "SimpleChemistry.NO2": 1e-9,
+        "SimpleChemistry.Photochemistry.NO2_photo": 1e-9
+      }
+    }
+  },
+
+  "solver": {
+    "strategy": "strang_serial",
+    "config": {
+      "stiff_algorithm": "Rodas5",
+      "timestep": 60.0
+    }
+  }
+}
