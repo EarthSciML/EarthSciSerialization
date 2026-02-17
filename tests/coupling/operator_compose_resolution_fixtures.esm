@@ -1,0 +1,219 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "OperatorComposeResolutionFixtures",
+    "description": "Test fixtures for operator_compose coupling resolution algorithm (Section 4.7.1)",
+    "authors": ["Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "notes": [
+      "Tests the operator_compose algorithm that merges ODE systems by:",
+      "1. Extracting dependent variables from equation LHS",
+      "2. Applying translation mappings between systems",
+      "3. Matching equations by dependent variables or placeholder expansion",
+      "4. Combining matched equations by adding RHS terms",
+      "5. Preserving unmatched equations unchanged"
+    ]
+  },
+
+  "models": {
+    "ChemistrySystem": {
+      "description": "Chemical reaction system with species O3, NO, NO2",
+      "variables": {
+        "O3": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone mixing ratio" },
+        "NO": { "type": "state", "units": "mol/mol", "default": 0.1e-9, "description": "NO mixing ratio" },
+        "NO2": { "type": "state", "units": "mol/mol", "default": 0.2e-9, "description": "NO2 mixing ratio" }
+      },
+      "parameters": {
+        "k1": { "units": "1/s", "default": 1e-5, "description": "Reaction rate 1" },
+        "k2": { "units": "cm^3/molec/s", "default": 1.8e-12, "description": "Reaction rate 2" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "k1", "O3"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["k2", "NO2"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["NO2"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "k2", "NO2"] }
+        }
+      ]
+    },
+
+    "AdvectionSystem": {
+      "description": "Advection transport system using _var placeholder",
+      "variables": {
+        "u": { "type": "parameter", "units": "m/s", "default": 3.0, "description": "Eastward wind" },
+        "v": { "type": "parameter", "units": "m/s", "default": 4.0, "description": "Northward wind" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [
+                { "op": "-", "args": ["u"] },
+                { "op": "grad", "args": ["_var"], "dim": "x" }
+              ]},
+              { "op": "*", "args": [
+                { "op": "-", "args": ["v"] },
+                { "op": "grad", "args": ["_var"], "dim": "y" }
+              ]}
+            ]
+          }
+        }
+      ]
+    },
+
+    "DiffusionSystem": {
+      "description": "Diffusion system with different variable names",
+      "variables": {
+        "ozone_conc": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone concentration" },
+        "nitrogen_oxide": { "type": "state", "units": "mol/mol", "default": 0.1e-9, "description": "NO concentration" }
+      },
+      "parameters": {
+        "kh": { "units": "m^2/s", "default": 10.0, "description": "Horizontal diffusivity" },
+        "kv": { "units": "m^2/s", "default": 1.0, "description": "Vertical diffusivity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["ozone_conc"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": ["kh", { "op": "laplacian", "args": ["ozone_conc"] }] },
+              { "op": "*", "args": ["kv", { "op": "D2", "args": ["ozone_conc"], "wrt": "z" }] }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["nitrogen_oxide"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": ["kh", { "op": "laplacian", "args": ["nitrogen_oxide"] }] },
+              { "op": "*", "args": ["kv", { "op": "D2", "args": ["nitrogen_oxide"], "wrt": "z" }] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "DepositionSystem": {
+      "description": "Dry deposition system with algebraic constraint equations",
+      "variables": {
+        "surface_flux": { "type": "state", "units": "mol/m^2/s", "default": 0.0, "description": "Surface flux" }
+      },
+      "parameters": {
+        "deposition_velocity": { "units": "m/s", "default": 0.01, "description": "Deposition velocity" }
+      },
+      "equations": [
+        {
+          "lhs": "surface_flux",
+          "rhs": { "op": "*", "args": ["deposition_velocity", "O3"] }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["ChemistrySystem", "AdvectionSystem"],
+      "description": "TEST CASE 1: Basic operator_compose with placeholder expansion - AdvectionSystem's _var equation should expand to three equations for O3, NO, NO2"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["ChemistrySystem", "DiffusionSystem"],
+      "translate": {
+        "O3": { "target": "ozone_conc", "factor": 1.0 },
+        "NO": { "target": "nitrogen_oxide", "factor": 1.0 }
+      },
+      "description": "TEST CASE 2: operator_compose with translation mapping - ChemistrySystem.O3 maps to DiffusionSystem.ozone_conc"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["ChemistrySystem", "AdvectionSystem"],
+      "translate": {
+        "O3": { "target": "O3", "factor": 1.0 },
+        "NO": { "target": "NO", "factor": 0.5 },
+        "NO2": { "target": "NO2", "factor": 2.0 }
+      },
+      "description": "TEST CASE 3: operator_compose with conversion factors in translation - NO gets factor 0.5, NO2 gets factor 2.0"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["DiffusionSystem", "DepositionSystem"],
+      "translate": {
+        "ozone_conc": { "target": "O3", "factor": 1.0 }
+      },
+      "description": "TEST CASE 4: operator_compose between diffusion and algebraic constraint - mixing different equation types"
+    }
+  ],
+
+  "_test_verification": {
+    "test_case_1_expected": {
+      "description": "After operator_compose of ChemistrySystem + AdvectionSystem",
+      "merged_equations": [
+        {
+          "variable": "O3",
+          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+          "rhs_combined": "(-k1 * O3) + (-u * grad(O3, x) - v * grad(O3, y))"
+        },
+        {
+          "variable": "NO",
+          "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
+          "rhs_combined": "(k2 * NO2) + (-u * grad(NO, x) - v * grad(NO, y))"
+        },
+        {
+          "variable": "NO2",
+          "lhs": { "op": "D", "args": ["NO2"], "wrt": "t" },
+          "rhs_combined": "(-k2 * NO2) + (-u * grad(NO2, x) - v * grad(NO2, y))"
+        }
+      ],
+      "note": "Placeholder _var expands to create advection equations for each state variable"
+    },
+
+    "test_case_2_expected": {
+      "description": "After operator_compose of ChemistrySystem + DiffusionSystem with translation",
+      "merged_equations": [
+        {
+          "variable": "O3/ozone_conc",
+          "mapped_name": "ozone_conc",
+          "lhs": { "op": "D", "args": ["ozone_conc"], "wrt": "t" },
+          "rhs_combined": "(-k1 * O3) + (kh * laplacian(ozone_conc) + kv * D2(ozone_conc, z))"
+        },
+        {
+          "variable": "NO/nitrogen_oxide",
+          "mapped_name": "nitrogen_oxide",
+          "lhs": { "op": "D", "args": ["nitrogen_oxide"], "wrt": "t" },
+          "rhs_combined": "(k2 * NO2) + (kh * laplacian(nitrogen_oxide) + kv * D2(nitrogen_oxide, z))"
+        }
+      ],
+      "note": "Translation mapping renames variables and merges their equations"
+    },
+
+    "test_case_3_expected": {
+      "description": "After operator_compose with conversion factors",
+      "merged_equations": [
+        {
+          "variable": "O3",
+          "rhs_combined": "(-k1 * O3) + 1.0 * (-u * grad(O3, x) - v * grad(O3, y))"
+        },
+        {
+          "variable": "NO",
+          "rhs_combined": "(k2 * NO2) + 0.5 * (-u * grad(NO, x) - v * grad(NO, y))"
+        },
+        {
+          "variable": "NO2",
+          "rhs_combined": "(-k2 * NO2) + 2.0 * (-u * grad(NO2, x) - v * grad(NO2, y))"
+        }
+      ],
+      "note": "Conversion factors multiply the second system's RHS before adding"
+    }
+  }
+}

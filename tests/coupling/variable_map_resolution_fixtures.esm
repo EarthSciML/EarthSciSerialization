@@ -1,0 +1,282 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "VariableMapResolutionFixtures",
+    "description": "Test fixtures for variable_map coupling resolution algorithm (Section 4.7.3)",
+    "authors": ["Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "notes": [
+      "Tests the variable_map algorithm that replaces parameters with variables from other systems:",
+      "1. Resolve 'from' scoped reference to source system and variable",
+      "2. Resolve 'to' scoped reference to target system and parameter",
+      "3. Apply transform: param_to_var, identity, additive, multiplicative, conversion_factor",
+      "4. Update merged system's variable/parameter lists"
+    ]
+  },
+
+  "models": {
+    "AtmosphericModel": {
+      "description": "Atmospheric model with parameterized meteorological inputs",
+      "variables": {
+        "ozone": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone mixing ratio" },
+        "pressure": { "type": "state", "units": "Pa", "default": 101325.0, "description": "Atmospheric pressure" }
+      },
+      "parameters": {
+        "temperature": { "units": "K", "default": 298.15, "description": "Air temperature" },
+        "humidity": { "units": "%", "default": 60.0, "description": "Relative humidity" },
+        "wind_speed": { "units": "m/s", "default": 5.0, "description": "Wind speed" },
+        "solar_radiation": { "units": "W/m^2", "default": 800.0, "description": "Solar radiation" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["ozone"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": [0.001, "solar_radiation", "ozone"] },
+            { "op": "*", "args": [-0.0001, "temperature", "ozone"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["pressure"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "wind_speed", { "op": "grad", "args": ["pressure"], "dim": "x" }] }
+        }
+      ]
+    },
+
+    "OceanModel": {
+      "description": "Ocean model with temperature and salinity",
+      "variables": {
+        "sea_surface_temperature": { "type": "state", "units": "K", "default": 285.0, "description": "Sea surface temperature" },
+        "salinity": { "type": "state", "units": "psu", "default": 35.0, "description": "Salinity" }
+      },
+      "parameters": {
+        "heat_exchange_coefficient": { "units": "W/m^2/K", "default": 20.0, "description": "Air-sea heat exchange" },
+        "evaporation_rate": { "units": "m/s", "default": 1e-8, "description": "Evaporation rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["sea_surface_temperature"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["heat_exchange_coefficient", { "op": "-", "args": ["temperature", "sea_surface_temperature"] }] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["salinity"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["evaporation_rate", "salinity"] }
+        }
+      ]
+    },
+
+    "LandModel": {
+      "description": "Land surface model with soil and vegetation",
+      "variables": {
+        "soil_moisture": { "type": "state", "units": "m^3/m^3", "default": 0.3, "description": "Soil moisture" },
+        "leaf_temperature": { "type": "state", "units": "K", "default": 295.0, "description": "Leaf temperature" }
+      },
+      "parameters": {
+        "albedo": { "units": "dimensionless", "default": 0.2, "description": "Surface albedo" },
+        "stomatal_conductance": { "units": "m/s", "default": 0.01, "description": "Stomatal conductance" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["soil_moisture"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "*", "args": [0.001, "solar_radiation"] },
+            { "op": "*", "args": ["stomatal_conductance", "soil_moisture"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["leaf_temperature"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "*", "args": [{ "op": "-", "args": [1.0, "albedo"] }, "solar_radiation"] },
+            0.001
+          ]}
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "WeatherStation": {
+      "description": "Meteorological observations from weather station",
+      "data_source": {
+        "type": "csv",
+        "url": "file://weather_data.csv",
+        "time_column": "timestamp"
+      },
+      "provided_variables": {
+        "air_temp": { "units": "K", "description": "Measured air temperature" },
+        "rel_humidity": { "units": "%", "description": "Measured relative humidity" },
+        "wind_velocity": { "units": "m/s", "description": "Measured wind speed" },
+        "incoming_radiation": { "units": "W/m^2", "description": "Measured solar irradiance" }
+      }
+    },
+
+    "SatelliteData": {
+      "description": "Satellite observations of sea surface properties",
+      "data_source": {
+        "type": "netcdf",
+        "url": "file://satellite_sst.nc",
+        "time_dimension": "time"
+      },
+      "provided_variables": {
+        "sst_satellite": { "units": "K", "description": "Satellite sea surface temperature" },
+        "ocean_color": { "units": "mg/m^3", "description": "Chlorophyll concentration" }
+      }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "WeatherStation.air_temp",
+      "to": "AtmosphericModel.temperature",
+      "transform": "param_to_var",
+      "description": "TEST CASE 1: param_to_var transform - promotes constant parameter to time-varying variable"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "WeatherStation.rel_humidity",
+      "to": "AtmosphericModel.humidity",
+      "transform": "identity",
+      "description": "TEST CASE 2: identity transform - direct assignment without type change"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "WeatherStation.wind_velocity",
+      "to": "AtmosphericModel.wind_speed",
+      "transform": "additive",
+      "description": "TEST CASE 3: additive transform - adds source value to target equation RHS"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "WeatherStation.incoming_radiation",
+      "to": "AtmosphericModel.solar_radiation",
+      "transform": "multiplicative",
+      "description": "TEST CASE 4: multiplicative transform - multiplies target equation RHS by source value"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "WeatherStation.incoming_radiation",
+      "to": "LandModel.albedo",
+      "transform": "conversion_factor",
+      "factor": 1e-4,
+      "description": "TEST CASE 5: conversion_factor transform - param_to_var with unit conversion"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "SatelliteData.sst_satellite",
+      "to": "OceanModel.sea_surface_temperature",
+      "transform": "param_to_var",
+      "description": "TEST CASE 6: Cross-system param_to_var - satellite data drives ocean model"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "AtmosphericModel.temperature",
+      "to": "OceanModel.heat_exchange_coefficient",
+      "transform": "multiplicative",
+      "description": "TEST CASE 7: Model-to-model coupling - atmospheric temperature affects ocean heat exchange"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "OceanModel.sea_surface_temperature",
+      "to": "LandModel.stomatal_conductance",
+      "transform": "conversion_factor",
+      "factor": 1e-5,
+      "description": "TEST CASE 8: Multi-step coupling chain - ocean temperature affects land processes"
+    }
+  ],
+
+  "_test_verification": {
+    "param_to_var_cases": {
+      "test_case_1": {
+        "before": {
+          "AtmosphericModel.parameters": "temperature = 298.15 K (constant)",
+          "variable_list": ["ozone", "pressure"]
+        },
+        "after": {
+          "AtmosphericModel.parameters": "temperature removed from parameters",
+          "variable_list": ["ozone", "pressure", "temperature"],
+          "temperature_source": "WeatherStation.air_temp (time-varying)"
+        },
+        "note": "Parameter promoted to shared variable"
+      },
+
+      "test_case_6": {
+        "before": {
+          "OceanModel.variables": "sea_surface_temperature with own equation"
+        },
+        "after": {
+          "OceanModel.variables": "sea_surface_temperature driven by SatelliteData.sst_satellite",
+          "original_equation": "replaced or modified to incorporate satellite data"
+        },
+        "note": "Satellite data overrides model-computed SST"
+      }
+    },
+
+    "identity_cases": {
+      "test_case_2": {
+        "transform": "direct assignment: AtmosphericModel.humidity = WeatherStation.rel_humidity",
+        "parameter_status": "remains parameter, not promoted to variable",
+        "note": "Value updated but type unchanged"
+      }
+    },
+
+    "additive_cases": {
+      "test_case_3": {
+        "original_equation": "D(pressure)/dt = -0.1 * wind_speed * grad(pressure, x)",
+        "modified_equation": "D(pressure)/dt = -0.1 * wind_speed * grad(pressure, x) + WeatherStation.wind_velocity",
+        "note": "Source value added as additional term to RHS"
+      }
+    },
+
+    "multiplicative_cases": {
+      "test_case_4": {
+        "original_equation": "D(ozone)/dt = 0.001 * solar_radiation * ozone - 0.0001 * temperature * ozone",
+        "modified_equation": "D(ozone)/dt = (0.001 * solar_radiation * ozone - 0.0001 * temperature * ozone) * WeatherStation.incoming_radiation",
+        "note": "Entire RHS multiplied by source value"
+      },
+
+      "test_case_7": {
+        "original_equation": "D(sea_surface_temperature)/dt = heat_exchange_coefficient * (temperature - sea_surface_temperature)",
+        "modified_equation": "D(sea_surface_temperature)/dt = (heat_exchange_coefficient * AtmosphericModel.temperature) * (temperature - sea_surface_temperature)",
+        "note": "Parameter multiplied by source variable"
+      }
+    },
+
+    "conversion_factor_cases": {
+      "test_case_5": {
+        "transform": "param_to_var with factor",
+        "calculation": "LandModel.albedo = 1e-4 * WeatherStation.incoming_radiation",
+        "before_type": "parameter",
+        "after_type": "variable",
+        "note": "Combines param_to_var promotion with unit conversion"
+      },
+
+      "test_case_8": {
+        "transform": "conversion_factor with cross-system coupling",
+        "calculation": "LandModel.stomatal_conductance = 1e-5 * OceanModel.sea_surface_temperature",
+        "coupling_chain": "Satellite → Ocean → Land",
+        "note": "Complex multi-step coupling with unit conversion"
+      }
+    },
+
+    "merged_system_structure": {
+      "shared_variables": [
+        "WeatherStation.air_temp → AtmosphericModel.temperature",
+        "WeatherStation.incoming_radiation → LandModel.albedo",
+        "SatelliteData.sst_satellite → OceanModel.sea_surface_temperature"
+      ],
+      "parameter_changes": {
+        "removed_parameters": ["AtmosphericModel.temperature", "LandModel.albedo"],
+        "modified_parameters": ["AtmosphericModel.humidity", "AtmosphericModel.solar_radiation"],
+        "unchanged_parameters": ["AtmosphericModel.wind_speed", "OceanModel.evaporation_rate"]
+      },
+      "note": "Variable_map transforms reorganize the parameter/variable structure of merged system"
+    }
+  }
+}
