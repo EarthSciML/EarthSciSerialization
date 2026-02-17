@@ -384,7 +384,7 @@ fn test_expected_graph_outputs() {
     let dot_output = expr_graph.to_dot();
 
     // Load expected DOT output if available
-    if let Ok(expected_dot) = std::fs::read_to_string("../../../tests/graphs/expected_dot/expression_graph.dot") {
+    if let Ok(_expected_dot) = std::fs::read_to_string("../../../tests/graphs/expected_dot/expression_graph.dot") {
         // Note: Exact matching may be too strict due to ordering, so we check key components
         assert!(dot_output.contains("digraph"), "Should contain digraph declaration");
         // More specific tests would depend on the exact expected format
@@ -393,7 +393,7 @@ fn test_expected_graph_outputs() {
     // Test Mermaid output format
     let mermaid_output = expr_graph.to_mermaid();
 
-    if let Ok(expected_mermaid) = std::fs::read_to_string("../../../tests/graphs/expected_mermaid/expression_graph.mermaid") {
+    if let Ok(_expected_mermaid) = std::fs::read_to_string("../../../tests/graphs/expected_mermaid/expression_graph.mermaid") {
         assert!(mermaid_output.contains("graph"), "Should contain graph declaration");
         // More specific tests would depend on the exact expected format
     }

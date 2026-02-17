@@ -83,15 +83,15 @@ fn test_free_parameters() {
 /// Test expression contains check
 #[test]
 fn test_contains() {
-    let target = Expr::Variable("x".to_string());
+    let target = "x";
 
     // Simple variable match
     let expr1 = Expr::Variable("x".to_string());
-    assert!(contains(&expr1, &target));
+    assert!(contains(&expr1, target));
 
     // Variable not present
     let expr2 = Expr::Variable("y".to_string());
-    assert!(!contains(&expr2, &target));
+    assert!(!contains(&expr2, target));
 
     // Target in operator arguments
     let expr3 = Expr::Operator(ExpressionNode {
@@ -103,7 +103,7 @@ fn test_contains() {
         wrt: None,
         dim: None,
     });
-    assert!(contains(&expr3, &target));
+    assert!(contains(&expr3, target));
 
     // Target in nested expression
     let expr4 = Expr::Operator(ExpressionNode {
@@ -123,7 +123,7 @@ fn test_contains() {
         wrt: None,
         dim: None,
     });
-    assert!(contains(&expr4, &target));
+    assert!(contains(&expr4, target));
 
     // Target not in nested expression
     let expr5 = Expr::Operator(ExpressionNode {
@@ -134,7 +134,7 @@ fn test_contains() {
         wrt: None,
         dim: None,
     });
-    assert!(!contains(&expr5, &target));
+    assert!(!contains(&expr5, target));
 }
 
 /// Test expression evaluation
@@ -301,11 +301,9 @@ fn test_complex_expression_operations() {
     assert_eq!(result, 1.0);
 
     // Test contains check
-    let target_var = Expr::Variable("x".to_string());
-    assert!(contains(&complex_expr, &target_var));
+    assert!(contains(&complex_expr, "x"));
 
-    let non_existent_var = Expr::Variable("z".to_string());
-    assert!(!contains(&complex_expr, &non_existent_var));
+    assert!(!contains(&complex_expr, "z"));
 }
 
 /// Test derivative-like expressions
@@ -389,6 +387,5 @@ fn test_deeply_nested_expressions() {
     assert_eq!(vars.len(), 1);
 
     // Test that deeply nested expression doesn't cause stack overflow
-    let target = Expr::Variable("x".to_string());
-    assert!(contains(&expr, &target));
+    assert!(contains(&expr, "x"));
 }

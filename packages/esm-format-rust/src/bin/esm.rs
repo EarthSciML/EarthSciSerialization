@@ -804,7 +804,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // ANALYSIS COMMANDS
         Commands::CheckConservation { file, conservation_type } => {
             let content = fs::read_to_string(&file)?;
-            let esm_file = load(&content)?;
+            let _esm_file = load(&content)?;
 
             println!("Conservation Analysis for: {}", file.display());
             println!("Type: {}", conservation_type);
@@ -877,7 +877,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::PerformanceProfile { file, profile_type } => {
             let content = fs::read_to_string(&file)?;
-            let esm_file = load(&content)?;
+            let _esm_file = load(&content)?;
 
             println!("Performance Profile for: {}", file.display());
             println!("Profile type: {}", profile_type);
@@ -947,7 +947,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Optimize { file, opt_type } => {
             let content = fs::read_to_string(&file)?;
-            let esm_file = load(&content)?;
+            let _esm_file = load(&content)?;
 
             println!("Optimization Analysis for: {}", file.display());
             println!("Optimization type: {}", opt_type);
