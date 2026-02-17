@@ -13,6 +13,7 @@ using JSON3
     # include("mtk_catalyst_test.jl")
     include("reference_resolution_test.jl")
     include("solver_test.jl")
+    include("solver_optimization_test.jl")
     include("test_codegen.jl")
 
     # Comprehensive test suite for full verification
