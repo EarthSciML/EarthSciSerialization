@@ -310,7 +310,7 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
 
         # Convert rate expression
         all_vars = merge(species_dict, param_dict)
-        rate_expr = esm_to_symbolic(esm_reaction.rate, all_vars)
+        rate_expr = esm_to_symbolic_enhanced(esm_reaction.rate, all_vars, false)
 
         # Create Catalyst reaction
         if length(reactants) == 0
@@ -337,13 +337,13 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
             all_vars = merge(species_dict, param_dict)
 
             if event isa ContinuousEvent
-                condition = esm_to_symbolic(event.condition, all_vars)
+                condition = esm_to_symbolic_enhanced(event.condition, all_vars, false)
 
                 affects = []
                 for affect in event.affects
                     if affect isa AffectEquation
                         target_var = all_vars[affect.lhs]
-                        affect_expr = esm_to_symbolic(affect.rhs, all_vars)
+                        affect_expr = esm_to_symbolic_enhanced(affect.rhs, all_vars, false)
                         push!(affects, [target_var ~ affect_expr])
                     end
                 end
@@ -356,13 +356,13 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
                 for affect in event.affects
                     if affect isa AffectEquation
                         target_var = all_vars[affect.lhs]
-                        affect_expr = esm_to_symbolic(affect.rhs, all_vars)
+                        affect_expr = esm_to_symbolic_enhanced(affect.rhs, all_vars, false)
                         push!(affects, [target_var ~ affect_expr])
                     end
                 end
 
                 if event.trigger isa ConditionTrigger
-                    condition = esm_to_symbolic(event.trigger.expression, all_vars)
+                    condition = esm_to_symbolic_enhanced(event.trigger.expression, all_vars, false)
                     cb = SymbolicDiscreteCallback(condition, vcat(affects...))
                     push!(discrete_events, cb)
                 end
@@ -764,76 +764,8 @@ end
 # Expression Conversion Utilities
 # ========================================
 
-"""
-    esm_to_symbolic(expr::Expr, var_dict::Dict) -> Any
-
-Convert ESM expression to Symbolics/MTK symbolic form.
-"""
-function esm_to_symbolic(expr::Expr, var_dict::Dict)
-    if expr isa NumExpr
-        return expr.value
-    elseif expr isa VarExpr
-        if haskey(var_dict, expr.name)
-            return var_dict[expr.name]
-        else
-            # Create a new symbolic variable if not found
-            Symbolics.variable(Symbol(expr.name), T=Symbolics.Real)
-            var_sym = Symbolics.variable(Symbol(expr.name), T=Symbolics.Real)
-            return var_sym
-        end
-    elseif expr isa OpExpr
-        # Convert arguments recursively
-        args = [esm_to_symbolic(arg, var_dict) for arg in expr.args]
-
-        # Handle special operators
-        if expr.op == "D" && expr.wrt !== nothing
-            # Differential operator D(x, t) -> Differential(t)(x)
-            if expr.wrt == "t"
-                t = Symbolics.variable(:t, T=Symbolics.Real)  # Time variable
-                D = Differential(t)
-                return D(args[1])
-            else
-                wrt_var = var_dict[expr.wrt]
-                D = Differential(wrt_var)
-                return D(args[1])
-            end
-        elseif expr.op == "+"
-            return sum(args)
-        elseif expr.op == "*"
-            return prod(args)
-        elseif expr.op == "-"
-            if length(args) == 1
-                return -args[1]
-            else
-                return args[1] - sum(args[2:end])
-            end
-        elseif expr.op == "/"
-            return args[1] / args[2]
-        elseif expr.op == "^"
-            return args[1] ^ args[2]
-        elseif expr.op == "exp"
-            return exp(args[1])
-        elseif expr.op == "log"
-            return log(args[1])
-        elseif expr.op == "sin"
-            return sin(args[1])
-        elseif expr.op == "cos"
-            return cos(args[1])
-        elseif expr.op == "sqrt"
-            return sqrt(args[1])
-        elseif expr.op == "abs"
-            return abs(args[1])
-        elseif expr.op == "ifelse"
-            return ifelse(args[1], args[2], args[3])
-        else
-            # Generic function call
-            func_sym = Symbol(expr.op)
-            return eval(func_sym)(args...)
-        end
-    end
-
-    error("Unknown expression type: $(typeof(expr))")
-end
+# Duplicate esm_to_symbolic function removed to avoid method overwriting error
+# Use esm_to_symbolic_enhanced instead
 
 """
     symbolic_to_esm(symbolic_expr) -> Expr
@@ -916,21 +848,7 @@ end
 # Enhanced Support Structures
 # ========================================
 
-"""
-    MockMTKSystem
-
-Mock MTK system for testing and fallback when ModelingToolkit is unavailable.
-"""
-struct MockMTKSystem
-    name::String
-    states::Vector{String}
-    parameters::Vector{String}
-    observed_variables::Vector{String}
-    equations::Vector{String}
-    events::Vector{String}
-    metadata::Dict{String, Any}
-    advanced_features::Bool
-end
+# Duplicate MockMTKSystem struct removed - defined in mtk.jl
 
 """
     MockCatalystSystem
