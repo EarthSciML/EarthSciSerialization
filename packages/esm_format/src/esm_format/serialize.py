@@ -329,6 +329,99 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
     return result
 
 
+def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
+    """Serialize a data loader to JSON-compatible format."""
+    result = {}
+
+    # Map our enum to schema types
+    type_mapping = {
+        DataLoaderType.NETCDF: "gridded_data",
+        DataLoaderType.CSV: "emissions",  # Default to emissions for CSV
+        DataLoaderType.REMOTE: "callback"
+    }
+    result["type"] = type_mapping.get(loader.type, "emissions")
+
+    # Schema uses loader_id for source
+    if loader.source:
+        result["loader_id"] = loader.source
+
+    # Schema uses config for format_options
+    if loader.format_options:
+        result["config"] = loader.format_options
+
+    # Schema uses provides for variables
+    if loader.variables:
+        result["provides"] = {var: {} for var in loader.variables}
+
+    return result
+
+
+def _serialize_operator(operator: Operator) -> Dict[str, Any]:
+    """Serialize an operator to JSON-compatible format."""
+    result = {}
+
+    # Schema requires operator_id
+    result["operator_id"] = operator.name or "default_operator"
+
+    # Schema uses config for parameters
+    if operator.parameters:
+        result["config"] = operator.parameters
+
+    # Schema uses needed_vars for input_variables
+    if operator.input_variables:
+        result["needed_vars"] = operator.input_variables
+
+    # Schema uses modifies for output_variables
+    if operator.output_variables:
+        result["modifies"] = operator.output_variables
+
+    return result
+
+
+def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
+    """Serialize a coupling entry to JSON-compatible format."""
+    result = {}
+
+    # Map our enum to schema types (using variable_map as default)
+    result["type"] = "variable_map"
+
+    # Create from/to strings from model and variable names
+    if coupling.source_variables and coupling.target_variables:
+        result["from"] = f"{coupling.source_model}.{coupling.source_variables[0]}"
+        result["to"] = f"{coupling.target_model}.{coupling.target_variables[0]}"
+
+    return result
+
+
+def _serialize_solver(solver: Solver) -> Dict[str, Any]:
+    """Serialize a solver to JSON-compatible format."""
+    result = {}
+
+    # Schema uses strategy for algorithm
+    if solver.algorithm:
+        result["strategy"] = solver.algorithm
+
+    # Schema uses config for parameters
+    config = {}
+    if solver.parameters:
+        config.update(solver.parameters)
+
+    # Add tolerances to config
+    if solver.tolerances:
+        stiff_kwargs = {}
+        if "absolute" in solver.tolerances:
+            stiff_kwargs["abstol"] = solver.tolerances["absolute"]
+        if "relative" in solver.tolerances:
+            stiff_kwargs["reltol"] = solver.tolerances["relative"]
+        if stiff_kwargs:
+            config["stiff_kwargs"] = stiff_kwargs
+
+    if config:
+        result["config"] = config
+
+    return result
+
+
 def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     """Serialize an ESM file to JSON-compatible format."""
     result = {
@@ -354,8 +447,48 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     if esm_file.domains:
         result["domain"] = _serialize_domain(esm_file.domains[0])
 
-    # TODO: Add serialization for other components when implemented in parse.py
-    # - events, data_loaders, operators, couplings, solvers
+    # Serialize data loaders
+    if esm_file.data_loaders:
+        result["data_loaders"] = {
+            loader.name: _serialize_data_loader(loader)
+            for loader in esm_file.data_loaders
+        }
+
+    # Serialize operators
+    if esm_file.operators:
+        result["operators"] = {
+            operator.name: _serialize_operator(operator)
+            for operator in esm_file.operators
+        }
+
+    # Serialize couplings
+    if esm_file.couplings:
+        result["coupling"] = [
+            _serialize_coupling_entry(coupling)
+            for coupling in esm_file.couplings
+        ]
+
+    # Serialize solver (only first solver for now, as schema expects single solver)
+    if esm_file.solvers:
+        result["solver"] = _serialize_solver(esm_file.solvers[0])
+
+    # Serialize events
+    if esm_file.events:
+        # For now, serialize events as a simple list at top level
+        # TODO: Properly distribute events back to their parent models/reaction_systems
+        continuous_events = []
+        discrete_events = []
+
+        for event in esm_file.events:
+            if isinstance(event, ContinuousEvent):
+                continuous_events.append(_serialize_continuous_event(event))
+            elif isinstance(event, DiscreteEvent):
+                discrete_events.append(_serialize_discrete_event(event))
+
+        if continuous_events:
+            result["continuous_events"] = continuous_events
+        if discrete_events:
+            result["discrete_events"] = discrete_events
 
     return result
 
