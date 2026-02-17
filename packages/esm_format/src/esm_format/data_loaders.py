@@ -1867,6 +1867,544 @@ class GRIBLoader:
             self.dataset = None
 
 
+class BinaryLoader:
+    """
+    Binary data loader supporting custom binary formats with struct unpacking and endianness handling.
+
+    Provides comprehensive support for legacy scientific data formats with configurable
+    binary layouts, data type specifications, endianness control, and struct unpacking.
+    Essential for ingesting data from older instruments and simulation outputs.
+    """
+
+    def __init__(self, data_loader: DataLoader):
+        """
+        Initialize binary loader with configuration.
+
+        Args:
+            data_loader: DataLoader configuration object
+
+        Raises:
+            ValueError: If data_loader type is not BINARY
+        """
+        if data_loader.type != DataLoaderType.BINARY:
+            raise ValueError(f"Expected DataLoaderType.BINARY, got {data_loader.type}")
+
+        self.config = data_loader
+        self.data: Optional[Dict[str, Any]] = None
+        self.raw_data: Optional[bytes] = None
+
+        # Parse format options
+        format_options = self.config.format_options or {}
+        self.endianness = format_options.get('endianness', 'native')  # 'little', 'big', 'native'
+        self.data_types = format_options.get('data_types', {})  # {field_name: type_spec}
+        self.record_size = format_options.get('record_size', None)  # bytes per record
+        self.header_size = format_options.get('header_size', 0)  # bytes to skip at start
+        self.struct_format = format_options.get('struct_format', None)  # Python struct format string
+        self.custom_format = format_options.get('custom_format', {})  # Custom format specification
+
+        # Validate endianness
+        if self.endianness not in ['little', 'big', 'native']:
+            raise ValueError(f"Invalid endianness: {self.endianness}. Must be 'little', 'big', or 'native'")
+
+        # Set up struct format prefix based on endianness
+        if self.endianness == 'little':
+            self.endian_prefix = '<'
+        elif self.endianness == 'big':
+            self.endian_prefix = '>'
+        else:  # native
+            self.endian_prefix = '='
+
+    def load(self) -> Dict[str, Any]:
+        """
+        Load binary data from the configured source.
+
+        Returns:
+            Dictionary containing the loaded and unpacked data
+
+        Raises:
+            FileNotFoundError: If the source file doesn't exist
+            OSError: If the file can't be read
+            ValueError: If the binary format is invalid or data can't be unpacked
+        """
+        source_path = Path(self.config.source)
+
+        if not source_path.exists():
+            raise FileNotFoundError(f"Binary file not found: {source_path}")
+
+        try:
+            # Read raw binary data
+            with open(source_path, 'rb') as f:
+                self.raw_data = f.read()
+
+            # Skip header if specified
+            data_start = self.header_size
+            working_data = self.raw_data[data_start:]
+
+            # Unpack data based on format specification
+            if self.struct_format:
+                self.data = self._unpack_with_struct_format(working_data)
+            elif self.custom_format:
+                self.data = self._unpack_with_custom_format(working_data)
+            elif self.data_types:
+                self.data = self._unpack_with_data_types(working_data)
+            else:
+                # Default: treat as array of bytes
+                self.data = {'raw_data': list(working_data)}
+
+            # Filter to requested variables if specified
+            if self.config.variables:
+                filtered_data = {}
+                for var in self.config.variables:
+                    if var in self.data:
+                        filtered_data[var] = self.data[var]
+                    else:
+                        # Support dot notation for nested access
+                        nested_value = self._get_nested_value(self.data, var)
+                        if nested_value is not None:
+                            filtered_data[var] = nested_value
+
+                missing_vars = set(self.config.variables) - set(filtered_data.keys())
+                if missing_vars:
+                    raise ValueError(f"Requested variables not found in binary data: {missing_vars}")
+
+                self.data = filtered_data
+
+            return self.data
+
+        except ValueError:
+            # Re-raise ValueError without wrapping
+            raise
+        except Exception as e:
+            raise OSError(f"Failed to load binary file {source_path}: {e}") from e
+
+    def _unpack_with_struct_format(self, data: bytes) -> Dict[str, Any]:
+        """Unpack data using Python struct format string."""
+        import struct
+
+        # Add endianness prefix if not already present
+        fmt = self.struct_format
+        if not fmt.startswith(('<', '>', '=', '@', '!')):
+            fmt = self.endian_prefix + fmt
+
+        try:
+            struct_size = struct.calcsize(fmt)
+
+            if self.record_size:
+                # Multiple records
+                records = []
+                for offset in range(0, len(data), self.record_size):
+                    record_data = data[offset:offset + struct_size]
+                    if len(record_data) == struct_size:
+                        unpacked = struct.unpack(fmt, record_data)
+                        # Convert to dict if field names are provided
+                        if 'field_names' in self.config.format_options:
+                            field_names = self.config.format_options['field_names']
+                            if len(field_names) == len(unpacked):
+                                records.append(dict(zip(field_names, unpacked)))
+                            else:
+                                records.append({'fields': unpacked})
+                        else:
+                            records.append({'fields': unpacked})
+                return {'records': records, 'record_count': len(records)}
+            else:
+                # Single record
+                if len(data) < struct_size:
+                    raise ValueError(f"Insufficient data: need {struct_size} bytes, got {len(data)}")
+
+                unpacked = struct.unpack(fmt, data[:struct_size])
+
+                # Convert to dict if field names are provided
+                if 'field_names' in self.config.format_options:
+                    field_names = self.config.format_options['field_names']
+                    if len(field_names) == len(unpacked):
+                        result = dict(zip(field_names, unpacked))
+                        # Add remaining data if any
+                        if len(data) > struct_size:
+                            result['remaining_data'] = data[struct_size:]
+                        return result
+                    else:
+                        raise ValueError(f"Field names count ({len(field_names)}) doesn't match unpacked values count ({len(unpacked)})")
+                else:
+                    return {'fields': unpacked}
+
+        except struct.error as e:
+            raise ValueError(f"Struct unpacking error: {e}")
+
+    def _unpack_with_custom_format(self, data: bytes) -> Dict[str, Any]:
+        """Unpack data using custom format specification."""
+        result = {}
+        offset = 0
+
+        for field_name, field_spec in self.custom_format.items():
+            if offset >= len(data):
+                break
+
+            # Parse field specification
+            if isinstance(field_spec, str):
+                # Simple type specification
+                field_type = field_spec
+                field_count = 1
+            elif isinstance(field_spec, dict):
+                field_type = field_spec.get('type', 'uint8')
+                field_count = field_spec.get('count', 1)
+                field_offset = field_spec.get('offset')
+                if field_offset is not None:
+                    offset = field_offset
+            else:
+                raise ValueError(f"Invalid field specification for {field_name}: {field_spec}")
+
+            # Extract data based on type
+            try:
+                values = self._extract_typed_values(data, offset, field_type, field_count)
+
+                if field_count == 1:
+                    result[field_name] = values[0]
+                else:
+                    result[field_name] = values
+
+                # Update offset
+                type_size = self._get_type_size(field_type)
+                offset += type_size * field_count
+
+            except Exception as e:
+                raise ValueError(f"Error extracting field {field_name}: {e}")
+
+        return result
+
+    def _unpack_with_data_types(self, data: bytes) -> Dict[str, Any]:
+        """Unpack data using simple data type specifications."""
+        result = {}
+        offset = 0
+
+        for field_name, type_spec in self.data_types.items():
+            if offset >= len(data):
+                break
+
+            # Parse type specification
+            if isinstance(type_spec, str):
+                field_type = type_spec
+                field_count = 1
+            elif isinstance(type_spec, list) and len(type_spec) == 2:
+                field_type, field_count = type_spec
+            else:
+                raise ValueError(f"Invalid type specification for {field_name}: {type_spec}")
+
+            try:
+                values = self._extract_typed_values(data, offset, field_type, field_count)
+
+                if field_count == 1:
+                    result[field_name] = values[0]
+                else:
+                    result[field_name] = values
+
+                # Update offset
+                type_size = self._get_type_size(field_type)
+                offset += type_size * field_count
+
+            except Exception as e:
+                raise ValueError(f"Error extracting field {field_name}: {e}")
+
+        return result
+
+    def _extract_typed_values(self, data: bytes, offset: int, type_name: str, count: int) -> List[Any]:
+        """Extract typed values from binary data."""
+        import struct
+
+        # Map type names to struct format codes
+        type_map = {
+            'int8': 'b',
+            'uint8': 'B',
+            'int16': 'h',
+            'uint16': 'H',
+            'int32': 'i',
+            'uint32': 'I',
+            'int64': 'q',
+            'uint64': 'Q',
+            'float32': 'f',
+            'float64': 'd',
+            'char': 'c',
+            'bool': '?',
+        }
+
+        if type_name not in type_map:
+            raise ValueError(f"Unsupported type: {type_name}")
+
+        fmt_char = type_map[type_name]
+        fmt = f"{self.endian_prefix}{count}{fmt_char}"
+
+        try:
+            struct_size = struct.calcsize(fmt)
+            if offset + struct_size > len(data):
+                raise ValueError(f"Not enough data: need {struct_size} bytes at offset {offset}, but only {len(data) - offset} available")
+
+            values = struct.unpack(fmt, data[offset:offset + struct_size])
+
+            # Convert char values to strings
+            if type_name == 'char':
+                values = [v.decode('ascii', errors='ignore') for v in values]
+
+            return list(values)
+
+        except struct.error as e:
+            raise ValueError(f"Struct unpacking error for type {type_name}: {e}")
+
+    def _get_type_size(self, type_name: str) -> int:
+        """Get the size in bytes for a data type."""
+        type_sizes = {
+            'int8': 1,
+            'uint8': 1,
+            'int16': 2,
+            'uint16': 2,
+            'int32': 4,
+            'uint32': 4,
+            'int64': 8,
+            'uint64': 8,
+            'float32': 4,
+            'float64': 8,
+            'char': 1,
+            'bool': 1,
+        }
+        return type_sizes.get(type_name, 1)
+
+    def _get_nested_value(self, data: Dict[str, Any], path: str) -> Any:
+        """
+        Get a nested value using dot notation.
+
+        Args:
+            data: Dictionary to search in
+            path: Dot-separated path (e.g., 'header.timestamp')
+
+        Returns:
+            The nested value or None if not found
+        """
+        keys = path.split('.')
+        current = data
+
+        for key in keys:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return None
+
+        return current
+
+    def get_file_info(self) -> Dict[str, Any]:
+        """
+        Get information about the loaded binary file.
+
+        Returns:
+            Dictionary containing file metadata and structure info
+
+        Raises:
+            RuntimeError: If file must be loaded before extracting info
+        """
+        if self.raw_data is None:
+            raise RuntimeError("File must be loaded before extracting info")
+
+        info = {
+            'file_size_bytes': len(self.raw_data),
+            'header_size': self.header_size,
+            'data_size_bytes': len(self.raw_data) - self.header_size,
+            'endianness': self.endianness,
+            'format_type': self._get_format_type(),
+            'field_count': len(self.data) if self.data else 0
+        }
+
+        if self.record_size:
+            data_size = len(self.raw_data) - self.header_size
+            info['record_size'] = self.record_size
+            info['estimated_record_count'] = data_size // self.record_size
+
+        if self.data:
+            info['fields'] = list(self.data.keys())
+
+            # Add field statistics
+            field_stats = {}
+            for field_name, field_value in self.data.items():
+                if isinstance(field_value, list) and field_value and isinstance(field_value[0], (int, float)):
+                    field_stats[field_name] = {
+                        'type': 'numeric_array',
+                        'length': len(field_value),
+                        'min': min(field_value),
+                        'max': max(field_value),
+                        'mean': sum(field_value) / len(field_value)
+                    }
+                elif isinstance(field_value, (int, float)):
+                    field_stats[field_name] = {
+                        'type': 'numeric_scalar',
+                        'value': field_value
+                    }
+                elif isinstance(field_value, str):
+                    field_stats[field_name] = {
+                        'type': 'string',
+                        'length': len(field_value)
+                    }
+                else:
+                    field_stats[field_name] = {
+                        'type': type(field_value).__name__
+                    }
+
+            info['field_statistics'] = field_stats
+
+        return info
+
+    def _get_format_type(self) -> str:
+        """Determine the format type being used."""
+        if self.struct_format:
+            return 'struct_format'
+        elif self.custom_format:
+            return 'custom_format'
+        elif self.data_types:
+            return 'data_types'
+        else:
+            return 'raw_bytes'
+
+    def validate_format(self) -> Dict[str, Any]:
+        """
+        Validate the binary format specification.
+
+        Returns:
+            Dictionary with validation results
+
+        Raises:
+            RuntimeError: If file must be loaded before validation
+        """
+        if self.raw_data is None:
+            raise RuntimeError("File must be loaded before format validation")
+
+        validation_result = {
+            'valid': True,
+            'warnings': [],
+            'errors': [],
+            'format_info': {}
+        }
+
+        # Check file size vs format expectations
+        data_size = len(self.raw_data) - self.header_size
+
+        if self.record_size and data_size % self.record_size != 0:
+            validation_result['warnings'].append(
+                f"File size ({data_size} bytes) is not evenly divisible by record size ({self.record_size} bytes)"
+            )
+
+        # Validate struct format if used
+        if self.struct_format:
+            try:
+                import struct
+                fmt = self.struct_format
+                if not fmt.startswith(('<', '>', '=', '@', '!')):
+                    fmt = self.endian_prefix + fmt
+                struct_size = struct.calcsize(fmt)
+                validation_result['format_info']['struct_size'] = struct_size
+
+                if data_size < struct_size:
+                    validation_result['errors'].append(
+                        f"File too small for struct format: need {struct_size} bytes, got {data_size}"
+                    )
+                    validation_result['valid'] = False
+
+            except Exception as e:
+                validation_result['errors'].append(f"Invalid struct format: {e}")
+                validation_result['valid'] = False
+
+        # Check field names consistency
+        if 'field_names' in self.config.format_options:
+            field_names = self.config.format_options['field_names']
+            if self.struct_format:
+                import struct
+                fmt = self.struct_format
+                if not fmt.startswith(('<', '>', '=', '@', '!')):
+                    fmt = self.endian_prefix + fmt
+                try:
+                    expected_count = len(struct.unpack(fmt, b'\x00' * struct.calcsize(fmt)))
+                    if len(field_names) != expected_count:
+                        validation_result['warnings'].append(
+                            f"Field names count ({len(field_names)}) doesn't match struct format field count ({expected_count})"
+                        )
+                except:
+                    pass
+
+        return validation_result
+
+    def read_header(self) -> bytes:
+        """
+        Read just the header portion of the binary file.
+
+        Returns:
+            Header bytes
+
+        Raises:
+            RuntimeError: If file must be loaded before reading header
+        """
+        if self.raw_data is None:
+            raise RuntimeError("File must be loaded before reading header")
+
+        return self.raw_data[:self.header_size] if self.header_size > 0 else b''
+
+    def read_raw_data(self, offset: int = 0, length: Optional[int] = None) -> bytes:
+        """
+        Read raw binary data from the file.
+
+        Args:
+            offset: Byte offset from start of file (after header)
+            length: Number of bytes to read (None for all remaining)
+
+        Returns:
+            Raw binary data
+
+        Raises:
+            RuntimeError: If file must be loaded before reading raw data
+            ValueError: If offset is invalid
+        """
+        if self.raw_data is None:
+            raise RuntimeError("File must be loaded before reading raw data")
+
+        data_start = self.header_size + offset
+
+        if data_start >= len(self.raw_data):
+            raise ValueError(f"Offset {offset} beyond file size")
+
+        if length is None:
+            return self.raw_data[data_start:]
+        else:
+            return self.raw_data[data_start:data_start + length]
+
+    def export_to_numpy(self) -> Dict[str, np.ndarray]:
+        """
+        Export loaded data as NumPy arrays where applicable.
+
+        Returns:
+            Dictionary mapping field names to NumPy arrays
+
+        Raises:
+            RuntimeError: If data must be loaded before export
+        """
+        if self.data is None:
+            raise RuntimeError("Data must be loaded before export")
+
+        numpy_data = {}
+
+        for field_name, field_value in self.data.items():
+            if isinstance(field_value, list):
+                try:
+                    # Try to convert to numpy array
+                    numpy_data[field_name] = np.array(field_value)
+                except:
+                    # Keep as list if conversion fails
+                    numpy_data[field_name] = field_value
+            elif isinstance(field_value, (int, float)):
+                numpy_data[field_name] = np.array([field_value])
+            else:
+                numpy_data[field_name] = field_value
+
+        return numpy_data
+
+    def close(self):
+        """Clean up resources."""
+        self.data = None
+        self.raw_data = None
+
+
 class StreamingLoader:
     """
     Streaming data loader supporting real-time data ingestion from multiple sources.
@@ -2108,7 +2646,7 @@ class StreamingLoader:
         self.buffer.clear()
 
 
-def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader]:
+def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, BinaryLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader]:
     """
     Factory function to create appropriate data loader based on type.
 

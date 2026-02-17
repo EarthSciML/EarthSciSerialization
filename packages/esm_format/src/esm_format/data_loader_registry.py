@@ -14,7 +14,7 @@ from importlib import import_module
 import warnings
 
 from .types import DataLoader, DataLoaderType
-from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader
+from .data_loaders import NetCDFLoader, JSONLoader, BinaryLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader
 
 
 class DataLoaderRegistry:
@@ -51,6 +51,14 @@ class DataLoaderRegistry:
             JSONLoader,
             extensions=['.json', '.jsonl'],
             mime_types=['application/json', 'application/jsonl']
+        )
+
+        # Register Binary loader
+        self.register_loader(
+            DataLoaderType.BINARY,
+            BinaryLoader,
+            extensions=['.bin', '.dat', '.raw', '.data'],
+            mime_types=['application/octet-stream']
         )
 
         # Register Database loader

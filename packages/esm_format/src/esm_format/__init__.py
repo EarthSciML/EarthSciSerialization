@@ -60,6 +60,7 @@ from .simulation import (
 from .data_loaders import (
     NetCDFLoader,
     JSONLoader,
+    BinaryLoader,
     create_data_loader,
 )
 from .data_loader_registry import (
@@ -269,6 +270,7 @@ __all__ = [
     "SimulationError",
     "NetCDFLoader",
     "JSONLoader",
+    "BinaryLoader",
     "create_data_loader",
     "DataLoaderRegistry",
     "get_registry",
