@@ -34,6 +34,8 @@ Package types:
   js, typescript         TypeScript/JavaScript packages
   py, python            Python packages
   jl, julia             Julia packages
+  rs, rust              Rust packages
+  go, golang            Go packages
 
 Examples:
   ./scripts/deps check                  # Check all packages
@@ -68,6 +70,20 @@ check_dependencies() {
             else
                 echo -e "${RED}Julia not found, skipping Julia dependency check${NC}"
             fi
+
+            echo -e "\n${YELLOW}Checking Rust packages...${NC}"
+            if command -v cargo &> /dev/null; then
+                "$SCRIPT_DIR/rust_deps.sh" check
+            else
+                echo -e "${RED}Cargo not found, skipping Rust dependency check${NC}"
+            fi
+
+            echo -e "\n${YELLOW}Checking Go packages...${NC}"
+            if command -v go &> /dev/null; then
+                "$SCRIPT_DIR/go_deps.sh" check
+            else
+                echo -e "${RED}Go not found, skipping Go dependency check${NC}"
+            fi
             ;;
         "js"|"typescript")
             node "$SCRIPT_DIR/dependency-manager.js" conflicts
@@ -85,6 +101,22 @@ check_dependencies() {
                 julia "$SCRIPT_DIR/julia_deps.jl" check
             else
                 echo -e "${RED}Julia not found${NC}"
+                exit 1
+            fi
+            ;;
+        "rs"|"rust")
+            if command -v cargo &> /dev/null; then
+                "$SCRIPT_DIR/rust_deps.sh" check
+            else
+                echo -e "${RED}Cargo not found${NC}"
+                exit 1
+            fi
+            ;;
+        "go"|"golang")
+            if command -v go &> /dev/null; then
+                "$SCRIPT_DIR/go_deps.sh" check
+            else
+                echo -e "${RED}Go not found${NC}"
                 exit 1
             fi
             ;;
@@ -127,6 +159,12 @@ install_dependencies() {
             "julia")
                 julia "$SCRIPT_DIR/julia_deps.jl" install "$package_name"
                 ;;
+            "rust")
+                "$SCRIPT_DIR/rust_deps.sh" install "$package_name"
+                ;;
+            "go")
+                "$SCRIPT_DIR/go_deps.sh" install "$package_name"
+                ;;
         esac
     else
         echo -e "${YELLOW}Installing all package dependencies...${NC}"
@@ -164,6 +202,12 @@ update_dependencies() {
             "julia")
                 julia "$SCRIPT_DIR/julia_deps.jl" update "$package_name"
                 ;;
+            "rust")
+                "$SCRIPT_DIR/rust_deps.sh" update "$package_name"
+                ;;
+            "go")
+                "$SCRIPT_DIR/go_deps.sh" update "$package_name"
+                ;;
         esac
     else
         echo -e "${YELLOW}Updating all package dependencies...${NC}"
@@ -190,6 +234,16 @@ resolve_conflicts() {
             if command -v julia &> /dev/null; then
                 julia "$SCRIPT_DIR/julia_deps.jl" resolve
             fi
+
+            echo -e "\n${YELLOW}Rust conflict resolutions:${NC}"
+            if command -v cargo &> /dev/null; then
+                "$SCRIPT_DIR/rust_deps.sh" resolve
+            fi
+
+            echo -e "\n${YELLOW}Go conflict resolutions:${NC}"
+            if command -v go &> /dev/null; then
+                "$SCRIPT_DIR/go_deps.sh" resolve
+            fi
             ;;
         "js"|"typescript")
             node "$SCRIPT_DIR/dependency-manager.js" conflicts
@@ -199,6 +253,12 @@ resolve_conflicts() {
             ;;
         "jl"|"julia")
             julia "$SCRIPT_DIR/julia_deps.jl" resolve
+            ;;
+        "rs"|"rust")
+            "$SCRIPT_DIR/rust_deps.sh" resolve
+            ;;
+        "go"|"golang")
+            "$SCRIPT_DIR/go_deps.sh" resolve
             ;;
     esac
 }
@@ -226,8 +286,26 @@ EOF
         echo -e "${YELLOW}Generating Julia report...${NC}"
         echo '    "julia": ' >> "$report_file"
         julia "$SCRIPT_DIR/julia_deps.jl" report >> "$report_file"
+        echo ',' >> "$report_file"
     else
-        echo '    "julia": null' >> "$report_file"
+        echo '    "julia": null,' >> "$report_file"
+    fi
+
+    if command -v cargo &> /dev/null; then
+        echo -e "${YELLOW}Generating Rust report...${NC}"
+        echo '    "rust": ' >> "$report_file"
+        "$SCRIPT_DIR/rust_deps.sh" report >> "$report_file"
+        echo ',' >> "$report_file"
+    else
+        echo '    "rust": null,' >> "$report_file"
+    fi
+
+    if command -v go &> /dev/null; then
+        echo -e "${YELLOW}Generating Go report...${NC}"
+        echo '    "go": ' >> "$report_file"
+        "$SCRIPT_DIR/go_deps.sh" report >> "$report_file"
+    else
+        echo '    "go": null' >> "$report_file"
     fi
 
     cat >> "$report_file" << EOF
@@ -242,6 +320,8 @@ EOF
     if command -v jq &> /dev/null; then
         jq -r '.reports.typescript | "TypeScript packages: \(.packages // 0), conflicts: \(.conflicts // 0)"' "$report_file" 2>/dev/null || true
         jq -r '.reports.julia | if . then "Julia packages: \(.julia_packages // 0), conflicts: \(.conflicts // 0)" else "Julia: not available" end' "$report_file" 2>/dev/null || true
+        jq -r '.reports.rust | if . then "Rust packages: \(.rust_packages // 0), conflicts: \(.conflicts // 0)" else "Rust: not available" end' "$report_file" 2>/dev/null || true
+        jq -r '.reports.go | if . then "Go packages: \(.go_packages // 0), conflicts: \(.conflicts // 0)" else "Go: not available" end' "$report_file" 2>/dev/null || true
     else
         echo "Install jq for formatted report summary"
     fi
