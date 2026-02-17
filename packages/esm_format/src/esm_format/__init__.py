@@ -4,7 +4,7 @@ ESM Format - Earth System Model Serialization Format
 A Python package for handling Earth System Model serialization and mathematical expressions.
 """
 
-from .types import (
+from .esm_types import (
     Expr,
     ExprNode,
     Equation,

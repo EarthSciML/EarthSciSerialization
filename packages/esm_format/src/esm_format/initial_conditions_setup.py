@@ -13,7 +13,7 @@ from enum import Enum
 import logging
 
 try:
-    from .types import (
+    from .esm_types import (
         InitialCondition,
         InitialConditionType,
         ModelVariable,
@@ -23,7 +23,7 @@ try:
     from .expression import evaluate
 except ImportError:
     # Fallback for direct imports
-    from .types import (
+    from .esm_types import (
         InitialCondition,
         InitialConditionType,
         ModelVariable,

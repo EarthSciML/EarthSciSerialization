@@ -7,7 +7,7 @@ detection, and expansion context management.
 """
 
 from typing import Union, Dict, Any, Set, List, Optional
-from .types import Expr, ExprNode
+from .esm_types import Expr, ExprNode
 
 
 class CircularReferenceError(Exception):

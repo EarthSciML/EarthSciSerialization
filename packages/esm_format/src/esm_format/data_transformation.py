@@ -20,7 +20,7 @@ import logging
 import numpy as np
 from abc import ABC, abstractmethod
 
-from .types import CouplingEntry, CouplingType
+from .esm_types import CouplingEntry, CouplingType
 
 # Optional import for unit handling
 try:

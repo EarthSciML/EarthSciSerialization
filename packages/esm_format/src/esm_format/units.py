@@ -26,7 +26,7 @@ except ImportError:
     ureg = None
 
 try:
-    from .types import EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter, Expr, ExprNode
+    from .esm_types import EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter, Expr, ExprNode
 except ImportError:
     # For direct imports when testing
     from types import EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter, Expr, ExprNode

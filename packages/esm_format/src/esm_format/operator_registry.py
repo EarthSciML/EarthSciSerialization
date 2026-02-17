@@ -13,7 +13,7 @@ from pathlib import Path
 from enum import Enum
 from collections import defaultdict, deque
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 from .operator_validation import get_validator, ValidationLevel
 
 

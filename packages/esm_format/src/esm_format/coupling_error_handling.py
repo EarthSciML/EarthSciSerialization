@@ -27,7 +27,7 @@ from .coupling_iteration import (
     ConvergenceMethod, RelaxationMethod, AccelerationMethod,
     IterationState, CouplingResult
 )
-from .types import EsmFile
+from .esm_types import EsmFile
 
 
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ Based on ESM Format Specification Section 6.1
 
 from typing import Union, Dict, Any
 try:
-    from .types import Expr, ExprNode, Equation, Model, ReactionSystem, EsmFile
+    from .esm_types import Expr, ExprNode, Equation, Model, ReactionSystem, EsmFile
 except ImportError:
     # For direct imports when testing
     from types import Expr, ExprNode, Equation, Model, ReactionSystem, EsmFile

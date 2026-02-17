@@ -20,7 +20,7 @@ import copy
 import uuid
 from contextlib import contextmanager
 
-from .types import EsmFile, ModelVariable
+from .esm_types import EsmFile, ModelVariable
 from .hierarchical_scope_resolution import HierarchicalScopeResolver, ScopeInfo, VariableResolution
 
 

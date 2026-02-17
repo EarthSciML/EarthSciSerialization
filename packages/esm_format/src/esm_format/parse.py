@@ -15,12 +15,12 @@ from enum import Enum
 import jsonschema
 from jsonschema import validate
 
-from .types import (
+from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator, OperatorType,
-    CouplingEntry, CouplingType, Domain, Solver, SolverType,
+    CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain, Solver, SolverType,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
     InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionType
 )
@@ -343,44 +343,91 @@ def _parse_operator(operator_data: Dict[str, Any]) -> Operator:
 
 def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
     """Parse a coupling entry from JSON data."""
-    # Schema has different coupling types, map to our enum
+    # Get coupling type from schema
     schema_type = coupling_data["type"]
+
+    # Map schema types to our enum
     type_mapping = {
-        "operator_compose": CouplingType.DIRECT,
-        "couple2": CouplingType.DIRECT,
-        "variable_map": CouplingType.DIRECT,
-        "operator_apply": CouplingType.DIRECT,
-        "callback": CouplingType.DIRECT,
-        "event": CouplingType.DIRECT,
+        "operator_compose": CouplingType.OPERATOR_COMPOSE,
+        "couple2": CouplingType.COUPLE2,
+        "variable_map": CouplingType.VARIABLE_MAP,
+        "operator_apply": CouplingType.OPERATOR_APPLY,
+        "callback": CouplingType.CALLBACK,
+        "event": CouplingType.EVENT,
     }
-    coupling_type = type_mapping.get(schema_type, CouplingType.DIRECT)
 
-    # Extract systems information - different schemas handle this differently
-    systems = coupling_data.get("systems", [])
-    source_model = systems[0] if len(systems) > 0 else coupling_data.get("from", "").split(".")[0]
-    target_model = systems[1] if len(systems) > 1 else coupling_data.get("to", "").split(".")[0]
+    if schema_type not in type_mapping:
+        raise ValueError(f"Unknown coupling type: {schema_type}")
 
-    # For variable maps, extract variable names
-    source_variables = []
-    target_variables = []
-    if "from" in coupling_data:
-        from_parts = coupling_data["from"].split(".")
-        source_variables = [from_parts[-1]] if len(from_parts) > 1 else []
-    if "to" in coupling_data:
-        to_parts = coupling_data["to"].split(".")
-        target_variables = [to_parts[-1]] if len(to_parts) > 1 else []
+    coupling_type = type_mapping[schema_type]
 
-    transformation = None
-    # No transformation parsing for now since the schema format is complex
-
-    return CouplingEntry(
-        source_model=source_model,
-        target_model=target_model,
-        source_variables=source_variables,
-        target_variables=target_variables,
+    # Create base coupling entry
+    entry = CouplingEntry(
         coupling_type=coupling_type,
-        transformation=transformation
+        description=coupling_data.get("description")
     )
+
+    # Parse type-specific fields
+    if coupling_type == CouplingType.OPERATOR_COMPOSE:
+        entry.systems = coupling_data.get("systems", [])
+        entry.translate = coupling_data.get("translate", {})
+
+    elif coupling_type == CouplingType.COUPLE2:
+        entry.systems = coupling_data.get("systems", [])
+        entry.coupletype_pair = coupling_data.get("coupletype_pair", [])
+
+        # Parse connector
+        if "connector" in coupling_data:
+            connector_data = coupling_data["connector"]
+            equations = []
+            for eq_data in connector_data.get("equations", []):
+                equation = ConnectorEquation(
+                    from_var=eq_data["from"],
+                    to_var=eq_data["to"],
+                    transform=eq_data["transform"],
+                    expression=_parse_expression(eq_data["expression"]) if "expression" in eq_data else None
+                )
+                equations.append(equation)
+            entry.connector = Connector(equations=equations)
+
+    elif coupling_type == CouplingType.VARIABLE_MAP:
+        entry.from_var = coupling_data.get("from")
+        entry.to_var = coupling_data.get("to")
+        entry.transform = coupling_data.get("transform")
+        entry.factor = coupling_data.get("factor")
+
+    elif coupling_type == CouplingType.OPERATOR_APPLY:
+        entry.operator = coupling_data.get("operator")
+
+    elif coupling_type == CouplingType.CALLBACK:
+        entry.callback_id = coupling_data.get("callback_id")
+        entry.config = coupling_data.get("config", {})
+
+    elif coupling_type == CouplingType.EVENT:
+        entry.event_type = coupling_data.get("event_type")
+
+        # Parse conditions
+        if "conditions" in coupling_data:
+            entry.conditions = [_parse_expression(cond) for cond in coupling_data["conditions"]]
+
+        # Parse trigger for discrete events
+        if "trigger" in coupling_data:
+            entry.trigger = _parse_discrete_event_trigger(coupling_data["trigger"])
+
+        # Parse affects
+        if "affects" in coupling_data:
+            entry.affects = [_parse_affect_equation(affect) for affect in coupling_data["affects"]]
+
+        # Parse affect_neg
+        if "affect_neg" in coupling_data and coupling_data["affect_neg"] is not None:
+            entry.affect_neg = [_parse_affect_equation(affect) for affect in coupling_data["affect_neg"]]
+
+        # Parse other fields
+        entry.discrete_parameters = coupling_data.get("discrete_parameters", [])
+        entry.root_find = coupling_data.get("root_find")
+        entry.reinitialize = coupling_data.get("reinitialize")
+
+    return entry
 
 
 def _parse_solver(solver_data: Dict[str, Any]) -> Solver:

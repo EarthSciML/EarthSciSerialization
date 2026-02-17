@@ -11,7 +11,7 @@ import numpy as np
 from typing import Any, Union, List, Dict, Optional, Tuple
 from dataclasses import dataclass
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 
 
 def _coerce_to_boolean(value: Any) -> Union[bool, np.ndarray]:

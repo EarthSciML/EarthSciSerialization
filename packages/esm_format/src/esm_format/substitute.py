@@ -3,7 +3,7 @@ Expression substitution and variable replacement functions.
 """
 
 from typing import Dict, Union
-from .types import Expr, ExprNode, Model, ReactionSystem, ModelVariable, Equation, AffectEquation, Parameter, Reaction
+from .esm_types import Expr, ExprNode, Model, ReactionSystem, ModelVariable, Equation, AffectEquation, Parameter, Reaction
 
 
 def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:

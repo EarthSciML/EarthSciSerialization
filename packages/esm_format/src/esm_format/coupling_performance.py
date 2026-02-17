@@ -55,7 +55,7 @@ from abc import ABC, abstractmethod
 
 from .coupling_graph import CouplingGraph, CouplingNode, construct_coupling_graph
 from .coupling_iteration import CouplingIterator, ConvergenceConfig, CouplingResult, IterationState
-from .types import EsmFile
+from .esm_types import EsmFile
 
 
 logger = logging.getLogger(__name__)

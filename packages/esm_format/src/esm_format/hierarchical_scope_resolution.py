@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 import logging
 
-from .types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator, ModelVariable, Species
+from .esm_types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator, ModelVariable, Species
 from .coupling_graph import ScopedReference
 
 

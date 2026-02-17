@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, replace
 from copy import deepcopy
 
 try:
-    from .types import (
+    from .esm_types import (
         EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter,
         Reaction, Equation, Expr, ExprNode, AffectEquation
     )

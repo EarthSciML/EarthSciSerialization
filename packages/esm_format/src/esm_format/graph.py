@@ -11,7 +11,7 @@ import json
 import re
 
 try:
-    from .types import EsmFile, Model, ReactionSystem, Reaction, Expr, ExprNode, Equation
+    from .esm_types import EsmFile, Model, ReactionSystem, Reaction, Expr, ExprNode, Equation
     from .coupling_graph import construct_coupling_graph
 except ImportError:
     # For direct imports when testing

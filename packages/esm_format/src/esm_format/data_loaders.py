@@ -52,7 +52,7 @@ try:
 except ImportError:
     CFGRIB_AVAILABLE = False
 
-from .types import DataLoader, DataLoaderType
+from .esm_types import DataLoader, DataLoaderType
 
 
 class NetCDFLoader:

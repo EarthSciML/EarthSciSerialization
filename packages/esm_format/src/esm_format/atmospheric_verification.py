@@ -16,7 +16,7 @@ import time
 import warnings
 
 from .simulation import simulate, SimulationResult, SimulationError
-from .types import (
+from .esm_types import (
     Model, ModelVariable, ReactionSystem, Reaction, Species, Parameter,
     ContinuousEvent, DiscreteEvent, Expr, ExprNode
 )

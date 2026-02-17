@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Union, Dict, Any, Optional
 
-from .types import (
+from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
