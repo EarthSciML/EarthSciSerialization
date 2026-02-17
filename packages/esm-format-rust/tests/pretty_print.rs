@@ -18,18 +18,20 @@ fn test_chemical_subscripts() {
                 case.get("input").and_then(|v| v.as_str()),
                 case.get("unicode").and_then(|v| v.as_str())
             ) {
-                let result = to_unicode(input);
+                // Create a variable expression from the input string
+                let expr = Expr::Variable(input.to_string());
+                let result = to_unicode(&expr);
                 assert_eq!(result, expected_unicode, "Unicode formatting mismatch for input: {}", input);
 
                 // Test LaTeX output if available
                 if let Some(expected_latex) = case.get("latex").and_then(|v| v.as_str()) {
-                    let latex_result = to_latex(input);
+                    let latex_result = to_latex(&expr);
                     assert_eq!(latex_result, expected_latex, "LaTeX formatting mismatch for input: {}", input);
                 }
 
                 // Test ASCII output if available
                 if let Some(expected_ascii) = case.get("ascii").and_then(|v| v.as_str()) {
-                    let ascii_result = to_ascii(input);
+                    let ascii_result = to_ascii(&expr);
                     assert_eq!(ascii_result, expected_ascii, "ASCII formatting mismatch for input: {}", input);
                 }
             }
@@ -50,7 +52,8 @@ fn test_chemical_subscripts_comprehensive() {
                 case.get("input").and_then(|v| v.as_str()),
                 case.get("unicode").and_then(|v| v.as_str())
             ) {
-                let result = to_unicode(input);
+                let expr = Expr::Variable(input.to_string());
+                let result = to_unicode(&expr);
                 assert_eq!(result, expected_unicode, "Unicode formatting mismatch for input: {}", input);
             }
         }
@@ -70,7 +73,8 @@ fn test_chemical_subscripts_edge_cases() {
                 case.get("input").and_then(|v| v.as_str()),
                 case.get("unicode").and_then(|v| v.as_str())
             ) {
-                let result = to_unicode(input);
+                let expr = Expr::Variable(input.to_string());
+                let result = to_unicode(&expr);
                 assert_eq!(result, expected_unicode, "Unicode formatting mismatch for input: {}", input);
             }
         }
@@ -86,7 +90,7 @@ fn test_operator_precedence() {
 
     if let Some(cases) = test_cases.as_array() {
         for case in cases {
-            if let (Some(input), Some(expected_output)) = (
+            if let (Some(input), Some(_expected_output)) = (
                 case.get("input"),
                 case.get("expected").and_then(|v| v.as_str())
             ) {
@@ -94,7 +98,7 @@ fn test_operator_precedence() {
                 let input_str = serde_json::to_string(input).expect("Failed to serialize input");
                 let expr: Expr = serde_json::from_str(&input_str).expect("Failed to parse expression");
 
-                let result = to_unicode(&format!("{:?}", expr)); // This is a placeholder - real implementation would format properly
+                let result = to_unicode(&expr);
                 // Note: The actual implementation should format expressions with proper precedence
                 // This is a simplified test that checks the display functionality exists
                 assert!(!result.is_empty(), "Expected non-empty formatting result for expression");
@@ -112,7 +116,7 @@ fn test_expr_precedence() {
 
     if let Some(cases) = test_cases.as_array() {
         for case in cases {
-            if let (Some(input), Some(expected_output)) = (
+            if let (Some(input), Some(_expected_output)) = (
                 case.get("input"),
                 case.get("expected").and_then(|v| v.as_str())
             ) {
@@ -121,7 +125,7 @@ fn test_expr_precedence() {
                 let expr: Expr = serde_json::from_str(&input_str).expect("Failed to parse expression");
 
                 // Format the expression
-                let result = to_unicode(&format!("{:?}", expr)); // Placeholder - should use proper formatting
+                let result = to_unicode(&expr);
                 assert!(!result.is_empty(), "Expected non-empty formatting result");
             }
         }
@@ -137,23 +141,26 @@ fn test_all_operators() {
 
     if let Some(cases) = test_cases.as_array() {
         for case in cases {
-            if let (Some(operator), Some(expected_unicode)) = (
-                case.get("operator").and_then(|v| v.as_str()),
+            if let (Some(input), Some(expected_unicode)) = (
+                case.get("input"),
                 case.get("unicode").and_then(|v| v.as_str())
             ) {
-                let result = to_unicode(operator);
-                assert_eq!(result, expected_unicode, "Unicode formatting mismatch for operator: {}", operator);
+                let input_str = serde_json::to_string(input).expect("Failed to serialize input");
+                let expr: Expr = serde_json::from_str(&input_str).expect("Failed to parse expression");
+
+                let result = to_unicode(&expr);
+                assert_eq!(result, expected_unicode, "Unicode formatting mismatch for input: {:?}", input);
 
                 // Test LaTeX formatting if available
                 if let Some(expected_latex) = case.get("latex").and_then(|v| v.as_str()) {
-                    let latex_result = to_latex(operator);
-                    assert_eq!(latex_result, expected_latex, "LaTeX formatting mismatch for operator: {}", operator);
+                    let latex_result = to_latex(&expr);
+                    assert_eq!(latex_result, expected_latex, "LaTeX formatting mismatch for input: {:?}", input);
                 }
 
                 // Test ASCII formatting if available
                 if let Some(expected_ascii) = case.get("ascii").and_then(|v| v.as_str()) {
-                    let ascii_result = to_ascii(operator);
-                    assert_eq!(ascii_result, expected_ascii, "ASCII formatting mismatch for operator: {}", operator);
+                    let ascii_result = to_ascii(&expr);
+                    assert_eq!(ascii_result, expected_ascii, "ASCII formatting mismatch for input: {:?}", input);
                 }
             }
         }
@@ -169,12 +176,18 @@ fn test_comprehensive_operators() {
 
     if let Some(cases) = test_cases.as_array() {
         for case in cases {
-            if let (Some(operator), Some(expected_unicode)) = (
-                case.get("operator").and_then(|v| v.as_str()),
-                case.get("unicode").and_then(|v| v.as_str())
-            ) {
-                let result = to_unicode(operator);
-                assert_eq!(result, expected_unicode, "Unicode formatting mismatch for operator: {}", operator);
+            if let Some(tests) = case.get("tests").and_then(|v| v.as_array()) {
+                for test in tests {
+                    if let (Some(input), Some(expected_unicode)) = (
+                        test.get("input"),
+                        test.get("unicode").and_then(|v| v.as_str())
+                    ) {
+                        let input_str = serde_json::to_string(input).expect("Failed to serialize input");
+                        let expr: Expr = serde_json::from_str(&input_str).expect("Failed to parse expression");
+                        let result = to_unicode(&expr);
+                        assert_eq!(result, expected_unicode, "Unicode formatting mismatch for input: {:?}", input);
+                    }
+                }
             }
         }
     }
@@ -239,10 +252,13 @@ fn test_basic_formatting_functions() {
     ];
 
     for input in &test_strings {
+        // Create a simple variable expression from the string
+        let expr = Expr::Variable(input.to_string());
+
         // Test that all formatting functions work without errors
-        let unicode_result = to_unicode(input);
-        let latex_result = to_latex(input);
-        let ascii_result = to_ascii(input);
+        let unicode_result = to_unicode(&expr);
+        let latex_result = to_latex(&expr);
+        let ascii_result = to_ascii(&expr);
 
         assert!(!unicode_result.is_empty(), "Unicode formatting failed for {}", input);
         assert!(!latex_result.is_empty(), "LaTeX formatting failed for {}", input);

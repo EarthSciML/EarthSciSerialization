@@ -72,7 +72,7 @@ pub struct Metadata {
 }
 
 /// Mathematical expression: a number literal, variable reference, or operator node
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Expr {
     /// Number literal
@@ -86,7 +86,7 @@ pub enum Expr {
 }
 
 /// Expression node representing an operator with operands
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExpressionNode {
     /// Operator name (e.g., "+", "-", "*", "/", "sin", "cos", etc.)
     pub op: String,
