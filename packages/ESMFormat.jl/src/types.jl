@@ -625,7 +625,9 @@ function create_solver_with_method(strategy_str::String, method_str::String; kwa
     recommendations = get_recommended_algorithms(strategy, method)
 
     # Merge recommendations with user-provided kwargs
-    config_args = merge(recommendations, kwargs)
+    # Convert recommendations to symbol keys to match kwargs
+    rec_symbols = Dict{Symbol, Any}(Symbol(k) => v for (k, v) in recommendations)
+    config_args = merge(rec_symbols, Dict{Symbol, Any}(kwargs))
     config_args[:numerical_method] = method
 
     config = SolverConfiguration(; NamedTuple(Symbol(k) => v for (k, v) in config_args)...)
