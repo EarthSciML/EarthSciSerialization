@@ -4,19 +4,19 @@ version = "0.1.0"
 authors = ["Chris Tessum with Claude <noreply@anthropic.com>"]
 
 [deps]
-# Temporarily commenting out heavy dependencies that cause precompilation issues
-# Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
+# Full dependencies for complete Julia EarthSciML ecosystem support
+Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
-# ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
-# Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
-# Catalyst = "15.0.11"
-# ModelingToolkit = "9.84.0"
-# Symbolics = "6.58.0"
+Catalyst = "15.0.11"
+ModelingToolkit = "9.84.0"
+Symbolics = "6.58.0"
 Unitful = "1.28.0"
 julia = "1"
 

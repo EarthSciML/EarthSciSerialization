@@ -6,22 +6,32 @@ Implements the core functionality for converting ESM expressions, variables,
 and equations into MTK symbolic form with proper event handling.
 """
 
-# Conditional imports to handle missing dependencies gracefully
+# Lazy loading approach to avoid precompilation issues
 const MTK_AVAILABLE = Ref(false)
 const SYMBOLICS_AVAILABLE = Ref(false)
+const MTK_CHECKED = Ref(false)
 
-try
-    using ModelingToolkit
-    global MTK_AVAILABLE[] = true
-catch e
-    @warn "ModelingToolkit not available, using mock implementation: $e"
-end
+# Lazy loading function
+function _check_mtk_availability()
+    if !MTK_CHECKED[]
+        try
+            @eval using ModelingToolkit
+            MTK_AVAILABLE[] = true
+        catch e
+            # Only warn if the check fails
+            MTK_AVAILABLE[] = false
+        end
 
-try
-    using Symbolics
-    global SYMBOLICS_AVAILABLE[] = true
-catch e
-    @warn "Symbolics.jl not available, using mock implementation: $e"
+        try
+            @eval using Symbolics
+            SYMBOLICS_AVAILABLE[] = true
+        catch e
+            SYMBOLICS_AVAILABLE[] = false
+        end
+
+        MTK_CHECKED[] = true
+    end
+    return MTK_AVAILABLE[]
 end
 
 # Also need to load Dates for the now() function
@@ -72,7 +82,8 @@ discrete events to SymbolicDiscreteCallback.
 function to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
     sys_name = name === nothing ? "anonymous" : name
 
-    if !MTK_AVAILABLE[]
+    # Check MTK availability lazily
+    if !_check_mtk_availability()
         @info "Using mock MTK system (ModelingToolkit not available)"
         return create_mock_mtk_system_basic(model, sys_name)
     end
