@@ -130,7 +130,7 @@ fn test_analysis_features_integration() {
     assert!(!mermaid_export.is_empty());
     assert!(mermaid_export.contains("graph LR"));
 
-    let json_export = comp_graph.to_json().expect("Failed to export JSON");
+    let json_export = comp_graph.to_json_graph();
     assert!(!json_export.is_empty());
 
     // Test expression graph for model

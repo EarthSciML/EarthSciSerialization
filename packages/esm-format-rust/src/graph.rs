@@ -528,9 +528,9 @@ impl ComponentGraph {
     ///
     /// # Returns
     ///
-    /// * `Result<String, serde_json::Error>` - JSON representation of the graph
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
+    /// * `String` - JSON representation of the graph
+    pub fn to_json_graph(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
     }
 }
 
@@ -569,13 +569,40 @@ impl ExpressionGraph {
         dot
     }
 
+    /// Export graph to Mermaid format
+    ///
+    /// # Returns
+    ///
+    /// * `String` - Mermaid representation of the expression graph
+    pub fn to_mermaid(&self) -> String {
+        let mut mermaid = String::from("graph TD\n");
+
+        // Add nodes with appropriate shapes
+        for node in &self.nodes {
+            let (shape_start, shape_end, label) = match &node.node_type {
+                ExpressionNodeType::Variable => ("(", ")", format!("{}", node.id)),
+                ExpressionNodeType::Constant => ("[", "]", format!("{}", node.value.unwrap_or(0.0))),
+                ExpressionNodeType::Operator(op) => ("{", "}", format!("{}", op)),
+            };
+
+            mermaid.push_str(&format!("  {}{}{}{}\n", node.id, shape_start, label, shape_end));
+        }
+
+        // Add edges
+        for edge in &self.edges {
+            mermaid.push_str(&format!("  {} --> {}\n", edge.from, edge.to));
+        }
+
+        mermaid
+    }
+
     /// Export graph to JSON format
     ///
     /// # Returns
     ///
-    /// * `Result<String, serde_json::Error>` - JSON representation of the graph
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
+    /// * `String` - JSON representation of the graph
+    pub fn to_json_graph(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
     }
 }
 
@@ -790,5 +817,27 @@ mod tests {
         let mermaid = graph.to_mermaid();
         assert!(mermaid.contains("graph LR"));
         assert!(mermaid.contains("model1(Test Model)"));
+    }
+
+    #[test]
+    fn test_expression_graph_to_mermaid() {
+        let expr = Expr::Operator(ExprNode {
+            op: "+".to_string(),
+            args: vec![
+                Expr::Variable("x".to_string()),
+                Expr::Number(1.0),
+            ],
+            wrt: None,
+            dim: None,
+        });
+
+        let graph = expression_graph(&expr);
+        let mermaid = graph.to_mermaid();
+
+        assert!(mermaid.contains("graph TD"));
+        assert!(mermaid.contains("x(x)"));  // Variable node
+        assert!(mermaid.contains("const_"));  // Constant node
+        assert!(mermaid.contains("{+}"));    // Operator node
+        assert!(mermaid.contains("-->"));    // Edge
     }
 }
