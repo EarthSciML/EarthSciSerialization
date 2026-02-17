@@ -20,10 +20,10 @@ try:
         Domain,
         Expr
     )
-    from .expression import evaluate_expr_dict
+    from .expression import evaluate
 except ImportError:
     # Fallback for direct imports
-    from types import (
+    from .types import (
         InitialCondition,
         InitialConditionType,
         ModelVariable,
@@ -31,7 +31,7 @@ except ImportError:
         Expr
     )
     # Stub for expression evaluation if not available
-    def evaluate_expr_dict(expr, variables):
+    def evaluate(expr, variables):
         return 0.0
 
 logger = logging.getLogger(__name__)
@@ -292,7 +292,7 @@ class InitialConditionProcessor:
         elif isinstance(value, dict):  # Expression
             # Try to evaluate as constant expression
             try:
-                result = evaluate_expr_dict(value, {})
+                result = evaluate(value, {})
                 return float(result)
             except:
                 logger.warning(f"Could not evaluate expression {value} as constant, using default")
