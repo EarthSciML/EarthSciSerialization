@@ -14,7 +14,7 @@ from importlib import import_module
 import warnings
 
 from .types import DataLoader, DataLoaderType
-from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader, GRIBLoader
+from .data_loaders import NetCDFLoader, JSONLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader
 
 
 class DataLoaderRegistry:
@@ -75,6 +75,14 @@ class DataLoaderRegistry:
             GRIBLoader,
             extensions=['.grib', '.grib1', '.grib2', '.grb', '.grb2'],
             mime_types=['application/x-grib']
+        )
+
+        # Register Streaming loader
+        self.register_loader(
+            DataLoaderType.STREAMING,
+            StreamingLoader,
+            extensions=[],  # Streaming doesn't use file extensions
+            mime_types=[]   # Streaming doesn't use MIME types
         )
 
     def register_loader(

@@ -150,6 +150,7 @@ class DataLoaderType(Enum):
     BINARY = "binary"
     DATABASE = "database"
     GRIB = "grib"
+    STREAMING = "streaming"
 
 
 @dataclass
