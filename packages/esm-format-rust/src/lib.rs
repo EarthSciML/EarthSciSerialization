@@ -76,7 +76,7 @@ pub use graph::{
 };
 // Note: ExpressionNode from graph module is different from types::ExpressionNode
 pub use graph::ExpressionNode as GraphExpressionNode;
-pub use reactions::{derive_odes, stoichiometric_matrix};
+pub use reactions::{derive_odes, stoichiometric_matrix, DeriveError};
 pub use units::{parse_unit, check_dimensional_consistency, convert_units, Unit, Dimension, UnitError};
 pub use edit::{
     add_model, remove_model, add_variable, remove_variable, add_equation, remove_equation,
