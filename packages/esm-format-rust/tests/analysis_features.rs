@@ -156,7 +156,7 @@ fn test_analysis_features_integration() {
             assert_eq!(matrix[1][0], 1); // B produced
 
             // Test ODE derivation
-            let ode_model = derive_odes(rs);
+            let ode_model = derive_odes(rs).expect("Should derive ODEs successfully");
             assert_eq!(ode_model.variables.len(), 2); // A and B
             assert_eq!(ode_model.equations.len(), 2); // d[A]/dt and d[B]/dt
 
