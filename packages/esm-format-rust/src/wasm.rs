@@ -7,7 +7,9 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "wasm")]
 use crate::{
     EsmFile, load as rust_load, save as rust_save, validate as rust_validate,
-    substitute_in_model, substitute_in_reaction_system
+    substitute_in_model, substitute_in_reaction_system,
+    performance::{CompactExpr, PerformanceError},
+    stoichiometric_matrix
 };
 
 // WASM bindings
@@ -188,9 +190,82 @@ pub fn substitute(json_str: &str, bindings_str: &str) -> Result<String, JsValue>
     }
 }
 
+/// Create a compact expression for fast evaluation (WASM version)
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn create_compact_expression(expr_str: &str) -> Result<JsValue, JsValue> {
+    // Parse expression from JSON string
+    let expr: crate::Expr = serde_json::from_str(expr_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    let compact = CompactExpr::from_expr(&expr);
+
+    match serde_wasm_bindgen::to_value(&compact) {
+        Ok(js_value) => Ok(js_value),
+        Err(e) => Err(JsValue::from_str(&format!("Serialization error: {}", e))),
+    }
+}
+
+/// Compute stoichiometric matrix (WASM version)
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn compute_stoichiometric_matrix(reaction_system_str: &str) -> Result<JsValue, JsValue> {
+    let reaction_system: crate::ReactionSystem = serde_json::from_str(reaction_system_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    let matrix = stoichiometric_matrix(&reaction_system);
+
+    match serde_wasm_bindgen::to_value(&matrix) {
+        Ok(js_value) => Ok(js_value),
+        Err(e) => Err(JsValue::from_str(&format!("Serialization error: {}", e))),
+    }
+}
+
+/// Get performance metrics (WASM version)
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn get_performance_info() -> JsValue {
+    let info = serde_json::json!({
+        "features": {
+            "parallel": cfg!(feature = "parallel"),
+            "simd": cfg!(feature = "simd"),
+            "zero_copy": cfg!(feature = "zero_copy"),
+            "custom_alloc": cfg!(feature = "custom_alloc"),
+            "wasm": true
+        },
+        "version": crate::VERSION,
+        "schema_version": crate::SCHEMA_VERSION
+    });
+
+    serde_wasm_bindgen::to_value(&info).unwrap_or(JsValue::NULL)
+}
+
+/// Benchmark parsing performance (WASM version)
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn benchmark_parsing(json_str: &str, iterations: u32) -> Result<f64, JsValue> {
+    let start = js_sys::Date::now();
+
+    for _ in 0..iterations {
+        rust_load(json_str)
+            .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    }
+
+    let end = js_sys::Date::now();
+    let total_time = end - start;
+
+    Ok(total_time / iterations as f64)
+}
+
 /// Initialize WASM module
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
 pub fn main() {
     console_log!("ESM Format Rust WASM module initialized");
+    console_log!("Features enabled: parallel={}, simd={}, zero_copy={}, custom_alloc={}",
+        cfg!(feature = "parallel"),
+        cfg!(feature = "simd"),
+        cfg!(feature = "zero_copy"),
+        cfg!(feature = "custom_alloc")
+    );
 }

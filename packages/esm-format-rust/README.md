@@ -8,6 +8,9 @@ Rust implementation of the EarthSciML Serialization Format (ESM).
 - **Analysis**: Unit checking, equation counting, structural validation
 - **CLI Tool**: Command-line interface for validation and conversion
 - **WASM**: WebAssembly compilation for web use
+- **High Performance**: Zero-copy parsing, parallel evaluation, SIMD optimization
+- **Memory Efficient**: Custom allocators and compact expression trees
+- **Benchmarking**: Comprehensive performance analysis with criterion.rs
 
 ## Installation
 
@@ -32,6 +35,21 @@ cargo install esm-format --features cli
 wasm-pack build --target web --features wasm
 ```
 
+### High-Performance Build
+
+For maximum performance, enable all optimization features:
+
+```bash
+cargo build --release --features performance
+```
+
+Available performance features:
+- `parallel`: Multi-threaded evaluation with rayon
+- `simd`: SIMD-optimized mathematical operations
+- `zero_copy`: Fast JSON parsing with simd-json
+- `custom_alloc`: Custom memory allocators for large models
+- `performance`: Enables all performance features
+
 ## Usage
 
 ### Library
@@ -53,6 +71,73 @@ if !validation_result.valid {
 
 // Save it back
 let json = save(&esm_file)?;
+```
+
+### High-Performance Usage
+
+For performance-critical applications:
+
+```rust
+use esm_format::{
+    performance::{CompactExpr, ParallelEvaluator, simd_math},
+    load, stoichiometric_matrix
+};
+use std::collections::HashMap;
+
+// Fast parsing with zero-copy SIMD JSON
+#[cfg(feature = "zero_copy")]
+{
+    let mut json_bytes = content.into_bytes();
+    let esm_file = esm_format::performance::fast_parse(&mut json_bytes)?;
+}
+
+// Compact expression evaluation
+let expr = load_expression_from_file("complex_expr.json")?;
+let compact = CompactExpr::from_expr(&expr);
+let variables = HashMap::from([("x".to_string(), 1.5), ("k".to_string(), 0.1)]);
+
+// Fast stack-based evaluation
+let result = compact.evaluate_fast(&variables)?;
+
+// Parallel expression batch evaluation
+#[cfg(feature = "parallel")]
+{
+    let evaluator = ParallelEvaluator::new(Some(4))?; // Use 4 threads
+    let expressions = load_many_expressions()?;
+    let results = evaluator.evaluate_batch(&expressions, &variables)?;
+}
+
+// SIMD-optimized vector operations
+#[cfg(feature = "simd")]
+{
+    let a = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let b = vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+    let mut result = vec![0.0; 8];
+
+    // SIMD vector addition (4x faster than scalar)
+    simd_math::add_vectors_simd(&a, &b, &mut result)?;
+
+    // SIMD dot product
+    let dot_product = simd_math::dot_product_simd(&a, &b)?;
+}
+
+// Parallel stoichiometric matrix computation
+#[cfg(feature = "parallel")]
+{
+    let reaction_system = load_reaction_system()?;
+    let matrix = evaluator.compute_stoichiometric_matrix_parallel(&reaction_system)?;
+}
+
+// Custom memory allocation for large models
+#[cfg(feature = "custom_alloc")]
+{
+    use esm_format::performance::ModelAllocator;
+
+    let mut allocator = ModelAllocator::with_capacity(1_000_000);
+    let large_array = allocator.alloc_slice::<f64>(10000);
+    // Process large model...
+    allocator.reset(); // Reuse memory
+}
 ```
 
 ### CLI
