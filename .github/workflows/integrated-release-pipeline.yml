@@ -1,0 +1,495 @@
+name: Integrated Release Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+        - prerelease
+      prerelease_type:
+        description: 'Prerelease type (only if prerelease selected)'
+        required: false
+        default: 'rc'
+        type: choice
+        options:
+        - alpha
+        - beta
+        - rc
+      force_release:
+        description: 'Force release even if no package changes detected'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  NAMESPACE: ${{ github.repository_owner }}
+
+jobs:
+  # Analyze what needs to be released
+  release-analysis:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_release: ${{ steps.analysis.outputs.needs_release }}
+      version_bump: ${{ steps.analysis.outputs.version_bump }}
+      changed_packages: ${{ steps.analysis.outputs.changed_packages }}
+      new_version: ${{ steps.analysis.outputs.new_version }}
+      release_notes: ${{ steps.analysis.outputs.release_notes }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Release analysis
+      id: analysis
+      run: |
+        # Get last release tag
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Last tag: $LAST_TAG"
+
+        # Check for changes in package directories since last tag
+        CHANGED_PACKAGES='[]'
+        NEEDS_RELEASE="false"
+
+        if [ "${{ github.event.inputs.force_release }}" = "true" ]; then
+          NEEDS_RELEASE="true"
+          CHANGED_PACKAGES='["ESMFormat.jl", "esm-format", "esm_format", "esm-format-rust"]'
+        elif git diff --name-only ${LAST_TAG}..HEAD | grep -E '^packages/'; then
+          echo "Changes detected in packages"
+          NEEDS_RELEASE="true"
+
+          # Detect which specific packages changed
+          CHANGED_PACKAGES=$(git diff --name-only ${LAST_TAG}..HEAD | \
+            grep -E '^packages/' | \
+            cut -d'/' -f2 | \
+            sort -u | \
+            jq -R -s 'split("\n") | map(select(length > 0))')
+        fi
+
+        echo "needs_release=$NEEDS_RELEASE" >> $GITHUB_OUTPUT
+        echo "changed_packages=$CHANGED_PACKAGES" >> $GITHUB_OUTPUT
+
+        # Determine version bump type
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION_BUMP="${{ github.event.inputs.version_type }}"
+        else
+          # Auto-detect from commit messages
+          COMMIT_MESSAGES=$(git log ${LAST_TAG}..HEAD --oneline)
+          if echo "$COMMIT_MESSAGES" | grep -i "BREAKING CHANGE\|!:"; then
+            VERSION_BUMP="major"
+          elif echo "$COMMIT_MESSAGES" | grep -i "^feat\|^feature"; then
+            VERSION_BUMP="minor"
+          else
+            VERSION_BUMP="patch"
+          fi
+        fi
+
+        echo "version_bump=$VERSION_BUMP" >> $GITHUB_OUTPUT
+        echo "Version bump: $VERSION_BUMP"
+
+        # Calculate new version
+        LAST_VERSION=${LAST_TAG#v}
+        IFS='.' read -ra VERSION_PARTS <<< "$LAST_VERSION"
+        MAJOR=${VERSION_PARTS[0]:-0}
+        MINOR=${VERSION_PARTS[1]:-0}
+        PATCH=${VERSION_PARTS[2]:-0}
+
+        case $VERSION_BUMP in
+          major)
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            ;;
+          minor)
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            ;;
+          patch)
+            PATCH=$((PATCH + 1))
+            ;;
+          prerelease)
+            PRERELEASE_TYPE="${{ github.event.inputs.prerelease_type }}"
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH-${PRERELEASE_TYPE}.1"
+            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "New prerelease version: $NEW_VERSION"
+            exit 0
+            ;;
+        esac
+
+        NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: $NEW_VERSION"
+
+        # Generate release notes
+        cat > /tmp/release_notes.md << EOF
+        # Release v$NEW_VERSION
+
+        ## Changes since $LAST_TAG:
+
+        $(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+
+        ## Changed Packages:
+
+        $(echo "$CHANGED_PACKAGES" | jq -r '.[]' | sed 's/^/- /')
+
+        ## Package Versions:
+        - Julia ESMFormat.jl: v$NEW_VERSION
+        - TypeScript esm-format: v$NEW_VERSION
+        - Python esm_format: v$NEW_VERSION
+        - Rust esm-format: v$NEW_VERSION
+
+        ## Installation:
+
+        ### Quick Install (Binaries)
+        \`\`\`bash
+        curl -sSL https://github.com/${{ github.repository }}/releases/latest/download/update.sh | bash
+        \`\`\`
+
+        ### Package Managers
+        \`\`\`bash
+        # Julia
+        using Pkg; Pkg.add("ESMFormat")
+
+        # TypeScript/JavaScript
+        npm install esm-format
+
+        # Python
+        pip install esm-format
+
+        # Rust
+        cargo add esm-format
+        \`\`\`
+
+        ### Container Images
+        \`\`\`bash
+        # Pull language-specific containers
+        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-julia:v$NEW_VERSION
+        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-python:v$NEW_VERSION
+        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-typescript:v$NEW_VERSION
+        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-rust:v$NEW_VERSION
+        \`\`\`
+        EOF
+
+        # Encode release notes for GitHub output
+        {
+          echo 'release_notes<<EOF'
+          cat /tmp/release_notes.md
+          echo EOF
+        } >> $GITHUB_OUTPUT
+
+  # Create the release and update package versions
+  create-release:
+    needs: release-analysis
+    runs-on: ubuntu-latest
+    if: needs.release-analysis.outputs.needs_release == 'true'
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: Update package versions
+      run: |
+        NEW_VERSION="${{ needs.release-analysis.outputs.new_version }}"
+
+        # Update Julia Project.toml
+        if [ -f "packages/ESMFormat.jl/Project.toml" ]; then
+          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/ESMFormat.jl/Project.toml
+        fi
+
+        # Update TypeScript package.json
+        if [ -f "packages/esm-format/package.json" ]; then
+          cd packages/esm-format
+          npm version $NEW_VERSION --no-git-tag-version
+          cd ../..
+        fi
+
+        # Update Python pyproject.toml
+        if [ -f "packages/esm_format/pyproject.toml" ]; then
+          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm_format/pyproject.toml
+        fi
+
+        # Update Rust Cargo.toml
+        if [ -f "packages/esm-format-rust/Cargo.toml" ]; then
+          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm-format-rust/Cargo.toml
+        fi
+
+        # Update workspace.json with coordinated release info
+        cat > workspace.json << EOF
+        {
+          "version": "$NEW_VERSION",
+          "updated": "$(date -Iseconds)",
+          "packages": {
+            "julia": "v$NEW_VERSION",
+            "typescript": "v$NEW_VERSION",
+            "python": "v$NEW_VERSION",
+            "rust": "v$NEW_VERSION"
+          },
+          "release_coordination": {
+            "status": "releasing",
+            "changed_packages": ${{ needs.release-analysis.outputs.changed_packages }},
+            "workflow_run_id": "${{ github.run_id }}"
+          }
+        }
+        EOF
+
+    - name: Commit version updates
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Release v${{ needs.release-analysis.outputs.new_version }}" || exit 0
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ needs.release-analysis.outputs.new_version }}
+        release_name: Release v${{ needs.release-analysis.outputs.new_version }}
+        body: ${{ needs.release-analysis.outputs.release_notes }}
+        draft: false
+        prerelease: ${{ contains(needs.release-analysis.outputs.new_version, '-') }}
+
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: main
+        tags: true
+
+  # Run package-specific CI/CD workflows
+  trigger-package-workflows:
+    needs: [release-analysis, create-release]
+    runs-on: ubuntu-latest
+    if: needs.release-analysis.outputs.needs_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        workflow: [
+          { name: 'julia-ci.yml', package: 'ESMFormat.jl' },
+          { name: 'npm-publish.yml', package: 'esm-format' },
+          { name: 'python-package.yml', package: 'esm_format' },
+          { name: 'rust-ci.yml', package: 'esm-format-rust' }
+        ]
+    steps:
+    - name: Check if package changed
+      id: check_package
+      run: |
+        CHANGED_PACKAGES='${{ needs.release-analysis.outputs.changed_packages }}'
+        PACKAGE_NAME="${{ matrix.workflow.package }}"
+
+        if echo "$CHANGED_PACKAGES" | jq -e ".[] | select(. == \"$PACKAGE_NAME\")" > /dev/null; then
+          echo "should_trigger=true" >> $GITHUB_OUTPUT
+          echo "Package $PACKAGE_NAME changed, will trigger workflow"
+        else
+          echo "should_trigger=false" >> $GITHUB_OUTPUT
+          echo "Package $PACKAGE_NAME not changed, skipping workflow"
+        fi
+
+    - name: Trigger package workflow
+      if: steps.check_package.outputs.should_trigger == 'true'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          await github.rest.actions.createWorkflowDispatch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: '${{ matrix.workflow.name }}',
+            ref: 'main'
+          });
+
+  # Build cross-platform binaries
+  build-binaries:
+    needs: [release-analysis, create-release]
+    if: needs.release-analysis.outputs.needs_release == 'true'
+    uses: ./.github/workflows/binary-release.yml
+    with:
+      version: v${{ needs.release-analysis.outputs.new_version }}
+    secrets: inherit
+
+  # Build and push container images
+  build-containers:
+    needs: [release-analysis, create-release]
+    if: needs.release-analysis.outputs.needs_release == 'true'
+    uses: ./.github/workflows/container-build-and-publish.yml
+    with:
+      push_to_registry: true
+      optimization_profile: 'production'
+    secrets: inherit
+
+  # Run comprehensive conformance testing
+  run-conformance-tests:
+    needs: [release-analysis, create-release, trigger-package-workflows]
+    runs-on: ubuntu-latest
+    if: needs.release-analysis.outputs.needs_release == 'true'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: v${{ needs.release-analysis.outputs.new_version }}
+
+    - name: Set up multi-language environment
+      run: |
+        # Install Node.js
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+
+        # Install Python
+        sudo apt-get install -y python3 python3-pip
+
+        # Install Julia
+        curl -fsSL https://install.julialang.org | sh -s -- --yes
+
+        # Install Rust
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source ~/.cargo/env
+
+    - name: Run conformance tests
+      run: |
+        chmod +x scripts/test-conformance.sh
+        ./scripts/test-conformance.sh --all-languages --release-validation
+
+    - name: Upload conformance results
+      uses: actions/upload-artifact@v4
+      with:
+        name: conformance-test-results-v${{ needs.release-analysis.outputs.new_version }}
+        path: tests/conformance/results/
+        retention-days: 90
+
+  # Update release with final assets and status
+  finalize-release:
+    needs: [
+      release-analysis,
+      create-release,
+      build-binaries,
+      build-containers,
+      run-conformance-tests
+    ]
+    runs-on: ubuntu-latest
+    if: always() && needs.release-analysis.outputs.needs_release == 'true'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Update workspace status
+      run: |
+        NEW_VERSION="${{ needs.release-analysis.outputs.new_version }}"
+
+        # Determine final release status
+        RELEASE_STATUS="success"
+        if [ "${{ needs.build-binaries.result }}" != "success" ] || \
+           [ "${{ needs.build-containers.result }}" != "success" ] || \
+           [ "${{ needs.run-conformance-tests.result }}" != "success" ]; then
+          RELEASE_STATUS="partial"
+        fi
+
+        # Update workspace.json with final status
+        cat > workspace.json << EOF
+        {
+          "version": "$NEW_VERSION",
+          "updated": "$(date -Iseconds)",
+          "packages": {
+            "julia": "v$NEW_VERSION",
+            "typescript": "v$NEW_VERSION",
+            "python": "v$NEW_VERSION",
+            "rust": "v$NEW_VERSION"
+          },
+          "release_coordination": {
+            "status": "$RELEASE_STATUS",
+            "completed": "$(date -Iseconds)",
+            "workflow_run_id": "${{ github.run_id }}",
+            "binaries_status": "${{ needs.build-binaries.result }}",
+            "containers_status": "${{ needs.build-containers.result }}",
+            "conformance_status": "${{ needs.run-conformance-tests.result }}"
+          }
+        }
+        EOF
+
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add workspace.json
+        git commit -m "Update release coordination status for v$NEW_VERSION" || exit 0
+        git push || exit 0
+
+    - name: Update release notes with final status
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const version = "${{ needs.release-analysis.outputs.new_version }}";
+          const releaseId = "${{ needs.create-release.outputs.release_id }}";
+
+          // Build status summary
+          const statusEmoji = {
+            'success': '✅',
+            'failure': '❌',
+            'skipped': '⏭️',
+            'cancelled': '🚫'
+          };
+
+          const binariesStatus = statusEmoji['${{ needs.build-binaries.result }}'] || '❓';
+          const containersStatus = statusEmoji['${{ needs.build-containers.result }}'] || '❓';
+          const conformanceStatus = statusEmoji['${{ needs.run-conformance-tests.result }}'] || '❓';
+
+          const originalBody = `${{ needs.release-analysis.outputs.release_notes }}`;
+
+          const statusSection = `
+
+          ## 🚀 Release Status
+
+          | Component | Status |
+          |-----------|--------|
+          | Cross-Platform Binaries | ${binariesStatus} ${{ needs.build-binaries.result }} |
+          | Container Images | ${containersStatus} ${{ needs.build-containers.result }} |
+          | Conformance Tests | ${conformanceStatus} ${{ needs.run-conformance-tests.result }} |
+
+          **Release Quality**: ${binariesStatus === '✅' && containersStatus === '✅' && conformanceStatus === '✅' ? '🟢 Production Ready' : '🟡 Review Required'}
+
+          ---
+
+          📊 [View detailed pipeline logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          `;
+
+          await github.rest.repos.updateRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            release_id: parseInt(releaseId),
+            body: originalBody + statusSection
+          });
+
+    - name: Notify on failure
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Release Pipeline Failed for v${{ needs.release-analysis.outputs.new_version }}`,
+            body: `The automated release pipeline failed for version v${{ needs.release-analysis.outputs.new_version }}.
+
+            **Workflow Run**: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            **Status Summary**:
+            - Binaries: ${{ needs.build-binaries.result }}
+            - Containers: ${{ needs.build-containers.result }}
+            - Conformance: ${{ needs.run-conformance-tests.result }}
+
+            Please review the logs and re-run the failed components manually if needed.`,
+            labels: ['release', 'ci/cd', 'bug']
+          });
