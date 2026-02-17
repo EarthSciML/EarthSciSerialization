@@ -149,7 +149,7 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
             name,
             name,
             "model",
-            get(model, :description, nothing),
+            nothing,  # Model doesn't have description field
             model,
             metadata
         )
@@ -169,7 +169,7 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
             name,
             name,
             "reaction_system",
-            get(rxn_sys, :description, nothing),
+            nothing,  # ReactionSystem doesn't have description field
             rxn_sys,
             metadata
         )
@@ -189,7 +189,7 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
             name,
             name,
             "data_loader",
-            get(loader, :description, nothing),
+            loader.description,  # DataLoader has description field
             loader,
             metadata
         )
@@ -460,7 +460,7 @@ function expression_graph(model::Model)::Graph{VariableNode, DependencyEdge}
         node = VariableNode(
             var_name,
             kind,
-            get(var, :units, nothing),
+            var.units,  # ModelVariable has units field
             "model"
         )
         push!(nodes, node)
@@ -504,7 +504,7 @@ function expression_graph(rxn_sys::ReactionSystem)::Graph{VariableNode, Dependen
         node = VariableNode(
             species.name,
             "species",
-            get(species, :units, nothing),
+            nothing,  # Species doesn't have units field
             "reaction_system"
         )
         push!(nodes, node)
@@ -516,7 +516,7 @@ function expression_graph(rxn_sys::ReactionSystem)::Graph{VariableNode, Dependen
         node = VariableNode(
             param.name,
             "parameter",
-            get(param, :units, nothing),
+            param.units,  # Parameter has units field
             "reaction_system"
         )
         push!(nodes, node)
@@ -685,6 +685,65 @@ function expression_graph(expr::ESMFormat.Expr)::Graph{VariableNode, DependencyE
     return Graph{VariableNode, DependencyEdge}(nodes, edges)
 end
 
+# Chemical subscript rendering utilities
+
+"""
+    render_chemical_formula(formula::String) -> String
+
+Convert chemical formula to format with subscripts for visualization.
+Replaces numeric digits with Unicode subscript characters.
+
+# Examples
+```julia
+render_chemical_formula("CO2") # "CO₂"
+render_chemical_formula("H2SO4") # "H₂SO₄"
+render_chemical_formula("CH3OH") # "CH₃OH"
+```
+"""
+function render_chemical_formula(formula::String)::String
+    # Mapping of digits to Unicode subscript characters
+    subscript_map = Dict(
+        '0' => '₀',
+        '1' => '₁',
+        '2' => '₂',
+        '3' => '₃',
+        '4' => '₄',
+        '5' => '₅',
+        '6' => '₆',
+        '7' => '₇',
+        '8' => '₈',
+        '9' => '₉'
+    )
+
+    result = ""
+    for char in formula
+        if haskey(subscript_map, char)
+            result *= subscript_map[char]
+        else
+            result *= char
+        end
+    end
+
+    return result
+end
+
+"""
+    format_node_label(name::String, node_type::String="") -> String
+
+Format node label with chemical subscript rendering if applicable.
+Detects chemical formulas and applies subscript formatting.
+"""
+function format_node_label(name::String, node_type::String="")::String
+    # Check if this looks like a chemical formula (has letters followed by digits)
+    if occursin(r"[A-Za-z]+\d+", name)
+        formatted_name = render_chemical_formula(name)
+    else
+        formatted_name = name
+    end
+
+    return formatted_name
+end
+
 # Export formats
 
 """
@@ -705,7 +764,7 @@ function to_dot(graph::Graph{ComponentNode, CouplingEdge})::String
             "lightgray"
         end
 
-        label = node.name
+        label = format_node_label(node.name, node.type)
         push!(lines, "  \"$(node.id)\" [label=\"$label\", fillcolor=$color, style=filled];")
     end
 
@@ -743,7 +802,8 @@ function to_dot(graph::Graph{VariableNode, DependencyEdge})::String
             "diamond"
         end
 
-        push!(lines, "  \"$(node.name)\" [label=\"$(node.name)\", shape=$shape];")
+        label = format_node_label(node.name, node.kind)
+        push!(lines, "  \"$(node.name)\" [label=\"$label\", shape=$shape];")
     end
 
     # Add edges with styles based on relationship
@@ -781,7 +841,8 @@ function to_mermaid(graph::Graph{ComponentNode, CouplingEdge})::String
             "((", "))"
         end
 
-        push!(lines, "    $(node.id)$shape_open$(node.name)$shape_close")
+        label = format_node_label(node.name, node.type)
+        push!(lines, "    $(node.id)$shape_open$label$shape_close")
     end
 
     # Add edges
@@ -811,7 +872,8 @@ function to_mermaid(graph::Graph{VariableNode, DependencyEdge})::String
             "((", "))"
         end
 
-        push!(lines, "    $(node.name)$shape_open$(node.name)$shape_close")
+        label = format_node_label(node.name, node.kind)
+        push!(lines, "    $(node.name)$shape_open$label$shape_close")
     end
 
     # Add edges

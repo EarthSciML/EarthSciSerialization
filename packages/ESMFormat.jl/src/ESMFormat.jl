@@ -87,6 +87,8 @@ export
     Graph, ComponentNode, CouplingEdge, VariableNode, DependencyEdge,
     component_graph, expression_graph, adjacency, predecessors, successors,
     to_dot, to_mermaid, to_json,
+    # Chemical subscript rendering
+    render_chemical_formula, format_node_label,
     # Unit validation
     parse_units, get_expression_dimensions, validate_equation_dimensions,
     validate_model_dimensions, validate_reaction_system_dimensions, validate_file_dimensions,
