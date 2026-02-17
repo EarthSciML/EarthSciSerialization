@@ -306,6 +306,16 @@ fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent
                     .collect::<Vec<_>>().join(", "))
             }
         },
+        "div" => {
+            // Divergence operator
+            if args.len() == 1 {
+                format!("∇·{}", args[0].to_unicode_with_precedence(op_prec))
+            } else {
+                format!("div({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
         "exp" => {
             if args.len() == 1 {
                 format!("exp({})", args[0].to_unicode_with_precedence(0))
@@ -549,6 +559,13 @@ fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> Strin
                 format!("\\frac{{\\partial {}}}{{\\partial y}}", to_latex(&args[0]))
             } else {
                 format!("\\grad({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "div" => {
+            if args.len() == 1 {
+                format!("\\nabla \\cdot {}", to_latex(&args[0]))
+            } else {
+                format!("\\mathrm{{div}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
         },
         "exp" => {
