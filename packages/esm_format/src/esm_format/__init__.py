@@ -79,6 +79,16 @@ from .operator_registry import (
     list_operators_by_type,
     has_operator,
 )
+from .operator_dispatch import (
+    OperatorDispatcher,
+    TypeSignature,
+    OperatorOverload,
+    get_dispatcher,
+    dispatch_operator,
+    register_operator_overload,
+    get_operator_overloads,
+    get_dispatch_info,
+)
 from .coupling_graph import (
     CouplingGraph,
     CouplingNode,
@@ -284,6 +294,15 @@ __all__ = [
     "create_operator_by_name",
     "list_operators_by_type",
     "has_operator",
+    # Operator dispatch system
+    "OperatorDispatcher",
+    "TypeSignature",
+    "OperatorOverload",
+    "get_dispatcher",
+    "dispatch_operator",
+    "register_operator_overload",
+    "get_operator_overloads",
+    "get_dispatch_info",
     "CouplingGraph",
     "CouplingNode",
     "CouplingEdge",
