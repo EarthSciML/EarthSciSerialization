@@ -37,14 +37,15 @@ beforeEach(async () => {
 });
 
 describe('Expression Editing E2E', () => {
+  const validExpression = {
+    op: '+',
+    args: [
+      { type: 'number', value: 5 },
+      { type: 'variable', name: 'x' }
+    ]
+  };
+
   describe('Expression Editor Web Component', () => {
-    const validExpression = {
-      op: '+',
-      args: [
-        { type: 'number', value: 5 },
-        { type: 'variable', name: 'x' }
-      ]
-    };
 
     it('should render expression editor web component with valid expression', async () => {
       // Create a container with the web component
@@ -358,12 +359,13 @@ describe('Expression Editing E2E', () => {
       ];
 
       // Verify all components are registered
-      expectedComponents.forEach(componentName => {
-        expect(global.customElements.define).toHaveBeenCalledWith(
-          componentName,
-          expect.anything(),
-          expect.any(Array)
-        );
+      expect(global.customElements.define).toHaveBeenCalledTimes(expectedComponents.length);
+
+      // Check each call individually
+      const calls = global.customElements.define.mock.calls;
+      expectedComponents.forEach((componentName, index) => {
+        expect(calls[index][0]).toBe(componentName);
+        expect(typeof calls[index][1]).toBe('function');
       });
     });
 
