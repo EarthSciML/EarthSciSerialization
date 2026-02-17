@@ -19,11 +19,11 @@ function to_julia_code(file::EsmFile)
     # Header comment
     push!(lines, "# Generated Julia script from ESM file")
     push!(lines, "# ESM version: $(file.esm)")
-    if !isnothing(file.metadata) && haskey(file.metadata, :title)
-        push!(lines, "# Title: $(file.metadata[:title])")
+    if !isnothing(file.metadata) && !isnothing(file.metadata.name)
+        push!(lines, "# Title: $(file.metadata.name)")
     end
-    if !isnothing(file.metadata) && haskey(file.metadata, :description)
-        push!(lines, "# Description: $(file.metadata[:description])")
+    if !isnothing(file.metadata) && !isnothing(file.metadata.description)
+        push!(lines, "# Description: $(file.metadata.description)")
     end
     push!(lines, "")
 
@@ -54,14 +54,7 @@ function to_julia_code(file::EsmFile)
         end
     end
 
-    # Generate events
-    if !isnothing(file.events) && !isempty(file.events)
-        push!(lines, "# Events")
-        for (name, event) in file.events
-            append!(lines, generate_event_code(name, event))
-            push!(lines, "")
-        end
-    end
+    # Note: Events are handled within individual models, not at the file level
 
     # Generate coupling as TODO comments
     if !isnothing(file.coupling) && !isempty(file.coupling)
@@ -110,11 +103,11 @@ function to_python_code(file::EsmFile)
     # Header comment
     push!(lines, "# Generated Python script from ESM file")
     push!(lines, "# ESM version: $(file.esm)")
-    if !isnothing(file.metadata) && haskey(file.metadata, :title)
-        push!(lines, "# Title: $(file.metadata[:title])")
+    if !isnothing(file.metadata) && !isnothing(file.metadata.name)
+        push!(lines, "# Title: $(file.metadata.name)")
     end
-    if !isnothing(file.metadata) && haskey(file.metadata, :description)
-        push!(lines, "# Description: $(file.metadata[:description])")
+    if !isnothing(file.metadata) && !isnothing(file.metadata.description)
+        push!(lines, "# Description: $(file.metadata.description)")
     end
     push!(lines, "")
 
@@ -185,28 +178,28 @@ function generate_model_code(name::String, model::Model)
     push!(lines, "# Model: $name")
 
     # Collect state variables and parameters
-    state_vars = ModelVariable[]
-    parameters = ModelVariable[]
+    state_vars = Tuple{String, ModelVariable}[]
+    parameters = Tuple{String, ModelVariable}[]
 
     if !isnothing(model.variables) && !isempty(model.variables)
-        for variable in values(model.variables)
+        for (var_name, variable) in model.variables
             if variable.type == StateVariable
-                push!(state_vars, variable)
+                push!(state_vars, (var_name, variable))
             elseif variable.type == ParameterVariable
-                push!(parameters, variable)
+                push!(parameters, (var_name, variable))
             end
         end
     end
 
     # Generate @variables declaration
     if !isempty(state_vars)
-        var_decls = join(map(format_variable_declaration, state_vars), " ")
+        var_decls = join(map(x -> format_variable_declaration(x[1], x[2]), state_vars), " ")
         push!(lines, "@variables t $var_decls")
     end
 
     # Generate @parameters declaration
     if !isempty(parameters)
-        param_decls = join(map(format_variable_declaration, parameters), " ")
+        param_decls = join(map(x -> format_variable_declaration(x[1], x[2]), parameters), " ")
         push!(lines, "@parameters $param_decls")
     end
 
@@ -234,14 +227,14 @@ function generate_reaction_system_code(name::String, reaction_system::ReactionSy
 
     # Generate @species declaration
     if !isnothing(reaction_system.species) && !isempty(reaction_system.species)
-        species_decls = join(map(format_species_declaration, values(reaction_system.species)), " ")
+        species_decls = join(map(format_species_declaration, reaction_system.species), " ")
         push!(lines, "@species $species_decls")
     end
 
     # Generate @parameters for reaction parameters
     reaction_params = Set{String}()
     if !isnothing(reaction_system.reactions) && !isempty(reaction_system.reactions)
-        for reaction in values(reaction_system.reactions)
+        for reaction in reaction_system.reactions
             if !isnothing(reaction.rate)
                 param_names = extract_parameter_names(reaction.rate)
                 union!(reaction_params, param_names)
@@ -257,7 +250,7 @@ function generate_reaction_system_code(name::String, reaction_system::ReactionSy
     if !isnothing(reaction_system.reactions) && !isempty(reaction_system.reactions)
         push!(lines, "")
         push!(lines, "rxs = [")
-        for reaction in values(reaction_system.reactions)
+        for reaction in reaction_system.reactions
             push!(lines, "    $(format_reaction(reaction)),")
         end
         push!(lines, "]")
@@ -298,8 +291,8 @@ end
 function generate_domain_comment(domain::Domain)
     lines = String[]
     push!(lines, "# TODO: Implement domain")
-    if !isnothing(domain.spatial) && haskey(domain.spatial, :coordinates)
-        coords = domain.spatial[:coordinates]
+    if !isnothing(domain.spatial) && haskey(domain.spatial, "coordinates")
+        coords = domain.spatial["coordinates"]
         push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
     end
     return lines
@@ -308,23 +301,23 @@ end
 function generate_solver_comment(solver::Solver)
     lines = String[]
     push!(lines, "# TODO: Implement solver")
-    if !isnothing(solver.strategy)
-        push!(lines, "#   Strategy: $(solver.strategy)")
-    end
+    push!(lines, "#   Strategy: $(solver.strategy)")
     return lines
 end
 
 function generate_data_loader_comment(name::String, data_loader::DataLoader)
     lines = String[]
     push!(lines, "# TODO: Implement data loader $name")
-    if haskey(data_loader, :source)
-        push!(lines, "#   Source: $(data_loader[:source])")
+    push!(lines, "#   Type: $(data_loader.type)")
+    push!(lines, "#   Source: $(data_loader.source)")
+    if !isnothing(data_loader.description)
+        push!(lines, "#   Description: $(data_loader.description)")
     end
     return lines
 end
 
-function format_variable_declaration(variable::ModelVariable)
-    decl = string(variable.name)
+function format_variable_declaration(var_name::String, variable::ModelVariable)
+    decl = var_name
 
     # Add default value and units if present
     parts = String[]
@@ -337,8 +330,8 @@ function format_variable_declaration(variable::ModelVariable)
         end
     end
 
-    if !isnothing(variable.unit)
-        push!(parts, "u\"$(variable.unit)\"")
+    if !isnothing(variable.units)
+        push!(parts, "u\"$(variable.units)\"")
     end
 
     if !isempty(parts)
@@ -350,16 +343,8 @@ end
 
 function format_species_declaration(species::Species)
     decl = string(species.name)
-
-    if !isnothing(species.initial_value)
-        initial_val = species.initial_value
-        if isa(initial_val, Int)
-            decl *= "($(initial_val).0)"
-        else
-            decl *= "($initial_val)"
-        end
-    end
-
+    # Species in the ESM format don't have initial_value fields
+    # Initial values are set during system configuration
     return decl
 end
 
@@ -373,19 +358,19 @@ function format_reaction(reaction::Reaction)
     rate = isnothing(reaction.rate) ? "1.0" : format_expression(reaction.rate)
 
     # Format reactants
-    reactants = if isnothing(reaction.substrates) || isempty(reaction.substrates)
+    reactants = if isnothing(reaction.reactants) || isempty(reaction.reactants)
         "∅"
     else
-        join([s.stoichiometry != 1 ? "$(s.stoichiometry)*$(s.species)" : s.species
-              for s in reaction.substrates], " + ")
+        join(["$(stoich != 1 ? "$stoich*" : "")$species"
+              for (species, stoich) in reaction.reactants], " + ")
     end
 
     # Format products
     products = if isnothing(reaction.products) || isempty(reaction.products)
         "∅"
     else
-        join([p.stoichiometry != 1 ? "$(p.stoichiometry)*$(p.species)" : p.species
-              for p in reaction.products], " + ")
+        join(["$(stoich != 1 ? "$stoich*" : "")$species"
+              for (species, stoich) in reaction.products], " + ")
     end
 
     return "Reaction($rate, [$reactants], [$products])"
@@ -466,17 +451,32 @@ function format_affect(affect)
     end
 end
 
+function format_affect_equation(affect::AffectEquation)
+    lhs_expr = affect.lhs  # This is a String for variable name
+    rhs_expr = format_expression(affect.rhs)
+    return "$lhs_expr ~ $rhs_expr"
+end
+
 function format_affect_equation(affect)
-    if haskey(affect, :lhs) && haskey(affect, :rhs)
-        return "$(format_expression(affect[:lhs])) ~ $(format_expression(affect[:rhs]))"
-    end
+    # Fallback for other affect types
     return "nothing"
 end
 
+function format_discrete_trigger(trigger::ConditionTrigger)
+    return format_expression(trigger.expression)
+end
+
+function format_discrete_trigger(trigger::PeriodicTrigger)
+    return "periodic_trigger($(trigger.period), $(trigger.phase))"
+end
+
+function format_discrete_trigger(trigger::PresetTimesTrigger)
+    times_str = join(string.(trigger.times), ", ")
+    return "preset_times_trigger([$times_str])"
+end
+
 function format_discrete_trigger(trigger)
-    if haskey(trigger, :condition)
-        return format_expression(trigger[:condition])
-    end
+    # Fallback for other trigger types
     return "true"
 end
 
@@ -505,15 +505,15 @@ function generate_python_model_code(name::String, model::Model)
     push!(lines, "# Model: $name")
 
     # Collect state variables and parameters
-    state_vars = ModelVariable[]
-    parameters = ModelVariable[]
+    state_vars = Tuple{String, ModelVariable}[]
+    parameters = Tuple{String, ModelVariable}[]
 
     if !isnothing(model.variables) && !isempty(model.variables)
-        for variable in values(model.variables)
+        for (var_name, variable) in model.variables
             if variable.type == StateVariable
-                push!(state_vars, variable)
+                push!(state_vars, (var_name, variable))
             elseif variable.type == ParameterVariable
-                push!(parameters, variable)
+                push!(parameters, (var_name, variable))
             end
         end
     end
@@ -532,12 +532,12 @@ function generate_python_model_code(name::String, model::Model)
     # Generate symbol/function definitions
     if !isempty(state_vars)
         push!(lines, "# State variables")
-        for variable in state_vars
-            comment = isnothing(variable.unit) ? "" : "  # $(variable.unit)"
+        for (var_name, variable) in state_vars
+            comment = isnothing(variable.units) ? "" : "  # $(variable.units)"
             if has_derivatives
-                push!(lines, "$(variable.name) = sp.Function('$(variable.name)')$comment")
+                push!(lines, "$var_name = sp.Function('$var_name')$comment")
             else
-                push!(lines, "$(variable.name) = sp.Symbol('$(variable.name)')$comment")
+                push!(lines, "$var_name = sp.Symbol('$var_name')$comment")
             end
         end
         push!(lines, "")
@@ -545,9 +545,9 @@ function generate_python_model_code(name::String, model::Model)
 
     if !isempty(parameters)
         push!(lines, "# Parameters")
-        for parameter in parameters
-            comment = isnothing(parameter.unit) ? "" : "  # $(parameter.unit)"
-            push!(lines, "$(parameter.name) = sp.Symbol('$(parameter.name)')$comment")
+        for (param_name, parameter) in parameters
+            comment = isnothing(parameter.units) ? "" : "  # $(parameter.units)"
+            push!(lines, "$param_name = sp.Symbol('$param_name')$comment")
         end
         push!(lines, "")
     end
@@ -573,7 +573,7 @@ function generate_python_reaction_system_code(name::String, reaction_system::Rea
     # Generate species symbols
     if !isnothing(reaction_system.species) && !isempty(reaction_system.species)
         push!(lines, "# Species")
-        for species in values(reaction_system.species)
+        for species in reaction_system.species
             push!(lines, "$(species.name) = sp.Symbol('$(species.name)')")
         end
         push!(lines, "")
@@ -582,25 +582,25 @@ function generate_python_reaction_system_code(name::String, reaction_system::Rea
     # Generate reaction rate expressions
     if !isnothing(reaction_system.reactions) && !isempty(reaction_system.reactions)
         push!(lines, "# Rate expressions")
-        for (reaction_name, reaction) in reaction_system.reactions
+        for (i, reaction) in enumerate(reaction_system.reactions)
             if !isnothing(reaction.rate)
                 rate_expr = format_python_expression(reaction.rate)
-                push!(lines, "$(reaction_name)_rate = $rate_expr")
+                push!(lines, "reaction_$(i)_rate = $rate_expr")
             end
         end
         push!(lines, "")
 
         push!(lines, "# Stoichiometry setup (TODO: Implement reaction network)")
-        for (reaction_name, reaction) in reaction_system.reactions
-            push!(lines, "# Reaction: $reaction_name")
-            if !isnothing(reaction.substrates) && !isempty(reaction.substrates)
-                reactant_str = join([s.stoichiometry != 1 ? "$(s.stoichiometry)*$(s.species)" : s.species
-                                   for s in reaction.substrates], " + ")
+        for (i, reaction) in enumerate(reaction_system.reactions)
+            push!(lines, "# Reaction $i:")
+            if !isnothing(reaction.reactants) && !isempty(reaction.reactants)
+                reactant_str = join(["$(stoich != 1 ? "$stoich*" : "")$species"
+                                   for (species, stoich) in reaction.reactants], " + ")
                 push!(lines, "#   Reactants: $reactant_str")
             end
             if !isnothing(reaction.products) && !isempty(reaction.products)
-                product_str = join([p.stoichiometry != 1 ? "$(p.stoichiometry)*$(p.species)" : p.species
-                                  for p in reaction.products], " + ")
+                product_str = join(["$(stoich != 1 ? "$stoich*" : "")$species"
+                                  for (species, stoich) in reaction.products], " + ")
                 push!(lines, "#   Products: $product_str")
             end
         end
@@ -618,8 +618,8 @@ end
 function generate_python_domain_comment(domain::Domain)
     lines = String[]
     push!(lines, "# TODO: Implement domain")
-    if !isnothing(domain.spatial) && haskey(domain.spatial, :coordinates)
-        coords = domain.spatial[:coordinates]
+    if !isnothing(domain.spatial) && haskey(domain.spatial, "coordinates")
+        coords = domain.spatial["coordinates"]
         push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
     end
     return lines
@@ -628,9 +628,7 @@ end
 function generate_python_solver_comment(solver::Solver)
     lines = String[]
     push!(lines, "# TODO: Implement solver")
-    if !isnothing(solver.strategy)
-        push!(lines, "#   Strategy: $(solver.strategy)")
-    end
+    push!(lines, "#   Strategy: $(solver.strategy)")
     return lines
 end
 
