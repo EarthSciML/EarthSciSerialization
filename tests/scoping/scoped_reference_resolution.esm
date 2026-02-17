@@ -1,0 +1,421 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ScopedReferenceResolutionTestFixture",
+    "description": "Comprehensive test fixture for hierarchical variable references covering all scoped reference resolution patterns from ESM spec Section 4.3",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["scoping", "reference-resolution", "hierarchical", "validation"]
+  },
+
+  "models": {
+    "EarthSystem": {
+      "reference": {
+        "notes": "Top-level Earth system model with multiple components for testing scoped references"
+      },
+      "variables": {
+        "global_time": {
+          "type": "parameter",
+          "units": "s",
+          "default": 0.0,
+          "description": "Global simulation time"
+        },
+        "solar_constant": {
+          "type": "parameter",
+          "units": "W/m^2",
+          "default": 1361.0,
+          "description": "Solar constant"
+        }
+      },
+      "equations": [],
+
+      "subsystems": {
+        "Atmosphere": {
+          "reference": {
+            "notes": "Atmospheric component with nested subsystems for chemistry and physics"
+          },
+          "variables": {
+            "pressure_surface": {
+              "type": "parameter",
+              "units": "Pa",
+              "default": 101325.0,
+              "description": "Surface pressure"
+            },
+            "temperature_mean": {
+              "type": "state",
+              "units": "K",
+              "default": 288.15,
+              "description": "Mean atmospheric temperature"
+            }
+          },
+          "equations": [
+            {
+              "_comment": "Test bare reference - temperature_mean refers to variable in current system",
+              "lhs": {"op": "D", "args": ["temperature_mean"], "wrt": "t"},
+              "rhs": {"op": "*", "args": [0.001, {"op": "-", "args": [290.0, "temperature_mean"]}]}
+            }
+          ],
+
+          "subsystems": {
+            "Chemistry": {
+              "reference": {
+                "notes": "Chemical processes subsystem with further nesting"
+              },
+              "variables": {
+                "reaction_rate_coeff": {
+                  "type": "parameter",
+                  "units": "cm^3/molec/s",
+                  "default": 1e-12,
+                  "description": "Base reaction rate coefficient"
+                }
+              },
+              "equations": [],
+
+              "subsystems": {
+                "TroposphericChemistry": {
+                  "variables": {
+                    "O3": {
+                      "type": "state",
+                      "units": "mol/mol",
+                      "default": 40e-9,
+                      "description": "Tropospheric ozone"
+                    },
+                    "NO": {
+                      "type": "state",
+                      "units": "mol/mol",
+                      "default": 0.1e-9,
+                      "description": "Nitric oxide"
+                    },
+                    "NO2": {
+                      "type": "state",
+                      "units": "mol/mol",
+                      "default": 1e-9,
+                      "description": "Nitrogen dioxide"
+                    },
+                    "k_NO_O3": {
+                      "type": "parameter",
+                      "units": "cm^3/molec/s",
+                      "default": 1.8e-12,
+                      "description": "Rate constant for NO + O3 reaction"
+                    }
+                  },
+                  "equations": [
+                    {
+                      "_comment": "Test bare references - all variables in current system context",
+                      "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+                      "rhs": {"op": "*", "args": [{"op": "-", "args": ["k_NO_O3"]}, "O3", "NO"]}
+                    },
+                    {
+                      "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
+                      "rhs": {"op": "*", "args": [{"op": "-", "args": ["k_NO_O3"]}, "O3", "NO"]}
+                    },
+                    {
+                      "lhs": {"op": "D", "args": ["NO2"], "wrt": "t"},
+                      "rhs": {"op": "*", "args": ["k_NO_O3", "O3", "NO"]}
+                    }
+                  ]
+                },
+
+                "StratosphericChemistry": {
+                  "variables": {
+                    "O3_strat": {
+                      "type": "state",
+                      "units": "mol/mol",
+                      "default": 8e-6,
+                      "description": "Stratospheric ozone"
+                    },
+                    "production_rate": {
+                      "type": "parameter",
+                      "units": "mol/mol/s",
+                      "default": 1e-11,
+                      "description": "Ozone production rate"
+                    }
+                  },
+                  "equations": [
+                    {
+                      "lhs": {"op": "D", "args": ["O3_strat"], "wrt": "t"},
+                      "rhs": {"op": "-", "args": ["production_rate", {"op": "*", "args": [1e-6, "O3_strat"]}]}
+                    }
+                  ]
+                }
+              }
+            },
+
+            "Physics": {
+              "reference": {
+                "notes": "Physical processes subsystem"
+              },
+              "variables": {
+                "mixing_length": {
+                  "type": "parameter",
+                  "units": "m",
+                  "default": 100.0,
+                  "description": "Turbulent mixing length"
+                }
+              },
+              "equations": [],
+
+              "subsystems": {
+                "Turbulence": {
+                  "variables": {
+                    "eddy_diffusivity": {
+                      "type": "parameter",
+                      "units": "m^2/s",
+                      "default": 50.0,
+                      "description": "Eddy diffusivity coefficient"
+                    },
+                    "richardson_number": {
+                      "type": "parameter",
+                      "units": "dimensionless",
+                      "default": 0.25,
+                      "description": "Bulk Richardson number"
+                    }
+                  },
+                  "equations": [
+                    {
+                      "_comment": "Template equation using _var placeholder",
+                      "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+                      "rhs": {"op": "*", "args": ["eddy_diffusivity", {"op": "laplacian", "args": ["_var"]}]}
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+
+        "Ocean": {
+          "reference": {
+            "notes": "Ocean component for cross-system coupling tests"
+          },
+          "variables": {
+            "sea_surface_temperature": {
+              "type": "state",
+              "units": "K",
+              "default": 285.0,
+              "description": "Sea surface temperature"
+            },
+            "heat_capacity": {
+              "type": "parameter",
+              "units": "J/K/m^2",
+              "default": 4.2e6,
+              "description": "Ocean mixed layer heat capacity"
+            }
+          },
+          "equations": [
+            {
+              "lhs": {"op": "D", "args": ["sea_surface_temperature"], "wrt": "t"},
+              "rhs": {"op": "/", "args": [
+                {"op": "*", "args": [0.7, "EarthSystem.solar_constant"]},
+                "heat_capacity"
+              ]}
+            }
+          ]
+        }
+      }
+    },
+
+    "BiosphereModel": {
+      "reference": {
+        "notes": "Separate top-level model for cross-system reference testing"
+      },
+      "variables": {
+        "carbon_pool": {
+          "type": "state",
+          "units": "kg C/m^2",
+          "default": 5.0,
+          "description": "Total carbon pool"
+        },
+        "respiration_rate": {
+          "type": "parameter",
+          "units": "kg C/m^2/s",
+          "default": 1e-8,
+          "description": "Ecosystem respiration rate"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["carbon_pool"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["respiration_rate"]}, "carbon_pool"]}
+        }
+      ],
+
+      "subsystems": {
+        "Vegetation": {
+          "variables": {
+            "leaf_area_index": {
+              "type": "parameter",
+              "units": "m^2/m^2",
+              "default": 3.0,
+              "description": "Leaf area index"
+            },
+            "photosynthesis_rate": {
+              "type": "parameter",
+              "units": "kg C/m^2/s",
+              "default": 2e-8,
+              "description": "Photosynthesis rate"
+            }
+          },
+          "equations": []
+        }
+      }
+    }
+  },
+
+  "data_loaders": {
+    "EmissionInventory": {
+      "type": "emissions",
+      "loader_id": "EDGAR_v6",
+      "provides": {
+        "NO_emissions": {"units": "kg N/m^2/s", "description": "Nitrogen oxide emissions"},
+        "temperature_profile": {"units": "K", "description": "3D temperature field"}
+      }
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "Test single-level scoped reference - System.variable",
+      "type": "variable_map",
+      "from": "EarthSystem.solar_constant",
+      "to": "BiosphereModel.respiration_rate",
+      "transform": "multiplicative",
+      "factor": 1e-12,
+      "description": "Solar forcing affects ecosystem respiration"
+    },
+
+    {
+      "_comment": "Test two-level scoped reference - System.Subsystem.variable",
+      "type": "variable_map",
+      "from": "EarthSystem.Atmosphere.temperature_mean",
+      "to": "BiosphereModel.Vegetation.photosynthesis_rate",
+      "transform": "param_to_var",
+      "description": "Atmospheric temperature affects photosynthesis"
+    },
+
+    {
+      "_comment": "Test three-level scoped reference - A.B.C.variable",
+      "type": "variable_map",
+      "from": "EarthSystem.Atmosphere.Chemistry.reaction_rate_coeff",
+      "to": "BiosphereModel.carbon_pool",
+      "transform": "additive",
+      "factor": 1e6,
+      "description": "Chemical reaction rate affects carbon cycling"
+    },
+
+    {
+      "_comment": "Test four-level scoped reference - A.B.C.D.variable",
+      "type": "variable_map",
+      "from": "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.O3",
+      "to": "BiosphereModel.Vegetation.leaf_area_index",
+      "transform": "multiplicative",
+      "factor": 1e9,
+      "description": "Ozone concentration affects vegetation health"
+    },
+
+    {
+      "_comment": "Test operator_compose with multi-level scoped references",
+      "type": "operator_compose",
+      "systems": [
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry",
+        "EarthSystem.Atmosphere.Physics.Turbulence"
+      ],
+      "translate": {
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.O3": "EarthSystem.Atmosphere.Physics.Turbulence._var",
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.NO": "EarthSystem.Atmosphere.Physics.Turbulence._var",
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.NO2": "EarthSystem.Atmosphere.Physics.Turbulence._var"
+      },
+      "description": "Compose chemistry with turbulent transport using deeply nested scoped references"
+    },
+
+    {
+      "_comment": "Test cross-system references in event conditions and affects",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "ozone_depletion_alert",
+      "conditions": [
+        {
+          "op": "<",
+          "args": [
+            "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.O3",
+            20e-9
+          ]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "EarthSystem.Atmosphere.Chemistry.StratosphericChemistry.production_rate",
+          "rhs": {"op": "*", "args": [2.0, {"op": "Pre", "args": ["EarthSystem.Atmosphere.Chemistry.StratosphericChemistry.production_rate"]}]}
+        }
+      ],
+      "description": "When tropospheric ozone drops, increase stratospheric production using nested scoped references"
+    },
+
+    {
+      "_comment": "Test data loader reference in coupling",
+      "type": "variable_map",
+      "from": "EmissionInventory.temperature_profile",
+      "to": "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.k_NO_O3",
+      "transform": "param_to_var",
+      "description": "Temperature profile affects reaction rate coefficient"
+    },
+
+    {
+      "_comment": "Test couple2 with deeply nested scoped references",
+      "type": "couple2",
+      "systems": [
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry",
+        "EarthSystem.Atmosphere.Chemistry.StratosphericChemistry"
+      ],
+      "coupletype_pair": ["TroposphericCoupler", "StratosphericCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "EarthSystem.Atmosphere.Chemistry.StratosphericChemistry.O3_strat",
+            "to": "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.O3",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                0.01,
+                "EarthSystem.Atmosphere.Chemistry.StratosphericChemistry.O3_strat"
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Couple stratosphere-troposphere ozone exchange using four-level scoped references"
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-01T12:00:00Z"
+    },
+    "spatial": {
+      "z": {"min": 0.0, "max": 50000.0, "units": "m", "grid_spacing": 1000.0}
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "EarthSystem.global_time": 0.0,
+        "EarthSystem.Atmosphere.temperature_mean": 288.15,
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.O3": 40e-9,
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.NO": 0.1e-9,
+        "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry.NO2": 1e-9,
+        "EarthSystem.Atmosphere.Chemistry.StratosphericChemistry.O3_strat": 8e-6,
+        "EarthSystem.Ocean.sea_surface_temperature": 285.0,
+        "BiosphereModel.carbon_pool": 5.0
+      }
+    }
+  },
+
+  "solver": {
+    "strategy": "strang_serial",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 300.0
+    }
+  }
+}
