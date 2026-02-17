@@ -400,5 +400,142 @@ func UnmarshalExpression(data []byte) (Expression, error) {
 	if err := json.Unmarshal(data, &node); err != nil {
 		return nil, fmt.Errorf("expression must be number, string, or object: %w", err)
 	}
+
+	// Recursively unmarshal Args if they contain expressions
+	if node.Args != nil {
+		for i, arg := range node.Args {
+			if argMap, ok := arg.(map[string]interface{}); ok {
+				// This is likely another ExprNode that needs to be unmarshaled properly
+				argBytes, err := json.Marshal(argMap)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal arg for re-processing: %w", err)
+				}
+				unmarshaledArg, err := UnmarshalExpression(argBytes)
+				if err != nil {
+					return nil, fmt.Errorf("failed to unmarshal nested expression in args: %w", err)
+				}
+				node.Args[i] = unmarshaledArg
+			}
+		}
+	}
+
 	return node, nil
+}
+
+// Custom JSON unmarshaling for Equation
+func (e *Equation) UnmarshalJSON(data []byte) error {
+	// Define a temporary struct with the same structure but using json.RawMessage
+	type TempEquation struct {
+		LHS json.RawMessage `json:"lhs"`
+		RHS json.RawMessage `json:"rhs"`
+	}
+
+	var temp TempEquation
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// Unmarshal LHS
+	lhs, err := UnmarshalExpression(temp.LHS)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal LHS: %w", err)
+	}
+	e.LHS = lhs
+
+	// Unmarshal RHS
+	rhs, err := UnmarshalExpression(temp.RHS)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal RHS: %w", err)
+	}
+	e.RHS = rhs
+
+	return nil
+}
+
+// Custom JSON unmarshaling for AffectEquation
+func (ae *AffectEquation) UnmarshalJSON(data []byte) error {
+	type TempAffectEquation struct {
+		LHS string          `json:"lhs"`
+		RHS json.RawMessage `json:"rhs"`
+	}
+
+	var temp TempAffectEquation
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	ae.LHS = temp.LHS
+
+	// Unmarshal RHS
+	rhs, err := UnmarshalExpression(temp.RHS)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal RHS: %w", err)
+	}
+	ae.RHS = rhs
+
+	return nil
+}
+
+// Custom JSON unmarshaling for Reaction
+func (r *Reaction) UnmarshalJSON(data []byte) error {
+	type TempReaction struct {
+		ID         string             `json:"id"`
+		Name       *string            `json:"name,omitempty"`
+		Substrates []SubstrateProduct `json:"substrates"`
+		Products   []SubstrateProduct `json:"products"`
+		Rate       json.RawMessage    `json:"rate"`
+		Reference  *Reference         `json:"reference,omitempty"`
+	}
+
+	var temp TempReaction
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	r.ID = temp.ID
+	r.Name = temp.Name
+	r.Substrates = temp.Substrates
+	r.Products = temp.Products
+	r.Reference = temp.Reference
+
+	// Unmarshal Rate
+	rate, err := UnmarshalExpression(temp.Rate)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal rate: %w", err)
+	}
+	r.Rate = rate
+
+	return nil
+}
+
+// Custom JSON unmarshaling for ModelVariable
+func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
+	type TempModelVariable struct {
+		Type        string          `json:"type"`
+		Units       *string         `json:"units,omitempty"`
+		Default     interface{}     `json:"default,omitempty"`
+		Description *string         `json:"description,omitempty"`
+		Expression  json.RawMessage `json:"expression,omitempty"`
+	}
+
+	var temp TempModelVariable
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	mv.Type = temp.Type
+	mv.Units = temp.Units
+	mv.Default = temp.Default
+	mv.Description = temp.Description
+
+	// Unmarshal Expression if present
+	if len(temp.Expression) > 0 && string(temp.Expression) != "null" {
+		expr, err := UnmarshalExpression(temp.Expression)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal expression: %w", err)
+		}
+		mv.Expression = expr
+	}
+
+	return nil
 }
