@@ -300,13 +300,13 @@ fn contains_variable(expr: &Expr, var_name: &str) -> bool {
 ///
 /// # Returns
 ///
-/// * `Vec<Vec<i32>>` - Matrix with species as rows and reactions as columns
-pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<i32>> {
+/// * `Vec<Vec<f64>>` - Matrix with species as rows and reactions as columns
+pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<f64>> {
     let num_species = system.species.len();
     let num_reactions = system.reactions.len();
 
     // Initialize matrix with zeros
-    let mut matrix = vec![vec![0i32; num_reactions]; num_species];
+    let mut matrix = vec![vec![0.0f64; num_reactions]; num_species];
 
     // Create mapping from species name to index
     let species_index: HashMap<String, usize> = system.species
@@ -320,7 +320,7 @@ pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<i32>> {
         // Process substrates (negative coefficients)
         for substrate in &reaction.substrates {
             if let Some(&species_idx) = species_index.get(&substrate.species) {
-                let coeff = substrate.coefficient.unwrap_or(1.0) as i32;
+                let coeff = substrate.coefficient.unwrap_or(1.0);
                 matrix[species_idx][reaction_idx] -= coeff;
             }
         }
@@ -328,7 +328,7 @@ pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<i32>> {
         // Process products (positive coefficients)
         for product in &reaction.products {
             if let Some(&species_idx) = species_index.get(&product.species) {
-                let coeff = product.coefficient.unwrap_or(1.0) as i32;
+                let coeff = product.coefficient.unwrap_or(1.0);
                 matrix[species_idx][reaction_idx] += coeff;
             }
         }
@@ -465,13 +465,13 @@ mod tests {
 
         // Check specific values
         // Species A: [-1, 0, -2] (consumed in reactions 1 and 3)
-        assert_eq!(matrix[0], vec![-1, 0, -2]);
+        assert_eq!(matrix[0], vec![-1.0, 0.0, -2.0]);
 
         // Species B: [1, -1, 0] (produced in reaction 1, consumed in reaction 2)
-        assert_eq!(matrix[1], vec![1, -1, 0]);
+        assert_eq!(matrix[1], vec![1.0, -1.0, 0.0]);
 
         // Species C: [0, 1, 1] (produced in reactions 2 and 3)
-        assert_eq!(matrix[2], vec![0, 1, 1]);
+        assert_eq!(matrix[2], vec![0.0, 1.0, 1.0]);
     }
 
     #[test]

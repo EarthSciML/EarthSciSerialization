@@ -54,6 +54,8 @@ pub mod edit;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+pub mod performance;
+
 // Re-export main types
 pub use types::{
     EsmFile, Model, ReactionSystem, Expr, Species, Reaction,
@@ -84,6 +86,13 @@ pub use edit::{
     remove_reaction, update_model_metadata, substitute_in_expression, EditError
 };
 pub use error::EsmError;
+pub use performance::{PerformanceError, CompactExpr};
+
+#[cfg(feature = "parallel")]
+pub use performance::ParallelEvaluator;
+
+#[cfg(feature = "custom_alloc")]
+pub use performance::ModelAllocator;
 
 /// Package version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

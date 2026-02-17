@@ -19,6 +19,18 @@ pub struct ValidationResult {
     pub is_valid: bool,
 }
 
+impl ValidationResult {
+    /// Check if there are any errors (schema or structural)
+    pub fn has_errors(&self) -> bool {
+        !self.schema_errors.is_empty() || !self.structural_errors.is_empty()
+    }
+
+    /// Get all errors as a combined vector (for compatibility with old API)
+    pub fn errors(&self) -> Vec<StructuralError> {
+        self.structural_errors.clone()
+    }
+}
+
 /// A schema validation error
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchemaError {
