@@ -13,7 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 import numpy as np
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 from .operator_registry import get_registry
 
 

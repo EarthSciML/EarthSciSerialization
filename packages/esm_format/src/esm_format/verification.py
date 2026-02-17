@@ -18,7 +18,7 @@ from typing import Dict, List, Tuple, Optional, Union, Set, Any
 from dataclasses import dataclass
 from enum import Enum
 
-from .types import (
+from .esm_types import (
     ModelVariable, Parameter, Species, Equation, ExprNode, Expr,
     Model, ReactionSystem, Reaction, ContinuousEvent, DiscreteEvent
 )

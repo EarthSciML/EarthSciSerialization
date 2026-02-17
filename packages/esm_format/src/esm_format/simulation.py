@@ -20,7 +20,7 @@ from scipy.integrate import solve_ivp
 from typing import Dict, List, Tuple, Optional, Union, Any, Callable
 from dataclasses import dataclass
 
-from .types import (
+from .esm_types import (
     Model, ModelVariable, ReactionSystem, Reaction, Species, Parameter,
     ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile,
     AffectEquation, FunctionalAffect

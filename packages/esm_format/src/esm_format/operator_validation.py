@@ -14,7 +14,7 @@ from typing import Type, Dict, Any, List, Optional, Callable, Union, get_type_hi
 from dataclasses import dataclass
 from enum import Enum
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 
 
 class ValidationLevel(Enum):

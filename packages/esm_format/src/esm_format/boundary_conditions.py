@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Union, Tuple, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from .types import BoundaryCondition, BoundaryConditionType, Domain, SpatialDimension
+from .esm_types import BoundaryCondition, BoundaryConditionType, Domain, SpatialDimension
 
 
 class BoundaryLocationError(ValueError):

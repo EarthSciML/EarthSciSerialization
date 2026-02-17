@@ -13,7 +13,7 @@ from typing import Dict, List, Type, Optional, Callable, Any, Union
 from importlib import import_module
 import warnings
 
-from .types import DataLoader, DataLoaderType
+from .esm_types import DataLoader, DataLoaderType
 from .data_loaders import NetCDFLoader, JSONLoader, BinaryLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader, RemoteLoader
 
 

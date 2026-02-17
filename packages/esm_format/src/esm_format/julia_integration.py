@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple, Optional, Any, Union
 from dataclasses import dataclass, asdict
 import numpy as np
 
-from .types import ReactionSystem, Model, Species, Parameter, Reaction
+from .esm_types import ReactionSystem, Model, Species, Parameter, Reaction
 from .simulation import SimulationResult
 
 

@@ -19,7 +19,7 @@ from scipy.interpolate import interp1d, CubicSpline, BSpline, splrep, splev
 from scipy.spatial import cKDTree
 import scipy.ndimage as ndimage
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 
 
 @dataclass

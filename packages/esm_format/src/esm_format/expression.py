@@ -3,7 +3,7 @@ Expression manipulation and analysis functions.
 """
 
 from typing import Dict, Set, Union, Optional, List
-from .types import Expr, ExprNode, Model, ReactionSystem, ModelVariable
+from .esm_types import Expr, ExprNode, Model, ReactionSystem, ModelVariable
 import sympy as sp
 
 

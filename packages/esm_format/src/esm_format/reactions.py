@@ -11,7 +11,7 @@ import numpy as np
 import sympy as sp
 from typing import Dict, List, Optional, Set, Tuple
 
-from .types import ReactionSystem, Reaction, Species, Model, ModelVariable, Equation, Expr, ExprNode
+from .esm_types import ReactionSystem, Reaction, Species, Model, ModelVariable, Equation, Expr, ExprNode
 from .expression import to_sympy, from_sympy
 
 

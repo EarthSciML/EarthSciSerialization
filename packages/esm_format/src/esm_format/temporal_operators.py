@@ -12,7 +12,7 @@ from typing import Any, Union, List, Dict, Optional, Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 
 
 class TemporalScheme(Enum):

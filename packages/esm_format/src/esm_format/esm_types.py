@@ -187,22 +187,68 @@ class Operator:
 
 
 class CouplingType(Enum):
-    """Types of coupling between model components."""
-    DIRECT = "direct"
-    INTERPOLATED = "interpolated"
-    AGGREGATED = "aggregated"
-    FEEDBACK = "feedback"
+    """Types of coupling between model components matching ESM schema."""
+    OPERATOR_COMPOSE = "operator_compose"
+    COUPLE2 = "couple2"
+    VARIABLE_MAP = "variable_map"
+    OPERATOR_APPLY = "operator_apply"
+    CALLBACK = "callback"
+    EVENT = "event"
+
+
+@dataclass
+class ConnectorEquation:
+    """Single equation in a connector system."""
+    from_var: str
+    to_var: str
+    transform: str
+    expression: Optional[Expr] = None
+
+
+@dataclass
+class Connector:
+    """Connector system with equations."""
+    equations: List[ConnectorEquation] = field(default_factory=list)
 
 
 @dataclass
 class CouplingEntry:
     """Entry describing how model components are coupled."""
-    source_model: str
-    target_model: str
-    source_variables: List[str]
-    target_variables: List[str]
     coupling_type: CouplingType
-    transformation: Optional[Operator] = None
+    description: Optional[str] = None
+
+    # Fields for operator_compose and couple2
+    systems: Optional[List[str]] = None
+
+    # Fields for couple2
+    coupletype_pair: Optional[List[str]] = None
+    connector: Optional[Connector] = None
+
+    # Fields for operator_compose (variable translation)
+    translate: Optional[Dict[str, Any]] = None
+
+    # Fields for variable_map
+    from_var: Optional[str] = None
+    to_var: Optional[str] = None
+    transform: Optional[str] = None
+    factor: Optional[float] = None
+
+    # Fields for operator_apply
+    operator: Optional[str] = None
+
+    # Fields for callback
+    callback_id: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+
+    # Fields for event
+    event_type: Optional[str] = None
+    conditions: Optional[List[Expr]] = None
+    trigger: Optional["DiscreteEventTrigger"] = None
+    affects: Optional[List["AffectEquation"]] = None
+    affect_neg: Optional[List["AffectEquation"]] = None
+    discrete_parameters: Optional[List[str]] = None
+    root_find: Optional[str] = None
+    reinitialize: Optional[bool] = None
 
 
 # ========================================

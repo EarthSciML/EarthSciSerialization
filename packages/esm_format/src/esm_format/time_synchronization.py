@@ -14,7 +14,7 @@ import math
 from datetime import datetime, timedelta
 import logging
 
-from .types import TemporalDomain, CouplingEntry, CouplingType
+from .esm_types import TemporalDomain, CouplingEntry, CouplingType
 
 # Set up logging
 logger = logging.getLogger(__name__)

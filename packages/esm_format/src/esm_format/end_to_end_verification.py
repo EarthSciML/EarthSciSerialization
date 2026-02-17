@@ -28,7 +28,7 @@ from .julia_integration import (
 from .simulation import simulate, SimulationResult
 from .parse import load
 from .serialize import save
-from .types import EsmFile, Metadata
+from .esm_types import EsmFile, Metadata
 
 
 class EndToEndVerificationSuite:

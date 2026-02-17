@@ -10,7 +10,7 @@ import numpy as np
 from typing import Any, Union, List, Dict, Optional
 from dataclasses import dataclass
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 
 
 def _ensure_numeric(value: Any) -> Union[int, float, np.ndarray]:

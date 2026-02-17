@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from enum import Enum
 import logging
 
-from .types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator, ModelVariable, Species
+from .esm_types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator, ModelVariable, Species
 
 # Optional import for unit handling
 try:
@@ -345,10 +345,12 @@ class CouplingGraph:
             'model_nodes': node_type_counts[NodeType.MODEL.value],
             'reaction_system_nodes': node_type_counts[NodeType.REACTION_SYSTEM.value],
             'variable_nodes': node_type_counts[NodeType.VARIABLE.value],
-            'direct_couplings': coupling_type_counts[CouplingType.DIRECT.value],
-            'interpolated_couplings': coupling_type_counts[CouplingType.INTERPOLATED.value],
-            'aggregated_couplings': coupling_type_counts[CouplingType.AGGREGATED.value],
-            'feedback_couplings': coupling_type_counts[CouplingType.FEEDBACK.value],
+            'operator_compose_couplings': coupling_type_counts[CouplingType.OPERATOR_COMPOSE.value],
+            'couple2_couplings': coupling_type_counts[CouplingType.COUPLE2.value],
+            'variable_map_couplings': coupling_type_counts[CouplingType.VARIABLE_MAP.value],
+            'operator_apply_couplings': coupling_type_counts[CouplingType.OPERATOR_APPLY.value],
+            'callback_couplings': coupling_type_counts[CouplingType.CALLBACK.value],
+            'event_couplings': coupling_type_counts[CouplingType.EVENT.value],
             'cycles_detected': len(cycles),
             'max_dependency_level': max((info.dependency_level for info in self._dependency_info.values()), default=0)
         }
@@ -359,7 +361,7 @@ def match_coupling_variables(
     target_var_name: str,
     source_component: Union[Model, ReactionSystem],
     target_component: Union[Model, ReactionSystem],
-    coupling_type: CouplingType = CouplingType.DIRECT
+    coupling_type: CouplingType = CouplingType.VARIABLE_MAP
 ) -> VariableMatchResult:
     """
     Match variables between coupled components with type compatibility checking,
@@ -638,32 +640,22 @@ def _check_interface_compatibility(
     warnings = []
 
     # Check for required interface properties based on coupling type
-    if coupling_type == CouplingType.INTERPOLATED:
-        # Interpolation requires compatible data domains
-        if not _has_spatial_domain_info(source_var):
-            warnings.append(
-                f"Source variable '{source_var['name']}' lacks spatial domain information "
-                "required for interpolation"
-            )
-
-        if not _has_spatial_domain_info(target_var):
-            warnings.append(
-                f"Target variable '{target_var['name']}' lacks spatial domain information "
-                "required for interpolation"
-            )
-
-    elif coupling_type == CouplingType.AGGREGATED:
-        # Aggregation requires understanding of how to combine values
-        if not _has_aggregation_metadata(source_var):
-            warnings.append(
-                f"Source variable '{source_var['name']}' lacks aggregation metadata "
-                "for proper aggregation coupling"
-            )
-
-    elif coupling_type == CouplingType.FEEDBACK:
-        # Feedback couplings require careful handling of temporal dependencies
+    if coupling_type == CouplingType.COUPLE2:
+        # Bidirectional coupling requires careful interface matching
         warnings.append(
-            "Feedback coupling detected: ensure proper temporal synchronization "
+            "Couple2 coupling detected: ensure proper bidirectional interface compatibility"
+        )
+    elif coupling_type == CouplingType.VARIABLE_MAP:
+        # Variable mapping requires type compatibility
+        if source_var.get('type') != 'state' and target_var.get('type') != 'parameter':
+            warnings.append(
+                f"Variable mapping from {source_var.get('type')} to {target_var.get('type')} "
+                "may require careful consideration of variable lifecycle"
+            )
+    elif coupling_type == CouplingType.EVENT:
+        # Event couplings require careful handling of temporal dependencies
+        warnings.append(
+            "Event coupling detected: ensure proper temporal synchronization "
             "to avoid numerical instabilities"
         )
 

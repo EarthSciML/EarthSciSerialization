@@ -12,7 +12,7 @@ import numpy as np
 from typing import Any, Union, List, Dict, Optional, Literal
 from dataclasses import dataclass
 
-from .types import Operator, OperatorType
+from .esm_types import Operator, OperatorType
 
 
 def _ensure_grid_data(value: Any) -> np.ndarray:

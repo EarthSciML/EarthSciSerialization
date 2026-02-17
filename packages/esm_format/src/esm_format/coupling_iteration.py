@@ -72,7 +72,7 @@ from enum import Enum
 import logging
 from abc import ABC, abstractmethod
 
-from .types import EsmFile, Model, ReactionSystem
+from .esm_types import EsmFile, Model, ReactionSystem
 from .coupling_graph import CouplingGraph, construct_coupling_graph
 
 

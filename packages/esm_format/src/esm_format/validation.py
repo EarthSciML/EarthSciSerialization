@@ -19,7 +19,7 @@ from .error_handling import (
 )
 from .hierarchical_scope_resolution import HierarchicalScopeResolver, ScopeInfo, VariableResolution
 from .coupling_graph import ScopedReferenceResolver
-from .types import EsmFile
+from .esm_types import EsmFile
 
 
 @dataclass
