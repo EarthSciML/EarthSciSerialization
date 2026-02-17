@@ -223,9 +223,22 @@ function validateSchemaWithVersionCompatibility(data: any): SchemaError[] {
   }
 
   // For backward/forward compatibility within the same major version,
-  // temporarily replace the version to pass schema validation
+  // first check if there are actual compatibility issues that need to be ignored
   if (major === CURRENT_VERSION.major) {
-    // Generate forward compatibility warnings
+    // Try validation with original version first to see if version is the only issue
+    const originalErrors = validateSchema(data)
+
+    // If there are no additional properties errors, then version mismatch should fail
+    const hasAdditionalPropsErrors = originalErrors.some(error =>
+      error.keyword === 'additionalProperties'
+    )
+
+    // If only version error and no additional properties, enforce strict version matching
+    if (!hasAdditionalPropsErrors && (minor !== CURRENT_VERSION.minor || patch !== CURRENT_VERSION.patch)) {
+      return originalErrors
+    }
+
+    // Generate forward compatibility warnings for actual compatibility cases
     if (minor > CURRENT_VERSION.minor) {
       console.warn(`Forward compatibility: Version ${version} is newer than current ${CURRENT_VERSION.major}.${CURRENT_VERSION.minor}.${CURRENT_VERSION.patch}. Some features may not be fully supported.`)
     }
