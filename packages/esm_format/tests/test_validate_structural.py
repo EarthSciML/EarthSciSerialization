@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 
 from esm_format import load
-from esm_format.parse import SchemaSchemaValidationError
 from esm_format.validation import validate, SchemaValidationError
 
 
@@ -30,7 +29,7 @@ class TestStructuralValidation:
             with open(invalid_file) as f:
                 content = f.read()
 
-            with pytest.raises(SchemaSchemaValidationError) as exc_info:
+            with pytest.raises(SchemaValidationError) as exc_info:
                 load(content)
 
             # Check for circular reference error code
