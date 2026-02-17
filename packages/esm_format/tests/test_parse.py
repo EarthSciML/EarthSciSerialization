@@ -193,3 +193,107 @@ def test_expression_with_metadata():
     }
     expr = _parse_expression(expr_data_with_dim)
     assert expr.dim == "x"
+
+
+def test_load_comprehensive_fields():
+    """Test loading ESM file with events, data_loaders, operators, coupling, and solver."""
+    comprehensive_esm = {
+        "esm": "0.1.0",
+        "metadata": {"name": "Comprehensive Test"},
+        "models": {
+            "test_model": {
+                "variables": {"x": {"type": "state"}},
+                "equations": [{"lhs": "x", "rhs": 1}],
+                "discrete_events": [
+                    {
+                        "name": "reset_event",
+                        "trigger": {"type": "periodic", "interval": 100},
+                        "affects": [{"lhs": "x", "rhs": 0}]
+                    }
+                ],
+                "continuous_events": [
+                    {
+                        "name": "threshold_event",
+                        "conditions": [{"op": ">", "args": ["x", 10]}],
+                        "affects": [{"lhs": "x", "rhs": 5}]
+                    }
+                ]
+            }
+        },
+        "data_loaders": {
+            "weather": {
+                "type": "gridded_data",
+                "loader_id": "ERA5",
+                "provides": {
+                    "temperature": {"units": "K", "description": "Air temperature"},
+                    "pressure": {"units": "Pa", "description": "Air pressure"}
+                }
+            }
+        },
+        "operators": {
+            "interpolator": {
+                "operator_id": "linear_interp",
+                "needed_vars": ["temperature"],
+                "modifies": ["temp_interp"]
+            }
+        },
+        "coupling": [
+            {
+                "type": "operator_compose",
+                "systems": ["model1", "model2"],
+                "description": "Compose two models"
+            },
+            {
+                "type": "variable_map",
+                "from": "weather.temperature",
+                "to": "test_model.T",
+                "transform": "param_to_var",
+                "description": "Map temperature"
+            }
+        ],
+        "solver": {
+            "strategy": "strang_threads",
+            "config": {
+                "timestep": 60.0,
+                "stiff_kwargs": {"abstol": 1e-8, "reltol": 1e-6}
+            }
+        }
+    }
+
+    json_str = json.dumps(comprehensive_esm)
+    esm_file = load(json_str)
+
+    # Verify all fields are parsed correctly (no longer empty!)
+    assert len(esm_file.events) == 2
+    assert len(esm_file.data_loaders) == 1
+    assert len(esm_file.operators) == 1
+    assert len(esm_file.couplings) == 2
+    assert len(esm_file.solvers) == 1
+
+    # Check events
+    event_names = {event.name for event in esm_file.events}
+    assert "reset_event" in event_names
+    assert "threshold_event" in event_names
+
+    # Check data loader
+    data_loader = esm_file.data_loaders[0]
+    assert data_loader.name == "weather"
+    assert len(data_loader.variables) == 2
+    assert "temperature" in data_loader.variables
+    assert "pressure" in data_loader.variables
+
+    # Check operator
+    operator = esm_file.operators[0]
+    assert operator.name == "interpolator"
+    assert "temperature" in operator.input_variables
+    assert "temp_interp" in operator.output_variables
+
+    # Check couplings
+    coupling_systems = [(c.source_model, c.target_model) for c in esm_file.couplings]
+    assert ("model1", "model2") in coupling_systems
+
+    # Check solver
+    solver = esm_file.solvers[0]
+    assert solver.algorithm == "strang_threads"
+    assert "absolute" in solver.tolerances
+    assert "relative" in solver.tolerances

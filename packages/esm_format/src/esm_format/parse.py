@@ -281,6 +281,139 @@ def _parse_metadata(metadata_data: Dict[str, Any]) -> Metadata:
     )
 
 
+def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
+    """Parse a data loader from JSON data."""
+    name = ""  # Name comes from the key
+
+    # Try to match schema type to our enum, fallback to CSV
+    schema_type = loader_data["type"]
+    type_mapping = {
+        "gridded_data": DataLoaderType.NETCDF,
+        "emissions": DataLoaderType.CSV,
+        "timeseries": DataLoaderType.CSV,
+        "static": DataLoaderType.CSV,
+        "callback": DataLoaderType.REMOTE
+    }
+    loader_type = type_mapping.get(schema_type, DataLoaderType.CSV)
+
+    # Schema uses loader_id, we use source
+    source = loader_data.get("loader_id", "")
+
+    # Schema uses config, we use format_options
+    format_options = loader_data.get("config", {})
+
+    # Extract variable names from provides
+    variables = []
+    if "provides" in loader_data:
+        variables = list(loader_data["provides"].keys())
+
+    return DataLoader(
+        name=name,
+        type=loader_type,
+        source=source,
+        format_options=format_options,
+        variables=variables
+    )
+
+
+def _parse_operator(operator_data: Dict[str, Any]) -> Operator:
+    """Parse an operator from JSON data."""
+    name = ""  # Name comes from the key
+
+    # Schema doesn't have type enum, default to transformation
+    operator_type = OperatorType.TRANSFORMATION
+
+    # Schema uses config, we use parameters
+    parameters = operator_data.get("config", {})
+
+    # Schema uses needed_vars, we use input_variables
+    input_variables = operator_data.get("needed_vars", [])
+
+    # Schema uses modifies, we use output_variables
+    output_variables = operator_data.get("modifies", [])
+
+    return Operator(
+        name=name,
+        type=operator_type,
+        parameters=parameters,
+        input_variables=input_variables,
+        output_variables=output_variables
+    )
+
+
+def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
+    """Parse a coupling entry from JSON data."""
+    # Schema has different coupling types, map to our enum
+    schema_type = coupling_data["type"]
+    type_mapping = {
+        "operator_compose": CouplingType.DIRECT,
+        "couple2": CouplingType.DIRECT,
+        "variable_map": CouplingType.DIRECT,
+        "operator_apply": CouplingType.DIRECT,
+        "callback": CouplingType.DIRECT,
+        "event": CouplingType.DIRECT,
+    }
+    coupling_type = type_mapping.get(schema_type, CouplingType.DIRECT)
+
+    # Extract systems information - different schemas handle this differently
+    systems = coupling_data.get("systems", [])
+    source_model = systems[0] if len(systems) > 0 else coupling_data.get("from", "").split(".")[0]
+    target_model = systems[1] if len(systems) > 1 else coupling_data.get("to", "").split(".")[0]
+
+    # For variable maps, extract variable names
+    source_variables = []
+    target_variables = []
+    if "from" in coupling_data:
+        from_parts = coupling_data["from"].split(".")
+        source_variables = [from_parts[-1]] if len(from_parts) > 1 else []
+    if "to" in coupling_data:
+        to_parts = coupling_data["to"].split(".")
+        target_variables = [to_parts[-1]] if len(to_parts) > 1 else []
+
+    transformation = None
+    # No transformation parsing for now since the schema format is complex
+
+    return CouplingEntry(
+        source_model=source_model,
+        target_model=target_model,
+        source_variables=source_variables,
+        target_variables=target_variables,
+        coupling_type=coupling_type,
+        transformation=transformation
+    )
+
+
+def _parse_solver(solver_data: Dict[str, Any]) -> Solver:
+    """Parse a solver from JSON data."""
+    name = ""  # Name can be provided or left empty
+
+    # Schema doesn't have type enum, default to ODE
+    solver_type = SolverType.ODE
+
+    # Schema uses strategy
+    algorithm = solver_data.get("strategy", "")
+
+    # Schema uses config
+    parameters = solver_data.get("config", {})
+
+    # Extract tolerances from config if available
+    tolerances = {}
+    if "config" in solver_data and "stiff_kwargs" in solver_data["config"]:
+        stiff_kwargs = solver_data["config"]["stiff_kwargs"]
+        if "abstol" in stiff_kwargs:
+            tolerances["absolute"] = stiff_kwargs["abstol"]
+        if "reltol" in stiff_kwargs:
+            tolerances["relative"] = stiff_kwargs["reltol"]
+
+    return Solver(
+        name=name,
+        type=solver_type,
+        algorithm=algorithm,
+        parameters=parameters,
+        tolerances=tolerances
+    )
+
+
 def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
     """Parse domain configuration from JSON data."""
     domain = Domain()
@@ -471,12 +604,56 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         _validate_domain(domain)
         domains.append(domain)
 
-    # For now, we'll leave other fields empty as they require more complex parsing
-    events = []
+    # Parse data loaders
     data_loaders = []
+    if "data_loaders" in data:
+        for loader_name, loader_data in data["data_loaders"].items():
+            loader = _parse_data_loader(loader_data)
+            loader.name = loader_name
+            data_loaders.append(loader)
+
+    # Parse operators
     operators = []
+    if "operators" in data:
+        for op_name, op_data in data["operators"].items():
+            operator = _parse_operator(op_data)
+            operator.name = op_name
+            operators.append(operator)
+
+    # Parse coupling entries
     couplings = []
+    if "coupling" in data:
+        for coupling_data in data["coupling"]:
+            couplings.append(_parse_coupling_entry(coupling_data))
+
+    # Parse solver
     solvers = []
+    if "solver" in data:
+        solver = _parse_solver(data["solver"])
+        solvers.append(solver)
+
+    # Collect events from models and reaction systems
+    events = []
+
+    # Collect events from models
+    if "models" in data:
+        for model_name, model_data in data["models"].items():
+            if "discrete_events" in model_data:
+                for event_data in model_data["discrete_events"]:
+                    events.append(_parse_discrete_event(event_data))
+            if "continuous_events" in model_data:
+                for event_data in model_data["continuous_events"]:
+                    events.append(_parse_continuous_event(event_data))
+
+    # Collect events from reaction systems
+    if "reaction_systems" in data:
+        for rs_name, rs_data in data["reaction_systems"].items():
+            if "discrete_events" in rs_data:
+                for event_data in rs_data["discrete_events"]:
+                    events.append(_parse_discrete_event(event_data))
+            if "continuous_events" in rs_data:
+                for event_data in rs_data["continuous_events"]:
+                    events.append(_parse_continuous_event(event_data))
 
     return EsmFile(
         version=data["esm"],
