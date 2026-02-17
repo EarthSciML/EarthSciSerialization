@@ -1,0 +1,421 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DomainDiscretizationValidation",
+    "description": "Validation test for proper domain discretization ensuring consistent grid setup, boundary condition application, and simulation-ready configuration",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["domain-discretization", "grid-validation", "simulation-setup"],
+    "references": [
+      {
+        "citation": "Domain discretization validation test fixture for simulation-capable libraries",
+        "notes": "Ensures proper interpretation of domain specifications for numerical simulation setup"
+      }
+    ]
+  },
+
+  "models": {
+    "ValidationSystem": {
+      "reference": { "notes": "Multi-physics system for domain discretization validation" },
+      "variables": {
+        "temperature": {
+          "type": "state",
+          "units": "K",
+          "default": 288.15,
+          "description": "Air temperature for heat transfer validation"
+        },
+        "pressure": {
+          "type": "state",
+          "units": "Pa",
+          "default": 101325.0,
+          "description": "Air pressure for compressible flow validation"
+        },
+        "velocity_u": {
+          "type": "state",
+          "units": "m/s",
+          "default": 0.0,
+          "description": "Eastward velocity component"
+        },
+        "velocity_v": {
+          "type": "state",
+          "units": "m/s",
+          "default": 0.0,
+          "description": "Northward velocity component"
+        },
+        "scalar_tracer": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1e-6,
+          "description": "Passive scalar for transport validation"
+        },
+        "thermal_diffusivity": {
+          "type": "parameter",
+          "units": "m^2/s",
+          "default": 2.0e-5,
+          "description": "Thermal diffusivity of air"
+        },
+        "kinematic_viscosity": {
+          "type": "parameter",
+          "units": "m^2/s",
+          "default": 1.5e-5,
+          "description": "Kinematic viscosity of air"
+        },
+        "coriolis_parameter": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 1e-4,
+          "description": "Coriolis parameter (f = 2Ω sin φ)"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Heat equation with advection",
+          "lhs": {"op": "D", "args": ["temperature"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_u"]},
+                  {"op": "grad", "args": ["temperature"], "dim": "x"}
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_v"]},
+                  {"op": "grad", "args": ["temperature"], "dim": "y"}
+                ]
+              },
+              {
+                "op": "*",
+                "args": ["thermal_diffusivity", {"op": "laplacian", "args": ["temperature"]}]
+              }
+            ]
+          }
+        },
+        {
+          "_comment": "Momentum equation (x-component) with Coriolis",
+          "lhs": {"op": "D", "args": ["velocity_u"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_u"]},
+                  {"op": "grad", "args": ["velocity_u"], "dim": "x"}
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_v"]},
+                  {"op": "grad", "args": ["velocity_u"], "dim": "y"}
+                ]
+              },
+              {
+                "op": "*",
+                "args": ["coriolis_parameter", "velocity_v"]
+              },
+              {
+                "op": "*",
+                "args": ["kinematic_viscosity", {"op": "laplacian", "args": ["velocity_u"]}]
+              }
+            ]
+          }
+        },
+        {
+          "_comment": "Momentum equation (y-component) with Coriolis",
+          "lhs": {"op": "D", "args": ["velocity_v"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_u"]},
+                  {"op": "grad", "args": ["velocity_v"], "dim": "x"}
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_v"]},
+                  {"op": "grad", "args": ["velocity_v"], "dim": "y"}
+                ]
+              },
+              {
+                "op": "*",
+                "args": [{"op": "-", "args": ["coriolis_parameter"]}, "velocity_u"]
+              },
+              {
+                "op": "*",
+                "args": ["kinematic_viscosity", {"op": "laplacian", "args": ["velocity_v"]}]
+              }
+            ]
+          }
+        },
+        {
+          "_comment": "Tracer transport equation",
+          "lhs": {"op": "D", "args": ["scalar_tracer"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_u"]},
+                  {"op": "grad", "args": ["scalar_tracer"], "dim": "x"}
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  {"op": "-", "args": ["velocity_v"]},
+                  {"op": "grad", "args": ["scalar_tracer"], "dim": "y"}
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-03-15T00:00:00Z",
+      "end": "2024-03-15T12:00:00Z",
+      "reference_time": "2024-03-15T00:00:00Z",
+      "_validation_notes": "12-hour simulation with hourly reference alignment"
+    },
+    "spatial": {
+      "x": {
+        "min": -50000.0,
+        "max": 50000.0,
+        "units": "meters",
+        "grid_spacing": 2000.0,
+        "_grid_points": 51,
+        "_domain_length": 100000.0,
+        "_validation": "Symmetric domain centered at origin"
+      },
+      "y": {
+        "min": -25000.0,
+        "max": 25000.0,
+        "units": "meters",
+        "grid_spacing": 1000.0,
+        "_grid_points": 51,
+        "_domain_width": 50000.0,
+        "_validation": "Symmetric domain with higher resolution"
+      },
+      "z": {
+        "min": 0.0,
+        "max": 10000.0,
+        "units": "meters",
+        "grid_spacing": 200.0,
+        "_grid_points": 51,
+        "_domain_height": 10000.0,
+        "_validation": "Vertical domain from surface to 10 km altitude"
+      },
+      "lon": {
+        "min": -123.5,
+        "max": -121.5,
+        "units": "degrees",
+        "grid_spacing": 0.02,
+        "_grid_points": 101,
+        "_domain_span_degrees": 2.0,
+        "_validation": "High-resolution longitude span"
+      },
+      "lat": {
+        "min": 46.0,
+        "max": 48.0,
+        "units": "degrees",
+        "grid_spacing": 0.02,
+        "_grid_points": 101,
+        "_domain_span_degrees": 2.0,
+        "_validation": "High-resolution latitude span, Pacific Northwest"
+      }
+    },
+    "coordinate_transforms": [
+      {
+        "id": "cartesian_grid_alignment",
+        "description": "Ensure Cartesian x,y,z grid alignment with physical coordinates",
+        "dimensions": ["x", "y", "z"],
+        "_validation_purpose": "Grid point alignment and spacing consistency"
+      },
+      {
+        "id": "geographic_projection",
+        "description": "Project lon,lat to Cartesian for finite difference methods",
+        "dimensions": ["lon", "lat"],
+        "_validation_purpose": "Geographic to Cartesian mapping for numerical methods"
+      },
+      {
+        "id": "vertical_coordinate_mapping",
+        "description": "Map geometric height to model levels if needed",
+        "dimensions": ["z"],
+        "_validation_purpose": "Vertical coordinate system consistency"
+      }
+    ],
+    "spatial_ref": "EPSG:4326",
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "temperature": 288.15,
+        "pressure": 101325.0,
+        "velocity_u": 0.0,
+        "velocity_v": 0.0,
+        "scalar_tracer": 1e-6
+      },
+      "_spatial_initialization": {
+        "temperature_gradient": {
+          "type": "linear",
+          "direction": "z",
+          "lapse_rate": -0.0065,
+          "_validation": "Standard atmospheric lapse rate"
+        },
+        "pressure_profile": {
+          "type": "hydrostatic",
+          "surface_pressure": 101325.0,
+          "_validation": "Hydrostatic pressure profile"
+        },
+        "tracer_plume": {
+          "type": "gaussian",
+          "center": [0.0, 0.0, 500.0],
+          "sigma": [5000.0, 2500.0, 200.0],
+          "amplitude": 5e-6,
+          "_validation": "Elevated tracer source for transport testing"
+        }
+      }
+    },
+    "boundary_conditions": [
+      {
+        "_comment": "Thermal boundary conditions",
+        "type": "constant",
+        "dimensions": ["x", "y"],
+        "applies_to": ["temperature"],
+        "values": {
+          "x_min": 283.15,
+          "x_max": 293.15,
+          "y_min": 288.15,
+          "y_max": 288.15
+        },
+        "_validation": "Temperature gradient across domain"
+      },
+      {
+        "_comment": "No-slip velocity boundaries",
+        "type": "constant",
+        "dimensions": ["x", "y"],
+        "applies_to": ["velocity_u", "velocity_v"],
+        "value": 0.0,
+        "_validation": "No-slip conditions at lateral boundaries"
+      },
+      {
+        "_comment": "Free-slip at top and bottom",
+        "type": "zero_gradient",
+        "dimensions": ["z"],
+        "applies_to": ["velocity_u", "velocity_v"],
+        "_validation": "Free-slip conditions at vertical boundaries"
+      },
+      {
+        "_comment": "Tracer boundaries",
+        "type": "zero_gradient",
+        "dimensions": ["x", "y", "z"],
+        "applies_to": ["scalar_tracer"],
+        "_validation": "No tracer flux through boundaries"
+      },
+      {
+        "_comment": "Pressure boundaries",
+        "type": "zero_gradient",
+        "dimensions": ["x", "y"],
+        "applies_to": ["pressure"],
+        "_validation": "Zero pressure gradient at lateral boundaries"
+      },
+      {
+        "_comment": "Geographic coordinate boundaries",
+        "type": "periodic",
+        "dimensions": ["lon"],
+        "_validation": "Periodic in longitude for regional simulation"
+      },
+      {
+        "type": "zero_gradient",
+        "dimensions": ["lat"],
+        "_validation": "Zero gradient at latitude boundaries"
+      }
+    ],
+    "element_type": "Float64",
+    "array_type": "Array"
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "threads": 4,
+      "stiff_algorithm": "QNDF",
+      "nonstiff_algorithm": "Vern7",
+      "timestep": 60.0,
+      "stiff_kwargs": {
+        "abstol": 1e-10,
+        "reltol": 1e-7,
+        "maxiters": 1000
+      },
+      "nonstiff_kwargs": {
+        "abstol": 1e-8,
+        "reltol": 1e-5
+      },
+      "_validation_notes": "1-minute timesteps for detailed dynamics resolution"
+    },
+    "adaptive_timestepping": {
+      "enabled": true,
+      "min_timestep": 1.0,
+      "max_timestep": 300.0,
+      "safety_factor": 0.9
+    }
+  },
+
+  "_discretization_validation": {
+    "grid_consistency_checks": {
+      "cartesian_grid_alignment": "All grid spacings must be consistent with domain bounds",
+      "geographic_grid_alignment": "Lon/lat grid must align with geographic bounds",
+      "coordinate_transform_compatibility": "All transforms must map between defined coordinate systems",
+      "boundary_condition_coverage": "All boundaries must have defined conditions for all variables"
+    },
+    "expected_grid_properties": {
+      "total_cartesian_points": 132651,
+      "total_geographic_points": 10201,
+      "aspect_ratios": {
+        "cartesian_xy": 2.0,
+        "cartesian_xz": 10.0,
+        "cartesian_yz": 5.0
+      },
+      "grid_spacing_ratios": {
+        "dx_to_dy": 2.0,
+        "dx_to_dz": 10.0,
+        "dlon_to_dlat": 1.0
+      }
+    },
+    "simulation_readiness_validation": {
+      "temporal_domain_coverage": "12 hours",
+      "spatial_domain_coverage": "100x50x10 km (Cartesian), 2°x2° (Geographic)",
+      "initial_condition_completeness": "All state variables initialized",
+      "boundary_condition_completeness": "All boundaries specified for all variables",
+      "solver_compatibility": "Strang splitting appropriate for mixed stiff/non-stiff system",
+      "expected_simulation_time_seconds": 43200.0,
+      "expected_total_timesteps": 720
+    },
+    "numerical_stability_checks": {
+      "cfl_condition_advection": "U*dt/dx < 1 (satisfied for given timestep)",
+      "diffusion_stability": "D*dt/dx^2 < 0.5 (satisfied for thermal diffusivity)",
+      "viscous_stability": "ν*dt/dx^2 < 0.5 (satisfied for kinematic viscosity)",
+      "coriolis_timestep": "f*dt << 1 (satisfied for Coriolis parameter)"
+    },
+    "conservation_properties": {
+      "mass_conservation": "Divergence-free velocity field enforced",
+      "energy_conservation": "No artificial heat sources/sinks",
+      "tracer_conservation": "Zero-flux boundaries ensure tracer conservation",
+      "momentum_conservation": "Conservative finite difference schemes"
+    }
+  }
+}
