@@ -6,6 +6,17 @@ on:
       - 'v*'
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v1.0.0)'
+        required: true
+        type: string
+      platforms:
+        description: 'Platforms to build (space-separated)'
+        required: false
+        type: string
+        default: 'linux-x64 macos-x64 macos-arm64 windows-x64'
   workflow_dispatch:
     inputs:
       version:

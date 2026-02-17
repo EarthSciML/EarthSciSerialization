@@ -15,6 +15,28 @@ on:
       - 'docker/**'
       - 'scripts/build-container-images.sh'
       - '.github/workflows/container-build-and-publish.yml'
+  workflow_call:
+    inputs:
+      push_to_registry:
+        description: 'Push images to container registry'
+        required: false
+        default: false
+        type: boolean
+      optimization_profile:
+        description: 'Container optimization profile'
+        required: false
+        default: 'production'
+        type: string
+      target_platforms:
+        description: 'Target platforms for build'
+        required: false
+        default: 'linux/amd64,linux/arm64'
+        type: string
+      registry:
+        description: 'Container registry'
+        required: false
+        default: 'ghcr.io'
+        type: string
   workflow_dispatch:
     inputs:
       push_to_registry:
@@ -47,11 +69,11 @@ on:
         - docker.io
 
 env:
-  REGISTRY: ${{ github.event.inputs.registry || 'ghcr.io' }}
+  REGISTRY: ${{ inputs.registry || github.event.inputs.registry || 'ghcr.io' }}
   NAMESPACE: ${{ github.repository_owner }}
   PROJECT_NAME: esm-format
-  OPTIMIZATION_PROFILE: ${{ github.event.inputs.optimization_profile || 'production' }}
-  TARGET_PLATFORMS: ${{ github.event.inputs.target_platforms || 'linux/amd64,linux/arm64' }}
+  OPTIMIZATION_PROFILE: ${{ inputs.optimization_profile || github.event.inputs.optimization_profile || 'production' }}
+  TARGET_PLATFORMS: ${{ inputs.target_platforms || github.event.inputs.target_platforms || 'linux/amd64,linux/arm64' }}
 
 jobs:
   # Determine build configuration and what needs to be built
