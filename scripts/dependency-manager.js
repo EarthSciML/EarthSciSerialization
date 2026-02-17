@@ -39,6 +39,22 @@ class DependencyManager {
         updateCommand: 'julia --project=. -e "using Pkg; Pkg.update()"',
         listCommand: 'julia --project=. -e "using Pkg; println(Pkg.status())"',
         parser: this.parseJuliaPackage.bind(this)
+      },
+      rust: {
+        configFile: 'Cargo.toml',
+        lockFile: 'Cargo.lock',
+        installCommand: 'cargo build',
+        updateCommand: 'cargo update',
+        listCommand: 'cargo tree --format "{p} {v}"',
+        parser: this.parseRustPackage.bind(this)
+      },
+      go: {
+        configFile: 'go.mod',
+        lockFile: 'go.sum',
+        installCommand: 'go mod download',
+        updateCommand: 'go get -u ./...',
+        listCommand: 'go list -m -u all',
+        parser: this.parseGoPackage.bind(this)
       }
     };
   }
@@ -180,6 +196,126 @@ class DependencyManager {
       dependencies,
       compatibility,
       engines: { julia: '1' }
+    };
+  }
+
+  /**
+   * Parse Rust Cargo.toml and dependencies
+   */
+  parseRustPackage(packagePath) {
+    const cargoPath = path.join(packagePath, 'Cargo.toml');
+    if (!fs.existsSync(cargoPath)) {
+      throw new Error(`Cargo.toml not found in ${packagePath}`);
+    }
+
+    const content = fs.readFileSync(cargoPath, 'utf8');
+    const lines = content.split('\n');
+
+    let inDependencies = false;
+    let inDevDependencies = false;
+    let inBuildDependencies = false;
+    const dependencies = {};
+    const devDependencies = {};
+    const buildDependencies = {};
+
+    lines.forEach(line => {
+      line = line.trim();
+      if (line === '[dependencies]') {
+        inDependencies = true;
+        inDevDependencies = false;
+        inBuildDependencies = false;
+      } else if (line === '[dev-dependencies]') {
+        inDependencies = false;
+        inDevDependencies = true;
+        inBuildDependencies = false;
+      } else if (line === '[build-dependencies]') {
+        inDependencies = false;
+        inDevDependencies = false;
+        inBuildDependencies = true;
+      } else if (line.startsWith('[') && line !== '[dependencies]' && line !== '[dev-dependencies]' && line !== '[build-dependencies]') {
+        inDependencies = false;
+        inDevDependencies = false;
+        inBuildDependencies = false;
+      } else if ((inDependencies || inDevDependencies || inBuildDependencies) && line.includes('=')) {
+        const [name, versionSpec] = line.split('=').map(s => s.trim());
+        const version = versionSpec.replace(/["{},]/g, '').trim();
+
+        if (inDependencies) {
+          dependencies[name] = version;
+        } else if (inDevDependencies) {
+          devDependencies[name] = version;
+        } else if (inBuildDependencies) {
+          buildDependencies[name] = version;
+        }
+      }
+    });
+
+    // Extract package info from [package] section
+    const versionMatch = content.match(/\[package\][\s\S]*?version\s*=\s*"([^"]+)"/);
+    const nameMatch = content.match(/\[package\][\s\S]*?name\s*=\s*"([^"]+)"/);
+    const editionMatch = content.match(/\[package\][\s\S]*?edition\s*=\s*"([^"]+)"/);
+
+    return {
+      name: nameMatch ? nameMatch[1] : path.basename(packagePath),
+      version: versionMatch ? versionMatch[1] : '0.1.0',
+      dependencies,
+      devDependencies,
+      buildDependencies,
+      engines: { rust: editionMatch ? editionMatch[1] : '2021' }
+    };
+  }
+
+  /**
+   * Parse Go go.mod and dependencies
+   */
+  parseGoPackage(packagePath) {
+    const goModPath = path.join(packagePath, 'go.mod');
+    if (!fs.existsSync(goModPath)) {
+      throw new Error(`go.mod not found in ${packagePath}`);
+    }
+
+    const content = fs.readFileSync(goModPath, 'utf8');
+    const lines = content.split('\n');
+
+    let inRequire = false;
+    const dependencies = {};
+    let moduleName = '';
+    let goVersion = '';
+
+    lines.forEach(line => {
+      line = line.trim();
+      if (line.startsWith('module ')) {
+        moduleName = line.replace('module ', '').trim();
+      } else if (line.startsWith('go ')) {
+        goVersion = line.replace('go ', '').trim();
+      } else if (line === 'require (' || line.startsWith('require (')) {
+        inRequire = true;
+      } else if (line === ')' && inRequire) {
+        inRequire = false;
+      } else if (inRequire && line.includes(' v')) {
+        const parts = line.split(' ');
+        const packageName = parts[0];
+        const version = parts.find(p => p.startsWith('v'));
+        if (packageName && version) {
+          dependencies[packageName] = version;
+        }
+      } else if (line.startsWith('require ') && line.includes(' v') && !line.includes('(')) {
+        // Single line require
+        const requireLine = line.replace('require ', '').trim();
+        const parts = requireLine.split(' ');
+        const packageName = parts[0];
+        const version = parts.find(p => p.startsWith('v'));
+        if (packageName && version) {
+          dependencies[packageName] = version;
+        }
+      }
+    });
+
+    return {
+      name: moduleName || path.basename(packagePath),
+      version: '0.1.0', // Go modules typically don't have a version in go.mod for the main module
+      dependencies,
+      engines: { go: goVersion || '1.19' }
     };
   }
 
