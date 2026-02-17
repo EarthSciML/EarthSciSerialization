@@ -139,6 +139,7 @@ class TestVerificationMethods:
         return SimulationResult(
             t=t,
             y=y,
+            vars=['A', 'B'],
             success=True,
             message="Mock simulation success",
             nfev=100,
@@ -190,7 +191,7 @@ class TestVerificationMethods:
         O3 = np.full_like(t, 40e-9)  # Constant O3 (excess)
 
         result = SimulationResult(
-            t=t, y=np.array([NO, NO2, O3]), success=True,
+            t=t, y=np.array([NO, NO2, O3]), vars=['NO', 'NO2', 'O3'], success=True,
             message="", nfev=100, njev=10, nlu=5
         )
 
@@ -215,7 +216,7 @@ class TestVerificationMethods:
         O3 = 60e-9 + 20e-9 * (1 - np.exp(-t/7200))  # 60 -> 80 ppb production
 
         result = SimulationResult(
-            t=t, y=np.array([O3]), success=True,
+            t=t, y=np.array([O3]), vars=['O3'], success=True,
             message="", nfev=100, njev=10, nlu=5
         )
 
@@ -240,7 +241,7 @@ class TestVerificationMethods:
         O3 = 8e-6 * np.exp(-t/43200)  # Exponential depletion
 
         result = SimulationResult(
-            t=t, y=np.array([O3]), success=True,
+            t=t, y=np.array([O3]), vars=['O3'], success=True,
             message="", nfev=100, njev=10, nlu=5
         )
 
@@ -267,7 +268,7 @@ class TestVerificationMethods:
         HO2 = HO2_eq + (10e-12 - HO2_eq) * np.exp(-t/300)
 
         result = SimulationResult(
-            t=t, y=np.array([OH, HO2]), success=True,
+            t=t, y=np.array([OH, HO2]), vars=['OH', 'HO2'], success=True,
             message="", nfev=100, njev=10, nlu=5
         )
 
@@ -298,8 +299,7 @@ class TestScenarioVerification:
 
         y = np.array([O3, NO, NO2, O2])
 
-        mock_simulate.return_value = SimulationResult(
-            t=t, y=y, success=True, message="Success",
+        mock_simulate.return_value = SimulationResult(t=t, y=y, vars=["O3", "NO", "NO2", "O2"], success=True, message="Success",
             nfev=500, njev=50, nlu=10
         )
 
@@ -315,8 +315,7 @@ class TestScenarioVerification:
     @patch('esm_format.atmospheric_verification.simulate')
     def test_failed_simulation_verification(self, mock_simulate):
         """Test verification when simulation fails."""
-        mock_simulate.return_value = SimulationResult(
-            t=np.array([]), y=np.array([[]]), success=False,
+        mock_simulate.return_value = SimulationResult(t=np.array([]), y=np.array([[]]), vars=["var"], success=False,
             message="Integration failed", nfev=0, njev=0, nlu=0
         )
 
