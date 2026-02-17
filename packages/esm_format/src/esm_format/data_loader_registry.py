@@ -14,7 +14,7 @@ from importlib import import_module
 import warnings
 
 from .types import DataLoader, DataLoaderType
-from .data_loaders import NetCDFLoader, JSONLoader, BinaryLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader
+from .data_loaders import NetCDFLoader, JSONLoader, BinaryLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader, RemoteLoader
 
 
 class DataLoaderRegistry:
@@ -91,6 +91,14 @@ class DataLoaderRegistry:
             StreamingLoader,
             extensions=[],  # Streaming doesn't use file extensions
             mime_types=[]   # Streaming doesn't use MIME types
+        )
+
+        # Register Remote loader
+        self.register_loader(
+            DataLoaderType.REMOTE,
+            RemoteLoader,
+            extensions=[],  # Remote doesn't use file extensions (URLs)
+            mime_types=[]   # Remote doesn't use MIME types (determined at runtime)
         )
 
     def register_loader(
@@ -184,6 +192,14 @@ class DataLoaderRegistry:
         Returns:
             Detected loader type, or None if no suitable loader is found
         """
+        source_str = str(source)
+
+        # Check if it's a URL (remote source)
+        from urllib.parse import urlparse
+        parsed = urlparse(source_str)
+        if parsed.scheme in ['http', 'https', 'ftp', 'sftp', 's3', 'gs', 'azure']:
+            return DataLoaderType.REMOTE
+
         source_path = Path(source)
 
         # Try file extension first

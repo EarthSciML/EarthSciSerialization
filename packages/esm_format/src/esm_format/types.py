@@ -151,6 +151,7 @@ class DataLoaderType(Enum):
     DATABASE = "database"
     GRIB = "grib"
     STREAMING = "streaming"
+    REMOTE = "remote"
 
 
 @dataclass
