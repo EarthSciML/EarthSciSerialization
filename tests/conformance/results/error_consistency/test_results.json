@@ -1,0 +1,440 @@
+{
+  "equation_count_mismatch.esm": {
+    "file": "equation_count_mismatch.esm",
+    "julia": {
+      "language": "julia",
+      "file": "equation_count_mismatch.esm",
+      "error": {
+        "type": "timeout",
+        "message": "Julia validation timed out"
+      }
+    },
+    "typescript": {
+      "language": "typescript",
+      "file": "equation_count_mismatch.esm",
+      "error": {
+        "type": "execution_error",
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/dist/index.js' imported from /tmp/tmphxnwbhl0.mjs\nDid you mean to import \"../home/ctessum/EarthSciSerialization/packages/esm-format/dist/index.js\"?\n    at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n    at moduleResolve (node:internal/modules/esm/resolve:864:10)\n    at defaultResolve (node:internal/modules/esm/resolve:990:11)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:718:20)\n    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:735:38)\n    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:764:52)\n    at #resolve (node:internal/modules/esm/loader:700:17)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:620:35)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:143:33)\n    at ModuleJob.link (node:internal/modules/esm/module_job:228:17) {\n  code: 'ERR_MODULE_NOT_FOUND',\n  url: 'file:///tmp/dist/index.js'\n}\n\nNode.js v24.13.0\n"
+      }
+    },
+    "python": {
+      "language": "python",
+      "file": "equation_count_mismatch.esm",
+      "validation_result": {
+        "valid": true,
+        "schema_errors": [],
+        "structural_errors": []
+      }
+    }
+  },
+  "complete_error_coverage.esm": {
+    "file": "complete_error_coverage.esm",
+    "julia": {
+      "language": "julia",
+      "file": "complete_error_coverage.esm",
+      "error": {
+        "type": "timeout",
+        "message": "Julia validation timed out"
+      }
+    },
+    "typescript": {
+      "language": "typescript",
+      "file": "complete_error_coverage.esm",
+      "error": {
+        "type": "execution_error",
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/dist/index.js' imported from /tmp/tmp3fkzx8ss.mjs\nDid you mean to import \"../home/ctessum/EarthSciSerialization/packages/esm-format/dist/index.js\"?\n    at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n    at moduleResolve (node:internal/modules/esm/resolve:864:10)\n    at defaultResolve (node:internal/modules/esm/resolve:990:11)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:718:20)\n    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:735:38)\n    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:764:52)\n    at #resolve (node:internal/modules/esm/loader:700:17)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:620:35)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:143:33)\n    at ModuleJob.link (node:internal/modules/esm/module_job:228:17) {\n  code: 'ERR_MODULE_NOT_FOUND',\n  url: 'file:///tmp/dist/index.js'\n}\n\nNode.js v24.13.0\n"
+      }
+    },
+    "python": {
+      "language": "python",
+      "file": "complete_error_coverage.esm",
+      "validation_result": {
+        "valid": false,
+        "schema_errors": [
+          {
+            "path": "models.BadModel",
+            "message": "Additional properties are not allowed ('type' was unexpected)",
+            "code": "additionalProperties",
+            "details": {
+              "validator": "additionalProperties",
+              "validator_value": false,
+              "schema_path": [
+                "properties",
+                "models",
+                "additionalProperties",
+                "additionalProperties"
+              ],
+              "instance": {
+                "type": "ode",
+                "variables": {
+                  "x": {
+                    "type": "state",
+                    "units": "kg",
+                    "description": "State variable x",
+                    "default": 1.0
+                  },
+                  "y": {
+                    "type": "state",
+                    "units": "kg",
+                    "description": "State variable y",
+                    "default": 0.0
+                  },
+                  "observed_without_expr": {
+                    "type": "observed",
+                    "units": "kg",
+                    "description": "Observed variable missing expression"
+                  }
+                },
+                "equations": [
+                  "dx/dt = undefined_rate + undefined_var"
+                ],
+                "continuous_events": [
+                  {
+                    "name": "bad_event",
+                    "condition": "undefined_condition_var > 0",
+                    "affects": [
+                      {
+                        "lhs": "nonexistent_var",
+                        "rhs": "0.0"
+                      }
+                    ]
+                  }
+                ],
+                "discrete_events": [
+                  {
+                    "name": "bad_discrete_event",
+                    "trigger": "t > 5.0",
+                    "discrete_parameters": [
+                      "undefined_discrete_param"
+                    ],
+                    "affects": [
+                      {
+                        "lhs": "x",
+                        "rhs": "1.0"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "path": "models.BadModel.variables.observed_without_expr",
+            "message": "'expression' is a required property",
+            "code": "required",
+            "details": {
+              "validator": "required",
+              "validator_value": [
+                "expression"
+              ],
+              "schema_path": [
+                "properties",
+                "models",
+                "additionalProperties",
+                "properties",
+                "variables",
+                "additionalProperties",
+                "then",
+                "required"
+              ],
+              "instance": {
+                "type": "observed",
+                "units": "kg",
+                "description": "Observed variable missing expression"
+              }
+            }
+          },
+          {
+            "path": "models.BadModel.equations[0]",
+            "message": "'dx/dt = undefined_rate + undefined_var' is not of type 'object'",
+            "code": "type",
+            "details": {
+              "validator": "type",
+              "validator_value": "object",
+              "schema_path": [
+                "properties",
+                "models",
+                "additionalProperties",
+                "properties",
+                "equations",
+                "items",
+                "type"
+              ],
+              "instance": "dx/dt = undefined_rate + undefined_var"
+            }
+          },
+          {
+            "path": "models.BadModel.discrete_events[0].trigger",
+            "message": "'t > 5.0' is not valid under any of the given schemas",
+            "code": "oneOf",
+            "details": {
+              "validator": "oneOf",
+              "validator_value": [
+                {
+                  "type": "object",
+                  "description": "Fires when the boolean expression is true at the end of a timestep.",
+                  "required": [
+                    "type",
+                    "expression"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "const": "condition"
+                    },
+                    "expression": {
+                      "$ref": "#/$defs/Expression"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "description": "Fires every interval time units.",
+                  "required": [
+                    "type",
+                    "interval"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "const": "periodic"
+                    },
+                    "interval": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Interval in simulation time units."
+                    },
+                    "initial_offset": {
+                      "type": "number",
+                      "description": "Offset from t=0 for the first firing.",
+                      "default": 0
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "description": "Fires at each specified time.",
+                  "required": [
+                    "type",
+                    "times"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "const": "preset_times"
+                    },
+                    "times": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 1,
+                      "description": "Array of simulation times at which to fire."
+                    }
+                  }
+                }
+              ],
+              "schema_path": [
+                "properties",
+                "models",
+                "additionalProperties",
+                "properties",
+                "discrete_events",
+                "items",
+                "properties",
+                "trigger",
+                "oneOf"
+              ],
+              "instance": "t > 5.0"
+            }
+          },
+          {
+            "path": "models.BadModel.continuous_events[0]",
+            "message": "'conditions' is a required property",
+            "code": "required",
+            "details": {
+              "validator": "required",
+              "validator_value": [
+                "conditions",
+                "affects"
+              ],
+              "schema_path": [
+                "properties",
+                "models",
+                "additionalProperties",
+                "properties",
+                "continuous_events",
+                "items",
+                "required"
+              ],
+              "instance": {
+                "name": "bad_event",
+                "condition": "undefined_condition_var > 0",
+                "affects": [
+                  {
+                    "lhs": "nonexistent_var",
+                    "rhs": "0.0"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "path": "models.BadModel.continuous_events[0]",
+            "message": "Additional properties are not allowed ('condition' was unexpected)",
+            "code": "additionalProperties",
+            "details": {
+              "validator": "additionalProperties",
+              "validator_value": false,
+              "schema_path": [
+                "properties",
+                "models",
+                "additionalProperties",
+                "properties",
+                "continuous_events",
+                "items",
+                "additionalProperties"
+              ],
+              "instance": {
+                "name": "bad_event",
+                "condition": "undefined_condition_var > 0",
+                "affects": [
+                  {
+                    "lhs": "nonexistent_var",
+                    "rhs": "0.0"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "path": "coupling[0]",
+            "message": "{'type': 'variable_map', 'from': 'NonExistentSystem.var', 'to': 'BadModel.x'} is not valid under any of the given schemas",
+            "code": "oneOf",
+            "details": {
+              "validator": "oneOf",
+              "validator_value": [
+                {
+                  "$ref": "#/$defs/CouplingOperatorCompose"
+                },
+                {
+                  "$ref": "#/$defs/CouplingCouple2"
+                },
+                {
+                  "$ref": "#/$defs/CouplingVariableMap"
+                },
+                {
+                  "$ref": "#/$defs/CouplingOperatorApply"
+                },
+                {
+                  "$ref": "#/$defs/CouplingCallback"
+                },
+                {
+                  "$ref": "#/$defs/CouplingEvent"
+                }
+              ],
+              "schema_path": [
+                "properties",
+                "coupling",
+                "items",
+                "oneOf"
+              ],
+              "instance": {
+                "type": "variable_map",
+                "from": "NonExistentSystem.var",
+                "to": "BadModel.x"
+              }
+            }
+          },
+          {
+            "path": "coupling[1]",
+            "message": "{'type': 'operator_apply', 'operator': 'MissingOperator', 'systems': ['BadModel']} is not valid under any of the given schemas",
+            "code": "oneOf",
+            "details": {
+              "validator": "oneOf",
+              "validator_value": [
+                {
+                  "$ref": "#/$defs/CouplingOperatorCompose"
+                },
+                {
+                  "$ref": "#/$defs/CouplingCouple2"
+                },
+                {
+                  "$ref": "#/$defs/CouplingVariableMap"
+                },
+                {
+                  "$ref": "#/$defs/CouplingOperatorApply"
+                },
+                {
+                  "$ref": "#/$defs/CouplingCallback"
+                },
+                {
+                  "$ref": "#/$defs/CouplingEvent"
+                }
+              ],
+              "schema_path": [
+                "properties",
+                "coupling",
+                "items",
+                "oneOf"
+              ],
+              "instance": {
+                "type": "operator_apply",
+                "operator": "MissingOperator",
+                "systems": [
+                  "BadModel"
+                ]
+              }
+            }
+          },
+          {
+            "path": "coupling[2]",
+            "message": "{'type': 'operator_apply', 'operator': 'TestOperator', 'systems': ['BadModel']} is not valid under any of the given schemas",
+            "code": "oneOf",
+            "details": {
+              "validator": "oneOf",
+              "validator_value": [
+                {
+                  "$ref": "#/$defs/CouplingOperatorCompose"
+                },
+                {
+                  "$ref": "#/$defs/CouplingCouple2"
+                },
+                {
+                  "$ref": "#/$defs/CouplingVariableMap"
+                },
+                {
+                  "$ref": "#/$defs/CouplingOperatorApply"
+                },
+                {
+                  "$ref": "#/$defs/CouplingCallback"
+                },
+                {
+                  "$ref": "#/$defs/CouplingEvent"
+                }
+              ],
+              "schema_path": [
+                "properties",
+                "coupling",
+                "items",
+                "oneOf"
+              ],
+              "instance": {
+                "type": "operator_apply",
+                "operator": "TestOperator",
+                "systems": [
+                  "BadModel"
+                ]
+              }
+            }
+          }
+        ],
+        "structural_errors": []
+      }
+    }
+  }
+}
