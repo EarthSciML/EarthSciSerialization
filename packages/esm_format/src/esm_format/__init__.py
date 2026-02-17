@@ -162,6 +162,15 @@ from .boundary_conditions import (
     create_periodic_boundary,
     validate_domain_boundary_consistency,
 )
+from .initial_conditions_setup import (
+    InitialConditionProcessor,
+    InitialConditionConfig,
+    FieldConstraint,
+    ConstraintOperator,
+    InitialConditionSetupError,
+    setup_initial_conditions,
+    create_atmospheric_constraints,
+)
 from .time_synchronization import (
     TimeSynchronizer,
     TimeStep,
@@ -289,6 +298,14 @@ __all__ = [
     "create_neumann_boundary",
     "create_periodic_boundary",
     "validate_domain_boundary_consistency",
+    # Initial condition setup and validation
+    "InitialConditionProcessor",
+    "InitialConditionConfig",
+    "FieldConstraint",
+    "ConstraintOperator",
+    "InitialConditionSetupError",
+    "setup_initial_conditions",
+    "create_atmospheric_constraints",
     "Solver",
     "Reference",
     "Metadata",
