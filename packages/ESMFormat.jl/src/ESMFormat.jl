@@ -33,6 +33,8 @@ include("mtk.jl")
 include("mtk_catalyst.jl")
 # Code generation
 include("codegen.jl")
+# Solver optimization
+include("solver_optimization.jl")
 
 # Export main types
 export
@@ -63,6 +65,11 @@ export
     parse_solver_strategy, solver_strategy_to_string,
     parse_numerical_method, numerical_method_to_string,
     validate_solver_compatibility, get_recommended_algorithms, create_solver_with_method,
+    # Solver optimization types and functions
+    PerformanceMetrics, ProblemCharacteristics, OptimizationStrategy,
+    GridSearchStrategy, AdaptiveStrategy, SolverOptimizer,
+    set_problem_characteristics!, record_performance!, get_best_configuration,
+    suggest_next_configuration, create_auto_tuning_optimizer, auto_tune_solver,
     # Serialization functions for solver (internal)
     serialize_solver, serialize_solver_configuration, coerce_solver, coerce_solver_configuration,
     # JSON functionality
