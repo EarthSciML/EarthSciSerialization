@@ -72,7 +72,7 @@ fn test_wrong_data_types() {
 #[test]
 fn test_structural_validation() {
     // Create a model with equations but no variables (should fail structural validation)
-    let mut variables = HashMap::new();
+    let variables = HashMap::new();
     let model = Model {
         name: Some("Test Model".to_string()),
         variables,
@@ -193,8 +193,8 @@ fn test_stoichiometric_matrix() {
     let matrix = stoichiometric_matrix(&rs);
     assert_eq!(matrix.len(), 2);
     assert_eq!(matrix[0].len(), 1);
-    assert_eq!(matrix[0][0], -1); // A consumed
-    assert_eq!(matrix[1][0], 1);  // B produced
+    assert_eq!(matrix[0][0], -1.0); // A consumed
+    assert_eq!(matrix[1][0], 1.0);  // B produced
 }
 
 /// Test component graph generation
