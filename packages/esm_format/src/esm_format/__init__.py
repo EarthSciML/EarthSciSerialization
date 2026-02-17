@@ -135,6 +135,12 @@ from .hierarchical_scope_resolution import (
     VariableResolution,
     create_enhanced_scoped_reference,
 )
+from .dynamic_scope_resolution import (
+    DynamicScopeResolver,
+    RuntimeVariable,
+    RuntimeContext,
+    ContextSwitchResult,
+)
 from .placeholder_expansion import (
     expand_placeholder,
     expand_multiple_placeholders,
@@ -370,6 +376,11 @@ __all__ = [
     "ScopeInfo",
     "VariableResolution",
     "create_enhanced_scoped_reference",
+    # Dynamic scope resolution for runtime contexts
+    "DynamicScopeResolver",
+    "RuntimeVariable",
+    "RuntimeContext",
+    "ContextSwitchResult",
     "expand_placeholder",
     "expand_multiple_placeholders",
     "validate_placeholder_expansion",
