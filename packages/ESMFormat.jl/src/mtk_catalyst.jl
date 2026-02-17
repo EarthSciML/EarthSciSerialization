@@ -23,31 +23,39 @@ This is the tier-defining feature of the Julia ESM library, enabling deep
 integration with Julia's symbolic ecosystem and EarthSciML.
 """
 
-# Conditional loading to handle precompilation issues
+# Lazy loading to handle precompilation issues
 const MTK_AVAILABLE = Ref(false)
 const CATALYST_AVAILABLE = Ref(false)
+const SYMBOLICS_AVAILABLE = Ref(false)
+const MTK_CATALYST_CHECKED = Ref(false)
 
-# Try to load dependencies safely
-try
-    using ModelingToolkit
-    global MTK_AVAILABLE[] = true
-catch e
-    @warn "ModelingToolkit not available, using fallback: $e"
-end
+# Lazy loading function
+function _check_mtk_catalyst_availability()
+    if !MTK_CATALYST_CHECKED[]
+        try
+            @eval using ModelingToolkit
+            MTK_AVAILABLE[] = true
+        catch e
+            MTK_AVAILABLE[] = false
+        end
 
-try
-    using Catalyst
-    global CATALYST_AVAILABLE[] = true
-catch e
-    @warn "Catalyst not available, using fallback: $e"
-end
+        try
+            @eval using Catalyst
+            CATALYST_AVAILABLE[] = true
+        catch e
+            CATALYST_AVAILABLE[] = false
+        end
 
-# Only conditionally load Symbolics and Dates
-try
-    using Symbolics
-    global SYMBOLICS_AVAILABLE[] = true
-catch e
-    @warn "Symbolics.jl not available, using fallback: $e"
+        try
+            @eval using Symbolics
+            SYMBOLICS_AVAILABLE[] = true
+        catch e
+            SYMBOLICS_AVAILABLE[] = false
+        end
+
+        MTK_CATALYST_CHECKED[] = true
+    end
+    return MTK_AVAILABLE[] && CATALYST_AVAILABLE[]
 end
 
 try

@@ -15,22 +15,31 @@ KEY FEATURES:
 - Proper handling of null substrates (source reactions) and null products (sink reactions)
 """
 
-# Conditional imports to handle missing dependencies gracefully
+# Lazy loading approach to avoid precompilation issues
 const CATALYST_AVAILABLE = Ref(false)
 const SYMBOLICS_AVAILABLE = Ref(false)
+const CATALYST_CHECKED = Ref(false)
 
-try
-    using Catalyst
-    global CATALYST_AVAILABLE[] = true
-catch e
-    @warn "Catalyst.jl not available, using mock implementation: $e"
-end
+# Lazy loading function
+function _check_catalyst_availability()
+    if !CATALYST_CHECKED[]
+        try
+            @eval using Catalyst
+            CATALYST_AVAILABLE[] = true
+        catch e
+            CATALYST_AVAILABLE[] = false
+        end
 
-try
-    using Symbolics
-    global SYMBOLICS_AVAILABLE[] = true
-catch e
-    @warn "Symbolics.jl not available, using mock implementation: $e"
+        try
+            @eval using Symbolics
+            SYMBOLICS_AVAILABLE[] = true
+        catch e
+            SYMBOLICS_AVAILABLE[] = false
+        end
+
+        CATALYST_CHECKED[] = true
+    end
+    return CATALYST_AVAILABLE[]
 end
 
 """
@@ -71,7 +80,8 @@ catalyst_sys = to_catalyst_system(rs)
 - Validates species and parameter references in reactions
 """
 function to_catalyst_system(rs::ReactionSystem)
-    if !CATALYST_AVAILABLE[]
+    # Check Catalyst availability lazily
+    if !_check_catalyst_availability()
         @info "Using mock Catalyst system (Catalyst.jl not available)"
         return create_mock_catalyst_system(rs)
     end
