@@ -138,11 +138,107 @@ function create_mock_mtk_system_basic(model::Model, name::String)
     return MockMTKSystem(name, states, parameters, observed_vars, equations, events, metadata, false)
 end
 
-# Fallback functions when MTK is not available - always use mock for now
+# Real MTK system creation when ModelingToolkit is available
 function create_real_mtk_system_basic(model::Model, name::String)
-    error("Cannot create real MTK system when ModelingToolkit is not available")
+    # Import ModelingToolkit symbols into current scope
+    @eval using ModelingToolkit: @variables, @parameters, ODESystem, Differential, Equation
+    @eval using Symbolics: Num
+
+    # Create time variable
+    @eval @variables t
+    t_sym = @eval t
+
+    # Create symbolic variables for each model variable
+    states = []
+    parameters = []
+    observed = []
+    var_dict = Dict{String, Any}()
+
+    for (var_name, model_var) in model.variables
+        if model_var.type == StateVariable
+            # Create state variable as function of time
+            @eval @variables $(Symbol(var_name))(t)
+            sym_var = @eval $(Symbol(var_name))(t)
+            push!(states, sym_var)
+            var_dict[var_name] = sym_var
+        elseif model_var.type == ParameterVariable
+            # Create parameter
+            @eval @parameters $(Symbol(var_name))
+            param_var = @eval $(Symbol(var_name))
+            push!(parameters, param_var)
+            var_dict[var_name] = param_var
+        elseif model_var.type == ObservedVariable
+            if model_var.expression !== nothing
+                # Create observed variable with expression
+                expr_sym = esm_to_mtk_expr(model_var.expression, var_dict, t_sym)
+                @eval @variables $(Symbol(var_name))(t)
+                obs_var = @eval $(Symbol(var_name))(t)
+                push!(observed, obs_var)
+                var_dict[var_name] = obs_var
+            end
+        end
+    end
+
+    # Convert equations
+    eqs = []
+    for equation in model.equations
+        lhs = esm_to_mtk_expr(equation.lhs, var_dict, t_sym)
+        rhs = esm_to_mtk_expr(equation.rhs, var_dict, t_sym)
+
+        # Create MTK equation
+        mtk_eq = @eval Equation($lhs, $rhs)
+        push!(eqs, mtk_eq)
+    end
+
+    # Create ODESystem
+    system = @eval ODESystem($eqs, $t_sym, $states, $parameters; name=Symbol($name))
+
+    return system
 end
 
 function esm_to_mtk_expr(expr::Expr, var_dict::Dict{String, Any}, t)
-    error("Cannot convert expressions when ModelingToolkit is not available")
+    @eval using Symbolics: Differential
+
+    if expr isa VarExpr
+        var_name = expr.name
+        if haskey(var_dict, var_name)
+            return var_dict[var_name]
+        else
+            error("Variable $var_name not found in variable dictionary")
+        end
+    elseif expr isa NumExpr
+        return expr.value
+    elseif expr isa OpExpr
+        if expr.op == "D"
+            # Differential operator
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            D = @eval Differential($t)
+            return @eval $D($arg)
+        elseif expr.op == "+"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left + $right
+        elseif expr.op == "-"
+            if length(expr.args) == 1
+                arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+                return @eval -$arg
+            else
+                left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+                right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+                return @eval $left - $right
+            end
+        elseif expr.op == "*"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left * $right
+        elseif expr.op == "/"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left / $right
+        else
+            error("Unsupported operation: $(expr.op)")
+        end
+    else
+        error("Unsupported expression type: $(typeof(expr))")
+    end
 end
