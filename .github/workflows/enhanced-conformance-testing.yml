@@ -1,0 +1,570 @@
+name: Enhanced Cross-Language Conformance Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'docker/**'
+      - '.github/workflows/enhanced-conformance-testing.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'docker/**'
+      - '.github/workflows/enhanced-conformance-testing.yml'
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      run_performance_analysis:
+        description: 'Run detailed performance analysis'
+        required: false
+        default: 'true'
+        type: boolean
+      include_docker_tests:
+        description: 'Run Docker-based isolated tests'
+        required: false
+        default: 'true'
+        type: boolean
+
+env:
+  # Consistent versions across jobs
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+  JULIA_VERSION: '1.10'
+  RUST_VERSION: 'stable'
+  # Resource limits for conformance testing
+  CONFORMANCE_MEMORY_LIMIT: '4g'
+  CONFORMANCE_CPU_LIMIT: '2.0'
+  CONFORMANCE_TIMEOUT: '300s'
+
+jobs:
+  # Run each language's individual tests first (unchanged from original)
+  julia-tests:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't fail workflow if individual tests fail
+    defaults:
+      run:
+        working-directory: packages/ESMFormat.jl
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ env.JULIA_VERSION }}
+
+      - name: Cache Julia dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.julia
+          key: ${{ runner.os }}-julia-${{ env.JULIA_VERSION }}-${{ hashFiles('packages/ESMFormat.jl/Project.toml', 'packages/ESMFormat.jl/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ env.JULIA_VERSION }}-
+
+      - name: Install Julia dependencies
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run Julia tests
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.test()'
+
+  typescript-tests:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: packages/esm-format
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: packages/esm-format/package-lock.json
+
+      - name: Install TypeScript dependencies
+        run: npm ci
+
+      - name: Build TypeScript package
+        run: npm run build
+
+      - name: Run TypeScript tests
+        run: npm test -- --run
+
+  python-tests:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: packages/esm_format
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('packages/esm_format/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+
+      - name: Run Python tests
+        run: |
+          python -m pytest tests/ -v
+
+  rust-tests:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: packages/esm-format-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/esm-format-rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/esm-format-rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build Rust package
+        run: cargo build --release
+
+      - name: Run Rust tests
+        run: cargo test
+
+  # Standard conformance testing (original approach)
+  standard-conformance-testing:
+    runs-on: ubuntu-latest
+    needs: [julia-tests, typescript-tests, python-tests, rust-tests]
+    if: always()  # Run even if individual tests fail
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ env.JULIA_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: packages/esm-format/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia
+            ~/.cache/pip
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/esm-format-rust/target
+            packages/esm-format/node_modules
+          key: ${{ runner.os }}-conformance-${{ hashFiles('packages/*/Project.toml', 'packages/*/package*.json', 'packages/*/pyproject.toml', 'packages/*/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-conformance-
+
+      # Install dependencies for all languages
+      - name: Install Julia dependencies
+        working-directory: packages/ESMFormat.jl
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+        continue-on-error: true
+
+      - name: Install TypeScript dependencies and build
+        working-directory: packages/esm-format
+        run: |
+          npm ci
+          npm run build
+        continue-on-error: true
+
+      - name: Install Python dependencies
+        working-directory: packages/esm_format
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+        continue-on-error: true
+
+      - name: Build Rust package
+        working-directory: packages/esm-format-rust
+        run: |
+          cargo build --release
+        continue-on-error: true
+
+      # Make scripts executable
+      - name: Make conformance scripts executable
+        run: |
+          chmod +x scripts/test-conformance.sh
+          chmod +x scripts/run-julia-conformance.jl
+          chmod +x scripts/run-typescript-conformance.js
+          chmod +x scripts/run-python-conformance.py
+          chmod +x scripts/enhanced-conformance-analyzer.py
+          chmod +x scripts/enhanced-report-generator.py
+
+      # Run standard cross-language conformance testing
+      - name: Run standard conformance tests
+        run: |
+          ./scripts/test-conformance.sh
+        continue-on-error: true
+
+      # Upload standard conformance results
+      - name: Upload standard conformance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: standard-conformance-results-${{ github.run_number }}
+          path: |
+            conformance-results/
+          retention-days: 30
+
+  # Enhanced Docker-based conformance testing
+  docker-conformance-testing:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.include_docker_tests != 'false'
+    needs: [julia-tests, typescript-tests, python-tests, rust-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install additional dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc jq
+
+      - name: Make Docker conformance scripts executable
+        run: |
+          chmod +x scripts/docker-conformance-runner.sh
+          chmod +x scripts/enhanced-conformance-analyzer.py
+          chmod +x scripts/enhanced-report-generator.py
+
+      # Install Python packages needed for enhanced analysis
+      - name: Setup Python for enhanced analysis
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python analysis dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install matplotlib seaborn plotly pandas jinja2 psutil
+
+      # Run Docker-based conformance testing
+      - name: Run Docker-based conformance tests
+        run: |
+          export DOCKER_BUILDKIT=1
+          ./scripts/docker-conformance-runner.sh
+        env:
+          ESM_MEMORY_LIMIT: ${{ env.CONFORMANCE_MEMORY_LIMIT }}
+          ESM_CPU_LIMIT: ${{ env.CONFORMANCE_CPU_LIMIT }}
+          ESM_TIMEOUT: ${{ env.CONFORMANCE_TIMEOUT }}
+
+      # Generate enhanced reports
+      - name: Generate enhanced HTML report
+        if: always()
+        run: |
+          if [ -f "conformance-results/comparison/analysis.json" ]; then
+            python3 scripts/enhanced-report-generator.py \
+              --analysis-file conformance-results/comparison/analysis.json \
+              --output-file conformance-results/reports/enhanced_conformance_report_${{ github.run_number }}.html \
+              --include-performance-charts \
+              --detailed-analysis
+          fi
+
+      # Upload enhanced conformance results
+      - name: Upload enhanced conformance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enhanced-conformance-results-${{ github.run_number }}
+          path: |
+            conformance-results/
+          retention-days: 30
+
+      # Upload Docker images for debugging (optional)
+      - name: Save Docker images
+        if: failure()
+        run: |
+          mkdir -p docker-images
+          docker save esm-format-julia:latest | gzip > docker-images/julia.tar.gz
+          docker save esm-format-typescript:latest | gzip > docker-images/typescript.tar.gz
+          docker save esm-format-python:latest | gzip > docker-images/python.tar.gz
+          docker save esm-format-rust:latest | gzip > docker-images/rust.tar.gz
+
+      - name: Upload Docker images for debugging
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: docker-images-debug-${{ github.run_number }}
+          path: docker-images/
+          retention-days: 7
+
+  # Performance analysis job
+  performance-analysis:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.run_performance_analysis != 'false'
+    needs: [docker-conformance-testing]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install performance analysis dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install matplotlib seaborn plotly pandas numpy scipy
+
+      - name: Download conformance results
+        uses: actions/download-artifact@v4
+        with:
+          name: enhanced-conformance-results-${{ github.run_number }}
+          path: conformance-results/
+
+      - name: Run performance analysis
+        run: |
+          python3 -c "
+          import json
+          import os
+          from pathlib import Path
+
+          # Load performance data
+          performance_file = Path('conformance-results/performance_summary.json')
+          if performance_file.exists():
+              with open(performance_file) as f:
+                  data = json.load(f)
+
+              print('=== PERFORMANCE ANALYSIS SUMMARY ===')
+              print(f'Analysis completed at: {data.get(\"timestamp\", \"unknown\")}')
+
+              languages = data.get('languages', {})
+              if languages:
+                  # Find fastest and slowest
+                  exec_times = {lang: info.get('execution_time_ms', 0) for lang, info in languages.items()}
+                  fastest = min(exec_times, key=exec_times.get) if exec_times else 'unknown'
+                  slowest = max(exec_times, key=exec_times.get) if exec_times else 'unknown'
+
+                  print(f'Fastest implementation: {fastest} ({exec_times.get(fastest, 0):.1f}ms)')
+                  print(f'Slowest implementation: {slowest} ({exec_times.get(slowest, 0):.1f}ms)')
+
+                  # Memory usage
+                  mem_usage = {lang: info.get('memory_peak_mb', 0) for lang, info in languages.items()}
+                  lowest_mem = min(mem_usage, key=mem_usage.get) if mem_usage else 'unknown'
+                  highest_mem = max(mem_usage, key=mem_usage.get) if mem_usage else 'unknown'
+
+                  print(f'Lowest memory usage: {lowest_mem} ({mem_usage.get(lowest_mem, 0):.1f}MB)')
+                  print(f'Highest memory usage: {highest_mem} ({mem_usage.get(highest_mem, 0):.1f}MB)')
+          else:
+              print('No performance data available')
+          "
+
+      - name: Upload performance analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-analysis-${{ github.run_number }}
+          path: |
+            conformance-results/performance_summary.json
+          retention-days: 90
+
+  # Report aggregation and final status
+  conformance-results:
+    runs-on: ubuntu-latest
+    needs: [standard-conformance-testing, docker-conformance-testing]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download all results
+      - name: Download standard conformance results
+        uses: actions/download-artifact@v4
+        with:
+          name: standard-conformance-results-${{ github.run_number }}
+          path: standard-results/
+        continue-on-error: true
+
+      - name: Download enhanced conformance results
+        uses: actions/download-artifact@v4
+        with:
+          name: enhanced-conformance-results-${{ github.run_number }}
+          path: enhanced-results/
+        continue-on-error: true
+
+      # Comment on PR with conformance results
+      - name: Comment PR with enhanced conformance results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            try {
+              // Look for enhanced analysis file first, then standard
+              let analysisPath = 'enhanced-results/comparison/analysis.json';
+              let analysisType = 'Enhanced';
+
+              if (!fs.existsSync(analysisPath)) {
+                analysisPath = 'standard-results/comparison/analysis.json';
+                analysisType = 'Standard';
+              }
+
+              if (fs.existsSync(analysisPath)) {
+                const analysis = JSON.parse(fs.readFileSync(analysisPath, 'utf8'));
+
+                const overallStatus = analysis.overall_status || 'UNKNOWN';
+                const overallScore = analysis.divergence_summary?.overall_score || 0;
+                const languagesTested = analysis.languages_tested || [];
+                const criticalDivergences = analysis.divergence_summary?.critical_divergences || [];
+
+                let statusEmoji = '❓';
+                if (overallStatus === 'PASS') statusEmoji = '✅';
+                else if (overallStatus === 'WARN') statusEmoji = '⚠️';
+                else if (overallStatus === 'FAIL') statusEmoji = '❌';
+
+                let comment = `## ${statusEmoji} ${analysisType} Cross-Language Conformance Test Results\n\n`;
+                comment += `**Overall Status:** ${overallStatus}\n`;
+                comment += `**Consistency Score:** ${(overallScore * 100).toFixed(1)}%\n`;
+                comment += `**Languages Tested:** ${languagesTested.join(', ')}\n`;
+                comment += `**Critical Divergences:** ${criticalDivergences.length}\n\n`;
+
+                // Performance summary if available
+                if (analysis.performance_analysis && analysis.performance_analysis.execution_time_stats) {
+                  const perf = analysis.performance_analysis.execution_time_stats;
+                  comment += `### Performance Summary:\n`;
+                  comment += `- **Fastest:** ${perf.fastest_language}\n`;
+                  comment += `- **Slowest:** ${perf.slowest_language}\n`;
+
+                  if (analysis.performance_analysis.memory_usage_stats) {
+                    const mem = analysis.performance_analysis.memory_usage_stats;
+                    comment += `- **Lowest Memory:** ${mem.lowest_memory_language}\n`;
+                    comment += `- **Highest Memory:** ${mem.highest_memory_language}\n`;
+                  }
+                  comment += '\n';
+                }
+
+                if (criticalDivergences.length > 0) {
+                  comment += `### Critical Divergences (< 70% consistency):\n`;
+                  for (const divergence of criticalDivergences) {
+                    comment += `- **${divergence.category}**: ${(divergence.score * 100).toFixed(1)}% consistency\n`;
+                  }
+                  comment += '\n';
+                }
+
+                comment += `### Category Results:\n`;
+                const categories = analysis.divergence_summary?.categories || {};
+                for (const [category, data] of Object.entries(categories)) {
+                  const statusIcon = data.status === 'PASS' ? '✅' : data.status === 'WARN' ? '⚠️' : '❌';
+                  comment += `- ${statusIcon} **${category.charAt(0).toUpperCase() + category.slice(1)}**: ${(data.consistency_score * 100).toFixed(1)}% (${data.divergent_tests}/${data.total_tests} divergent)\n`;
+                }
+
+                comment += `\n📊 [View detailed conformance report](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              } else {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: '❌ Cross-language conformance testing failed - no results generated. Check the action logs for details.'
+                });
+              }
+            } catch (error) {
+              console.error('Error posting conformance results:', error);
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `❌ Error processing conformance test results: ${error.message}`
+              });
+            }
+
+      # Final status check
+      - name: Check final conformance status
+        run: |
+          # Check enhanced results first, then standard
+          ANALYSIS_FILE=""
+          if [ -f "enhanced-results/comparison/analysis.json" ]; then
+            ANALYSIS_FILE="enhanced-results/comparison/analysis.json"
+            echo "Using enhanced analysis results"
+          elif [ -f "standard-results/comparison/analysis.json" ]; then
+            ANALYSIS_FILE="standard-results/comparison/analysis.json"
+            echo "Using standard analysis results"
+          fi
+
+          if [ -n "$ANALYSIS_FILE" ]; then
+            OVERALL_STATUS=$(python3 -c "import json; data=json.load(open('$ANALYSIS_FILE')); print(data.get('overall_status', 'UNKNOWN'))")
+            CONSISTENCY_SCORE=$(python3 -c "import json; data=json.load(open('$ANALYSIS_FILE')); print(data.get('divergence_summary', {}).get('overall_score', 0))")
+
+            echo "Overall conformance status: $OVERALL_STATUS"
+            echo "Consistency score: $(python3 -c "print(f'{float('$CONSISTENCY_SCORE') * 100:.1f}%')")"
+
+            case "$OVERALL_STATUS" in
+              "PASS")
+                echo "✅ Conformance tests passed - all implementations are consistent"
+                exit 0
+                ;;
+              "WARN")
+                echo "⚠️ Conformance tests passed with warnings - some minor divergences detected"
+                exit 0
+                ;;
+              "FAIL")
+                echo "❌ Conformance tests failed - implementations have significant divergences"
+                exit 1
+                ;;
+              *)
+                echo "❓ Conformance test status unknown"
+                exit 1
+                ;;
+            esac
+          else
+            echo "❌ No conformance analysis results found"
+            exit 1
+          fi
