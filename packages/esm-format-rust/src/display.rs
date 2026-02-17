@@ -376,16 +376,80 @@ pub fn to_latex(expr: &Expr) -> String {
             }
         },
         Expr::Variable(name) => {
-            if name.len() > 1 || name.chars().any(|c| c.is_ascii_digit()) {
-                format!("\\mathrm{{{}}}", format_chemical_latex(name))
-            } else {
-                name.clone()
-            }
+            format_variable_latex(name)
         },
         Expr::Operator(node) => {
             format_operator_latex(&node.op, &node.args, &node.wrt)
         }
     }
+}
+
+fn format_variable_latex(name: &str) -> String {
+    // Simple variable (single letter, no digits)
+    if name.len() == 1 && !name.chars().any(|c| c.is_ascii_digit()) {
+        return name.to_string();
+    }
+
+    // Check if the name contains chemical elements after a prefix
+    // Look for patterns like "k_NO_O3" where we want "k_{\\mathrm{NO_O_3}}"
+    if let Some(underscore_pos) = name.find('_') {
+        let prefix = &name[..underscore_pos + 1]; // Include underscore
+        let suffix = &name[underscore_pos + 1..];
+
+        // Check if suffix looks like a chemical formula (starts with element)
+        if is_chemical_formula(suffix) {
+            return format!("{}{{\\mathrm{{{}}}}}", prefix, format_chemical_latex(suffix));
+        }
+    }
+
+    // Check if starts with lowercase letters that could be non-chemical prefix
+    let mut prefix_end = 0;
+    for ch in name.chars() {
+        if ch.is_ascii_lowercase() || ch == '_' {
+            prefix_end += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if prefix_end > 0 && prefix_end < name.len() {
+        let prefix = &name[..prefix_end];
+        let suffix = &name[prefix_end..];
+
+        if is_chemical_formula(suffix) {
+            return format!("{}_{{\\mathrm{{{}}}}}", prefix, format_chemical_latex(suffix));
+        }
+    }
+
+    // Default: treat entire name as potentially chemical
+    if name.len() > 1 || name.chars().any(|c| c.is_ascii_digit()) {
+        format!("\\mathrm{{{}}}", format_chemical_latex(name))
+    } else {
+        name.to_string()
+    }
+}
+
+fn is_chemical_formula(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+
+    // Check if starts with an element symbol (uppercase letter)
+    let first_char = s.chars().next().unwrap();
+    if !first_char.is_ascii_uppercase() {
+        return false;
+    }
+
+    // Try to find a matching element symbol at the start
+    if s.len() >= 2 {
+        let two_letter = &s[..2];
+        if ELEMENTS.contains(&two_letter) {
+            return true;
+        }
+    }
+
+    let one_letter = &s[..1];
+    ELEMENTS.contains(&one_letter)
 }
 
 fn format_chemical_latex(s: &str) -> String {
