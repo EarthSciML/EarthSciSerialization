@@ -202,6 +202,10 @@ from .display import (
     explore,
     ESMExplorer,
 )
+from .codegen import (
+    to_julia_code,
+    to_python_code,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -382,4 +386,7 @@ __all__ = [
     # Jupyter integration
     "explore",
     "ESMExplorer",
+    # Code generation
+    "to_julia_code",
+    "to_python_code",
 ]

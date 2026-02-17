@@ -31,6 +31,8 @@ include("edit.jl")
 # MTK modules - conditionally loaded to avoid precompilation issues
 include("mtk.jl")
 include("mtk_catalyst.jl")
+# Code generation
+include("codegen.jl")
 
 # Export main types
 export
@@ -102,6 +104,8 @@ export
     merge, extract,
     # Legacy compatibility aliases (for tests)
     MockMTKSystem,
-    esm_to_mock_symbolic, mock_symbolic_to_esm
+    esm_to_mock_symbolic, mock_symbolic_to_esm,
+    # Code generation
+    to_julia_code, to_python_code
 
 end # module ESMFormat
