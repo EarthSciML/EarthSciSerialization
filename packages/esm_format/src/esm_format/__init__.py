@@ -172,9 +172,16 @@ from .reactions import (
 from .graph import (
     component_graph,
     expression_graph,
+    to_dot,
+    to_mermaid,
+    to_json_graph,
     Graph,
     GraphNode,
     GraphEdge,
+    ComponentNode,
+    VariableNode,
+    CouplingEdge,
+    DependencyEdge,
 )
 from .units import (
     validate_units,
@@ -349,9 +356,16 @@ __all__ = [
     # Graph representations
     "component_graph",
     "expression_graph",
+    "to_dot",
+    "to_mermaid",
+    "to_json_graph",
     "Graph",
     "GraphNode",
     "GraphEdge",
+    "ComponentNode",
+    "VariableNode",
+    "CouplingEdge",
+    "DependencyEdge",
     # Unit validation
     "validate_units",
     "convert_units",

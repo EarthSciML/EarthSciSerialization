@@ -8,14 +8,43 @@ Specification Section 4.8, with export capabilities to DOT, Mermaid, and JSON fo
 from typing import Dict, List, Set, Union, Any, Optional
 from dataclasses import dataclass, field
 import json
+import re
 
 try:
-    from .types import EsmFile, Model, ReactionSystem, Expr, ExprNode, Equation
+    from .types import EsmFile, Model, ReactionSystem, Reaction, Expr, ExprNode, Equation
     from .coupling_graph import construct_coupling_graph
 except ImportError:
     # For direct imports when testing
-    from types import EsmFile, Model, ReactionSystem, Expr, ExprNode, Equation
+    from types import EsmFile, Model, ReactionSystem, Reaction, Expr, ExprNode, Equation
     from coupling_graph import construct_coupling_graph
+
+
+def _format_chemical_name(name: str) -> str:
+    """
+    Format chemical names with proper Unicode subscripts.
+
+    Converts patterns like H2O, CO2, NH4+, SO4-2 to H₂O, CO₂, NH₄⁺, SO₄²⁻
+    """
+    # Unicode subscript mapping
+    subscripts = {'0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+                  '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'}
+
+    # Unicode superscript mapping for charges
+    superscripts = {'0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+                    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+                    '+': '⁺', '-': '⁻'}
+
+    result = name
+
+    # Handle charges first (e.g., NH4+, SO4-2)
+    result = re.sub(r'([+-])(\d*)', lambda m: superscripts.get(m.group(1), m.group(1)) +
+                    ''.join(superscripts.get(d, d) for d in m.group(2)), result)
+
+    # Handle subscripts (numbers following letters, e.g., H2O -> H₂O)
+    result = re.sub(r'([A-Za-z])(\d+)', lambda m: m.group(1) +
+                    ''.join(subscripts.get(d, d) for d in m.group(2)), result)
+
+    return result
 
 
 @dataclass
@@ -28,6 +57,20 @@ class GraphNode:
 
 
 @dataclass
+class ComponentNode(GraphNode):
+    """A component node representing models or reaction systems."""
+    def __init__(self, id: str, label: str, component_type: str, **metadata):
+        super().__init__(id, _format_chemical_name(label), component_type, metadata)
+
+
+@dataclass
+class VariableNode(GraphNode):
+    """A variable node representing mathematical variables or expressions."""
+    def __init__(self, id: str, label: str, variable_type: str, **metadata):
+        super().__init__(id, _format_chemical_name(label), variable_type, metadata)
+
+
+@dataclass
 class GraphEdge:
     """An edge in a graph representation."""
     source: str
@@ -35,6 +78,20 @@ class GraphEdge:
     label: str = ""
     edge_type: str = "default"
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class CouplingEdge(GraphEdge):
+    """An edge representing coupling between components."""
+    def __init__(self, source: str, target: str, label: str = "", coupling_type: str = "coupling", **metadata):
+        super().__init__(source, target, label, coupling_type, metadata)
+
+
+@dataclass
+class DependencyEdge(GraphEdge):
+    """An edge representing mathematical dependencies."""
+    def __init__(self, source: str, target: str, label: str = "", dependency_type: str = "dependency", **metadata):
+        super().__init__(source, target, label, dependency_type, metadata)
 
 
 @dataclass
@@ -82,7 +139,7 @@ class Graph:
 
         return "\n".join(lines)
 
-    def to_json(self) -> str:
+    def to_json_graph(self) -> str:
         """Export graph to JSON format."""
         data = {
             "nodes": [
@@ -150,7 +207,7 @@ class Graph:
         ]
 
 
-def component_graph(esm_file: EsmFile) -> Graph:
+def component_graph(esm_file: EsmFile) -> 'Graph[ComponentNode, CouplingEdge]':
     """
     Create a component graph from an ESM file showing models, reaction systems,
     and their coupling relationships.
@@ -159,35 +216,31 @@ def component_graph(esm_file: EsmFile) -> Graph:
         esm_file: The ESM file to analyze
 
     Returns:
-        Graph representing the component structure and couplings
+        Graph representing the component structure and couplings with ComponentNode and CouplingEdge types
     """
     graph = Graph(metadata={"type": "component_graph", "title": "Component Graph"})
 
     # Add model nodes
     if esm_file.models:
         for model in esm_file.models:
-            node = GraphNode(
+            node = ComponentNode(
                 id=f"model_{model.name}",
                 label=model.name,
-                node_type="model",
-                metadata={
-                    "num_variables": len(model.variables) if model.variables else 0,
-                    "num_equations": len(model.equations) if model.equations else 0
-                }
+                component_type="model",
+                num_variables=len(model.variables) if model.variables else 0,
+                num_equations=len(model.equations) if model.equations else 0
             )
             graph.nodes.append(node)
 
     # Add reaction system nodes
     if esm_file.reaction_systems:
         for rs in esm_file.reaction_systems:
-            node = GraphNode(
+            node = ComponentNode(
                 id=f"rs_{rs.name}",
                 label=rs.name,
-                node_type="reaction_system",
-                metadata={
-                    "num_species": len(rs.species) if rs.species else 0,
-                    "num_reactions": len(rs.reactions) if rs.reactions else 0
-                }
+                component_type="reaction_system",
+                num_species=len(rs.species) if rs.species else 0,
+                num_reactions=len(rs.reactions) if rs.reactions else 0
             )
             graph.nodes.append(node)
 
@@ -200,15 +253,13 @@ def component_graph(esm_file: EsmFile) -> Graph:
             target_node = coupling_graph.nodes.get(edge.target_node)
 
             if source_node and target_node:
-                graph_edge = GraphEdge(
+                graph_edge = CouplingEdge(
                     source=f"{source_node.type.value}_{source_node.name}",
                     target=f"{target_node.type.value}_{target_node.name}",
                     label=f"{len(edge.source_variables)} vars",
-                    edge_type="coupling",
-                    metadata={
-                        "coupling_type": edge.coupling_type.value if hasattr(edge.coupling_type, 'value') else str(edge.coupling_type),
-                        "variables": edge.source_variables + edge.target_variables
-                    }
+                    coupling_type="coupling",
+                    coupling_type_detail=edge.coupling_type.value if hasattr(edge.coupling_type, 'value') else str(edge.coupling_type),
+                    variables=edge.source_variables + edge.target_variables
                 )
                 graph.edges.append(graph_edge)
     except Exception:
@@ -218,15 +269,15 @@ def component_graph(esm_file: EsmFile) -> Graph:
     return graph
 
 
-def expression_graph(target: Union[EsmFile, Model, ReactionSystem, Expr, Equation]) -> Graph:
+def expression_graph(target: Union[EsmFile, Model, ReactionSystem, Reaction, Equation, Expr]) -> 'Graph[VariableNode, DependencyEdge]':
     """
     Create an expression graph showing the mathematical structure and dependencies.
 
     Args:
-        target: The ESM file, model, reaction system, expression, or equation to analyze
+        target: The ESM file, model, reaction system, reaction, equation, or expression to analyze
 
     Returns:
-        Graph representing the expression structure and mathematical dependencies
+        Graph representing the expression structure and mathematical dependencies with VariableNode and DependencyEdge types
     """
     graph = Graph(metadata={"type": "expression_graph", "title": "Expression Graph"})
 
@@ -253,11 +304,33 @@ def expression_graph(target: Union[EsmFile, Model, ReactionSystem, Expr, Equatio
         for i, expr in enumerate(expressions):
             _add_expression_to_graph(graph, expr, f"rs_{target.name}_expr_{i}")
 
+    elif isinstance(target, Reaction):
+        # Add reactants and products as nodes, rate constant as expression
+        for reactant, coeff in target.reactants.items():
+            reactant_id = f"reactant_{reactant}"
+            _add_expression_to_graph(graph, reactant, reactant_id)
+            if coeff != 1.0:
+                coeff_id = f"coeff_{reactant}"
+                _add_expression_to_graph(graph, coeff, coeff_id)
+                graph.edges.append(DependencyEdge(coeff_id, reactant_id, "×", "coefficient"))
+
+        for product, coeff in target.products.items():
+            product_id = f"product_{product}"
+            _add_expression_to_graph(graph, product, product_id)
+            if coeff != 1.0:
+                coeff_id = f"coeff_{product}"
+                _add_expression_to_graph(graph, coeff, coeff_id)
+                graph.edges.append(DependencyEdge(coeff_id, product_id, "×", "coefficient"))
+
+        # Add rate constant if present
+        if target.rate_constant is not None:
+            _add_expression_to_graph(graph, target.rate_constant, "rate_constant")
+
     elif isinstance(target, Equation):
         _add_expression_to_graph(graph, target.lhs, "lhs")
         _add_expression_to_graph(graph, target.rhs, "rhs")
         # Connect lhs and rhs
-        graph.edges.append(GraphEdge("lhs", "rhs", "=", "equation"))
+        graph.edges.append(DependencyEdge("lhs", "rhs", "=", "equation"))
 
     elif isinstance(target, (ExprNode, int, float, str)):
         _add_expression_to_graph(graph, target, "root")
@@ -305,30 +378,32 @@ def _extract_reaction_system_expressions(rs: ReactionSystem) -> List[Expr]:
 def _add_expression_to_graph(graph: Graph, expr: Expr, node_id: str) -> None:
     """Add an expression and its subexpressions to the graph."""
     if isinstance(expr, (int, float)):
-        node = GraphNode(
+        node = VariableNode(
             id=node_id,
             label=str(expr),
-            node_type="constant",
-            metadata={"value": expr, "type": type(expr).__name__}
+            variable_type="constant",
+            value=expr,
+            type=type(expr).__name__
         )
         graph.nodes.append(node)
 
     elif isinstance(expr, str):
-        node = GraphNode(
+        node = VariableNode(
             id=node_id,
-            label=expr,
-            node_type="variable",
-            metadata={"name": expr}
+            label=_format_chemical_name(expr),
+            variable_type="variable",
+            name=expr
         )
         graph.nodes.append(node)
 
     elif isinstance(expr, ExprNode):
         # Add operator node
-        op_node = GraphNode(
+        op_node = VariableNode(
             id=node_id,
             label=expr.op,
-            node_type="operator",
-            metadata={"operation": expr.op, "arity": len(expr.args)}
+            variable_type="operator",
+            operation=expr.op,
+            arity=len(expr.args)
         )
         graph.nodes.append(op_node)
 
@@ -338,10 +413,26 @@ def _add_expression_to_graph(graph: Graph, expr: Expr, node_id: str) -> None:
             _add_expression_to_graph(graph, arg, arg_id)
 
             # Connect operator to argument
-            edge = GraphEdge(
+            edge = DependencyEdge(
                 source=node_id,
                 target=arg_id,
                 label=f"arg{i}",
-                edge_type="operand"
+                dependency_type="operand"
             )
             graph.edges.append(edge)
+
+
+# Export functions for external use
+def to_dot(graph: Graph) -> str:
+    """Export graph to DOT format for Graphviz visualization."""
+    return graph.to_dot()
+
+
+def to_mermaid(graph: Graph) -> str:
+    """Export graph to Mermaid format for web-based visualization."""
+    return graph.to_mermaid()
+
+
+def to_json_graph(graph: Graph) -> str:
+    """Export graph to JSON format for programmatic use."""
+    return graph.to_json_graph()
