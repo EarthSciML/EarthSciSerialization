@@ -1,0 +1,330 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventsCrossSystemInteraction",
+    "description": "Test fixture for cross-system events - Events spanning multiple coupled systems with inter-system dependencies",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["events", "cross_system", "coupling", "multi_system", "interactions"]
+  },
+
+  "reaction_systems": {
+    "AtmosphericChemistry": {
+      "coupletype": "AtmosphericCoupler",
+      "reference": { "notes": "Simplified atmospheric chemistry system" },
+      "species": {
+        "O3": { "units": "ppb", "default": 40.0, "description": "Ozone concentration" },
+        "NO2": { "units": "ppb", "default": 20.0, "description": "Nitrogen dioxide concentration" },
+        "VOC": { "units": "ppb", "default": 100.0, "description": "Volatile organic compounds" }
+      },
+      "parameters": {
+        "k_photo": { "units": "1/min", "default": 0.01, "description": "Photolysis rate constant" },
+        "k_formation": { "units": "ppb^-2/min", "default": 0.001, "description": "Ozone formation rate constant" },
+        "emission_rate_NO2": { "units": "ppb/min", "default": 0.1, "description": "NO2 emission rate" },
+        "emission_rate_VOC": { "units": "ppb/min", "default": 0.5, "description": "VOC emission rate" }
+      },
+      "reactions": [
+        {
+          "id": "R1_photo",
+          "name": "NO2_photolysis",
+          "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+          "products": [],
+          "rate": { "op": "*", "args": ["k_photo", { "scoped_ref": "MeteorologicalSystem.solar_intensity" }] }
+        },
+        {
+          "id": "R2_formation",
+          "name": "O3_formation",
+          "substrates": [
+            { "species": "NO2", "stoichiometry": 1 },
+            { "species": "VOC", "stoichiometry": 1 }
+          ],
+          "products": [{ "species": "O3", "stoichiometry": 1 }],
+          "rate": "k_formation"
+        }
+      ]
+    },
+
+    "BiologicalSystem": {
+      "coupletype": "BiologicalCoupler",
+      "reference": { "notes": "Plant response to air quality" },
+      "species": {
+        "healthy_biomass": { "units": "g/m^2", "default": 1000.0, "description": "Healthy plant biomass" },
+        "stressed_biomass": { "units": "g/m^2", "default": 0.0, "description": "Stress-damaged biomass" }
+      },
+      "parameters": {
+        "growth_rate": { "units": "1/day", "default": 0.05, "description": "Plant growth rate" },
+        "stress_threshold": { "units": "ppb", "default": 60.0, "description": "Ozone stress threshold" },
+        "damage_rate": { "units": "1/day", "default": 0.1, "description": "Ozone damage rate" },
+        "recovery_rate": { "units": "1/day", "default": 0.02, "description": "Plant recovery rate" }
+      },
+      "reactions": [
+        {
+          "id": "growth",
+          "name": "plant_growth",
+          "substrates": [],
+          "products": [{ "species": "healthy_biomass", "stoichiometry": 1 }],
+          "rate": { "op": "*", "args": ["growth_rate", { "scoped_ref": "MeteorologicalSystem.temperature_factor" }] }
+        },
+        {
+          "id": "stress_damage",
+          "name": "ozone_damage",
+          "substrates": [{ "species": "healthy_biomass", "stoichiometry": 1 }],
+          "products": [{ "species": "stressed_biomass", "stoichiometry": 1 }],
+          "rate": {
+            "op": "ifelse", "args": [
+              { "op": ">", "args": [{ "scoped_ref": "AtmosphericChemistry.O3" }, "stress_threshold"] },
+              { "op": "*", "args": ["damage_rate", { "op": "-", "args": [{ "scoped_ref": "AtmosphericChemistry.O3" }, "stress_threshold"] }] },
+              0.0
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "MeteorologicalSystem": {
+      "reference": { "notes": "Weather system affecting chemistry and biology" },
+      "variables": {
+        "solar_intensity": { "type": "state", "units": "W/m^2", "default": 800.0, "description": "Solar radiation intensity" },
+        "temperature": { "type": "state", "units": "°C", "default": 25.0, "description": "Air temperature" },
+        "wind_speed": { "type": "state", "units": "m/s", "default": 3.0, "description": "Wind speed for mixing" },
+        "temperature_factor": { "type": "derived", "units": "dimensionless", "description": "Temperature factor for biological processes" }
+      },
+      "parameters": {
+        "diurnal_amplitude": { "units": "W/m^2", "default": 600.0, "description": "Solar radiation amplitude" },
+        "base_solar": { "units": "W/m^2", "default": 200.0, "description": "Base solar radiation" },
+        "temp_amplitude": { "units": "°C", "default": 10.0, "description": "Diurnal temperature amplitude" },
+        "base_temp": { "units": "°C", "default": 20.0, "description": "Base temperature" },
+        "wind_variability": { "units": "m/s", "default": 1.0, "description": "Wind speed variability" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["solar_intensity"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              0.1,
+              {
+                "op": "-", "args": [
+                  {
+                    "op": "+", "args": [
+                      "base_solar",
+                      { "op": "*", "args": ["diurnal_amplitude", { "op": "cos", "args": [{ "op": "*", "args": [0.26, "t"] }] }] }
+                    ]
+                  },
+                  "solar_intensity"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              0.2,
+              {
+                "op": "-", "args": [
+                  {
+                    "op": "+", "args": [
+                      "base_temp",
+                      { "op": "*", "args": ["temp_amplitude", { "op": "cos", "args": [{ "op": "*", "args": [0.26, { "op": "+", "args": ["t", 6] }] }] }] }
+                    ]
+                  },
+                  "temperature"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["wind_speed"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              0.05,
+              { "op": "*", "args": ["wind_variability", { "op": "sin", "args": [{ "op": "*", "args": [0.1, "t"] }] }] }
+            ]
+          }
+        },
+        {
+          "lhs": "temperature_factor",
+          "rhs": { "op": "exp", "args": [{ "op": "/", "args": [{ "op": "-", "args": ["temperature", 25] }, 15] }] }
+        }
+      ]
+    }
+  },
+
+  "events": [
+    {
+      "name": "pollution_event_impact",
+      "type": "continuous",
+      "condition": { "op": "-", "args": [{ "scoped_ref": "AtmosphericChemistry.O3" }, 80.0] },
+      "affects": [
+        {
+          "system": "BiologicalSystem",
+          "variable": "damage_rate",
+          "value": { "op": "*", "args": [{ "op": "Pre", "args": ["BiologicalSystem.damage_rate"] }, 2.0] }
+        },
+        {
+          "system": "AtmosphericChemistry",
+          "variable": "emission_rate_NO2",
+          "value": { "op": "*", "args": [{ "op": "Pre", "args": ["AtmosphericChemistry.emission_rate_NO2"] }, 0.8] }
+        }
+      ],
+      "affect_neg": [
+        {
+          "system": "BiologicalSystem",
+          "variable": "damage_rate",
+          "value": { "op": "*", "args": [{ "op": "Pre", "args": ["BiologicalSystem.damage_rate"] }, 0.5] }
+        }
+      ],
+      "root_find": true,
+      "description": "High ozone levels trigger increased plant damage and emission controls"
+    },
+    {
+      "name": "weather_driven_emissions",
+      "type": "discrete",
+      "trigger": {
+        "type": "condition",
+        "condition": {
+          "op": "and", "args": [
+            { "op": ">", "args": [{ "scoped_ref": "MeteorologicalSystem.temperature" }, 30.0] },
+            { "op": "<", "args": [{ "scoped_ref": "MeteorologicalSystem.wind_speed" }, 2.0] }
+          ]
+        }
+      },
+      "affects": [
+        {
+          "system": "AtmosphericChemistry",
+          "variable": "emission_rate_VOC",
+          "value": { "op": "*", "args": [{ "scoped_ref": "AtmosphericChemistry.emission_rate_VOC" }, 1.5] }
+        }
+      ],
+      "description": "Hot, stagnant conditions increase biogenic VOC emissions"
+    },
+    {
+      "name": "ecosystem_stress_feedback",
+      "type": "discrete",
+      "trigger": {
+        "type": "condition",
+        "condition": { "op": ">", "args": [{ "scoped_ref": "BiologicalSystem.stressed_biomass" }, 200.0] }
+      },
+      "affects": [
+        {
+          "system": "BiologicalSystem",
+          "variable": "growth_rate",
+          "value": { "op": "*", "args": [{ "scoped_ref": "BiologicalSystem.growth_rate" }, 0.7] }
+        },
+        {
+          "system": "AtmosphericChemistry",
+          "variable": "k_photo",
+          "value": { "op": "*", "args": [{ "scoped_ref": "AtmosphericChemistry.k_photo" }, 1.1] }
+        }
+      ],
+      "description": "Stressed vegetation reduces growth rate and slightly increases photolysis due to reduced canopy cover"
+    },
+    {
+      "name": "nighttime_chemistry_shutdown",
+      "type": "continuous",
+      "condition": { "op": "-", "args": [{ "scoped_ref": "MeteorologicalSystem.solar_intensity" }, 100.0] },
+      "affects": [],
+      "affect_neg": [
+        {
+          "system": "AtmosphericChemistry",
+          "variable": "k_photo",
+          "value": { "op": "*", "args": [{ "op": "Pre", "args": ["AtmosphericChemistry.k_photo"] }, 0.1] }
+        }
+      ],
+      "root_find": true,
+      "description": "Photochemistry rates drop dramatically at night"
+    },
+    {
+      "name": "wind_dispersion_event",
+      "type": "discrete",
+      "trigger": {
+        "type": "condition",
+        "condition": { "op": ">", "args": [{ "scoped_ref": "MeteorologicalSystem.wind_speed" }, 8.0] }
+      },
+      "affects": [
+        {
+          "system": "AtmosphericChemistry",
+          "variable": "O3",
+          "value": { "op": "*", "args": [{ "scoped_ref": "AtmosphericChemistry.O3" }, 0.8] }
+        },
+        {
+          "system": "AtmosphericChemistry",
+          "variable": "NO2",
+          "value": { "op": "*", "args": [{ "scoped_ref": "AtmosphericChemistry.NO2" }, 0.7] }
+        },
+        {
+          "system": "AtmosphericChemistry",
+          "variable": "VOC",
+          "value": { "op": "*", "args": [{ "scoped_ref": "AtmosphericChemistry.VOC" }, 0.6] }
+        }
+      ],
+      "description": "High winds disperse pollutants and reduce concentrations"
+    },
+    {
+      "name": "seasonal_adaptation",
+      "type": "discrete",
+      "trigger": {
+        "type": "periodic",
+        "interval": 2160.0,
+        "offset": 0.0
+      },
+      "affects": [
+        {
+          "system": "BiologicalSystem",
+          "variable": "stress_threshold",
+          "value": {
+            "op": "+", "args": [
+              { "op": "Pre", "args": ["BiologicalSystem.stress_threshold"] },
+              { "op": "*", "args": [5.0, { "op": "cos", "args": [{ "op": "/", "args": ["t", 8640.0] }] }] }
+            ]
+          }
+        }
+      ],
+      "condition": { "op": ">", "args": ["t", 720.0] },
+      "description": "Seasonal adaptation of plant stress tolerance"
+    }
+  ],
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["AtmosphericChemistry", "BiologicalSystem"]
+    },
+    {
+      "type": "operator_compose",
+      "systems": ["MeteorologicalSystem"]
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-08T00:00:00Z",
+      "timestep": 1.0
+    },
+    "spatial": {
+      "x": { "min": 0.0, "max": 100.0, "grid_spacing": 10.0, "units": "km" },
+      "y": { "min": 0.0, "max": 100.0, "grid_spacing": 10.0, "units": "km" }
+    },
+    "initial_conditions": { "type": "default" },
+    "boundary_conditions": [
+      { "type": "periodic", "dimensions": ["x", "y"] }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "coupled_systems",
+    "config": {
+      "base_algorithm": "Tsit5",
+      "event_detection": "root_finding",
+      "event_tolerance": 1e-10,
+      "adaptive": true,
+      "coupling_method": "operator_splitting"
+    }
+  }
+}
