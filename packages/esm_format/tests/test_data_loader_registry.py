@@ -316,12 +316,12 @@ class TestGlobalRegistryFunctions:
         """Test global register_loader function."""
         initial_count = len(get_registry().list_registered_loaders())
 
-        register_loader(DataLoaderType.BINARY, MockLoader, extensions=['.bin'])
+        register_loader(DataLoaderType.CSV, MockLoader, extensions=['.csv'])
 
         # Check that loader was registered
         registry = get_registry()
         registered = registry.list_registered_loaders()
-        assert DataLoaderType.BINARY in registered
+        assert DataLoaderType.CSV in registered
         assert len(registered) == initial_count + 1
 
         # Clean up
@@ -406,14 +406,14 @@ class TestRegistryIntegration:
 
         # This should override the built-in JSON loader for .json files
         registry.register_loader(
-            DataLoaderType.BINARY,  # Use a different type
+            DataLoaderType.CSV,  # Use a different type
             CustomJSONLoader,
             extensions=['.json']  # Override .json
         )
 
-        # The .json extension should now map to BINARY type
+        # The .json extension should now map to CSV type
         detected_type = registry.detect_loader_type('test.json')
-        assert detected_type == DataLoaderType.BINARY
+        assert detected_type == DataLoaderType.CSV
 
         # Clean up
-        registry.unregister_loader(DataLoaderType.BINARY)
+        registry.unregister_loader(DataLoaderType.CSV)

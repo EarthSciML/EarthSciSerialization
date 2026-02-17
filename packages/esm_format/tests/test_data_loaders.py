@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 
 # Import the data loading functionality
-from esm_format.data_loaders import NetCDFLoader, JSONLoader, HDF5Loader, GRIBLoader, StreamingLoader, create_data_loader
+from esm_format.data_loaders import NetCDFLoader, JSONLoader, BinaryLoader, HDF5Loader, GRIBLoader, StreamingLoader, create_data_loader
 from esm_format.types import DataLoader, DataLoaderType
 
 # Try to import xarray for creating test data
@@ -274,12 +274,11 @@ class TestDataLoaderFactory:
 
     def test_create_unsupported_loader(self):
         """Test creating unsupported data loader type."""
-        # Since HDF5 is now implemented, we need to test with a truly unsupported type
-        # We'll use BINARY type which is defined but not implemented
+        # Test with CSV type which is defined but not implemented
         config = DataLoader(
             name="test",
-            type=DataLoaderType.BINARY,  # Not implemented yet
-            source="test.bin"
+            type=DataLoaderType.CSV,  # Not implemented yet
+            source="test.csv"
         )
 
         with pytest.raises(ValueError, match="is not registered"):
@@ -1647,3 +1646,476 @@ class TestStreamingLoaderFactory:
         # Should not raise "not supported" error
         loader = create_data_loader(config)
         assert isinstance(loader, StreamingLoader)
+
+
+# ========================================
+# Binary Loader Tests
+# ========================================
+
+@pytest.fixture
+def sample_binary_file():
+    """Create a sample binary file for testing."""
+    with tempfile.NamedTemporaryFile(suffix='.bin', delete=False) as f:
+        # Create a simple binary file with known structure:
+        # - Header (8 bytes): magic number (4) + version (4)
+        # - Record 1: int32 (4), float32 (4), char[4] (4)
+        # - Record 2: int32 (4), float32 (4), char[4] (4)
+
+        # Header
+        f.write(b'TESTBIN1')  # magic + version
+
+        # Record 1
+        f.write((42).to_bytes(4, 'little'))  # int32
+        f.write(bytes([0x00, 0x00, 0x20, 0x41]))  # 10.0 as float32 little-endian
+        f.write(b'TEST')  # char[4]
+
+        # Record 2
+        f.write((100).to_bytes(4, 'little'))  # int32
+        f.write(bytes([0x00, 0x00, 0xA0, 0x41]))  # 20.0 as float32 little-endian
+        f.write(b'DATA')  # char[4]
+
+        return Path(f.name)
+
+
+@pytest.fixture
+def sample_mixed_binary_file():
+    """Create a binary file with mixed data types."""
+    with tempfile.NamedTemporaryFile(suffix='.dat', delete=False) as f:
+        import struct
+
+        # Write data in parts to avoid struct format issues
+        # Use 0x1234 instead of 0xFFFF to test endianness properly
+        f.write(struct.pack('<H', 0x1234))        # uint16 = 4660
+        f.write(struct.pack('<i', -12345))        # int32
+        f.write(struct.pack('<d', 3.14159))       # float64
+        f.write(struct.pack('<?', True))          # bool
+        f.write(struct.pack('<BBBB', 1, 2, 3, 4)) # uint8[4]
+
+        return Path(f.name)
+
+
+class TestBinaryLoader:
+    """Test BinaryLoader class."""
+
+    def test_binary_loader_initialization(self):
+        """Test BinaryLoader initialization."""
+        config = DataLoader(
+            name="test_binary",
+            type=DataLoaderType.BINARY,
+            source="test.bin"
+        )
+
+        loader = BinaryLoader(config)
+        assert loader.config == config
+        assert loader.endianness == 'native'
+        assert loader.header_size == 0
+        assert loader.data is None
+        assert loader.raw_data is None
+
+    def test_binary_loader_wrong_type(self):
+        """Test BinaryLoader with wrong data type."""
+        config = DataLoader(
+            name="test_wrong_type",
+            type=DataLoaderType.JSON,
+            source="test.bin"
+        )
+
+        with pytest.raises(ValueError, match="Expected DataLoaderType.BINARY"):
+            BinaryLoader(config)
+
+    def test_binary_loader_invalid_endianness(self):
+        """Test BinaryLoader with invalid endianness."""
+        config = DataLoader(
+            name="test_invalid_endian",
+            type=DataLoaderType.BINARY,
+            source="test.bin",
+            format_options={'endianness': 'invalid'}
+        )
+
+        with pytest.raises(ValueError, match="Invalid endianness"):
+            BinaryLoader(config)
+
+    def test_load_nonexistent_file(self):
+        """Test loading from nonexistent file."""
+        config = DataLoader(
+            name="test_nonexistent",
+            type=DataLoaderType.BINARY,
+            source="nonexistent.bin"
+        )
+
+        loader = BinaryLoader(config)
+        with pytest.raises(FileNotFoundError):
+            loader.load()
+
+    def test_load_with_struct_format(self, sample_binary_file):
+        """Test loading with struct format."""
+        config = DataLoader(
+            name="test_struct",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file),
+            format_options={
+                'header_size': 8,
+                'struct_format': 'ifc',  # int32, float32, char
+                'field_names': ['id', 'value', 'name'],
+                'endianness': 'little',
+                'record_size': 12
+            }
+        )
+
+        loader = BinaryLoader(config)
+        data = loader.load()
+
+        assert 'records' in data
+        assert len(data['records']) == 2
+
+        # Check first record
+        record1 = data['records'][0]
+        assert record1['id'] == 42
+        assert abs(record1['value'] - 10.0) < 0.001
+        assert record1['name'] == b'T'  # First char only due to 'c' format
+
+        # Check second record
+        record2 = data['records'][1]
+        assert record2['id'] == 100
+        assert abs(record2['value'] - 20.0) < 0.001
+
+    def test_load_with_data_types(self, sample_mixed_binary_file):
+        """Test loading with data types specification."""
+        config = DataLoader(
+            name="test_data_types",
+            type=DataLoaderType.BINARY,
+            source=str(sample_mixed_binary_file),
+            format_options={
+                'endianness': 'little',
+                'data_types': {
+                    'id': 'uint16',
+                    'count': 'int32',
+                    'pi': 'float64',
+                    'flag': 'bool',
+                    'bytes': ['uint8', 4]
+                }
+            }
+        )
+
+        loader = BinaryLoader(config)
+        data = loader.load()
+
+        assert data['id'] == 0x1234  # 4660 in decimal
+        assert data['count'] == -12345
+        assert abs(data['pi'] - 3.14159) < 0.0001
+        assert data['flag'] is True
+        assert data['bytes'] == [1, 2, 3, 4]
+
+    def test_load_with_custom_format(self, sample_mixed_binary_file):
+        """Test loading with custom format specification."""
+        config = DataLoader(
+            name="test_custom",
+            type=DataLoaderType.BINARY,
+            source=str(sample_mixed_binary_file),
+            format_options={
+                'endianness': 'little',
+                'custom_format': {
+                    'header': {'type': 'uint16', 'count': 1},
+                    'value': {'type': 'int32', 'count': 1, 'offset': 2},
+                    'precision': {'type': 'float64', 'count': 1, 'offset': 6},
+                    'enabled': {'type': 'bool', 'count': 1, 'offset': 14}
+                }
+            }
+        )
+
+        loader = BinaryLoader(config)
+        data = loader.load()
+
+        assert data['header'] == 0x1234
+        assert data['value'] == -12345
+        assert abs(data['precision'] - 3.14159) < 0.0001
+        assert data['enabled'] is True
+
+    def test_load_raw_bytes(self, sample_binary_file):
+        """Test loading as raw bytes when no format specified."""
+        config = DataLoader(
+            name="test_raw",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file)
+        )
+
+        loader = BinaryLoader(config)
+        data = loader.load()
+
+        assert 'raw_data' in data
+        assert isinstance(data['raw_data'], list)
+        assert len(data['raw_data']) == 32  # 8 header + 24 data bytes
+
+    def test_load_with_variable_filtering(self, sample_mixed_binary_file):
+        """Test loading with variable filtering."""
+        config = DataLoader(
+            name="test_filtering",
+            type=DataLoaderType.BINARY,
+            source=str(sample_mixed_binary_file),
+            format_options={
+                'endianness': 'little',
+                'data_types': {
+                    'id': 'uint16',
+                    'count': 'int32',
+                    'pi': 'float64',
+                    'flag': 'bool'
+                }
+            },
+            variables=['id', 'pi']
+        )
+
+        loader = BinaryLoader(config)
+        data = loader.load()
+
+        assert len(data) == 2
+        assert 'id' in data
+        assert 'pi' in data
+        assert 'count' not in data
+        assert 'flag' not in data
+
+        assert data['id'] == 0x1234  # 4660 in decimal
+        assert abs(data['pi'] - 3.14159) < 0.0001
+
+    def test_load_with_missing_variables(self, sample_binary_file):
+        """Test loading with missing variables raises error."""
+        config = DataLoader(
+            name="test_missing_vars",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file),
+            variables=['nonexistent', 'also_missing']
+        )
+
+        loader = BinaryLoader(config)
+        with pytest.raises(ValueError, match="Requested variables not found"):
+            loader.load()
+
+    def test_get_file_info(self, sample_binary_file):
+        """Test getting file information."""
+        config = DataLoader(
+            name="test_info",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file),
+            format_options={
+                'header_size': 8,
+                'record_size': 12,
+                'data_types': {
+                    'test': 'int32'
+                }
+            }
+        )
+
+        loader = BinaryLoader(config)
+        loader.load()
+
+        info = loader.get_file_info()
+
+        assert info['file_size_bytes'] == 32
+        assert info['header_size'] == 8
+        assert info['data_size_bytes'] == 24
+        assert info['record_size'] == 12
+        assert info['estimated_record_count'] == 2
+        assert info['format_type'] == 'data_types'
+
+    def test_validate_format(self, sample_binary_file):
+        """Test format validation."""
+        config = DataLoader(
+            name="test_validate",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file),
+            format_options={
+                'header_size': 8,
+                'struct_format': 'if4s',  # int, float, 4-byte string
+                'field_names': ['id', 'value', 'name']
+            }
+        )
+
+        loader = BinaryLoader(config)
+        loader.load()
+
+        validation = loader.validate_format()
+
+        assert validation['valid'] is True
+        assert len(validation['errors']) == 0
+        assert 'struct_size' in validation['format_info']
+
+    def test_read_header(self, sample_binary_file):
+        """Test reading header."""
+        config = DataLoader(
+            name="test_header",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file),
+            format_options={'header_size': 8}
+        )
+
+        loader = BinaryLoader(config)
+        loader.load()
+
+        header = loader.read_header()
+        assert header == b'TESTBIN1'
+
+    def test_read_raw_data(self, sample_binary_file):
+        """Test reading raw data."""
+        config = DataLoader(
+            name="test_raw_read",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file),
+            format_options={'header_size': 8}
+        )
+
+        loader = BinaryLoader(config)
+        loader.load()
+
+        # Read first 4 bytes of data (should be first int32)
+        raw_data = loader.read_raw_data(offset=0, length=4)
+        assert len(raw_data) == 4
+        assert int.from_bytes(raw_data, 'little') == 42
+
+    def test_export_to_numpy(self, sample_mixed_binary_file):
+        """Test exporting to NumPy arrays."""
+        config = DataLoader(
+            name="test_numpy",
+            type=DataLoaderType.BINARY,
+            source=str(sample_mixed_binary_file),
+            format_options={
+                'endianness': 'little',
+                'data_types': {
+                    'values': ['int32', 2]  # Array of 2 int32s (but our file only has 1)
+                }
+            }
+        )
+
+        loader = BinaryLoader(config)
+        try:
+            data = loader.load()
+            numpy_data = loader.export_to_numpy()
+
+            # Check that arrays are converted to numpy
+            assert hasattr(numpy_data['values'], 'shape')  # NumPy array
+
+        except ValueError:
+            # Expected if we try to read more data than available
+            pass
+
+    def test_operations_before_loading(self):
+        """Test operations that require loading first."""
+        config = DataLoader(
+            name="test_before_load",
+            type=DataLoaderType.BINARY,
+            source="test.bin"
+        )
+
+        loader = BinaryLoader(config)
+
+        with pytest.raises(RuntimeError, match="must be loaded"):
+            loader.get_file_info()
+
+        with pytest.raises(RuntimeError, match="must be loaded"):
+            loader.validate_format()
+
+        with pytest.raises(RuntimeError, match="must be loaded"):
+            loader.read_header()
+
+        with pytest.raises(RuntimeError, match="must be loaded"):
+            loader.read_raw_data()
+
+        with pytest.raises(RuntimeError, match="must be loaded"):
+            loader.export_to_numpy()
+
+    def test_close_loader(self, sample_binary_file):
+        """Test closing the loader."""
+        config = DataLoader(
+            name="test_close",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file)
+        )
+
+        loader = BinaryLoader(config)
+        loader.load()
+
+        assert loader.data is not None
+        assert loader.raw_data is not None
+
+        loader.close()
+
+        assert loader.data is None
+        assert loader.raw_data is None
+
+    def test_unsupported_data_type(self, sample_binary_file):
+        """Test unsupported data type raises error."""
+        config = DataLoader(
+            name="test_unsupported",
+            type=DataLoaderType.BINARY,
+            source=str(sample_binary_file),
+            format_options={
+                'data_types': {
+                    'bad_field': 'unsupported_type'
+                }
+            }
+        )
+
+        loader = BinaryLoader(config)
+        with pytest.raises(ValueError, match="Unsupported type"):
+            loader.load()
+
+    def test_endianness_variations(self, sample_mixed_binary_file):
+        """Test different endianness settings."""
+        # Test with little endian (matches our file format)
+        config_little = DataLoader(
+            name="test_little_endian",
+            type=DataLoaderType.BINARY,
+            source=str(sample_mixed_binary_file),
+            format_options={
+                'endianness': 'little',
+                'data_types': {'value': 'uint16'}
+            }
+        )
+
+        loader_little = BinaryLoader(config_little)
+        data_little = loader_little.load()
+
+        # Test with big endian (will interpret same bytes differently)
+        config_big = DataLoader(
+            name="test_big_endian",
+            type=DataLoaderType.BINARY,
+            source=str(sample_mixed_binary_file),
+            format_options={
+                'endianness': 'big',
+                'data_types': {'value': 'uint16'}
+            }
+        )
+
+        loader_big = BinaryLoader(config_big)
+        data_big = loader_big.load()
+
+        # Values will be different due to endianness
+        # 0x1234 in little endian vs 0x3412 in big endian
+        assert data_little['value'] == 0x1234  # This should match little endian (4660)
+        assert data_big['value'] == 0x3412     # This should be big endian interpretation (13330)
+
+
+class TestBinaryLoaderFactory:
+    """Test factory function with BinaryLoader."""
+
+    def test_create_binary_loader(self):
+        """Test factory creates BinaryLoader correctly."""
+        config = DataLoader(
+            name="test_factory_binary",
+            type=DataLoaderType.BINARY,
+            source="test.bin"
+        )
+
+        loader = create_data_loader(config)
+        assert isinstance(loader, BinaryLoader)
+        assert loader.config == config
+
+    def test_factory_supports_binary(self):
+        """Test factory supports BINARY type."""
+        config = DataLoader(
+            name="test_factory_support",
+            type=DataLoaderType.BINARY,
+            source="test.dat"
+        )
+
+        # Should not raise "not supported" error
+        loader = create_data_loader(config)
+        assert isinstance(loader, BinaryLoader)
