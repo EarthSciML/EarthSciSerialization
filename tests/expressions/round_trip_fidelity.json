@@ -1,0 +1,485 @@
+[
+  {
+    "name": "Perfect round-trip preservation property",
+    "description": "Tests that verify load(save(load(expr))) === load(expr) as specified in libraries spec Section 7.3",
+    "tests": [
+      {
+        "description": "Simple expression round-trip identity",
+        "original_json": {"op": "+", "args": [2, 3]},
+        "first_load_result": {"op": "+", "args": [2.0, 3.0]},
+        "serialized_json": {"op": "+", "args": [2.0, 3.0]},
+        "second_load_result": {"op": "+", "args": [2.0, 3.0]},
+        "round_trip_identical": true,
+        "notes": "Numbers should normalize to float representation"
+      },
+      {
+        "description": "Variable name preservation",
+        "original_json": "CO2_emission_rate",
+        "first_load_result": "CO2_emission_rate",
+        "serialized_json": "CO2_emission_rate",
+        "second_load_result": "CO2_emission_rate",
+        "round_trip_identical": true,
+        "notes": "String variables must preserve exactly"
+      },
+      {
+        "description": "Complex nested expression fidelity",
+        "original_json": {
+          "op": "*",
+          "args": [
+            1.8e-12,
+            {"op": "exp", "args": [{"op": "/", "args": [-1370, "T"]}]},
+            "M",
+            "NO",
+            "O3"
+          ]
+        },
+        "first_load_result": {
+          "op": "*",
+          "args": [
+            1.8e-12,
+            {"op": "exp", "args": [{"op": "/", "args": [-1370.0, "T"]}]},
+            "M",
+            "NO",
+            "O3"
+          ]
+        },
+        "serialized_json": {
+          "op": "*",
+          "args": [
+            1.8e-12,
+            {"op": "exp", "args": [{"op": "/", "args": [-1370.0, "T"]}]},
+            "M",
+            "NO",
+            "O3"
+          ]
+        },
+        "second_load_result": {
+          "op": "*",
+          "args": [
+            1.8e-12,
+            {"op": "exp", "args": [{"op": "/", "args": [-1370.0, "T"]}]},
+            "M",
+            "NO",
+            "O3"
+          ]
+        },
+        "round_trip_identical": true,
+        "notes": "Scientific notation and mixed types must be preserved"
+      },
+      {
+        "description": "Derivative with wrt field preservation",
+        "original_json": {
+          "op": "D",
+          "args": ["O3"],
+          "wrt": "t"
+        },
+        "first_load_result": {
+          "op": "D",
+          "args": ["O3"],
+          "wrt": "t"
+        },
+        "serialized_json": {
+          "op": "D",
+          "args": ["O3"],
+          "wrt": "t"
+        },
+        "second_load_result": {
+          "op": "D",
+          "args": ["O3"],
+          "wrt": "t"
+        },
+        "round_trip_identical": true,
+        "notes": "Optional fields like wrt must be preserved exactly"
+      },
+      {
+        "description": "Gradient with dim field preservation",
+        "original_json": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "first_load_result": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "serialized_json": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "second_load_result": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "round_trip_identical": true,
+        "notes": "Spatial derivative dim field must preserve exactly"
+      }
+    ]
+  },
+  {
+    "name": "Precision preservation edge cases",
+    "description": "Round-trip tests for numeric precision boundaries",
+    "tests": [
+      {
+        "description": "High-precision decimal preservation",
+        "original_json": 3.1415926535897932384626433832795,
+        "first_load_result": 3.1415926535897932384626433832795,
+        "serialized_json": 3.1415926535897932384626433832795,
+        "second_load_result": 3.1415926535897932384626433832795,
+        "round_trip_identical": true,
+        "notes": "Full precision must be maintained within language float limits"
+      },
+      {
+        "description": "Very small number preservation",
+        "original_json": 1.23456789e-100,
+        "first_load_result": 1.23456789e-100,
+        "serialized_json": 1.23456789e-100,
+        "second_load_result": 1.23456789e-100,
+        "round_trip_identical": true,
+        "notes": "Scientific notation with extreme exponents"
+      },
+      {
+        "description": "Very large number preservation",
+        "original_json": 9.87654321e+99,
+        "first_load_result": 9.87654321e+99,
+        "serialized_json": 9.87654321e+99,
+        "second_load_result": 9.87654321e+99,
+        "round_trip_identical": true,
+        "notes": "Large numbers in scientific notation"
+      },
+      {
+        "description": "Negative zero normalization",
+        "original_json": -0.0,
+        "first_load_result": 0.0,
+        "serialized_json": 0.0,
+        "second_load_result": 0.0,
+        "round_trip_identical": true,
+        "notes": "Negative zero should normalize to positive zero"
+      }
+    ]
+  },
+  {
+    "name": "Unicode and special character preservation",
+    "description": "Round-trip fidelity for complex variable names",
+    "tests": [
+      {
+        "description": "Greek letters preservation",
+        "original_json": {
+          "op": "*",
+          "args": ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ"]
+        },
+        "first_load_result": {
+          "op": "*",
+          "args": ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ"]
+        },
+        "serialized_json": {
+          "op": "*",
+          "args": ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ"]
+        },
+        "second_load_result": {
+          "op": "*",
+          "args": ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ"]
+        },
+        "round_trip_identical": true,
+        "notes": "All Greek letters must preserve exactly"
+      },
+      {
+        "description": "Subscript and superscript preservation",
+        "original_json": {
+          "op": "+",
+          "args": ["x₁", "y₂", "z₃", "a¹", "b²", "c³"]
+        },
+        "first_load_result": {
+          "op": "+",
+          "args": ["x₁", "y₂", "z₃", "a¹", "b²", "c³"]
+        },
+        "serialized_json": {
+          "op": "+",
+          "args": ["x₁", "y₂", "z₃", "a¹", "b²", "c³"]
+        },
+        "second_load_result": {
+          "op": "+",
+          "args": ["x₁", "y₂", "z₃", "a¹", "b²", "c³"]
+        },
+        "round_trip_identical": true,
+        "notes": "Unicode subscripts and superscripts"
+      },
+      {
+        "description": "Mixed Unicode classes preservation",
+        "original_json": "Temperature_θ₁_Δx",
+        "first_load_result": "Temperature_θ₁_Δx",
+        "serialized_json": "Temperature_θ₁_Δx",
+        "second_load_result": "Temperature_θ₁_Δx",
+        "round_trip_identical": true,
+        "notes": "Complex mixed Unicode variable names"
+      },
+      {
+        "description": "Chemical formula preservation",
+        "original_json": {
+          "op": "*",
+          "args": ["CH₄", "NH₃", "H₂SO₄", "Ca(OH)₂", "C₆H₁₂O₆"]
+        },
+        "first_load_result": {
+          "op": "*",
+          "args": ["CH₄", "NH₃", "H₂SO₄", "Ca(OH)₂", "C₆H₁₂O₆"]
+        },
+        "serialized_json": {
+          "op": "*",
+          "args": ["CH₄", "NH₃", "H₂SO₄", "Ca(OH)₂", "C₆H₁₂O₆"]
+        },
+        "second_load_result": {
+          "op": "*",
+          "args": ["CH₄", "NH₃", "H₂SO₄", "Ca(OH)₂", "C₆H₁₂O₆"]
+        },
+        "round_trip_identical": true,
+        "notes": "Complex chemical formulas with parentheses and subscripts"
+      }
+    ]
+  },
+  {
+    "name": "Structural preservation tests",
+    "description": "Round-trip tests for complex nested structures",
+    "tests": [
+      {
+        "description": "Deep nested expression structure",
+        "original_json": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": "&&",
+              "args": [
+                {"op": ">", "args": [{"op": "abs", "args": ["x"]}, 1e-10]},
+                {"op": "<", "args": [{"op": "^", "args": ["y", 2]}, 1000]}
+              ]
+            },
+            {
+              "op": "D",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["E"]}, "kT"]}]},
+                    {"op": "sqrt", "args": [{"op": "*", "args": ["M", "T"]}]},
+                    "σ",
+                    "n"
+                  ]
+                }
+              ],
+              "wrt": "t"
+            },
+            {"op": "Pre", "args": ["default_value"]}
+          ]
+        },
+        "first_load_result": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": "&&",
+              "args": [
+                {"op": ">", "args": [{"op": "abs", "args": ["x"]}, 1e-10]},
+                {"op": "<", "args": [{"op": "^", "args": ["y", 2.0]}, 1000.0]}
+              ]
+            },
+            {
+              "op": "D",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["E"]}, "kT"]}]},
+                    {"op": "sqrt", "args": [{"op": "*", "args": ["M", "T"]}]},
+                    "σ",
+                    "n"
+                  ]
+                }
+              ],
+              "wrt": "t"
+            },
+            {"op": "Pre", "args": ["default_value"]}
+          ]
+        },
+        "serialized_json": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": "&&",
+              "args": [
+                {"op": ">", "args": [{"op": "abs", "args": ["x"]}, 1e-10]},
+                {"op": "<", "args": [{"op": "^", "args": ["y", 2.0]}, 1000.0]}
+              ]
+            },
+            {
+              "op": "D",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["E"]}, "kT"]}]},
+                    {"op": "sqrt", "args": [{"op": "*", "args": ["M", "T"]}]},
+                    "σ",
+                    "n"
+                  ]
+                }
+              ],
+              "wrt": "t"
+            },
+            {"op": "Pre", "args": ["default_value"]}
+          ]
+        },
+        "second_load_result": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": "&&",
+              "args": [
+                {"op": ">", "args": [{"op": "abs", "args": ["x"]}, 1e-10]},
+                {"op": "<", "args": [{"op": "^", "args": ["y", 2.0]}, 1000.0]}
+              ]
+            },
+            {
+              "op": "D",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["E"]}, "kT"]}]},
+                    {"op": "sqrt", "args": [{"op": "*", "args": ["M", "T"]}]},
+                    "σ",
+                    "n"
+                  ]
+                }
+              ],
+              "wrt": "t"
+            },
+            {"op": "Pre", "args": ["default_value"]}
+          ]
+        },
+        "round_trip_identical": true,
+        "notes": "Complex nested structure with all element types must preserve exactly"
+      },
+      {
+        "description": "Wide expression with many arguments",
+        "original_json": {
+          "op": "+",
+          "args": [
+            "term1", "term2", "term3", "term4", "term5",
+            {"op": "*", "args": ["k1", "x1"]},
+            {"op": "*", "args": ["k2", "x2"]},
+            {"op": "*", "args": ["k3", "x3"]},
+            {"op": "*", "args": ["k4", "x4"]},
+            {"op": "*", "args": ["k5", "x5"]},
+            {"op": "exp", "args": ["E1"]},
+            {"op": "exp", "args": ["E2"]},
+            {"op": "sin", "args": ["phase1"]},
+            {"op": "cos", "args": ["phase2"]}
+          ]
+        },
+        "first_load_result": {
+          "op": "+",
+          "args": [
+            "term1", "term2", "term3", "term4", "term5",
+            {"op": "*", "args": ["k1", "x1"]},
+            {"op": "*", "args": ["k2", "x2"]},
+            {"op": "*", "args": ["k3", "x3"]},
+            {"op": "*", "args": ["k4", "x4"]},
+            {"op": "*", "args": ["k5", "x5"]},
+            {"op": "exp", "args": ["E1"]},
+            {"op": "exp", "args": ["E2"]},
+            {"op": "sin", "args": ["phase1"]},
+            {"op": "cos", "args": ["phase2"]}
+          ]
+        },
+        "serialized_json": {
+          "op": "+",
+          "args": [
+            "term1", "term2", "term3", "term4", "term5",
+            {"op": "*", "args": ["k1", "x1"]},
+            {"op": "*", "args": ["k2", "x2"]},
+            {"op": "*", "args": ["k3", "x3"]},
+            {"op": "*", "args": ["k4", "x4"]},
+            {"op": "*", "args": ["k5", "x5"]},
+            {"op": "exp", "args": ["E1"]},
+            {"op": "exp", "args": ["E2"]},
+            {"op": "sin", "args": ["phase1"]},
+            {"op": "cos", "args": ["phase2"]}
+          ]
+        },
+        "second_load_result": {
+          "op": "+",
+          "args": [
+            "term1", "term2", "term3", "term4", "term5",
+            {"op": "*", "args": ["k1", "x1"]},
+            {"op": "*", "args": ["k2", "x2"]},
+            {"op": "*", "args": ["k3", "x3"]},
+            {"op": "*", "args": ["k4", "x4"]},
+            {"op": "*", "args": ["k5", "x5"]},
+            {"op": "exp", "args": ["E1"]},
+            {"op": "exp", "args": ["E2"]},
+            {"op": "sin", "args": ["phase1"]},
+            {"op": "cos", "args": ["phase2"]}
+          ]
+        },
+        "round_trip_identical": true,
+        "notes": "Wide expressions with many terms must preserve order and content exactly"
+      }
+    ]
+  },
+  {
+    "name": "Field ordering and optional field preservation",
+    "description": "Tests for proper handling of JSON field ordering and optional fields",
+    "tests": [
+      {
+        "description": "Optional fields presence preservation",
+        "original_json": {
+          "op": "D",
+          "wrt": "t",
+          "args": [{"op": "*", "args": ["k", "concentration"]}]
+        },
+        "first_load_result": {
+          "op": "D",
+          "args": [{"op": "*", "args": ["k", "concentration"]}],
+          "wrt": "t"
+        },
+        "serialized_json": {
+          "op": "D",
+          "args": [{"op": "*", "args": ["k", "concentration"]}],
+          "wrt": "t"
+        },
+        "second_load_result": {
+          "op": "D",
+          "args": [{"op": "*", "args": ["k", "concentration"]}],
+          "wrt": "t"
+        },
+        "round_trip_identical": true,
+        "notes": "Field ordering may change, but content must be preserved"
+      },
+      {
+        "description": "Mixed optional fields preservation",
+        "original_json": {
+          "args": ["Temperature"],
+          "dim": "x",
+          "op": "grad"
+        },
+        "first_load_result": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "serialized_json": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "second_load_result": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "round_trip_identical": true,
+        "notes": "All fields present, ordering normalized"
+      }
+    ]
+  }
+]
