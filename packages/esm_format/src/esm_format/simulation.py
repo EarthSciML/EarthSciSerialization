@@ -22,7 +22,8 @@ from dataclasses import dataclass
 
 from .types import (
     Model, ModelVariable, ReactionSystem, Reaction, Species, Parameter,
-    ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile
+    ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile,
+    AffectEquation, FunctionalAffect
 )
 from .reactions import derive_odes, stoichiometric_matrix
 from .expression import to_sympy
@@ -175,6 +176,30 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
             if len(sympy_args) != 1:
                 raise SimulationError(f"Cosine requires exactly 1 argument, got {len(sympy_args)}")
             return sp.cos(sympy_args[0])
+        elif expr.op == '>':
+            if len(sympy_args) != 2:
+                raise SimulationError(f"Greater than requires exactly 2 arguments, got {len(sympy_args)}")
+            return sp.StrictGreaterThan(sympy_args[0], sympy_args[1])
+        elif expr.op == '<':
+            if len(sympy_args) != 2:
+                raise SimulationError(f"Less than requires exactly 2 arguments, got {len(sympy_args)}")
+            return sp.StrictLessThan(sympy_args[0], sympy_args[1])
+        elif expr.op == '>=':
+            if len(sympy_args) != 2:
+                raise SimulationError(f"Greater than or equal requires exactly 2 arguments, got {len(sympy_args)}")
+            return sp.GreaterThan(sympy_args[0], sympy_args[1])
+        elif expr.op == '<=':
+            if len(sympy_args) != 2:
+                raise SimulationError(f"Less than or equal requires exactly 2 arguments, got {len(sympy_args)}")
+            return sp.LessThan(sympy_args[0], sympy_args[1])
+        elif expr.op == '==':
+            if len(sympy_args) != 2:
+                raise SimulationError(f"Equality requires exactly 2 arguments, got {len(sympy_args)}")
+            return sp.Eq(sympy_args[0], sympy_args[1])
+        elif expr.op == '!=':
+            if len(sympy_args) != 2:
+                raise SimulationError(f"Inequality requires exactly 2 arguments, got {len(sympy_args)}")
+            return sp.Ne(sympy_args[0], sympy_args[1])
         else:
             raise SimulationError(f"Unsupported operation: {expr.op}")
     else:
@@ -261,6 +286,139 @@ def _create_event_functions(events: List[ContinuousEvent], symbol_map: Dict[str,
         event_functions.append(event_function)
 
     return event_functions
+
+
+def _apply_discrete_event_effects(
+    event: DiscreteEvent,
+    y: np.ndarray,
+    species_names: List[str],
+    symbol_map: Dict[str, sp.Symbol]
+) -> np.ndarray:
+    """
+    Apply discrete event effects to the current state.
+
+    Args:
+        event: Discrete event to apply
+        y: Current state vector
+        species_names: List of species names corresponding to y
+        symbol_map: Mapping from variable names to SymPy symbols
+
+    Returns:
+        Updated state vector
+    """
+    y_modified = y.copy()
+    species_indices = {name: i for i, name in enumerate(species_names)}
+
+    for affect in event.affects:
+        if isinstance(affect, AffectEquation):
+            # Direct assignment: variable = expression
+            if affect.lhs in species_indices:
+                # Evaluate the expression
+                expr_value = _evaluate_expression_at_state(affect.rhs, y_modified, species_names, symbol_map)
+                y_modified[species_indices[affect.lhs]] = max(0.0, expr_value)  # Ensure non-negative
+
+        elif isinstance(affect, FunctionalAffect):
+            # Functional effect: apply function to target variable
+            if affect.target in species_indices:
+                target_idx = species_indices[affect.target]
+                current_value = y_modified[target_idx]
+
+                # Simple function implementations
+                if affect.function == 'multiply':
+                    if len(affect.arguments) >= 1:
+                        factor = float(affect.arguments[0])
+                        y_modified[target_idx] = max(0.0, current_value * factor)
+
+                elif affect.function == 'add':
+                    if len(affect.arguments) >= 1:
+                        increment = float(affect.arguments[0])
+                        y_modified[target_idx] = max(0.0, current_value + increment)
+
+                elif affect.function == 'set':
+                    if len(affect.arguments) >= 1:
+                        new_value = float(affect.arguments[0])
+                        y_modified[target_idx] = max(0.0, new_value)
+
+                elif affect.function == 'reset':
+                    y_modified[target_idx] = 0.0
+
+    return y_modified
+
+
+def _check_discrete_event_condition(
+    event: DiscreteEvent,
+    t: float,
+    y: np.ndarray,
+    species_names: List[str],
+    symbol_map: Dict[str, sp.Symbol]
+) -> bool:
+    """
+    Check if a condition-based discrete event should trigger.
+
+    Args:
+        event: Discrete event with condition trigger
+        t: Current time
+        y: Current state vector
+        species_names: List of species names corresponding to y
+        symbol_map: Mapping from variable names to SymPy symbols
+
+    Returns:
+        True if event should trigger, False otherwise
+    """
+    if event.trigger.type != 'condition':
+        return False
+
+    try:
+        # Evaluate the condition expression
+        condition_value = _evaluate_expression_at_state(event.trigger.value, y, species_names, symbol_map)
+        # Convert to boolean (non-zero is True)
+        return bool(condition_value)
+    except Exception:
+        # If condition evaluation fails, don't trigger
+        return False
+
+
+def _evaluate_expression_at_state(
+    expr: Expr,
+    y: np.ndarray,
+    species_names: List[str],
+    symbol_map: Dict[str, sp.Symbol]
+) -> float:
+    """
+    Evaluate an expression given the current state.
+
+    Args:
+        expr: Expression to evaluate
+        y: Current state vector
+        species_names: List of species names corresponding to y
+        symbol_map: Mapping from variable names to SymPy symbols
+
+    Returns:
+        Evaluated expression value
+    """
+    # Convert expression to SymPy
+    sympy_expr = _expr_to_sympy(expr, symbol_map.copy())
+
+    # Get variables in the expression
+    variables = list(sympy_expr.free_symbols)
+    var_names = [str(var) for var in variables]
+
+    # Create values dictionary
+    species_indices = {name: i for i, name in enumerate(species_names)}
+    var_values = []
+    for var_name in var_names:
+        if var_name in species_indices:
+            var_values.append(y[species_indices[var_name]])
+        else:
+            var_values.append(0.0)  # Default for unknown variables
+
+    # Lambdify and evaluate
+    if variables:
+        eval_func = sp.lambdify(variables, sympy_expr, 'numpy')
+        return float(eval_func(*var_values))
+    else:
+        # Constant expression
+        return float(sympy_expr)
 
 
 # Backward compatibility: provide old function signature as alias
@@ -579,10 +737,182 @@ def simulate_with_discrete_events(
         # No discrete events, use regular simulation
         return simulate_reaction_system(reaction_system, initial_conditions, time_span, **solver_options)
 
-    # TODO: Implement discrete event handling with manual stepping
-    # For now, just run regular simulation and warn
-    result = simulate_reaction_system(reaction_system, initial_conditions, time_span, **solver_options)
-    if result.success:
-        result.message += " (Warning: Discrete events not yet implemented)"
+    try:
+        # Implement discrete event handling with manual stepping
+        t_start, t_end = time_span
+        dt = solver_options.pop('max_step', (t_end - t_start) / 100.0)  # Default step size
 
-    return result
+        # Sort events by trigger time/priority for time-based events
+        time_events = []
+        condition_events = []
+
+        for event in discrete_events:
+            if event.trigger.type == 'time':
+                time_events.append((float(event.trigger.value), event))
+            elif event.trigger.type == 'condition':
+                condition_events.append(event)
+            # Note: 'external' events would need external trigger mechanism
+
+        # Sort time events by time
+        time_events.sort(key=lambda x: x[0])
+
+        # Generate mass-action ODEs
+        species_names, ode_exprs = _generate_mass_action_odes(reaction_system)
+        if not species_names:
+            raise SimulationError("No species found in reaction system")
+
+        # Create symbol map and initial conditions
+        symbol_map = {name: sp.Symbol(name) for name in species_names}
+        y_current = np.array([initial_conditions.get(name, 0.0) for name in species_names])
+
+        # Lambdify ODEs for fast evaluation
+        variables = [symbol_map[name] for name in species_names]
+        if variables and ode_exprs:
+            rhs_funcs = [sp.lambdify(variables, expr, 'numpy') for expr in ode_exprs]
+
+            def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
+                """Right-hand side function for the ODE system."""
+                y_clipped = np.maximum(y, 0.0)  # Clip to prevent negative concentrations
+                dydt = np.array([func(*y_clipped) for func in rhs_funcs])
+                if not np.all(np.isfinite(dydt)):
+                    raise SimulationError("Non-finite derivatives encountered")
+                return dydt
+        else:
+            def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
+                return np.zeros_like(y)
+
+        # Manual stepping with event handling
+        t_current = t_start
+        t_points = [t_current]
+        y_points = [y_current.copy()]
+        event_times = []
+
+        # Set up solver options with more conservative defaults for manual stepping
+        default_options = {
+            'method': 'RK45',  # Use more stable method for manual stepping
+            'rtol': 1e-6,
+            'atol': 1e-8,
+            'dense_output': False,
+            'max_step': dt / 10.0,  # Smaller steps for stability
+        }
+        default_options.update(solver_options)
+
+        time_event_index = 0  # Index for next time event
+
+        while t_current < t_end:
+            # Determine next integration end time
+            next_t = min(t_end, t_current + dt)
+
+            # Check if there are time events before next_t
+            while (time_event_index < len(time_events) and
+                   time_events[time_event_index][0] <= next_t):
+                event_time, event = time_events[time_event_index]
+
+                if event_time > t_current:
+                    # Integrate to event time
+                    sol = solve_ivp(
+                        fun=rhs_function,
+                        t_span=(t_current, event_time),
+                        y0=y_current,
+                        **default_options
+                    )
+
+                    if not sol.success:
+                        return SimulationResult(
+                            t=np.array(t_points),
+                            y=np.array(y_points).T,
+                            vars=species_names,
+                            success=False,
+                            message=f"Integration failed before discrete event: {sol.message}",
+                            nfev=sol.nfev,
+                            njev=sol.njev,
+                            nlu=sol.nlu
+                        )
+
+                    # Update current state
+                    t_current = event_time
+                    y_current = sol.y[:, -1]
+                    # Add intermediate points if any
+                    if len(sol.t) > 1:
+                        t_points.extend(sol.t[1:])  # Skip first point (duplicate)
+                        y_points.extend(sol.y[:, 1:].T)  # Skip first point
+
+                # Apply discrete event effects
+                y_current = _apply_discrete_event_effects(event, y_current, species_names, symbol_map)
+                event_times.append(t_current)
+                time_event_index += 1
+
+            # Check condition-based events at current time point
+            events_triggered = []
+            for event in condition_events:
+                if _check_discrete_event_condition(event, t_current, y_current, species_names, symbol_map):
+                    events_triggered.append(event)
+
+            # Apply triggered events (avoid modifying state while checking)
+            for event in events_triggered:
+                y_current = _apply_discrete_event_effects(event, y_current, species_names, symbol_map)
+                event_times.append(t_current)
+
+            # Continue integration to next_t if not already there
+            if t_current < next_t:
+                sol = solve_ivp(
+                    fun=rhs_function,
+                    t_span=(t_current, next_t),
+                    y0=y_current,
+                    **default_options
+                )
+
+                if not sol.success:
+                    return SimulationResult(
+                        t=np.array(t_points),
+                        y=np.array(y_points).T,
+                        vars=species_names,
+                        success=False,
+                        message=f"Integration failed: {sol.message}",
+                        nfev=sol.nfev,
+                        njev=sol.njev,
+                        nlu=sol.nlu
+                    )
+
+                # Update current state
+                t_current = sol.t[-1]
+                y_current = sol.y[:, -1]
+                # Add intermediate points if any
+                if len(sol.t) > 1:
+                    t_points.extend(sol.t[1:])  # Skip first point (duplicate)
+                    y_points.extend(sol.y[:, 1:].T)  # Skip first point
+
+            # Check condition-based events after integration step
+            events_triggered = []
+            for event in condition_events:
+                if _check_discrete_event_condition(event, t_current, y_current, species_names, symbol_map):
+                    events_triggered.append(event)
+
+            # Apply triggered events
+            for event in events_triggered:
+                y_current = _apply_discrete_event_effects(event, y_current, species_names, symbol_map)
+                event_times.append(t_current)
+
+        return SimulationResult(
+            t=np.array(t_points),
+            y=np.array(y_points).T,
+            vars=species_names,
+            success=True,
+            message=f"Simulation completed successfully with {len(event_times)} discrete events",
+            nfev=0,  # Not tracking across multiple integrations
+            njev=0,
+            nlu=0,
+            events=[np.array(event_times)] if event_times else None
+        )
+
+    except Exception as e:
+        return SimulationResult(
+            t=np.array([]),
+            y=np.array([[]]),
+            vars=[],
+            success=False,
+            message=f"Discrete event simulation failed: {e}",
+            nfev=0,
+            njev=0,
+            nlu=0
+        )
