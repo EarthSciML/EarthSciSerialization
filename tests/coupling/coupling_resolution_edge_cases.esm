@@ -1,0 +1,373 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CouplingResolutionEdgeCases",
+    "description": "Edge cases and boundary conditions for coupling resolution algorithms",
+    "authors": ["Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "notes": [
+      "Tests edge cases that coupling resolution algorithms must handle correctly:",
+      "1. Empty systems and empty equations",
+      "2. Self-coupling (system coupled to itself)",
+      "3. Missing variables in translation maps",
+      "4. Placeholder expansion with no state variables",
+      "5. Circular coupling dependencies",
+      "6. Variable name conflicts and disambiguation",
+      "7. Mixed equation types (ODE, algebraic, discrete)"
+    ]
+  },
+
+  "models": {
+    "EmptySystem": {
+      "description": "System with no variables or equations",
+      "variables": {},
+      "parameters": {},
+      "equations": []
+    },
+
+    "SingleVariableSystem": {
+      "description": "System with only one variable",
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0, "description": "Single state variable" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    },
+
+    "ParameterOnlySystem": {
+      "description": "System with only parameters, no state variables",
+      "variables": {},
+      "parameters": {
+        "a": { "units": "1/s", "default": 0.5, "description": "Parameter a" },
+        "b": { "units": "dimensionless", "default": 2.0, "description": "Parameter b" }
+      },
+      "equations": []
+    },
+
+    "AlgebraicSystem": {
+      "description": "System with only algebraic equations (no time derivatives)",
+      "variables": {
+        "y": { "type": "observed", "units": "dimensionless", "description": "Algebraic variable" },
+        "z": { "type": "observed", "units": "dimensionless", "description": "Another algebraic variable" }
+      },
+      "parameters": {
+        "c": { "units": "dimensionless", "default": 3.0, "description": "Coefficient" }
+      },
+      "equations": [
+        {
+          "lhs": "y",
+          "rhs": { "op": "+", "args": ["z", "c"] }
+        },
+        {
+          "lhs": "z",
+          "rhs": { "op": "*", "args": [2.0, "c"] }
+        }
+      ]
+    },
+
+    "ConflictingNamesSystem": {
+      "description": "System with variables that might conflict with other systems",
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0, "description": "Position x (different from SingleVariableSystem.x)" },
+        "temperature": { "type": "state", "units": "K", "default": 300.0, "description": "Temperature state" }
+      },
+      "parameters": {
+        "a": { "units": "m/s^2", "default": 1.0, "description": "Acceleration (different units from ParameterOnlySystem.a)" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["a", "temperature"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.01, "temperature"] }
+        }
+      ]
+    },
+
+    "PlaceholderTestSystem": {
+      "description": "System designed for placeholder expansion testing",
+      "variables": {
+        "_var": { "type": "state", "units": "dimensionless", "default": 1.0, "description": "Variable literally named _var" },
+        "normal_var": { "type": "state", "units": "dimensionless", "default": 2.0, "description": "Normal variable" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "_var"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["normal_var"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-2, "normal_var"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": { "op": "+", "args": ["_var", "normal_var"] }
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "EmptyDataLoader": {
+      "description": "Data loader with no provided variables",
+      "data_source": {
+        "type": "csv",
+        "url": "file://empty.csv"
+      },
+      "provided_variables": {}
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["EmptySystem", "SingleVariableSystem"],
+      "description": "EDGE CASE 1: Compose empty system with non-empty system"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["EmptySystem", "EmptySystem"],
+      "description": "EDGE CASE 2: Compose two empty systems"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["SingleVariableSystem", "SingleVariableSystem"],
+      "description": "EDGE CASE 3: Self-coupling - compose system with itself"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["ParameterOnlySystem", "SingleVariableSystem"],
+      "description": "EDGE CASE 4: Compose parameter-only system with state system (placeholder expansion with no matching equations)"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["SingleVariableSystem", "AlgebraicSystem"],
+      "description": "EDGE CASE 5: Mix ODE and algebraic equations"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["SingleVariableSystem", "ConflictingNamesSystem"],
+      "translate": {
+        "x": { "target": "x", "factor": 1.0 }
+      },
+      "description": "EDGE CASE 6: Variable name conflict - both systems have 'x' with different meanings"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["SingleVariableSystem", "ConflictingNamesSystem"],
+      "translate": {
+        "x": { "target": "nonexistent_var", "factor": 1.0 }
+      },
+      "description": "EDGE CASE 7: Translation to non-existent variable"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["PlaceholderTestSystem", "SingleVariableSystem"],
+      "description": "EDGE CASE 8: System with variable literally named '_var' - disambiguation required"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "EmptyDataLoader.nonexistent_var",
+      "to": "SingleVariableSystem.x",
+      "transform": "param_to_var",
+      "description": "EDGE CASE 9: Map from non-existent data loader variable"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "SingleVariableSystem.x",
+      "to": "EmptySystem.nonexistent_param",
+      "transform": "param_to_var",
+      "description": "EDGE CASE 10: Map to non-existent parameter in empty system"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ParameterOnlySystem.a",
+      "to": "ParameterOnlySystem.a",
+      "transform": "identity",
+      "description": "EDGE CASE 11: Self-mapping - parameter mapped to itself"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "AlgebraicSystem.y",
+      "to": "SingleVariableSystem.x",
+      "transform": "additive",
+      "description": "EDGE CASE 12: Map algebraic variable to ODE variable"
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["EmptySystem", "SingleVariableSystem"],
+      "coupletype_pair": ["EmptyCoupler", "SingleCoupler"],
+      "connector": {
+        "description": "Coupling with empty system",
+        "equations": []
+      },
+      "description": "EDGE CASE 13: couple2 with empty connector equations"
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["SingleVariableSystem", "SingleVariableSystem"],
+      "coupletype_pair": ["SelfCoupler", "SelfCoupler"],
+      "connector": {
+        "description": "Self-coupling through couple2",
+        "equations": [
+          {
+            "from": "SingleVariableSystem.x",
+            "to": "SingleVariableSystem.x",
+            "transform": "multiplicative",
+            "expression": { "op": "+", "args": [1.0, 0.1] },
+            "description": "Self-feedback loop"
+          }
+        ]
+      },
+      "description": "EDGE CASE 14: couple2 self-coupling"
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["ConflictingNamesSystem", "AlgebraicSystem"],
+      "coupletype_pair": ["ConflictAlgebraicCoupler", "AlgebraicConflictCoupler"],
+      "connector": {
+        "description": "Coupling with circular dependencies",
+        "equations": [
+          {
+            "from": "ConflictingNamesSystem.temperature",
+            "to": "AlgebraicSystem.y",
+            "transform": "replacement",
+            "expression": "temperature",
+            "description": "Temperature drives algebraic variable"
+          },
+          {
+            "from": "AlgebraicSystem.y",
+            "to": "ConflictingNamesSystem.temperature",
+            "transform": "additive",
+            "expression": { "op": "*", "args": [0.01, "y"] },
+            "description": "Algebraic variable affects temperature (circular dependency)"
+          }
+        ]
+      },
+      "description": "EDGE CASE 15: couple2 with circular dependencies"
+    }
+  ],
+
+  "_test_verification": {
+    "empty_system_cases": {
+      "case_1": {
+        "expected_result": "Composed system identical to SingleVariableSystem",
+        "equations_count": 1,
+        "variables_count": 1,
+        "note": "Empty system contributes nothing to composition"
+      },
+      "case_2": {
+        "expected_result": "Composed system remains empty",
+        "equations_count": 0,
+        "variables_count": 0,
+        "note": "Two empty systems produce empty result"
+      }
+    },
+
+    "self_coupling_cases": {
+      "case_3": {
+        "expected_result": "System equations duplicated and combined",
+        "original_equation": "D(x)/dt = -0.1 * x",
+        "composed_equation": "D(x)/dt = (-0.1 * x) + (-0.1 * x) = -0.2 * x",
+        "note": "Self-coupling doubles the effect"
+      },
+      "case_14": {
+        "expected_result": "Self-referential equation modification",
+        "original_equation": "D(x)/dt = -0.1 * x",
+        "coupled_equation": "D(x)/dt = (-0.1 * x) * (1.0 + 0.1) = -0.11 * x",
+        "note": "Multiplicative self-coupling changes system dynamics"
+      }
+    },
+
+    "placeholder_edge_cases": {
+      "case_4": {
+        "expected_result": "No placeholder expansion occurs",
+        "reason": "ParameterOnlySystem has no state variables to expand _var placeholder",
+        "final_equations": "Only SingleVariableSystem equation remains"
+      },
+      "case_8": {
+        "expected_result": "Disambiguation required between literal '_var' and placeholder",
+        "literal_var": "PlaceholderTestSystem._var (actual variable name)",
+        "placeholder": "_var in equations (to be expanded)",
+        "expansion_result": "Placeholder expands to SingleVariableSystem.x",
+        "note": "Algorithm must distinguish between literal and placeholder usage"
+      }
+    },
+
+    "variable_conflict_cases": {
+      "case_6": {
+        "conflict": "Both systems have variable 'x' with different units and meanings",
+        "resolution": "Translation mapping resolves conflict",
+        "SingleVariableSystem_x": "dimensionless, default=1.0",
+        "ConflictingNamesSystem_x": "meters, default=0.0",
+        "mapping": "SingleVariableSystem.x → ConflictingNamesSystem.x"
+      }
+    },
+
+    "error_conditions": {
+      "case_7": {
+        "error_type": "unresolved_scoped_ref",
+        "error_message": "Translation target 'nonexistent_var' not found in ConflictingNamesSystem",
+        "algorithm_step": "Translation map validation"
+      },
+      "case_9": {
+        "error_type": "undefined_variable",
+        "error_message": "Source variable 'EmptyDataLoader.nonexistent_var' not found",
+        "algorithm_step": "Variable_map source resolution"
+      },
+      "case_10": {
+        "error_type": "undefined_parameter",
+        "error_message": "Target parameter 'EmptySystem.nonexistent_param' not found",
+        "algorithm_step": "Variable_map target resolution"
+      }
+    },
+
+    "circular_dependency_cases": {
+      "case_15": {
+        "dependency_chain": "ConflictingNamesSystem.temperature → AlgebraicSystem.y → ConflictingNamesSystem.temperature",
+        "resolution_strategy": "Iterative solving or simultaneous equation system",
+        "equation_system": [
+          "y = temperature (replacement)",
+          "D(temperature)/dt = -0.01 * temperature + 0.01 * y"
+        ],
+        "simplified": "D(temperature)/dt = -0.01 * temperature + 0.01 * temperature = 0",
+        "note": "Circular coupling can create steady-state or oscillatory behavior"
+      }
+    },
+
+    "mixed_equation_types": {
+      "case_5": {
+        "ode_equations": ["D(x)/dt = -0.1 * x"],
+        "algebraic_equations": ["y = z + c", "z = 2.0 * c"],
+        "composed_system": "Mixed DAE (Differential-Algebraic Equation) system",
+        "solver_requirements": "DAE-capable solver needed for simulation"
+      },
+      "case_12": {
+        "algebraic_to_ode_mapping": "AlgebraicSystem.y added to D(x)/dt equation",
+        "result": "D(x)/dt = -0.1 * x + y",
+        "constraint": "y = z + c must be satisfied simultaneously",
+        "note": "Creates implicit coupling between ODE and algebraic constraints"
+      }
+    }
+  }
+}

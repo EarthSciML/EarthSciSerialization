@@ -1,0 +1,418 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MultiStepCouplingChainsFixtures",
+    "description": "Test fixtures for complex multi-step coupling resolution chains",
+    "authors": ["Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "notes": [
+      "Tests complex coupling scenarios involving multiple algorithms in sequence:",
+      "1. Chains of different coupling types (operator_compose → variable_map → couple2)",
+      "2. Circular coupling dependencies",
+      "3. Deep hierarchical system coupling",
+      "4. Mixed coupling with data loaders, operators, and models",
+      "5. Order-independence verification (commutative coupling rules)"
+    ]
+  },
+
+  "models": {
+    "AtmosphereChemistry": {
+      "description": "Atmospheric chemistry with ozone cycle",
+      "variables": {
+        "O3": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "type": "state", "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "type": "state", "units": "mol/mol", "default": 0.2e-9, "description": "Nitrogen dioxide" },
+        "HO2": { "type": "state", "units": "mol/mol", "default": 0.05e-9, "description": "Hydroperoxyl radical" }
+      },
+      "parameters": {
+        "j_O3": { "units": "1/s", "default": 1e-5, "description": "Ozone photolysis rate" },
+        "k_NO_HO2": { "units": "cm^3/molec/s", "default": 8e-12, "description": "NO + HO2 rate constant" },
+        "temperature": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "*", "args": ["j_O3", "O3"] },
+            { "op": "*", "args": [1e-14, "O3", "NO"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": ["k_NO_HO2", "NO", "HO2"] },
+            { "op": "*", "args": [-1e-14, "O3", "NO"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["NO2"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [1e-14, "O3", "NO"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["HO2"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "k_NO_HO2", "NO", "HO2"] }
+        }
+      ]
+    },
+
+    "AtmosphereTransport": {
+      "description": "Atmospheric transport with advection and diffusion",
+      "variables": {
+        "u": { "type": "parameter", "units": "m/s", "default": 10.0, "description": "Zonal wind" },
+        "v": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Meridional wind" },
+        "w": { "type": "parameter", "units": "m/s", "default": 0.1, "description": "Vertical wind" }
+      },
+      "parameters": {
+        "Kh": { "units": "m^2/s", "default": 100.0, "description": "Horizontal diffusivity" },
+        "Kv": { "units": "m^2/s", "default": 10.0, "description": "Vertical diffusivity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [
+                { "op": "-", "args": ["u"] },
+                { "op": "grad", "args": ["_var"], "dim": "x" }
+              ]},
+              { "op": "*", "args": [
+                { "op": "-", "args": ["v"] },
+                { "op": "grad", "args": ["_var"], "dim": "y" }
+              ]},
+              { "op": "*", "args": [
+                { "op": "-", "args": ["w"] },
+                { "op": "grad", "args": ["_var"], "dim": "z" }
+              ]},
+              { "op": "*", "args": ["Kh", { "op": "laplacian", "args": ["_var"] }] },
+              { "op": "*", "args": ["Kv", { "op": "D2", "args": ["_var"], "wrt": "z" }] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "OceanBiogeochemistry": {
+      "description": "Ocean biogeochemical cycles",
+      "variables": {
+        "DIC": { "type": "state", "units": "mol/m^3", "default": 2000.0, "description": "Dissolved inorganic carbon" },
+        "O2": { "type": "state", "units": "mol/m^3", "default": 250.0, "description": "Dissolved oxygen" },
+        "nutrients": { "type": "state", "units": "mol/m^3", "default": 30.0, "description": "Nutrient concentration" }
+      },
+      "parameters": {
+        "primary_production_rate": { "units": "1/s", "default": 1e-7, "description": "Primary production rate" },
+        "respiration_rate": { "units": "1/s", "default": 5e-8, "description": "Respiration rate" },
+        "gas_exchange_velocity": { "units": "m/s", "default": 3e-5, "description": "Air-sea gas exchange" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["DIC"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": ["respiration_rate", "O2"] },
+            { "op": "*", "args": [-1, "primary_production_rate", "DIC", "nutrients"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["O2"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": ["primary_production_rate", "DIC", "nutrients"] },
+            { "op": "*", "args": [-1, "respiration_rate", "O2"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["nutrients"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": ["respiration_rate", "O2", 0.16] },
+            { "op": "*", "args": [-1, "primary_production_rate", "DIC", "nutrients"] }
+          ]}
+        }
+      ]
+    },
+
+    "LandVegetation": {
+      "description": "Terrestrial vegetation and carbon cycle",
+      "variables": {
+        "biomass": { "type": "state", "units": "kg/m^2", "default": 5.0, "description": "Vegetation biomass" },
+        "soil_carbon": { "type": "state", "units": "kg/m^2", "default": 10.0, "description": "Soil carbon" }
+      },
+      "parameters": {
+        "photosynthesis_rate": { "units": "1/s", "default": 1e-7, "description": "Photosynthesis rate" },
+        "respiration_rate": { "units": "1/s", "default": 5e-8, "description": "Plant respiration" },
+        "decomposition_rate": { "units": "1/s", "default": 1e-8, "description": "Soil decomposition" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["biomass"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "*", "args": ["photosynthesis_rate", "biomass"] },
+            { "op": "*", "args": ["respiration_rate", "biomass"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["soil_carbon"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": ["respiration_rate", "biomass"] },
+            { "op": "*", "args": [-1, "decomposition_rate", "soil_carbon"] }
+          ]}
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "MeteorologicalForcing": {
+      "description": "High-frequency meteorological data",
+      "data_source": {
+        "type": "netcdf",
+        "url": "file://met_forcing.nc",
+        "time_dimension": "time"
+      },
+      "provided_variables": {
+        "wind_u": { "units": "m/s", "description": "Zonal wind velocity" },
+        "wind_v": { "units": "m/s", "description": "Meridional wind velocity" },
+        "solar_flux": { "units": "W/m^2", "description": "Solar radiation flux" },
+        "air_temperature": { "units": "K", "description": "Air temperature" }
+      }
+    },
+
+    "EmissionInventory": {
+      "description": "Chemical emission sources",
+      "data_source": {
+        "type": "csv",
+        "url": "file://emissions.csv",
+        "time_column": "datetime"
+      },
+      "provided_variables": {
+        "NOx_emissions": { "units": "mol/m^2/s", "description": "NOx emission rate" },
+        "CO2_flux": { "units": "kg/m^2/s", "description": "CO2 surface flux" }
+      }
+    }
+  },
+
+  "operators": {
+    "PhotolysisCalculator": {
+      "description": "Calculate photolysis rates from solar radiation",
+      "inputs": ["solar_flux", "O3_column"],
+      "outputs": ["j_O3", "j_NO2"],
+      "algorithm": "TUV_photolysis"
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["AtmosphereChemistry", "AtmosphereTransport"],
+      "description": "STEP 1: Couple chemistry with transport (placeholder expansion for all chemical species)"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.wind_u",
+      "to": "AtmosphereTransport.u",
+      "transform": "param_to_var",
+      "description": "STEP 2: Replace constant wind with time-varying meteorological data"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.wind_v",
+      "to": "AtmosphereTransport.v",
+      "transform": "param_to_var",
+      "description": "STEP 3: Replace meridional wind with data"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.air_temperature",
+      "to": "AtmosphereChemistry.temperature",
+      "transform": "param_to_var",
+      "description": "STEP 4: Replace constant temperature with meteorological forcing"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "PhotolysisCalculator",
+      "target": "AtmosphereChemistry",
+      "inputs": {
+        "solar_flux": "MeteorologicalForcing.solar_flux",
+        "O3_column": { "op": "integrate", "args": ["O3"], "dim": "z" }
+      },
+      "outputs": {
+        "j_O3": "AtmosphereChemistry.j_O3"
+      },
+      "description": "STEP 5: Calculate photolysis rates from solar radiation and ozone column"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "EmissionInventory.NOx_emissions",
+      "to": "AtmosphereChemistry.NO",
+      "transform": "additive",
+      "description": "STEP 6: Add surface NOx emissions to NO equation"
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["AtmosphereChemistry", "OceanBiogeochemistry"],
+      "coupletype_pair": ["AtmosphereOceanCoupler", "OceanAtmosphereCoupler"],
+      "connector": {
+        "description": "Air-sea CO2 and O2 exchange",
+        "equations": [
+          {
+            "from": "OceanBiogeochemistry.O2",
+            "to": "AtmosphereChemistry.HO2",
+            "transform": "additive",
+            "expression": { "op": "*", "args": ["gas_exchange_velocity", { "op": "-", "args": ["O2", 250.0] }] },
+            "description": "O2 air-sea exchange affects HO2 budget"
+          }
+        ]
+      },
+      "description": "STEP 7: Couple atmosphere and ocean through gas exchange"
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["AtmosphereChemistry", "LandVegetation"],
+      "coupletype_pair": ["AtmosphereLandCoupler", "LandAtmosphereCoupler"],
+      "connector": {
+        "description": "Land-atmosphere CO2 and O3 exchange",
+        "equations": [
+          {
+            "from": "LandVegetation.biomass",
+            "to": "AtmosphereChemistry.O3",
+            "transform": "additive",
+            "expression": { "op": "*", "args": [-1e-10, "biomass", "O3"] },
+            "description": "Vegetation ozone deposition"
+          },
+          {
+            "from": "AtmosphereChemistry.O3",
+            "to": "LandVegetation.photosynthesis_rate",
+            "transform": "multiplicative",
+            "expression": { "op": "exp", "args": [{ "op": "*", "args": [-0.1, "O3"] }] },
+            "description": "Ozone stress reduces photosynthesis"
+          }
+        ]
+      },
+      "description": "STEP 8: Couple atmosphere and land through deposition and ozone stress"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "EmissionInventory.CO2_flux",
+      "to": "LandVegetation.soil_carbon",
+      "transform": "additive",
+      "description": "STEP 9: Add anthropogenic CO2 flux to soil carbon budget"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["OceanBiogeochemistry", "AtmosphereTransport"],
+      "translate": {
+        "DIC": { "target": "CO2_dissolved", "factor": 1.0 },
+        "O2": { "target": "O2_dissolved", "factor": 1.0 }
+      },
+      "description": "STEP 10: Apply transport to dissolved ocean tracers (creates new variables)"
+    }
+  ],
+
+  "_test_verification": {
+    "coupling_chain_analysis": {
+      "total_steps": 10,
+      "coupling_types_used": ["operator_compose", "variable_map", "operator_apply", "couple2"],
+      "systems_involved": ["AtmosphereChemistry", "AtmosphereTransport", "OceanBiogeochemistry", "LandVegetation"],
+      "data_loaders_used": ["MeteorologicalForcing", "EmissionInventory"],
+      "operators_used": ["PhotolysisCalculator"]
+    },
+
+    "step_by_step_resolution": {
+      "step_1": {
+        "algorithm": "operator_compose",
+        "effect": "AtmosphereTransport._var expands to [O3, NO, NO2, HO2] transport equations",
+        "new_equations": 4,
+        "placeholder_expansion": true
+      },
+      "step_2": {
+        "algorithm": "variable_map param_to_var",
+        "effect": "AtmosphereTransport.u becomes time-varying from MeteorologicalForcing.wind_u",
+        "parameter_to_variable": "u"
+      },
+      "step_3": {
+        "algorithm": "variable_map param_to_var",
+        "effect": "AtmosphereTransport.v becomes time-varying from MeteorologicalForcing.wind_v",
+        "parameter_to_variable": "v"
+      },
+      "step_4": {
+        "algorithm": "variable_map param_to_var",
+        "effect": "AtmosphereChemistry.temperature becomes time-varying from MeteorologicalForcing.air_temperature",
+        "parameter_to_variable": "temperature"
+      },
+      "step_5": {
+        "algorithm": "operator_apply",
+        "effect": "PhotolysisCalculator computes j_O3 from solar_flux and O3_column",
+        "dynamic_calculation": "j_O3 = f(solar_flux, integrate(O3, z))"
+      },
+      "step_6": {
+        "algorithm": "variable_map additive",
+        "effect": "NOx emissions added to NO equation RHS",
+        "modified_equation": "D(NO)/dt = ... + NOx_emissions"
+      },
+      "step_7": {
+        "algorithm": "couple2 additive",
+        "effect": "Ocean O2 affects atmosphere HO2 through air-sea exchange",
+        "bidirectional_coupling": true
+      },
+      "step_8": {
+        "algorithm": "couple2 additive + multiplicative",
+        "effect": "Land vegetation affects O3 deposition, O3 affects photosynthesis",
+        "feedback_loop": "O3 ⟷ vegetation"
+      },
+      "step_9": {
+        "algorithm": "variable_map additive",
+        "effect": "Anthropogenic CO2 flux added to soil carbon equation",
+        "emission_forcing": true
+      },
+      "step_10": {
+        "algorithm": "operator_compose with translate",
+        "effect": "Ocean tracers get transport equations with name mapping",
+        "variable_mapping": "DIC→CO2_dissolved, O2→O2_dissolved"
+      }
+    },
+
+    "final_coupled_system": {
+      "total_variables": 15,
+      "atmosphere_chemistry": ["O3", "NO", "NO2", "HO2"],
+      "atmosphere_transport": ["u", "v", "w", "CO2_dissolved", "O2_dissolved"],
+      "ocean": ["DIC", "O2", "nutrients"],
+      "land": ["biomass", "soil_carbon"],
+      "meteorological_forcing": ["wind_u", "wind_v", "solar_flux", "air_temperature"],
+      "emissions": ["NOx_emissions", "CO2_flux"]
+    },
+
+    "coupling_dependencies": {
+      "direct_dependencies": [
+        "MeteorologicalForcing → AtmosphereTransport (winds)",
+        "MeteorologicalForcing → AtmosphereChemistry (temperature)",
+        "MeteorologicalForcing → PhotolysisCalculator (solar flux)",
+        "EmissionInventory → AtmosphereChemistry (NOx)",
+        "EmissionInventory → LandVegetation (CO2)"
+      ],
+      "bidirectional_couplings": [
+        "AtmosphereChemistry ⟷ OceanBiogeochemistry (gas exchange)",
+        "AtmosphereChemistry ⟷ LandVegetation (deposition & stress)"
+      ],
+      "transport_application": [
+        "AtmosphereTransport applied to all chemical species",
+        "AtmosphereTransport applied to ocean dissolved tracers"
+      ]
+    },
+
+    "order_independence_test": {
+      "note": "Coupling rules are commutative - same result regardless of order",
+      "test_permutations": [
+        "Steps 1,2,3,4,5,6,7,8,9,10 (original order)",
+        "Steps 2,3,4,1,6,5,9,7,8,10 (reordered variable_maps first)",
+        "Steps 7,8,1,10,2,3,4,5,6,9 (couple2 operations first)"
+      ],
+      "expected_result": "All permutations produce identical final coupled system"
+    }
+  }
+}
