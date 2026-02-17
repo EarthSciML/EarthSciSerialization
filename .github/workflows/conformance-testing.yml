@@ -1,0 +1,336 @@
+name: Cross-Language Conformance Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/conformance-testing.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/conformance-testing.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  # Consistent versions across jobs
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+  JULIA_VERSION: '1.10'
+  RUST_VERSION: 'stable'
+
+jobs:
+  # Run each language's individual tests first
+  julia-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/ESMFormat.jl
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ env.JULIA_VERSION }}
+
+      - name: Cache Julia dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.julia
+          key: ${{ runner.os }}-julia-${{ env.JULIA_VERSION }}-${{ hashFiles('packages/ESMFormat.jl/Project.toml', 'packages/ESMFormat.jl/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ env.JULIA_VERSION }}-
+
+      - name: Install Julia dependencies
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run Julia tests
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.test()'
+
+  typescript-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/esm-format
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: packages/esm-format/package-lock.json
+
+      - name: Install TypeScript dependencies
+        run: npm ci
+
+      - name: Build TypeScript package
+        run: npm run build
+
+      - name: Run TypeScript tests
+        run: npm test -- --run
+
+  python-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/esm_format
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('packages/esm_format/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+
+      - name: Run Python tests
+        run: |
+          python -m pytest tests/ -v
+
+  rust-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/esm-format-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/esm-format-rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/esm-format-rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build Rust package
+        run: cargo build --release
+
+      - name: Run Rust tests
+        run: cargo test
+
+  # Cross-language conformance testing
+  conformance-testing:
+    runs-on: ubuntu-latest
+    needs: [julia-tests, typescript-tests, python-tests, rust-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ env.JULIA_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: packages/esm-format/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia
+            ~/.cache/pip
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/esm-format-rust/target
+            packages/esm-format/node_modules
+          key: ${{ runner.os }}-conformance-${{ hashFiles('packages/*/Project.toml', 'packages/*/package*.json', 'packages/*/pyproject.toml', 'packages/*/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-conformance-
+
+      # Install dependencies for all languages
+      - name: Install Julia dependencies
+        working-directory: packages/ESMFormat.jl
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Install TypeScript dependencies and build
+        working-directory: packages/esm-format
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Python dependencies
+        working-directory: packages/esm_format
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+
+      - name: Build Rust package
+        working-directory: packages/esm-format-rust
+        run: |
+          cargo build --release
+
+      # Make scripts executable
+      - name: Make conformance scripts executable
+        run: |
+          chmod +x scripts/test-conformance.sh
+          chmod +x scripts/run-julia-conformance.jl
+          chmod +x scripts/run-typescript-conformance.js
+          chmod +x scripts/run-python-conformance.py
+
+      # Run cross-language conformance testing
+      - name: Run conformance tests
+        run: |
+          ./scripts/test-conformance.sh
+
+      # Upload conformance results as artifacts
+      - name: Upload conformance results
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload even if tests fail
+        with:
+          name: conformance-results-${{ github.run_number }}
+          path: |
+            conformance-results/
+          retention-days: 30
+
+      # Upload HTML report
+      - name: Upload conformance report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-report-${{ github.run_number }}
+          path: |
+            conformance-results/reports/
+          retention-days: 30
+
+      # Comment on PR with conformance results (if PR)
+      - name: Comment PR with conformance results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            try {
+              // Look for the analysis file
+              const analysisPath = 'conformance-results/comparison/analysis.json';
+              if (fs.existsSync(analysisPath)) {
+                const analysis = JSON.parse(fs.readFileSync(analysisPath, 'utf8'));
+
+                const overallStatus = analysis.overall_status || 'UNKNOWN';
+                const overallScore = analysis.divergence_summary?.overall_score || 0;
+                const languagesTested = analysis.languages_tested || [];
+                const criticalDivergences = analysis.divergence_summary?.critical_divergences || [];
+
+                let statusEmoji = '❓';
+                if (overallStatus === 'PASS') statusEmoji = '✅';
+                else if (overallStatus === 'WARN') statusEmoji = '⚠️';
+                else if (overallStatus === 'FAIL') statusEmoji = '❌';
+
+                let comment = `## ${statusEmoji} Cross-Language Conformance Test Results\n\n`;
+                comment += `**Overall Status:** ${overallStatus}\n`;
+                comment += `**Consistency Score:** ${(overallScore * 100).toFixed(1)}%\n`;
+                comment += `**Languages Tested:** ${languagesTested.join(', ')}\n`;
+                comment += `**Critical Divergences:** ${criticalDivergences.length}\n\n`;
+
+                if (criticalDivergences.length > 0) {
+                  comment += `### Critical Divergences (< 70% consistency):\n`;
+                  for (const divergence of criticalDivergences) {
+                    comment += `- **${divergence.category}**: ${(divergence.score * 100).toFixed(1)}% (${divergence.divergent_count} divergent tests)\n`;
+                  }
+                  comment += '\n';
+                }
+
+                comment += `### Category Results:\n`;
+                const categories = analysis.divergence_summary?.categories || {};
+                for (const [category, data] of Object.entries(categories)) {
+                  const statusIcon = data.status === 'PASS' ? '✅' : data.status === 'WARN' ? '⚠️' : '❌';
+                  comment += `- ${statusIcon} **${category.charAt(0).toUpperCase() + category.slice(1)}**: ${(data.consistency_score * 100).toFixed(1)}% (${data.divergent_tests}/${data.total_tests} divergent)\n`;
+                }
+
+                comment += `\n📊 [View detailed conformance report](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              } else {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: '❌ Cross-language conformance testing failed - no results generated. Check the action logs for details.'
+                });
+              }
+            } catch (error) {
+              console.error('Error posting conformance results:', error);
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `❌ Error processing conformance test results: ${error.message}`
+              });
+            }
+
+      # Fail the workflow if conformance tests fail
+      - name: Check conformance test results
+        run: |
+          if [ -f "conformance-results/comparison/analysis.json" ]; then
+            OVERALL_STATUS=$(python3 -c "import json; data=json.load(open('conformance-results/comparison/analysis.json')); print(data.get('overall_status', 'UNKNOWN'))")
+            echo "Overall conformance status: $OVERALL_STATUS"
+
+            if [ "$OVERALL_STATUS" = "FAIL" ]; then
+              echo "❌ Conformance tests failed - implementations have significant divergences"
+              exit 1
+            elif [ "$OVERALL_STATUS" = "WARN" ]; then
+              echo "⚠️ Conformance tests passed with warnings - some minor divergences detected"
+              exit 0
+            elif [ "$OVERALL_STATUS" = "PASS" ]; then
+              echo "✅ Conformance tests passed - all implementations are consistent"
+              exit 0
+            else
+              echo "❓ Conformance test status unknown"
+              exit 1
+            fi
+          else
+            echo "❌ No conformance analysis results found"
+            exit 1
+          fi
