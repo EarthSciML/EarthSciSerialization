@@ -27,8 +27,11 @@ export { validate } from './validate.js'
 export type { ValidationError, ValidationResult } from './validate.js'
 
 // Export graph utilities
-export { component_graph, componentGraph, expressionGraph, componentExists, getComponentType } from './graph.js'
+export { component_graph, componentGraph, expressionGraph, componentExists, getComponentType, toDot, toMermaid, toJsonGraph } from './graph.js'
 export type { ComponentGraph, ComponentNode, CouplingEdge, Graph, VariableNode, DependencyEdge } from './graph.js'
+
+// Export advanced expression analysis and manipulation
+export * from './analysis/index.js'
 
 // Export pretty-printing utilities
 export { toUnicode, toLatex, toAscii } from './pretty-print.js'
