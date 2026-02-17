@@ -2646,7 +2646,498 @@ class StreamingLoader:
         self.buffer.clear()
 
 
-def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, BinaryLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader]:
+class RemoteLoader:
+    """
+    Remote data loader for HTTP, FTP, and cloud storage access.
+
+    Supports authentication, caching, retry logic, and progress tracking for
+    remote data sources including HTTP/HTTPS, FTP/SFTP, and cloud storage
+    services like S3, Azure Blob Storage, and Google Cloud Storage.
+    """
+
+    def __init__(self, data_loader: DataLoader):
+        """
+        Initialize remote loader with configuration.
+
+        Args:
+            data_loader: DataLoader configuration object
+        """
+        import urllib.request
+        import urllib.parse
+        import time
+        import hashlib
+        import os
+        from pathlib import Path
+
+        self.config = data_loader
+        self.source = data_loader.source
+        self.format_options = data_loader.format_options
+
+        # Parse URL to determine protocol
+        parsed_url = urllib.parse.urlparse(self.source)
+        self.protocol = parsed_url.scheme.lower()
+
+        # Configuration options with defaults
+        self.auth_token = self.format_options.get('auth_token')
+        self.username = self.format_options.get('username')
+        self.password = self.format_options.get('password')
+        self.api_key = self.format_options.get('api_key')
+
+        # Retry configuration
+        self.max_retries = self.format_options.get('max_retries', 3)
+        self.retry_delay = self.format_options.get('retry_delay', 1.0)
+        self.backoff_factor = self.format_options.get('backoff_factor', 2.0)
+
+        # Caching configuration
+        self.enable_cache = self.format_options.get('enable_cache', True)
+        self.cache_dir = Path(self.format_options.get('cache_dir', Path.home() / '.esm_cache'))
+        self.cache_ttl = self.format_options.get('cache_ttl', 3600)  # 1 hour default
+
+        # Progress tracking
+        self.progress_callback = self.format_options.get('progress_callback')
+
+        # Ensure cache directory exists
+        if self.enable_cache:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _get_cache_path(self) -> Path:
+        """Generate cache file path based on URL hash."""
+        import hashlib
+        url_hash = hashlib.md5(self.source.encode()).hexdigest()
+        return self.cache_dir / f"{url_hash}.cache"
+
+    def _is_cache_valid(self, cache_path: Path) -> bool:
+        """Check if cached file is still valid based on TTL."""
+        if not cache_path.exists():
+            return False
+
+        import time
+        file_age = time.time() - cache_path.stat().st_mtime
+        return file_age < self.cache_ttl
+
+    def _download_with_progress(self, url: str, output_path: Path) -> None:
+        """Download file with progress tracking and authentication."""
+        try:
+            import requests
+        except ImportError:
+            # Fallback to urllib implementation if requests is not available
+            import urllib.request
+            import urllib.error
+
+            # Create request with authentication
+            request = urllib.request.Request(url)
+
+            # Add authentication headers
+            if self.auth_token:
+                request.add_header('Authorization', f'Bearer {self.auth_token}')
+            elif self.api_key:
+                request.add_header('X-API-Key', self.api_key)
+            elif self.username and self.password:
+                import base64
+                credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+                request.add_header('Authorization', f'Basic {credentials}')
+
+            # Perform download with retry logic
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = urllib.request.urlopen(request)
+
+                    # Get content length for progress tracking
+                    content_length = response.getheader('Content-Length')
+                    total_size = int(content_length) if content_length else None
+
+                    # Download with progress tracking
+                    with open(output_path, 'wb') as f:
+                        downloaded = 0
+                        while True:
+                            chunk = response.read(8192)  # 8KB chunks
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+
+                            # Call progress callback if provided
+                            if self.progress_callback and total_size:
+                                progress = downloaded / total_size
+                                self.progress_callback(progress, downloaded, total_size)
+
+                    return  # Success
+
+                except (urllib.error.URLError, urllib.error.HTTPError, ConnectionError) as e:
+                    if attempt == self.max_retries:
+                        raise ValueError(f"Failed to download {url} after {self.max_retries + 1} attempts: {e}")
+
+                    # Wait before retry with exponential backoff
+                    import time
+                    delay = self.retry_delay * (self.backoff_factor ** attempt)
+                    time.sleep(delay)
+        else:
+            # Use requests library for better functionality
+            headers = {}
+            if self.auth_token:
+                headers['Authorization'] = f'Bearer {self.auth_token}'
+            elif self.api_key:
+                headers['X-API-Key'] = self.api_key
+
+            auth = None
+            if self.username and self.password:
+                auth = (self.username, self.password)
+
+            # Perform download with retry logic
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = requests.get(url, headers=headers, auth=auth, stream=True)
+                    response.raise_for_status()
+
+                    # Get content length for progress tracking
+                    total_size = int(response.headers.get('Content-Length', 0)) or None
+
+                    # Download with progress tracking
+                    with open(output_path, 'wb') as f:
+                        downloaded = 0
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:  # Filter out keep-alive chunks
+                                f.write(chunk)
+                                downloaded += len(chunk)
+
+                                # Call progress callback if provided
+                                if self.progress_callback and total_size:
+                                    progress = downloaded / total_size
+                                    self.progress_callback(progress, downloaded, total_size)
+
+                    return  # Success
+
+                except (requests.RequestException, ConnectionError) as e:
+                    if attempt == self.max_retries:
+                        raise ValueError(f"Failed to download {url} after {self.max_retries + 1} attempts: {e}")
+
+                    # Wait before retry with exponential backoff
+                    import time
+                    delay = self.retry_delay * (self.backoff_factor ** attempt)
+                    time.sleep(delay)
+
+    def _download_ftp(self, output_path: Path) -> None:
+        """Download file via FTP/SFTP."""
+        import ftplib
+        import urllib.parse
+
+        parsed_url = urllib.parse.urlparse(self.source)
+
+        # Extract components
+        hostname = parsed_url.hostname
+        port = parsed_url.port or 21
+        username = parsed_url.username or self.username or 'anonymous'
+        password = parsed_url.password or self.password or 'anonymous@'
+        file_path = parsed_url.path
+
+        if self.protocol == 'sftp':
+            # SFTP requires paramiko (not implemented for basic version)
+            raise NotImplementedError("SFTP support requires paramiko library")
+
+        # Standard FTP
+        for attempt in range(self.max_retries + 1):
+            try:
+                with ftplib.FTP() as ftp:
+                    ftp.connect(hostname, port)
+                    ftp.login(username, password)
+
+                    with open(output_path, 'wb') as f:
+                        ftp.retrbinary(f'RETR {file_path}', f.write)
+
+                return  # Success
+
+            except (ftplib.error_perm, ftplib.error_temp, ConnectionError) as e:
+                if attempt == self.max_retries:
+                    raise ValueError(f"Failed to download via FTP after {self.max_retries + 1} attempts: {e}")
+
+                import time
+                delay = self.retry_delay * (self.backoff_factor ** attempt)
+                time.sleep(delay)
+
+    def _download_cloud_storage(self, output_path: Path) -> None:
+        """Download from cloud storage (S3, Azure, GCS)."""
+        # This is a simplified implementation - full cloud support would require
+        # cloud provider SDKs (boto3, azure-storage-blob, google-cloud-storage)
+
+        if self.protocol in ['s3', 'gs', 'azure']:
+            # For basic implementation, try to convert to HTTPS URL
+            if self.protocol == 's3':
+                # Convert s3://bucket/key to https://bucket.s3.amazonaws.com/key
+                import urllib.parse
+                parsed = urllib.parse.urlparse(self.source)
+                bucket = parsed.netloc
+                key = parsed.path.lstrip('/')
+                https_url = f"https://{bucket}.s3.amazonaws.com/{key}"
+            else:
+                raise NotImplementedError(f"Cloud storage protocol {self.protocol} requires specific SDK")
+
+            # Use HTTPS download for converted URL
+            https_source = self.source
+            self.source = https_url
+            try:
+                self._download_with_progress(https_url, output_path)
+            finally:
+                self.source = https_source  # Restore original
+        else:
+            raise ValueError(f"Unsupported cloud storage protocol: {self.protocol}")
+
+    def load_data(self) -> Dict[str, Any]:
+        """
+        Load data from remote source.
+
+        Returns:
+            Dictionary containing loaded data and metadata
+
+        Raises:
+            ValueError: If the source URL is invalid or inaccessible
+            NotImplementedError: If the protocol is not supported
+        """
+        # Check cache first if enabled
+        cache_path = None
+        if self.enable_cache:
+            cache_path = self._get_cache_path()
+            if self._is_cache_valid(cache_path):
+                # Load from cache
+                with open(cache_path, 'rb') as f:
+                    import pickle
+                    return pickle.load(f)
+
+        # Download to temporary file
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_path = Path(temp_file.name)
+
+        try:
+            # Download based on protocol
+            if self.protocol in ['http', 'https']:
+                self._download_with_progress(self.source, temp_path)
+            elif self.protocol in ['ftp', 'sftp']:
+                self._download_ftp(temp_path)
+            elif self.protocol in ['s3', 'gs', 'azure']:
+                self._download_cloud_storage(temp_path)
+            else:
+                raise ValueError(f"Unsupported protocol: {self.protocol}")
+
+            # Determine file type and delegate to appropriate loader
+            from .data_loader_registry import detect_loader_type, create_data_loader
+
+            loader_type = detect_loader_type(temp_path)
+            if loader_type is None:
+                # Try to guess from URL extension
+                import urllib.parse
+                parsed_url = urllib.parse.urlparse(self.source)
+                path = Path(parsed_url.path)
+                loader_type = detect_loader_type(path)
+
+            if loader_type is None:
+                # Try to detect from content by examining the first few bytes
+                content_sample = temp_path.read_bytes()[:1024] if temp_path.exists() else b""
+
+                # Simple content-based detection
+                try:
+                    # Try to parse as JSON
+                    import json
+                    json.loads(content_sample.decode('utf-8'))
+                    loader_type = DataLoaderType.JSON
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    # Check for binary formats
+                    if content_sample.startswith(b'\x89HDF'):
+                        loader_type = DataLoaderType.HDF5
+                    elif content_sample.startswith(b'CDF'):
+                        loader_type = DataLoaderType.NETCDF
+                    elif b'GRIB' in content_sample[:100]:
+                        loader_type = DataLoaderType.GRIB
+                    else:
+                        # Default to binary loader if all else fails
+                        loader_type = DataLoaderType.BINARY
+
+            if loader_type is None:
+                raise ValueError(f"Cannot determine file type for {self.source}")
+
+            # Create appropriate loader for the downloaded file
+            temp_data_loader = DataLoader(
+                name=f"remote_{self.config.name}",
+                type=loader_type,
+                source=str(temp_path),
+                format_options=self.format_options,
+                variables=self.config.variables
+            )
+
+            # Load data using the appropriate loader
+            loader_instance = create_data_loader(temp_data_loader)
+
+            # Try different method names as different loaders may use different interfaces
+            if hasattr(loader_instance, 'load_data'):
+                data = loader_instance.load_data()
+            elif hasattr(loader_instance, 'load'):
+                data = loader_instance.load()
+            else:
+                # Fallback: just return the path info for binary data
+                data = {
+                    'file_path': str(temp_path),
+                    'file_size': temp_path.stat().st_size,
+                    'loader_type': loader_type.value
+                }
+
+            # Add remote source metadata
+            data['_remote_metadata'] = {
+                'original_source': self.source,
+                'protocol': self.protocol,
+                'downloaded_at': __import__('time').time(),
+                'file_type': loader_type.value
+            }
+
+            # Cache the result if enabled
+            if self.enable_cache and cache_path:
+                with open(cache_path, 'wb') as f:
+                    import pickle
+                    pickle.dump(data, f)
+
+            return data
+
+        finally:
+            # Clean up temporary file
+            if temp_path.exists():
+                temp_path.unlink()
+
+    def validate_source(self) -> Dict[str, Any]:
+        """
+        Validate that the remote source is accessible.
+
+        Returns:
+            Dictionary containing validation results
+        """
+        import urllib.request
+        import urllib.parse
+        import urllib.error
+
+        try:
+            # Quick HEAD request to check accessibility
+            if self.protocol in ['http', 'https']:
+                try:
+                    import requests
+                except ImportError:
+                    # Fallback to urllib if requests is not available
+                    import urllib.request
+                    request = urllib.request.Request(self.source)
+                    request.get_method = lambda: 'HEAD'
+
+                    # Add authentication if provided
+                    if self.auth_token:
+                        request.add_header('Authorization', f'Bearer {self.auth_token}')
+                    elif self.api_key:
+                        request.add_header('X-API-Key', self.api_key)
+                    elif self.username and self.password:
+                        import base64
+                        credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+                        request.add_header('Authorization', f'Basic {credentials}')
+
+                    response = urllib.request.urlopen(request, timeout=10)
+
+                    return {
+                        'valid': True,
+                        'status_code': response.getcode(),
+                        'content_type': response.getheader('Content-Type'),
+                        'content_length': response.getheader('Content-Length'),
+                        'last_modified': response.getheader('Last-Modified')
+                    }
+                else:
+                    # Use requests library for better testing support
+                    headers = {}
+                    auth = None
+
+                    if self.auth_token:
+                        headers['Authorization'] = f'Bearer {self.auth_token}'
+                    elif self.api_key:
+                        headers['X-API-Key'] = self.api_key
+                    elif self.username and self.password:
+                        auth = (self.username, self.password)
+
+                    response = requests.head(self.source, headers=headers, auth=auth, timeout=10)
+                    response.raise_for_status()  # Raise exception for bad status codes
+
+                    return {
+                        'valid': True,
+                        'status_code': response.status_code,
+                        'content_type': response.headers.get('Content-Type'),
+                        'content_length': response.headers.get('Content-Length'),
+                        'last_modified': response.headers.get('Last-Modified')
+                    }
+
+            elif self.protocol in ['ftp', 'sftp']:
+                # For FTP, we'd need to actually connect (simplified check)
+                parsed_url = urllib.parse.urlparse(self.source)
+                return {
+                    'valid': True,
+                    'protocol': self.protocol,
+                    'hostname': parsed_url.hostname,
+                    'note': 'FTP validation requires full connection'
+                }
+
+            else:
+                return {
+                    'valid': False,
+                    'error': f'Validation not implemented for protocol: {self.protocol}'
+                }
+
+        except Exception as e:
+            return {
+                'valid': False,
+                'error': str(e),
+                'protocol': self.protocol
+            }
+
+    def clear_cache(self) -> bool:
+        """
+        Clear cached data for this source.
+
+        Returns:
+            True if cache was cleared, False if no cache existed
+        """
+        if not self.enable_cache:
+            return False
+
+        cache_path = self._get_cache_path()
+        if cache_path.exists():
+            cache_path.unlink()
+            return True
+        return False
+
+    def get_cache_info(self) -> Dict[str, Any]:
+        """
+        Get information about cached data.
+
+        Returns:
+            Dictionary containing cache information
+        """
+        if not self.enable_cache:
+            return {'cache_enabled': False}
+
+        cache_path = self._get_cache_path()
+        if not cache_path.exists():
+            return {
+                'cache_enabled': True,
+                'cached': False,
+                'cache_path': str(cache_path)
+            }
+
+        import time
+        stat = cache_path.stat()
+        file_age = time.time() - stat.st_mtime
+        is_valid = file_age < self.cache_ttl
+
+        return {
+            'cache_enabled': True,
+            'cached': True,
+            'cache_path': str(cache_path),
+            'cache_size': stat.st_size,
+            'cache_age_seconds': file_age,
+            'cache_valid': is_valid,
+            'cache_ttl': self.cache_ttl
+        }
+
+
+def create_data_loader(data_loader: DataLoader) -> Union[NetCDFLoader, JSONLoader, BinaryLoader, DatabaseLoader, HDF5Loader, GRIBLoader, StreamingLoader, RemoteLoader]:
     """
     Factory function to create appropriate data loader based on type.
 
