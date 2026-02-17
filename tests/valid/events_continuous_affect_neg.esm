@@ -1,0 +1,206 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventsContinuousAffectNeg",
+    "description": "Test fixture for continuous events with affect_neg - Bouncing ball with energy loss on ground collision",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["events", "continuous", "affect_neg", "bouncing_ball", "root_finding"]
+  },
+
+  "models": {
+    "BouncingBallSystem": {
+      "reference": {
+        "notes": "Classic bouncing ball with restitution coefficient and ground collision detection",
+        "doi": "10.1016/example-bouncing-dynamics"
+      },
+      "variables": {
+        "y": { "type": "state", "units": "m", "default": 10.0, "description": "Ball height above ground" },
+        "v": { "type": "state", "units": "m/s", "default": 0.0, "description": "Ball vertical velocity (positive upward)" }
+      },
+      "parameters": {
+        "g": { "units": "m/s^2", "default": 9.81, "description": "Gravitational acceleration" },
+        "e": { "units": "dimensionless", "default": 0.8, "description": "Coefficient of restitution (energy loss factor)" },
+        "ground_level": { "units": "m", "default": 0.0, "description": "Ground level reference height" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "g"] }
+        }
+      ],
+      "events": {
+        "continuous": [
+          {
+            "name": "ground_collision",
+            "conditions": [
+              { "op": "-", "args": ["y", "ground_level"] }
+            ],
+            "affects": [],
+            "affect_neg": [
+              {
+                "lhs": "v",
+                "rhs": { "op": "*", "args": [-1, "e", { "op": "Pre", "args": ["v"] }] }
+              }
+            ],
+            "root_find": true,
+            "description": "Ball collision with ground - velocity reversal with energy loss"
+          }
+        ]
+      }
+    },
+
+    "OscillatorWithDamping": {
+      "reference": {
+        "notes": "Damped harmonic oscillator with asymmetric damping affecting negative velocity differently"
+      },
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.0, "description": "Position from equilibrium" },
+        "v": { "type": "state", "units": "m/s", "default": 0.0, "description": "Velocity" }
+      },
+      "parameters": {
+        "k": { "units": "N/m", "default": 1.0, "description": "Spring constant" },
+        "m": { "units": "kg", "default": 1.0, "description": "Mass" },
+        "damping_up": { "units": "N*s/m", "default": 0.1, "description": "Damping coefficient for upward motion" },
+        "damping_down": { "units": "N*s/m", "default": 0.3, "description": "Damping coefficient for downward motion" },
+        "switch_velocity": { "units": "m/s", "default": 0.0, "description": "Velocity threshold for switching damping" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              { "op": "/", "args": [{ "op": "*", "args": ["k", "x"] }, "m"] },
+              {
+                "op": "/", "args": [
+                  {
+                    "op": "ifelse", "args": [
+                      { "op": ">=", "args": ["v", "switch_velocity"] },
+                      { "op": "*", "args": ["damping_up", "v"] },
+                      { "op": "*", "args": ["damping_down", "v"] }
+                    ]
+                  },
+                  "m"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "events": {
+        "continuous": [
+          {
+            "name": "velocity_direction_change",
+            "conditions": [
+              { "op": "-", "args": ["v", "switch_velocity"] }
+            ],
+            "affects": [
+              {
+                "lhs": "x",
+                "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["x"] }, 0.99] }
+              }
+            ],
+            "affect_neg": [
+              {
+                "lhs": "x",
+                "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["x"] }, 1.01] }
+              }
+            ],
+            "root_find": true,
+            "description": "Different position adjustments depending on velocity direction change"
+          }
+        ]
+      }
+    },
+
+    "PopulationWithThresholds": {
+      "reference": {
+        "notes": "Population model with different interventions for population increase vs decrease"
+      },
+      "variables": {
+        "P": { "type": "state", "units": "individuals", "default": 100.0, "description": "Population size" },
+        "intervention_count": { "type": "discrete", "units": "dimensionless", "default": 0, "description": "Number of interventions applied" }
+      },
+      "parameters": {
+        "r": { "units": "1/time", "default": 0.1, "description": "Intrinsic growth rate" },
+        "K": { "units": "individuals", "default": 1000.0, "description": "Carrying capacity" },
+        "critical_threshold": { "units": "individuals", "default": 50.0, "description": "Critical population threshold" },
+        "boost_factor": { "units": "dimensionless", "default": 1.5, "description": "Population boost factor for declining populations" },
+        "control_factor": { "units": "dimensionless", "default": 0.8, "description": "Population control factor for growing populations" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["P"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              "r",
+              "P",
+              { "op": "-", "args": [1, { "op": "/", "args": ["P", "K"] }] }
+            ]
+          }
+        }
+      ],
+      "events": {
+        "continuous": [
+          {
+            "name": "critical_population_crossing",
+            "conditions": [
+              { "op": "-", "args": ["P", "critical_threshold"] }
+            ],
+            "affects": [
+              {
+                "lhs": "P",
+                "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["P"] }, "control_factor"] }
+              },
+              {
+                "lhs": "intervention_count",
+                "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["intervention_count"] }, 1] }
+              }
+            ],
+            "affect_neg": [
+              {
+                "lhs": "P",
+                "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["P"] }, "boost_factor"] }
+              },
+              {
+                "lhs": "intervention_count",
+                "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["intervention_count"] }, 1] }
+              }
+            ],
+            "root_find": true,
+            "description": "Apply different interventions based on whether population is increasing or decreasing past threshold"
+          }
+        ]
+      }
+    }
+  },
+
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T01:00:00Z",
+      "timestep": 0.01
+    },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "event_handling",
+    "config": {
+      "base_algorithm": "Tsit5",
+      "event_detection": "root_finding",
+      "event_tolerance": 1e-12,
+      "adaptive": true,
+      "root_finding_method": "Illinois"
+    }
+  }
+}
