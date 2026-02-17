@@ -84,6 +84,49 @@ export {
   getComponentType
 } from '../graph.js';
 
+// Import unit analysis functionality
+export {
+  parseUnit,
+  checkDimensions,
+  validateUnits,
+  type DimensionalRep,
+  type UnitResult,
+  type UnitWarning
+} from '../units.js';
+
+// Import ODE derivation and stoichiometry functionality
+export {
+  deriveODEs,
+  stoichiometricMatrix,
+  substrateMatrix,
+  productMatrix
+} from '../reactions.js';
+
+// Import programmatic model editing operations
+export {
+  addVariable,
+  removeVariable,
+  renameVariable,
+  addEquation,
+  removeEquation,
+  substituteInEquations,
+  addReaction,
+  removeReaction,
+  addSpecies,
+  removeSpecies,
+  addContinuousEvent,
+  addDiscreteEvent,
+  removeEvent,
+  addCoupling,
+  removeCoupling,
+  compose,
+  mapVariable,
+  merge,
+  extract,
+  VariableInUseError,
+  EntityNotFoundError
+} from '../edit.js';
+
 /**
  * Main analysis class providing a unified interface to all analysis capabilities
  */
