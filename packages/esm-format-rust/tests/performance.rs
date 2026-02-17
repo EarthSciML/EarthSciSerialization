@@ -1,7 +1,6 @@
 use esm_format::{
-    Expr, performance::{CompactExpr, PerformanceError},
+    Expr, performance::CompactExpr,
 };
-use std::collections::HashMap;
 
 #[test]
 fn test_compact_expression_creation() {

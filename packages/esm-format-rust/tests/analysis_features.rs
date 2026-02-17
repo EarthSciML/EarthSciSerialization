@@ -152,8 +152,8 @@ fn test_analysis_features_integration() {
             let matrix = stoichiometric_matrix(rs);
             assert_eq!(matrix.len(), 2); // 2 species
             assert_eq!(matrix[0].len(), 1); // 1 reaction
-            assert_eq!(matrix[0][0], -1); // A consumed
-            assert_eq!(matrix[1][0], 1); // B produced
+            assert_eq!(matrix[0][0], -1.0); // A consumed
+            assert_eq!(matrix[1][0], 1.0); // B produced
 
             // Test ODE derivation
             let ode_model = derive_odes(rs).expect("Should derive ODEs successfully");
