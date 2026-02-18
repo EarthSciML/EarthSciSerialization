@@ -1,13 +1,16 @@
 package esm
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/xeipuuv/gojsonschema"
 )
+
+//go:embed esm-schema.json
+var embeddedSchema []byte
 
 // ValidationResult holds the result of schema validation
 type ValidationResult struct {
@@ -54,32 +57,8 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 
 // validateJSONSchema validates the JSON string against the ESM JSON schema
 func validateJSONSchema(jsonStr string) (*ValidationResult, error) {
-	// Get the schema file path - look for it in several locations
-	schemaPaths := []string{
-		"../../esm-schema.json",                    // from pkg/esm directory
-		"../../../esm-schema.json",                 // from packages/esm-format-go
-		"../../../../esm-schema.json",              // from deeper
-		"/home/ctessum/EarthSciSerialization/esm-schema.json", // absolute path fallback
-	}
-
-	var schemaLoader gojsonschema.JSONLoader
-	var schemaFound bool
-
-	for _, schemaPath := range schemaPaths {
-		if _, err := os.Stat(schemaPath); err == nil {
-			absPath, err := filepath.Abs(schemaPath)
-			if err != nil {
-				continue
-			}
-			schemaLoader = gojsonschema.NewReferenceLoader("file://" + absPath)
-			schemaFound = true
-			break
-		}
-	}
-
-	if !schemaFound {
-		return nil, fmt.Errorf("ESM schema file not found in any expected location")
-	}
+	// Load the embedded schema
+	schemaLoader := gojsonschema.NewBytesLoader(embeddedSchema)
 
 	// Load the document
 	documentLoader := gojsonschema.NewStringLoader(jsonStr)

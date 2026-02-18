@@ -159,21 +159,49 @@ func TestLoadShouldSucceedWithStructuralValidationFailure(t *testing.T) {
 	}
 }
 
-func TestValidateJSONSchemaWithoutSchemaFile(t *testing.T) {
-	// This test assumes we're in a context where schema file is not found
-	// We'll create a minimal test
+func TestValidateJSONSchemaWithEmbeddedSchema(t *testing.T) {
+	// Test that schema validation works with embedded schema
+	// This should now always work regardless of external file presence
 	testJSON := `{"esm": "0.1.0"}`
 
-	// We can't easily test this without mocking the file system
-	// Instead, we'll test with a valid JSON that should pass if schema is found
 	result, err := validateJSONSchema(testJSON)
 
-	// The result depends on whether the schema file is found
-	// If not found, err should not be nil
-	// If found, the validation should fail because the JSON is incomplete
-	if err != nil {
-		assert.Contains(t, err.Error(), "schema file not found")
-	} else {
-		assert.False(t, result.Valid)
-	}
+	// With embedded schema, err should always be nil (no file lookup required)
+	assert.NoError(t, err)
+	// This JSON should fail validation because it's incomplete (missing metadata, models/reaction_systems)
+	assert.False(t, result.Valid)
+	assert.NotEmpty(t, result.Errors)
+}
+
+func TestValidateJSONSchemaValidDocument(t *testing.T) {
+	// Test with a complete valid document to ensure embedded schema works correctly
+	validJSON := `{
+		"esm": "0.1.0",
+		"metadata": {
+			"name": "TestModel",
+			"authors": ["Test Author"]
+		},
+		"models": {
+			"TestModel": {
+				"variables": {
+					"x": {
+						"type": "state",
+						"units": "m",
+						"default": 0.0
+					}
+				},
+				"equations": [
+					{
+						"lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+						"rhs": 1.0
+					}
+				]
+			}
+		}
+	}`
+
+	result, err := validateJSONSchema(validJSON)
+	assert.NoError(t, err)
+	assert.True(t, result.Valid, "Valid JSON should pass schema validation")
+	assert.Empty(t, result.Errors)
 }
