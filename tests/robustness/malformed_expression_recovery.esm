@@ -316,7 +316,7 @@
   },
   "data_loaders": {
     "MalformedExpressionLoader": {
-      "type": "expression_error_test",
+      "type": "static",
       "loader_id": "EXPR_ERROR_TEST",
       "config": {
         "inject_errors": true,

@@ -368,7 +368,7 @@
 
   "data_loaders": {
     "ClimateForcing": {
-      "type": "climate_data",
+      "type": "gridded_data",
       "loader_id": "CESM2_Output",
       "config": {
         "model": "CESM2",
@@ -385,7 +385,7 @@
     },
 
     "OceanObservations": {
-      "type": "observational_data",
+      "type": "timeseries",
       "loader_id": "SOCAT_pCO2",
       "config": {
         "dataset": "SOCATv2022",

@@ -299,7 +299,7 @@
   },
   "data_loaders": {
     "VersionedDataLoader": {
-      "type": "schema_evolution_test",
+      "type": "static",
       "loader_id": "SCHEMA_EVOLUTION",
       "config": {
         "version_compatibility": "multi",

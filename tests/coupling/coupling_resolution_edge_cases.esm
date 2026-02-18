@@ -115,12 +115,12 @@
 
   "data_loaders": {
     "EmptyDataLoader": {
-      "description": "Data loader with no provided variables",
-      "data_source": {
-        "type": "csv",
+      "type": "static",
+      "loader_id": "empty_csv",
+      "config": {
         "url": "file://empty.csv"
       },
-      "provided_variables": {}
+      "provides": {}
     }
   },
 

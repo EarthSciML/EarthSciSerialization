@@ -95,13 +95,13 @@
 
   "data_loaders": {
     "WeatherStation": {
-      "description": "Meteorological observations from weather station",
-      "data_source": {
-        "type": "csv",
+      "type": "static",
+      "loader_id": "weather_station_csv",
+      "config": {
         "url": "file://weather_data.csv",
         "time_column": "timestamp"
       },
-      "provided_variables": {
+      "provides": {
         "air_temp": { "units": "K", "description": "Measured air temperature" },
         "rel_humidity": { "units": "%", "description": "Measured relative humidity" },
         "wind_velocity": { "units": "m/s", "description": "Measured wind speed" },
@@ -110,13 +110,13 @@
     },
 
     "SatelliteData": {
-      "description": "Satellite observations of sea surface properties",
-      "data_source": {
-        "type": "netcdf",
+      "type": "gridded_data",
+      "loader_id": "satellite_netcdf",
+      "config": {
         "url": "file://satellite_sst.nc",
         "time_dimension": "time"
       },
-      "provided_variables": {
+      "provides": {
         "sst_satellite": { "units": "K", "description": "Satellite sea surface temperature" },
         "ocean_color": { "units": "mg/m^3", "description": "Chlorophyll concentration" }
       }

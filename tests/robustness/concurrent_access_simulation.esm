@@ -247,7 +247,7 @@
     Array.from({length: 50}, (_, i) => [
       `CONCURRENT_LOADER_${i}`,
       {
-        "type": "thread_safe_data",
+        "type": "static",
         "loader_id": `TSAFE_${i}`,
         "config": {
           "thread_pool_size": (i % 16) + 1,

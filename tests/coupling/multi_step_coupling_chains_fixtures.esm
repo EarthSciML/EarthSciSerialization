@@ -160,13 +160,13 @@
 
   "data_loaders": {
     "MeteorologicalForcing": {
-      "description": "High-frequency meteorological data",
-      "data_source": {
-        "type": "netcdf",
+      "type": "gridded_data",
+      "loader_id": "meteorological_netcdf",
+      "config": {
         "url": "file://met_forcing.nc",
         "time_dimension": "time"
       },
-      "provided_variables": {
+      "provides": {
         "wind_u": { "units": "m/s", "description": "Zonal wind velocity" },
         "wind_v": { "units": "m/s", "description": "Meridional wind velocity" },
         "solar_flux": { "units": "W/m^2", "description": "Solar radiation flux" },
@@ -175,13 +175,13 @@
     },
 
     "EmissionInventory": {
-      "description": "Chemical emission sources",
-      "data_source": {
-        "type": "csv",
+      "type": "emissions",
+      "loader_id": "emissions_csv",
+      "config": {
         "url": "file://emissions.csv",
         "time_column": "datetime"
       },
-      "provided_variables": {
+      "provides": {
         "NOx_emissions": { "units": "mol/m^2/s", "description": "NOx emission rate" },
         "CO2_flux": { "units": "kg/m^2/s", "description": "CO2 surface flux" }
       }

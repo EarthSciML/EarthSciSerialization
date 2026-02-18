@@ -226,7 +226,7 @@
   },
   "data_loaders": {
     "CorruptedDataLoader": {
-      "type": "corruption_simulation",
+      "type": "static",
       "loader_id": "CORRUPT_SIM",
       "config": {
         "corruption_rate": 0.15,
