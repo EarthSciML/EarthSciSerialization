@@ -58,8 +58,8 @@ export { toJuliaCode, toPythonCode } from './codegen.js'
 // Interactive editor components (SolidJS) - moved to esm-editor package
 // export * from './interactive-editor/index.js'
 
-// Web Components (framework-agnostic usage) - moved to esm-editor package
-// export * from './web-components.js'
+// Web Components (framework-agnostic usage)
+export * from './web-components.js'
 
 // Error handling and diagnostics
 export * from './error-handling.js'
