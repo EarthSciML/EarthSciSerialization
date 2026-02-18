@@ -34,6 +34,33 @@ def free_variables(expr: Expr) -> Set[str]:
         return set()
 
 
+def free_parameters(expr: Expr, model: Model) -> Set[str]:
+    """
+    Extract free parameters from an expression.
+
+    A parameter is a free variable that has type="parameter" in the model.
+
+    Args:
+        expr: Expression to analyze
+        model: Model containing variable type information
+
+    Returns:
+        Set of parameter names found in the expression
+    """
+    # Get all free variables from the expression
+    free_vars = free_variables(expr)
+
+    # Filter to only include variables that are parameters
+    parameters = set()
+    for var_name in free_vars:
+        if var_name in model.variables:
+            var = model.variables[var_name]
+            if var.type == 'parameter':
+                parameters.add(var_name)
+
+    return parameters
+
+
 def contains(expr: Expr, var_name: str) -> bool:
     """
     Check if an expression contains a specific variable.

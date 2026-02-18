@@ -40,7 +40,7 @@ from .esm_types import (
 from .parse import load, SchemaValidationError, UnsupportedVersionError
 from .serialize import save
 from .validation import validate, ValidationResult, ValidationError
-from .expression import free_variables, contains, evaluate, simplify
+from .expression import free_variables, free_parameters, contains, evaluate, simplify
 from .substitute import substitute, substitute_in_model, substitute_in_reaction_system
 from .verification import (
     MathematicalVerifier,
@@ -418,6 +418,7 @@ __all__ = [
     "create_subcycling_synchronizer",
     "validate_time_synchronization_config",
     "free_variables",
+    "free_parameters",
     "contains",
     "evaluate",
     "simplify",

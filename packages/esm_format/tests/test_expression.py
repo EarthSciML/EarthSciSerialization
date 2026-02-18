@@ -3,10 +3,10 @@
 import pytest
 import sympy as sp
 from esm_format.expression import (
-    free_variables, contains, evaluate, simplify,
+    free_variables, free_parameters, contains, evaluate, simplify,
     to_sympy, from_sympy, symbolic_jacobian
 )
-from esm_format.types import ExprNode, Model, ModelVariable, Equation
+from esm_format.esm_types import ExprNode, Model, ModelVariable, Equation
 
 
 class TestBasicExpressionFunctions:
@@ -38,6 +38,61 @@ class TestBasicExpressionFunctions:
         """Test contains when variable is not present."""
         expr = ExprNode(op="*", args=["k", "x"])
         assert contains(expr, "y") is False
+
+    def test_free_parameters(self):
+        """Test free_parameters extracts only parameter variables."""
+        # Create a model with different variable types
+        model = Model(
+            name="test_model",
+            variables={
+                "x": ModelVariable(type="state"),
+                "y": ModelVariable(type="state"),
+                "k": ModelVariable(type="parameter"),
+                "alpha": ModelVariable(type="parameter"),
+                "z": ModelVariable(type="observed")
+            }
+        )
+
+        # Test expression: k * x + alpha * y + z
+        expr = ExprNode(op="+", args=[
+            ExprNode(op="*", args=["k", "x"]),
+            ExprNode(op="+", args=[
+                ExprNode(op="*", args=["alpha", "y"]),
+                "z"
+            ])
+        ])
+
+        parameters = free_parameters(expr, model)
+        assert parameters == {"k", "alpha"}
+
+    def test_free_parameters_empty(self):
+        """Test free_parameters with no parameters in expression."""
+        model = Model(
+            name="test_model",
+            variables={
+                "x": ModelVariable(type="state"),
+                "y": ModelVariable(type="observed")
+            }
+        )
+
+        expr = ExprNode(op="+", args=["x", "y"])
+        parameters = free_parameters(expr, model)
+        assert parameters == set()
+
+    def test_free_parameters_undefined_variables(self):
+        """Test free_parameters with variables not in model."""
+        model = Model(
+            name="test_model",
+            variables={
+                "k": ModelVariable(type="parameter")
+            }
+        )
+
+        # Expression contains both defined and undefined variables
+        expr = ExprNode(op="*", args=["k", "undefined_var"])
+        parameters = free_parameters(expr, model)
+        # Should only include the parameter that's defined in the model
+        assert parameters == {"k"}
 
     def test_evaluate_simple(self):
         """Test evaluate with simple expressions."""
