@@ -13,7 +13,7 @@ try:
     from .esm_types import (
         EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter,
         Reaction, Equation, Expr, ExprNode, AffectEquation, ContinuousEvent,
-        DiscreteEvent, CouplingEntry
+        DiscreteEvent, CouplingEntry, Metadata
     )
     from .validation import validate, ValidationResult
 except ImportError:
@@ -21,7 +21,7 @@ except ImportError:
     from esm_types import (
         EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter,
         Reaction, Equation, Expr, ExprNode, AffectEquation, ContinuousEvent,
-        DiscreteEvent, CouplingEntry
+        DiscreteEvent, CouplingEntry, Metadata
     )
 
 
@@ -356,19 +356,37 @@ class ESMEditor:
             # Make deep copies to avoid modifying originals
             merged_file = deepcopy(file_a)
 
-            # Merge models
+            # Merge models (dict merge)
             if file_b.models:
                 if not merged_file.models:
-                    merged_file.models = []
-                merged_file.models.extend(file_b.models)
+                    merged_file.models = {}
+                merged_file.models.update(file_b.models)
 
-            # Merge reaction systems
+            # Merge reaction systems (dict merge)
             if file_b.reaction_systems:
                 if not merged_file.reaction_systems:
-                    merged_file.reaction_systems = []
-                merged_file.reaction_systems.extend(file_b.reaction_systems)
+                    merged_file.reaction_systems = {}
+                merged_file.reaction_systems.update(file_b.reaction_systems)
 
-            # Merge coupling
+            # Merge events (list extend)
+            if file_b.events:
+                if not merged_file.events:
+                    merged_file.events = []
+                merged_file.events.extend(file_b.events)
+
+            # Merge data_loaders (list extend)
+            if file_b.data_loaders:
+                if not merged_file.data_loaders:
+                    merged_file.data_loaders = []
+                merged_file.data_loaders.extend(file_b.data_loaders)
+
+            # Merge operators (list extend)
+            if file_b.operators:
+                if not merged_file.operators:
+                    merged_file.operators = []
+                merged_file.operators.extend(file_b.operators)
+
+            # Merge coupling (list extend)
             if file_b.coupling:
                 if not merged_file.coupling:
                     merged_file.coupling = []
@@ -377,6 +395,10 @@ class ESMEditor:
             # Other fields from file_b take precedence
             if hasattr(file_b, 'metadata') and file_b.metadata:
                 merged_file.metadata = file_b.metadata
+            if hasattr(file_b, 'domain') and file_b.domain:
+                merged_file.domain = file_b.domain
+            if hasattr(file_b, 'solver') and file_b.solver:
+                merged_file.solver = file_b.solver
 
             return EditResult(success=True, modified_object=merged_file)
 
@@ -396,31 +418,67 @@ class ESMEditor:
         """
         try:
             # Create a new ESM file with only the specified component
+            # Use minimal metadata for the extracted file
+            extracted_metadata = Metadata(
+                title=f"Extracted: {component_name}",
+                description=f"Component '{component_name}' extracted from {esm_file.metadata.title if esm_file.metadata else 'source file'}"
+            )
+
             extracted_file = EsmFile(
-                models=[],
-                reaction_systems=[],
+                version=esm_file.version,
+                metadata=extracted_metadata,
+                models={},
+                reaction_systems={},
                 coupling=[]
             )
 
-            # Find and extract the component
-            if esm_file.models:
-                for model in esm_file.models:
-                    if model.name == component_name:
-                        extracted_file.models.append(deepcopy(model))
-                        break
+            found_component = False
 
-            if esm_file.reaction_systems:
-                for rs in esm_file.reaction_systems:
-                    if rs.name == component_name:
-                        extracted_file.reaction_systems.append(deepcopy(rs))
-                        break
+            # Find and extract the component from models
+            if esm_file.models and component_name in esm_file.models:
+                extracted_file.models[component_name] = deepcopy(esm_file.models[component_name])
+                found_component = True
 
-            # Find relevant coupling entries
+            # Find and extract the component from reaction systems
+            if esm_file.reaction_systems and component_name in esm_file.reaction_systems:
+                extracted_file.reaction_systems[component_name] = deepcopy(esm_file.reaction_systems[component_name])
+                found_component = True
+
+            # Find relevant coupling entries that involve the extracted component
             if esm_file.coupling:
                 for coupling in esm_file.coupling:
                     # Check if coupling involves the extracted component
-                    # Implementation would depend on specific coupling structure
-                    extracted_file.coupling.append(deepcopy(coupling))
+                    should_include = False
+
+                    # Check systems field (for operator_compose, couple2)
+                    if coupling.systems and component_name in coupling.systems:
+                        should_include = True
+
+                    # Check from_var/to_var fields (for variable_map)
+                    if coupling.from_var and coupling.from_var.startswith(f"{component_name}."):
+                        should_include = True
+                    if coupling.to_var and coupling.to_var.startswith(f"{component_name}."):
+                        should_include = True
+
+                    # Check operator field (for operator_apply)
+                    if coupling.operator and coupling.operator == component_name:
+                        should_include = True
+
+                    if should_include:
+                        extracted_file.coupling.append(deepcopy(coupling))
+
+            # Copy relevant events that might belong to this component
+            if esm_file.events:
+                for event in esm_file.events:
+                    # This is a simple heuristic - include events that might be related
+                    # A more sophisticated implementation would check variable references
+                    extracted_file.events.append(deepcopy(event))
+
+            if not found_component:
+                return EditResult(
+                    success=False,
+                    errors=[f"Component '{component_name}' not found in the ESM file"]
+                )
 
             return EditResult(success=True, modified_object=extracted_file)
 
