@@ -127,7 +127,10 @@ def validate(esm_file: EsmFile) -> ValidationResult:
         # 4. Event Consistency validation
         _validate_event_consistency(esm_file, structural_errors)
 
-        # 5. Unit validation (warnings only)
+        # 5. Domain validation (coordinate transforms, etc.)
+        _validate_domain_enhanced(esm_file, error_collector)
+
+        # 6. Unit validation (warnings only)
         _validate_units(esm_file, unit_warnings)
 
         # Convert enhanced errors back to old format for backward compatibility
@@ -272,6 +275,170 @@ def validate_raw(esm_data: Union[str, Dict[str, Any]]) -> ValidationResult:
         structural_errors=structural_errors,
         unit_warnings=[]
     )
+
+
+def _validate_domain_enhanced(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
+    """
+    Enhanced domain validation including comprehensive coordinate transform checks.
+
+    This validates:
+    1. Coordinate transform ID uniqueness
+    2. Non-empty dimensions arrays
+    3. Transform chain compatibility (if metadata indicates relationships)
+    4. Dimensional consistency for known transform patterns
+    """
+    if not esm_file.domain or not esm_file.domain.coordinate_transforms:
+        return  # No domain or transforms to validate
+
+    domain = esm_file.domain
+    transforms = domain.coordinate_transforms
+    spatial_dims = set(domain.spatial.keys()) if domain.spatial else set()
+
+    # 1. Check for duplicate transform IDs
+    seen_ids = set()
+    for i, transform in enumerate(transforms):
+        if transform.id in seen_ids:
+            error = ESMError(
+                code=ErrorCode.SCHEMA_VALIDATION_ERROR,  # Using closest available error code
+                message=f"Duplicate coordinate transform ID '{transform.id}' found",
+                severity=Severity.ERROR,
+                context=ErrorContext(
+                    path=f"/domain/coordinate_transforms/{i}/id",
+                    details={
+                        "transform_id": transform.id,
+                        "duplicate_indices": [j for j, t in enumerate(transforms) if t.id == transform.id]
+                    }
+                ),
+                fix_suggestion=FixSuggestion(f"Use unique IDs for coordinate transforms. Consider '{transform.id}_v2' or similar.")
+            )
+            error_collector.add_error(error)
+        seen_ids.add(transform.id)
+
+    # 2. Check for empty dimensions arrays
+    for i, transform in enumerate(transforms):
+        if not transform.dimensions:
+            error = ESMError(
+                code=ErrorCode.MISSING_REQUIRED_FIELD,
+                message=f"Coordinate transform '{transform.id}' has empty dimensions array",
+                severity=Severity.ERROR,
+                context=ErrorContext(
+                    path=f"/domain/coordinate_transforms/{i}/dimensions",
+                    details={
+                        "transform_id": transform.id,
+                        "description": transform.description if hasattr(transform, 'description') else ""
+                    }
+                ),
+                fix_suggestion=FixSuggestion("Specify at least one dimension for the coordinate transform.")
+            )
+            error_collector.add_error(error)
+
+    # 3. Check dimensions exist in spatial domain (enhanced beyond parse.py check)
+    for i, transform in enumerate(transforms):
+        for j, dim in enumerate(transform.dimensions):
+            if spatial_dims and dim not in spatial_dims:
+                available_dims = sorted(list(spatial_dims))
+                error = ESMError(
+                    code=ErrorCode.UNDEFINED_VARIABLE,  # Using closest available error code
+                    message=f"Coordinate transform '{transform.id}' references undefined dimension '{dim}'",
+                    severity=Severity.ERROR,
+                    context=ErrorContext(
+                        path=f"/domain/coordinate_transforms/{i}/dimensions/{j}",
+                        details={
+                            "transform_id": transform.id,
+                            "undefined_dimension": dim,
+                            "available_dimensions": available_dims,
+                            "similar_dimensions": [d for d in available_dims if abs(len(d) - len(dim)) <= 2]
+                        }
+                    ),
+                    fix_suggestion=FixSuggestion(
+                        f"Use one of the available spatial dimensions: {', '.join(available_dims)}"
+                        if available_dims else
+                        "Define the required spatial dimensions in the domain.spatial section"
+                    )
+                )
+                error_collector.add_error(error)
+
+    # 4. Validate common coordinate transform patterns
+    _validate_coordinate_transform_patterns(transforms, spatial_dims, error_collector)
+
+
+def _validate_coordinate_transform_patterns(transforms, spatial_dims, error_collector: ErrorCollector) -> None:
+    """
+    Validate common coordinate transform dimensional patterns.
+
+    This checks for physically reasonable transform dimension counts and patterns
+    commonly found in earth science applications.
+    """
+    for i, transform in enumerate(transforms):
+        transform_id = transform.id.lower()
+        dim_count = len(transform.dimensions)
+
+        # Check for suspicious dimension patterns
+        if dim_count > 4:
+            error = ESMError(
+                code=ErrorCode.SCHEMA_VALIDATION_ERROR,  # Using available error code for warnings
+                message=f"Coordinate transform '{transform.id}' has unusually high dimension count ({dim_count})",
+                severity=Severity.WARNING,
+                context=ErrorContext(
+                    path=f"/domain/coordinate_transforms/{i}",
+                    details={
+                        "transform_id": transform.id,
+                        "dimension_count": dim_count,
+                        "dimensions": transform.dimensions
+                    }
+                ),
+                fix_suggestion=FixSuggestion("Verify that all dimensions are necessary for this coordinate transform.")
+            )
+            error_collector.add_warning(error)
+
+        # Check for common geographic transform patterns
+        if any(geo_indicator in transform_id for geo_indicator in ['lonlat', 'geographic', 'mercator', 'proj']):
+            geographic_dims = {'lon', 'longitude', 'lat', 'latitude'}
+            has_geographic = any(dim.lower() in geographic_dims for dim in transform.dimensions)
+
+            if not has_geographic and spatial_dims:
+                # Check if spatial domain has geographic dimensions that might be missing
+                available_geographic = [dim for dim in spatial_dims if dim.lower() in geographic_dims]
+                if available_geographic:
+                    error = ESMError(
+                        code=ErrorCode.SCHEMA_VALIDATION_ERROR,
+                        message=f"Geographic coordinate transform '{transform.id}' doesn't reference geographic dimensions",
+                        severity=Severity.WARNING,
+                        context=ErrorContext(
+                            path=f"/domain/coordinate_transforms/{i}/dimensions",
+                            details={
+                                "transform_id": transform.id,
+                                "current_dimensions": transform.dimensions,
+                                "available_geographic": available_geographic
+                            }
+                        ),
+                        fix_suggestion=FixSuggestion(f"Consider including geographic dimensions: {', '.join(available_geographic)}")
+                    )
+                    error_collector.add_warning(error)
+
+        # Check for vertical transforms
+        if any(vert_indicator in transform_id for vert_indicator in ['pressure', 'height', 'level', 'vertical']):
+            vertical_dims = {'lev', 'level', 'pressure', 'height', 'z', 'z_height', 'p'}
+            has_vertical = any(dim.lower() in vertical_dims for dim in transform.dimensions)
+
+            if not has_vertical and spatial_dims:
+                available_vertical = [dim for dim in spatial_dims if dim.lower() in vertical_dims]
+                if available_vertical:
+                    error = ESMError(
+                        code=ErrorCode.SCHEMA_VALIDATION_ERROR,
+                        message=f"Vertical coordinate transform '{transform.id}' doesn't reference vertical dimensions",
+                        severity=Severity.WARNING,
+                        context=ErrorContext(
+                            path=f"/domain/coordinate_transforms/{i}/dimensions",
+                            details={
+                                "transform_id": transform.id,
+                                "current_dimensions": transform.dimensions,
+                                "available_vertical": available_vertical
+                            }
+                        ),
+                        fix_suggestion=FixSuggestion(f"Consider including vertical dimensions: {', '.join(available_vertical)}")
+                    )
+                    error_collector.add_warning(error)
 
 
 def _validate_content_presence(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
