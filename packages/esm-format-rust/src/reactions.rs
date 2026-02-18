@@ -182,9 +182,9 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
             })
         };
 
-        // Create the ODE equation: d[species]/dt = rhs
+        // Create the ODE equation: D[species] (wrt t) = rhs
         let lhs = Expr::Operator(ExpressionNode {
-            op: "d/dt".to_string(),
+            op: "D".to_string(),
             args: vec![Expr::Variable(species.name.clone())],
             wrt: Some("t".to_string()),
             dim: None,
@@ -409,7 +409,7 @@ mod tests {
         // Both species should have ODE equations
         let var_names: Vec<String> = model.equations.iter().map(|eq| {
             match &eq.lhs {
-                Expr::Operator(node) if node.op == "d/dt" => {
+                Expr::Operator(node) if node.op == "D" => {
                     match &node.args[0] {
                         Expr::Variable(name) => name.clone(),
                         _ => "unknown".to_string(),
@@ -579,7 +579,7 @@ mod tests {
         // For species C: d[C]/dt = k1 * A * B
         let c_equation = model.equations.iter()
             .find(|eq| match &eq.lhs {
-                Expr::Operator(node) if node.op == "d/dt" => {
+                Expr::Operator(node) if node.op == "D" => {
                     match &node.args[0] {
                         Expr::Variable(name) => name == "C",
                         _ => false,
@@ -689,7 +689,7 @@ mod tests {
         // Check that the rate law includes A^2 term (or A*A)
         let b_equation = model.equations.iter()
             .find(|eq| match &eq.lhs {
-                Expr::Operator(node) if node.op == "d/dt" => {
+                Expr::Operator(node) if node.op == "D" => {
                     match &node.args[0] {
                         Expr::Variable(name) => name == "B",
                         _ => false,
@@ -760,7 +760,7 @@ mod tests {
         // Check that fractional stoichiometry is handled correctly
         let b_equation = model.equations.iter()
             .find(|eq| match &eq.lhs {
-                Expr::Operator(node) if node.op == "d/dt" => {
+                Expr::Operator(node) if node.op == "D" => {
                     match &node.args[0] {
                         Expr::Variable(name) => name == "B",
                         _ => false,
@@ -821,7 +821,7 @@ mod tests {
         for species_name in &["A", "B", "C", "D"] {
             let found = model.equations.iter().any(|eq| {
                 match &eq.lhs {
-                    Expr::Operator(node) if node.op == "d/dt" => {
+                    Expr::Operator(node) if node.op == "D" => {
                         match &node.args[0] {
                             Expr::Variable(name) => name == species_name,
                             _ => false,

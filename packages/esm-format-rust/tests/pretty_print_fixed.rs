@@ -38,7 +38,7 @@ fn test_basic_expression_formatting() {
 /// Test operator formatting
 #[test]
 fn test_operator_formatting() {
-    let operators = ["+", "-", "*", "/", "^", "d/dt", "sin", "cos", "exp", "log"];
+    let operators = ["+", "-", "*", "/", "^", "D", "sin", "cos", "exp", "log"];
 
     for op in &operators {
         let expr = Expr::Operator(ExpressionNode {
@@ -127,7 +127,7 @@ fn test_complex_expression_formatting() {
 #[test]
 fn test_derivative_formatting() {
     let derivative_expr = Expr::Operator(ExpressionNode {
-        op: "d/dt".to_string(),
+        op: "D".to_string(),
         args: vec![Expr::Variable("x".to_string())],
         wrt: Some("t".to_string()),
         dim: None,
@@ -141,8 +141,8 @@ fn test_derivative_formatting() {
     assert!(!latex_result.is_empty());
     assert!(!ascii_result.is_empty());
 
-    // Should properly format derivatives
-    assert!(unicode_result.contains("d") && unicode_result.contains("t"));
+    // Should properly format derivatives with partial derivative symbols
+    assert!(unicode_result.contains("∂") && unicode_result.contains("t"));
 }
 
 /// Test number formatting

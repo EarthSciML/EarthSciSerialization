@@ -309,9 +309,9 @@ fn test_complex_expression_operations() {
 /// Test derivative-like expressions
 #[test]
 fn test_derivative_expressions() {
-    // Test d/dt expression
+    // Test D expression (derivative operator)
     let derivative_expr = Expr::Operator(ExpressionNode {
-        op: "d/dt".to_string(),
+        op: "D".to_string(),
         args: vec![Expr::Variable("x".to_string())],
         wrt: Some("t".to_string()),
         dim: None,
