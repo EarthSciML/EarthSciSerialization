@@ -223,13 +223,38 @@ Serialize Reaction to JSON-compatible format.
 """
 function serialize_reaction(reaction::Reaction)::Dict{String,Any}
     result = Dict{String,Any}(
-        "reactants" => reaction.reactants,
-        "products" => reaction.products,
+        "id" => reaction.id,
         "rate" => serialize_expression(reaction.rate)
     )
-    if reaction.reversible
-        result["reversible"] = reaction.reversible
+
+    if reaction.name !== nothing
+        result["name"] = reaction.name
     end
+
+    # Handle substrates (can be null for source reactions)
+    if reaction.substrates !== nothing
+        result["substrates"] = [
+            Dict("species" => entry.species, "stoichiometry" => entry.stoichiometry)
+            for entry in reaction.substrates
+        ]
+    else
+        result["substrates"] = nothing
+    end
+
+    # Handle products (can be null for sink reactions)
+    if reaction.products !== nothing
+        result["products"] = [
+            Dict("species" => entry.species, "stoichiometry" => entry.stoichiometry)
+            for entry in reaction.products
+        ]
+    else
+        result["products"] = nothing
+    end
+
+    if reaction.reference !== nothing
+        result["reference"] = serialize_reference(reaction.reference)
+    end
+
     return result
 end
 

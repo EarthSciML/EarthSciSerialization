@@ -724,28 +724,36 @@ function Base.show(io::IO, reaction_system::ReactionSystem)
 
     println(io, "  Reactions ($(length(reaction_system.reactions))):")
     for (i, reaction) in enumerate(reaction_system.reactions)
-        # Format reactants
-        reactants_str = join([
-            if stoich == 1
-                format_chemical_subscripts(species, :unicode)
-            else
-                "$(stoich)$(format_chemical_subscripts(species, :unicode))"
-            end
-            for (species, stoich) in reaction.reactants
-        ], " + ")
+        # Format substrates
+        reactants_str = if reaction.substrates === nothing || isempty(reaction.substrates)
+            ""
+        else
+            join([
+                if entry.stoichiometry == 1
+                    format_chemical_subscripts(entry.species, :unicode)
+                else
+                    "$(entry.stoichiometry)$(format_chemical_subscripts(entry.species, :unicode))"
+                end
+                for entry in reaction.substrates
+            ], " + ")
+        end
 
         # Format products
-        products_str = join([
-            if stoich == 1
-                format_chemical_subscripts(species, :unicode)
-            else
-                "$(stoich)$(format_chemical_subscripts(species, :unicode))"
-            end
-            for (species, stoich) in reaction.products
-        ], " + ")
+        products_str = if reaction.products === nothing || isempty(reaction.products)
+            ""
+        else
+            join([
+                if entry.stoichiometry == 1
+                    format_chemical_subscripts(entry.species, :unicode)
+                else
+                    "$(entry.stoichiometry)$(format_chemical_subscripts(entry.species, :unicode))"
+                end
+                for entry in reaction.products
+            ], " + ")
+        end
 
-        # Arrow type
-        arrow = reaction.reversible ? " ⇌ " : " → "
+        # Arrow type (no reversible field in new schema)
+        arrow = " → "
 
         # Rate expression
         rate_str = format_expression_unicode(reaction.rate)

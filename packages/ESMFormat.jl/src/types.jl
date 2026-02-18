@@ -271,38 +271,7 @@ struct Parameter
         new(name, default, description, units)
 end
 
-"""
-    Reaction
 
-Chemical reaction with reactants, products, and rate expression.
-"""
-struct Reaction
-    reactants::Dict{String,Int}  # species => stoichiometry
-    products::Dict{String,Int}   # species => stoichiometry
-    rate::Expr
-    reversible::Bool
-
-    # Constructor with optional reversible parameter
-    Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false) =
-        new(reactants, products, rate, reversible)
-end
-
-"""
-    ReactionSystem
-
-Collection of chemical reactions with associated species, supporting hierarchical composition.
-"""
-struct ReactionSystem
-    species::Vector{Species}
-    reactions::Vector{Reaction}
-    parameters::Vector{Parameter}
-    subsystems::Dict{String,ReactionSystem}
-
-    # Constructor with optional parameters and subsystems
-    ReactionSystem(species::Vector{Species}, reactions::Vector{Reaction};
-                   parameters=Parameter[], subsystems=Dict{String,ReactionSystem}()) =
-        new(species, reactions, parameters, subsystems)
-end
 
 # ========================================
 # 6. Data and Operator Types
@@ -660,6 +629,56 @@ struct Reference
 end
 
 """
+    StoichiometryEntry
+
+A species with its stoichiometric coefficient in a reaction.
+"""
+struct StoichiometryEntry
+    species::String
+    stoichiometry::Int
+
+    # Constructor
+    StoichiometryEntry(species::String, stoichiometry::Int) = new(species, stoichiometry)
+end
+
+"""
+    Reaction
+
+Chemical reaction with substrates, products, and rate expression.
+"""
+struct Reaction
+    id::String
+    name::Union{String,Nothing}
+    substrates::Union{Vector{StoichiometryEntry},Nothing}  # null for source reactions (∅ → X)
+    products::Union{Vector{StoichiometryEntry},Nothing}    # null for sink reactions (X → ∅)
+    rate::Expr
+    reference::Union{Reference,Nothing}
+
+    # Constructor with optional parameters
+    Reaction(id::String, substrates::Union{Vector{StoichiometryEntry},Nothing},
+             products::Union{Vector{StoichiometryEntry},Nothing}, rate::Expr;
+             name=nothing, reference=nothing) =
+        new(id, name, substrates, products, rate, reference)
+end
+
+"""
+    ReactionSystem
+
+Collection of chemical reactions with associated species, supporting hierarchical composition.
+"""
+struct ReactionSystem
+    species::Vector{Species}
+    reactions::Vector{Reaction}
+    parameters::Vector{Parameter}
+    subsystems::Dict{String,ReactionSystem}
+
+    # Constructor with optional parameters and subsystems
+    ReactionSystem(species::Vector{Species}, reactions::Vector{Reaction};
+                   parameters=Parameter[], subsystems=Dict{String,ReactionSystem}()) =
+        new(species, reactions, parameters, subsystems)
+end
+
+"""
     Metadata
 
 Authorship, provenance, and description metadata.
@@ -950,4 +969,93 @@ function is_valid_identifier(name::String)::Bool
     end
 
     return true
+end
+
+# ========================================
+# 9. Backward Compatibility Helpers
+# ========================================
+
+"""
+    dict_to_stoichiometry_entries(dict::Dict{String,Int}) -> Vector{StoichiometryEntry}
+
+Convert old-style Dict{String,Int} format to new StoichiometryEntry vector format.
+"""
+function dict_to_stoichiometry_entries(dict::Dict{String,Int})::Vector{StoichiometryEntry}
+    return [StoichiometryEntry(species, stoichiometry) for (species, stoichiometry) in dict]
+end
+
+"""
+    stoichiometry_entries_to_dict(entries::Vector{StoichiometryEntry}) -> Dict{String,Int}
+
+Convert new StoichiometryEntry vector format to old-style Dict{String,Int} format.
+"""
+function stoichiometry_entries_to_dict(entries::Vector{StoichiometryEntry})::Dict{String,Int}
+    return Dict(entry.species => entry.stoichiometry for entry in entries)
+end
+
+"""
+    Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false) -> Reaction
+
+Legacy constructor for backward compatibility. Creates a reaction with auto-generated ID.
+"""
+function Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false)
+    # Generate a simple ID based on the reactants and products
+    id = "reaction_$(hash(string(reactants, products, rate)))"
+
+    substrates = isempty(reactants) ? nothing : dict_to_stoichiometry_entries(reactants)
+    products_vec = isempty(products) ? nothing : dict_to_stoichiometry_entries(products)
+
+    return Reaction(id, substrates, products_vec, rate)
+end
+
+"""
+    get_reactants_dict(reaction::Reaction) -> Dict{String,Int}
+
+Get reactants as dictionary for backward compatibility.
+"""
+function get_reactants_dict(reaction::Reaction)::Dict{String,Int}
+    # Use getfield to avoid infinite recursion
+    substrates_field = getfield(reaction, :substrates)
+    if substrates_field === nothing
+        return Dict{String,Int}()
+    else
+        return stoichiometry_entries_to_dict(substrates_field)
+    end
+end
+
+"""
+    get_products_dict(reaction::Reaction) -> Dict{String,Int}
+
+Get products as dictionary for backward compatibility.
+"""
+function get_products_dict(reaction::Reaction)::Dict{String,Int}
+    # Use getfield to avoid infinite recursion
+    products_field = getfield(reaction, :products)
+    if products_field === nothing
+        return Dict{String,Int}()
+    else
+        return stoichiometry_entries_to_dict(products_field)
+    end
+end
+
+# Add property access for backward compatibility
+# Only override specific properties that are needed for backward compatibility
+Base.getproperty(reaction::Reaction, name::Symbol) = begin
+    if name == :reactants
+        return get_reactants_dict(reaction)
+    elseif name == :reversible
+        return false  # Not supported in new schema
+    else
+        return getfield(reaction, name)
+    end
+end
+
+# Add a separate property for old-style products access
+Base.propertynames(::Type{Reaction}, private::Bool=false) = begin
+    names = fieldnames(Reaction)
+    if private
+        return (names..., :reactants, :reversible)
+    else
+        return names
+    end
 end

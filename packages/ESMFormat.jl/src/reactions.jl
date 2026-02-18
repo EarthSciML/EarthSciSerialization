@@ -152,19 +152,23 @@ function stoichiometric_matrix(rxn_sys::ReactionSystem)::Matrix{Int}
     S = zeros(Int, n_species, n_reactions)
 
     for (j, reaction) in enumerate(rxn_sys.reactions)
-        # Handle reactants (negative stoichiometry)
-        for (species_name, stoich) in reaction.reactants
-            if haskey(species_idx, species_name)
-                i = species_idx[species_name]
-                S[i, j] -= stoich
+        # Handle substrates (negative stoichiometry)
+        if reaction.substrates !== nothing
+            for entry in reaction.substrates
+                if haskey(species_idx, entry.species)
+                    i = species_idx[entry.species]
+                    S[i, j] -= entry.stoichiometry
+                end
             end
         end
 
         # Handle products (positive stoichiometry)
-        for (species_name, stoich) in reaction.products
-            if haskey(species_idx, species_name)
-                i = species_idx[species_name]
-                S[i, j] += stoich
+        if reaction.products !== nothing
+            for entry in reaction.products
+                if haskey(species_idx, entry.species)
+                    i = species_idx[entry.species]
+                    S[i, j] += entry.stoichiometry
+                end
             end
         end
     end
@@ -206,21 +210,21 @@ function mass_action_rate(reaction::Reaction, species::Vector{Species})::ESMForm
     # Start with the rate constant expression
     rate_expr = reaction.rate
 
-    # Handle source reactions (no reactants)
-    if isempty(reaction.reactants)
+    # Handle source reactions (no substrates)
+    if reaction.substrates === nothing || isempty(reaction.substrates)
         return rate_expr
     end
 
-    # Build mass action terms for reactants
+    # Build mass action terms for substrates
     mass_action_terms = ESMFormat.Expr[rate_expr]
 
-    for (species_name, stoich) in reaction.reactants
-        species_expr = VarExpr(species_name)
-        if stoich == 1
+    for entry in reaction.substrates
+        species_expr = VarExpr(entry.species)
+        if entry.stoichiometry == 1
             push!(mass_action_terms, species_expr)
         else
             # For stoichiometry > 1, use power operator
-            push!(mass_action_terms, OpExpr("^", ESMFormat.Expr[species_expr, NumExpr(Float64(stoich))]))
+            push!(mass_action_terms, OpExpr("^", ESMFormat.Expr[species_expr, NumExpr(Float64(entry.stoichiometry))]))
         end
     end
 
