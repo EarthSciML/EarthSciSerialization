@@ -40,7 +40,7 @@ from .esm_types import (
 from .parse import load, SchemaValidationError, UnsupportedVersionError
 from .serialize import save
 from .validation import validate, ValidationResult, ValidationError
-from .expression import free_variables, free_parameters, contains, evaluate, simplify
+from .expression import free_variables, free_parameters, contains, evaluate, simplify, to_sympy, from_sympy, symbolic_jacobian as jacobian
 from .substitute import substitute, substitute_in_model, substitute_in_reaction_system
 from .verification import (
     MathematicalVerifier,
@@ -270,6 +270,8 @@ from .edit import (
 from .display import (
     explore,
     ESMExplorer,
+    to_unicode,
+    to_latex,
 )
 from .codegen import (
     to_julia_code,
@@ -438,6 +440,9 @@ __all__ = [
     "contains",
     "evaluate",
     "simplify",
+    "to_sympy",
+    "from_sympy",
+    "jacobian",
     "substitute",
     "substitute_in_model",
     "substitute_in_reaction_system",
@@ -520,6 +525,9 @@ __all__ = [
     # Jupyter integration
     "explore",
     "ESMExplorer",
+    # Display and conversion functions
+    "to_unicode",
+    "to_latex",
     # Code generation
     "to_julia_code",
     "to_python_code",
