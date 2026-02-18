@@ -910,6 +910,965 @@ fn count_expression_nodes(expr: &esm_format::Expr) -> usize {
 }
 
 #[cfg(feature = "cli")]
+fn analyze_expression_optimization(esm_file: &esm_format::EsmFile) {
+    println!("\n=== EXPRESSION OPTIMIZATION ANALYSIS ===");
+
+    let mut suggestions: Vec<String> = Vec::new();
+    let mut complex_expressions = 0;
+    let mut redundant_operations = 0;
+
+    // Analyze model expressions
+    if let Some(ref models) = esm_file.models {
+        for (model_id, model) in models {
+            println!("Model: {}", model_id);
+
+            for (i, equation) in model.equations.iter().enumerate() {
+                // Check expression complexity
+                let lhs_depth = expression_depth(&equation.lhs);
+                let rhs_depth = expression_depth(&equation.rhs);
+                let max_depth = lhs_depth.max(rhs_depth);
+
+                if max_depth > 5 {
+                    complex_expressions += 1;
+                    suggestions.push(format!("  Eq {}: High complexity (depth {}), consider factoring", i + 1, max_depth));
+                }
+
+                // Check for redundant operations
+                if contains_redundant_operations(&equation.rhs) {
+                    redundant_operations += 1;
+                    suggestions.push(format!("  Eq {}: Contains redundant operations", i + 1));
+                }
+
+                // Check for common subexpressions
+                if contains_common_subexpressions(&equation.lhs, &equation.rhs) {
+                    suggestions.push(format!("  Eq {}: Common subexpressions found", i + 1));
+                }
+            }
+        }
+    }
+
+    // Analyze reaction expressions
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            println!("Reaction System: {}", rs_id);
+
+            for (i, reaction) in rs.reactions.iter().enumerate() {
+                let rate_depth = expression_depth(&reaction.rate);
+
+                if rate_depth > 4 {
+                    complex_expressions += 1;
+                    suggestions.push(format!("  Reaction {}: Complex rate expression (depth {})", i + 1, rate_depth));
+                }
+
+                if contains_redundant_operations(&reaction.rate) {
+                    redundant_operations += 1;
+                    suggestions.push(format!("  Reaction {}: Rate contains redundant operations", i + 1));
+                }
+            }
+        }
+    }
+
+    // Summary
+    println!("\n=== OPTIMIZATION SUGGESTIONS ===");
+    if suggestions.is_empty() {
+        println!("✓ No obvious expression optimizations needed");
+    } else {
+        println!("Found {} complex expressions, {} redundant operations", complex_expressions, redundant_operations);
+        for suggestion in suggestions {
+            println!("{}", suggestion);
+        }
+    }
+
+    // General recommendations
+    println!("\n=== GENERAL RECOMMENDATIONS ===");
+    println!("- Factor out common subexpressions into intermediate variables");
+    println!("- Use pre-computed constants where possible");
+    println!("- Consider using operator precedence to reduce parentheses");
+}
+
+#[cfg(feature = "cli")]
+fn analyze_structure_optimization(esm_file: &esm_format::EsmFile) {
+    println!("\n=== STRUCTURE OPTIMIZATION ANALYSIS ===");
+
+    // Component count analysis
+    let model_count = esm_file.models.as_ref().map(|m| m.len()).unwrap_or(0);
+    let rs_count = esm_file.reaction_systems.as_ref().map(|rs| rs.len()).unwrap_or(0);
+    let coupling_count = esm_file.coupling.as_ref().map(|c| c.len()).unwrap_or(0);
+
+    println!("Structure: {} models, {} reaction systems, {} coupling rules",
+        model_count, rs_count, coupling_count);
+
+    let mut suggestions: Vec<String> = Vec::new();
+
+    // Analyze coupling complexity
+    if coupling_count > 10 {
+        suggestions.push("High coupling complexity - consider grouping related couplings".to_string());
+    }
+
+    // Analyze model sizes
+    if let Some(ref models) = esm_file.models {
+        for (model_id, model) in models {
+            let var_count = model.variables.len();
+            let eq_count = model.equations.len();
+
+            if var_count > 50 {
+                suggestions.push(format!("Model '{}' has {} variables - consider splitting into smaller components", model_id, var_count));
+            }
+
+            if eq_count > 30 {
+                suggestions.push(format!("Model '{}' has {} equations - consider modular decomposition", model_id, eq_count));
+            }
+
+            // Check for unused variables
+            let mut used_vars = std::collections::HashSet::new();
+            for equation in &model.equations {
+                collect_variables(&equation.lhs, &mut used_vars);
+                collect_variables(&equation.rhs, &mut used_vars);
+            }
+
+            let unused_count = model.variables.keys().filter(|&v| !used_vars.contains(v)).count();
+            if unused_count > 0 {
+                suggestions.push(format!("Model '{}' has {} potentially unused variables", model_id, unused_count));
+            }
+        }
+    }
+
+    // Analyze reaction system sizes
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            if rs.species.len() > 100 {
+                suggestions.push(format!("Reaction system '{}' has {} species - consider chemical family grouping", rs_id, rs.species.len()));
+            }
+
+            if rs.reactions.len() > 200 {
+                suggestions.push(format!("Reaction system '{}' has {} reactions - consider mechanism reduction", rs_id, rs.reactions.len()));
+            }
+        }
+    }
+
+    // Output recommendations
+    if suggestions.is_empty() {
+        println!("✓ Structure appears well-organized");
+    } else {
+        println!("\n=== OPTIMIZATION SUGGESTIONS ===");
+        for suggestion in suggestions {
+            println!("  - {}", suggestion);
+        }
+    }
+
+    println!("\n=== GENERAL RECOMMENDATIONS ===");
+    println!("- Keep models focused on single domains/processes");
+    println!("- Use hierarchical naming for related variables");
+    println!("- Group related coupling operations together");
+}
+
+#[cfg(feature = "cli")]
+fn analyze_performance_optimization(esm_file: &esm_format::EsmFile) {
+    println!("\n=== PERFORMANCE OPTIMIZATION ANALYSIS ===");
+
+    // Computational complexity estimation
+    let mut total_ops = 0;
+    let mut expensive_ops = 0;
+
+    if let Some(ref models) = esm_file.models {
+        for (model_id, model) in models {
+            println!("Model: {}", model_id);
+            let mut model_ops = 0;
+
+            for equation in &model.equations {
+                let lhs_ops = count_operations(&equation.lhs);
+                let rhs_ops = count_operations(&equation.rhs);
+                model_ops += lhs_ops + rhs_ops;
+
+                // Check for expensive operations
+                if contains_expensive_operations(&equation.rhs) {
+                    expensive_ops += 1;
+                }
+            }
+
+            total_ops += model_ops;
+            println!("  Operations per timestep: ~{}", model_ops);
+        }
+    }
+
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            println!("Reaction System: {}", rs_id);
+            let mut rs_ops = 0;
+
+            for reaction in &rs.reactions {
+                let rate_ops = count_operations(&reaction.rate);
+                rs_ops += rate_ops;
+
+                if contains_expensive_operations(&reaction.rate) {
+                    expensive_ops += 1;
+                }
+            }
+
+            // Add stoichiometric operations
+            rs_ops += rs.reactions.len() * rs.species.len(); // Approximate stoichiometric matrix operations
+
+            total_ops += rs_ops;
+            println!("  Operations per timestep: ~{}", rs_ops);
+        }
+    }
+
+    println!("\nTotal operations per timestep: ~{}", total_ops);
+    println!("Expensive operations found: {}", expensive_ops);
+
+    // Performance suggestions
+    println!("\n=== OPTIMIZATION SUGGESTIONS ===");
+    if total_ops > 10000 {
+        println!("  - High computational load - consider numerical method optimization");
+    }
+    if expensive_ops > 5 {
+        println!("  - {} expensive operations found - consider lookup tables or approximations", expensive_ops);
+    }
+
+    // Memory usage estimation
+    let var_count = esm_file.models.as_ref().map(|models| {
+        models.values().map(|m| m.variables.len()).sum::<usize>()
+    }).unwrap_or(0);
+
+    let species_count = esm_file.reaction_systems.as_ref().map(|rs_map| {
+        rs_map.values().map(|rs| rs.species.len()).sum::<usize>()
+    }).unwrap_or(0);
+
+    let total_state_vars = var_count + species_count;
+    println!("State variables: {} (estimated memory: {} KB)",
+        total_state_vars, total_state_vars * 8 / 1024); // 8 bytes per double
+
+    println!("\n=== GENERAL RECOMMENDATIONS ===");
+    println!("- Use fast numerical integrators for stiff systems");
+    println!("- Cache frequently computed expressions");
+    println!("- Consider sparse matrix representations for large systems");
+    println!("- Profile actual runtime to identify bottlenecks");
+}
+
+#[cfg(feature = "cli")]
+fn contains_redundant_operations(expr: &esm_format::Expr) -> bool {
+    match expr {
+        esm_format::Expr::Operator(node) => {
+            // Check for operations like x + 0, x * 1, x^1, etc.
+            match node.op.as_str() {
+                "+" | "-" => {
+                    node.args.iter().any(|arg| {
+                        if let esm_format::Expr::Number(n) = arg {
+                            *n == 0.0
+                        } else {
+                            false
+                        }
+                    })
+                },
+                "*" | "/" => {
+                    node.args.iter().any(|arg| {
+                        if let esm_format::Expr::Number(n) = arg {
+                            *n == 1.0
+                        } else {
+                            false
+                        }
+                    })
+                },
+                "^" => {
+                    if node.args.len() >= 2 {
+                        if let esm_format::Expr::Number(n) = &node.args[1] {
+                            *n == 1.0
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                },
+                _ => node.args.iter().any(contains_redundant_operations)
+            }
+        }
+        _ => false
+    }
+}
+
+#[cfg(feature = "cli")]
+fn contains_common_subexpressions(lhs: &esm_format::Expr, rhs: &esm_format::Expr) -> bool {
+    let mut lhs_subexprs = Vec::new();
+    let mut rhs_subexprs = Vec::new();
+
+    collect_subexpressions(lhs, &mut lhs_subexprs);
+    collect_subexpressions(rhs, &mut rhs_subexprs);
+
+    // Simple heuristic: check if any complex subexpressions appear in both sides
+    lhs_subexprs.iter().any(|lhs_expr| {
+        if expression_depth(lhs_expr) > 2 {
+            rhs_subexprs.iter().any(|rhs_expr| expressions_equal(lhs_expr, rhs_expr))
+        } else {
+            false
+        }
+    })
+}
+
+#[cfg(feature = "cli")]
+fn collect_subexpressions(expr: &esm_format::Expr, subexprs: &mut Vec<esm_format::Expr>) {
+    subexprs.push(expr.clone());
+    if let esm_format::Expr::Operator(node) = expr {
+        for arg in &node.args {
+            collect_subexpressions(arg, subexprs);
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn expressions_equal(expr1: &esm_format::Expr, expr2: &esm_format::Expr) -> bool {
+    // Simple structural equality check
+    match (expr1, expr2) {
+        (esm_format::Expr::Number(n1), esm_format::Expr::Number(n2)) => (n1 - n2).abs() < 1e-10,
+        (esm_format::Expr::Variable(v1), esm_format::Expr::Variable(v2)) => v1 == v2,
+        (esm_format::Expr::Operator(op1), esm_format::Expr::Operator(op2)) => {
+            op1.op == op2.op && op1.args.len() == op2.args.len() &&
+            op1.args.iter().zip(op2.args.iter()).all(|(a1, a2)| expressions_equal(a1, a2))
+        },
+        _ => false
+    }
+}
+
+#[cfg(feature = "cli")]
+fn collect_variables(expr: &esm_format::Expr, vars: &mut std::collections::HashSet<String>) {
+    match expr {
+        esm_format::Expr::Variable(name) => {
+            vars.insert(name.clone());
+        }
+        esm_format::Expr::Operator(node) => {
+            for arg in &node.args {
+                collect_variables(arg, vars);
+            }
+        }
+        esm_format::Expr::Number(_) => {}
+    }
+}
+
+#[cfg(feature = "cli")]
+fn count_operations(expr: &esm_format::Expr) -> usize {
+    match expr {
+        esm_format::Expr::Number(_) | esm_format::Expr::Variable(_) => 0,
+        esm_format::Expr::Operator(node) => {
+            1 + node.args.iter().map(count_operations).sum::<usize>()
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn contains_expensive_operations(expr: &esm_format::Expr) -> bool {
+    match expr {
+        esm_format::Expr::Operator(node) => {
+            match node.op.as_str() {
+                "exp" | "log" | "sin" | "cos" | "tan" | "sqrt" | "^" => true,
+                _ => node.args.iter().any(contains_expensive_operations)
+            }
+        }
+        _ => false
+    }
+}
+
+#[cfg(feature = "cli")]
+fn perform_structural_comparison(esm_file1: &esm_format::EsmFile, esm_file2: &esm_format::EsmFile) {
+    println!("\n=== STRUCTURAL COMPARISON ===");
+
+    let mut differences = Vec::new();
+
+    // Compare basic structure
+    if esm_file1.esm != esm_file2.esm {
+        differences.push(format!("ESM version: {} vs {}", esm_file1.esm, esm_file2.esm));
+    }
+
+    // Compare component counts
+    let models1_count = esm_file1.models.as_ref().map(|m| m.len()).unwrap_or(0);
+    let models2_count = esm_file2.models.as_ref().map(|m| m.len()).unwrap_or(0);
+    if models1_count != models2_count {
+        differences.push(format!("Model count: {} vs {}", models1_count, models2_count));
+    }
+
+    let rs1_count = esm_file1.reaction_systems.as_ref().map(|rs| rs.len()).unwrap_or(0);
+    let rs2_count = esm_file2.reaction_systems.as_ref().map(|rs| rs.len()).unwrap_or(0);
+    if rs1_count != rs2_count {
+        differences.push(format!("Reaction system count: {} vs {}", rs1_count, rs2_count));
+    }
+
+    let coupling1_count = esm_file1.coupling.as_ref().map(|c| c.len()).unwrap_or(0);
+    let coupling2_count = esm_file2.coupling.as_ref().map(|c| c.len()).unwrap_or(0);
+    if coupling1_count != coupling2_count {
+        differences.push(format!("Coupling rule count: {} vs {}", coupling1_count, coupling2_count));
+    }
+
+    // Compare model structures
+    match (&esm_file1.models, &esm_file2.models) {
+        (Some(models1), Some(models2)) => {
+            let keys1: std::collections::HashSet<_> = models1.keys().collect();
+            let keys2: std::collections::HashSet<_> = models2.keys().collect();
+
+            let only_in_1: Vec<_> = keys1.difference(&keys2).collect();
+            let only_in_2: Vec<_> = keys2.difference(&keys1).collect();
+
+            if !only_in_1.is_empty() {
+                differences.push(format!("Models only in file1: {:?}", only_in_1));
+            }
+            if !only_in_2.is_empty() {
+                differences.push(format!("Models only in file2: {:?}", only_in_2));
+            }
+
+            // Compare common models
+            for model_id in keys1.intersection(&keys2) {
+                let model1 = &models1[*model_id];
+                let model2 = &models2[*model_id];
+
+                if model1.variables.len() != model2.variables.len() {
+                    differences.push(format!("Model {}: variable count {} vs {}",
+                        model_id, model1.variables.len(), model2.variables.len()));
+                }
+
+                if model1.equations.len() != model2.equations.len() {
+                    differences.push(format!("Model {}: equation count {} vs {}",
+                        model_id, model1.equations.len(), model2.equations.len()));
+                }
+
+                // Compare variable names
+                let vars1: std::collections::HashSet<_> = model1.variables.keys().collect();
+                let vars2: std::collections::HashSet<_> = model2.variables.keys().collect();
+                if vars1 != vars2 {
+                    differences.push(format!("Model {}: different variable sets", model_id));
+                }
+            }
+        }
+        (Some(_), None) => differences.push("File1 has models, file2 does not".to_string()),
+        (None, Some(_)) => differences.push("File2 has models, file1 does not".to_string()),
+        (None, None) => {}
+    }
+
+    // Compare reaction system structures
+    match (&esm_file1.reaction_systems, &esm_file2.reaction_systems) {
+        (Some(rs1), Some(rs2)) => {
+            let keys1: std::collections::HashSet<_> = rs1.keys().collect();
+            let keys2: std::collections::HashSet<_> = rs2.keys().collect();
+
+            let only_in_1: Vec<_> = keys1.difference(&keys2).collect();
+            let only_in_2: Vec<_> = keys2.difference(&keys1).collect();
+
+            if !only_in_1.is_empty() {
+                differences.push(format!("Reaction systems only in file1: {:?}", only_in_1));
+            }
+            if !only_in_2.is_empty() {
+                differences.push(format!("Reaction systems only in file2: {:?}", only_in_2));
+            }
+
+            // Compare common reaction systems
+            for rs_id in keys1.intersection(&keys2) {
+                let system1 = &rs1[*rs_id];
+                let system2 = &rs2[*rs_id];
+
+                if system1.species.len() != system2.species.len() {
+                    differences.push(format!("Reaction system {}: species count {} vs {}",
+                        rs_id, system1.species.len(), system2.species.len()));
+                }
+
+                if system1.reactions.len() != system2.reactions.len() {
+                    differences.push(format!("Reaction system {}: reaction count {} vs {}",
+                        rs_id, system1.reactions.len(), system2.reactions.len()));
+                }
+            }
+        }
+        (Some(_), None) => differences.push("File1 has reaction systems, file2 does not".to_string()),
+        (None, Some(_)) => differences.push("File2 has reaction systems, file1 does not".to_string()),
+        (None, None) => {}
+    }
+
+    // Output results
+    if differences.is_empty() {
+        println!("✓ Files have identical structure");
+    } else {
+        println!("✗ Structural differences found:");
+        for diff in differences {
+            println!("  - {}", diff);
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn perform_numerical_comparison(esm_file1: &esm_format::EsmFile, esm_file2: &esm_format::EsmFile) {
+    println!("\n=== NUMERICAL COMPARISON ===");
+
+    let tolerance = 1e-10;
+    let mut differences = Vec::new();
+
+    // Compare numerical values in models
+    if let (Some(models1), Some(models2)) = (&esm_file1.models, &esm_file2.models) {
+        for model_id in models1.keys() {
+            if let Some(model2) = models2.get(model_id) {
+                let model1 = &models1[model_id];
+
+                // Compare variable default values
+                for (var_name, var1) in &model1.variables {
+                    if let Some(var2) = model2.variables.get(var_name) {
+                        if let (Some(default1), Some(default2)) = (var1.default, var2.default) {
+                            if (default1 - default2).abs() > tolerance {
+                                differences.push(format!("Model {}, variable {}: default {} vs {}",
+                                    model_id, var_name, default1, default2));
+                            }
+                        }
+                    }
+                }
+
+                // Compare equation expressions numerically
+                if model1.equations.len() == model2.equations.len() {
+                    for (i, (eq1, eq2)) in model1.equations.iter().zip(model2.equations.iter()).enumerate() {
+                        if !expressions_numerically_equal(&eq1.lhs, &eq2.lhs, tolerance) {
+                            differences.push(format!("Model {}, equation {} LHS: numerical difference", model_id, i + 1));
+                        }
+                        if !expressions_numerically_equal(&eq1.rhs, &eq2.rhs, tolerance) {
+                            differences.push(format!("Model {}, equation {} RHS: numerical difference", model_id, i + 1));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Compare reaction system coefficients
+    if let (Some(rs1), Some(rs2)) = (&esm_file1.reaction_systems, &esm_file2.reaction_systems) {
+        for rs_id in rs1.keys() {
+            if let Some(system2) = rs2.get(rs_id) {
+                let system1 = &rs1[rs_id];
+
+                if system1.reactions.len() == system2.reactions.len() {
+                    for (i, (reaction1, reaction2)) in system1.reactions.iter().zip(system2.reactions.iter()).enumerate() {
+                        // Compare substrate coefficients
+                        if reaction1.substrates.len() == reaction2.substrates.len() {
+                            for (sub1, sub2) in reaction1.substrates.iter().zip(reaction2.substrates.iter()) {
+                                let coeff1 = sub1.coefficient.unwrap_or(1.0);
+                                let coeff2 = sub2.coefficient.unwrap_or(1.0);
+                                if (coeff1 - coeff2).abs() > tolerance {
+                                    differences.push(format!("Reaction system {}, reaction {}: substrate coefficient {} vs {}",
+                                        rs_id, i + 1, coeff1, coeff2));
+                                }
+                            }
+                        }
+
+                        // Compare product coefficients
+                        if reaction1.products.len() == reaction2.products.len() {
+                            for (prod1, prod2) in reaction1.products.iter().zip(reaction2.products.iter()) {
+                                let coeff1 = prod1.coefficient.unwrap_or(1.0);
+                                let coeff2 = prod2.coefficient.unwrap_or(1.0);
+                                if (coeff1 - coeff2).abs() > tolerance {
+                                    differences.push(format!("Reaction system {}, reaction {}: product coefficient {} vs {}",
+                                        rs_id, i + 1, coeff1, coeff2));
+                                }
+                            }
+                        }
+
+                        // Compare rate expressions
+                        if !expressions_numerically_equal(&reaction1.rate, &reaction2.rate, tolerance) {
+                            differences.push(format!("Reaction system {}, reaction {}: rate expression numerical difference",
+                                rs_id, i + 1));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Output results
+    if differences.is_empty() {
+        println!("✓ Files are numerically equivalent (tolerance: {})", tolerance);
+    } else {
+        println!("✗ Numerical differences found (tolerance: {}):", tolerance);
+        for diff in differences {
+            println!("  - {}", diff);
+        }
+    }
+
+    // Summary statistics
+    let mut total_numbers1 = 0;
+    let mut total_numbers2 = 0;
+    count_numerical_values(&esm_file1, &mut total_numbers1);
+    count_numerical_values(&esm_file2, &mut total_numbers2);
+
+    println!("\nNumerical values compared: {} vs {}", total_numbers1, total_numbers2);
+}
+
+#[cfg(feature = "cli")]
+fn expressions_numerically_equal(expr1: &esm_format::Expr, expr2: &esm_format::Expr, tolerance: f64) -> bool {
+    match (expr1, expr2) {
+        (esm_format::Expr::Number(n1), esm_format::Expr::Number(n2)) => {
+            (n1 - n2).abs() <= tolerance
+        }
+        (esm_format::Expr::Variable(v1), esm_format::Expr::Variable(v2)) => v1 == v2,
+        (esm_format::Expr::Operator(op1), esm_format::Expr::Operator(op2)) => {
+            op1.op == op2.op && op1.args.len() == op2.args.len() &&
+            op1.args.iter().zip(op2.args.iter()).all(|(a1, a2)| expressions_numerically_equal(a1, a2, tolerance))
+        }
+        _ => false
+    }
+}
+
+#[cfg(feature = "cli")]
+fn count_numerical_values(esm_file: &esm_format::EsmFile, count: &mut usize) {
+    if let Some(ref models) = esm_file.models {
+        for (_, model) in models {
+            // Count variable defaults
+            for (_, var) in &model.variables {
+                if var.default.is_some() {
+                    *count += 1;
+                }
+            }
+
+            // Count numbers in expressions
+            for equation in &model.equations {
+                count_numbers_in_expression(&equation.lhs, count);
+                count_numbers_in_expression(&equation.rhs, count);
+            }
+        }
+    }
+
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (_, rs) in reaction_systems {
+            for reaction in &rs.reactions {
+                // Count coefficients
+                for substrate in &reaction.substrates {
+                    if substrate.coefficient.is_some() {
+                        *count += 1;
+                    }
+                }
+                for product in &reaction.products {
+                    if product.coefficient.is_some() {
+                        *count += 1;
+                    }
+                }
+
+                // Count numbers in rate expressions
+                count_numbers_in_expression(&reaction.rate, count);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn count_numbers_in_expression(expr: &esm_format::Expr, count: &mut usize) {
+    match expr {
+        esm_format::Expr::Number(_) => *count += 1,
+        esm_format::Expr::Operator(node) => {
+            for arg in &node.args {
+                count_numbers_in_expression(arg, count);
+            }
+        }
+        esm_format::Expr::Variable(_) => {}
+    }
+}
+
+#[cfg(feature = "cli")]
+fn perform_deep_coupling_analysis(esm_file: &esm_format::EsmFile) {
+    println!("\n=== DEEP COUPLING DEPENDENCY ANALYSIS ===");
+
+    let graph = component_graph(&esm_file);
+    println!("Analyzing {} components with {} coupling relationships",
+        graph.nodes.len(), graph.edges.len());
+
+    // Build dependency maps
+    let mut dependencies = std::collections::HashMap::new();
+    let mut dependents = std::collections::HashMap::new();
+
+    for edge in &graph.edges {
+        dependencies.entry(edge.to.clone()).or_insert_with(Vec::new).push(edge.from.clone());
+        dependents.entry(edge.from.clone()).or_insert_with(Vec::new).push(edge.to.clone());
+    }
+
+    // Analyze coupling patterns
+    analyze_coupling_patterns(&graph);
+
+    // Find strongly connected components (circular dependencies)
+    let scc = find_strongly_connected_components(&graph);
+    if scc.len() < graph.nodes.len() {
+        println!("\n=== CIRCULAR DEPENDENCIES FOUND ===");
+        for (i, component) in scc.iter().enumerate() {
+            if component.len() > 1 {
+                println!("Circular dependency group {}: {:?}", i + 1, component);
+            }
+        }
+    } else {
+        println!("\n✓ No circular dependencies found");
+    }
+
+    // Analyze coupling strength
+    analyze_coupling_strength(&graph, &esm_file);
+
+    // Detect coupling anti-patterns
+    detect_coupling_antipatterns(&graph, &esm_file);
+
+    // Generate coupling recommendations
+    println!("\n=== COUPLING RECOMMENDATIONS ===");
+    if graph.edges.len() > graph.nodes.len() * 2 {
+        println!("- High coupling density ({} edges, {} nodes) - consider reducing interdependencies",
+            graph.edges.len(), graph.nodes.len());
+    }
+
+    // Check for hub components (components with many connections)
+    let mut connection_counts = std::collections::HashMap::new();
+    for edge in &graph.edges {
+        *connection_counts.entry(&edge.from).or_insert(0) += 1;
+        *connection_counts.entry(&edge.to).or_insert(0) += 1;
+    }
+
+    let max_connections = connection_counts.values().max().unwrap_or(&0);
+    if *max_connections > 5 {
+        println!("- Hub components detected (max {} connections) - consider architectural refactoring",
+            max_connections);
+        for (component, count) in &connection_counts {
+            if *count > 5 {
+                println!("  High connectivity: {} ({} connections)", component, count);
+            }
+        }
+    }
+
+    // Analyze coupling by type
+    let mut coupling_types = std::collections::HashMap::new();
+    for edge in &graph.edges {
+        *coupling_types.entry(&edge.coupling_type).or_insert(0) += 1;
+    }
+
+    println!("\n=== COUPLING TYPE ANALYSIS ===");
+    for (coupling_type, count) in coupling_types {
+        println!("  {}: {} occurrences", coupling_type, count);
+    }
+
+    // Calculate coupling metrics
+    let coupling_density = graph.edges.len() as f64 / (graph.nodes.len() as f64 * (graph.nodes.len() - 1) as f64);
+    println!("\nCoupling density: {:.3} (0=no coupling, 1=fully coupled)", coupling_density);
+
+    if coupling_density > 0.5 {
+        println!("⚠ Very high coupling density - system may be difficult to maintain");
+    } else if coupling_density > 0.2 {
+        println!("- Moderate coupling density - monitor for growth");
+    } else {
+        println!("✓ Low coupling density - good architectural separation");
+    }
+}
+
+#[cfg(feature = "cli")]
+fn analyze_coupling_patterns(graph: &esm_format::graph::ComponentGraph) {
+    println!("\n=== COUPLING PATTERNS ===");
+
+    // Pattern 1: Fan-out (one component affects many others)
+    let mut out_degree = std::collections::HashMap::new();
+    let mut in_degree = std::collections::HashMap::new();
+
+    for edge in &graph.edges {
+        *out_degree.entry(&edge.from).or_insert(0) += 1;
+        *in_degree.entry(&edge.to).or_insert(0) += 1;
+    }
+
+    let mut fan_out_components = Vec::new();
+    let mut fan_in_components = Vec::new();
+
+    for (component, degree) in &out_degree {
+        if *degree > 3 {
+            fan_out_components.push((component, degree));
+        }
+    }
+
+    for (component, degree) in &in_degree {
+        if *degree > 3 {
+            fan_in_components.push((component, degree));
+        }
+    }
+
+    if !fan_out_components.is_empty() {
+        println!("Fan-out patterns (components affecting many others):");
+        for (component, degree) in fan_out_components {
+            println!("  {} -> {} components", component, degree);
+        }
+    }
+
+    if !fan_in_components.is_empty() {
+        println!("Fan-in patterns (components affected by many others):");
+        for (component, degree) in fan_in_components {
+            println!("  {} <- {} components", component, degree);
+        }
+    }
+
+    // Pattern 2: Chains (A->B->C->D)
+    let chain_length = find_longest_dependency_chain(graph);
+    if chain_length > 4 {
+        println!("Long dependency chain detected: {} components", chain_length);
+        println!("  Consider reducing chain length for better parallelization");
+    }
+}
+
+#[cfg(feature = "cli")]
+fn find_strongly_connected_components(graph: &esm_format::graph::ComponentGraph) -> Vec<Vec<String>> {
+    // Simple SCC detection using DFS
+    let mut visited = std::collections::HashSet::new();
+    let mut components = Vec::new();
+
+    for node in &graph.nodes {
+        if !visited.contains(&node.id) {
+            let mut component = Vec::new();
+            dfs_scc(&graph, &node.id, &mut visited, &mut component);
+            if !component.is_empty() {
+                components.push(component);
+            }
+        }
+    }
+
+    components
+}
+
+#[cfg(feature = "cli")]
+fn dfs_scc(graph: &esm_format::graph::ComponentGraph, node_id: &str, visited: &mut std::collections::HashSet<String>, component: &mut Vec<String>) {
+    visited.insert(node_id.to_string());
+    component.push(node_id.to_string());
+
+    // Find all nodes reachable from this node
+    for edge in &graph.edges {
+        if edge.from == node_id && !visited.contains(&edge.to) {
+            dfs_scc(graph, &edge.to, visited, component);
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn analyze_coupling_strength(graph: &esm_format::graph::ComponentGraph, esm_file: &esm_format::EsmFile) {
+    println!("\n=== COUPLING STRENGTH ANALYSIS ===");
+
+    // Analyze based on coupling rules
+    if let Some(ref coupling) = esm_file.coupling {
+        let mut strong_couplings = 0;
+        let mut weak_couplings = 0;
+
+        for rule in coupling {
+            match rule {
+                esm_format::CouplingEntry::Couple2 { systems, .. } => {
+                    // Bidirectional coupling is stronger
+                    strong_couplings += 1;
+                    if systems.len() >= 2 {
+                        println!("  Strong coupling: {} <-> {} (bidirectional)", systems[0], systems[1]);
+                    }
+                }
+                esm_format::CouplingEntry::OperatorCompose { systems, .. } => {
+                    // Composition is medium strength
+                    if systems.len() >= 2 {
+                        println!("  Medium coupling: {} -> {} (composition)", systems[0], systems[1]);
+                    }
+                }
+                esm_format::CouplingEntry::VariableMap { from, to, .. } => {
+                    // Variable mapping is weaker
+                    weak_couplings += 1;
+                    println!("  Weak coupling: {} -> {} (variable mapping)", from, to);
+                }
+                esm_format::CouplingEntry::OperatorApply { operator, .. } => {
+                    println!("  Medium coupling: {} (operator application)", operator);
+                }
+                esm_format::CouplingEntry::Callback { callback_id, .. } => {
+                    println!("  Dynamic coupling: {} (callback)", callback_id);
+                }
+                esm_format::CouplingEntry::Event { name, affects, .. } => {
+                    let event_name = name.as_deref().unwrap_or("unnamed");
+                    let affected_count = affects.as_ref().map(|a| a.len()).unwrap_or(0);
+                    println!("  Event coupling: {} affects {} components", event_name, affected_count);
+                }
+            }
+        }
+
+        println!("\nCoupling strength distribution:");
+        println!("  Strong (bidirectional): {}", strong_couplings);
+        println!("  Medium (composition/operators): {}", coupling.len() - strong_couplings - weak_couplings);
+        println!("  Weak (variable mapping): {}", weak_couplings);
+
+        if strong_couplings > weak_couplings {
+            println!("⚠ Many strong couplings - consider loosening dependencies");
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn detect_coupling_antipatterns(graph: &esm_format::graph::ComponentGraph, esm_file: &esm_format::EsmFile) {
+    println!("\n=== COUPLING ANTI-PATTERNS ===");
+
+    let mut antipatterns_found = Vec::new();
+
+    // Anti-pattern 1: God component (connected to everything)
+    let mut connection_counts = std::collections::HashMap::new();
+    for edge in &graph.edges {
+        *connection_counts.entry(&edge.from).or_insert(0) += 1;
+        *connection_counts.entry(&edge.to).or_insert(0) += 1;
+    }
+
+    for (component, count) in &connection_counts {
+        if *count > graph.nodes.len() / 2 {
+            antipatterns_found.push(format!("God component: {} connected to {}/{} components",
+                component, count, graph.nodes.len()));
+        }
+    }
+
+    // Anti-pattern 2: Inappropriate intimacy (too many coupling types between same components)
+    let mut component_pairs = std::collections::HashMap::new();
+    for edge in &graph.edges {
+        let key = if edge.from < edge.to {
+            format!("{}->{}", edge.from, edge.to)
+        } else {
+            format!("{}->{}", edge.to, edge.from)
+        };
+        *component_pairs.entry(key).or_insert(0) += 1;
+    }
+
+    for (pair, count) in &component_pairs {
+        if *count > 2 {
+            antipatterns_found.push(format!("Inappropriate intimacy: {} ({} coupling types)",
+                pair, count));
+        }
+    }
+
+    // Anti-pattern 3: Circular dependencies (already detected in SCC analysis)
+
+    if antipatterns_found.is_empty() {
+        println!("✓ No major coupling anti-patterns detected");
+    } else {
+        for antipattern in antipatterns_found {
+            println!("  ⚠ {}", antipattern);
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn find_longest_dependency_chain(graph: &esm_format::graph::ComponentGraph) -> usize {
+    let mut max_length = 0;
+
+    // For each node, find the longest path starting from it
+    for node in &graph.nodes {
+        let mut visited = std::collections::HashSet::new();
+        let length = dfs_longest_path(graph, &node.id, &mut visited);
+        max_length = max_length.max(length);
+    }
+
+    max_length
+}
+
+#[cfg(feature = "cli")]
+fn dfs_longest_path(graph: &esm_format::graph::ComponentGraph, node_id: &str, visited: &mut std::collections::HashSet<String>) -> usize {
+    if visited.contains(node_id) {
+        return 0; // Avoid cycles
+    }
+
+    visited.insert(node_id.to_string());
+    let mut max_path = 1;
+
+    // Find all outgoing edges
+    for edge in &graph.edges {
+        if edge.from == node_id {
+            let path_length = 1 + dfs_longest_path(graph, &edge.to, visited);
+            max_path = max_path.max(path_length);
+        }
+    }
+
+    visited.remove(node_id);
+    max_path
+}
+
+#[cfg(feature = "cli")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
@@ -1576,7 +2535,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Shallow analysis complete");
                 }
                 "deep" => {
-                    println!("Deep coupling analysis not yet implemented");
+                    perform_deep_coupling_analysis(&esm_file);
                 }
                 _ => {
                     eprintln!("Unsupported depth: {}. Use shallow or deep.", depth);
@@ -1765,10 +2724,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 "structural" => {
-                    println!("Structural comparison not yet implemented");
+                    perform_structural_comparison(&esm_file1, &esm_file2);
                 }
                 "numerical" => {
-                    println!("Numerical comparison not yet implemented");
+                    perform_numerical_comparison(&esm_file1, &esm_file2);
                 }
                 _ => {
                     eprintln!("Unsupported comparison type: {}. Use semantic, structural, or numerical.", comparison_type);
@@ -1779,14 +2738,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Optimize { file, opt_type } => {
             let content = fs::read_to_string(&file)?;
-            let _esm_file = load(&content)?;
+            let esm_file = load(&content)?;
 
             println!("Optimization Analysis for: {}", file.display());
             println!("Optimization type: {}", opt_type);
 
             match opt_type.as_str() {
-                "expression" | "structure" | "performance" => {
-                    println!("Optimization suggestions not yet implemented");
+                "expression" => {
+                    analyze_expression_optimization(&esm_file);
+                }
+                "structure" => {
+                    analyze_structure_optimization(&esm_file);
+                }
+                "performance" => {
+                    analyze_performance_optimization(&esm_file);
                 }
                 _ => {
                     eprintln!("Unsupported optimization type: {}. Use expression, structure, or performance.", opt_type);
