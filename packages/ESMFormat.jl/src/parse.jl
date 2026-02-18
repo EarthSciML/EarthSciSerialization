@@ -366,11 +366,21 @@ Coerce JSON data into DataLoader type.
 """
 function coerce_data_loader(data::Any)::DataLoader
     loader_type = string(data.type)
-    source = string(data.source)
-    parameters = haskey(data, :parameters) ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.parameters)) : Dict{String,Any}()
-    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    loader_id = string(data.loader_id)
 
-    return DataLoader(loader_type, source, parameters=parameters, description=description)
+    config = haskey(data, :config) ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.config)) : nothing
+    reference = haskey(data, :reference) && data.reference !== nothing ? coerce_reference(data.reference) : nothing
+    provides = haskey(data, :provides) ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.provides)) : Dict{String,Any}()
+    temporal_resolution = haskey(data, :temporal_resolution) && data.temporal_resolution !== nothing ? string(data.temporal_resolution) : nothing
+    spatial_resolution = haskey(data, :spatial_resolution) && data.spatial_resolution !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.spatial_resolution)) : nothing
+    interpolation = haskey(data, :interpolation) && data.interpolation !== nothing ? string(data.interpolation) : nothing
+
+    return DataLoader(loader_type, loader_id, provides,
+                     config=config,
+                     reference=reference,
+                     temporal_resolution=temporal_resolution,
+                     spatial_resolution=spatial_resolution,
+                     interpolation=interpolation)
 end
 
 """
@@ -379,12 +389,19 @@ end
 Coerce JSON data into Operator type.
 """
 function coerce_operator(data::Any)::Operator
-    op_type = string(data.type)
-    name = string(data.name)
-    parameters = haskey(data, :parameters) ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.parameters)) : Dict{String,Any}()
+    operator_id = string(data.operator_id)
+    needed_vars = haskey(data, :needed_vars) ? [string(v) for v in data.needed_vars] : String[]
+
+    reference = haskey(data, :reference) && data.reference !== nothing ? coerce_reference(data.reference) : nothing
+    config = haskey(data, :config) && data.config !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.config)) : nothing
+    modifies = haskey(data, :modifies) && data.modifies !== nothing ? [string(v) for v in data.modifies] : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
 
-    return Operator(op_type, name, parameters=parameters, description=description)
+    return Operator(operator_id, needed_vars,
+                   reference=reference,
+                   config=config,
+                   modifies=modifies,
+                   description=description)
 end
 
 """
