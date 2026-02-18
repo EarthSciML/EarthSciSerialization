@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -79,7 +80,12 @@ func formatNumber(num float64, format string) string {
 		switch format {
 		case "unicode":
 			expStr := formatSuperscript(exp)
-			return fmt.Sprintf("%.3g×10%s", mantissa, expStr)
+			mantissaStr := fmt.Sprintf("%.3g", mantissa)
+			// Replace regular minus with unicode minus for negative mantissa
+			if strings.HasPrefix(mantissaStr, "-") {
+				mantissaStr = "−" + mantissaStr[1:]
+			}
+			return fmt.Sprintf("%s×10%s", mantissaStr, expStr)
 		case "latex":
 			return fmt.Sprintf("%.3g \\times 10^{%d}", mantissa, exp)
 		default:
@@ -87,7 +93,12 @@ func formatNumber(num float64, format string) string {
 		}
 	}
 
-	return fmt.Sprintf("%g", num)
+	result := fmt.Sprintf("%g", num)
+	// Replace regular minus with unicode minus in unicode format
+	if format == "unicode" && strings.HasPrefix(result, "-") {
+		result = "−" + result[1:]
+	}
+	return result
 }
 
 // formatVariable formats variable names with chemical subscripts
@@ -555,6 +566,222 @@ func formatExponentiation(args []interface{}, format string) string {
 	default:
 		return base + "^" + exp
 	}
+}
+
+// ToUnicodeSpaced converts an expression to Unicode string with spaced multiplication
+// for better readability in model summary displays
+func ToUnicodeSpaced(target interface{}) string {
+	result := formatExpression(target, "unicode")
+	// Replace "·" with " · " for better readability in model summaries
+	return strings.ReplaceAll(result, "·", " · ")
+}
+
+// ModelSummary returns a structured model summary display showing all models,
+// reaction systems, data loaders, coupling, domain, and solver as specified in Section 6.3
+func ModelSummary(esm *EsmFile) string {
+	result := strings.Builder{}
+
+	// Header: ESM version and metadata
+	result.WriteString(fmt.Sprintf("ESM v%s: %s\n", esm.Esm, esm.Metadata.Name))
+	if esm.Metadata.Description != nil {
+		result.WriteString(fmt.Sprintf("  \"%s\"\n", *esm.Metadata.Description))
+	}
+	if len(esm.Metadata.Authors) > 0 {
+		result.WriteString(fmt.Sprintf("  Authors: %s\n", strings.Join(esm.Metadata.Authors, ", ")))
+	}
+	result.WriteString("\n")
+
+	// Reaction Systems
+	if len(esm.ReactionSystems) > 0 {
+		result.WriteString("  Reaction Systems:\n")
+		for name, rs := range esm.ReactionSystems {
+			speciesCount := len(rs.Species)
+			paramCount := len(rs.Parameters)
+			reactionCount := len(rs.Reactions)
+			result.WriteString(fmt.Sprintf("    %s (%d species, %d parameters, %d reactions)\n",
+				name, speciesCount, paramCount, reactionCount))
+
+			// Display reactions
+			for _, reaction := range rs.Reactions {
+				result.WriteString("      ")
+				result.WriteString(reaction.ID)
+				result.WriteString(": ")
+
+				// Format substrates
+				substrateNames := make([]string, len(reaction.Substrates))
+				for i, substrate := range reaction.Substrates {
+					if substrate.Stoichiometry == 1 {
+						substrateNames[i] = ToUnicode(substrate.Species)
+					} else {
+						substrateNames[i] = fmt.Sprintf("%d%s", substrate.Stoichiometry, ToUnicode(substrate.Species))
+					}
+				}
+				result.WriteString(strings.Join(substrateNames, " + "))
+
+				result.WriteString(" → ")
+
+				// Format products
+				productNames := make([]string, len(reaction.Products))
+				for i, product := range reaction.Products {
+					if product.Stoichiometry == 1 {
+						productNames[i] = ToUnicode(product.Species)
+					} else {
+						productNames[i] = fmt.Sprintf("%d%s", product.Stoichiometry, ToUnicode(product.Species))
+					}
+				}
+				result.WriteString(strings.Join(productNames, " + "))
+
+				// Format rate
+				result.WriteString("    rate: ")
+				result.WriteString(ToUnicodeSpaced(reaction.Rate))
+				result.WriteString("\n")
+			}
+		}
+		result.WriteString("\n")
+	}
+
+	// Models
+	if len(esm.Models) > 0 {
+		result.WriteString("  Models:\n")
+		for name, model := range esm.Models {
+			// Count parameters vs other variable types
+			paramCount := 0
+			for _, variable := range model.Variables {
+				if variable.Type == "parameter" {
+					paramCount++
+				}
+			}
+			equationCount := len(model.Equations)
+			result.WriteString(fmt.Sprintf("    %s (%d parameters, %d equation", name, paramCount, equationCount))
+			if equationCount != 1 {
+				result.WriteString("s")
+			}
+			result.WriteString(")\n")
+
+			// Display equations
+			for _, equation := range model.Equations {
+				result.WriteString("      ")
+				result.WriteString(ToUnicodeSpaced(equation.LHS))
+				result.WriteString(" = ")
+				result.WriteString(ToUnicodeSpaced(equation.RHS))
+				result.WriteString("\n")
+			}
+		}
+		result.WriteString("\n")
+	}
+
+	// Data Loaders
+	if len(esm.DataLoaders) > 0 {
+		result.WriteString("  Data Loaders:\n")
+		for name, loader := range esm.DataLoaders {
+			providedVars := make([]string, 0, len(loader.Provides))
+			for varName := range loader.Provides {
+				providedVars = append(providedVars, varName)
+			}
+			// Sort for deterministic output
+			sort.Strings(providedVars)
+			result.WriteString(fmt.Sprintf("    %s: %s (%s)\n", name,
+				strings.Join(providedVars, ", "), loader.Type))
+		}
+		result.WriteString("\n")
+	}
+
+	// Coupling
+	if len(esm.Coupling) > 0 {
+		result.WriteString("  Coupling:\n")
+		for i, coupling := range esm.Coupling {
+			result.WriteString(fmt.Sprintf("    %d. ", i+1))
+
+			// Type switch to handle different coupling types
+			switch c := coupling.(type) {
+			case OperatorComposeCoupling:
+				result.WriteString(fmt.Sprintf("operator_compose: %s + %s", c.Systems[0], c.Systems[1]))
+			case VariableMapCoupling:
+				result.WriteString(fmt.Sprintf("variable_map: %s → %s", c.From, c.To))
+			case Couple2Coupling:
+				result.WriteString(fmt.Sprintf("couple2: %s ↔ %s", c.Systems[0], c.Systems[1]))
+			case OperatorApplyCoupling:
+				result.WriteString(fmt.Sprintf("operator_apply: %s", c.Operator))
+			case CallbackCoupling:
+				result.WriteString(fmt.Sprintf("callback: %s", c.CallbackID))
+			case EventCoupling:
+				result.WriteString(fmt.Sprintf("event: %s (%s)", c.Name, c.EventType))
+			default:
+				result.WriteString("unknown coupling type")
+			}
+			result.WriteString("\n")
+		}
+		result.WriteString("\n")
+	}
+
+	// Domain
+	if esm.Domain != nil {
+		result.WriteString("  Domain: ")
+		parts := make([]string, 0)
+
+		// Spatial dimensions
+		if len(esm.Domain.Spatial) > 0 {
+			for dimName, dim := range esm.Domain.Spatial {
+				// Use minus signs for negative numbers and degree symbol for degrees
+				minStr := formatNumber(dim.Min, "unicode")
+				maxStr := formatNumber(dim.Max, "unicode")
+				spacingStr := formatNumber(dim.GridSpacing, "unicode")
+
+				unitStr := dim.Units
+				if unitStr == "degrees" {
+					unitStr = "°"
+				}
+
+				parts = append(parts, fmt.Sprintf("%s [%s, %s] (Δ%s%s)",
+					dimName, minStr, maxStr, spacingStr, unitStr))
+			}
+		}
+
+		// Temporal domain
+		if esm.Domain.Temporal != nil {
+			temporal := esm.Domain.Temporal
+			// Extract just the date parts for brevity
+			start := strings.Split(temporal.Start, "T")[0]
+			end := strings.Split(temporal.End, "T")[0]
+			parts = append(parts, fmt.Sprintf("%s to %s", start, end))
+		}
+
+		result.WriteString(strings.Join(parts, ", "))
+		result.WriteString("\n")
+	}
+
+	// Solver
+	if esm.Solver != nil {
+		result.WriteString("  Solver: ")
+		result.WriteString(esm.Solver.Strategy)
+
+		if esm.Solver.Config != nil {
+			configParts := make([]string, 0)
+
+			// Handle specific known config keys with appropriate naming and order
+			if stiffAlg, ok := esm.Solver.Config["stiff_algorithm"]; ok {
+				configParts = append(configParts, fmt.Sprintf("%v", stiffAlg))
+			}
+			if timestep, ok := esm.Solver.Config["timestep"]; ok {
+				configParts = append(configParts, fmt.Sprintf("dt=%v", timestep))
+			}
+
+			// Handle any other config keys
+			for key, value := range esm.Solver.Config {
+				if key != "stiff_algorithm" && key != "timestep" {
+					configParts = append(configParts, fmt.Sprintf("%s=%v", key, value))
+				}
+			}
+			if len(configParts) > 0 {
+				result.WriteString(" (")
+				result.WriteString(strings.Join(configParts, ", "))
+				result.WriteString(")")
+			}
+		}
+		result.WriteString("\n")
+	}
+
+	return strings.TrimSpace(result.String())
 }
 
 func formatDerivative(args []interface{}, wrt *string, format string) string {

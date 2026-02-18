@@ -327,3 +327,177 @@ func TestComplexChemicalExpression(t *testing.T) {
 	assert.Equal(t, "1.8×10⁻¹²·O₃·NO·M", unicode)
 	assert.Equal(t, "1.8 \\times 10^{-12} \\cdot \\mathrm{O_{3}} \\cdot \\mathrm{NO} \\cdot M", latex)
 }
+
+func TestModelSummary(t *testing.T) {
+	// Create a minimal ESM file structure similar to minimal_chemistry.esm
+	esm := &EsmFile{
+		Esm: "0.1.0",
+		Metadata: Metadata{
+			Name:        "MinimalChemAdvection",
+			Description: strPtr("O3-NO-NO2 chemistry with advection and external meteorology"),
+			Authors:     []string{"Chris Tessum"},
+		},
+		ReactionSystems: map[string]ReactionSystem{
+			"SimpleOzone": {
+				Species: map[string]Species{
+					"O3":  {Units: strPtr("mol/mol"), Default: 40e-9, Description: strPtr("Ozone")},
+					"NO":  {Units: strPtr("mol/mol"), Default: 0.1e-9, Description: strPtr("Nitric oxide")},
+					"NO2": {Units: strPtr("mol/mol"), Default: 1.0e-9, Description: strPtr("Nitrogen dioxide")},
+				},
+				Parameters: map[string]Parameter{
+					"T":    {Units: strPtr("K"), Default: 298.15, Description: strPtr("Temperature")},
+					"M":    {Units: strPtr("molec/cm^3"), Default: 2.46e19, Description: strPtr("Air number density")},
+					"jNO2": {Units: strPtr("1/s"), Default: 0.005, Description: strPtr("NO2 photolysis rate")},
+				},
+				Reactions: []Reaction{
+					{
+						ID: "R1",
+						Substrates: []SubstrateProduct{
+							{Species: "NO", Stoichiometry: 1},
+							{Species: "O3", Stoichiometry: 1},
+						},
+						Products: []SubstrateProduct{
+							{Species: "NO2", Stoichiometry: 1},
+						},
+						Rate: ExprNode{
+							Op: "*",
+							Args: []interface{}{
+								1.8e-12,
+								ExprNode{
+									Op: "exp",
+									Args: []interface{}{
+										ExprNode{
+											Op:   "/",
+											Args: []interface{}{-1370, "T"},
+										},
+									},
+								},
+								"M",
+							},
+						},
+					},
+					{
+						ID: "R2",
+						Substrates: []SubstrateProduct{
+							{Species: "NO2", Stoichiometry: 1},
+						},
+						Products: []SubstrateProduct{
+							{Species: "NO", Stoichiometry: 1},
+							{Species: "O3", Stoichiometry: 1},
+						},
+						Rate: "jNO2",
+					},
+				},
+			},
+		},
+		Models: map[string]Model{
+			"Advection": {
+				Variables: map[string]ModelVariable{
+					"u_wind": {Type: "parameter", Units: strPtr("m/s"), Default: 0.0},
+					"v_wind": {Type: "parameter", Units: strPtr("m/s"), Default: 0.0},
+				},
+				Equations: []Equation{
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"_var"}, Wrt: strPtr("t")},
+						RHS: ExprNode{
+							Op: "+",
+							Args: []interface{}{
+								ExprNode{
+									Op: "*",
+									Args: []interface{}{
+										ExprNode{Op: "-", Args: []interface{}{"u_wind"}},
+										ExprNode{Op: "grad", Args: []interface{}{"_var"}, Dim: strPtr("x")},
+									},
+								},
+								ExprNode{
+									Op: "*",
+									Args: []interface{}{
+										ExprNode{Op: "-", Args: []interface{}{"v_wind"}},
+										ExprNode{Op: "grad", Args: []interface{}{"_var"}, Dim: strPtr("y")},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		DataLoaders: map[string]DataLoader{
+			"GEOSFP": {
+				Type:     "gridded_data",
+				LoaderID: "GEOSFP",
+				Provides: map[string]ProvidedVar{
+					"u": {Units: "m/s", Description: strPtr("Eastward wind")},
+					"v": {Units: "m/s", Description: strPtr("Northward wind")},
+					"T": {Units: "K", Description: strPtr("Temperature")},
+				},
+			},
+		},
+		Coupling: []interface{}{
+			OperatorComposeCoupling{
+				Type:    "operator_compose",
+				Systems: [2]string{"SimpleOzone", "Advection"},
+			},
+			VariableMapCoupling{
+				Type:      "variable_map",
+				From:      "GEOSFP.T",
+				To:        "SimpleOzone.T",
+				Transform: "param_to_var",
+			},
+			VariableMapCoupling{
+				Type:      "variable_map",
+				From:      "GEOSFP.u",
+				To:        "Advection.u_wind",
+				Transform: "param_to_var",
+			},
+			VariableMapCoupling{
+				Type:      "variable_map",
+				From:      "GEOSFP.v",
+				To:        "Advection.v_wind",
+				Transform: "param_to_var",
+			},
+		},
+		Domain: &Domain{
+			Temporal: &TemporalDomain{
+				Start: "2024-05-01T00:00:00Z",
+				End:   "2024-05-03T00:00:00Z",
+			},
+			Spatial: map[string]SpatialDimension{
+				"lon": {
+					Min:         -130.0,
+					Max:         -100.0,
+					GridSpacing: 0.3125,
+					Units:       "degrees",
+				},
+			},
+		},
+		Solver: &Solver{
+			Strategy: "strang_threads",
+			Config: map[string]interface{}{
+				"stiff_algorithm": "Rosenbrock23",
+				"timestep":        1.0,
+			},
+		},
+	}
+
+	result := ModelSummary(esm)
+
+	// Debug: print the actual result
+	t.Logf("Actual result:\n%s", result)
+
+	// Check key parts of the expected output
+	assert.Contains(t, result, "ESM v0.1.0: MinimalChemAdvection")
+	assert.Contains(t, result, "O3-NO-NO2 chemistry with advection and external meteorology")
+	assert.Contains(t, result, "Authors: Chris Tessum")
+	assert.Contains(t, result, "SimpleOzone (3 species, 3 parameters, 2 reactions)")
+	assert.Contains(t, result, "R1: NO + O₃ → NO₂    rate: 1.8×10⁻¹² · exp(−1370/T) · M")
+	assert.Contains(t, result, "R2: NO₂ → NO + O₃    rate: jNO₂")
+	assert.Contains(t, result, "Advection (2 parameters, 1 equation)")
+	assert.Contains(t, result, "∂_var/∂t = −u_wind · ∂_var/∂x + −v_wind · ∂_var/∂y")
+	assert.Contains(t, result, "GEOSFP: T, u, v (gridded_data)")
+	assert.Contains(t, result, "operator_compose: SimpleOzone + Advection")
+	assert.Contains(t, result, "variable_map: GEOSFP.T → SimpleOzone.T")
+	assert.Contains(t, result, "lon [−130, −100] (Δ0.3125°)")
+	assert.Contains(t, result, "2024-05-01 to 2024-05-03")
+	assert.Contains(t, result, "strang_threads (Rosenbrock23, dt=1)")
+}
