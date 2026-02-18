@@ -45,6 +45,11 @@ func main() {
 			log.Fatal("Usage: esm-go save <input-file> <output-file>")
 		}
 		saveFile(os.Args[2], os.Args[3])
+	case "summary":
+		if len(os.Args) < 3 {
+			log.Fatal("Usage: esm-go summary <file>")
+		}
+		summaryFile(os.Args[2])
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -60,6 +65,7 @@ func printUsage() {
 	fmt.Println("  pretty-print <file> [format]    - Pretty-print expressions (format: unicode, latex, ascii)")
 	fmt.Println("  substitute <file> <var=value>   - Substitute variables in expressions")
 	fmt.Println("  save <input> <output>           - Save ESM file to new location")
+	fmt.Println("  summary <file>                  - Display structured model summary")
 }
 
 func parseFile(filename string) {
@@ -212,6 +218,16 @@ func saveFile(inputFile, outputFile string) {
 	}
 
 	fmt.Printf("Successfully saved to %s\n", outputFile)
+}
+
+func summaryFile(filename string) {
+	esmFile, err := esm.Load(filename)
+	if err != nil {
+		log.Fatalf("Failed to load ESM file: %v", err)
+	}
+
+	summary := esm.ModelSummary(esmFile)
+	fmt.Println(summary)
 }
 
 // Helper functions
