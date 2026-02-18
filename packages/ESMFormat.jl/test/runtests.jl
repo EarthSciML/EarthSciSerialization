@@ -273,9 +273,10 @@ using JSON3
 
     @testset "Model Component Types" begin
         # Test Species
-        species = Species("CO2", molecular_weight=44.01)
+        species = Species("CO2", units="mol/m^3", default=1e-6)
         @test species.name == "CO2"
-        @test species.molecular_weight == 44.01
+        @test species.units == "mol/m^3"
+        @test species.default == 1e-6
         @test species.description === nothing
 
         # Test Parameter
