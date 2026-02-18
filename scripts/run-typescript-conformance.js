@@ -24,7 +24,7 @@ const testsDir = path.join(projectRoot, 'tests');
 let esmFormat;
 try {
     // Try to import from built distribution
-    esmFormat = await import(path.join(typescriptPackage, 'dist', 'index.js'));
+    esmFormat = await import(path.join(typescriptPackage, 'dist', 'esm', 'index.js'));
 } catch (error) {
     console.error('Failed to import esm-format TypeScript library:', error.message);
     console.error('Make sure the library is built with: npm run build');
@@ -67,7 +67,8 @@ async function runValidationTests(testsDir) {
         for (const filename of validFiles) {
             const filepath = path.join(validDir, filename);
             try {
-                const esmData = await esmFormat.load(filepath);
+                const fileContent = fs.readFileSync(filepath, 'utf8');
+                const esmData = await esmFormat.load(fileContent);
                 const result = await esmFormat.validate(esmData);
 
                 validResults[filename] = {
@@ -96,7 +97,8 @@ async function runValidationTests(testsDir) {
         for (const filename of invalidFiles) {
             const filepath = path.join(invalidDir, filename);
             try {
-                const esmData = await esmFormat.load(filepath);
+                const fileContent = fs.readFileSync(filepath, 'utf8');
+                const esmData = await esmFormat.load(fileContent);
                 const result = await esmFormat.validate(esmData);
 
                 invalidResults[filename] = {
