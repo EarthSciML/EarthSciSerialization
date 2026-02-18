@@ -174,12 +174,12 @@ func ValidateStructural(file *EsmFile) *DetailedValidationResult {
 
 	// Validate models
 	for modelName, model := range file.Models {
-		validateModel(modelName, &model, result)
+		validateModel(modelName, &model, result, file)
 	}
 
 	// Validate reaction systems
 	for systemName, system := range file.ReactionSystems {
-		validateReactionSystem(systemName, &system, result)
+		validateReactionSystem(systemName, &system, result, file)
 	}
 
 	// Validate coupling references
@@ -195,7 +195,7 @@ func ValidateStructural(file *EsmFile) *DetailedValidationResult {
 }
 
 // validateModel checks model-specific validation rules
-func validateModel(modelName string, model *Model, result *DetailedValidationResult) {
+func validateModel(modelName string, model *Model, result *DetailedValidationResult, file *EsmFile) {
 	basePath := fmt.Sprintf("$.models.%s", modelName)
 
 	// Check that all variables referenced in equations exist
@@ -206,8 +206,8 @@ func validateModel(modelName string, model *Model, result *DetailedValidationRes
 
 	for i, eq := range model.Equations {
 		eqPath := fmt.Sprintf("%s.equations[%d]", basePath, i)
-		validateExpressionVariables(eq.LHS, allVars, fmt.Sprintf("%s.lhs", eqPath), result)
-		validateExpressionVariables(eq.RHS, allVars, fmt.Sprintf("%s.rhs", eqPath), result)
+		validateExpressionVariablesWithScoped(eq.LHS, allVars, fmt.Sprintf("%s.lhs", eqPath), result, file, modelName)
+		validateExpressionVariablesWithScoped(eq.RHS, allVars, fmt.Sprintf("%s.rhs", eqPath), result, file, modelName)
 	}
 
 	// Equation-unknown balance validation (Section 3.2.1)
@@ -228,17 +228,17 @@ func validateModel(modelName string, model *Model, result *DetailedValidationRes
 
 	// Validate discrete events
 	for i, event := range model.DiscreteEvents {
-		validateDiscreteEvent(&event, allVars, fmt.Sprintf("%s.discrete_events[%d]", basePath, i), result)
+		validateDiscreteEvent(&event, allVars, fmt.Sprintf("%s.discrete_events[%d]", basePath, i), result, file, modelName)
 	}
 
 	// Validate continuous events
 	for i, event := range model.ContinuousEvents {
-		validateContinuousEvent(&event, allVars, fmt.Sprintf("%s.continuous_events[%d]", basePath, i), result)
+		validateContinuousEvent(&event, allVars, fmt.Sprintf("%s.continuous_events[%d]", basePath, i), result, file, modelName)
 	}
 }
 
 // validateReactionSystem checks reaction system-specific validation rules
-func validateReactionSystem(systemName string, system *ReactionSystem, result *DetailedValidationResult) {
+func validateReactionSystem(systemName string, system *ReactionSystem, result *DetailedValidationResult, file *EsmFile) {
 	basePath := fmt.Sprintf("$.reaction_systems.%s", systemName)
 
 	// Check reaction stoichiometry balance (optional - could be intentionally unbalanced)
@@ -295,7 +295,7 @@ func validateReactionSystem(systemName string, system *ReactionSystem, result *D
 		}
 
 		// Validate rate expression
-		validateExpressionVariables(reaction.Rate, allVars, fmt.Sprintf("%s.rate", reactionPath), result)
+		validateExpressionVariablesWithScoped(reaction.Rate, allVars, fmt.Sprintf("%s.rate", reactionPath), result, file, systemName)
 	}
 }
 
@@ -329,21 +329,39 @@ func validateReaction(reaction *Reaction, system *ReactionSystem, path string, r
 
 // validateExpressionVariables checks that all variables in an expression exist
 func validateExpressionVariables(expr Expression, allVars map[string]bool, path string, result *DetailedValidationResult) {
+	validateExpressionVariablesWithScoped(expr, allVars, path, result, nil, "")
+}
+
+// validateExpressionVariablesWithScoped checks that all variables in an expression exist
+// with support for scoped reference resolution
+func validateExpressionVariablesWithScoped(expr Expression, allVars map[string]bool, path string, result *DetailedValidationResult, file *EsmFile, currentSystem string) {
 	switch e := expr.(type) {
 	case string:
 		// Variable reference - check if it exists
 		if !allVars[e] {
-			result.Valid = false
-			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "error",
-				Message: fmt.Sprintf("Unknown variable '%s'", e),
-				Path:    path,
-			})
+			// If it's a scoped reference and we have file context, try to resolve it
+			if file != nil && strings.Contains(e, ".") {
+				if _, resolved := resolveScopedReference(e, file, currentSystem); !resolved {
+					result.Valid = false
+					result.Messages = append(result.Messages, ValidationMessage{
+						Level:   "error",
+						Message: fmt.Sprintf("Unresolved scoped reference '%s'", e),
+						Path:    path,
+					})
+				}
+			} else {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: fmt.Sprintf("Unknown variable '%s'", e),
+					Path:    path,
+				})
+			}
 		}
 	case ExprNode:
 		// Recursively validate arguments
 		for i, arg := range e.Args {
-			validateExpressionVariables(arg, allVars, fmt.Sprintf("%s.args[%d]", path, i), result)
+			validateExpressionVariablesWithScoped(arg, allVars, fmt.Sprintf("%s.args[%d]", path, i), result, file, currentSystem)
 		}
 	case float64, int:
 		// Numeric literals are always valid
@@ -357,36 +375,47 @@ func validateExpressionVariables(expr Expression, allVars map[string]bool, path 
 }
 
 // validateDiscreteEvent validates discrete event structure
-func validateDiscreteEvent(event *DiscreteEvent, allVars map[string]bool, path string, result *DetailedValidationResult) {
+func validateDiscreteEvent(event *DiscreteEvent, allVars map[string]bool, path string, result *DetailedValidationResult, file *EsmFile, currentSystem string) {
 	// Validate trigger expression if it's a condition type
 	if event.Trigger.Type == "condition" && event.Trigger.Expression != nil {
-		validateExpressionVariables(event.Trigger.Expression, allVars, fmt.Sprintf("%s.trigger.expression", path), result)
+		validateExpressionVariablesWithScoped(event.Trigger.Expression, allVars, fmt.Sprintf("%s.trigger.expression", path), result, file, currentSystem)
 	}
 
 	// Validate affect equations
 	for i, affect := range event.Affects {
 		affectPath := fmt.Sprintf("%s.affects[%d]", path, i)
 
-		// Check that the target variable exists
+		// Check that the target variable exists (could be scoped)
 		if !allVars[affect.LHS] {
-			result.Valid = false
-			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "error",
-				Message: fmt.Sprintf("Unknown variable '%s' in affect equation", affect.LHS),
-				Path:    fmt.Sprintf("%s.lhs", affectPath),
-			})
+			if file != nil && strings.Contains(affect.LHS, ".") {
+				if _, resolved := resolveScopedReference(affect.LHS, file, currentSystem); !resolved {
+					result.Valid = false
+					result.Messages = append(result.Messages, ValidationMessage{
+						Level:   "error",
+						Message: fmt.Sprintf("Unresolved scoped reference '%s' in affect equation", affect.LHS),
+						Path:    fmt.Sprintf("%s.lhs", affectPath),
+					})
+				}
+			} else {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: fmt.Sprintf("Unknown variable '%s' in affect equation", affect.LHS),
+					Path:    fmt.Sprintf("%s.lhs", affectPath),
+				})
+			}
 		}
 
 		// Validate the RHS expression
-		validateExpressionVariables(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result)
+		validateExpressionVariablesWithScoped(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result, file, currentSystem)
 	}
 }
 
 // validateContinuousEvent validates continuous event structure
-func validateContinuousEvent(event *ContinuousEvent, allVars map[string]bool, path string, result *DetailedValidationResult) {
+func validateContinuousEvent(event *ContinuousEvent, allVars map[string]bool, path string, result *DetailedValidationResult, file *EsmFile, currentSystem string) {
 	// Validate condition expressions
 	for i, condition := range event.Conditions {
-		validateExpressionVariables(condition, allVars, fmt.Sprintf("%s.conditions[%d]", path, i), result)
+		validateExpressionVariablesWithScoped(condition, allVars, fmt.Sprintf("%s.conditions[%d]", path, i), result, file, currentSystem)
 	}
 
 	// Validate affect equations
@@ -394,15 +423,26 @@ func validateContinuousEvent(event *ContinuousEvent, allVars map[string]bool, pa
 		affectPath := fmt.Sprintf("%s.affects[%d]", path, i)
 
 		if !allVars[affect.LHS] {
-			result.Valid = false
-			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "error",
-				Message: fmt.Sprintf("Unknown variable '%s' in affect equation", affect.LHS),
-				Path:    fmt.Sprintf("%s.lhs", affectPath),
-			})
+			if file != nil && strings.Contains(affect.LHS, ".") {
+				if _, resolved := resolveScopedReference(affect.LHS, file, currentSystem); !resolved {
+					result.Valid = false
+					result.Messages = append(result.Messages, ValidationMessage{
+						Level:   "error",
+						Message: fmt.Sprintf("Unresolved scoped reference '%s' in affect equation", affect.LHS),
+						Path:    fmt.Sprintf("%s.lhs", affectPath),
+					})
+				}
+			} else {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: fmt.Sprintf("Unknown variable '%s' in affect equation", affect.LHS),
+					Path:    fmt.Sprintf("%s.lhs", affectPath),
+				})
+			}
 		}
 
-		validateExpressionVariables(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result)
+		validateExpressionVariablesWithScoped(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result, file, currentSystem)
 	}
 
 	// Validate affect_neg equations if present
@@ -410,15 +450,26 @@ func validateContinuousEvent(event *ContinuousEvent, allVars map[string]bool, pa
 		affectPath := fmt.Sprintf("%s.affect_neg[%d]", path, i)
 
 		if !allVars[affect.LHS] {
-			result.Valid = false
-			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "error",
-				Message: fmt.Sprintf("Unknown variable '%s' in affect_neg equation", affect.LHS),
-				Path:    fmt.Sprintf("%s.lhs", affectPath),
-			})
+			if file != nil && strings.Contains(affect.LHS, ".") {
+				if _, resolved := resolveScopedReference(affect.LHS, file, currentSystem); !resolved {
+					result.Valid = false
+					result.Messages = append(result.Messages, ValidationMessage{
+						Level:   "error",
+						Message: fmt.Sprintf("Unresolved scoped reference '%s' in affect_neg equation", affect.LHS),
+						Path:    fmt.Sprintf("%s.lhs", affectPath),
+					})
+				}
+			} else {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: fmt.Sprintf("Unknown variable '%s' in affect_neg equation", affect.LHS),
+					Path:    fmt.Sprintf("%s.lhs", affectPath),
+				})
+			}
 		}
 
-		validateExpressionVariables(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result)
+		validateExpressionVariablesWithScoped(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result, file, currentSystem)
 	}
 }
 
