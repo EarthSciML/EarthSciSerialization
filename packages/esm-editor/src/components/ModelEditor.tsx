@@ -342,7 +342,82 @@ const EventsPanel: Component<{
                     <Show when={event.description}>
                       <div class="event-description">{event.description}</div>
                     </Show>
-                    {/* TODO: Add condition and affect editors */}
+                    <div class="event-details">
+                      <div class="event-conditions">
+                        <strong>Conditions:</strong>
+                        <For each={event.conditions || []}>
+                          {(condition, index) => (
+                            <div class="condition-item">
+                              <code class="condition-expr">{JSON.stringify(condition)}</code>
+                              <Show when={!props.readonly}>
+                                <button
+                                  class="edit-btn"
+                                  onClick={() => {
+                                    const newCondition = prompt('Edit condition:', JSON.stringify(condition));
+                                    if (newCondition) {
+                                      try {
+                                        const parsed = JSON.parse(newCondition);
+                                        const updatedEvents = [...(props.model.continuous_events || [])];
+                                        const eventIndex = updatedEvents.indexOf(event);
+                                        if (eventIndex >= 0) {
+                                          const updatedConditions = [...event.conditions];
+                                          updatedConditions[index()] = parsed;
+                                          updatedEvents[eventIndex] = { ...event, conditions: updatedConditions };
+                                          handleModelChange({ continuous_events: updatedEvents });
+                                        }
+                                      } catch (e) {
+                                        alert('Invalid JSON format');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              </Show>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                      <div class="event-affects">
+                        <strong>Effects:</strong>
+                        <For each={event.affects || []}>
+                          {(affect, index) => (
+                            <div class="affect-item">
+                              <code class="affect-expr">
+                                {JSON.stringify(affect.lhs)} = {JSON.stringify(affect.rhs)}
+                              </code>
+                              <Show when={!props.readonly}>
+                                <button
+                                  class="edit-btn"
+                                  onClick={() => {
+                                    const newLhs = prompt('Edit left side:', JSON.stringify(affect.lhs));
+                                    const newRhs = prompt('Edit right side:', JSON.stringify(affect.rhs));
+                                    if (newLhs && newRhs) {
+                                      try {
+                                        const parsedLhs = JSON.parse(newLhs);
+                                        const parsedRhs = JSON.parse(newRhs);
+                                        const updatedEvents = [...(props.model.continuous_events || [])];
+                                        const eventIndex = updatedEvents.indexOf(event);
+                                        if (eventIndex >= 0) {
+                                          const updatedAffects = [...event.affects];
+                                          updatedAffects[index()] = { lhs: parsedLhs, rhs: parsedRhs };
+                                          updatedEvents[eventIndex] = { ...event, affects: updatedAffects };
+                                          handleModelChange({ continuous_events: updatedEvents });
+                                        }
+                                      } catch (e) {
+                                        alert('Invalid JSON format');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              </Show>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
                   </div>
                 )}
               </For>
@@ -359,7 +434,76 @@ const EventsPanel: Component<{
                     <Show when={event.description}>
                       <div class="event-description">{event.description}</div>
                     </Show>
-                    {/* TODO: Add trigger and affect editors */}
+                    <div class="event-details">
+                      <div class="event-trigger">
+                        <strong>Trigger:</strong>
+                        <div class="trigger-item">
+                          <code class="trigger-expr">{JSON.stringify(event.trigger)}</code>
+                          <Show when={!props.readonly}>
+                            <button
+                              class="edit-btn"
+                              onClick={() => {
+                                const newTrigger = prompt('Edit trigger:', JSON.stringify(event.trigger));
+                                if (newTrigger) {
+                                  try {
+                                    const parsed = JSON.parse(newTrigger);
+                                    const updatedEvents = [...(props.model.discrete_events || [])];
+                                    const eventIndex = updatedEvents.indexOf(event);
+                                    if (eventIndex >= 0) {
+                                      updatedEvents[eventIndex] = { ...event, trigger: parsed };
+                                      handleModelChange({ discrete_events: updatedEvents });
+                                    }
+                                  } catch (e) {
+                                    alert('Invalid JSON format');
+                                  }
+                                }
+                              }}
+                            >
+                              Edit
+                            </button>
+                          </Show>
+                        </div>
+                      </div>
+                      <div class="event-affects">
+                        <strong>Effects:</strong>
+                        <For each={event.affects || []}>
+                          {(affect, index) => (
+                            <div class="affect-item">
+                              <code class="affect-expr">
+                                {JSON.stringify(affect.lhs)} = {JSON.stringify(affect.rhs)}
+                              </code>
+                              <Show when={!props.readonly}>
+                                <button
+                                  class="edit-btn"
+                                  onClick={() => {
+                                    const newLhs = prompt('Edit left side:', JSON.stringify(affect.lhs));
+                                    const newRhs = prompt('Edit right side:', JSON.stringify(affect.rhs));
+                                    if (newLhs && newRhs) {
+                                      try {
+                                        const parsedLhs = JSON.parse(newLhs);
+                                        const parsedRhs = JSON.parse(newRhs);
+                                        const updatedEvents = [...(props.model.discrete_events || [])];
+                                        const eventIndex = updatedEvents.indexOf(event);
+                                        if (eventIndex >= 0) {
+                                          const updatedAffects = [...event.affects];
+                                          updatedAffects[index()] = { lhs: parsedLhs, rhs: parsedRhs };
+                                          updatedEvents[eventIndex] = { ...event, affects: updatedAffects };
+                                          handleModelChange({ discrete_events: updatedEvents });
+                                        }
+                                      } catch (e) {
+                                        alert('Invalid JSON format');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              </Show>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
                   </div>
                 )}
               </For>
@@ -404,13 +548,58 @@ export const ModelEditor: Component<ModelEditorProps> = (props) => {
 
   // Variable management handlers
   const handleAddVariable = () => {
-    // TODO: Open variable creation dialog
-    console.log('Add variable');
+    const name = prompt('Enter variable name:');
+    if (!name || !name.trim()) return;
+
+    const type = prompt('Enter variable type (state, parameter, observed, or other):', 'parameter');
+    if (!type) return;
+
+    const validTypes = ['state', 'parameter', 'observed', 'other'];
+    const variableType = validTypes.includes(type) ? type : 'other';
+
+    const newVariable: ModelVariable = {
+      name: name.trim(),
+      type: variableType as any,
+      unit: '',
+      description: '',
+      ...(variableType === 'parameter' && { default_value: 0 })
+    };
+
+    const newVariables = [...(props.model.variables || []), newVariable];
+    handleModelChange({ variables: newVariables });
   };
 
   const handleEditVariable = (variable: ModelVariable) => {
-    // TODO: Open variable editing dialog
-    console.log('Edit variable:', variable.name);
+    const newName = prompt('Enter variable name:', variable.name);
+    if (!newName || newName.trim() === variable.name) return;
+
+    const newDescription = prompt('Enter description:', variable.description || '');
+    const newUnit = prompt('Enter unit:', variable.unit || '');
+
+    let newDefaultValue = variable.default_value;
+    if (variable.type === 'parameter') {
+      const defaultInput = prompt('Enter default value:', String(variable.default_value || 0));
+      if (defaultInput !== null) {
+        const parsed = parseFloat(defaultInput);
+        if (!isNaN(parsed)) {
+          newDefaultValue = parsed;
+        }
+      }
+    }
+
+    const updatedVariables = (props.model.variables || []).map(v =>
+      v.name === variable.name
+        ? {
+            ...v,
+            name: newName.trim(),
+            description: newDescription || '',
+            unit: newUnit || '',
+            ...(v.type === 'parameter' && { default_value: newDefaultValue })
+          }
+        : v
+    );
+
+    handleModelChange({ variables: updatedVariables });
   };
 
   const handleRemoveVariable = (name: string) => {
@@ -442,13 +631,43 @@ export const ModelEditor: Component<ModelEditorProps> = (props) => {
 
   // Event management handlers
   const handleAddContinuousEvent = () => {
-    // TODO: Create default continuous event
-    console.log('Add continuous event');
+    const name = prompt('Enter event name:', 'New Continuous Event');
+    if (!name) return;
+
+    const description = prompt('Enter event description:', '');
+
+    const newEvent: ContinuousEvent = {
+      name: name.trim(),
+      description: description || '',
+      conditions: ['_condition_placeholder'],
+      affects: [{
+        lhs: '_variable_placeholder',
+        rhs: '_value_placeholder'
+      }]
+    };
+
+    const newContinuousEvents = [...(props.model.continuous_events || []), newEvent];
+    handleModelChange({ continuous_events: newContinuousEvents });
   };
 
   const handleAddDiscreteEvent = () => {
-    // TODO: Create default discrete event
-    console.log('Add discrete event');
+    const name = prompt('Enter event name:', 'New Discrete Event');
+    if (!name) return;
+
+    const description = prompt('Enter event description:', '');
+
+    const newEvent: DiscreteEvent = {
+      name: name.trim(),
+      description: description || '',
+      trigger: '_trigger_placeholder',
+      affects: [{
+        lhs: '_variable_placeholder',
+        rhs: '_value_placeholder'
+      }]
+    };
+
+    const newDiscreteEvents = [...(props.model.discrete_events || []), newEvent];
+    handleModelChange({ discrete_events: newDiscreteEvents });
   };
 
   const editorClasses = () => {
