@@ -2,24 +2,160 @@ package esm
 
 import (
 	"fmt"
+	"strings"
 )
 
-// ValidationMessage represents a single validation issue
+// SchemaError represents a JSON Schema violation
+type SchemaError struct {
+	Path    string `json:"path"`    // JSON Pointer to the offending location
+	Message string `json:"message"` // Human-readable description
+	Keyword string `json:"keyword"` // JSON Schema keyword that failed
+}
+
+// StructuralError represents equation/unknown balance, reference integrity issues
+type StructuralError struct {
+	Path    string                 `json:"path"`    // JSON Pointer to the relevant component
+	Code    string                 `json:"code"`    // Machine-readable error code
+	Message string                 `json:"message"` // Human-readable description
+	Details map[string]interface{} `json:"details"` // Additional context
+}
+
+// UnitWarning represents dimensional inconsistencies
+type UnitWarning struct {
+	Path     string `json:"path"`      // JSON Pointer to the equation or expression
+	Message  string `json:"message"`   // Human-readable description
+	LhsUnits string `json:"lhs_units"` // Inferred units of the LHS
+	RhsUnits string `json:"rhs_units"` // Inferred units of the RHS
+}
+
+// ValidationResult holds the result of validation per ESM Libraries Spec Section 3.4
+type ValidationResult struct {
+	SchemaErrors     []SchemaError     `json:"schema_errors"`
+	StructuralErrors []StructuralError `json:"structural_errors"`
+	UnitWarnings     []UnitWarning     `json:"unit_warnings"`
+	IsValid          bool              `json:"is_valid"`
+}
+
+// Structural error codes per ESM Libraries Spec Section 3.4
+const (
+	ErrorEquationCountMismatch  = "equation_count_mismatch"
+	ErrorUndefinedVariable      = "undefined_variable"
+	ErrorUndefinedSpecies       = "undefined_species"
+	ErrorUndefinedParameter     = "undefined_parameter"
+	ErrorUndefinedSystem        = "undefined_system"
+	ErrorUndefinedOperator      = "undefined_operator"
+	ErrorUnresolvedScopedRef    = "unresolved_scoped_ref"
+	ErrorInvalidDiscreteParam   = "invalid_discrete_param"
+	ErrorNullReaction          = "null_reaction"
+	ErrorMissingObservedExpr   = "missing_observed_expr"
+	ErrorEventVarUndeclared    = "event_var_undeclared"
+)
+
+// ValidationMessage represents a single validation issue (for backward compatibility)
 type ValidationMessage struct {
 	Level   string `json:"level"`   // "error", "warning", "info"
 	Message string `json:"message"` // Human-readable description
 	Path    string `json:"path"`    // JSON path to the problematic element
 }
 
-// DetailedValidationResult holds comprehensive validation results
+// DetailedValidationResult holds comprehensive validation results (for backward compatibility)
 type DetailedValidationResult struct {
 	Valid    bool                `json:"valid"`
 	Messages []ValidationMessage `json:"messages,omitempty"`
 }
 
-// Validate performs comprehensive structural validation of an ESM file
-// This includes equation balance, reference integrity, and reaction consistency
+// ValidateFile performs comprehensive validation of an ESM file per ESM Libraries Spec Section 3.4
+// This includes schema validation, structural validation, and unit validation (future)
+func ValidateFile(file *EsmFile, jsonStr string) *ValidationResult {
+	// First validate JSON schema
+	schemaResult, err := validateJSONSchema(jsonStr)
+	if err != nil {
+		// If schema validation fails, return with error
+		return &ValidationResult{
+			IsValid:          false,
+			SchemaErrors:     []SchemaError{{Path: "$", Message: fmt.Sprintf("Schema validation failed: %v", err), Keyword: "error"}},
+			StructuralErrors: []StructuralError{},
+			UnitWarnings:     []UnitWarning{},
+		}
+	}
+
+	// Start with schema validation results
+	result := &ValidationResult{
+		SchemaErrors:     schemaResult.SchemaErrors,
+		StructuralErrors: []StructuralError{},
+		UnitWarnings:     []UnitWarning{},
+		IsValid:          schemaResult.IsValid,
+	}
+
+	// If schema validation failed, don't proceed with structural validation
+	if !schemaResult.IsValid {
+		return result
+	}
+
+	// Perform structural validation
+	structuralResult := ValidateStructural(file)
+
+	// Convert structural validation results
+	for _, msg := range structuralResult.Messages {
+		if msg.Level == "error" {
+			structuralError := StructuralError{
+				Path:    msg.Path,
+				Code:    getErrorCodeFromMessage(msg.Message),
+				Message: msg.Message,
+				Details: map[string]interface{}{},
+			}
+			result.StructuralErrors = append(result.StructuralErrors, structuralError)
+		} else if msg.Level == "warning" {
+			// For now, treat non-unit warnings as unit warnings
+			unitWarning := UnitWarning{
+				Path:     msg.Path,
+				Message:  msg.Message,
+				LhsUnits: "unknown",
+				RhsUnits: "unknown",
+			}
+			result.UnitWarnings = append(result.UnitWarnings, unitWarning)
+		}
+	}
+
+	// Update IsValid based on both schema and structural errors
+	result.IsValid = len(result.SchemaErrors) == 0 && len(result.StructuralErrors) == 0
+
+	return result
+}
+
+// getErrorCodeFromMessage attempts to infer error code from message text
+// This is a temporary solution until we refactor the structural validation to use codes directly
+func getErrorCodeFromMessage(message string) string {
+	if strings.Contains(message, "Unknown variable") {
+		return ErrorUndefinedVariable
+	}
+	if strings.Contains(message, "Unknown species") {
+		return ErrorUndefinedSpecies
+	}
+	if strings.Contains(message, "Unknown parameter") {
+		return ErrorUndefinedParameter
+	}
+	if strings.Contains(message, "Unknown system") {
+		return ErrorUndefinedSystem
+	}
+	if strings.Contains(message, "Equation-unknown balance") {
+		return ErrorEquationCountMismatch
+	}
+	if strings.Contains(message, "Observed variable must have an expression") {
+		return ErrorMissingObservedExpr
+	}
+	return "unknown_error"
+}
+
+// Validate is the backward compatibility function that returns DetailedValidationResult
+// For the new spec-compliant validation, use ValidateFile
 func Validate(file *EsmFile) *DetailedValidationResult {
+	return ValidateStructural(file)
+}
+
+// ValidateStructural performs comprehensive structural validation of an ESM file (renamed for clarity)
+// This includes equation balance, reference integrity, and reaction consistency
+func ValidateStructural(file *EsmFile) *DetailedValidationResult {
 	result := &DetailedValidationResult{
 		Valid:    true,
 		Messages: []ValidationMessage{},

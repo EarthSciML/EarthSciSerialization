@@ -12,12 +12,6 @@ import (
 //go:embed esm-schema.json
 var embeddedSchema []byte
 
-// ValidationResult holds the result of schema validation
-type ValidationResult struct {
-	Valid  bool     `json:"valid"`
-	Errors []string `json:"errors,omitempty"`
-}
-
 // Load loads an ESM file from the specified path and validates it against the JSON schema
 func Load(path string) (*EsmFile, error) {
 	// Read the file
@@ -37,8 +31,12 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 		return nil, fmt.Errorf("schema validation failed: %w", err)
 	}
 
-	if !result.Valid {
-		return nil, fmt.Errorf("JSON schema validation failed: %v", result.Errors)
+	if !result.IsValid {
+		var errorStrs []string
+		for _, schemaErr := range result.SchemaErrors {
+			errorStrs = append(errorStrs, schemaErr.Message)
+		}
+		return nil, fmt.Errorf("JSON schema validation failed: %v", errorStrs)
 	}
 
 	// Parse JSON into our struct
@@ -69,14 +67,22 @@ func validateJSONSchema(jsonStr string) (*ValidationResult, error) {
 		return nil, fmt.Errorf("validation error: %w", err)
 	}
 
-	// Convert result
+	// Convert result to new ValidationResult format
 	validationResult := &ValidationResult{
-		Valid: result.Valid(),
+		IsValid:          result.Valid(),
+		SchemaErrors:     []SchemaError{},
+		StructuralErrors: []StructuralError{},
+		UnitWarnings:     []UnitWarning{},
 	}
 
 	if !result.Valid() {
 		for _, desc := range result.Errors() {
-			validationResult.Errors = append(validationResult.Errors, desc.String())
+			schemaError := SchemaError{
+				Path:    desc.Context().String(),
+				Message: desc.Description(),
+				Keyword: desc.Type(),
+			}
+			validationResult.SchemaErrors = append(validationResult.SchemaErrors, schemaError)
 		}
 	}
 
