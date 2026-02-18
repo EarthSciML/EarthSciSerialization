@@ -318,7 +318,7 @@
   },
 
   "solver": {
-    "strategy": "coupled_systems",
+    "strategy": "strang_threads",
     "config": {
       "base_algorithm": "Tsit5",
       "event_detection": "root_finding",

@@ -253,7 +253,7 @@
   },
 
   "solver": {
-    "strategy": "adaptive_ode",
+    "strategy": "imex",
     "config": {
       "algorithm": "Rosenbrock23",
       "abstol": 1e-8,
