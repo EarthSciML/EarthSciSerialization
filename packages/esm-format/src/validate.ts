@@ -6,6 +6,7 @@
  */
 
 import { validateSchema, load, type SchemaError } from './parse.js';
+import { validateUnits, type UnitWarning } from './units.js';
 import type {
     EsmFile,
     Model,
@@ -41,6 +42,7 @@ export interface ValidationResult {
     is_valid: boolean;
     schema_errors: ValidationError[];
     structural_errors: ValidationError[];
+    unit_warnings: UnitWarning[];
 }
 
 /**
@@ -576,6 +578,7 @@ function convertSchemaError(error: SchemaError): ValidationError {
 export function validate(data: string | object): ValidationResult {
     const schema_errors: ValidationError[] = [];
     const structural_errors: ValidationError[] = [];
+    let unit_warnings: UnitWarning[] = [];
 
     try {
         let parsedData: object;
@@ -594,7 +597,8 @@ export function validate(data: string | object): ValidationResult {
                         code: 'json_parse_error',
                         details: { error: error.message }
                     }],
-                    structural_errors: []
+                    structural_errors: [],
+                    unit_warnings: []
                 };
             }
         } else {
@@ -617,6 +621,9 @@ export function validate(data: string | object): ValidationResult {
                     code: err.code,
                     details: err.details
                 })));
+
+                // Perform unit validation
+                unit_warnings = validateUnits(esmFile);
             } catch (e: unknown) {
                 const error = e as Error;
                 structural_errors.push({
@@ -645,13 +652,15 @@ export function validate(data: string | object): ValidationResult {
                     error: error.message || String(e)
                 }
             }],
-            structural_errors: []
+            structural_errors: [],
+            unit_warnings: []
         };
     }
 
     return {
         is_valid: schema_errors.length === 0 && structural_errors.length === 0,
         schema_errors,
-        structural_errors
+        structural_errors,
+        unit_warnings
     };
 }
