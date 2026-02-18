@@ -59,6 +59,7 @@ class Model:
     variables: Dict[str, ModelVariable] = field(default_factory=dict)
     equations: List[Equation] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    subsystems: Dict[str, 'Model'] = field(default_factory=dict)
 
 
 @dataclass
@@ -98,6 +99,7 @@ class ReactionSystem:
     species: List[Species] = field(default_factory=list)
     parameters: List[Parameter] = field(default_factory=list)
     reactions: List[Reaction] = field(default_factory=list)
+    subsystems: Dict[str, 'ReactionSystem'] = field(default_factory=dict)
 
 
 # ========================================
