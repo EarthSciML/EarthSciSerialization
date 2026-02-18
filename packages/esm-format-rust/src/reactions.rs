@@ -394,6 +394,368 @@ pub fn stoichiometric_matrix_parallel(
     evaluator.compute_stoichiometric_matrix_parallel(system)
 }
 
+/// Conservation law violations in a reaction system
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConservationViolation {
+    /// Type of conservation law violated
+    pub violation_type: ConservationLawType,
+    /// Reaction index where violation occurs (if applicable)
+    pub reaction_index: Option<usize>,
+    /// Species involved in the violation
+    pub species: Vec<String>,
+    /// Quantitative measure of the violation
+    pub magnitude: f64,
+    /// Human-readable description
+    pub description: String,
+}
+
+/// Types of conservation laws that can be detected
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConservationLawType {
+    /// Mass balance violation within a single reaction
+    MassBalance,
+    /// System-wide linear invariant violation
+    LinearInvariant,
+    /// Unexpected degrees of freedom in the stoichiometric matrix
+    StoichiometricRank,
+}
+
+/// Results of conservation law analysis
+#[derive(Debug, Clone)]
+pub struct ConservationAnalysis {
+    /// Violations found in the system
+    pub violations: Vec<ConservationViolation>,
+    /// Linear invariants found (combinations of species that should be conserved)
+    pub linear_invariants: Vec<LinearInvariant>,
+    /// Rank of the stoichiometric matrix
+    pub stoichiometric_rank: usize,
+    /// Number of independent conservation laws
+    pub conservation_laws_count: usize,
+}
+
+/// A linear invariant representing a conservation law
+#[derive(Debug, Clone)]
+pub struct LinearInvariant {
+    /// Coefficients for each species (same order as in the reaction system)
+    pub coefficients: Vec<f64>,
+    /// Names of species with non-zero coefficients
+    pub species_names: Vec<String>,
+    /// Description of what this invariant represents
+    pub description: String,
+}
+
+/// Detect conservation law violations in a reaction system
+///
+/// Analyzes the reaction system for various types of conservation law violations
+/// including mass balance within reactions and system-wide linear invariants.
+///
+/// # Arguments
+///
+/// * `system` - The reaction system to analyze
+///
+/// # Returns
+///
+/// * `ConservationAnalysis` - Detailed analysis of conservation laws and violations
+///
+/// # Examples
+///
+/// ```rust
+/// use esm_format::{ReactionSystem, detect_conservation_violations};
+///
+/// // Create a simple reaction system
+/// let system = ReactionSystem {
+///     name: Some("Test System".to_string()),
+///     species: vec![],
+///     parameters: std::collections::HashMap::new(),
+///     reactions: vec![],
+///     description: None,
+/// };
+///
+/// let analysis = detect_conservation_violations(&system);
+/// println!("Found {} violations", analysis.violations.len());
+/// ```
+pub fn detect_conservation_violations(system: &ReactionSystem) -> ConservationAnalysis {
+    let mut violations = Vec::new();
+
+    // Check mass balance for each reaction
+    violations.extend(detect_mass_balance_violations(system));
+
+    // Analyze stoichiometric matrix for linear invariants
+    let matrix = stoichiometric_matrix(system);
+    let linear_invariants = find_linear_invariants(&matrix, &system.species);
+    let stoichiometric_rank = calculate_matrix_rank(&matrix);
+    let conservation_laws_count = system.species.len().saturating_sub(stoichiometric_rank);
+
+    // Check for unexpected rank (this could indicate missing conservation laws)
+    if conservation_laws_count == 0 && !system.species.is_empty() && !system.reactions.is_empty() {
+        violations.push(ConservationViolation {
+            violation_type: ConservationLawType::StoichiometricRank,
+            reaction_index: None,
+            species: system.species.iter().map(|s| s.name.clone()).collect(),
+            magnitude: stoichiometric_rank as f64,
+            description: "System has full rank stoichiometric matrix with no conservation laws, which may indicate missing constraints".to_string(),
+        });
+    }
+
+    ConservationAnalysis {
+        violations,
+        linear_invariants,
+        stoichiometric_rank,
+        conservation_laws_count,
+    }
+}
+
+/// Detect mass balance violations in individual reactions
+fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationViolation> {
+    let mut violations = Vec::new();
+
+    for (reaction_idx, reaction) in system.reactions.iter().enumerate() {
+        // Skip source reactions (no substrates) and sink reactions (no products)
+        // These represent exchange with environment and don't need to be mass balanced
+        if reaction.substrates.is_empty() || reaction.products.is_empty() {
+            continue;
+        }
+
+        // Calculate total substrate and product coefficients
+        let substrate_sum: f64 = reaction.substrates.iter()
+            .map(|s| s.coefficient.unwrap_or(1.0))
+            .sum();
+
+        let product_sum: f64 = reaction.products.iter()
+            .map(|p| p.coefficient.unwrap_or(1.0))
+            .sum();
+
+        // Check if mass is conserved (allowing for small numerical errors)
+        const BALANCE_TOLERANCE: f64 = 1e-10;
+        let imbalance = (substrate_sum - product_sum).abs();
+
+        if imbalance > BALANCE_TOLERANCE {
+            let mut species_involved = Vec::new();
+            species_involved.extend(reaction.substrates.iter().map(|s| s.species.clone()));
+            species_involved.extend(reaction.products.iter().map(|p| p.species.clone()));
+
+            violations.push(ConservationViolation {
+                violation_type: ConservationLawType::MassBalance,
+                reaction_index: Some(reaction_idx),
+                species: species_involved,
+                magnitude: imbalance,
+                description: format!(
+                    "Reaction {} has mass imbalance: {:.6} substrates → {:.6} products (difference: {:.6})",
+                    reaction_idx, substrate_sum, product_sum, imbalance
+                ),
+            });
+        }
+    }
+
+    violations
+}
+
+/// Find linear invariants (conservation laws) from the stoichiometric matrix
+fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Vec<LinearInvariant> {
+    if matrix.is_empty() || species.is_empty() {
+        return Vec::new();
+    }
+
+    let num_species = matrix.len();
+    let num_reactions = matrix[0].len();
+
+    if num_reactions == 0 {
+        // No reactions means all species are conserved individually
+        return species.iter().enumerate().map(|(i, species)| {
+            let mut coefficients = vec![0.0; num_species];
+            coefficients[i] = 1.0;
+            LinearInvariant {
+                coefficients,
+                species_names: vec![species.name.clone()],
+                description: format!("Conservation of {}", species.name),
+            }
+        }).collect();
+    }
+
+    // Find the null space of the transpose of the stoichiometric matrix
+    // This gives us the linear invariants
+    let invariants = find_null_space_transpose(matrix);
+
+    // Convert to LinearInvariant structs with descriptions
+    invariants.into_iter().map(|coeffs| {
+        let species_names: Vec<String> = coeffs.iter()
+            .enumerate()
+            .filter_map(|(i, &coeff)| {
+                if coeff.abs() > 1e-10 {
+                    Some(species[i].name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let description = if species_names.len() <= 3 {
+            format!("Linear combination: {}",
+                coeffs.iter()
+                    .enumerate()
+                    .filter(|(_, &coeff)| coeff.abs() > 1e-10)
+                    .map(|(i, &coeff)| format!("{:.3}*{}", coeff, species[i].name))
+                    .collect::<Vec<_>>()
+                    .join(" + ")
+            )
+        } else {
+            format!("Linear invariant involving {} species", species_names.len())
+        };
+
+        LinearInvariant {
+            coefficients: coeffs,
+            species_names,
+            description,
+        }
+    }).collect()
+}
+
+/// Find the null space of the transpose of a matrix (simplified implementation)
+fn find_null_space_transpose(matrix: &[Vec<f64>]) -> Vec<Vec<f64>> {
+    let num_species = matrix.len();
+    let num_reactions = if matrix.is_empty() { 0 } else { matrix[0].len() };
+
+    if num_reactions == 0 {
+        // All species are independent invariants
+        return (0..num_species).map(|i| {
+            let mut inv = vec![0.0; num_species];
+            inv[i] = 1.0;
+            inv
+        }).collect();
+    }
+
+    // For the transpose null space, we need to find vectors v such that:
+    // matrix^T * v = 0, which means v^T * matrix = 0
+    // This is equivalent to finding the left null space of the stoichiometric matrix
+
+    // Use a simplified approach based on the rank deficiency
+    let rank = calculate_matrix_rank(matrix);
+    let null_space_dim = num_species.saturating_sub(rank);
+
+    if null_space_dim == 0 {
+        return Vec::new();
+    }
+
+    let mut invariants = Vec::new();
+
+    // Check if total mass is conserved (sum of all species)
+    let mut total_conserved = true;
+    for reaction_col in 0..num_reactions {
+        let column_sum: f64 = matrix.iter().map(|row| row[reaction_col]).sum();
+        if column_sum.abs() > 1e-10 {
+            total_conserved = false;
+            break;
+        }
+    }
+
+    if total_conserved {
+        invariants.push(vec![1.0; num_species]);
+    }
+
+    // For reversible A <-> B systems, check for simple conservation patterns
+    if num_species == 2 && num_reactions == 2 && invariants.is_empty() {
+        // Check if the two reactions are opposite of each other (reversible system)
+        let mut is_reversible = true;
+        for species_idx in 0..num_species {
+            let coeff_sum: f64 = matrix[species_idx].iter().sum();
+            if coeff_sum.abs() > 1e-10 {
+                is_reversible = false;
+                break;
+            }
+        }
+
+        if is_reversible {
+            // A <-> B system: A + B is conserved
+            invariants.push(vec![1.0; num_species]);
+        }
+    }
+
+    // For systems with rank deficiency, try to find additional patterns
+    if invariants.len() < null_space_dim {
+        // Try combinations that sum to zero for each reaction
+        // This is a heuristic approach for common chemical systems
+        for species_idx in 0..num_species {
+            let mut candidate = vec![0.0; num_species];
+            candidate[species_idx] = 1.0;
+
+            // Check if this species by itself forms a conservation law
+            let mut is_conserved = true;
+            for reaction_col in 0..num_reactions {
+                if matrix[species_idx][reaction_col].abs() > 1e-10 {
+                    is_conserved = false;
+                    break;
+                }
+            }
+
+            if is_conserved && !invariants.iter().any(|inv| inv[species_idx] > 0.5) {
+                invariants.push(candidate);
+            }
+        }
+    }
+
+    invariants
+}
+
+/// Calculate the rank of a matrix using Gaussian elimination
+fn calculate_matrix_rank(matrix: &[Vec<f64>]) -> usize {
+    if matrix.is_empty() {
+        return 0;
+    }
+
+    let rows = matrix.len();
+    let cols = matrix[0].len();
+
+    if cols == 0 {
+        return 0;
+    }
+
+    // Create a mutable copy for Gaussian elimination
+    let mut mat = matrix.to_vec();
+
+    let mut rank = 0;
+    let mut col = 0;
+
+    for row in 0..rows {
+        if col >= cols {
+            break;
+        }
+
+        // Find pivot
+        let mut pivot_row = row;
+        for i in (row + 1)..rows {
+            if mat[i][col].abs() > mat[pivot_row][col].abs() {
+                pivot_row = i;
+            }
+        }
+
+        // If pivot is too small, try next column
+        if mat[pivot_row][col].abs() < 1e-10 {
+            col += 1;
+            continue;
+        }
+
+        // Swap rows if needed
+        if pivot_row != row {
+            mat.swap(pivot_row, row);
+        }
+
+        // Eliminate below pivot
+        for i in (row + 1)..rows {
+            if mat[i][col].abs() > 1e-10 {
+                let factor = mat[i][col] / mat[row][col];
+                for j in col..cols {
+                    mat[i][j] -= factor * mat[row][j];
+                }
+            }
+        }
+
+        rank += 1;
+        col += 1;
+    }
+
+    rank
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1061,5 +1423,253 @@ mod tests {
         assert_eq!(parallel_matrix[1][0], 1.0, "B produced in reaction 1");
         assert_eq!(parallel_matrix[1][1], -1.0, "B consumed in reaction 2");
         assert_eq!(parallel_matrix[2][1], 1.0, "C produced in reaction 2");
+    }
+
+    #[test]
+    fn test_conservation_detection_balanced_system() {
+        let system = ReactionSystem {
+            name: Some("Balanced System".to_string()),
+            species: vec![
+                create_test_species("A"),
+                create_test_species("B"),
+            ],
+            reactions: vec![
+                // A <-> B (reversible)
+                create_test_reaction(
+                    vec![("A", Some(1.0))],
+                    vec![("B", Some(1.0))],
+                    Expr::Variable("kf".to_string())
+                ),
+                create_test_reaction(
+                    vec![("B", Some(1.0))],
+                    vec![("A", Some(1.0))],
+                    Expr::Variable("kr".to_string())
+                ),
+            ],
+            parameters: HashMap::new(),
+            description: None,
+        };
+
+        let analysis = detect_conservation_violations(&system);
+
+        // Should have no mass balance violations
+        let mass_violations: Vec<_> = analysis.violations.iter()
+            .filter(|v| v.violation_type == ConservationLawType::MassBalance)
+            .collect();
+        assert_eq!(mass_violations.len(), 0, "Balanced system should have no mass violations");
+
+        // Should detect total mass conservation (A + B = constant)
+        assert!(analysis.linear_invariants.len() > 0, "Should detect conservation laws");
+        assert_eq!(analysis.conservation_laws_count, 1, "Should have one conservation law");
+    }
+
+    #[test]
+    fn test_conservation_detection_unbalanced_reaction() {
+        let system = ReactionSystem {
+            name: Some("Unbalanced System".to_string()),
+            species: vec![
+                create_test_species("A"),
+                create_test_species("B"),
+            ],
+            reactions: vec![
+                // Unbalanced: 2A -> B (mass not conserved)
+                create_test_reaction(
+                    vec![("A", Some(2.0))],
+                    vec![("B", Some(1.0))],
+                    Expr::Variable("k".to_string())
+                ),
+            ],
+            parameters: HashMap::new(),
+            description: None,
+        };
+
+        let analysis = detect_conservation_violations(&system);
+
+        // Should detect mass balance violation
+        let mass_violations: Vec<_> = analysis.violations.iter()
+            .filter(|v| v.violation_type == ConservationLawType::MassBalance)
+            .collect();
+        assert_eq!(mass_violations.len(), 1, "Should detect one mass balance violation");
+
+        let violation = &mass_violations[0];
+        assert_eq!(violation.reaction_index, Some(0));
+        assert_eq!(violation.magnitude, 1.0); // |2.0 - 1.0| = 1.0
+        assert!(violation.species.contains(&"A".to_string()));
+        assert!(violation.species.contains(&"B".to_string()));
+    }
+
+    #[test]
+    fn test_conservation_detection_complex_network() {
+        let system = ReactionSystem {
+            name: Some("Complex Network".to_string()),
+            species: vec![
+                create_test_species("A"),
+                create_test_species("B"),
+                create_test_species("C"),
+            ],
+            reactions: vec![
+                // A -> B + C (total mass conserved)
+                create_test_reaction(
+                    vec![("A", Some(1.0))],
+                    vec![("B", Some(0.5)), ("C", Some(0.5))],
+                    Expr::Variable("k1".to_string())
+                ),
+                // B -> A (mass conserved)
+                create_test_reaction(
+                    vec![("B", Some(1.0))],
+                    vec![("A", Some(1.0))],
+                    Expr::Variable("k2".to_string())
+                ),
+            ],
+            parameters: HashMap::new(),
+            description: None,
+        };
+
+        let analysis = detect_conservation_violations(&system);
+
+        // All reactions should be mass balanced
+        let mass_violations: Vec<_> = analysis.violations.iter()
+            .filter(|v| v.violation_type == ConservationLawType::MassBalance)
+            .collect();
+        assert_eq!(mass_violations.len(), 0, "All reactions should be mass balanced");
+
+        // Should have conservation laws
+        assert!(analysis.conservation_laws_count > 0, "Should have conservation laws");
+    }
+
+    #[test]
+    fn test_conservation_detection_empty_system() {
+        let system = ReactionSystem {
+            name: Some("Empty System".to_string()),
+            species: vec![],
+            reactions: vec![],
+            parameters: HashMap::new(),
+            description: None,
+        };
+
+        let analysis = detect_conservation_violations(&system);
+
+        assert_eq!(analysis.violations.len(), 0, "Empty system should have no violations");
+        assert_eq!(analysis.linear_invariants.len(), 0, "Empty system should have no invariants");
+        assert_eq!(analysis.stoichiometric_rank, 0, "Empty system should have rank 0");
+        assert_eq!(analysis.conservation_laws_count, 0, "Empty system should have no conservation laws");
+    }
+
+    #[test]
+    fn test_conservation_detection_source_sink() {
+        let system = ReactionSystem {
+            name: Some("Source-Sink System".to_string()),
+            species: vec![
+                create_test_species("A"),
+            ],
+            reactions: vec![
+                // Source: -> A
+                create_test_reaction(
+                    vec![],
+                    vec![("A", Some(1.0))],
+                    Expr::Variable("k_source".to_string())
+                ),
+                // Sink: A ->
+                create_test_reaction(
+                    vec![("A", Some(1.0))],
+                    vec![],
+                    Expr::Variable("k_sink".to_string())
+                ),
+            ],
+            parameters: HashMap::new(),
+            description: None,
+        };
+
+        let analysis = detect_conservation_violations(&system);
+
+        // Source and sink reactions should not be flagged as mass balance violations
+        // (they represent exchange with environment)
+        let mass_violations: Vec<_> = analysis.violations.iter()
+            .filter(|v| v.violation_type == ConservationLawType::MassBalance)
+            .collect();
+        assert_eq!(mass_violations.len(), 0, "Source/sink reactions should not be flagged");
+    }
+
+    #[test]
+    fn test_linear_invariant_calculation() {
+        // Test system where A + B = constant
+        let system = ReactionSystem {
+            name: Some("Conservation Test".to_string()),
+            species: vec![
+                create_test_species("A"),
+                create_test_species("B"),
+            ],
+            reactions: vec![
+                // A <-> B
+                create_test_reaction(
+                    vec![("A", Some(1.0))],
+                    vec![("B", Some(1.0))],
+                    Expr::Variable("k".to_string())
+                ),
+            ],
+            parameters: HashMap::new(),
+            description: None,
+        };
+
+        let matrix = stoichiometric_matrix(&system);
+        let invariants = find_linear_invariants(&matrix, &system.species);
+
+        // Should find that total mass (A + B) is conserved
+        assert!(invariants.len() > 0, "Should find linear invariants");
+
+        // Check that we found the A + B conservation
+        let total_mass_invariant = invariants.iter().find(|inv| {
+            inv.coefficients.len() == 2 &&
+            (inv.coefficients[0] - inv.coefficients[1]).abs() < 1e-10 &&
+            inv.coefficients[0].abs() > 0.5
+        });
+        assert!(total_mass_invariant.is_some(), "Should find A + B conservation law");
+    }
+
+    #[test]
+    fn test_matrix_rank_calculation() {
+        // Test rank calculation with known matrices
+
+        // Full rank 2x2 matrix
+        let full_rank_matrix = vec![
+            vec![1.0, 0.0],
+            vec![0.0, 1.0],
+        ];
+        assert_eq!(calculate_matrix_rank(&full_rank_matrix), 2, "Identity matrix should have full rank");
+
+        // Rank 1 matrix
+        let rank_1_matrix = vec![
+            vec![1.0, 2.0],
+            vec![2.0, 4.0],
+        ];
+        assert_eq!(calculate_matrix_rank(&rank_1_matrix), 1, "Dependent rows should give rank 1");
+
+        // Zero matrix
+        let zero_matrix = vec![
+            vec![0.0, 0.0],
+            vec![0.0, 0.0],
+        ];
+        assert_eq!(calculate_matrix_rank(&zero_matrix), 0, "Zero matrix should have rank 0");
+
+        // Empty matrix
+        let empty_matrix: Vec<Vec<f64>> = vec![];
+        assert_eq!(calculate_matrix_rank(&empty_matrix), 0, "Empty matrix should have rank 0");
+    }
+
+    #[test]
+    fn test_conservation_violation_types() {
+        // Test that different violation types are properly categorized
+        let violation = ConservationViolation {
+            violation_type: ConservationLawType::MassBalance,
+            reaction_index: Some(0),
+            species: vec!["A".to_string(), "B".to_string()],
+            magnitude: 1.5,
+            description: "Test violation".to_string(),
+        };
+
+        assert_eq!(violation.violation_type, ConservationLawType::MassBalance);
+        assert_eq!(violation.reaction_index, Some(0));
+        assert_eq!(violation.magnitude, 1.5);
+        assert_eq!(violation.species.len(), 2);
     }
 }
