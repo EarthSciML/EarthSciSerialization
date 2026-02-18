@@ -308,7 +308,7 @@
     Array.from({length: 100}, (_, i) => [
       `MassiveDataSource_${i}`,
       {
-        "type": "coupling_intensive_data",
+        "type": "gridded_data",
         "loader_id": `MASSIVE_DATA_${i}`,
         "config": {
           "coupling_fanout": (i % 20) + 1,

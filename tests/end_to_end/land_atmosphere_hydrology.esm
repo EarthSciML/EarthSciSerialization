@@ -607,7 +607,7 @@
 
   "data_loaders": {
     "MeteorologicalForcing": {
-      "type": "reanalysis_data",
+      "type": "gridded_data",
       "loader_id": "ERA5_Hourly",
       "config": {
         "variables": ["2m_temperature", "2m_dewpoint", "surface_pressure", "10m_u", "10m_v", "total_precipitation", "surface_solar_radiation", "surface_thermal_radiation"],

@@ -328,7 +328,7 @@
   },
   "data_loaders": {
     "BrokenDataLoader": {
-      "type": "dependency_failure_simulation",
+      "type": "static",
       "loader_id": "BROKEN_DEPS",
       "config": {
         "simulate_missing_files": true,

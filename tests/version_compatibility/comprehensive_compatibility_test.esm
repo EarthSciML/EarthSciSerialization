@@ -164,7 +164,7 @@
       }
     },
     "EmissionInventory": {
-      "type": "sectoral_emissions",
+      "type": "emissions",
       "loader_id": "CEDS_v2021",
       "config": {
         "sectors": ["energy", "industry", "transport", "residential"],

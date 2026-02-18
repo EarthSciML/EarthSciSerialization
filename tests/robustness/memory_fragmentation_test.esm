@@ -148,7 +148,7 @@
     Array.from({length: 200}, (_, i) => [
       `FRAGMENTED_LOADER_${i}`,
       {
-        "type": "memory_stress",
+        "type": "gridded_data",
         "loader_id": `FRAG_${i}`,
         "config": {
           "allocation_pattern": i % 3 === 0 ? "random_sizes" : (i % 3 === 1 ? "growing_sizes" : "shrinking_sizes"),
