@@ -143,16 +143,9 @@ const VariablesPanel: Component<{
     };
 
     variables.forEach(variable => {
-      // Determine variable type based on naming conventions or explicit type
-      let type: VariableType = 'other';
-
-      if (variable.name.startsWith('k_') || variable.name.includes('rate') || variable.name.includes('param')) {
-        type = 'parameter';
-      } else if (variable.name.includes('obs') || variable.name.includes('measured')) {
-        type = 'observed';
-      } else if (!variable.name.includes('_const') && !variable.name.includes('_param')) {
-        type = 'state';
-      }
+      // Use the actual type field from ModelVariable, fall back to 'other' if not specified
+      const type: VariableType =
+        ('type' in variable && variable.type) ? variable.type : 'other';
 
       groups[type].push(variable);
     });
