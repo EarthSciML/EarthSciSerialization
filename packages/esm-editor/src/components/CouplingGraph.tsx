@@ -8,77 +8,9 @@
 
 import { Component, createSignal, createMemo, onMount, onCleanup, Show, For } from 'solid-js';
 import type { ComponentNode, CouplingEdge, Graph } from 'esm-format';
-// import * as d3 from 'd3-force';
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force';
+import type { Simulation, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 
-// Temporary manual implementation of basic force simulation
-interface ForceSimulation {
-  force: (name: string, force: any) => ForceSimulation;
-  on: (event: string, callback: () => void) => ForceSimulation;
-  nodes: (nodes: GraphNode[]) => ForceSimulation;
-  alpha: (value: number) => ForceSimulation;
-  restart: () => ForceSimulation;
-  stop: () => void;
-}
-
-interface Force {
-  id?: (accessor: (d: any) => string) => Force;
-  distance?: (value: number) => Force;
-  strength?: (value: number) => Force;
-  links?: (edges?: GraphEdge[]) => GraphEdge[] | Force;
-  radius?: (value: number) => Force;
-}
-
-// Simple manual layout implementation
-const createSimpleSimulation = (nodes: GraphNode[]): ForceSimulation => {
-  let tickCallback: (() => void) | null = null;
-  let stopped = false;
-
-  // Simple circular layout as placeholder
-  const layoutNodes = () => {
-    if (stopped) return;
-
-    const centerX = 400;
-    const centerY = 300;
-    const radius = Math.min(200, Math.max(100, nodes.length * 15));
-
-    nodes.forEach((node, i) => {
-      const angle = (i / nodes.length) * 2 * Math.PI;
-      node.x = centerX + Math.cos(angle) * radius;
-      node.y = centerY + Math.sin(angle) * radius;
-    });
-
-    tickCallback?.();
-  };
-
-  // Run initial layout
-  setTimeout(layoutNodes, 10);
-
-  return {
-    force: (name: string, force: any) => createSimpleSimulation(nodes),
-    on: (event: string, callback: () => void) => {
-      if (event === 'tick') tickCallback = callback;
-      return createSimpleSimulation(nodes);
-    },
-    nodes: (newNodes: GraphNode[]) => createSimpleSimulation(newNodes),
-    alpha: (value: number) => createSimpleSimulation(nodes),
-    restart: () => {
-      setTimeout(layoutNodes, 10);
-      return createSimpleSimulation(nodes);
-    },
-    stop: () => { stopped = true; }
-  };
-};
-
-const forceSimulation = (nodes: GraphNode[]) => createSimpleSimulation(nodes);
-const forceLink = () => ({
-  id: (accessor: (d: any) => string) => ({ distance: () => ({ strength: () => ({}) }) }),
-  distance: (value: number) => ({ strength: (value: number) => ({}) }),
-  strength: (value: number) => ({}),
-  links: (edges?: GraphEdge[]) => ({})
-});
-const forceManyBody = () => ({ strength: (value: number) => ({}) });
-const forceCenter = (x: number, y: number) => ({});
-const forceCollide = () => ({ radius: (value: number) => ({}) });
 
 export interface CouplingGraphProps {
   /** The graph data to visualize */
@@ -100,18 +32,12 @@ export interface CouplingGraphProps {
   showMinimap?: boolean;
 }
 
-interface GraphNode extends ComponentNode {
-  x?: number;
-  y?: number;
-  fx?: number | null;
-  fy?: number | null;
-  vx?: number;
-  vy?: number;
+interface GraphNode extends ComponentNode, SimulationNodeDatum {
+  // ComponentNode already has id, name, type properties
+  // SimulationNodeDatum provides x?, y?, fx?, fy?, vx?, vy? properties
 }
 
-interface GraphEdge {
-  source: GraphNode;
-  target: GraphNode;
+interface GraphEdge extends SimulationLinkDatum<GraphNode> {
   data: CouplingEdge;
 }
 
@@ -124,8 +50,8 @@ export const CouplingGraph: Component<CouplingGraphProps> = (props) => {
   const nodes = createMemo(() => [...props.graph.nodes] as GraphNode[]);
   const edges = createMemo(() =>
     props.graph.edges.map(edge => ({
-      source: nodes().find(n => n.id === edge.source)!,
-      target: nodes().find(n => n.id === edge.target)!,
+      source: edge.source,
+      target: edge.target,
       data: edge.data
     })) as GraphEdge[]
   );
@@ -138,7 +64,7 @@ export const CouplingGraph: Component<CouplingGraphProps> = (props) => {
 
   // SVG refs
   let svgRef: SVGSVGElement | undefined;
-  let simulation: d3.Simulation<GraphNode, GraphEdge> | undefined;
+  let simulation: Simulation<GraphNode, GraphEdge> | undefined;
 
   // Initialize D3 force simulation
   const initializeSimulation = () => {
@@ -146,8 +72,8 @@ export const CouplingGraph: Component<CouplingGraphProps> = (props) => {
     const edgeData = edges();
 
     simulation = forceSimulation(nodeData)
-      .force('link', forceLink()
-        .id(d => d.id)
+      .force('link', forceLink(edgeData)
+        .id(d => (d as GraphNode).id)
         .distance(100)
         .strength(0.1))
       .force('charge', forceManyBody().strength(-300))
@@ -262,9 +188,12 @@ export const CouplingGraph: Component<CouplingGraphProps> = (props) => {
 
   // Reactive simulation updates
   createMemo(() => {
-    if (simulation && (nodes() !== simulation.nodes() || edges() !== simulation.force('link')?.links())) {
+    if (simulation) {
       simulation.nodes(nodes());
-      (simulation.force('link') as any)?.links?.(edges());
+      const linkForce = simulation.force('link');
+      if (linkForce && 'links' in linkForce) {
+        (linkForce as any).links(edges());
+      }
       simulation.alpha(0.3).restart();
     }
   });
@@ -337,15 +266,18 @@ export const CouplingGraph: Component<CouplingGraphProps> = (props) => {
 
   // Render edge with arrowhead
   const renderEdge = (edge: GraphEdge) => {
-    if (!edge.source.x || !edge.source.y || !edge.target.x || !edge.target.y) return null;
+    const source = typeof edge.source === 'object' ? edge.source : nodes().find(n => n.id === edge.source);
+    const target = typeof edge.target === 'object' ? edge.target : nodes().find(n => n.id === edge.target);
+
+    if (!source?.x || !source?.y || !target?.x || !target?.y) return null;
 
     const style = getEdgeStyle(edge.data);
     return (
       <line
-        x1={edge.source.x}
-        y1={edge.source.y}
-        x2={edge.target.x}
-        y2={edge.target.y}
+        x1={source.x}
+        y1={source.y}
+        x2={target.x}
+        y2={target.y}
         {...style}
         onClick={() => handleEdgeClick(edge.data)}
         onMouseEnter={() => setHoveredElement(edge.data.id)}
