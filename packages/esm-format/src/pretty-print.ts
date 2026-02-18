@@ -301,21 +301,34 @@ function hasElementPattern(variable: string): boolean {
  * Format a number in scientific notation with appropriate formatting
  */
 function formatNumber(num: number, format: 'unicode' | 'latex' | 'ascii'): string {
-  if (Number.isInteger(num) && Math.abs(num) < 1e6) {
+  // Format according to ESM spec Section 6.1
+  if (num === 0) return '0'
+
+  const absNum = Math.abs(num)
+
+  // Use scientific notation for very small or large numbers (spec Section 6.1)
+  if (absNum < 0.01 || absNum >= 10000) {
+    const str = num.toExponential()
+    const [mantissa, exponent] = str.split('e')
+    const cleanMantissa = parseFloat(mantissa).toString() // Remove trailing zeros
+    const exp = parseInt(exponent)
+
+    if (format === 'unicode') {
+      return `${cleanMantissa}×10${toSuperscript(exp.toString())}`
+    } else if (format === 'latex') {
+      return `${cleanMantissa} \\times 10^{${exp}}`
+    } else {
+      return `${cleanMantissa}e${exp >= 0 ? '+' : ''}${exp}` // ASCII with explicit sign
+    }
+  }
+
+  // For integers, show as plain integer
+  if (Number.isInteger(num)) {
     return num.toString()
   }
 
-  const str = num.toExponential()
-  const [mantissa, exponent] = str.split('e')
-  const exp = parseInt(exponent)
-
-  if (format === 'unicode') {
-    return `${mantissa}×10${toSuperscript(exp.toString())}`
-  } else if (format === 'latex') {
-    return `${mantissa} \\times 10^{${exp}}`
-  } else {
-    return str // Plain scientific notation for ASCII
-  }
+  // For decimals, use standard notation
+  return num.toString()
 }
 
 /**
