@@ -5,23 +5,20 @@ import { ReactionEditor } from './ReactionEditor';
 describe('ReactionEditor', () => {
   const mockReactionSystem = {
     name: 'Test Reaction System',
-    species: [
-      {
-        name: 'NO',
+    species: {
+      'NO': {
         formula: 'NO',
         description: 'Nitrogen monoxide'
       },
-      {
-        name: 'O3',
+      'O3': {
         formula: 'O₃',
         description: 'Ozone'
       },
-      {
-        name: 'NO2',
+      'NO2': {
         formula: 'NO₂',
         description: 'Nitrogen dioxide'
       }
-    ],
+    },
     reactions: [
       {
         name: 'NO oxidation',

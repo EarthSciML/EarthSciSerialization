@@ -52,7 +52,7 @@ const renderChemicalFormula = (formula: string): string => {
 const ReactionItem: Component<{
   reaction: Reaction;
   index: number;
-  species: Species[];
+  species: { [k: string]: Species };
   onEditReaction?: (index: number, reaction: Reaction) => void;
   onRemoveReaction?: (index: number) => void;
   highlightedVars?: Set<string>;
@@ -63,13 +63,7 @@ const ReactionItem: Component<{
   const [hoveredVar, setHoveredVar] = createSignal<string | null>(null);
 
   // Create species lookup for chemical formulas
-  const speciesMap = createMemo(() => {
-    const map = new Map<string, Species>();
-    props.species.forEach(species => {
-      map.set(species.name, species);
-    });
-    return map;
-  });
+  const speciesMap = createMemo(() => props.species || {});
 
   // Create reactive highlighted vars set
   const highlightedVars = createMemo(() => {
@@ -88,7 +82,7 @@ const ReactionItem: Component<{
 
     return props.reaction.reactants
       .map((reactant, idx) => {
-        const species = speciesMap().get(reactant.species);
+        const species = speciesMap()[reactant.species];
         const formula = species?.formula || reactant.species;
         const stoichiometry = reactant.stoichiometry !== undefined ? reactant.stoichiometry : 1;
 
@@ -103,7 +97,7 @@ const ReactionItem: Component<{
 
     return props.reaction.products
       .map((product, idx) => {
-        const species = speciesMap().get(product.species);
+        const species = speciesMap()[product.species];
         const formula = species?.formula || product.species;
         const stoichiometry = product.stoichiometry !== undefined ? product.stoichiometry : 1;
 
@@ -429,34 +423,110 @@ export const ReactionEditor: Component<ReactionEditorProps> = (props) => {
 
   // Species management handlers
   const handleAddSpecies = () => {
-    // TODO: Open species creation dialog
-    console.log('Add species');
+    const name = prompt('Enter species name:');
+    if (!name || !name.trim()) return;
+
+    const formula = prompt('Enter chemical formula:', name);
+    const description = prompt('Enter description (optional):', '');
+
+    const newSpecies = {
+      formula: formula || name.trim(),
+      description: description || undefined
+    };
+
+    const updatedSpecies = {
+      ...(props.reactionSystem.species || {}),
+      [name.trim()]: newSpecies
+    };
+    handleReactionSystemChange({ species: updatedSpecies });
   };
 
   const handleEditSpecies = (species: Species) => {
-    // TODO: Open species editing dialog
-    console.log('Edit species:', species.name);
+    const newName = prompt('Enter species name:', species.name);
+    if (!newName || !newName.trim()) return;
+
+    const newFormula = prompt('Enter chemical formula:', species.formula || species.name);
+    const newDescription = prompt('Enter description:', species.description || '');
+
+    const updatedSpecies = { ...(props.reactionSystem.species || {}) };
+
+    // Remove old species if name changed
+    if (newName.trim() !== species.name) {
+      delete updatedSpecies[species.name];
+    }
+
+    // Add/update species with new values
+    updatedSpecies[newName.trim()] = {
+      formula: newFormula || newName.trim(),
+      description: newDescription || undefined
+    };
+
+    handleReactionSystemChange({ species: updatedSpecies });
   };
 
   const handleRemoveSpecies = (name: string) => {
-    const newSpecies = (props.reactionSystem.species || []).filter(s => s.name !== name);
-    handleReactionSystemChange({ species: newSpecies });
+    if (!confirm(`Remove species "${name}"? This may affect reactions that reference it.`)) return;
+
+    const updatedSpecies = { ...(props.reactionSystem.species || {}) };
+    delete updatedSpecies[name];
+    handleReactionSystemChange({ species: updatedSpecies });
   };
 
-  // Parameter management handlers (these would interact with parent model parameters)
+  // Parameter management handlers
   const handleAddParameter = () => {
-    // TODO: Open parameter creation dialog
-    console.log('Add parameter');
+    const name = prompt('Enter parameter name (e.g., k_rate):');
+    if (!name || !name.trim()) return;
+
+    const value = prompt('Enter default value:', '1.0');
+    const unit = prompt('Enter unit (optional):', '');
+    const description = prompt('Enter description (optional):', '');
+
+    const newParameter = {
+      value: parseFloat(value || '1.0') || 1.0,
+      unit: unit || undefined,
+      description: description || undefined
+    };
+
+    const updatedParameters = {
+      ...(props.reactionSystem.parameters || {}),
+      [name.trim()]: newParameter
+    };
+
+    handleReactionSystemChange({ parameters: updatedParameters });
   };
 
   const handleEditParameter = (parameter: ModelVariable) => {
-    // TODO: Open parameter editing dialog
-    console.log('Edit parameter:', parameter.name);
+    const newName = prompt('Enter parameter name:', parameter.name);
+    if (!newName || !newName.trim()) return;
+
+    const newValue = prompt('Enter value:', String(parameter.default_value || 1.0));
+    const newUnit = prompt('Enter unit:', parameter.unit || '');
+    const newDescription = prompt('Enter description:', parameter.description || '');
+
+    const updatedParameters = { ...(props.reactionSystem.parameters || {}) };
+
+    // Remove old parameter if name changed
+    if (newName.trim() !== parameter.name) {
+      delete updatedParameters[parameter.name];
+    }
+
+    // Add/update parameter with new values
+    updatedParameters[newName.trim()] = {
+      value: parseFloat(newValue || '1.0') || 1.0,
+      unit: newUnit || undefined,
+      description: newDescription || undefined
+    };
+
+    handleReactionSystemChange({ parameters: updatedParameters });
   };
 
   const handleRemoveParameter = (name: string) => {
-    // TODO: Remove from parent model parameters
-    console.log('Remove parameter:', name);
+    if (!confirm(`Remove parameter "${name}"? This may affect reactions that reference it.`)) return;
+
+    const updatedParameters = { ...(props.reactionSystem.parameters || {}) };
+    delete updatedParameters[name];
+
+    handleReactionSystemChange({ parameters: updatedParameters });
   };
 
   const editorClasses = () => {
@@ -490,7 +560,7 @@ export const ReactionEditor: Component<ReactionEditorProps> = (props) => {
                 <ReactionItem
                   reaction={reaction}
                   index={index()}
-                  species={props.reactionSystem.species || []}
+                  species={props.reactionSystem.species || {}}
                   onEditReaction={handleEditReaction}
                   onRemoveReaction={handleRemoveReaction}
                   highlightedVars={props.highlightedVars}
@@ -516,7 +586,10 @@ export const ReactionEditor: Component<ReactionEditorProps> = (props) => {
         {/* Side panels */}
         <div class="reaction-sidebar">
           <SpeciesPanel
-            species={props.reactionSystem.species}
+            species={Object.entries(props.reactionSystem.species || {}).map(([name, species]) => ({
+              ...species,
+              name
+            }))}
             onAddSpecies={handleAddSpecies}
             onEditSpecies={handleEditSpecies}
             onRemoveSpecies={handleRemoveSpecies}
@@ -524,7 +597,13 @@ export const ReactionEditor: Component<ReactionEditorProps> = (props) => {
           />
 
           <ParametersPanel
-            parameters={[]} // TODO: Get from parent model
+            parameters={Object.entries(props.reactionSystem.parameters || {}).map(([name, param]) => ({
+              name,
+              type: 'parameter',
+              unit: param.unit,
+              description: param.description,
+              default_value: param.value
+            }))}
             onAddParameter={handleAddParameter}
             onEditParameter={handleEditParameter}
             onRemoveParameter={handleRemoveParameter}
