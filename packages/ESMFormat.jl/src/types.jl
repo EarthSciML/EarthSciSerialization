@@ -230,13 +230,47 @@ Supports hierarchical composition through subsystems.
 struct Model
     variables::Dict{String,ModelVariable}
     equations::Vector{Equation}
-    events::Vector{EventType}
+    discrete_events::Vector{DiscreteEvent}
+    continuous_events::Vector{ContinuousEvent}
     subsystems::Dict{String,Model}
 
-    # Constructor with optional events and subsystems
+    # Primary constructor with separate event arrays
+    Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation},
+          discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
+          subsystems::Dict{String,Model}) =
+        new(variables, equations, discrete_events, continuous_events, subsystems)
+
+    # Convenience constructor with optional events and subsystems
     Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation};
-          events=EventType[], subsystems=Dict{String,Model}()) =
-        new(variables, equations, events, subsystems)
+          discrete_events=DiscreteEvent[], continuous_events=ContinuousEvent[],
+          subsystems=Dict{String,Model}()) =
+        new(variables, equations, discrete_events, continuous_events, subsystems)
+end
+
+"""
+    create_model_with_mixed_events(variables, equations, events, subsystems) -> Model
+
+Helper function to create Model from mixed events vector for backwards compatibility.
+"""
+function create_model_with_mixed_events(variables::Dict{String,ModelVariable},
+                                      equations::Vector{Equation},
+                                      events::Vector{EventType},
+                                      subsystems::Dict{String,Model}=Dict{String,Model}())
+    # Split mixed events vector into separate types
+    discrete = DiscreteEvent[]
+    continuous = ContinuousEvent[]
+
+    for event in events
+        if isa(event, DiscreteEvent)
+            push!(discrete, event)
+        elseif isa(event, ContinuousEvent)
+            push!(continuous, event)
+        else
+            error("Unknown event type: $(typeof(event))")
+        end
+    end
+
+    return Model(variables, equations, discrete, continuous, subsystems)
 end
 
 """
@@ -1071,6 +1105,25 @@ Base.propertynames(::Type{Reaction}, private::Bool=false) = begin
     names = fieldnames(Reaction)
     if private
         return (names..., :reactants, :reversible)
+    else
+        return names
+    end
+end
+
+# Add backwards compatibility property access for Model.events
+Base.getproperty(model::Model, name::Symbol) = begin
+    if name == :events
+        # Return combined events vector for backwards compatibility
+        return vcat(Vector{EventType}(model.discrete_events), Vector{EventType}(model.continuous_events))
+    else
+        return getfield(model, name)
+    end
+end
+
+Base.propertynames(::Type{Model}, private::Bool=false) = begin
+    names = fieldnames(Model)
+    if private
+        return (names..., :events)
     else
         return names
     end
