@@ -278,6 +278,22 @@ end
 # ========================================
 
 """
+    Reference
+
+Academic citation or data source reference.
+"""
+struct Reference
+    doi::Union{String,Nothing}
+    citation::Union{String,Nothing}
+    url::Union{String,Nothing}
+    notes::Union{String,Nothing}
+
+    # Constructor with all optional parameters
+    Reference(; doi=nothing, citation=nothing, url=nothing, notes=nothing) =
+        new(doi, citation, url, notes)
+end
+
+"""
     abstract type CouplingEntry end
 
 Abstract base type for coupling entries that connect model components.
@@ -292,13 +308,22 @@ Runtime-specific data loading functionality.
 """
 struct DataLoader
     type::String
-    source::String
-    parameters::Dict{String,Any}
-    description::Union{String,Nothing}
+    loader_id::String
+    config::Union{Dict{String,Any},Nothing}
+    reference::Union{Reference,Nothing}
+    provides::Dict{String,Any}
+    temporal_resolution::Union{String,Nothing}
+    spatial_resolution::Union{Dict{String,Any},Nothing}
+    interpolation::Union{String,Nothing}
 
-    # Constructor with optional parameters and description
-    DataLoader(type::String, source::String; parameters=Dict{String,Any}(), description=nothing) =
-        new(type, source, parameters, description)
+    # Constructor with optional parameters
+    DataLoader(type::String, loader_id::String, provides::Dict{String,Any};
+               config=nothing,
+               reference=nothing,
+               temporal_resolution=nothing,
+               spatial_resolution=nothing,
+               interpolation=nothing) =
+        new(type, loader_id, config, reference, provides, temporal_resolution, spatial_resolution, interpolation)
 end
 
 """
@@ -308,14 +333,20 @@ Registered runtime operator (by reference).
 Platform-specific computational kernels and operations.
 """
 struct Operator
-    type::String
-    name::String
-    parameters::Dict{String,Any}
+    operator_id::String
+    reference::Union{Reference,Nothing}
+    config::Union{Dict{String,Any},Nothing}
+    needed_vars::Vector{String}
+    modifies::Union{Vector{String},Nothing}
     description::Union{String,Nothing}
 
-    # Constructor with optional parameters and description
-    Operator(type::String, name::String; parameters=Dict{String,Any}(), description=nothing) =
-        new(type, name, parameters, description)
+    # Constructor with optional parameters
+    Operator(operator_id::String, needed_vars::Vector{String};
+             reference=nothing,
+             config=nothing,
+             modifies=nothing,
+             description=nothing) =
+        new(operator_id, reference, config, needed_vars, modifies, description)
 end
 
 # ========================================
@@ -612,21 +643,6 @@ function create_solver_with_method(strategy_str::String, method_str::String; kwa
     return solver
 end
 
-"""
-    Reference
-
-Academic citation or data source reference.
-"""
-struct Reference
-    doi::Union{String,Nothing}
-    citation::Union{String,Nothing}
-    url::Union{String,Nothing}
-    notes::Union{String,Nothing}
-
-    # Constructor with all optional parameters
-    Reference(; doi=nothing, citation=nothing, url=nothing, notes=nothing) =
-        new(doi, citation, url, notes)
-end
 
 """
     StoichiometryEntry
