@@ -175,7 +175,7 @@
       }
     },
     "InitialConditions": {
-      "type": "initial_data",
+      "type": "static",
       "loader_id": "analytical_fields",
       "config": {
         "field_type": "gaussian_pulse",
@@ -194,6 +194,7 @@
   "operators": {
     "BoundaryInterpolator": {
       "operator_id": "boundary_interpolation",
+      "needed_vars": ["phi", "psi"],
       "config": {
         "method": "cubic_spline",
         "boundary_treatment": "extrapolate"
@@ -204,17 +205,16 @@
 
   "coupling": [
     { "type": "operator_compose", "systems": ["FluidDynamics", "WaveEquation"] },
-    { "type": "variable_map", "from": "WindField.wind_u", "to": "FluidDynamics.f_x", "transform": "wind_to_force" },
-    { "type": "variable_map", "from": "WindField.wind_v", "to": "FluidDynamics.f_y", "transform": "wind_to_force" },
+    { "type": "variable_map", "from": "WindField.wind_u", "to": "FluidDynamics.f_x", "transform": "multiplicative" },
+    { "type": "variable_map", "from": "WindField.wind_v", "to": "FluidDynamics.f_y", "transform": "multiplicative" },
     { "type": "variable_map", "from": "WindField.temperature_2m", "to": "FluidDynamics.T", "transform": "param_to_var" },
-    { "type": "operator_apply", "operator": "BoundaryInterpolator", "input": "InitialConditions.initial_phi", "output": "WaveEquation.phi" }
+    { "type": "operator_apply", "operator": "BoundaryInterpolator" }
   ],
 
   "domain": {
     "temporal": {
       "start": "2024-03-01T00:00:00Z",
-      "end": "2024-03-02T00:00:00Z",
-      "timestep": 10.0
+      "end": "2024-03-02T00:00:00Z"
     },
     "spatial": {
       "x": { "min": 0.0, "max": 10.0, "grid_spacing": 0.1, "units": "km" },
@@ -224,23 +224,22 @@
       { "id": "cartesian_2d", "dimensions": ["x", "y"] }
     ],
     "initial_conditions": {
-      "type": "from_data_loader",
-      "loader": "InitialConditions",
-      "variable_mapping": {
-        "phi": "initial_phi",
-        "prey": "initial_prey",
-        "predator": "initial_predator"
+      "type": "per_variable",
+      "values": {
+        "phi": 1.0,
+        "prey": 100.0,
+        "predator": 10.0
       }
     },
     "boundary_conditions": [
-      { "type": "dirichlet", "dimensions": ["x"], "value": { "u": 0.0, "v": 0.0, "phi": 0.0 } },
-      { "type": "neumann", "dimensions": ["y"], "value": { "T": 0.0, "prey": 0.0, "predator": 0.0 } }
+      { "type": "dirichlet", "dimensions": ["x"], "value": 0.0 },
+      { "type": "neumann", "dimensions": ["y"], "value": 0.0 }
     ],
     "element_type": "Float32"
   },
 
   "solver": {
-    "strategy": "coupled_ode_pde",
+    "strategy": "imex",
     "config": {
       "ode_algorithm": "Tsit5",
       "pde_discretization": "finite_differences",
