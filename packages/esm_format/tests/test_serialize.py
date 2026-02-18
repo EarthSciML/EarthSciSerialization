@@ -7,7 +7,7 @@ from pathlib import Path
 
 from esm_format import save
 from esm_format.serialize import _serialize_expression
-from esm_format.types import (
+from esm_format.esm_types import (
     EsmFile, Metadata, Model, ModelVariable, Equation, ExprNode,
     ReactionSystem, Species, Parameter, Reaction
 )

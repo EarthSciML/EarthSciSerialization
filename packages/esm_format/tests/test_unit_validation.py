@@ -12,7 +12,7 @@ This module provides comprehensive tests for:
 
 import pytest
 from pint import UnitRegistry, DimensionalityError
-from esm_format.types import (
+from esm_format.esm_types import (
     ModelVariable, Parameter, Species, Equation, ExprNode,
     Model, ReactionSystem, Reaction, CouplingEntry, CouplingType
 )

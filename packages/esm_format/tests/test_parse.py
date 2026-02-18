@@ -7,7 +7,7 @@ import jsonschema
 from esm_format import load
 from esm_format.parse import _parse_expression
 from esm_format.serialize import _serialize_expression
-from esm_format.types import ExprNode, EsmFile
+from esm_format.esm_types import ExprNode, EsmFile
 
 
 def test_load_invalid_json():

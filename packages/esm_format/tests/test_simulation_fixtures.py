@@ -25,7 +25,7 @@ from unittest.mock import patch
 from contextlib import contextmanager
 
 # Core imports
-from esm_format.types import (
+from esm_format.esm_types import (
     Model, ModelVariable, Equation, ExprNode, EsmFile, Metadata,
     ReactionSystem, Species, Parameter, Reaction
 )
