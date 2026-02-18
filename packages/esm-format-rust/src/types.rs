@@ -78,6 +78,10 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authors: Option<Vec<String>>,
 
+    /// License information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+
     /// Creation timestamp (ISO 8601)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created: Option<String>,
@@ -86,9 +90,13 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified: Option<String>,
 
-    /// Version of this model
+    /// Tags for categorization
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
+    pub tags: Option<Vec<String>>,
+
+    /// Academic citations and references
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub references: Option<Vec<Reference>>,
 }
 
 /// Mathematical expression: a number literal, variable reference, or operator node
