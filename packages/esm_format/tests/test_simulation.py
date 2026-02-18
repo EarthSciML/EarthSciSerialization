@@ -210,7 +210,7 @@ class TestSimpleReactionSystems:
         event_condition = ExprNode(op="-", args=["A", 0.5])  # A - 0.5
         event = ContinuousEvent(
             name="threshold",
-            condition=event_condition,
+            conditions=[event_condition],  # Changed to array
             affects=[]
         )
 

@@ -231,7 +231,7 @@ def test_roundtrip_preserves_events():
     # Create continuous event
     event = ContinuousEvent(
         name="test_event",
-        condition="x > 5.0",
+        conditions=["x > 5.0"],  # Changed to array
         affects=[AffectEquation(lhs="y", rhs="0.0")],
         priority=1
     )
@@ -314,7 +314,7 @@ def test_roundtrip_preserves_all_missing_fields():
 
     event = ContinuousEvent(
         name="event",
-        condition="t > 10",
+        conditions=["t > 10"],  # Changed to array
         affects=[AffectEquation(lhs="x", rhs="1.0")],
         priority=0
     )

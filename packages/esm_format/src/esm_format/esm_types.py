@@ -114,9 +114,13 @@ class FunctionalAffect:
 class ContinuousEvent:
     """An event that occurs when a condition becomes true during continuous evolution."""
     name: str
-    condition: Expr
+    conditions: List[Expr] = field(default_factory=list)  # Changed from single condition to array
     affects: List[Union[AffectEquation, FunctionalAffect]] = field(default_factory=list)
+    affect_neg: Optional[List[Union[AffectEquation, FunctionalAffect]]] = None  # Added: affects for negative-going zero crossings
+    root_find: Optional[Literal['left', 'right', 'all']] = 'left'  # Added: root-finding direction with default
+    reinitialize: bool = False  # Added: whether to reinitialize after event
     priority: int = 0
+    description: Optional[str] = None  # Added: optional description
 
 
 @dataclass
