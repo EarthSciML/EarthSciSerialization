@@ -223,8 +223,8 @@ using ESMFormat
         reaction_system = ReactionSystem(species, reactions, parameters=params)
 
         # DataLoader and Operator (don't have variables, but should be findable)
-        data_loader = DataLoader("file", "/path/to/data.nc", description="Meteorological data")
-        operator = Operator("spatial", "advection", description="Wind transport")
+        data_loader = DataLoader("file", "met_data_loader", Dict("path" => "/path/to/data.nc"))
+        operator = Operator("advection", ["temperature", "wind_u", "wind_v"], description="Wind transport")
 
         esm_file = EsmFile("0.1.0", metadata,
                           models=Dict("Meteorology" => model),
