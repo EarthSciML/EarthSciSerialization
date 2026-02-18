@@ -74,6 +74,7 @@ fn test_structural_validation() {
     // Create a model with equations but no variables (should fail structural validation)
     let variables = HashMap::new();
     let model = Model {
+        reference: None,
         name: Some("Test Model".to_string()),
         variables,
         equations: vec![
@@ -212,6 +213,7 @@ fn test_component_graph() {
     };
 
     let model = Model {
+        reference: None,
         name: Some("TestModel".to_string()),
         variables: HashMap::new(),
         equations: vec![],
@@ -287,6 +289,7 @@ fn test_units() {
 #[test]
 fn test_editing() {
     let model = Model {
+        reference: None,
         name: Some("Test Model".to_string()),
         variables: HashMap::new(),
         equations: vec![],

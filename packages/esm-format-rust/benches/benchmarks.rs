@@ -49,6 +49,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         }
 
         let model = Model {
+            reference: None,
             name: Some(format!("model_{}", i)),
             variables,
             equations,

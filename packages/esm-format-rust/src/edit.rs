@@ -400,6 +400,7 @@ mod tests {
 
     fn create_simple_model() -> Model {
         Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables: HashMap::new(),
             equations: vec![],

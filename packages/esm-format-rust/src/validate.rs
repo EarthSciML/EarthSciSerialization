@@ -1158,6 +1158,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![
@@ -1224,6 +1225,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![
@@ -1317,6 +1319,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![], // No equations needed for this test
@@ -1390,6 +1393,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![
@@ -1511,6 +1515,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![
@@ -1586,6 +1591,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![
@@ -1647,6 +1653,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![

@@ -31,6 +31,7 @@ fn test_analysis_features_integration() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("Simple Model".to_string()),
         variables,
         equations: vec![Equation {
@@ -194,6 +195,7 @@ fn test_editing_operations() {
 
     // Create a simple model
     let model = Model {
+        reference: None,
         name: Some("Test Model".to_string()),
         variables: HashMap::new(),
         equations: vec![],

@@ -177,6 +177,7 @@ fn main() {
     };
 
     let model = Model {
+        reference: None,
         name: Some("Advection".to_string()),
         variables,
         equations: vec![equation],
