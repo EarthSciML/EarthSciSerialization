@@ -14,6 +14,7 @@ using JSON3
 using JSONSchema
 
 # Include type definitions and functionality
+include("availability.jl")  # Include before other modules that need availability checking
 include("types.jl")
 include("error_handling.jl")
 include("validate.jl")
@@ -112,6 +113,8 @@ export
     # Legacy compatibility aliases (for tests)
     MockMTKSystem,
     esm_to_mock_symbolic, mock_symbolic_to_esm,
+    # Availability checking functions
+    check_mtk_availability, check_catalyst_availability, check_mtk_catalyst_availability,
     # Code generation
     to_julia_code, to_python_code
 
