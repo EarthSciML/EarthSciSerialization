@@ -308,3 +308,75 @@ fn test_editing() {
     assert!(updated_model.variables.contains_key("k"));
     assert_eq!(updated_model.variables.len(), 1);
 }
+
+/// Test FunctionalAffect structure has all required fields
+#[test]
+fn test_functional_affect_fields() {
+    use serde_json;
+
+    // Test that FunctionalAffect has all required fields
+    let functional_affect = FunctionalAffect {
+        handler_id: "test_handler".to_string(),
+        read_vars: vec!["var1".to_string(), "var2".to_string()],
+        read_params: vec!["param1".to_string()],
+        modified_params: Some(vec!["param2".to_string()]),
+        config: Some(serde_json::json!({
+            "threshold": 0.5,
+            "update_frequency": 10
+        })),
+    };
+
+    // Test serialization
+    let json = serde_json::to_string_pretty(&functional_affect).expect("Failed to serialize FunctionalAffect");
+
+    // Verify JSON contains required fields
+    assert!(json.contains("handler_id"));
+    assert!(json.contains("read_vars"));
+    assert!(json.contains("read_params"));
+    assert!(json.contains("modified_params"));
+    assert!(json.contains("config"));
+
+    // Test deserialization
+    let deserialized: FunctionalAffect = serde_json::from_str(&json).expect("Failed to deserialize FunctionalAffect");
+
+    assert_eq!(deserialized.handler_id, "test_handler");
+    assert_eq!(deserialized.read_vars, vec!["var1", "var2"]);
+    assert_eq!(deserialized.read_params, vec!["param1"]);
+    assert_eq!(deserialized.modified_params, Some(vec!["param2".to_string()]));
+    assert!(deserialized.config.is_some());
+}
+
+/// Test FunctionalAffect with minimal fields
+#[test]
+fn test_functional_affect_minimal() {
+    use serde_json;
+
+    // Test with only required fields
+    let functional_affect = FunctionalAffect {
+        handler_id: "minimal_handler".to_string(),
+        read_vars: vec!["var1".to_string()],
+        read_params: vec!["param1".to_string()],
+        modified_params: None,
+        config: None,
+    };
+
+    // Test serialization - should not include None fields due to skip_serializing_if
+    let json = serde_json::to_string_pretty(&functional_affect).expect("Failed to serialize minimal FunctionalAffect");
+
+    // Verify JSON has required fields but not optional ones
+    assert!(json.contains("handler_id"));
+    assert!(json.contains("read_vars"));
+    assert!(json.contains("read_params"));
+    // These should be skipped
+    assert!(!json.contains("modified_params"));
+    assert!(!json.contains("config"));
+
+    // Test deserialization
+    let deserialized: FunctionalAffect = serde_json::from_str(&json).expect("Failed to deserialize minimal FunctionalAffect");
+
+    assert_eq!(deserialized.handler_id, "minimal_handler");
+    assert_eq!(deserialized.read_vars, vec!["var1"]);
+    assert_eq!(deserialized.read_params, vec!["param1"]);
+    assert_eq!(deserialized.modified_params, None);
+    assert_eq!(deserialized.config, None);
+}

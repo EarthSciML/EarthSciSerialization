@@ -59,7 +59,7 @@ pub mod performance;
 pub use types::{
     EsmFile, Model, ReactionSystem, Expr, Species, Reaction,
     Metadata, ModelVariable, VariableType, Equation, ExpressionNode,
-    DiscreteEvent, DiscreteEventTrigger, AffectEquation,
+    DiscreteEvent, ContinuousEvent, DiscreteEventTrigger, AffectEquation, FunctionalAffect,
     StoichiometricEntry, DataLoader, Operator, CouplingEntry,
     Domain, Solver
 };
