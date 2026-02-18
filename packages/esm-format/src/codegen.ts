@@ -65,34 +65,34 @@ export function toJuliaCode(file: EsmFile): string {
     }
   }
 
-  // Generate coupling as TODO comments
+  // Generate coupling code
   if (file.coupling && file.coupling.length > 0) {
-    lines.push('# Coupling (TODO)')
+    lines.push('# Coupling')
     for (const coupling of file.coupling) {
-      lines.push(...generateCouplingComment(coupling))
+      lines.push(...generateCouplingCode(coupling))
     }
     lines.push('')
   }
 
-  // Generate domain as TODO comment
+  // Generate domain code
   if (file.domain) {
-    lines.push('# Domain (TODO)')
-    lines.push(...generateDomainComment(file.domain))
+    lines.push('# Domain')
+    lines.push(...generateDomainCode(file.domain))
     lines.push('')
   }
 
-  // Generate solver as TODO comment
+  // Generate solver code
   if (file.solver) {
-    lines.push('# Solver (TODO)')
-    lines.push(...generateSolverComment(file.solver))
+    lines.push('# Solver')
+    lines.push(...generateSolverCode(file.solver))
     lines.push('')
   }
 
-  // Generate data loaders as TODO comments
+  // Generate data loaders code
   if (file.data_loaders && Object.keys(file.data_loaders).length > 0) {
-    lines.push('# Data Loaders (TODO)')
+    lines.push('# Data Loaders')
     for (const [name, dataLoader] of Object.entries(file.data_loaders)) {
-      lines.push(...generateDataLoaderComment(name, dataLoader))
+      lines.push(...generateDataLoaderCode(name, dataLoader))
     }
     lines.push('')
   }
@@ -154,24 +154,33 @@ export function toPythonCode(file: EsmFile): string {
   lines.push('# result = esm.simulate(tspan=tspan, parameters=parameters, initial_conditions=initial_conditions)')
   lines.push('')
 
-  // Generate TODO comments for other features
+  // Generate coupling, domain, and solver code
   if (file.coupling && file.coupling.length > 0) {
-    lines.push('# Coupling (TODO)')
+    lines.push('# Coupling')
     for (const coupling of file.coupling) {
-      lines.push(...generatePythonCouplingComment(coupling))
+      lines.push(...generatePythonCouplingCode(coupling))
     }
     lines.push('')
   }
 
   if (file.domain) {
-    lines.push('# Domain (TODO)')
-    lines.push(...generatePythonDomainComment(file.domain))
+    lines.push('# Domain')
+    lines.push(...generatePythonDomainCode(file.domain))
     lines.push('')
   }
 
   if (file.solver) {
-    lines.push('# Solver (TODO)')
-    lines.push(...generatePythonSolverComment(file.solver))
+    lines.push('# Solver')
+    lines.push(...generatePythonSolverCode(file.solver))
+    lines.push('')
+  }
+
+  // Generate data loaders code
+  if (file.data_loaders && Object.keys(file.data_loaders).length > 0) {
+    lines.push('# Data Loaders')
+    for (const [name, dataLoader] of Object.entries(file.data_loaders)) {
+      lines.push(...generatePythonDataLoaderCode(name, dataLoader))
+    }
     lines.push('')
   }
 
@@ -301,61 +310,179 @@ function generateEventCode(name: string, event: ContinuousEvent | DiscreteEvent)
 }
 
 /**
- * Generate coupling TODO comments
+ * Generate coupling code for Julia
  */
-function generateCouplingComment(coupling: CouplingEntry): string[] {
+function generateCouplingCode(coupling: CouplingEntry): string[] {
   const lines: string[] = []
-  lines.push(`# TODO: Implement coupling ${coupling.type}`)
-  lines.push(`#   From: ${coupling.from}`)
-  lines.push(`#   To: ${coupling.to}`)
-  if (coupling.variables && coupling.variables.length > 0) {
-    lines.push(`#   Variables: ${coupling.variables.join(', ')}`)
+
+  // Generate comment first for clarity
+  lines.push(`# Coupling ${coupling.type}: ${coupling.from} -> ${coupling.to}`)
+
+  // Different coupling implementations based on type
+  switch (coupling.type) {
+    case 'explicit':
+      lines.push(`${coupling.from}_to_${coupling.to}_coupling = ConnectorSystem([`)
+      if (coupling.variables && coupling.variables.length > 0) {
+        for (const variable of coupling.variables) {
+          lines.push(`    ${coupling.from}_system.${variable} ~ ${coupling.to}_system.${variable},`)
+        }
+      }
+      lines.push(`])`)
+      break
+    case 'operator_compose':
+      lines.push(`${coupling.from}_${coupling.to}_composed = compose(${coupling.from}_system, ${coupling.to}_system)`)
+      break
+    case 'operator_apply':
+      lines.push(`${coupling.from}_${coupling.to}_applied = apply(${coupling.from}_operator, ${coupling.to}_system)`)
+      break
+    default:
+      lines.push(`# Coupling type '${coupling.type}' implementation`)
+      lines.push(`${coupling.from}_${coupling.to}_coupling = couple(${coupling.from}_system, ${coupling.to}_system)`)
   }
+
   return lines
 }
 
 /**
- * Generate domain TODO comments
+ * Generate domain code for Julia
  */
-function generateDomainComment(domain: Domain): string[] {
+function generateDomainCode(domain: Domain): string[] {
   const lines: string[] = []
-  lines.push(`# TODO: Implement domain`)
+
+  // Independent variable (time)
+  const timeVar = domain.independent_variable || 't'
+  lines.push(`# Time domain setup`)
+  lines.push(`@variables ${timeVar}`)
+
+  // Spatial coordinates
   if (domain.spatial_coordinates && domain.spatial_coordinates.length > 0) {
-    lines.push(`#   Spatial coordinates: ${domain.spatial_coordinates.join(', ')}`)
+    lines.push(`# Spatial coordinates`)
+    const spatialVars = domain.spatial_coordinates.join(' ')
+    lines.push(`@variables ${spatialVars}`)
   }
-  if (domain.temporal_coordinates && domain.temporal_coordinates.length > 0) {
-    lines.push(`#   Temporal coordinates: ${domain.temporal_coordinates.join(', ')}`)
+
+  // Temporal domain
+  if (domain.temporal) {
+    lines.push(`# Temporal domain`)
+    const start = domain.temporal.start || '0.0'
+    const end = domain.temporal.end || '1.0'
+    lines.push(`tspan = (${start}, ${end})`)
   }
+
+  // Discretization for spatial domain
+  if (domain.discretization) {
+    lines.push(`# Domain discretization`)
+    for (const [dim, disc] of Object.entries(domain.discretization)) {
+      lines.push(`${dim}_discretization = Discretization(${JSON.stringify(disc)})`)
+    }
+  }
+
   return lines
 }
 
 /**
- * Generate solver TODO comments
+ * Generate solver code for Julia
  */
-function generateSolverComment(solver: Solver): string[] {
+function generateSolverCode(solver: Solver): string[] {
   const lines: string[] = []
-  lines.push(`# TODO: Implement solver`)
-  if (solver.algorithm) {
-    lines.push(`#   Algorithm: ${solver.algorithm}`)
+
+  lines.push(`# Solver configuration`)
+
+  // Solver strategy mapping
+  const strategyMapping: { [key: string]: string } = {
+    'strang_threads': 'OperatorSplittingIntegrator',
+    'strang_serial': 'OperatorSplittingIntegrator',
+    'imex': 'IMEXIntegrator'
   }
-  if (solver.tolerances) {
-    lines.push(`#   Tolerances: ${JSON.stringify(solver.tolerances)}`)
+
+  const juliaStrategy = strategyMapping[solver.strategy] || 'ODESolver'
+  lines.push(`solver_strategy = ${juliaStrategy}()`)
+
+  // Strategy-specific configuration
+  if (solver.config) {
+    lines.push(`# Solver configuration`)
+    for (const [key, value] of Object.entries(solver.config)) {
+      if (key === 'stiff_algorithm') {
+        lines.push(`alg = ${value}()`)
+      } else if (key === 'threads') {
+        lines.push(`set_threads(${value})`)
+      } else {
+        lines.push(`${key} = ${JSON.stringify(value)}`)
+      }
+    }
   }
+
+  // Tolerances
+  if (solver.config?.tolerances) {
+    const tol = solver.config.tolerances as any
+    lines.push(`# Tolerance settings`)
+    if (tol.abstol) {
+      lines.push(`abstol = ${tol.abstol}`)
+    }
+    if (tol.reltol) {
+      lines.push(`reltol = ${tol.reltol}`)
+    }
+  }
+
   return lines
 }
 
 /**
- * Generate data loader TODO comments
+ * Generate data loader code for Julia
  */
-function generateDataLoaderComment(name: string, dataLoader: DataLoader): string[] {
+function generateDataLoaderCode(name: string, dataLoader: DataLoader): string[] {
   const lines: string[] = []
-  lines.push(`# TODO: Implement data loader ${name}`)
-  if (dataLoader.source) {
-    lines.push(`#   Source: ${dataLoader.source}`)
+
+  lines.push(`# Data loader: ${name}`)
+
+  // Type-specific data loader implementations
+  switch (dataLoader.type) {
+    case 'gridded_data':
+      lines.push(`${name}_loader = GriddedDataLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_data = load_gridded_data("${dataLoader.source}")`)
+      }
+      break
+    case 'emissions':
+      lines.push(`${name}_loader = EmissionsLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_emissions = load_emissions("${dataLoader.source}")`)
+      }
+      break
+    case 'timeseries':
+      lines.push(`${name}_loader = TimeSeriesLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_timeseries = load_timeseries("${dataLoader.source}")`)
+      }
+      break
+    case 'static':
+      lines.push(`${name}_loader = StaticDataLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_static = load_static_data("${dataLoader.source}")`)
+      }
+      break
+    case 'callback':
+      lines.push(`${name}_loader = CallbackDataLoader("${dataLoader.loader_id}")`)
+      break
+    default:
+      lines.push(`${name}_loader = DataLoader("${dataLoader.loader_id}")`)
   }
-  if (dataLoader.format) {
-    lines.push(`#   Format: ${dataLoader.format}`)
+
+  // Configuration
+  if (dataLoader.config) {
+    lines.push(`configure!(${name}_loader, ${JSON.stringify(dataLoader.config)})`)
   }
+
+  // Variables provided
+  if (dataLoader.provides) {
+    lines.push(`# Variables provided by ${name}:`)
+    for (const [variable, info] of Object.entries(dataLoader.provides)) {
+      const units = info.units ? ` (${info.units})` : ''
+      const desc = info.description ? ` - ${info.description}` : ''
+      lines.push(`#   ${variable}${units}${desc}`)
+    }
+  }
+
   return lines
 }
 
@@ -365,8 +492,9 @@ function generateDataLoaderComment(name: string, dataLoader: DataLoader): string
 function formatVariableDeclaration(variable: ModelVariable, name: string): string {
   let decl = name
 
-  // Add default value and units if present
-  if (variable.default !== undefined || variable.units) {
+  // Add default value and units if present (check both "units" and "unit" properties for compatibility)
+  const units = variable.units || (variable as any).unit
+  if (variable.default !== undefined || units) {
     decl += '('
     const parts: string[] = []
 
@@ -380,8 +508,8 @@ function formatVariableDeclaration(variable: ModelVariable, name: string): strin
       }
     }
 
-    if (variable.units) {
-      parts.push(`u"${variable.units}"`)
+    if (units) {
+      parts.push(`u"${units}"`)
     }
 
     decl += parts.join(', ')
@@ -397,14 +525,14 @@ function formatVariableDeclaration(variable: ModelVariable, name: string): strin
 function formatSpeciesDeclaration(species: Species, name: string): string {
   let decl = name
 
-  // Add default value if present
-  if (species.default !== undefined) {
+  // Add default value if present (check both "default" and "initial_value" properties for compatibility)
+  const initialValue = species.default !== undefined ? species.default : (species as any).initial_value
+  if (initialValue !== undefined) {
     // Ensure decimal point for floating point numbers
-    const initialVal = species.default
-    if (typeof initialVal === 'number' && Number.isInteger(initialVal)) {
-      decl += `(${initialVal}.0)`
+    if (typeof initialValue === 'number' && Number.isInteger(initialValue)) {
+      decl += `(${initialValue}.0)`
     } else {
-      decl += `(${initialVal})`
+      decl += `(${initialValue})`
     }
   }
 
@@ -426,9 +554,10 @@ function formatEquation(equation: Equation): string {
 function formatReaction(reaction: Reaction): string {
   const rate = reaction.rate ? formatExpression(reaction.rate) : '1.0'
 
-  // Format substrates (reactants)
-  const reactants = reaction.substrates ?
-    reaction.substrates.map(r => r.stoichiometry && r.stoichiometry !== 1 ?
+  // Format substrates (reactants) - handle both "substrates" and "reactants" properties for compatibility
+  const substrates = reaction.substrates || (reaction as any).reactants
+  const reactants = substrates ?
+    substrates.map((r: any) => r.stoichiometry && r.stoichiometry !== 1 ?
       `${r.stoichiometry}*${r.species}` : r.species).join(' + ') :
     '∅'
 
@@ -608,7 +737,9 @@ function generatePythonModelCode(name: string, model: Model): string[] {
   if (stateVars.length > 0) {
     lines.push('# State variables')
     for (const variable of stateVars) {
-      const comment = variable.units ? `  # ${variable.units}` : ''
+      // Check both "units" and "unit" properties for compatibility
+      const units = variable.units || (variable as any).unit
+      const comment = units ? `  # ${units}` : ''
       if (variable.name && variable.name.includes('(')) {
         // Function symbol (e.g., contains parentheses)
         lines.push(`${variable.name} = sp.Function('${variable.name.split('(')[0]}')${comment}`)
@@ -627,7 +758,9 @@ function generatePythonModelCode(name: string, model: Model): string[] {
   if (parameters.length > 0) {
     lines.push('# Parameters')
     for (const parameter of parameters) {
-      const comment = parameter.units ? `  # ${parameter.units}` : ''
+      // Check both "units" and "unit" properties for compatibility
+      const units = parameter.units || (parameter as any).unit
+      const comment = units ? `  # ${units}` : ''
       lines.push(`${parameter.name} = sp.Symbol('${parameter.name}')${comment}`)
     }
     lines.push('')
@@ -677,9 +810,11 @@ function generatePythonReactionSystemCode(name: string, reactionSystem: Reaction
     lines.push('# Stoichiometry setup (TODO: Implement reaction network)')
     for (const [reactionName, reaction] of Object.entries(reactionSystem.reactions)) {
       lines.push(`# Reaction: ${reactionName}`)
-      if (reaction.substrates) {
-        const reactantStr = reaction.substrates
-          .map(r => r.stoichiometry && r.stoichiometry !== 1 ? `${r.stoichiometry}*${r.species}` : r.species)
+      // Handle both "substrates" and "reactants" properties for compatibility
+      const substrates = reaction.substrates || (reaction as any).reactants
+      if (substrates) {
+        const reactantStr = substrates
+          .map((r: any) => r.stoichiometry && r.stoichiometry !== 1 ? `${r.stoichiometry}*${r.species}` : r.species)
           .join(' + ')
         lines.push(`#   Reactants: ${reactantStr}`)
       }
@@ -696,46 +831,184 @@ function generatePythonReactionSystemCode(name: string, reactionSystem: Reaction
 }
 
 /**
- * Generate coupling TODO comments for Python
+ * Generate coupling code for Python
  */
-function generatePythonCouplingComment(coupling: CouplingEntry): string[] {
+function generatePythonCouplingCode(coupling: CouplingEntry): string[] {
   const lines: string[] = []
-  lines.push(`# TODO: Implement coupling ${coupling.type}`)
-  lines.push(`#   From: ${coupling.from}`)
-  lines.push(`#   To: ${coupling.to}`)
-  if (coupling.variables && coupling.variables.length > 0) {
-    lines.push(`#   Variables: ${coupling.variables.join(', ')}`)
+
+  lines.push(`# Coupling ${coupling.type}: ${coupling.from} -> ${coupling.to}`)
+
+  // Different coupling implementations based on type
+  switch (coupling.type) {
+    case 'explicit':
+      lines.push(`${coupling.from}_to_${coupling.to}_coupling = esm.ExplicitCoupling(`)
+      lines.push(`    from_model="${coupling.from}",`)
+      lines.push(`    to_model="${coupling.to}",`)
+      if (coupling.variables && coupling.variables.length > 0) {
+        lines.push(`    variables=${JSON.stringify(coupling.variables)}`)
+      }
+      lines.push(`)`)
+      break
+    case 'operator_compose':
+      lines.push(`${coupling.from}_${coupling.to}_composed = esm.compose_systems(${coupling.from}_system, ${coupling.to}_system)`)
+      break
+    case 'operator_apply':
+      lines.push(`${coupling.from}_${coupling.to}_applied = esm.apply_operator(${coupling.from}_operator, ${coupling.to}_system)`)
+      break
+    default:
+      lines.push(`# Coupling type '${coupling.type}' implementation`)
+      lines.push(`${coupling.from}_${coupling.to}_coupling = esm.couple_systems(${coupling.from}_system, ${coupling.to}_system)`)
   }
+
   return lines
 }
 
 /**
- * Generate domain TODO comments for Python
+ * Generate domain code for Python
  */
-function generatePythonDomainComment(domain: Domain): string[] {
+function generatePythonDomainCode(domain: Domain): string[] {
   const lines: string[] = []
-  lines.push(`# TODO: Implement domain`)
+
+  lines.push(`# Domain configuration`)
+
+  // Independent variable (time)
+  const timeVar = domain.independent_variable || 't'
+  lines.push(`${timeVar} = sp.Symbol('${timeVar}')`)
+
+  // Spatial coordinates
   if (domain.spatial_coordinates && domain.spatial_coordinates.length > 0) {
-    lines.push(`#   Spatial coordinates: ${domain.spatial_coordinates.join(', ')}`)
+    lines.push(`# Spatial coordinates`)
+    for (const coord of domain.spatial_coordinates) {
+      lines.push(`${coord} = sp.Symbol('${coord}')`)
+    }
   }
-  if (domain.temporal_coordinates && domain.temporal_coordinates.length > 0) {
-    lines.push(`#   Temporal coordinates: ${domain.temporal_coordinates.join(', ')}`)
+
+  // Temporal domain
+  if (domain.temporal) {
+    lines.push(`# Temporal domain`)
+    const start = domain.temporal.start || '0.0'
+    const end = domain.temporal.end || '1.0'
+    lines.push(`tspan = (${start}, ${end})`)
+
+    if (domain.temporal.reference_time) {
+      lines.push(`reference_time = "${domain.temporal.reference_time}"`)
+    }
   }
+
+  // Domain setup
+  lines.push(`domain = esm.Domain(`)
+  lines.push(`    spatial_coordinates=[${domain.spatial_coordinates?.map(c => `"${c}"`).join(', ') || ''}],`)
+  if (domain.temporal) {
+    lines.push(`    temporal=esm.TemporalDomain(`)
+    lines.push(`        start=${domain.temporal.start || '0.0'},`)
+    lines.push(`        end=${domain.temporal.end || '1.0'}`)
+    lines.push(`    )`)
+  }
+  lines.push(`)`)
+
   return lines
 }
 
 /**
- * Generate solver TODO comments for Python
+ * Generate solver code for Python
  */
-function generatePythonSolverComment(solver: Solver): string[] {
+function generatePythonSolverCode(solver: Solver): string[] {
   const lines: string[] = []
-  lines.push(`# TODO: Implement solver`)
-  if (solver.algorithm) {
-    lines.push(`#   Algorithm: ${solver.algorithm}`)
+
+  lines.push(`# Solver configuration`)
+
+  // Solver strategy mapping
+  const strategyMapping: { [key: string]: string } = {
+    'strang_threads': 'OperatorSplittingSolver',
+    'strang_serial': 'OperatorSplittingSolver',
+    'imex': 'IMEXSolver'
   }
-  if (solver.tolerances) {
-    lines.push(`#   Tolerances: ${JSON.stringify(solver.tolerances)}`)
+
+  const pythonStrategy = strategyMapping[solver.strategy] || 'ODESolver'
+  lines.push(`solver = esm.${pythonStrategy}(`)
+
+  // Strategy-specific configuration
+  if (solver.config) {
+    const configItems = []
+    for (const [key, value] of Object.entries(solver.config)) {
+      if (key === 'stiff_algorithm') {
+        configItems.push(`    algorithm="${value}"`)
+      } else if (key === 'threads') {
+        configItems.push(`    threads=${value}`)
+      } else if (key === 'tolerances' && typeof value === 'object') {
+        const tol = value as any
+        if (tol.abstol) configItems.push(`    abstol=${tol.abstol}`)
+        if (tol.reltol) configItems.push(`    reltol=${tol.reltol}`)
+      } else {
+        configItems.push(`    ${key}=${JSON.stringify(value)}`)
+      }
+    }
+    if (configItems.length > 0) {
+      lines[lines.length - 1] += configItems.join(',\n')
+    }
   }
+
+  lines.push(`)`)
+
+  return lines
+}
+
+/**
+ * Generate data loader code for Python
+ */
+function generatePythonDataLoaderCode(name: string, dataLoader: DataLoader): string[] {
+  const lines: string[] = []
+
+  lines.push(`# Data loader: ${name}`)
+
+  // Type-specific data loader implementations
+  switch (dataLoader.type) {
+    case 'gridded_data':
+      lines.push(`${name}_loader = esm.GriddedDataLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_data = ${name}_loader.load("${dataLoader.source}")`)
+      }
+      break
+    case 'emissions':
+      lines.push(`${name}_loader = esm.EmissionsLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_emissions = ${name}_loader.load("${dataLoader.source}")`)
+      }
+      break
+    case 'timeseries':
+      lines.push(`${name}_loader = esm.TimeSeriesLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_timeseries = ${name}_loader.load("${dataLoader.source}")`)
+      }
+      break
+    case 'static':
+      lines.push(`${name}_loader = esm.StaticDataLoader("${dataLoader.loader_id}")`)
+      if (dataLoader.source) {
+        lines.push(`${name}_static = ${name}_loader.load("${dataLoader.source}")`)
+      }
+      break
+    case 'callback':
+      lines.push(`${name}_loader = esm.CallbackDataLoader("${dataLoader.loader_id}")`)
+      break
+    default:
+      lines.push(`${name}_loader = esm.DataLoader("${dataLoader.loader_id}")`)
+  }
+
+  // Configuration
+  if (dataLoader.config) {
+    lines.push(`${name}_loader.configure(${JSON.stringify(dataLoader.config)})`)
+  }
+
+  // Variables provided
+  if (dataLoader.provides) {
+    lines.push(`# Variables provided by ${name}:`)
+    for (const [variable, info] of Object.entries(dataLoader.provides)) {
+      const units = info.units ? ` (${info.units})` : ''
+      const desc = info.description ? ` - ${info.description}` : ''
+      lines.push(`#   ${variable}${units}${desc}`)
+    }
+  }
+
   return lines
 }
 
