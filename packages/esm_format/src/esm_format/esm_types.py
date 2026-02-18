@@ -390,8 +390,8 @@ class EsmFile:
     """Root container for an ESM format file."""
     version: str
     metadata: Metadata
-    models: List[Model] = field(default_factory=list)
-    reaction_systems: List[ReactionSystem] = field(default_factory=list)
+    models: Dict[str, Model] = field(default_factory=dict)
+    reaction_systems: Dict[str, ReactionSystem] = field(default_factory=dict)
     events: List[Union[ContinuousEvent, DiscreteEvent]] = field(default_factory=list)
     data_loaders: List[DataLoader] = field(default_factory=list)
     operators: List[Operator] = field(default_factory=list)
