@@ -1,419 +1,219 @@
 """
-Enhanced hierarchical scope resolution algorithm for ESM Format.
-
-This module implements comprehensive hierarchical scope resolution with:
-1. Scope chain traversal - walking up and down the hierarchy
-2. Variable shadowing rules - inner scopes shadow outer scopes
-3. Scope inheritance - inner scopes can access parent scope variables
-
-The algorithm follows these resolution rules:
-- Direct resolution: Try to find the variable at the exact scope requested
-- Inheritance resolution: If not found, walk up the scope chain to parent scopes
-- Shadowing enforcement: When multiple scopes have the same variable, use the most specific (inner) one
+Minimal hierarchical scope resolution for ESM Format.
+This provides only the essential scoped reference resolution required by validation.
 """
 
-from typing import Dict, List, Set, Optional, Tuple, Union, Any
-from dataclasses import dataclass, field
-from collections import defaultdict
-import logging
-
-from .esm_types import CouplingEntry, CouplingType, EsmFile, Model, ReactionSystem, DataLoader, Operator, ModelVariable, Species
-from .coupling_graph import ScopedReference
+from dataclasses import dataclass
+from typing import Optional, Dict, List, Any
+from .esm_types import EsmFile, Model, ReactionSystem
 
 
 @dataclass
 class ScopeInfo:
-    """Information about a scope in the hierarchy."""
+    """Information about a scope."""
     name: str
-    full_path: List[str]  # Full path from root to this scope
-    parent: Optional['ScopeInfo'] = None
-    children: Dict[str, 'ScopeInfo'] = field(default_factory=dict)
-    variables: Dict[str, Any] = field(default_factory=dict)
-    component_data: Any = None  # The actual component object/dict
-    component_type: str = ""
+    parent: Optional[str] = None
+    variables: Optional[List[str]] = None
 
 
 @dataclass
 class VariableResolution:
-    """Result of variable resolution with scope information."""
+    """Result of variable resolution."""
     variable_name: str
-    resolved_value: Any
-    resolved_scope: ScopeInfo
-    resolution_type: str  # "direct", "inherited", "shadowed"
-    shadow_chain: List[ScopeInfo] = field(default_factory=list)  # Scopes that were shadowed
-    available_scopes: List[ScopeInfo] = field(default_factory=list)  # All scopes checked
+    system_name: str
+    found: bool
+    full_path: Optional[str] = None
 
 
 class HierarchicalScopeResolver:
-    """
-    Enhanced hierarchical scope resolver with shadowing and inheritance.
-
-    This resolver builds a complete scope hierarchy tree and implements
-    sophisticated variable resolution with proper shadowing semantics.
-    """
+    """Minimal hierarchical scope resolver for scoped references."""
 
     def __init__(self, esm_file: EsmFile):
-        """
-        Initialize the hierarchical scope resolver.
-
-        Args:
-            esm_file: The ESM file containing components to resolve against
-        """
         self.esm_file = esm_file
-        self.scope_tree: Dict[str, ScopeInfo] = {}
-        self.logger = logging.getLogger(__name__)
 
-        # Build the scope hierarchy tree
-        self._build_scope_tree()
+    def resolve_variable(self, reference: str, context_system: Optional[str] = None) -> VariableResolution:
+        """Resolve a potentially scoped variable reference."""
+        parts = reference.split('.')
 
-    def _build_scope_tree(self):
-        """Build the complete scope hierarchy tree from the ESM file."""
-        self.scope_tree.clear()
+        if len(parts) == 1:
+            # Unqualified variable - look in context system first
+            var_name = parts[0]
 
-        # Process models
-        if hasattr(self.esm_file, 'models') and self.esm_file.models:
-            self._build_tree_from_components(self.esm_file.models, 'model')
+            if context_system:
+                if self._variable_exists_in_system(var_name, context_system):
+                    return VariableResolution(
+                        variable_name=var_name,
+                        system_name=context_system,
+                        found=True,
+                        full_path=f"{context_system}.{var_name}"
+                    )
 
-        # Process reaction systems
-        if hasattr(self.esm_file, 'reaction_systems') and self.esm_file.reaction_systems:
-            self._build_tree_from_components(self.esm_file.reaction_systems, 'reaction_system')
+            # Look in all systems
+            for system_name in self._get_all_system_names():
+                if self._variable_exists_in_system(var_name, system_name):
+                    return VariableResolution(
+                        variable_name=var_name,
+                        system_name=system_name,
+                        found=True,
+                        full_path=f"{system_name}.{var_name}"
+                    )
 
-        # Process data loaders
-        if hasattr(self.esm_file, 'data_loaders') and self.esm_file.data_loaders:
-            self._build_tree_from_components(self.esm_file.data_loaders, 'data_loader')
-
-        # Process operators
-        if hasattr(self.esm_file, 'operators') and self.esm_file.operators:
-            self._build_tree_from_components(self.esm_file.operators, 'operator')
-
-    def _build_tree_from_components(self, components: Union[Dict, List], component_type: str):
-        """Build scope tree from a collection of components."""
-        if isinstance(components, dict):
-            for name, component in components.items():
-                self._build_scope_subtree(component, [name], component_type)
-        elif isinstance(components, list):
-            for component in components:
-                if isinstance(component, dict) and 'name' in component:
-                    name = component['name']
-                elif hasattr(component, 'name'):
-                    name = component.name
-                else:
-                    continue
-                self._build_scope_subtree(component, [name], component_type)
-
-    def _build_scope_subtree(self, component: Any, path: List[str], component_type: str, parent: Optional[ScopeInfo] = None):
-        """Recursively build scope subtree for a component and its subsystems."""
-        # Create scope info for this component
-        scope_name = path[-1]
-        scope_info = ScopeInfo(
-            name=scope_name,
-            full_path=path.copy(),
-            parent=parent,
-            component_data=component,
-            component_type=component_type
-        )
-
-        # Extract variables from the component
-        scope_info.variables = self._extract_variables_from_component(component)
-
-        # Store in the tree
-        scope_key = '.'.join(path)
-        self.scope_tree[scope_key] = scope_info
-
-        # Link to parent
-        if parent:
-            parent.children[scope_name] = scope_info
-
-        # Recursively process subsystems
-        subsystems = {}
-        if isinstance(component, dict):
-            subsystems = component.get('subsystems', {})
-        elif hasattr(component, 'subsystems'):
-            subsystems = getattr(component, 'subsystems', {})
-
-        for subsystem_name, subsystem_data in subsystems.items():
-            child_path = path + [subsystem_name]
-            self._build_scope_subtree(subsystem_data, child_path, component_type, scope_info)
-
-    def _extract_variables_from_component(self, component: Any) -> Dict[str, Any]:
-        """Extract all variables from a component."""
-        variables = {}
-
-        # Handle dict-based components
-        if isinstance(component, dict):
-            variables.update(component.get('variables', {}))
-            # Also check for provides (for data loaders)
-            variables.update(component.get('provides', {}))
-        else:
-            # Handle object-based components
-            if hasattr(component, 'variables'):
-                if isinstance(component.variables, dict):
-                    variables.update(component.variables)
-
-            # Handle Model objects specifically
-            if hasattr(component, '__class__') and component.__class__.__name__ == 'Model':
-                for var_name, var_obj in getattr(component, 'variables', {}).items():
-                    if hasattr(var_obj, '__dict__'):
-                        variables[var_name] = var_obj.__dict__
-                    else:
-                        variables[var_name] = var_obj
-
-            # Handle ReactionSystem objects
-            elif hasattr(component, '__class__') and component.__class__.__name__ == 'ReactionSystem':
-                # Add species as variables
-                for species in getattr(component, 'species', []):
-                    if hasattr(species, 'name'):
-                        variables[species.name] = {
-                            'type': 'species',
-                            'units': getattr(species, 'units', None),
-                            'description': getattr(species, 'description', None)
-                        }
-
-                # Add parameters as variables
-                for param in getattr(component, 'parameters', []):
-                    if hasattr(param, 'name'):
-                        variables[param.name] = {
-                            'type': 'parameter',
-                            'units': getattr(param, 'units', None),
-                            'value': getattr(param, 'value', None),
-                            'description': getattr(param, 'description', None)
-                        }
-
-        return variables
-
-    def resolve_variable(self, reference: str) -> VariableResolution:
-        """
-        Resolve a scoped variable reference with full shadowing and inheritance.
-
-        Args:
-            reference: Scoped reference like 'AtmosphereModel.Chemistry.temperature'
-
-        Returns:
-            VariableResolution with complete resolution information
-
-        Raises:
-            ValueError: If the reference cannot be resolved
-        """
-        # Parse the reference
-        segments = reference.split('.')
-        if len(segments) < 2:
-            raise ValueError(f"Invalid scoped reference '{reference}': must contain at least one dot")
-
-        variable_name = segments[-1]
-        scope_path = segments[:-1]
-
-        # Find the target scope
-        scope_key = '.'.join(scope_path)
-        if scope_key not in self.scope_tree:
-            raise ValueError(f"Scope '{scope_key}' not found in hierarchy")
-
-        target_scope = self.scope_tree[scope_key]
-
-        # Try direct resolution first
-        if variable_name in target_scope.variables:
             return VariableResolution(
-                variable_name=variable_name,
-                resolved_value=target_scope.variables[variable_name],
-                resolved_scope=target_scope,
-                resolution_type="direct",
-                available_scopes=[target_scope]
+                variable_name=var_name,
+                system_name="",
+                found=False
             )
 
-        # Try inheritance resolution (walk up the scope chain)
-        current_scope = target_scope
-        shadow_chain = []
-        available_scopes = [target_scope]
+        else:
+            # Qualified variable - resolve system path (supports multi-level paths like A.B.C.variable)
+            var_name = parts[-1]
+            system_path = parts[:-1]  # All parts except the last (variable name)
 
-        while current_scope.parent:
-            current_scope = current_scope.parent
-            available_scopes.append(current_scope)
+            # Try to resolve the variable through the subsystem hierarchy
+            found, resolved_system = self._resolve_variable_in_hierarchy(system_path, var_name)
 
-            if variable_name in current_scope.variables:
+            if found:
                 return VariableResolution(
-                    variable_name=variable_name,
-                    resolved_value=current_scope.variables[variable_name],
-                    resolved_scope=current_scope,
-                    resolution_type="inherited",
-                    shadow_chain=shadow_chain,
-                    available_scopes=available_scopes
-                )
-
-        # Variable not found in any parent scope
-        all_available = self._get_all_available_variables_in_scope_chain(target_scope)
-        raise ValueError(
-            f"Variable '{variable_name}' not found in scope '{scope_key}' or any parent scope. "
-            f"Available variables: {list(all_available.keys())}"
-        )
-
-    def _get_all_available_variables_in_scope_chain(self, scope: ScopeInfo) -> Dict[str, ScopeInfo]:
-        """Get all variables available in a scope chain (including parents)."""
-        available = {}
-        current = scope
-
-        while current:
-            for var_name in current.variables:
-                if var_name not in available:  # Respect shadowing - first one found wins
-                    available[var_name] = current
-            current = current.parent
-
-        return available
-
-    def find_variable_shadows(self, variable_name: str, scope_path: List[str]) -> List[Tuple[ScopeInfo, Any]]:
-        """
-        Find all instances of a variable in the scope hierarchy (for shadowing analysis).
-
-        Args:
-            variable_name: Name of the variable to search for
-            scope_path: Path to start the search from
-
-        Returns:
-            List of (scope, variable_value) tuples where the variable exists
-        """
-        shadows = []
-
-        # Start from the specified scope and walk up
-        scope_key = '.'.join(scope_path)
-        if scope_key not in self.scope_tree:
-            return shadows
-
-        current_scope = self.scope_tree[scope_key]
-
-        while current_scope:
-            if variable_name in current_scope.variables:
-                shadows.append((current_scope, current_scope.variables[variable_name]))
-            current_scope = current_scope.parent
-
-        return shadows
-
-    def resolve_with_shadowing_info(self, reference: str) -> VariableResolution:
-        """
-        Resolve a variable with complete shadowing information.
-
-        This method provides detailed information about which variables were
-        shadowed during the resolution process.
-        """
-        segments = reference.split('.')
-        if len(segments) < 2:
-            raise ValueError(f"Invalid scoped reference '{reference}': must contain at least one dot")
-
-        variable_name = segments[-1]
-        scope_path = segments[:-1]
-
-        # Find all shadows of this variable
-        shadows = self.find_variable_shadows(variable_name, scope_path)
-
-        if not shadows:
-            scope_key = '.'.join(scope_path)
-            if scope_key in self.scope_tree:
-                available = self._get_all_available_variables_in_scope_chain(self.scope_tree[scope_key])
-                raise ValueError(
-                    f"Variable '{variable_name}' not found in scope '{scope_key}' or any parent scope. "
-                    f"Available variables: {list(available.keys())}"
+                    variable_name=var_name,
+                    system_name=resolved_system,
+                    found=True,
+                    full_path=reference
                 )
             else:
-                raise ValueError(f"Scope '{scope_key}' not found in hierarchy")
+                # For backward compatibility, try the old single-level approach
+                system_name = parts[0]
+                if self._system_exists(system_name) and self._variable_exists_in_system(var_name, system_name):
+                    return VariableResolution(
+                        variable_name=var_name,
+                        system_name=system_name,
+                        found=True,
+                        full_path=reference
+                    )
 
-        # The first shadow is the resolved variable (most specific scope)
-        resolved_scope, resolved_value = shadows[0]
+            return VariableResolution(
+                variable_name=var_name,
+                system_name=".".join(system_path),
+                found=False,
+                full_path=reference
+            )
 
-        # Determine resolution type
-        scope_key = '.'.join(scope_path)
-        if resolved_scope.full_path == scope_path:
-            resolution_type = "direct"
-            shadow_chain = [scope for scope, _ in shadows[1:]]  # All others were shadowed
-        else:
-            resolution_type = "inherited"
-            shadow_chain = [scope for scope, _ in shadows[1:]]  # All others were shadowed
+    def _get_all_system_names(self) -> List[str]:
+        """Get all system names."""
+        systems = []
+        if self.esm_file.models:
+            systems.extend(self.esm_file.models.keys())
+        if self.esm_file.reaction_systems:
+            systems.extend(self.esm_file.reaction_systems.keys())
+        if self.esm_file.data_loaders:
+            systems.extend(self.esm_file.data_loaders.keys())
+        if self.esm_file.operators:
+            systems.extend(self.esm_file.operators.keys())
+        return systems
 
-        return VariableResolution(
-            variable_name=variable_name,
-            resolved_value=resolved_value,
-            resolved_scope=resolved_scope,
-            resolution_type=resolution_type,
-            shadow_chain=shadow_chain,
-            available_scopes=[scope for scope, _ in shadows]
+    def _system_exists(self, system_name: str) -> bool:
+        """Check if a system exists."""
+        return (
+            (self.esm_file.models and system_name in self.esm_file.models) or
+            (self.esm_file.reaction_systems and system_name in self.esm_file.reaction_systems) or
+            (self.esm_file.data_loaders and system_name in self.esm_file.data_loaders) or
+            (self.esm_file.operators and system_name in self.esm_file.operators)
         )
 
-    def validate_scope_hierarchy(self) -> Tuple[bool, List[str]]:
+    def _variable_exists_in_system(self, var_name: str, system_name: str) -> bool:
+        """Check if a variable exists in a system."""
+        # Check models
+        if self.esm_file.models and system_name in self.esm_file.models:
+            model = self.esm_file.models[system_name]
+            if model.variables and var_name in model.variables:
+                return True
+
+        # Check reaction systems
+        if self.esm_file.reaction_systems and system_name in self.esm_file.reaction_systems:
+            rsys = self.esm_file.reaction_systems[system_name]
+            if rsys.species and var_name in rsys.species:
+                return True
+            if rsys.parameters and var_name in rsys.parameters:
+                return True
+
+        # Check data loaders (variables are in outputs)
+        if self.esm_file.data_loaders and system_name in self.esm_file.data_loaders:
+            loader = self.esm_file.data_loaders[system_name]
+            if hasattr(loader, 'outputs') and loader.outputs and var_name in loader.outputs:
+                return True
+
+        return False
+
+    def _resolve_variable_in_hierarchy(self, system_path: List[str], var_name: str) -> tuple[bool, str]:
         """
-        Validate the scope hierarchy for common issues.
+        Resolve a variable in a hierarchical system path.
+
+        Args:
+            system_path: List of system names forming a path (e.g., ["ParentSystem", "SubsystemA", "DeepSubA"])
+            var_name: The variable name to find
 
         Returns:
-            Tuple of (is_valid, list_of_error_messages)
+            Tuple of (found: bool, resolved_system_name: str)
         """
-        errors = []
+        if not system_path:
+            return False, ""
 
-        # Check for orphaned scopes
-        for scope_key, scope_info in self.scope_tree.items():
-            if len(scope_info.full_path) > 1 and scope_info.parent is None:
-                errors.append(f"Orphaned scope '{scope_key}': has path depth > 1 but no parent")
+        root_system_name = system_path[0]
 
-        # Check for circular parent relationships (shouldn't happen, but defensive)
-        for scope_key, scope_info in self.scope_tree.items():
-            visited = set()
-            current = scope_info
-            while current:
-                if id(current) in visited:
-                    errors.append(f"Circular parent relationship detected in scope '{scope_key}'")
-                    break
-                visited.add(id(current))
-                current = current.parent
+        # Check if root system exists
+        if not self._system_exists(root_system_name):
+            return False, root_system_name
 
-        # Check for inconsistent children relationships
-        for scope_key, scope_info in self.scope_tree.items():
-            for child_name, child_scope in scope_info.children.items():
-                if child_scope.parent is not scope_info:
-                    errors.append(f"Inconsistent parent-child relationship: '{scope_key}'.'{child_name}'")
+        # If it's just a single-level reference, use existing logic
+        if len(system_path) == 1:
+            if self._variable_exists_in_system(var_name, root_system_name):
+                return True, root_system_name
+            return False, root_system_name
 
-        return len(errors) == 0, errors
+        # Multi-level reference - traverse subsystem hierarchy
+        # Start with the root system
+        if self.esm_file.models and root_system_name in self.esm_file.models:
+            current_system = self.esm_file.models[root_system_name]
+            current_path = [root_system_name]
 
-    def get_scope_statistics(self) -> Dict[str, Any]:
-        """Get statistics about the scope hierarchy."""
-        stats = {
-            'total_scopes': len(self.scope_tree),
-            'max_depth': 0,
-            'scopes_by_type': defaultdict(int),
-            'variables_by_scope': {},
-            'total_variables': 0
-        }
+            # Traverse through subsystems
+            for subsystem_name in system_path[1:]:
+                if not hasattr(current_system, 'subsystems') or not current_system.subsystems:
+                    return False, ".".join(current_path)
 
-        for scope_key, scope_info in self.scope_tree.items():
-            # Track max depth
-            depth = len(scope_info.full_path)
-            stats['max_depth'] = max(stats['max_depth'], depth)
+                if subsystem_name not in current_system.subsystems:
+                    return False, ".".join(current_path)
 
-            # Track scopes by type
-            stats['scopes_by_type'][scope_info.component_type] += 1
+                current_system = current_system.subsystems[subsystem_name]
+                current_path.append(subsystem_name)
 
-            # Track variables
-            var_count = len(scope_info.variables)
-            stats['variables_by_scope'][scope_key] = var_count
-            stats['total_variables'] += var_count
+            # Check if variable exists in the final subsystem
+            if current_system.variables and var_name in current_system.variables:
+                return True, ".".join(current_path)
 
-        return dict(stats)
+            return False, ".".join(current_path)
 
+        # Check reaction systems (they also support subsystems)
+        elif self.esm_file.reaction_systems and root_system_name in self.esm_file.reaction_systems:
+            current_system = self.esm_file.reaction_systems[root_system_name]
+            current_path = [root_system_name]
 
-def create_enhanced_scoped_reference(
-    resolver: HierarchicalScopeResolver,
-    reference: str
-) -> ScopedReference:
-    """
-    Create an enhanced ScopedReference using the hierarchical resolver.
+            # Traverse through subsystems
+            for subsystem_name in system_path[1:]:
+                if not hasattr(current_system, 'subsystems') or not current_system.subsystems:
+                    return False, ".".join(current_path)
 
-    This function bridges the old ScopedReference interface with the new
-    hierarchical resolution capabilities.
-    """
-    resolution = resolver.resolve_with_shadowing_info(reference)
+                if subsystem_name not in current_system.subsystems:
+                    return False, ".".join(current_path)
 
-    segments = reference.split('.')
-    path = segments[:-1] if len(segments) > 1 else []
-    target = segments[-1] if len(segments) > 1 else ""
+                current_system = current_system.subsystems[subsystem_name]
+                current_path.append(subsystem_name)
 
-    return ScopedReference(
-        original_reference=reference,
-        path=path,
-        target=target,
-        resolved_component=resolution.resolved_scope.component_data,
-        resolved_variable=resolution.resolved_value,
-        component_type=resolution.resolved_scope.component_type
-    )
+            # Check if variable exists in the final subsystem (species or parameters)
+            if current_system.species and any(species.name == var_name for species in current_system.species):
+                return True, ".".join(current_path)
+            if current_system.parameters and any(param.name == var_name for param in current_system.parameters):
+                return True, ".".join(current_path)
+
+            return False, ".".join(current_path)
+
+        return False, root_system_name
