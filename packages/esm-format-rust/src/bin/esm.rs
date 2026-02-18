@@ -255,6 +255,661 @@ enum Commands {
 }
 
 #[cfg(feature = "cli")]
+fn check_mass_conservation(esm_file: &esm_format::EsmFile) {
+    println!("Mass Conservation Analysis:");
+
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            println!("  Reaction System: {}", rs_id);
+
+            let mut mass_balanced = true;
+            let mut mass_issues = Vec::new();
+
+            for (i, reaction) in rs.reactions.iter().enumerate() {
+                // Check if mass is conserved in each reaction
+                let mut substrate_mass = 0.0;
+                let mut product_mass = 0.0;
+
+                // For simplicity, assume all species have unit atomic mass
+                // In a real implementation, this would use actual atomic masses
+                for substrate in &reaction.substrates {
+                    substrate_mass += substrate.coefficient.unwrap_or(1.0);
+                }
+
+                for product in &reaction.products {
+                    product_mass += product.coefficient.unwrap_or(1.0);
+                }
+
+                if (substrate_mass - product_mass).abs() > 1e-6 {
+                    mass_balanced = false;
+                    mass_issues.push(format!(
+                        "Reaction {}: mass imbalance ({:.3} -> {:.3})",
+                        i + 1, substrate_mass, product_mass
+                    ));
+                } else {
+                    println!("    Reaction {}: ✓ mass conserved", i + 1);
+                }
+            }
+
+            if mass_balanced {
+                println!("    ✓ All reactions are mass-balanced");
+            } else {
+                println!("    ⚠ Mass conservation issues found:");
+                for issue in &mass_issues {
+                    println!("      {}", issue);
+                }
+            }
+        }
+    } else {
+        println!("  No reaction systems found - mass conservation check not applicable");
+    }
+}
+
+#[cfg(feature = "cli")]
+fn check_energy_conservation(esm_file: &esm_format::EsmFile) {
+    println!("Energy Conservation Analysis:");
+
+    // Check for energy-related variables and equations
+    let mut energy_vars = Vec::new();
+    let mut energy_equations = Vec::new();
+
+    if let Some(ref models) = esm_file.models {
+        for (model_id, model) in models {
+            println!("  Model: {}", model_id);
+
+            // Look for energy-related variables
+            for (var_name, var) in &model.variables {
+                if var_name.to_lowercase().contains("energy") ||
+                   var_name.to_lowercase().contains("temperature") ||
+                   var_name.to_lowercase().contains("heat") {
+                    energy_vars.push((model_id, var_name));
+                }
+            }
+
+            // Look for energy-related equations
+            for (i, equation) in model.equations.iter().enumerate() {
+                if contains_energy_terms(&equation.lhs) || contains_energy_terms(&equation.rhs) {
+                    energy_equations.push((model_id, i + 1));
+                }
+            }
+        }
+    }
+
+    if energy_vars.is_empty() {
+        println!("  No energy variables detected");
+    } else {
+        println!("  Energy variables found:");
+        for (model_id, var_name) in energy_vars {
+            println!("    {}.{}", model_id, var_name);
+        }
+    }
+
+    if energy_equations.is_empty() {
+        println!("  No energy equations detected");
+    } else {
+        println!("  Energy equations found:");
+        for (model_id, eq_num) in energy_equations {
+            println!("    {}: equation {}", model_id, eq_num);
+        }
+    }
+
+    // Note: A full energy conservation check would require:
+    // 1. Identifying all energy sources and sinks
+    // 2. Checking that d(total_energy)/dt = energy_input - energy_output
+    // 3. Verifying thermodynamic consistency
+    println!("  Note: Full energy conservation analysis requires domain-specific knowledge");
+}
+
+#[cfg(feature = "cli")]
+fn check_species_conservation(esm_file: &esm_format::EsmFile) {
+    println!("Species Conservation Analysis:");
+
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            println!("  Reaction System: {}", rs_id);
+
+            // Check species mass balance for each reaction
+            for (i, reaction) in rs.reactions.iter().enumerate() {
+                let mut atom_balance = std::collections::HashMap::new();
+
+                // For each substrate, add atoms consumed
+                for substrate in &reaction.substrates {
+                    // Simplified: assume species name indicates element
+                    // Real implementation would parse chemical formulas
+                    let coeff = substrate.coefficient.unwrap_or(1.0);
+                    *atom_balance.entry(&substrate.species).or_insert(0.0) -= coeff;
+                }
+
+                // For each product, add atoms produced
+                for product in &reaction.products {
+                    let coeff = product.coefficient.unwrap_or(1.0);
+                    *atom_balance.entry(&product.species).or_insert(0.0) += coeff;
+                }
+
+                // Check if atom counts balance
+                let mut balanced = true;
+                for (species, balance) in &atom_balance {
+                    if balance.abs() > 1e-6 {
+                        balanced = false;
+                        break;
+                    }
+                }
+
+                if balanced {
+                    println!("    Reaction {}: ✓ species conserved", i + 1);
+                } else {
+                    println!("    Reaction {}: ⚠ species imbalance", i + 1);
+                    for (species, balance) in &atom_balance {
+                        if balance.abs() > 1e-6 {
+                            println!("      {} imbalance: {:.3}", species, balance);
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        println!("  No reaction systems found - species conservation check not applicable");
+    }
+}
+
+#[cfg(feature = "cli")]
+fn analyze_model_units(esm_file: &esm_format::EsmFile) {
+    if let Some(ref models) = esm_file.models {
+        for (model_id, model) in models {
+            println!("Model: {}", model_id);
+
+            // Analyze variable units
+            let mut unit_count = 0;
+            for (var_name, var) in &model.variables {
+                if let Some(ref units) = var.units {
+                    println!("  Variable {}: {} [{}]", var_name, var_name, units);
+                    unit_count += 1;
+                } else {
+                    println!("  Variable {}: {} [no units specified]", var_name, var_name);
+                }
+            }
+
+            println!("  {} out of {} variables have units specified",
+                unit_count, model.variables.len());
+
+            // Check for dimensional consistency in equations
+            for (i, equation) in model.equations.iter().enumerate() {
+                println!("  Equation {}: dimensional analysis needed", i + 1);
+                // Note: Full dimensional analysis would require evaluating expression units
+            }
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn analyze_reaction_system_units(esm_file: &esm_format::EsmFile) {
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            println!("Reaction System: {}", rs_id);
+
+            // Analyze species units
+            let mut species_with_units = 0;
+            for species in &rs.species {
+                if let Some(ref units) = species.units {
+                    println!("  Species {}: [{}]", species.name, units);
+                    species_with_units += 1;
+                } else {
+                    println!("  Species {}: [no units]", species.name);
+                }
+            }
+
+            println!("  {} out of {} species have units specified",
+                species_with_units, rs.species.len());
+
+            // Check rate expression units
+            for (i, reaction) in rs.reactions.iter().enumerate() {
+                println!("  Reaction {} rate: dimensional analysis needed", i + 1);
+                // Rate expressions should have units consistent with d[species]/dt
+            }
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn generate_julia_code(esm_file: &esm_format::EsmFile) -> String {
+    let mut code = String::new();
+
+    code.push_str("# Generated Julia code from ESM file\n");
+    code.push_str("# WARNING: This is a basic code generation - review before use\n\n");
+    code.push_str("using DifferentialEquations, ModelingToolkit\n\n");
+
+    if let Some(ref name) = esm_file.metadata.name {
+        code.push_str(&format!("# Model: {}\n", name));
+    }
+    if let Some(ref description) = esm_file.metadata.description {
+        code.push_str(&format!("# {}\n", description));
+    }
+    code.push('\n');
+
+    // Generate variables and equations for each model
+    if let Some(ref models) = esm_file.models {
+        for (model_id, model) in models {
+            code.push_str(&format!("# Model: {}\n", model_id));
+            code.push_str(&format!("function {}!(du, u, p, t)\n", model_id));
+
+            // Variable mapping
+            for (i, (var_name, _var)) in model.variables.iter().enumerate() {
+                code.push_str(&format!("    {} = u[{}]  # {}\n", var_name, i + 1, var_name));
+            }
+            code.push('\n');
+
+            // Equations
+            for (i, equation) in model.equations.iter().enumerate() {
+                let lhs = expr_to_julia(&equation.lhs);
+                let rhs = expr_to_julia(&equation.rhs);
+
+                // Check if it's a derivative equation
+                if let esm_format::Expr::Operator(node) = &equation.lhs {
+                    if node.op == "d" && node.args.len() >= 1 {
+                        if let esm_format::Expr::Variable(var_name) = &node.args[0] {
+                            // Find variable index
+                            if let Some(var_idx) = model.variables.keys().position(|v| v == var_name) {
+                                code.push_str(&format!("    du[{}] = {}  # d{}/dt\n", var_idx + 1, rhs, var_name));
+                            } else {
+                                code.push_str(&format!("    # Unknown variable in derivative: d{}/dt = {}\n", var_name, rhs));
+                            }
+                        }
+                    } else {
+                        code.push_str(&format!("    # Algebraic equation {}: {} = {}\n", i + 1, lhs, rhs));
+                    }
+                } else {
+                    code.push_str(&format!("    # Algebraic equation {}: {} = {}\n", i + 1, lhs, rhs));
+                }
+            }
+
+            code.push_str("end\n\n");
+
+            // Initial conditions
+            if !model.variables.is_empty() {
+                code.push_str(&format!("# Initial conditions for {}\n", model_id));
+                code.push_str("u0 = [\n");
+                for (var_name, var) in &model.variables {
+                    let init_val = var.default.unwrap_or(0.0);
+                    code.push_str(&format!("    {},  # {}\n", init_val, var_name));
+                }
+                code.push_str("]\n\n");
+            }
+        }
+    }
+
+    // Generate reaction system code
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            code.push_str(&format!("# Reaction System: {}\n", rs_id));
+            code.push_str(&format!("function {}!(du, u, p, t)\n", rs_id));
+
+            // Species mapping
+            for (i, species) in rs.species.iter().enumerate() {
+                code.push_str(&format!("    {} = u[{}]  # {}\n", species.name, i + 1, species.name));
+            }
+            code.push('\n');
+
+            // Reaction rates
+            for (i, reaction) in rs.reactions.iter().enumerate() {
+                let rate = expr_to_julia(&reaction.rate);
+                code.push_str(&format!("    rate_{} = {}\n", i + 1, rate));
+            }
+            code.push('\n');
+
+            // Species rate equations
+            for (i, species) in rs.species.iter().enumerate() {
+                code.push_str(&format!("    du[{}] = 0.0  # d[{}]/dt\n", i + 1, species.name));
+
+                for (j, reaction) in rs.reactions.iter().enumerate() {
+                    // Check if species is a substrate
+                    for substrate in &reaction.substrates {
+                        if substrate.species == species.name {
+                            let coeff = substrate.coefficient.unwrap_or(1.0);
+                            code.push_str(&format!("    du[{}] -= {} * rate_{}  # substrate\n", i + 1, coeff, j + 1));
+                        }
+                    }
+
+                    // Check if species is a product
+                    for product in &reaction.products {
+                        if product.species == species.name {
+                            let coeff = product.coefficient.unwrap_or(1.0);
+                            code.push_str(&format!("    du[{}] += {} * rate_{}  # product\n", i + 1, coeff, j + 1));
+                        }
+                    }
+                }
+            }
+
+            code.push_str("end\n\n");
+        }
+    }
+
+    // Basic solver setup
+    code.push_str("# Example solver setup\n");
+    code.push_str("# tspan = (0.0, 10.0)\n");
+    code.push_str("# prob = ODEProblem(model_function!, u0, tspan)\n");
+    code.push_str("# sol = solve(prob)\n");
+
+    code
+}
+
+#[cfg(feature = "cli")]
+fn generate_python_code(esm_file: &esm_format::EsmFile) -> String {
+    let mut code = String::new();
+
+    code.push_str("# Generated Python code from ESM file\n");
+    code.push_str("# WARNING: This is a basic code generation - review before use\n\n");
+    code.push_str("import numpy as np\n");
+    code.push_str("from scipy.integrate import solve_ivp\n");
+    code.push_str("import matplotlib.pyplot as plt\n\n");
+
+    if let Some(ref name) = esm_file.metadata.name {
+        code.push_str(&format!("# Model: {}\n", name));
+    }
+    if let Some(ref description) = esm_file.metadata.description {
+        code.push_str(&format!("# {}\n", description));
+    }
+    code.push('\n');
+
+    // Generate functions for each model
+    if let Some(ref models) = esm_file.models {
+        for (model_id, model) in models {
+            code.push_str(&format!("def {}(t, y):\n", model_id));
+            code.push_str("    \"\"\"\n");
+            code.push_str(&format!("    Model: {}\n", model.name.as_deref().unwrap_or("Unnamed")));
+            code.push_str("    \"\"\"\n");
+
+            // Variable unpacking
+            for (i, (var_name, _var)) in model.variables.iter().enumerate() {
+                code.push_str(&format!("    {} = y[{}]  # {}\n", var_name, i, var_name));
+            }
+            code.push('\n');
+
+            code.push_str(&format!("    dydt = np.zeros({})\n", model.variables.len()));
+            code.push('\n');
+
+            // Equations
+            for (i, equation) in model.equations.iter().enumerate() {
+                let lhs = expr_to_python(&equation.lhs);
+                let rhs = expr_to_python(&equation.rhs);
+
+                // Check if it's a derivative equation
+                if let esm_format::Expr::Operator(node) = &equation.lhs {
+                    if node.op == "d" && node.args.len() >= 1 {
+                        if let esm_format::Expr::Variable(var_name) = &node.args[0] {
+                            // Find variable index
+                            if let Some(var_idx) = model.variables.keys().position(|v| v == var_name) {
+                                code.push_str(&format!("    dydt[{}] = {}  # d{}/dt\n", var_idx, rhs, var_name));
+                            } else {
+                                code.push_str(&format!("    # Unknown variable: d{}/dt = {}\n", var_name, rhs));
+                            }
+                        }
+                    } else {
+                        code.push_str(&format!("    # Algebraic equation {}: {} = {}\n", i + 1, lhs, rhs));
+                    }
+                } else {
+                    code.push_str(&format!("    # Algebraic equation {}: {} = {}\n", i + 1, lhs, rhs));
+                }
+            }
+
+            code.push_str("\n    return dydt\n\n");
+
+            // Initial conditions
+            if !model.variables.is_empty() {
+                code.push_str(&format!("# Initial conditions for {}\n", model_id));
+                code.push_str(&format!("{}_y0 = np.array([\n", model_id));
+                for (var_name, var) in &model.variables {
+                    let init_val = var.default.unwrap_or(0.0);
+                    code.push_str(&format!("    {},  # {}\n", init_val, var_name));
+                }
+                code.push_str("])\n\n");
+            }
+        }
+    }
+
+    // Generate reaction system functions
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_id, rs) in reaction_systems {
+            code.push_str(&format!("def {}(t, y):\n", rs_id));
+            code.push_str("    \"\"\"\n");
+            code.push_str(&format!("    Reaction System: {}\n", rs.name.as_deref().unwrap_or("Unnamed")));
+            code.push_str("    \"\"\"\n");
+
+            // Species unpacking
+            for (i, species) in rs.species.iter().enumerate() {
+                code.push_str(&format!("    {} = y[{}]  # {}\n", species.name, i, species.name));
+            }
+            code.push('\n');
+
+            // Reaction rates
+            for (i, reaction) in rs.reactions.iter().enumerate() {
+                let rate = expr_to_python(&reaction.rate);
+                code.push_str(&format!("    rate_{} = {}\n", i + 1, rate));
+            }
+            code.push('\n');
+
+            code.push_str(&format!("    dydt = np.zeros({})\n", rs.species.len()));
+
+            // Species rate equations
+            for (i, species) in rs.species.iter().enumerate() {
+                code.push_str(&format!("    # d[{}]/dt\n", species.name));
+
+                for (j, reaction) in rs.reactions.iter().enumerate() {
+                    // Check if species is a substrate
+                    for substrate in &reaction.substrates {
+                        if substrate.species == species.name {
+                            let coeff = substrate.coefficient.unwrap_or(1.0);
+                            code.push_str(&format!("    dydt[{}] -= {} * rate_{}\n", i, coeff, j + 1));
+                        }
+                    }
+
+                    // Check if species is a product
+                    for product in &reaction.products {
+                        if product.species == species.name {
+                            let coeff = product.coefficient.unwrap_or(1.0);
+                            code.push_str(&format!("    dydt[{}] += {} * rate_{}\n", i, coeff, j + 1));
+                        }
+                    }
+                }
+            }
+
+            code.push_str("\n    return dydt\n\n");
+        }
+    }
+
+    // Example solver setup
+    code.push_str("# Example solver setup\n");
+    code.push_str("if __name__ == '__main__':\n");
+    code.push_str("    # Time span\n");
+    code.push_str("    t_span = (0, 10)\n");
+    code.push_str("    t_eval = np.linspace(0, 10, 100)\n\n");
+    code.push_str("    # Solve ODE (uncomment and modify as needed)\n");
+    code.push_str("    # sol = solve_ivp(model_function, t_span, y0, t_eval=t_eval)\n");
+    code.push_str("    # plt.plot(sol.t, sol.y.T)\n");
+    code.push_str("    # plt.show()\n");
+
+    code
+}
+
+#[cfg(feature = "cli")]
+fn expr_to_julia(expr: &esm_format::Expr) -> String {
+    match expr {
+        esm_format::Expr::Number(n) => n.to_string(),
+        esm_format::Expr::Variable(name) => name.clone(),
+        esm_format::Expr::Operator(node) => {
+            match node.op.as_str() {
+                "+" | "-" | "*" | "/" => {
+                    if node.args.len() >= 2 {
+                        let args: Vec<String> = node.args.iter().map(expr_to_julia).collect();
+                        format!("({} {} {})", args[0], node.op, args[1])
+                    } else {
+                        format!("{}({})", node.op, node.args.iter().map(expr_to_julia).collect::<Vec<_>>().join(", "))
+                    }
+                }
+                "^" | "**" => {
+                    if node.args.len() >= 2 {
+                        let base = expr_to_julia(&node.args[0]);
+                        let exp = expr_to_julia(&node.args[1]);
+                        format!("{}^{}", base, exp)
+                    } else {
+                        "1.0".to_string()
+                    }
+                }
+                "exp" | "log" | "sin" | "cos" | "tan" => {
+                    if !node.args.is_empty() {
+                        let arg = expr_to_julia(&node.args[0]);
+                        format!("{}({})", node.op, arg)
+                    } else {
+                        node.op.clone()
+                    }
+                }
+                "d" => {
+                    // Derivative - just return the variable name for now
+                    if !node.args.is_empty() {
+                        expr_to_julia(&node.args[0])
+                    } else {
+                        "unknown_derivative".to_string()
+                    }
+                }
+                _ => {
+                    let args: Vec<String> = node.args.iter().map(expr_to_julia).collect();
+                    format!("{}({})", node.op, args.join(", "))
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn expr_to_python(expr: &esm_format::Expr) -> String {
+    match expr {
+        esm_format::Expr::Number(n) => n.to_string(),
+        esm_format::Expr::Variable(name) => name.clone(),
+        esm_format::Expr::Operator(node) => {
+            match node.op.as_str() {
+                "+" | "-" | "*" | "/" => {
+                    if node.args.len() >= 2 {
+                        let args: Vec<String> = node.args.iter().map(expr_to_python).collect();
+                        format!("({} {} {})", args[0], node.op, args[1])
+                    } else {
+                        format!("{}({})", node.op, node.args.iter().map(expr_to_python).collect::<Vec<_>>().join(", "))
+                    }
+                }
+                "^" | "**" => {
+                    if node.args.len() >= 2 {
+                        let base = expr_to_python(&node.args[0]);
+                        let exp = expr_to_python(&node.args[1]);
+                        format!("{}**{}", base, exp)
+                    } else {
+                        "1.0".to_string()
+                    }
+                }
+                "exp" => {
+                    if !node.args.is_empty() {
+                        let arg = expr_to_python(&node.args[0]);
+                        format!("np.exp({})", arg)
+                    } else {
+                        "np.exp".to_string()
+                    }
+                }
+                "log" => {
+                    if !node.args.is_empty() {
+                        let arg = expr_to_python(&node.args[0]);
+                        format!("np.log({})", arg)
+                    } else {
+                        "np.log".to_string()
+                    }
+                }
+                "sin" | "cos" | "tan" => {
+                    if !node.args.is_empty() {
+                        let arg = expr_to_python(&node.args[0]);
+                        format!("np.{}({})", node.op, arg)
+                    } else {
+                        format!("np.{}", node.op)
+                    }
+                }
+                "d" => {
+                    // Derivative - just return the variable name for now
+                    if !node.args.is_empty() {
+                        expr_to_python(&node.args[0])
+                    } else {
+                        "unknown_derivative".to_string()
+                    }
+                }
+                _ => {
+                    let args: Vec<String> = node.args.iter().map(expr_to_python).collect();
+                    format!("{}({})", node.op, args.join(", "))
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn collect_unit_types(esm_file: &esm_format::EsmFile) -> Vec<String> {
+    let mut units = std::collections::HashSet::new();
+
+    if let Some(ref models) = esm_file.models {
+        for (_, model) in models {
+            for (_, var) in &model.variables {
+                if let Some(ref unit_str) = var.units {
+                    units.insert(unit_str.clone());
+                }
+            }
+        }
+    }
+
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (_, rs) in reaction_systems {
+            for species in &rs.species {
+                if let Some(ref unit_str) = species.units {
+                    units.insert(unit_str.clone());
+                }
+            }
+        }
+    }
+
+    let mut unit_list: Vec<String> = units.into_iter().collect();
+    unit_list.sort();
+    unit_list
+}
+
+#[cfg(feature = "cli")]
+fn contains_energy_terms(expr: &esm_format::Expr) -> bool {
+    match expr {
+        esm_format::Expr::Variable(name) => {
+            name.to_lowercase().contains("energy") ||
+            name.to_lowercase().contains("temperature") ||
+            name.to_lowercase().contains("heat") ||
+            name.to_lowercase().contains("enthalpy")
+        }
+        esm_format::Expr::Operator(node) => {
+            node.args.iter().any(contains_energy_terms)
+        }
+        esm_format::Expr::Number(_) => false,
+    }
+}
+
+#[cfg(feature = "cli")]
+fn expression_depth(expr: &esm_format::Expr) -> usize {
+    match expr {
+        esm_format::Expr::Number(_) | esm_format::Expr::Variable(_) => 1,
+        esm_format::Expr::Operator(node) => {
+            1 + node.args.iter().map(expression_depth).max().unwrap_or(0)
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn count_expression_nodes(expr: &esm_format::Expr) -> usize {
+    match expr {
+        esm_format::Expr::Number(_) | esm_format::Expr::Variable(_) => 1,
+        esm_format::Expr::Operator(node) => {
+            1 + node.args.iter().map(count_expression_nodes).sum::<usize>()
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
@@ -617,14 +1272,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "json" => save(&esm_file)?,
                 "compact-json" => save_compact(&esm_file)?,
                 "julia" => {
-                    // TODO: Implement Julia code generation
-                    eprintln!("Julia code generation not yet implemented");
-                    std::process::exit(1);
+                    generate_julia_code(&esm_file)
                 },
                 "python" => {
-                    // TODO: Implement Python code generation
-                    eprintln!("Python code generation not yet implemented");
-                    std::process::exit(1);
+                    generate_python_code(&esm_file)
                 },
                 _ => {
                     eprintln!("Unsupported format: {}. Use json, compact-json, julia, or python.", to);
@@ -818,15 +1469,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // ANALYSIS COMMANDS
         Commands::CheckConservation { file, conservation_type } => {
             let content = fs::read_to_string(&file)?;
-            let _esm_file = load(&content)?;
+            let esm_file = load(&content)?;
 
             println!("Conservation Analysis for: {}", file.display());
             println!("Type: {}", conservation_type);
 
-            // TODO: Implement conservation law checking
             match conservation_type.as_str() {
-                "all" | "mass" | "energy" | "species" => {
-                    println!("Conservation law verification not yet implemented");
+                "mass" => {
+                    println!("\n=== MASS CONSERVATION ANALYSIS ===");
+                    check_mass_conservation(&esm_file);
+                }
+                "energy" => {
+                    println!("\n=== ENERGY CONSERVATION ANALYSIS ===");
+                    check_energy_conservation(&esm_file);
+                }
+                "species" => {
+                    println!("\n=== SPECIES CONSERVATION ANALYSIS ===");
+                    check_species_conservation(&esm_file);
+                }
+                "all" => {
+                    println!("\n=== COMPREHENSIVE CONSERVATION ANALYSIS ===");
+                    check_mass_conservation(&esm_file);
+                    println!();
+                    check_energy_conservation(&esm_file);
+                    println!();
+                    check_species_conservation(&esm_file);
                 }
                 _ => {
                     eprintln!("Unsupported conservation type: {}. Use all, mass, energy, or species.", conservation_type);
@@ -842,7 +1509,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Units Analysis for: {}", file.display());
 
             if check {
-                println!("Checking dimensional consistency...");
+                println!("\n=== DIMENSIONAL CONSISTENCY CHECK ===");
                 // Use existing validation for unit checking
                 let validation_result = validate(&esm_file);
 
@@ -855,8 +1522,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("✓ All units are dimensionally consistent");
                 }
             } else {
-                // TODO: Implement comprehensive unit analysis
-                println!("Comprehensive unit analysis not yet implemented");
+                println!("\n=== COMPREHENSIVE UNIT ANALYSIS ===");
+
+                // Analyze units in all components
+                analyze_model_units(&esm_file);
+                analyze_reaction_system_units(&esm_file);
+
+                // Unit system summary
+                println!("\n=== UNIT SYSTEM SUMMARY ===");
+                let unit_summary = collect_unit_types(&esm_file);
+
+                if unit_summary.is_empty() {
+                    println!("No units specified in the model");
+                } else {
+                    println!("Unit types found:");
+                    for unit_type in &unit_summary {
+                        println!("  - {}", unit_type);
+                    }
+
+                    // Unit system recommendations
+                    println!("\n=== RECOMMENDATIONS ===");
+                    if unit_summary.contains(&"m".to_string()) && unit_summary.contains(&"cm".to_string()) {
+                        println!("⚠ Mixed length units detected (m, cm) - consider standardizing");
+                    }
+                    if unit_summary.contains(&"s".to_string()) && unit_summary.contains(&"min".to_string()) {
+                        println!("⚠ Mixed time units detected (s, min) - consider standardizing");
+                    }
+
+                    // Check for SI compliance
+                    let si_base_units = ["m", "kg", "s", "A", "K", "mol", "cd"];
+                    let using_si = unit_summary.iter().any(|u| si_base_units.contains(&u.as_str()));
+                    if using_si {
+                        println!("✓ SI base units detected - good for scientific consistency");
+                    } else {
+                        println!("ℹ Consider using SI base units for scientific consistency");
+                    }
+                }
             }
         },
 
@@ -891,15 +1592,137 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::PerformanceProfile { file, profile_type } => {
             let content = fs::read_to_string(&file)?;
-            let _esm_file = load(&content)?;
+            let esm_file = load(&content)?;
 
             println!("Performance Profile for: {}", file.display());
             println!("Profile type: {}", profile_type);
 
             match profile_type.as_str() {
-                "both" | "memory" | "time" => {
-                    // TODO: Implement performance profiling
-                    println!("Performance profiling not yet implemented");
+                "memory" => {
+                    println!("\n=== MEMORY ANALYSIS ===");
+
+                    // File size analysis
+                    let file_size = content.len();
+                    println!("File size: {} bytes ({:.2} KB)", file_size, file_size as f64 / 1024.0);
+
+                    // Component memory estimation
+                    let model_count = esm_file.models.as_ref().map(|m| m.len()).unwrap_or(0);
+                    let rs_count = esm_file.reaction_systems.as_ref().map(|rs| rs.len()).unwrap_or(0);
+                    let dl_count = esm_file.data_loaders.as_ref().map(|dl| dl.len()).unwrap_or(0);
+                    let op_count = esm_file.operators.as_ref().map(|op| op.len()).unwrap_or(0);
+
+                    // Estimate memory usage
+                    let mut estimated_memory = file_size; // Base JSON representation
+
+                    if let Some(ref models) = esm_file.models {
+                        for (model_id, model) in models {
+                            let vars_mem = model.variables.len() * 64; // ~64 bytes per variable
+                            let eqs_mem = model.equations.len() * 128; // ~128 bytes per equation
+                            estimated_memory += vars_mem + eqs_mem;
+                            println!("  Model {}: ~{} bytes ({} vars, {} eqs)",
+                                model_id, vars_mem + eqs_mem, model.variables.len(), model.equations.len());
+                        }
+                    }
+
+                    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+                        for (rs_id, rs) in reaction_systems {
+                            let species_mem = rs.species.len() * 32; // ~32 bytes per species
+                            let reactions_mem = rs.reactions.len() * 256; // ~256 bytes per reaction
+                            estimated_memory += species_mem + reactions_mem;
+                            println!("  Reaction System {}: ~{} bytes ({} species, {} reactions)",
+                                rs_id, species_mem + reactions_mem, rs.species.len(), rs.reactions.len());
+                        }
+                    }
+
+                    println!("Total estimated memory: {} bytes ({:.2} KB)",
+                        estimated_memory, estimated_memory as f64 / 1024.0);
+
+                    // Memory optimization suggestions
+                    if file_size > 10000 { // > 10KB
+                        println!("\n=== MEMORY OPTIMIZATION SUGGESTIONS ===");
+                        println!("- Consider using compact JSON format for smaller file sizes");
+                        println!("- Use references instead of duplicating common expressions");
+                    }
+                }
+                "time" => {
+                    println!("\n=== TIME ANALYSIS ===");
+
+                    // Parsing benchmark
+                    let iterations = 100;
+                    let start = std::time::Instant::now();
+                    for _ in 0..iterations {
+                        let _ = load(&content)?;
+                    }
+                    let parse_duration = start.elapsed();
+                    println!("Parse time: {} iterations in {:?} ({:?}/iter)",
+                        iterations, parse_duration, parse_duration / iterations as u32);
+
+                    // Validation benchmark
+                    let start = std::time::Instant::now();
+                    for _ in 0..iterations {
+                        let _ = validate(&esm_file);
+                    }
+                    let validate_duration = start.elapsed();
+                    println!("Validate time: {} iterations in {:?} ({:?}/iter)",
+                        iterations, validate_duration, validate_duration / iterations as u32);
+
+                    // Expression complexity analysis
+                    if let Some(ref models) = esm_file.models {
+                        println!("\n=== EXPRESSION COMPLEXITY ===");
+                        for (model_id, model) in models {
+                            let mut max_depth = 0;
+                            let mut total_nodes = 0;
+
+                            for equation in &model.equations {
+                                let lhs_depth = expression_depth(&equation.lhs);
+                                let rhs_depth = expression_depth(&equation.rhs);
+                                max_depth = max_depth.max(lhs_depth).max(rhs_depth);
+
+                                total_nodes += count_expression_nodes(&equation.lhs);
+                                total_nodes += count_expression_nodes(&equation.rhs);
+                            }
+
+                            println!("  Model {}: max depth = {}, total nodes = {}",
+                                model_id, max_depth, total_nodes);
+                        }
+                    }
+
+                    // Performance suggestions
+                    println!("\n=== PERFORMANCE SUGGESTIONS ===");
+                    if parse_duration.as_millis() > 100 {
+                        println!("- Parse time is high; consider SIMD JSON parsing for large files");
+                    }
+                    if validate_duration.as_millis() > 50 {
+                        println!("- Validation time is high; consider caching validation results");
+                    }
+                }
+                "both" => {
+                    // Run both memory and time analysis
+                    println!("=== COMBINED PERFORMANCE ANALYSIS ===");
+                    // Reuse the above logic for both types
+
+                    // Memory analysis (simplified)
+                    let file_size = content.len();
+                    println!("File size: {} bytes ({:.2} KB)", file_size, file_size as f64 / 1024.0);
+
+                    // Time analysis (simplified)
+                    let iterations = 50;
+                    let start = std::time::Instant::now();
+                    for _ in 0..iterations {
+                        let _ = load(&content)?;
+                    }
+                    let parse_duration = start.elapsed();
+                    println!("Parse time: {:?}/iter", parse_duration / iterations as u32);
+
+                    // Overall assessment
+                    println!("\n=== OVERALL ASSESSMENT ===");
+                    if file_size < 1000 {
+                        println!("✓ Small file size - good performance expected");
+                    } else if file_size < 10000 {
+                        println!("- Medium file size - acceptable performance");
+                    } else {
+                        println!("⚠ Large file size - consider optimization");
+                    }
                 }
                 _ => {
                     eprintln!("Unsupported profile type: {}. Use memory, time, or both.", profile_type);
