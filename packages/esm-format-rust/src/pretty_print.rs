@@ -25,7 +25,7 @@ pub fn to_unicode(expr: &Expr) -> String {
             name.clone()
         },
         Expr::Operator(op_node) => {
-            format_operator_unicode(&op_node.op, &op_node.args)
+            format_operator_unicode(&op_node.op, &op_node.args, &op_node.wrt, &op_node.dim)
         }
     }
 }
@@ -57,7 +57,7 @@ pub fn to_latex(expr: &Expr) -> String {
             }
         },
         Expr::Operator(op_node) => {
-            format_operator_latex(&op_node.op, &op_node.args)
+            format_operator_latex(&op_node.op, &op_node.args, &op_node.wrt, &op_node.dim)
         }
     }
 }
@@ -82,12 +82,12 @@ pub fn to_ascii(expr: &Expr) -> String {
         },
         Expr::Variable(name) => name.clone(),
         Expr::Operator(op_node) => {
-            format_operator_ascii(&op_node.op, &op_node.args)
+            format_operator_ascii(&op_node.op, &op_node.args, &op_node.wrt, &op_node.dim)
         }
     }
 }
 
-fn format_operator_unicode(op: &str, args: &[Expr]) -> String {
+fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Option<String>) -> String {
     match op {
         "+" => {
             if args.len() == 2 {
@@ -126,13 +126,38 @@ fn format_operator_unicode(op: &str, args: &[Expr]) -> String {
                 format!("^({})", args.iter().map(to_unicode).collect::<Vec<_>>().join(", "))
             }
         },
+        "laplacian" => {
+            if args.len() == 1 {
+                format!("∇²{}", to_unicode(&args[0]))
+            } else {
+                format!("laplacian({})", args.iter().map(to_unicode).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "grad" => {
+            if args.len() == 1 {
+                if let Some(dim_val) = dim {
+                    format!("∂{}/∂{}", to_unicode(&args[0]), dim_val)
+                } else {
+                    format!("∇({})", to_unicode(&args[0]))
+                }
+            } else {
+                format!("grad({})", args.iter().map(to_unicode).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "div" => {
+            if args.len() == 1 {
+                format!("∇·{}", to_unicode(&args[0]))
+            } else {
+                format!("div({})", args.iter().map(to_unicode).collect::<Vec<_>>().join(", "))
+            }
+        },
         _ => {
             format!("{}({})", op, args.iter().map(to_unicode).collect::<Vec<_>>().join(", "))
         }
     }
 }
 
-fn format_operator_latex(op: &str, args: &[Expr]) -> String {
+fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Option<String>) -> String {
     match op {
         "+" => {
             if args.len() == 2 {
@@ -178,13 +203,38 @@ fn format_operator_latex(op: &str, args: &[Expr]) -> String {
                 format!("\\{}({})", op, args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
         },
+        "laplacian" => {
+            if args.len() == 1 {
+                format!("\\nabla^2 {}", to_latex(&args[0]))
+            } else {
+                format!("\\mathrm{{laplacian}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "grad" => {
+            if args.len() == 1 {
+                if let Some(dim_val) = dim {
+                    format!("\\frac{{\\partial {}}}{{\\partial {}}}", to_latex(&args[0]), dim_val)
+                } else {
+                    format!("\\nabla({})", to_latex(&args[0]))
+                }
+            } else {
+                format!("\\mathrm{{grad}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "div" => {
+            if args.len() == 1 {
+                format!("\\nabla \\cdot {}", to_latex(&args[0]))
+            } else {
+                format!("\\mathrm{{div}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
         _ => {
             format!("\\mathrm{{{}}}({})", op, args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
         }
     }
 }
 
-fn format_operator_ascii(op: &str, args: &[Expr]) -> String {
+fn format_operator_ascii(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Option<String>) -> String {
     match op {
         "+" => {
             if args.len() == 2 {
@@ -222,6 +272,23 @@ fn format_operator_ascii(op: &str, args: &[Expr]) -> String {
             } else {
                 format!("^({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
             }
+        },
+        "laplacian" => {
+            format!("laplacian({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "grad" => {
+            if args.len() == 1 {
+                if let Some(dim_val) = dim {
+                    format!("d({})/d{}", to_ascii(&args[0]), dim_val)
+                } else {
+                    format!("grad({})", to_ascii(&args[0]))
+                }
+            } else {
+                format!("grad({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "div" => {
+            format!("div({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
         },
         _ => {
             format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
@@ -320,5 +387,33 @@ mod tests {
         assert_eq!(to_unicode(&expr), "x^2");
         assert_eq!(to_latex(&expr), "{x}^{2}");
         assert_eq!(to_ascii(&expr), "x^2");
+    }
+
+    #[test]
+    fn test_laplacian_formatting() {
+        let expr = Expr::Operator(ExpressionNode {
+            op: "laplacian".to_string(),
+            args: vec![Expr::Variable("T".to_string())],
+            wrt: None,
+            dim: None,
+        });
+
+        assert_eq!(to_unicode(&expr), "∇²T");
+        assert_eq!(to_latex(&expr), "\\nabla^2 T");
+        assert_eq!(to_ascii(&expr), "laplacian(T)");
+    }
+
+    #[test]
+    fn test_grad_formatting() {
+        let expr = Expr::Operator(ExpressionNode {
+            op: "grad".to_string(),
+            args: vec![Expr::Variable("phi".to_string())],
+            wrt: None,
+            dim: Some("x".to_string()),
+        });
+
+        assert_eq!(to_unicode(&expr), "∂phi/∂x");
+        assert_eq!(to_latex(&expr), "\\frac{\\partial \\mathrm{phi}}{\\partial x}");
+        assert_eq!(to_ascii(&expr), "d(phi)/dx");
     }
 }

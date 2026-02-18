@@ -46,8 +46,42 @@ fn get_precedence(op: &str) -> i32 {
     0 // Default for unknown operators
 }
 
-/// Convert a string with chemical subscripts to Unicode
+/// Convert a string with chemical subscripts and Greek letters to Unicode
 fn format_chemical_subscripts(s: &str) -> String {
+    // Handle Greek letter conversions first
+    let greek_converted = match s {
+        "alpha" => "α",
+        "beta" => "β",
+        "gamma" => "γ",
+        "delta" => "δ",
+        "epsilon" => "ε",
+        "zeta" => "ζ",
+        "eta" => "η",
+        "theta" => "θ",
+        "iota" => "ι",
+        "kappa" => "κ",
+        "lambda" => "λ",
+        "mu" => "μ",
+        "nu" => "ν",
+        "xi" => "ξ",
+        "omicron" => "ο",
+        "pi" => "π",
+        "rho" => "ρ",
+        "sigma" => "σ",
+        "tau" => "τ",
+        "upsilon" => "υ",
+        "phi" => "φ",
+        "chi" => "χ",
+        "psi" => "ψ",
+        "omega" => "ω",
+        _ => s,
+    };
+
+    // If we converted to a Greek letter, return it
+    if greek_converted != s {
+        return greek_converted.to_string();
+    }
+
     let mut result = String::new();
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
@@ -197,13 +231,13 @@ impl Expr {
             Expr::Number(n) => format_number_unicode(*n),
             Expr::Variable(name) => format_chemical_subscripts(name),
             Expr::Operator(node) => {
-                format_operator_unicode(&node.op, &node.args, &node.wrt, parent_prec)
+                format_operator_unicode(&node.op, &node.args, &node.wrt, &node.dim, parent_prec)
             }
         }
     }
 }
 
-fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent_prec: i32) -> String {
+fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Option<String>, parent_prec: i32) -> String {
     let op_prec = get_precedence(op);
     let needs_parens = op_prec > 0 && op_prec <= parent_prec;
 
@@ -301,7 +335,11 @@ fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent
         "grad" => {
             // Gradient - use dim field if available
             if args.len() == 1 {
-                format!("∂{}/∂y", args[0].to_unicode_with_precedence(0))
+                if let Some(dim_val) = dim {
+                    format!("∂{}/∂{}", args[0].to_unicode_with_precedence(0), dim_val)
+                } else {
+                    format!("∇({})", args[0].to_unicode_with_precedence(0))
+                }
             } else {
                 format!("grad({})", args.iter()
                     .map(|arg| arg.to_unicode_with_precedence(0))
@@ -314,6 +352,16 @@ fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent
                 format!("∇·{}", args[0].to_unicode_with_precedence(op_prec))
             } else {
                 format!("div({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "laplacian" => {
+            // Laplacian operator
+            if args.len() == 1 {
+                format!("∇²{}", args[0].to_unicode_with_precedence(op_prec))
+            } else {
+                format!("laplacian({})", args.iter()
                     .map(|arg| arg.to_unicode_with_precedence(0))
                     .collect::<Vec<_>>().join(", "))
             }
@@ -349,6 +397,259 @@ fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, parent
                     .map(|arg| arg.to_unicode_with_precedence(0))
                     .collect::<Vec<_>>().join(", "))
             }
+        },
+        "<" => {
+            if args.len() == 2 {
+                format!("{} < {}",
+                    args[0].to_unicode_with_precedence(0),
+                    args[1].to_unicode_with_precedence(0))
+            } else {
+                format!("<({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        ">=" => {
+            if args.len() == 2 {
+                format!("{} ≥ {}",
+                    args[0].to_unicode_with_precedence(0),
+                    args[1].to_unicode_with_precedence(0))
+            } else {
+                format!(">=({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "<=" => {
+            if args.len() == 2 {
+                format!("{} ≤ {}",
+                    args[0].to_unicode_with_precedence(0),
+                    args[1].to_unicode_with_precedence(0))
+            } else {
+                format!("<=({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "=" | "==" => {
+            if args.len() == 2 {
+                format!("{} = {}",
+                    args[0].to_unicode_with_precedence(0),
+                    args[1].to_unicode_with_precedence(0))
+            } else {
+                format!("=({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "!=" => {
+            if args.len() == 2 {
+                format!("{} ≠ {}",
+                    args[0].to_unicode_with_precedence(0),
+                    args[1].to_unicode_with_precedence(0))
+            } else {
+                format!("!=({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "and" => {
+            if args.len() >= 2 {
+                args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>()
+                    .join(" ∧ ")
+            } else {
+                format!("and({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "or" => {
+            if args.len() >= 2 {
+                args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>()
+                    .join(" ∨ ")
+            } else {
+                format!("or({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "not" => {
+            if args.len() == 1 {
+                // Add parentheses for complex expressions
+                if matches!(&args[0], Expr::Operator(_)) {
+                    format!("¬({})", args[0].to_unicode_with_precedence(0))
+                } else {
+                    format!("¬{}", args[0].to_unicode_with_precedence(0))
+                }
+            } else {
+                format!("not({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "log" => {
+            if args.len() == 1 {
+                format!("ln({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("log({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "log10" => {
+            if args.len() == 1 {
+                format!("log₁₀({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("log10({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "sqrt" => {
+            if args.len() == 1 {
+                format!("√{}", args[0].to_unicode_with_precedence(op_prec))
+            } else {
+                format!("sqrt({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "sin" | "cos" | "tan" => {
+            if args.len() == 1 {
+                format!("{}({})", op, args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("{}({})", op, args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "asin" => {
+            if args.len() == 1 {
+                format!("arcsin({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("asin({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "acos" => {
+            if args.len() == 1 {
+                format!("arccos({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("acos({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "atan" => {
+            if args.len() == 1 {
+                format!("arctan({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("atan({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "atan2" => {
+            format!("atan2({})", args.iter()
+                .map(|arg| arg.to_unicode_with_precedence(0))
+                .collect::<Vec<_>>().join(", "))
+        },
+        "abs" => {
+            if args.len() == 1 {
+                format!("|{}|", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("abs({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "sign" => {
+            format!("sgn({})", args.iter()
+                .map(|arg| arg.to_unicode_with_precedence(0))
+                .collect::<Vec<_>>().join(", "))
+        },
+        "floor" => {
+            if args.len() == 1 {
+                format!("⌊{}⌋", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("floor({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "ceil" => {
+            if args.len() == 1 {
+                format!("⌈{}⌉", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("ceil({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "min" | "max" => {
+            format!("{}({})", op, args.iter()
+                .map(|arg| arg.to_unicode_with_precedence(0))
+                .collect::<Vec<_>>().join(", "))
+        },
+        "sinh" | "cosh" | "tanh" => {
+            format!("{}({})", op, args.iter()
+                .map(|arg| arg.to_unicode_with_precedence(0))
+                .collect::<Vec<_>>().join(", "))
+        },
+        "asinh" => {
+            if args.len() == 1 {
+                format!("sinh⁻¹({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("asinh({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "acosh" => {
+            if args.len() == 1 {
+                format!("cosh⁻¹({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("acosh({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "atanh" => {
+            if args.len() == 1 {
+                format!("tanh⁻¹({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("atanh({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "binomial" => {
+            if args.len() == 2 {
+                format!("C({},{})", args[0].to_unicode_with_precedence(0), args[1].to_unicode_with_precedence(0))
+            } else {
+                format!("binomial({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "gamma" => {
+            if args.len() == 1 {
+                format!("Γ({})", args[0].to_unicode_with_precedence(0))
+            } else {
+                format!("gamma({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
+        "erf" | "erfc" => {
+            format!("{}({})", op, args.iter()
+                .map(|arg| arg.to_unicode_with_precedence(0))
+                .collect::<Vec<_>>().join(", "))
         },
         _ => {
             format!("{}({})", op, args.iter()
@@ -391,7 +692,7 @@ pub fn to_latex(expr: &Expr) -> String {
             format_variable_latex(name)
         },
         Expr::Operator(node) => {
-            format_operator_latex(&node.op, &node.args, &node.wrt)
+            format_operator_latex(&node.op, &node.args, &node.wrt, &node.dim)
         }
     }
 }
@@ -505,7 +806,7 @@ fn format_chemical_latex(s: &str) -> String {
     result
 }
 
-fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> String {
+fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Option<String>) -> String {
     match op {
         "+" => {
             if args.len() >= 2 {
@@ -564,9 +865,13 @@ fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> Strin
         },
         "grad" => {
             if args.len() == 1 {
-                format!("\\frac{{\\partial {}}}{{\\partial y}}", to_latex(&args[0]))
+                if let Some(dim_val) = dim {
+                    format!("\\frac{{\\partial {}}}{{\\partial {}}}", to_latex(&args[0]), dim_val)
+                } else {
+                    format!("\\nabla({})", to_latex(&args[0]))
+                }
             } else {
-                format!("\\grad({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+                format!("\\mathrm{{grad}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
         },
         "div" => {
@@ -574,6 +879,13 @@ fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> Strin
                 format!("\\nabla \\cdot {}", to_latex(&args[0]))
             } else {
                 format!("\\mathrm{{div}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "laplacian" => {
+            if args.len() == 1 {
+                format!("\\nabla^2 {}", to_latex(&args[0]))
+            } else {
+                format!("\\mathrm{{laplacian}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
         },
         "exp" => {
@@ -595,7 +907,190 @@ fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>) -> Strin
                 format!("\\mathrm{{ifelse}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
         },
-        "sin" | "cos" | "tan" | "log" | "sqrt" => {
+        "and" => {
+            if args.len() >= 2 {
+                args.iter()
+                    .map(to_latex)
+                    .collect::<Vec<_>>()
+                    .join(" \\land ")
+            } else {
+                format!("\\land({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "or" => {
+            if args.len() >= 2 {
+                args.iter()
+                    .map(to_latex)
+                    .collect::<Vec<_>>()
+                    .join(" \\lor ")
+            } else {
+                format!("\\lor({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "not" => {
+            if args.len() == 1 {
+                // Add parentheses for complex expressions
+                if matches!(&args[0], Expr::Operator(_)) {
+                    format!("\\lnot ({})", to_latex(&args[0]))
+                } else {
+                    format!("\\lnot {}", to_latex(&args[0]))
+                }
+            } else {
+                format!("\\lnot({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        ">" => {
+            if args.len() == 2 {
+                format!("{} > {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!(">({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "<" => {
+            if args.len() == 2 {
+                format!("{} < {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("<({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        ">=" => {
+            if args.len() == 2 {
+                format!("{} \\geq {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("\\geq({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "<=" => {
+            if args.len() == 2 {
+                format!("{} \\leq {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("\\leq({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "=" | "==" => {
+            if args.len() == 2 {
+                format!("{} = {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("=({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "!=" => {
+            if args.len() == 2 {
+                format!("{} \\neq {}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("\\neq({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "log" => {
+            if args.len() == 1 {
+                format!("\\ln({})", to_latex(&args[0]))
+            } else {
+                format!("\\log({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "log10" => {
+            if args.len() == 1 {
+                format!("\\log_{{10}}({})", to_latex(&args[0]))
+            } else {
+                format!("\\log_{{10}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "sqrt" => {
+            if args.len() == 1 {
+                format!("\\sqrt{{{}}}", to_latex(&args[0]))
+            } else {
+                format!("\\sqrt{{{}}}", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "asin" => {
+            if args.len() == 1 {
+                format!("\\arcsin({})", to_latex(&args[0]))
+            } else {
+                format!("\\arcsin({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "acos" => {
+            if args.len() == 1 {
+                format!("\\arccos({})", to_latex(&args[0]))
+            } else {
+                format!("\\arccos({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "atan" => {
+            if args.len() == 1 {
+                format!("\\arctan({})", to_latex(&args[0]))
+            } else {
+                format!("\\arctan({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "abs" => {
+            if args.len() == 1 {
+                format!("|{}|", to_latex(&args[0]))
+            } else {
+                format!("|{}|", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "sign" => {
+            format!("\\mathrm{{sgn}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "floor" => {
+            if args.len() == 1 {
+                format!("\\lfloor {} \\rfloor", to_latex(&args[0]))
+            } else {
+                format!("\\lfloor {} \\rfloor", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "ceil" => {
+            if args.len() == 1 {
+                format!("\\lceil {} \\rceil", to_latex(&args[0]))
+            } else {
+                format!("\\lceil {} \\rceil", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "min" => {
+            format!("\\min({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "max" => {
+            format!("\\max({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "atan2" => {
+            format!("\\mathrm{{atan2}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "binomial" => {
+            if args.len() == 2 {
+                format!("\\binom{{{}}}{{{}}}", to_latex(&args[0]), to_latex(&args[1]))
+            } else {
+                format!("\\mathrm{{binomial}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "gamma" => {
+            format!("\\Gamma({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "erf" => {
+            format!("\\mathrm{{erf}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "erfc" => {
+            format!("\\mathrm{{erfc}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "sinh" => {
+            format!("\\sinh({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "cosh" => {
+            format!("\\cosh({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "tanh" => {
+            format!("\\tanh({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "asinh" => {
+            format!("\\sinh^{{-1}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "acosh" => {
+            format!("\\cosh^{{-1}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "atanh" => {
+            format!("\\tanh^{{-1}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+        },
+        "sin" | "cos" | "tan" => {
             if args.len() == 1 {
                 format!("\\{}({})", op, to_latex(&args[0]))
             } else {
@@ -626,12 +1121,12 @@ pub fn to_ascii(expr: &Expr) -> String {
         },
         Expr::Variable(name) => name.clone(),
         Expr::Operator(node) => {
-            format_operator_ascii(&node.op, &node.args, &node.wrt)
+            format_operator_ascii(&node.op, &node.args, &node.wrt, &node.dim)
         }
     }
 }
 
-fn format_operator_ascii(op: &str, args: &[Expr], wrt: &Option<String>) -> String {
+fn format_operator_ascii(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Option<String>) -> String {
     match op {
         "+" => {
             if args.len() == 2 {
@@ -683,10 +1178,124 @@ fn format_operator_ascii(op: &str, args: &[Expr], wrt: &Option<String>) -> Strin
         },
         "grad" => {
             if args.len() == 1 {
-                format!("d({})/dy", to_ascii(&args[0]))
+                if let Some(dim_val) = dim {
+                    format!("d({})/d{}", to_ascii(&args[0]), dim_val)
+                } else {
+                    format!("grad({})", to_ascii(&args[0]))
+                }
             } else {
                 format!("grad({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
             }
+        },
+        "laplacian" => {
+            format!("laplacian({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        ">" => {
+            if args.len() == 2 {
+                format!("{} > {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!(">({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "<" => {
+            if args.len() == 2 {
+                format!("{} < {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("<({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        ">=" => {
+            if args.len() == 2 {
+                format!("{} >= {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!(">=({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "<=" => {
+            if args.len() == 2 {
+                format!("{} <= {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("<=({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "=" | "==" => {
+            if args.len() == 2 {
+                format!("{} == {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("==({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "!=" => {
+            if args.len() == 2 {
+                format!("{} != {}", to_ascii(&args[0]), to_ascii(&args[1]))
+            } else {
+                format!("!=({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "and" => {
+            if args.len() >= 2 {
+                args.iter()
+                    .map(|arg| format!("({})", to_ascii(arg)))
+                    .collect::<Vec<_>>()
+                    .join(" && ")
+            } else {
+                format!("and({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "or" => {
+            if args.len() >= 2 {
+                args.iter()
+                    .map(|arg| format!("({})", to_ascii(arg)))
+                    .collect::<Vec<_>>()
+                    .join(" || ")
+            } else {
+                format!("or({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "not" => {
+            if args.len() == 1 {
+                format!("!({})", to_ascii(&args[0]))
+            } else {
+                format!("not({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
+        },
+        "log" => {
+            format!("log({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "log10" => {
+            format!("log10({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "sqrt" => {
+            format!("sqrt({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "sin" | "cos" | "tan" => {
+            format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "asin" | "acos" | "atan" | "atan2" => {
+            format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "abs" => {
+            format!("abs({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "sign" => {
+            format!("sign({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "floor" | "ceil" | "min" | "max" => {
+            format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh" => {
+            format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "binomial" => {
+            format!("binomial({}, {})",
+                if args.len() >= 1 { to_ascii(&args[0]) } else { "".to_string() },
+                if args.len() >= 2 { to_ascii(&args[1]) } else { "".to_string() })
+        },
+        "gamma" => {
+            format!("gamma({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "erf" | "erfc" => {
+            format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
         },
         _ => {
             format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
