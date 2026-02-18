@@ -167,6 +167,8 @@ class DataLoader:
     source: str  # file path, URL, or connection string
     format_options: Dict[str, Any] = field(default_factory=dict)
     variables: List[str] = field(default_factory=list)
+    # Store full metadata for each provided variable (units, description, etc.)
+    provides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 class OperatorType(Enum):
