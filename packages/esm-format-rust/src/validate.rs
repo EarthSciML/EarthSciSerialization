@@ -171,6 +171,9 @@ pub fn validate(esm_file: &EsmFile) -> ValidationResult {
         for (model_name, model) in models {
             validate_model(model_name, model, &system_refs, &mut structural_errors, &mut unit_warnings);
         }
+
+        // Check for circular dependencies between models
+        check_circular_dependencies_in_models(models, &mut structural_errors);
     }
 
     // Validate reaction systems
@@ -358,7 +361,7 @@ enum SystemType {
 fn validate_model(
     model_name: &str,
     model: &crate::Model,
-    _system_refs: &HashMap<String, SystemInfo>,
+    system_refs: &HashMap<String, SystemInfo>,
     errors: &mut Vec<StructuralError>,
     warnings: &mut Vec<String>,
 ) {
@@ -407,8 +410,8 @@ fn validate_model(
     // Check that all equation references are defined and validate dimensional consistency
     for (eq_idx, equation) in model.equations.iter().enumerate() {
         let eq_path = format!("{}/equations/{}", model_path, eq_idx);
-        validate_expression_references(&equation.lhs, &defined_vars, &eq_path, "lhs", eq_idx, errors);
-        validate_expression_references(&equation.rhs, &defined_vars, &eq_path, "rhs", eq_idx, errors);
+        validate_expression_references_with_systems(&equation.lhs, &defined_vars, system_refs, &eq_path, "lhs", eq_idx, errors);
+        validate_expression_references_with_systems(&equation.rhs, &defined_vars, system_refs, &eq_path, "rhs", eq_idx, errors);
 
         // Validate dimensional consistency of equation
         validate_equation_units(equation, &model.variables, &eq_path, eq_idx, warnings);
@@ -430,7 +433,7 @@ fn validate_model(
             // If the expression exists, validate its variable references
             if let Some(ref expr) = variable.expression {
                 let expr_path = format!("{}/variables/{}/expression", model_path, var_name);
-                validate_expression_references(expr, &defined_vars, &expr_path, "expression", 0, errors);
+                validate_expression_references_with_systems(expr, &defined_vars, system_refs, &expr_path, "expression", 0, errors);
             }
         }
     }
@@ -600,32 +603,89 @@ fn validate_expression_references(
     equation_index: usize,
     errors: &mut Vec<StructuralError>,
 ) {
+    validate_expression_references_with_systems(
+        expr, defined_vars, &HashMap::new(), base_path, field, equation_index, errors
+    );
+}
+
+fn validate_expression_references_with_systems(
+    expr: &crate::Expr,
+    defined_vars: &HashSet<String>,
+    system_refs: &HashMap<String, SystemInfo>,
+    base_path: &str,
+    field: &str,
+    equation_index: usize,
+    errors: &mut Vec<StructuralError>,
+) {
     match expr {
         crate::Expr::Variable(var_name) => {
             // Skip derivatives, time variable, and built-in functions
-            if !var_name.starts_with("d(") &&
-               !var_name.starts_with("t") &&
-               var_name != "t" &&
-               !is_builtin_function(var_name) &&
-               !defined_vars.contains(var_name) {
-                errors.push(StructuralError {
-                    path: base_path.to_string(),
-                    code: StructuralErrorCode::UndefinedVariable,
-                    message: format!("Variable '{}' referenced in equation is not declared", var_name),
-                    details: serde_json::json!({
-                        "variable": var_name,
-                        "equation_index": equation_index,
-                        "expected_in": "variables"
-                    }),
-                });
+            if var_name.starts_with("d(") ||
+               var_name.starts_with("t") ||
+               var_name == "t" ||
+               is_builtin_function(var_name) {
+                return; // These are always valid
+            }
+
+            // Check for scoped references (e.g., "ModelA.x")
+            if let Some(dot_pos) = var_name.find('.') {
+                let system_name = &var_name[..dot_pos];
+                let var_suffix = &var_name[dot_pos + 1..];
+
+                // Validate scoped reference
+                if let Some(system) = system_refs.get(system_name) {
+                    let var_exists = system.variables.contains(var_suffix) ||
+                                    system.species.contains(var_suffix) ||
+                                    system.parameters.contains(var_suffix);
+
+                    if !var_exists {
+                        errors.push(StructuralError {
+                            path: base_path.to_string(),
+                            code: StructuralErrorCode::UnresolvedScopedRef,
+                            message: format!("Scoped reference '{}' cannot be resolved", var_name),
+                            details: serde_json::json!({
+                                "reference": var_name,
+                                "equation_index": equation_index,
+                                "missing_component": var_suffix
+                            }),
+                        });
+                    }
+                    // If scoped reference is valid, don't generate undefined variable error
+                } else {
+                    errors.push(StructuralError {
+                        path: base_path.to_string(),
+                        code: StructuralErrorCode::UnresolvedScopedRef,
+                        message: format!("Scoped reference '{}' cannot be resolved", var_name),
+                        details: serde_json::json!({
+                            "reference": var_name,
+                            "equation_index": equation_index,
+                            "missing_component": system_name
+                        }),
+                    });
+                }
+            } else {
+                // Regular variable - check if defined locally
+                if !defined_vars.contains(var_name) {
+                    errors.push(StructuralError {
+                        path: base_path.to_string(),
+                        code: StructuralErrorCode::UndefinedVariable,
+                        message: format!("Variable '{}' referenced in equation is not declared", var_name),
+                        details: serde_json::json!({
+                            "variable": var_name,
+                            "equation_index": equation_index,
+                            "expected_in": "variables"
+                        }),
+                    });
+                }
             }
         }
         crate::Expr::Operator(op_node) => {
             // Recursively validate operands
             for arg in &op_node.args {
-                validate_expression_references(
+                validate_expression_references_with_systems(
                     arg,
                     defined_vars,
+                    system_refs,
                     base_path,
                     field,
                     equation_index,
@@ -1186,6 +1246,153 @@ fn get_operator_unit(
             Ok(Unit::dimensionless())
         }
     }
+}
+
+/// Check for circular dependencies between models
+fn check_circular_dependencies_in_models(
+    models: &HashMap<String, crate::Model>,
+    errors: &mut Vec<StructuralError>,
+) {
+    let mut dependencies: HashMap<String, HashSet<String>> = HashMap::new();
+
+    // Build dependency graph by analyzing scoped references in equations
+    for (model_name, model) in models {
+        let mut model_deps = HashSet::new();
+
+        for equation in &model.equations {
+            // Check RHS for scoped references
+            extract_model_dependencies(&equation.rhs, &mut model_deps);
+
+            // Check LHS for scoped references (though less common)
+            extract_model_dependencies(&equation.lhs, &mut model_deps);
+        }
+
+        // Also check observed variable expressions
+        for variable in model.variables.values() {
+            if let Some(ref expr) = variable.expression {
+                extract_model_dependencies(expr, &mut model_deps);
+            }
+        }
+
+        dependencies.insert(model_name.clone(), model_deps);
+    }
+
+    // Detect cycles using DFS
+    let mut visited = HashSet::new();
+    let mut rec_stack = HashSet::new();
+
+    for model_name in models.keys() {
+        if !visited.contains(model_name) {
+            if has_cycle_dfs(model_name, &dependencies, &mut visited, &mut rec_stack) {
+                // Find the actual cycle for error reporting
+                let cycle = find_cycle(&dependencies, model_name);
+                errors.push(StructuralError {
+                    path: format!("/models"),
+                    code: StructuralErrorCode::CircularDependency,
+                    message: format!(
+                        "Circular dependency detected in model dependencies: {}",
+                        cycle.join(" -> ")
+                    ),
+                    details: serde_json::json!({
+                        "cycle": cycle,
+                        "dependency_type": "model_references"
+                    }),
+                });
+                break; // Report only the first cycle found
+            }
+        }
+    }
+}
+
+/// Extract model dependencies from an expression by finding scoped references
+fn extract_model_dependencies(expr: &crate::Expr, deps: &mut HashSet<String>) {
+    match expr {
+        crate::Expr::Variable(var_name) => {
+            // Check if it's a scoped reference (e.g., "ModelA.x")
+            if let Some(dot_pos) = var_name.find('.') {
+                let model_name = &var_name[..dot_pos];
+                deps.insert(model_name.to_string());
+            }
+        }
+        crate::Expr::Operator(op_node) => {
+            for arg in &op_node.args {
+                extract_model_dependencies(arg, deps);
+            }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers don't reference models
+        }
+    }
+}
+
+/// Check for cycles using depth-first search
+fn has_cycle_dfs(
+    node: &str,
+    graph: &HashMap<String, HashSet<String>>,
+    visited: &mut HashSet<String>,
+    rec_stack: &mut HashSet<String>,
+) -> bool {
+    visited.insert(node.to_string());
+    rec_stack.insert(node.to_string());
+
+    if let Some(neighbors) = graph.get(node) {
+        for neighbor in neighbors {
+            if !visited.contains(neighbor) {
+                if has_cycle_dfs(neighbor, graph, visited, rec_stack) {
+                    return true;
+                }
+            } else if rec_stack.contains(neighbor) {
+                return true;
+            }
+        }
+    }
+
+    rec_stack.remove(node);
+    false
+}
+
+/// Find the actual cycle path for error reporting
+fn find_cycle(graph: &HashMap<String, HashSet<String>>, start: &str) -> Vec<String> {
+    let mut path = vec![];
+    let mut visited = HashSet::new();
+
+    if find_cycle_path(start, graph, &mut path, &mut visited) {
+        path
+    } else {
+        vec![start.to_string()] // Fallback
+    }
+}
+
+/// Helper function to find the actual cycle path
+fn find_cycle_path(
+    current: &str,
+    graph: &HashMap<String, HashSet<String>>,
+    path: &mut Vec<String>,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if path.contains(&current.to_string()) {
+        // Found cycle - include the current node to complete the cycle
+        path.push(current.to_string());
+        return true;
+    }
+
+    if visited.contains(current) {
+        return false;
+    }
+
+    visited.insert(current.to_string());
+    path.push(current.to_string());
+
+    if let Some(neighbors) = graph.get(current) {
+        for neighbor in neighbors {
+            if find_cycle_path(neighbor, graph, path, visited) {
+                return true;
+            }
+        }
+    }
+
+    path.pop();
+    false
 }
 
 #[cfg(test)]
