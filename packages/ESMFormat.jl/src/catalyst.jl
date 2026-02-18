@@ -15,32 +15,8 @@ KEY FEATURES:
 - Proper handling of null substrates (source reactions) and null products (sink reactions)
 """
 
-# Lazy loading approach to avoid precompilation issues
-const CATALYST_AVAILABLE = Ref(false)
-const SYMBOLICS_AVAILABLE = Ref(false)
-const CATALYST_CHECKED = Ref(false)
-
-# Lazy loading function
-function _check_catalyst_availability()
-    if !CATALYST_CHECKED[]
-        try
-            @eval using Catalyst
-            CATALYST_AVAILABLE[] = true
-        catch e
-            CATALYST_AVAILABLE[] = false
-        end
-
-        try
-            @eval using Symbolics
-            SYMBOLICS_AVAILABLE[] = true
-        catch e
-            SYMBOLICS_AVAILABLE[] = false
-        end
-
-        CATALYST_CHECKED[] = true
-    end
-    return CATALYST_AVAILABLE[]
-end
+# Use shared availability checking from availability.jl
+# No need for local constants - they are defined in availability.jl
 
 """
     to_catalyst_system(rs::ReactionSystem)::Union{ReactionSystem, MockCatalystSystem}
@@ -81,7 +57,7 @@ catalyst_sys = to_catalyst_system(rs)
 """
 function to_catalyst_system(rs::ReactionSystem)
     # Check Catalyst availability lazily
-    if !_check_catalyst_availability()
+    if !check_catalyst_availability()
         @info "Using mock Catalyst system (Catalyst.jl not available)"
         return create_mock_catalyst_system(rs)
     end
@@ -338,6 +314,7 @@ function esm_to_symbolic(expr::Expr, var_dict::Dict)
             return var_dict[expr.name]
         else
             # Create new symbolic variable if not found
+            # Check if Symbolics was loaded when Catalyst was checked
             if SYMBOLICS_AVAILABLE[]
                 var_sym = Symbolics.variable(Symbol(expr.name), T=Symbolics.Real)
                 var_dict[expr.name] = var_sym  # Cache for future use
@@ -400,7 +377,7 @@ function process_reaction_events(events::Vector, var_dict::Dict)
     continuous_events = []
     discrete_events = []
 
-    if !CATALYST_AVAILABLE[]
+    if !check_catalyst_availability()
         return continuous_events, discrete_events
     end
 
