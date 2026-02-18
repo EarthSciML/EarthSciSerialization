@@ -48,7 +48,8 @@ fn test_analysis_features_integration() {
                 dim: None,
             }),
         }],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -193,7 +194,8 @@ fn test_editing_operations() {
         name: Some("Test Model".to_string()),
         variables: HashMap::new(),
         equations: vec![],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 

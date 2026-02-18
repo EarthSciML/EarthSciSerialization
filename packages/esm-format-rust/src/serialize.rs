@@ -122,7 +122,8 @@ mod tests {
                     rhs: Expr::Number(1.0),
                 }
             ],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
 

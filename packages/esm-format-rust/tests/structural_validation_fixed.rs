@@ -28,7 +28,8 @@ fn test_undefined_variable_in_model() {
                 rhs: Expr::Number(1.0),
             }
         ],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -97,7 +98,8 @@ fn test_equation_count_mismatch() {
                 rhs: Expr::Number(2.0),
             },
         ],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -244,7 +246,8 @@ fn test_valid_file_passes() {
         name: Some("Valid Model".to_string()),
         variables,
         equations: vec![], // No equations needed for parameter-only model
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 

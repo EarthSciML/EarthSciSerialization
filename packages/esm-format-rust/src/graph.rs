@@ -895,14 +895,16 @@ mod tests {
             name: Some("Test Model 1".to_string()),
             variables: HashMap::new(),
             equations: vec![],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
         models.insert("model2".to_string(), Model {
             name: Some("Test Model 2".to_string()),
             variables: HashMap::new(),
             equations: vec![],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
 
@@ -944,7 +946,8 @@ mod tests {
             name: Some("Test Model".to_string()),
             variables: HashMap::new(),
             equations: vec![],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
 
@@ -978,7 +981,8 @@ mod tests {
             name: Some("Test Model".to_string()),
             variables: HashMap::new(),
             equations: vec![],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
 

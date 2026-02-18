@@ -63,7 +63,8 @@ pub fn substitute_in_model(
         name: model.name.clone(),
         variables: model.variables.clone(),
         equations: new_equations,
-        events: model.events.clone(), // TODO: Substitute in events too
+        discrete_events: model.discrete_events.clone(), // TODO: Substitute in discrete events too
+        continuous_events: model.continuous_events.clone(), // TODO: Substitute in continuous events too
         description: model.description.clone(),
     }
 }

@@ -76,10 +76,17 @@ fn test_comprehensive_events_round_trip() {
     if let (Some(models1), Some(models2)) = (&parsed.models, &reparsed.models) {
         for (name, model1) in models1 {
             let model2 = &models2[name];
-            match (&model1.events, &model2.events) {
+            // Compare discrete events
+            match (&model1.discrete_events, &model2.discrete_events) {
                 (Some(events1), Some(events2)) => assert_eq!(events1.len(), events2.len()),
                 (None, None) => {},
-                _ => panic!("Events structure mismatch for model {}", name),
+                _ => panic!("Discrete events structure mismatch for model {}", name),
+            }
+            // Compare continuous events
+            match (&model1.continuous_events, &model2.continuous_events) {
+                (Some(events1), Some(events2)) => assert_eq!(events1.len(), events2.len()),
+                (None, None) => {},
+                _ => panic!("Continuous events structure mismatch for model {}", name),
             }
         }
     }

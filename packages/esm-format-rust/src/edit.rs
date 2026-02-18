@@ -403,7 +403,8 @@ mod tests {
             name: Some("Test Model".to_string()),
             variables: HashMap::new(),
             equations: vec![],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         }
     }
