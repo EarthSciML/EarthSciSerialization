@@ -241,43 +241,69 @@ pub fn get_component_type(esm_file: &EsmFile, component_id: &str) -> Option<Comp
 /// Expression graph representing variable dependencies within expressions
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExpressionGraph {
-    /// Nodes representing variables and operators
-    pub nodes: Vec<ExpressionNode>,
-    /// Edges representing dependencies
+    /// Nodes representing variables only (no operators or constants)
+    pub nodes: Vec<VariableNode>,
+    /// Edges representing dependencies between variables
     pub edges: Vec<DependencyEdge>,
 }
 
-/// Node in an expression graph
+/// Node representing a variable in an expression graph
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ExpressionNode {
-    /// Unique node identifier
-    pub id: String,
-    /// Type of expression node
-    pub node_type: ExpressionNodeType,
-    /// Optional value for constants
-    pub value: Option<f64>,
+pub struct VariableNode {
+    /// Variable name
+    pub name: String,
+    /// Variable kind/type
+    pub kind: VariableKind,
+    /// Physical units (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
+    /// Which model/system owns this variable
+    pub system: String,
 }
 
-/// Type of node in an expression graph
+/// Type/kind of variable
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum ExpressionNodeType {
-    /// Variable reference
-    Variable,
-    /// Numeric constant
-    Constant,
-    /// Operator
-    Operator(String),
+#[serde(rename_all = "snake_case")]
+pub enum VariableKind {
+    /// State variable
+    State,
+    /// Parameter (constant)
+    Parameter,
+    /// Observed quantity (computed)
+    Observed,
+    /// Chemical species
+    Species,
 }
 
-/// Edge representing dependencies in an expression graph
+/// Edge representing dependencies between variables in an expression graph
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DependencyEdge {
-    /// Source node ID
-    pub from: String,
-    /// Target node ID
-    pub to: String,
-    /// Edge type (e.g., "operand")
-    pub edge_type: String,
+    /// Source variable name (influences the target)
+    pub source: String,
+    /// Target variable name (is influenced by the source)
+    pub target: String,
+    /// How the dependency arises
+    pub relationship: DependencyRelationship,
+    /// Which equation/reaction index produced this edge
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub equation_index: Option<usize>,
+    /// The relevant subexpression (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expression: Option<crate::Expr>,
+}
+
+/// Type of dependency relationship
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyRelationship {
+    /// Additive relationship (e.g., in D(x)/dt = ... + f(y) + ...)
+    Additive,
+    /// Multiplicative relationship
+    Multiplicative,
+    /// Rate relationship (in reactions)
+    Rate,
+    /// Stoichiometric relationship (in reactions)
+    Stoichiometric,
 }
 
 /// Build an expression graph from various ESM components
@@ -305,22 +331,21 @@ impl ExpressionGraphInput for crate::EsmFile {
     fn build_expression_graph(&self) -> ExpressionGraph {
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
-        let mut node_counter = 0;
 
         // Process all models
         if let Some(ref models) = self.models {
-            for (_, model) in models {
-                let (model_nodes, model_edges) = extract_from_model(model, &mut node_counter);
-                nodes.extend(model_nodes);
+            for (model_id, model) in models {
+                let (model_nodes, model_edges) = extract_from_model(model, model_id);
+                merge_variable_nodes(&mut nodes, model_nodes);
                 edges.extend(model_edges);
             }
         }
 
         // Process all reaction systems
         if let Some(ref reaction_systems) = self.reaction_systems {
-            for (_, rs) in reaction_systems {
-                let (rs_nodes, rs_edges) = extract_from_reaction_system(rs, &mut node_counter);
-                nodes.extend(rs_nodes);
+            for (rs_id, rs) in reaction_systems {
+                let (rs_nodes, rs_edges) = extract_from_reaction_system(rs, rs_id);
+                merge_variable_nodes(&mut nodes, rs_nodes);
                 edges.extend(rs_edges);
             }
         }
@@ -331,28 +356,73 @@ impl ExpressionGraphInput for crate::EsmFile {
 
 impl ExpressionGraphInput for crate::Model {
     fn build_expression_graph(&self) -> ExpressionGraph {
-        let mut node_counter = 0;
-        let (nodes, edges) = extract_from_model(self, &mut node_counter);
+        let (nodes, edges) = extract_from_model(self, "unknown");
         ExpressionGraph { nodes, edges }
     }
 }
 
 impl ExpressionGraphInput for crate::ReactionSystem {
     fn build_expression_graph(&self) -> ExpressionGraph {
-        let mut node_counter = 0;
-        let (nodes, edges) = extract_from_reaction_system(self, &mut node_counter);
+        let (nodes, edges) = extract_from_reaction_system(self, "unknown");
         ExpressionGraph { nodes, edges }
     }
 }
 
 impl ExpressionGraphInput for crate::Equation {
     fn build_expression_graph(&self) -> ExpressionGraph {
-        let mut node_counter = 0;
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
 
-        extract_from_expr(&self.lhs, &mut nodes, &mut edges, &mut node_counter);
-        extract_from_expr(&self.rhs, &mut nodes, &mut edges, &mut node_counter);
+        // Extract LHS variable (the one being differentiated)
+        let lhs_vars = extract_variables_from_expr(&self.lhs);
+        let rhs_vars = extract_variables_from_expr(&self.rhs);
+
+        // Create nodes for all variables
+        for var in &lhs_vars {
+            if !nodes.iter().any(|n: &VariableNode| n.name == *var) {
+                nodes.push(VariableNode {
+                    name: var.clone(),
+                    kind: VariableKind::State, // Assume LHS variables are state variables
+                    units: None,
+                    system: "unknown".to_string(),
+                });
+            }
+        }
+
+        for var in &rhs_vars {
+            if !nodes.iter().any(|n: &VariableNode| n.name == *var) {
+                nodes.push(VariableNode {
+                    name: var.clone(),
+                    kind: VariableKind::Parameter, // Assume RHS variables are parameters
+                    units: None,
+                    system: "unknown".to_string(),
+                });
+            }
+        }
+
+        // Create edges from RHS variables to LHS variables
+        for lhs_var in &lhs_vars {
+            for rhs_var in &rhs_vars {
+                if lhs_var != rhs_var {
+                    edges.push(DependencyEdge {
+                        source: rhs_var.clone(),
+                        target: lhs_var.clone(),
+                        relationship: DependencyRelationship::Additive,
+                        equation_index: Some(0),
+                        expression: Some(self.rhs.clone()),
+                    });
+                } else {
+                    // Self-reference (e.g., D(x)/dt = -x)
+                    edges.push(DependencyEdge {
+                        source: rhs_var.clone(),
+                        target: lhs_var.clone(),
+                        relationship: DependencyRelationship::Additive,
+                        equation_index: Some(0),
+                        expression: Some(self.rhs.clone()),
+                    });
+                }
+            }
+        }
 
         ExpressionGraph { nodes, edges }
     }
@@ -360,11 +430,82 @@ impl ExpressionGraphInput for crate::Equation {
 
 impl ExpressionGraphInput for crate::Reaction {
     fn build_expression_graph(&self) -> ExpressionGraph {
-        let mut node_counter = 0;
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
 
-        extract_from_expr(&self.rate, &mut nodes, &mut edges, &mut node_counter);
+        // Extract variables from rate expression
+        let rate_vars = extract_variables_from_expr(&self.rate);
+
+        // Create nodes for all variables found in rate expression
+        for var in &rate_vars {
+            if !nodes.iter().any(|n: &VariableNode| n.name == *var) {
+                nodes.push(VariableNode {
+                    name: var.clone(),
+                    kind: VariableKind::Species, // Rate variables are typically species or rate constants
+                    units: None,
+                    system: "unknown".to_string(),
+                });
+            }
+        }
+
+        // Add substrate and product species as nodes
+        for species in &self.substrates {
+            if !nodes.iter().any(|n| n.name == species.species) {
+                nodes.push(VariableNode {
+                    name: species.species.clone(),
+                    kind: VariableKind::Species,
+                    units: None,
+                    system: "unknown".to_string(),
+                });
+            }
+        }
+
+        for species in &self.products {
+            if !nodes.iter().any(|n| n.name == species.species) {
+                nodes.push(VariableNode {
+                    name: species.species.clone(),
+                    kind: VariableKind::Species,
+                    units: None,
+                    system: "unknown".to_string(),
+                });
+            }
+        }
+
+        // Create rate dependencies: rate variables influence product concentrations
+        for rate_var in &rate_vars {
+            for product in &self.products {
+                edges.push(DependencyEdge {
+                    source: rate_var.clone(),
+                    target: product.species.clone(),
+                    relationship: DependencyRelationship::Rate,
+                    equation_index: None,
+                    expression: Some(self.rate.clone()),
+                });
+            }
+            // Rate variables also influence substrate depletion
+            for substrate in &self.substrates {
+                edges.push(DependencyEdge {
+                    source: rate_var.clone(),
+                    target: substrate.species.clone(),
+                    relationship: DependencyRelationship::Rate,
+                    equation_index: None,
+                    expression: Some(self.rate.clone()),
+                });
+            }
+        }
+
+        // Stoichiometric dependencies: substrates influence products
+        for substrate in &self.substrates {
+            for product in &self.products {
+                edges.push(DependencyEdge {
+                    source: substrate.species.clone(),
+                    target: product.species.clone(),
+                    relationship: DependencyRelationship::Stoichiometric,
+                    equation_index: None,
+                    expression: None,
+                });
+            }
+        }
 
         ExpressionGraph { nodes, edges }
     }
@@ -372,96 +513,186 @@ impl ExpressionGraphInput for crate::Reaction {
 
 impl ExpressionGraphInput for crate::Expr {
     fn build_expression_graph(&self) -> ExpressionGraph {
-        let mut node_counter = 0;
         let mut nodes = Vec::new();
-        let mut edges = Vec::new();
 
-        extract_from_expr(self, &mut nodes, &mut edges, &mut node_counter);
+        // For a standalone expression, just extract variables
+        let vars = extract_variables_from_expr(self);
 
-        ExpressionGraph { nodes, edges }
+        for var in vars {
+            if !nodes.iter().any(|n: &VariableNode| n.name == var) {
+                nodes.push(VariableNode {
+                    name: var,
+                    kind: VariableKind::Parameter, // Default to parameter for standalone expressions
+                    units: None,
+                    system: "unknown".to_string(),
+                });
+            }
+        }
+
+        // For a standalone expression, there are no variable-to-variable dependencies
+        ExpressionGraph {
+            nodes,
+            edges: Vec::new()
+        }
     }
 }
 
 /// Helper function to extract nodes and edges from a model
-fn extract_from_model(model: &crate::Model, node_counter: &mut usize) -> (Vec<ExpressionNode>, Vec<DependencyEdge>) {
+fn extract_from_model(model: &crate::Model, system_id: &str) -> (Vec<VariableNode>, Vec<DependencyEdge>) {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
 
-    for equation in &model.equations {
-        extract_from_expr(&equation.lhs, &mut nodes, &mut edges, node_counter);
-        extract_from_expr(&equation.rhs, &mut nodes, &mut edges, node_counter);
+    // Add variable declarations as nodes with proper types
+    for (var_name, var_def) in &model.variables {
+        let kind = match var_def.var_type {
+            crate::VariableType::State => VariableKind::State,
+            crate::VariableType::Parameter => VariableKind::Parameter,
+            crate::VariableType::Observed => VariableKind::Observed,
+        };
+
+        nodes.push(VariableNode {
+            name: var_name.clone(),
+            kind,
+            units: var_def.units.clone(),
+            system: system_id.to_string(),
+        });
+    }
+
+    // Process equations to create dependency edges
+    for (eq_idx, equation) in model.equations.iter().enumerate() {
+        let lhs_vars = extract_variables_from_expr(&equation.lhs);
+        let rhs_vars = extract_variables_from_expr(&equation.rhs);
+
+        // Ensure all variables in equations exist as nodes
+        for var in lhs_vars.iter().chain(rhs_vars.iter()) {
+            if !nodes.iter().any(|n: &VariableNode| n.name == *var) {
+                nodes.push(VariableNode {
+                    name: var.clone(),
+                    kind: VariableKind::State, // Default for undeclared variables
+                    units: None,
+                    system: system_id.to_string(),
+                });
+            }
+        }
+
+        // Create edges from RHS variables to LHS variables
+        for lhs_var in &lhs_vars {
+            for rhs_var in &rhs_vars {
+                edges.push(DependencyEdge {
+                    source: rhs_var.clone(),
+                    target: lhs_var.clone(),
+                    relationship: DependencyRelationship::Additive,
+                    equation_index: Some(eq_idx),
+                    expression: Some(equation.rhs.clone()),
+                });
+            }
+        }
     }
 
     (nodes, edges)
 }
 
 /// Helper function to extract nodes and edges from a reaction system
-fn extract_from_reaction_system(rs: &crate::ReactionSystem, node_counter: &mut usize) -> (Vec<ExpressionNode>, Vec<DependencyEdge>) {
+fn extract_from_reaction_system(rs: &crate::ReactionSystem, system_id: &str) -> (Vec<VariableNode>, Vec<DependencyEdge>) {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
 
-    for reaction in &rs.reactions {
-        extract_from_expr(&reaction.rate, &mut nodes, &mut edges, node_counter);
+    // Add species as nodes
+    for species in &rs.species {
+        nodes.push(VariableNode {
+            name: species.name.clone(),
+            kind: VariableKind::Species,
+            units: species.units.clone(),
+            system: system_id.to_string(),
+        });
+    }
+
+    // Process reactions to create dependency edges
+    for (rxn_idx, reaction) in rs.reactions.iter().enumerate() {
+        let rate_vars = extract_variables_from_expr(&reaction.rate);
+
+        // Ensure rate variables exist as nodes
+        for var in &rate_vars {
+            if !nodes.iter().any(|n: &VariableNode| n.name == *var) {
+                nodes.push(VariableNode {
+                    name: var.clone(),
+                    kind: VariableKind::Parameter, // Rate constants are typically parameters
+                    units: None,
+                    system: system_id.to_string(),
+                });
+            }
+        }
+
+        // Create rate dependencies: rate variables influence concentrations
+        for rate_var in &rate_vars {
+            for product in &reaction.products {
+                edges.push(DependencyEdge {
+                    source: rate_var.clone(),
+                    target: product.species.clone(),
+                    relationship: DependencyRelationship::Rate,
+                    equation_index: Some(rxn_idx),
+                    expression: Some(reaction.rate.clone()),
+                });
+            }
+            for substrate in &reaction.substrates {
+                edges.push(DependencyEdge {
+                    source: rate_var.clone(),
+                    target: substrate.species.clone(),
+                    relationship: DependencyRelationship::Rate,
+                    equation_index: Some(rxn_idx),
+                    expression: Some(reaction.rate.clone()),
+                });
+            }
+        }
+
+        // Stoichiometric dependencies: substrates -> products
+        for substrate in &reaction.substrates {
+            for product in &reaction.products {
+                edges.push(DependencyEdge {
+                    source: substrate.species.clone(),
+                    target: product.species.clone(),
+                    relationship: DependencyRelationship::Stoichiometric,
+                    equation_index: Some(rxn_idx),
+                    expression: None,
+                });
+            }
+        }
     }
 
     (nodes, edges)
 }
 
-/// Helper function to extract nodes and edges from an expression
-fn extract_from_expr(
-    expr: &crate::Expr,
-    nodes: &mut Vec<ExpressionNode>,
-    edges: &mut Vec<DependencyEdge>,
-    node_counter: &mut usize,
-) -> String {
+/// Extract all variable names from an expression
+fn extract_variables_from_expr(expr: &crate::Expr) -> Vec<String> {
+    let mut vars = Vec::new();
+    collect_variables(expr, &mut vars);
+    vars.sort();
+    vars.dedup();
+    vars
+}
+
+/// Recursively collect variable names from an expression
+fn collect_variables(expr: &crate::Expr, vars: &mut Vec<String>) {
     match expr {
-        crate::Expr::Number(n) => {
-            let node_id = format!("const_{}", node_counter);
-            *node_counter += 1;
-
-            nodes.push(ExpressionNode {
-                id: node_id.clone(),
-                node_type: ExpressionNodeType::Constant,
-                value: Some(*n),
-            });
-
-            node_id
-        }
         crate::Expr::Variable(var) => {
-            let node_id = var.clone();
-
-            // Only add node if not already present
-            if !nodes.iter().any(|n| n.id == node_id) {
-                nodes.push(ExpressionNode {
-                    id: node_id.clone(),
-                    node_type: ExpressionNodeType::Variable,
-                    value: None,
-                });
-            }
-
-            node_id
+            vars.push(var.clone());
         }
-        crate::Expr::Operator(op_node) => {
-            let node_id = format!("op_{}_{}", op_node.op, node_counter);
-            *node_counter += 1;
-
-            nodes.push(ExpressionNode {
-                id: node_id.clone(),
-                node_type: ExpressionNodeType::Operator(op_node.op.clone()),
-                value: None,
-            });
-
-            // Process operands and create edges
-            for (i, arg) in op_node.args.iter().enumerate() {
-                let arg_id = extract_from_expr(arg, nodes, edges, node_counter);
-                edges.push(DependencyEdge {
-                    from: arg_id,
-                    to: node_id.clone(),
-                    edge_type: format!("operand_{}", i),
-                });
+        crate::Expr::Operator(op) => {
+            for arg in &op.args {
+                collect_variables(arg, vars);
             }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers are not variables, skip
+        }
+    }
+}
 
-            node_id
+/// Merge variable nodes, avoiding duplicates
+fn merge_variable_nodes(existing: &mut Vec<VariableNode>, new_nodes: Vec<VariableNode>) {
+    for new_node in new_nodes {
+        if !existing.iter().any(|n: &VariableNode| n.name == new_node.name && n.system == new_node.system) {
+            existing.push(new_node);
         }
     }
 }
@@ -553,26 +784,33 @@ impl ExpressionGraph {
     pub fn to_dot(&self) -> String {
         let mut dot = String::from("digraph ExpressionGraph {\n");
         dot.push_str("  rankdir=TB;\n");
-        dot.push_str("  node [shape=circle];\n\n");
+        dot.push_str("  node [shape=ellipse];\n\n");
 
-        // Add nodes
+        // Add nodes (all variables)
         for node in &self.nodes {
-            let (shape, label) = match &node.node_type {
-                ExpressionNodeType::Variable => ("ellipse", node.id.clone()),
-                ExpressionNodeType::Constant => ("box", format!("{}", node.value.unwrap_or(0.0))),
-                ExpressionNodeType::Operator(op) => ("diamond", op.clone()),
+            let shape = match node.kind {
+                VariableKind::State => "ellipse",
+                VariableKind::Parameter => "box",
+                VariableKind::Observed => "diamond",
+                VariableKind::Species => "circle",
             };
 
             dot.push_str(&format!("  \"{}\" [label=\"{}\" shape={}];\n",
-                node.id, label, shape));
+                node.name, node.name, shape));
         }
 
         dot.push_str("\n");
 
         // Add edges
         for edge in &self.edges {
-            dot.push_str(&format!("  \"{}\" -> \"{}\";\n",
-                edge.from, edge.to));
+            let label = match edge.relationship {
+                DependencyRelationship::Additive => "additive",
+                DependencyRelationship::Multiplicative => "mult",
+                DependencyRelationship::Rate => "rate",
+                DependencyRelationship::Stoichiometric => "stoich",
+            };
+            dot.push_str(&format!("  \"{}\" -> \"{}\" [label=\"{}\"];\n",
+                edge.source, edge.target, label));
         }
 
         dot.push_str("}\n");
@@ -589,18 +827,19 @@ impl ExpressionGraph {
 
         // Add nodes with appropriate shapes
         for node in &self.nodes {
-            let (shape_start, shape_end, label) = match &node.node_type {
-                ExpressionNodeType::Variable => ("(", ")", format!("{}", node.id)),
-                ExpressionNodeType::Constant => ("[", "]", format!("{}", node.value.unwrap_or(0.0))),
-                ExpressionNodeType::Operator(op) => ("{", "}", format!("{}", op)),
+            let (shape_start, shape_end) = match node.kind {
+                VariableKind::State => ("(", ")"),
+                VariableKind::Parameter => ("[", "]"),
+                VariableKind::Observed => ("{", "}"),
+                VariableKind::Species => ("((", "))"),
             };
 
-            mermaid.push_str(&format!("  {}{}{}{}\n", node.id, shape_start, label, shape_end));
+            mermaid.push_str(&format!("  {}{}{}{}\n", node.name, shape_start, node.name, shape_end));
         }
 
         // Add edges
         for edge in &self.edges {
-            mermaid.push_str(&format!("  {} --> {}\n", edge.from, edge.to));
+            mermaid.push_str(&format!("  {} --> {}\n", edge.source, edge.target));
         }
 
         mermaid
@@ -788,8 +1027,13 @@ mod tests {
         });
 
         let graph = expression_graph(&expr);
-        assert_eq!(graph.nodes.len(), 3); // x, 1.0, +
-        assert_eq!(graph.edges.len(), 2); // x -> +, 1.0 -> +
+        // Variable dependency graph: only variables as nodes, no operators/constants
+        assert_eq!(graph.nodes.len(), 1); // Only 'x' variable
+        assert_eq!(graph.edges.len(), 0); // No variable-to-variable dependencies for standalone expression
+
+        // Check the variable node
+        assert_eq!(graph.nodes[0].name, "x");
+        assert_eq!(graph.nodes[0].kind, VariableKind::Parameter);
     }
 
     #[test]
@@ -845,9 +1089,11 @@ mod tests {
         let mermaid = graph.to_mermaid();
 
         assert!(mermaid.contains("graph TD"));
-        assert!(mermaid.contains("x(x)"));  // Variable node
-        assert!(mermaid.contains("const_"));  // Constant node
-        assert!(mermaid.contains("{+}"));    // Operator node
-        assert!(mermaid.contains("-->"));    // Edge
+        assert!(mermaid.contains("x[x]"));  // Parameter variable node (square brackets)
+        // No constants or operators in variable dependency graph
+        assert!(!mermaid.contains("const_"));  // No constant nodes
+        assert!(!mermaid.contains("{+}"));    // No operator nodes
+        // No edges for standalone expression
+        assert!(!mermaid.contains("-->"));    // No edges
     }
 }
