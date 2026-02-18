@@ -275,7 +275,7 @@ class TestReactionSystemSubstitution:
     def test_substitute_preserves_reaction_structure(self):
         """Test that substitution preserves reaction system structure."""
         reaction_system = {
-            "species": {"A": {"mass": 18.0}},
+            "species": {"A": {"default": 18.0}},
             "parameters": {"k": {"units": "1/s"}},
             "reactions": [{
                 "id": "R1",
@@ -289,7 +289,7 @@ class TestReactionSystemSubstitution:
         result = substitute_in_reaction_system(reaction_system, substitutions)
 
         # Should preserve structure
-        assert result["species"]["A"]["mass"] == 18.0
+        assert result["species"]["A"]["default"] == 18.0
         assert result["parameters"]["k"]["units"] == "1/s"
         assert result["reactions"][0]["id"] == "R1"
         assert result["reactions"][0]["rate"] == "k"

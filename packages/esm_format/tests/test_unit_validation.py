@@ -316,14 +316,14 @@ class TestModelVariableUnitValidation:
     def test_valid_chemical_species_variables(self):
         """Test valid chemical species variables with units."""
         species_list = [
-            Species(name="CO2", formula="CO2", mass=44.01, units="gram/mole"),
-            Species(name="O3", formula="O3", mass=48.0, units="gram/mole"),
-            Species(name="H2O", formula="H2O", mass=18.01, units="gram/mole"),
+            Species(name="CO2", formula="CO2", default=44.01, units="gram/mole"),
+            Species(name="O3", formula="O3", default=48.0, units="gram/mole"),
+            Species(name="H2O", formula="H2O", default=18.01, units="gram/mole"),
         ]
 
         for species in species_list:
-            if species.units:
-                quantity = Q_(species.mass, species.units)
+            if species.units and species.default is not None:
+                quantity = Q_(species.default, species.units)
                 assert quantity is not None
 
 
@@ -466,9 +466,9 @@ class TestIntegratedUnitValidation:
 
         # Add species with consistent units
         system.species.extend([
-            Species(name="A", mass=30.0, units="gram/mole"),
-            Species(name="B", mass=45.0, units="gram/mole"),
-            Species(name="C", mass=75.0, units="gram/mole"),
+            Species(name="A", default=30.0, units="gram/mole"),
+            Species(name="B", default=45.0, units="gram/mole"),
+            Species(name="C", default=75.0, units="gram/mole"),
         ])
 
         # Add parameters with appropriate units
@@ -488,8 +488,8 @@ class TestIntegratedUnitValidation:
 
         # Validate unit consistency
         for species in system.species:
-            if species.units and species.mass:
-                mass_quantity = Q_(species.mass, species.units)
+            if species.units and species.default is not None:
+                mass_quantity = Q_(species.default, species.units)
                 assert mass_quantity is not None
 
         for param in system.parameters:
