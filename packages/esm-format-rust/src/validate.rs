@@ -328,7 +328,7 @@ fn validate_model(
     model: &crate::Model,
     _system_refs: &HashMap<String, SystemInfo>,
     errors: &mut Vec<StructuralError>,
-    _warnings: &mut Vec<String>,
+    warnings: &mut Vec<String>,
 ) {
     let model_path = format!("/models/{}", model_name);
 
@@ -379,7 +379,7 @@ fn validate_model(
         validate_expression_references(&equation.rhs, &defined_vars, &eq_path, "rhs", eq_idx, errors);
 
         // Validate dimensional consistency of equation
-        validate_equation_units(equation, &model.variables, &eq_path, eq_idx, _warnings);
+        validate_equation_units(equation, &model.variables, &eq_path, eq_idx, warnings);
     }
 
     // Validate observed variable expressions
@@ -453,7 +453,7 @@ fn validate_reaction_system(
     rs: &crate::ReactionSystem,
     _system_refs: &HashMap<String, SystemInfo>,
     errors: &mut Vec<StructuralError>,
-    _warnings: &mut Vec<String>,
+    warnings: &mut Vec<String>,
 ) {
     let rs_path = format!("/reaction_systems/{}", rs_name);
 
@@ -1636,6 +1636,76 @@ mod tests {
         // But should have unit warnings
         assert!(!result.unit_warnings.is_empty(), "Should have unit warnings");
         assert!(result.unit_warnings[0].contains("Dimension mismatch"), "Should contain dimension mismatch warning");
+    }
+
+    #[test]
+    fn test_unit_validation_integration() {
+        // Test that unit validation warnings are properly returned from the main validate function
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with position units
+        variables.insert("position".to_string(), ModelVariable {
+            var_type: VariableType::State,
+            units: Some("m".to_string()),
+            default: Some(0.0),
+            description: None,
+            expression: None,
+        });
+
+        // Parameter with velocity units - should be compatible
+        variables.insert("velocity".to_string(), ModelVariable {
+            var_type: VariableType::Parameter,
+            units: Some("m/s".to_string()),
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        });
+
+        models.insert("test_model".to_string(), Model {
+            reference: None,
+            name: Some("Test Model".to_string()),
+            variables,
+            equations: vec![
+                Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("position".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Variable("velocity".to_string()),
+                }
+            ],
+            discrete_events: None,
+            continuous_events: None,
+            description: None,
+        });
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("Unit Test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                version: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should pass validation - LHS: d(position)/dt = m/s, RHS: velocity = m/s
+        assert!(result.is_valid, "Validation should pass: {:?}", result.structural_errors);
+        assert!(result.structural_errors.is_empty());
+        assert!(result.unit_warnings.is_empty(), "No unit warnings expected: {:?}", result.unit_warnings);
     }
 
     #[test]
