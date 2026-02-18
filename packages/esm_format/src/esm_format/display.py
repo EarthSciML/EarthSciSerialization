@@ -122,6 +122,10 @@ def _format_chemical_subscripts(variable: str, format_type: str) -> str:
             # Regular variable: return as-is
             return variable
 
+    if format_type == 'ascii':
+        # For ASCII, just return as-is (no special formatting for chemical subscripts)
+        return variable
+
     if not has_elements:
         # No element pattern found, return as-is
         return variable
@@ -170,23 +174,37 @@ def _format_number(num: Union[int, float], format_type: str) -> str:
     if isinstance(num, int) and abs(num) < 1e6:
         return str(num)
 
-    if isinstance(num, float) and abs(num) < 1e6 and num.is_integer():
+    if isinstance(num, float) and abs(num) >= 1e-4 and abs(num) < 1e5 and num.is_integer():
         return str(int(num))
 
-    # Use scientific notation for large numbers or floats
-    str_repr = f"{num:.12e}"
+    # For regular-sized floats, return as-is without scientific notation
+    if isinstance(num, float) and abs(num) >= 1e-4 and abs(num) < 1e5:
+        # Use reasonable precision for display
+        return f"{num:.12g}".rstrip('0').rstrip('.')
+
+    # Use scientific notation for very large or very small numbers
+    # Use a reasonable precision to start with
+    str_repr = f"{num:.1e}"
     if 'e' not in str_repr:
         return str_repr
 
     mantissa, exponent = str_repr.split('e')
-    # Clean up mantissa by removing trailing zeros
-    mantissa = mantissa.rstrip('0').rstrip('.')
     exp = int(exponent)
+
+    # Convert mantissa to float to handle it properly
+    mantissa_val = float(mantissa)
+    # If mantissa is a whole number, format it with one decimal place to preserve precision like "2.0"
+    if mantissa_val == int(mantissa_val):
+        mantissa = f"{int(mantissa_val)}.0"
+    else:
+        mantissa = str(mantissa_val)
 
     if format_type == 'unicode':
         return f"{mantissa}×10{_to_superscript(str(exp))}"
     elif format_type == 'latex':
         return f"{mantissa} \\times 10^{{{exp}}}"
+    elif format_type == 'ascii':
+        return f"{mantissa}*10^{exp}"
     else:
         return str_repr  # Plain scientific notation
 
@@ -243,6 +261,9 @@ def to_unicode(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) ->
     Returns:
         Unicode string representation
     """
+    if target is None:
+        return "None"
+
     if isinstance(target, (int, float)):
         return _format_number(target, 'unicode')
 
@@ -251,6 +272,14 @@ def to_unicode(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) ->
 
     if isinstance(target, ExprNode):
         return _format_expression_node(target, 'unicode')
+
+    if isinstance(target, dict) and 'op' in target and 'args' in target:
+        # Handle dictionary-style expressions for compatibility
+        return _format_expression_node(ExprNode(op=target['op'], args=target['args']), 'unicode')
+
+    if isinstance(target, dict):
+        # Handle malformed dict expressions gracefully
+        return str(target)
 
     if isinstance(target, Equation):
         return f"{to_unicode(target.lhs)} = {to_unicode(target.rhs)}"
@@ -277,6 +306,9 @@ def to_latex(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) -> s
     Returns:
         LaTeX string representation
     """
+    if target is None:
+        return "None"
+
     if isinstance(target, (int, float)):
         return _format_number(target, 'latex')
 
@@ -285,6 +317,14 @@ def to_latex(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) -> s
 
     if isinstance(target, ExprNode):
         return _format_expression_node(target, 'latex')
+
+    if isinstance(target, dict) and 'op' in target and 'args' in target:
+        # Handle dictionary-style expressions for compatibility
+        return _format_expression_node(ExprNode(op=target['op'], args=target['args']), 'latex')
+
+    if isinstance(target, dict):
+        # Handle malformed dict expressions gracefully
+        return str(target)
 
     if isinstance(target, Equation):
         return f"{to_latex(target.lhs)} = {to_latex(target.rhs)}"
@@ -304,6 +344,51 @@ def to_latex(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) -> s
     raise ValueError(f"Unsupported type for LaTeX formatting: {type(target)}")
 
 
+def to_ascii(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) -> str:
+    """
+    Format target as plain ASCII mathematical notation.
+
+    Args:
+        target: Expression, equation, model, reaction system, or ESM file to format
+
+    Returns:
+        Plain ASCII string representation (no Unicode symbols)
+    """
+    if target is None:
+        return "None"
+
+    if isinstance(target, (int, float)):
+        return _format_number(target, 'ascii')
+
+    if isinstance(target, str):
+        return _format_chemical_subscripts(target, 'ascii')
+
+    if isinstance(target, ExprNode):
+        return _format_expression_node(target, 'ascii')
+
+    if isinstance(target, dict) and 'op' in target and 'args' in target:
+        # Handle dictionary-style expressions for compatibility
+        return _format_expression_node(ExprNode(op=target['op'], args=target['args']), 'ascii')
+
+    if isinstance(target, dict):
+        # Handle malformed dict expressions gracefully
+        return str(target)
+
+    if isinstance(target, Equation):
+        return f"{to_ascii(target.lhs)} = {to_ascii(target.rhs)}"
+
+    if isinstance(target, EsmFile):
+        return _format_esm_file_summary(target, 'ascii')
+
+    if isinstance(target, Model):
+        return _format_model_summary(target, 'ascii')
+
+    if isinstance(target, ReactionSystem):
+        return _format_reaction_system_summary(target, 'ascii')
+
+    raise ValueError(f"Unsupported type for ASCII formatting: {type(target)}")
+
+
 def _format_expression_node(node: ExprNode, format_type: str) -> str:
     """Format an ExpressionNode (operator with arguments)."""
     op, args = node.op, node.args
@@ -315,6 +400,8 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
             result = to_unicode(arg)
         elif format_type == 'latex':
             result = to_latex(arg)
+        elif format_type == 'ascii':
+            result = to_ascii(arg)
         else:
             raise ValueError(f"Unknown format type: {format_type}")
 
@@ -342,11 +429,15 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
                 return f"{format_arg(left)}·{format_arg(right, True)}"
             elif format_type == 'latex':
                 return f"{format_arg(left)} \\cdot {format_arg(right, True)}"
+            elif format_type == 'ascii':
+                return f"{format_arg(left)}*{format_arg(right, True)}"
 
         elif op == '/':
             if format_type == 'latex':
                 return f"\\frac{{{to_latex(left)}}}{{{to_latex(right)}}}"
             elif format_type == 'unicode':
+                return f"{format_arg(left)}/{format_arg(right, True)}"
+            elif format_type == 'ascii':
                 return f"{format_arg(left)}/{format_arg(right, True)}"
 
         elif op == '^':
@@ -420,12 +511,16 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
                 return f"ln({format_arg(arg)})"
             elif format_type == 'latex':
                 return f"\\log\\left({to_latex(arg)}\\right)"
+            elif format_type == 'ascii':
+                return f"log({format_arg(arg)})"
 
         elif op == 'sqrt':
             if format_type == 'unicode':
                 return f"√{format_arg(arg)}"
             elif format_type == 'latex':
                 return f"\\sqrt{{{to_latex(arg)}}}"
+            elif format_type == 'ascii':
+                return f"sqrt({format_arg(arg)})"
 
         elif op == 'abs':
             if format_type == 'unicode':
@@ -441,6 +536,8 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
                 return f"∂{variable}/∂{wrt_var}"
             elif format_type == 'latex':
                 return f"\\frac{{\\partial {to_latex(arg)}}}{{\\partial {wrt_var}}}"
+            elif format_type == 'ascii':
+                return f"d({format_arg(arg)})/d{wrt_var}"
 
     # Fallback: function call notation
     if format_type == 'unicode':
@@ -448,6 +545,10 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
     elif format_type == 'latex':
         arg_list = ', '.join(to_latex(arg) for arg in args)
         return f"\\text{{{op}}}\\left({arg_list}\\right)"
+    elif format_type == 'ascii':
+        arg_list = ', '.join(to_ascii(arg) for arg in args)
+    else:
+        arg_list = ', '.join(str(arg) for arg in args)
 
     return f"{op}({arg_list})"
 

@@ -147,6 +147,7 @@ from .display import (
     ESMExplorer,
     to_unicode,
     to_latex,
+    to_ascii,
 )
 
 # Code generation (for interoperability)
@@ -287,6 +288,7 @@ __all__ = [
     "ESMExplorer",
     "to_unicode",
     "to_latex",
+    "to_ascii",
 
     # Code generation
     "to_julia_code",
