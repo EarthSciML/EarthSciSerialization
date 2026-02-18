@@ -158,7 +158,7 @@ describe('toJuliaCode', () => {
     expect(code).toContain('Differential(x)(u)')
   })
 
-  it('should generate TODO comments for unsupported features', () => {
+  it('should generate implementation code for coupling, domain, solver, and data loaders', () => {
     const file: EsmFile = {
       esm: '0.1.0',
       models: {},
@@ -176,26 +176,44 @@ describe('toJuliaCode', () => {
         temporal_coordinates: ['t']
       },
       solver: {
-        algorithm: 'CVODE_BDF',
-        tolerances: { abstol: 1e-6, reltol: 1e-3 }
+        strategy: 'imex',
+        config: {
+          stiff_algorithm: 'CVODE_BDF',
+          tolerances: { abstol: 1e-6, reltol: 1e-3 }
+        }
       },
       data_loaders: {
         weather: {
+          type: 'gridded_data',
+          loader_id: 'weather',
           source: 'weather_data.nc',
-          format: 'netcdf'
+          config: { format: 'netcdf' }
         }
       }
     }
 
     const code = toJuliaCode(file)
 
-    expect(code).toContain('# TODO: Implement coupling explicit')
-    expect(code).toContain('# TODO: Implement domain')
-    expect(code).toContain('# TODO: Implement solver')
-    expect(code).toContain('# TODO: Implement data loader weather')
-    expect(code).toContain('#   Spatial coordinates: x, y')
-    expect(code).toContain('#   Algorithm: CVODE_BDF')
-    expect(code).toContain('#   Source: weather_data.nc')
+    // Check coupling implementation
+    expect(code).toContain('# Coupling explicit: model1 -> model2')
+    expect(code).toContain('model1_to_model2_coupling = ConnectorSystem([')
+    expect(code).toContain('model1_system.x ~ model2_system.x,')
+    expect(code).toContain('model1_system.y ~ model2_system.y,')
+
+    // Check domain implementation
+    expect(code).toContain('# Domain')
+    expect(code).toContain('@variables t')
+    expect(code).toContain('@variables x y')
+
+    // Check solver implementation
+    expect(code).toContain('# Solver')
+    expect(code).toContain('solver_strategy = IMEXIntegrator()')
+    expect(code).toContain('alg = CVODE_BDF()')
+
+    // Check data loader implementation
+    expect(code).toContain('# Data loader: weather')
+    expect(code).toContain('weather_loader = GriddedDataLoader("weather")')
+    expect(code).toContain('weather_data = load_gridded_data("weather_data.nc")')
   })
 
   it('should handle complex expressions with nested operations', () => {
@@ -470,7 +488,7 @@ describe('toPythonCode', () => {
     expect(code).toContain('sp.Derivative(u, x)')
   })
 
-  it('should generate TODO comments for unsupported features in Python', () => {
+  it('should generate implementation code for coupling, domain, and solver in Python', () => {
     const file: EsmFile = {
       esm: '0.1.0',
       models: {},
@@ -488,17 +506,44 @@ describe('toPythonCode', () => {
         temporal_coordinates: ['t']
       },
       solver: {
-        algorithm: 'CVODE_BDF',
-        tolerances: { abstol: 1e-6, reltol: 1e-3 }
+        strategy: 'imex',
+        config: {
+          stiff_algorithm: 'CVODE_BDF',
+          tolerances: { abstol: 1e-6, reltol: 1e-3 }
+        }
+      },
+      data_loaders: {
+        weather: {
+          type: 'gridded_data',
+          loader_id: 'weather',
+          source: 'weather_data.nc',
+          config: { format: 'netcdf' }
+        }
       }
     }
 
     const code = toPythonCode(file)
 
-    expect(code).toContain('# TODO: Implement coupling explicit')
-    expect(code).toContain('# TODO: Implement domain')
-    expect(code).toContain('# TODO: Implement solver')
-    expect(code).toContain('#   Spatial coordinates: x, y')
-    expect(code).toContain('#   Algorithm: CVODE_BDF')
+    // Check coupling implementation
+    expect(code).toContain('# Coupling explicit: model1 -> model2')
+    expect(code).toContain('model1_to_model2_coupling = esm.ExplicitCoupling(')
+    expect(code).toContain('from_model="model1",')
+    expect(code).toContain('to_model="model2",')
+    expect(code).toContain('variables=["x","y"]')
+
+    // Check domain implementation
+    expect(code).toContain('# Domain')
+    expect(code).toContain('x = sp.Symbol(\'x\')')
+    expect(code).toContain('y = sp.Symbol(\'y\')')
+    expect(code).toContain('domain = esm.Domain(')
+
+    // Check solver implementation
+    expect(code).toContain('# Solver')
+    expect(code).toContain('solver = esm.IMEXSolver(')
+
+    // Check data loader implementation
+    expect(code).toContain('# Data loader: weather')
+    expect(code).toContain('weather_loader = esm.GriddedDataLoader("weather")')
+    expect(code).toContain('weather_data = weather_loader.load("weather_data.nc")')
   })
 })
