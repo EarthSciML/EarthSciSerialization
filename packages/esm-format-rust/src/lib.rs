@@ -65,7 +65,7 @@ pub use types::{
 };
 pub use parse::{load, ParseError, SchemaValidationError};
 pub use serialize::{save, save_compact};
-pub use validate::{validate, ValidationResult, StructuralError, StructuralErrorCode, SchemaError};
+pub use validate::{validate, validate_complete, ValidationResult, StructuralError, StructuralErrorCode, SchemaError};
 pub use substitute::{
     substitute, substitute_in_model, substitute_in_reaction_system, substitute_with_context,
     substitute_in_model_with_context, substitute_in_reaction_system_with_context, ScopedContext
