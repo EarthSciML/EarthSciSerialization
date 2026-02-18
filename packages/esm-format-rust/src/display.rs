@@ -656,6 +656,15 @@ fn format_operator_unicode(op: &str, args: &[Expr], wrt: &Option<String>, dim: &
                 .map(|arg| arg.to_unicode_with_precedence(0))
                 .collect::<Vec<_>>().join(", "))
         },
+        "Pre" => {
+            if args.len() == 1 {
+                format!("{}⁻", args[0].to_unicode_with_precedence(op_prec))
+            } else {
+                format!("Pre({})", args.iter()
+                    .map(|arg| arg.to_unicode_with_precedence(0))
+                    .collect::<Vec<_>>().join(", "))
+            }
+        },
         _ => {
             format!("{}({})", op, args.iter()
                 .map(|arg| arg.to_unicode_with_precedence(0))
@@ -1105,6 +1114,13 @@ fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Op
                 format!("\\{}({})", op, args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
             }
         },
+        "Pre" => {
+            if args.len() == 1 {
+                format!("{{{}}}^{{-}}", to_latex(&args[0]))
+            } else {
+                format!("\\mathrm{{Pre}}({})", args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
+            }
+        },
         _ => {
             format!("\\mathrm{{{}}}({})", op, args.iter().map(to_latex).collect::<Vec<_>>().join(", "))
         }
@@ -1307,6 +1323,13 @@ fn format_operator_ascii(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Op
         },
         "erf" | "erfc" => {
             format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+        },
+        "Pre" => {
+            if args.len() == 1 {
+                format!("{}-", to_ascii(&args[0]))
+            } else {
+                format!("Pre({})", args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
+            }
         },
         _ => {
             format!("{}({})", op, args.iter().map(to_ascii).collect::<Vec<_>>().join(", "))
@@ -1701,5 +1724,57 @@ mod tests {
         assert!(output.contains("Reaction Systems:"));
         assert!(output.contains("TestReactions (2 species, 1 parameters, 1 reaction)"));
         assert!(output.contains("R1: A → B    rate: k1"));
+    }
+
+    #[test]
+    fn test_pre_operator_formatting() {
+        use crate::types::*;
+
+        // Test Unicode formatting for Pre operator with x⁻ notation
+        let pre_expr = Expr::Operator(ExpressionNode {
+            op: "Pre".to_string(),
+            args: vec![Expr::Variable("x".to_string())],
+            wrt: None,
+            dim: None,
+        });
+
+        // Test all three formatting functions
+        assert_eq!(to_unicode(&pre_expr), "x⁻");
+        assert_eq!(to_latex(&pre_expr), "{x}^{-}");
+        assert_eq!(to_ascii(&pre_expr), "x-");
+
+        // Test with complex expression as argument
+        let complex_pre = Expr::Operator(ExpressionNode {
+            op: "Pre".to_string(),
+            args: vec![
+                Expr::Operator(ExpressionNode {
+                    op: "+".to_string(),
+                    args: vec![Expr::Variable("a".to_string()), Expr::Variable("b".to_string())],
+                    wrt: None,
+                    dim: None,
+                })
+            ],
+            wrt: None,
+            dim: None,
+        });
+
+        assert_eq!(to_unicode(&complex_pre), "a + b⁻");
+        assert_eq!(to_latex(&complex_pre), "{a + b}^{-}");
+        assert_eq!(to_ascii(&complex_pre), "a + b-");
+
+        // Test with multiple arguments (should fall back to Pre(...) format)
+        let multi_arg_pre = Expr::Operator(ExpressionNode {
+            op: "Pre".to_string(),
+            args: vec![
+                Expr::Variable("x".to_string()),
+                Expr::Variable("y".to_string())
+            ],
+            wrt: None,
+            dim: None,
+        });
+
+        assert_eq!(to_unicode(&multi_arg_pre), "Pre(x, y)");
+        assert_eq!(to_latex(&multi_arg_pre), "\\mathrm{Pre}(x, y)");
+        assert_eq!(to_ascii(&multi_arg_pre), "Pre(x, y)");
     }
 }
