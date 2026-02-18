@@ -478,7 +478,7 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
     - No reaction has both substrates: null and products: null
     - Rate expressions only reference declared parameters/species
     """
-    for rs_idx, rs in enumerate(esm_file.reaction_systems):
+    for rs_idx, (rs_name, rs) in enumerate(esm_file.reaction_systems.items()):
         rs_path = f"/reaction_systems/{rs_idx}"
 
         # Build set of declared species and parameters
@@ -515,6 +515,15 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
                         details={"species": species_name, "stoichiometry": stoich}
                     ))
 
+                # Check if stoichiometry is an integer
+                if not isinstance(stoich, int) and not (isinstance(stoich, float) and stoich.is_integer()):
+                    structural_errors.append(ValidationError(
+                        path=f"{reaction_path}/reactants/{species_name}",
+                        message=f"Reactant stoichiometry must be a positive integer, got {stoich}",
+                        code="non_integer_stoichiometry",
+                        details={"species": species_name, "stoichiometry": stoich, "stoichiometry_type": type(stoich).__name__}
+                    ))
+
             # Validate product species exist and have positive stoichiometry
             for species_name, stoich in reaction.products.items():
                 if species_name not in species_names:
@@ -531,6 +540,15 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
                         message=f"Product stoichiometry must be positive, got {stoich}",
                         code="negative_stoichiometry",
                         details={"species": species_name, "stoichiometry": stoich}
+                    ))
+
+                # Check if stoichiometry is an integer
+                if not isinstance(stoich, int) and not (isinstance(stoich, float) and stoich.is_integer()):
+                    structural_errors.append(ValidationError(
+                        path=f"{reaction_path}/products/{species_name}",
+                        message=f"Product stoichiometry must be a positive integer, got {stoich}",
+                        code="non_integer_stoichiometry",
+                        details={"species": species_name, "stoichiometry": stoich, "stoichiometry_type": type(stoich).__name__}
                     ))
 
             # Validate rate constant references (basic check - would need expression parsing for full validation)
