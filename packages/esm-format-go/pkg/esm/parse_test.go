@@ -128,6 +128,37 @@ func TestLoadNonExistentFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to read file")
 }
 
+func TestLoadShouldSucceedWithStructuralValidationFailure(t *testing.T) {
+	// This test verifies the fix for the bug: LoadString() should succeed for valid JSON
+	// that passes schema validation but fails structural validation.
+	// According to spec Section 2.1a, structural issues should only be reported
+	// by the separate validate() function.
+
+	// Create JSON with empty models - this passes JSON schema validation
+	// (because models is not marked as required in schema, only via anyOf pattern)
+	// but fails basic structural validation
+	testJSON := `{
+		"esm": "0.1.0",
+		"metadata": {
+			"name": "TestModel",
+			"authors": ["Test Author"]
+		},
+		"models": {}
+	}`
+
+	// This should succeed in LoadString (valid JSON schema)
+	esmFile, err := LoadString(testJSON)
+	assert.NoError(t, err, "LoadString should succeed for valid JSON schema even with structural issues")
+	assert.NotNil(t, esmFile)
+
+	// Verify it actually fails structural validation when called separately
+	if esmFile != nil {
+		validationErr := esmFile.Validate()
+		assert.Error(t, validationErr, "Basic structural validation should fail")
+		assert.Contains(t, validationErr.Error(), "at least one of 'models' or 'reaction_systems' must be present")
+	}
+}
+
 func TestValidateJSONSchemaWithoutSchemaFile(t *testing.T) {
 	// This test assumes we're in a context where schema file is not found
 	// We'll create a minimal test
