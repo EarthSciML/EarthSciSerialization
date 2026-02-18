@@ -17,8 +17,12 @@ from urllib.parse import urlparse
 try:
     import xarray as xr
     XARRAY_AVAILABLE = True
+    XrDataset = XrDataset
 except ImportError:
     XARRAY_AVAILABLE = False
+    # Provide type stub for when xarray is not available
+    xr = Any
+    XrDataset = Any
 
 try:
     import jsonschema
@@ -82,9 +86,9 @@ class NetCDFLoader:
             raise ValueError(f"Expected DataLoaderType.NETCDF, got {data_loader.type}")
 
         self.config = data_loader
-        self.dataset: Optional[xr.Dataset] = None
+        self.dataset: Optional[XrDataset] = None
 
-    def load(self) -> xr.Dataset:
+    def load(self) -> XrDataset:
         """
         Load the NetCDF dataset from the configured source.
 
@@ -1546,9 +1550,9 @@ class GRIBLoader:
             raise ValueError(f"Expected DataLoaderType.GRIB, got {data_loader.type}")
 
         self.config = data_loader
-        self.dataset: Optional[xr.Dataset] = None
+        self.dataset: Optional[XrDataset] = None
 
-    def load(self) -> xr.Dataset:
+    def load(self) -> XrDataset:
         """
         Load the GRIB dataset from the configured source.
 
