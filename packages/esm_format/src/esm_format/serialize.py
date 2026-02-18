@@ -345,13 +345,15 @@ def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
     """Serialize a data loader to JSON-compatible format."""
     result = {}
 
-    # Map our enum to schema types
+    # Map our enum directly to schema types (they now match)
     type_mapping = {
-        DataLoaderType.NETCDF: "gridded_data",
-        DataLoaderType.CSV: "emissions",  # Default to emissions for CSV
-        DataLoaderType.REMOTE: "callback"
+        DataLoaderType.GRIDDED_DATA: "gridded_data",
+        DataLoaderType.EMISSIONS: "emissions",
+        DataLoaderType.TIMESERIES: "timeseries",
+        DataLoaderType.STATIC: "static",
+        DataLoaderType.CALLBACK: "callback"
     }
-    result["type"] = type_mapping.get(loader.type, "emissions")
+    result["type"] = type_mapping.get(loader.type, "static")
 
     # Schema uses loader_id for source
     if loader.source:

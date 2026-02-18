@@ -58,7 +58,7 @@ def main():
         print("1. Loading complete JSON file:")
         basic_config = DataLoader(
             name="climate_config",
-            type=DataLoaderType.JSON,
+            type=DataLoaderType.STATIC,
             source=json_file_path
         )
 
@@ -72,7 +72,7 @@ def main():
         print("2. Loading specific variables only:")
         filtered_config = DataLoader(
             name="filtered_data",
-            type=DataLoaderType.JSON,
+            type=DataLoaderType.STATIC,
             source=json_file_path,
             variables=["metadata", "simulation_parameters"]
         )
@@ -86,7 +86,7 @@ def main():
         print("3. Loading nested variables with dot notation:")
         nested_config = DataLoader(
             name="nested_access",
-            type=DataLoaderType.JSON,
+            type=DataLoaderType.STATIC,
             source=json_file_path,
             variables=[
                 "metadata.title",
@@ -105,7 +105,7 @@ def main():
         print("4. Type coercion example:")
         coercion_config = DataLoader(
             name="coercion_demo",
-            type=DataLoaderType.JSON,
+            type=DataLoaderType.STATIC,
             source=json_file_path,
             format_options={
                 "type_coercion": True,
@@ -158,7 +158,7 @@ def main():
 
         schema_config = DataLoader(
             name="schema_validation",
-            type=DataLoaderType.JSON,
+            type=DataLoaderType.STATIC,
             source=json_file_path,
             format_options={"schema": schema}
         )

@@ -32,7 +32,7 @@ def test_csv_simple():
         # Create and test DataLoader
         data_loader = DataLoader(
             name="test_data",
-            type=DataLoaderType.CSV,
+            type=DataLoaderType.EMISSIONS,
             source=temp_csv,
             format_options={
                 'column_types': {
@@ -67,7 +67,7 @@ def test_csv_simple():
         try:
             bad_loader = DataLoader(
                 name="bad_data",
-                type=DataLoaderType.CSV,
+                type=DataLoaderType.EMISSIONS,
                 source="nonexistent_file.csv"
             )
             load_csv_data(bad_loader)

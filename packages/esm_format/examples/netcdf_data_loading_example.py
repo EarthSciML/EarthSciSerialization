@@ -139,7 +139,7 @@ def demonstrate_netcdf_loading():
         print("\n2. Configuring NetCDF data loader...")
         data_loader_config = DataLoader(
             name="atmospheric_data",
-            type=DataLoaderType.NETCDF,
+            type=DataLoaderType.GRIDDED_DATA,
             source=netcdf_path,
             format_options={
                 "decode_times": True,
@@ -227,7 +227,7 @@ def demonstrate_error_handling():
     try:
         config = DataLoader(
             name="missing_file",
-            type=DataLoaderType.NETCDF,
+            type=DataLoaderType.GRIDDED_DATA,
             source="/nonexistent/path/data.nc"
         )
         loader = NetCDFLoader(config)
@@ -241,7 +241,7 @@ def demonstrate_error_handling():
     try:
         config = DataLoader(
             name="missing_vars",
-            type=DataLoaderType.NETCDF,
+            type=DataLoaderType.GRIDDED_DATA,
             source=netcdf_path,
             variables=["nonexistent_variable"]
         )
@@ -257,7 +257,7 @@ def demonstrate_error_handling():
     try:
         config = DataLoader(
             name="wrong_type",
-            type=DataLoaderType.CSV,  # Wrong type
+            type=DataLoaderType.EMISSIONS,  # Wrong type
             source="test.nc"
         )
         NetCDFLoader(config)

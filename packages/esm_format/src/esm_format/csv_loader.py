@@ -23,8 +23,10 @@ class CSVLoader:
         Args:
             data_loader: DataLoader configuration object
         """
-        if data_loader.type != DataLoaderType.CSV:
-            raise ValueError(f"Expected CSV data loader, got {data_loader.type}")
+        # CSV loader can handle different types of data
+        csv_compatible_types = {DataLoaderType.EMISSIONS, DataLoaderType.TIMESERIES, DataLoaderType.STATIC}
+        if data_loader.type not in csv_compatible_types:
+            raise ValueError(f"CSV loader supports {csv_compatible_types}, got {data_loader.type}")
 
         self.config = data_loader
         self.source = data_loader.source

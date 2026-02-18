@@ -38,7 +38,7 @@ def demo_struct_format_loading():
     try:
         config = DataLoader(
             name="weather_station",
-            type=DataLoaderType.BINARY,
+            type=DataLoaderType.STATIC,
             source=str(weather_file),
             format_options={
                 'header_size': 8,  # Skip magic + count
@@ -81,7 +81,7 @@ def demo_custom_format_loading():
     try:
         config = DataLoader(
             name="instrument_data",
-            type=DataLoaderType.BINARY,
+            type=DataLoaderType.STATIC,
             source=str(custom_file),
             format_options={
                 'endianness': 'little',
@@ -131,7 +131,7 @@ def demo_endianness_handling():
         # Read as little endian
         config_little = DataLoader(
             name="little_endian_test",
-            type=DataLoaderType.BINARY,
+            type=DataLoaderType.STATIC,
             source=str(endian_file),
             format_options={
                 'endianness': 'little',
@@ -146,7 +146,7 @@ def demo_endianness_handling():
         # Read as big endian
         config_big = DataLoader(
             name="big_endian_test",
-            type=DataLoaderType.BINARY,
+            type=DataLoaderType.STATIC,
             source=str(endian_file),
             format_options={
                 'endianness': 'big',

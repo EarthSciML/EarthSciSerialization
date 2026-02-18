@@ -105,7 +105,7 @@ def example_basic_loading():
         # Create database loader configuration
         config = DataLoader(
             name="atmospheric_measurements",
-            type=DataLoaderType.DATABASE,
+            type=DataLoaderType.STATIC,
             source=db_path,
             format_options={
                 "table": "measurements",
@@ -148,7 +148,7 @@ def example_custom_queries():
         # Create loader with custom query
         config = DataLoader(
             name="high_pollution_data",
-            type=DataLoaderType.DATABASE,
+            type=DataLoaderType.STATIC,
             source=f"sqlite://{db_path}",  # Using URL format
             format_options={
                 "query": """
@@ -206,7 +206,7 @@ def example_transactions():
     try:
         config = DataLoader(
             name="transaction_demo",
-            type=DataLoaderType.DATABASE,
+            type=DataLoaderType.STATIC,
             source=db_path,
             format_options={"table": "measurements"}
         )

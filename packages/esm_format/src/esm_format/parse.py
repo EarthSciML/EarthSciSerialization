@@ -298,16 +298,16 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     """Parse a data loader from JSON data."""
     name = ""  # Name comes from the key
 
-    # Try to match schema type to our enum, fallback to CSV
+    # Map schema type directly to our enum, fallback to STATIC
     schema_type = loader_data["type"]
     type_mapping = {
-        "gridded_data": DataLoaderType.NETCDF,
-        "emissions": DataLoaderType.CSV,
-        "timeseries": DataLoaderType.CSV,
-        "static": DataLoaderType.CSV,
-        "callback": DataLoaderType.REMOTE
+        "gridded_data": DataLoaderType.GRIDDED_DATA,
+        "emissions": DataLoaderType.EMISSIONS,
+        "timeseries": DataLoaderType.TIMESERIES,
+        "static": DataLoaderType.STATIC,
+        "callback": DataLoaderType.CALLBACK
     }
-    loader_type = type_mapping.get(schema_type, DataLoaderType.CSV)
+    loader_type = type_mapping.get(schema_type, DataLoaderType.STATIC)
 
     # Schema uses loader_id, we use source
     source = loader_data.get("loader_id", "")

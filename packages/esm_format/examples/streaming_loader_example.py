@@ -20,7 +20,7 @@ def example_websocket_streaming():
     # Configure WebSocket streaming loader
     config = DataLoader(
         name="weather_websocket",
-        type=DataLoaderType.STREAMING,
+        type=DataLoaderType.TIMESERIES,
         source="ws://localhost:8080/weather-stream",
         format_options={
             'buffer_size': 100,
@@ -76,7 +76,7 @@ def example_http_streaming():
     # Configure HTTP streaming loader (Server-Sent Events)
     config = DataLoader(
         name="sensor_stream",
-        type=DataLoaderType.STREAMING,
+        type=DataLoaderType.TIMESERIES,
         source="https://api.example.com/sensor-stream",
         format_options={
             'buffer_size': 500,
@@ -126,7 +126,7 @@ def example_message_queue_streaming():
     # Configure Kafka streaming loader
     config = DataLoader(
         name="kafka_events",
-        type=DataLoaderType.STREAMING,
+        type=DataLoaderType.TIMESERIES,
         source="kafka://localhost:9092/sensor-events",
         format_options={
             'buffer_size': 1000,
@@ -169,7 +169,7 @@ def example_tcp_streaming():
     # Configure TCP streaming loader
     config = DataLoader(
         name="tcp_data_feed",
-        type=DataLoaderType.STREAMING,
+        type=DataLoaderType.TIMESERIES,
         source="tcp://localhost:9999",
         format_options={
             'buffer_size': 200,
@@ -210,7 +210,7 @@ def example_connection_resilience():
 
     config = DataLoader(
         name="resilient_stream",
-        type=DataLoaderType.STREAMING,
+        type=DataLoaderType.TIMESERIES,
         source="ws://unreliable-server:8080/stream",
         format_options={
             'buffer_size': 50,

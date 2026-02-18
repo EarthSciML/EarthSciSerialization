@@ -27,7 +27,7 @@ def test_roundtrip_preserves_data_loaders():
     # Create data loader
     data_loader = DataLoader(
         name="test_loader",
-        type=DataLoaderType.NETCDF,
+        type=DataLoaderType.GRIDDED_DATA,
         source="test_data.nc",
         format_options={"param1": "value1"},
         variables=["temperature", "pressure"]
@@ -281,7 +281,7 @@ def test_roundtrip_preserves_all_missing_fields():
     # Create all components
     data_loader = DataLoader(
         name="loader",
-        type=DataLoaderType.CSV,
+        type=DataLoaderType.EMISSIONS,
         source="data.csv",
         format_options={},
         variables=["temp"]

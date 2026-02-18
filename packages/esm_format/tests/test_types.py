@@ -96,9 +96,9 @@ def test_reaction_system():
 
 def test_data_loader():
     """Test DataLoader creation."""
-    loader = DataLoader(name="test", type=DataLoaderType.CSV, source="data.csv")
+    loader = DataLoader(name="test", type=DataLoaderType.EMISSIONS, source="data.csv")
     assert loader.name == "test"
-    assert loader.type == DataLoaderType.CSV
+    assert loader.type == DataLoaderType.EMISSIONS
     assert loader.source == "data.csv"
 
 
