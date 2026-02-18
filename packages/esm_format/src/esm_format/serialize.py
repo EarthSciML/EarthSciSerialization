@@ -319,6 +319,8 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
 
         if ic.value is not None:
             ic_data["value"] = ic.value
+        if ic.values is not None:
+            ic_data["values"] = ic.values
         if ic.function is not None:
             ic_data["function"] = ic.function
         if ic.data_source is not None:
