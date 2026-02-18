@@ -72,7 +72,7 @@ Every library must define typed representations for:
 |---|---|---|
 | Top-level file | `EsmFile` | Contains all sections |
 | Expression AST | `Expr` | Recursive: `Num`, `Var`, `Op` |
-| Equation | `Equation` | `{lhs: Expr, rhs: Expr}` |
+| Equation | `Equation` | `{lhs: Expr, rhs: Expr, _comment?: string}` |
 | Affect equation | `AffectEquation` | `{lhs: string, rhs: Expr}` |
 | Model variable | `ModelVariable` | `state`, `parameter`, or `observed` |
 | Model | `Model` | Variables, equations, events |
@@ -89,6 +89,19 @@ Every library must define typed representations for:
 | Solver | `Solver` | Strategy + config |
 | Reference | `Reference` | doi, citation, url, notes |
 | Metadata | `Metadata` | Name, authors, tags |
+
+#### 2.2.1 Optional Fields
+
+Several data model types support optional fields for enhanced documentation and debugging:
+
+**Equation `_comment` field**: The `_comment` field is an optional string that provides human-readable documentation about an equation's purpose or mathematical meaning. This field is commonly used in examples and test files to clarify the physical interpretation of equations.
+
+Examples of usage:
+- `"_comment": "Fast consumption of A: dA/dt = -k_fast*A + k_slow*B"`
+- `"_comment": "Momentum equation x-direction with viscous terms and pressure gradient"`
+- `"_comment": "Logistic equation: dp/dt = r*p*(1 - p/K)"`
+
+The comment field is purely for documentation and has no effect on model behavior or validation. Libraries should preserve comments during round-trip serialization and may optionally display them in pretty-printed output or debugging interfaces.
 
 ### 2.3 Expression Engine Requirements
 
