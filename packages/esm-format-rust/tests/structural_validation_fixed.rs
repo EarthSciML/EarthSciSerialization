@@ -166,6 +166,7 @@ fn test_undefined_species_in_reaction() {
     let rs = ReactionSystem {
         name: Some("Test RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };

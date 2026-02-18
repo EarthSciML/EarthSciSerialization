@@ -99,6 +99,7 @@ fn test_analysis_features_integration() {
     let rs = ReactionSystem {
         name: Some("Simple RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
