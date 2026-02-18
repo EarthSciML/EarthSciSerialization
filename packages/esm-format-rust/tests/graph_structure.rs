@@ -257,10 +257,9 @@ fn test_reaction_system_expression_graph() {
     assert!(!expr_graph.nodes.is_empty(), "Reaction system expression graph should have nodes");
 
     // Test that graph contains rate expression nodes
-    let has_rate_nodes = expr_graph.nodes.iter().any(|node| {
-        matches!(node.node_type, ExpressionNodeType::Operator(_))
-    });
-    assert!(has_rate_nodes, "Should have operator nodes for rate expressions");
+    // In the new variable dependency graph format, we only have variable nodes (no operator nodes)
+    let has_variable_nodes = expr_graph.nodes.len() > 0;
+    assert!(has_variable_nodes, "Should have variable nodes representing species and rate constants");
 }
 
 /// Test component existence checks

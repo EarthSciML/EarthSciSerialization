@@ -73,11 +73,9 @@ pub use expression::{free_variables, free_parameters, contains, evaluate, simpli
 pub use graph::{
     component_graph, component_exists, get_component_type, expression_graph,
     ComponentGraph, ComponentNode, CouplingEdge, ComponentType,
-    ExpressionGraph, ExpressionNodeType, DependencyEdge,
+    ExpressionGraph, VariableNode, VariableKind, DependencyEdge, DependencyRelationship,
     ExpressionGraphInput
 };
-// Note: ExpressionNode from graph module is different from types::ExpressionNode
-pub use graph::ExpressionNode as GraphExpressionNode;
 pub use reactions::{derive_odes, stoichiometric_matrix, DeriveError};
 pub use units::{parse_unit, check_dimensional_consistency, convert_units, Unit, Dimension, UnitError};
 pub use edit::{
