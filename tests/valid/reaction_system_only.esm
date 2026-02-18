@@ -151,7 +151,7 @@
 
   "data_loaders": {
     "PhotolysisRates": {
-      "type": "photolysis_data",
+      "type": "static",
       "loader_id": "TUV_rates",
       "config": {
         "model": "TUV_v5.2",
@@ -184,7 +184,7 @@
   },
 
   "solver": {
-    "strategy": "chemistry_only",
+    "strategy": "strang_serial",
     "config": {
       "algorithm": "CVODE_BDF",
       "timestep": 60.0,

@@ -65,46 +65,41 @@
           }
         }
       ],
-      "events": {
-        "continuous": [
-          {
-            "name": "concentration_limit",
-            "conditions": [{ "op": "-", "args": ["_var", 1e-3] }],
-            "affects": [
-              { "lhs": "_var", "rhs": 1e-3 }
-            ],
-            "affect_neg": [
-              { "lhs": "_var", "rhs": { "op": "max", "args": [0.0, { "op": "Pre", "args": ["_var"] }] } }
-            ],
-            "root_find": true
+      "continuous_events": [
+        {
+          "name": "concentration_limit",
+          "conditions": [{ "op": "-", "args": ["_var", 1e-3] }],
+          "affects": [
+            { "lhs": "_var", "rhs": 1e-3 }
+          ],
+          "affect_neg": [
+            { "lhs": "_var", "rhs": { "op": "max", "args": [0.0, { "op": "Pre", "args": ["_var"] }] } }
+          ],
+          "root_find": "all"
+        }
+      ],
+      "discrete_events": [
+        {
+          "name": "hourly_reset",
+          "trigger": { "type": "periodic", "interval": 3600.0 },
+          "discrete_parameters": ["K_h"],
+          "functional_affect": {
+            "handler_id": "hourly_diffusion_update",
+            "read_vars": ["_var"],
+            "read_params": ["K_h"],
+            "modified_params": ["K_h"],
+            "config": { "factor": 1.1 }
           }
-        ],
-        "discrete": [
-          {
-            "name": "hourly_reset",
-            "trigger": { "type": "periodic", "interval": 3600.0 },
-            "affects": [
-              { "lhs": "K_h", "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["K_h"] }, 1.1] } }
-            ],
-            "discrete_parameters": ["K_h"],
-            "functional_affect": {
-              "handler_id": "hourly_diffusion_update",
-              "read_vars": ["_var"],
-              "read_params": ["K_h"],
-              "modified_params": ["K_h"],
-              "config": { "factor": 1.1 }
-            }
-          },
-          {
-            "name": "preset_events",
-            "trigger": { "type": "preset_times", "times": [86400, 172800, 259200] },
-            "affects": [
-              { "lhs": "K_v", "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["K_v"] }, 0.9] } }
-            ],
-            "discrete_parameters": ["K_v"]
-          }
-        ]
-      }
+        },
+        {
+          "name": "preset_events",
+          "trigger": { "type": "preset_times", "times": [86400, 172800, 259200] },
+          "affects": [
+            { "lhs": "K_v", "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["K_v"] }, 0.9] } }
+          ],
+          "discrete_parameters": ["K_v"]
+        }
+      ]
     }
   },
 
@@ -138,11 +133,13 @@
   "operators": {
     "SpatialInterpolator": {
       "operator_id": "bilinear_interp",
+      "needed_vars": ["u", "v", "T"],
       "config": { "method": "bilinear", "extrapolation": "nearest" },
       "reference": { "notes": "Spatial interpolation operator" }
     },
     "UnitConverter": {
       "operator_id": "unit_conversion",
+      "needed_vars": ["NOx_emissions"],
       "config": { "from": "kg/m^2/s", "to": "mol/mol/s", "molecular_weight": 46.0 },
       "reference": { "notes": "NOx unit conversion" }
     }
@@ -150,20 +147,17 @@
 
   "coupling": [
     { "type": "operator_compose", "systems": ["AtmosphericChemistry", "Transport"] },
-    { "type": "couple2", "systems": ["AtmosphericChemistry", "Transport"], "coupling_vars": [["O3", "O3"], ["NO", "NO"], ["NO2", "NO2"]] },
     { "type": "variable_map", "from": "MeteoData.T", "to": "AtmosphericChemistry.T", "transform": "param_to_var" },
     { "type": "variable_map", "from": "MeteoData.u", "to": "Transport.u", "transform": "param_to_var" },
     { "type": "variable_map", "from": "MeteoData.v", "to": "Transport.v", "transform": "param_to_var" },
-    { "type": "operator_apply", "operator": "UnitConverter", "input": "EmissionsData.NOx_emissions", "output": "NOx_converted" },
-    { "type": "callback", "name": "emissions_callback", "handler_id": "apply_emissions", "read_vars": ["NO", "NO2"], "write_vars": ["NO", "NO2"], "read_params": ["NOx_converted"] },
-    { "type": "event", "name": "chemistry_transport_sync", "condition": { "op": ">", "args": ["t", 3600] }, "action": "synchronize_fields" }
+    { "type": "operator_apply", "operator": "UnitConverter" },
+    { "type": "callback", "callback_id": "apply_emissions" }
   ],
 
   "domain": {
     "temporal": {
       "start": "2024-07-01T00:00:00Z",
-      "end": "2024-07-08T00:00:00Z",
-      "timestep": 60.0
+      "end": "2024-07-08T00:00:00Z"
     },
     "spatial": {
       "lon": { "min": -125.0, "max": -110.0, "grid_spacing": 0.25, "units": "degrees" },
@@ -175,24 +169,23 @@
       { "id": "sigma_to_pressure", "dimensions": ["lev"] }
     ],
     "initial_conditions": {
-      "type": "from_data_loader",
-      "loader": "MeteoData",
-      "variable_mapping": {
-        "O3": "O3_init",
-        "NO": "NO_init",
-        "NO2": "NO2_init"
+      "type": "per_variable",
+      "values": {
+        "O3": 40e-9,
+        "NO": 0.1e-9,
+        "NO2": 1.0e-9
       }
     },
     "boundary_conditions": [
       { "type": "periodic", "dimensions": ["lon"] },
       { "type": "zero_gradient", "dimensions": ["lat"] },
-      { "type": "constant", "dimensions": ["lev"], "value": { "O3": 20e-9, "NO": 0.05e-9, "NO2": 0.5e-9 } }
+      { "type": "constant", "dimensions": ["lev"], "value": 1e-9 }
     ],
     "element_type": "Float64"
   },
 
   "solver": {
-    "strategy": "operator_splitting",
+    "strategy": "strang_threads",
     "config": {
       "chemistry_algorithm": "Rosenbrock23",
       "transport_algorithm": "ROCK4",
