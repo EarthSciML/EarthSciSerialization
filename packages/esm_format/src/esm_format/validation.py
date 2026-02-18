@@ -273,7 +273,7 @@ def validate_raw(esm_data: Union[str, Dict[str, Any]]) -> ValidationResult:
 
 def _validate_equation_balance_enhanced(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
     """Enhanced equation-unknown balance validation with detailed suggestions."""
-    for i, model in enumerate(esm_file.models):
+    for i, model in enumerate(esm_file.models.values()):
         # Count state variables (unknowns)
         state_vars = [name for name, var in model.variables.items() if var.type == 'state']
         num_unknowns = len(state_vars)
@@ -327,7 +327,7 @@ def _validate_reference_integrity_enhanced(esm_file: EsmFile, error_collector: E
     all_operators = {}
 
     # Collect all models and their variables
-    for model in esm_file.models:
+    for model in esm_file.models.values():
         all_models[model.name] = model
         for var_name, var in model.variables.items():
             scoped_name = f"{model.name}.{var_name}"
@@ -335,7 +335,7 @@ def _validate_reference_integrity_enhanced(esm_file: EsmFile, error_collector: E
             all_variables[var_name] = var  # Also allow unscoped references within model
 
     # Collect all reaction systems and their species/parameters
-    for rs in esm_file.reaction_systems:
+    for rs in esm_file.reaction_systems.values():
         all_reaction_systems[rs.name] = rs
         for species in rs.species:
             scoped_name = f"{rs.name}.{species.name}"
@@ -393,7 +393,7 @@ def _validate_reference_integrity(esm_file: EsmFile, structural_errors: List[Val
     all_operators = {}
 
     # Collect all models and their variables
-    for model in esm_file.models:
+    for model in esm_file.models.values():
         all_models[model.name] = model
         for var_name, var in model.variables.items():
             scoped_name = f"{model.name}.{var_name}"
@@ -401,7 +401,7 @@ def _validate_reference_integrity(esm_file: EsmFile, structural_errors: List[Val
             all_variables[var_name] = var  # Also allow unscoped references within model
 
     # Collect all reaction systems and their species/parameters
-    for rs in esm_file.reaction_systems:
+    for rs in esm_file.reaction_systems.values():
         all_reaction_systems[rs.name] = rs
         # Add species as variables
         for species in rs.species:
@@ -523,12 +523,12 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
     """
     # Build variable lookup for validation
     all_variables = set()
-    for model in esm_file.models:
+    for model in esm_file.models.values():
         for var_name in model.variables:
             all_variables.add(var_name)
             all_variables.add(f"{model.name}.{var_name}")
 
-    for rs in esm_file.reaction_systems:
+    for rs in esm_file.reaction_systems.values():
         for species in rs.species:
             all_variables.add(species.name)
             all_variables.add(f"{rs.name}.{species.name}")
