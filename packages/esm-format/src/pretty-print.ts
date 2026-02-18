@@ -826,13 +826,36 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
 }
 
 /**
- * Format model summary (implementation placeholder)
+ * Format model summary (implementation per spec Section 6.3)
  */
 function formatModelSummary(model: Model, format: 'unicode' | 'ascii'): string {
-  // This is a placeholder - full implementation would need to format
-  // the model according to spec Section 6.3
-  const name = (model as any).name || 'unnamed'  // name might not be in Model type yet
-  return `Model: ${name} (${model.variables?.length || 0} variables, ${model.equations?.length || 0} equations)`
+  // Count parameter and state variables
+  const variables = model.variables || {}
+  const parameterCount = Object.values(variables).filter(v => v.type === 'parameter').length
+  const equationCount = model.equations?.length || 0
+
+  // Format equation list
+  const equationLines: string[] = []
+  if (model.equations) {
+    for (const equation of model.equations) {
+      try {
+        const lhsStr = format === 'unicode' ? toUnicode(equation.lhs) : toAscii(equation.lhs)
+        const rhsStr = format === 'unicode' ? toUnicode(equation.rhs) : toAscii(equation.rhs)
+        equationLines.push(`    ${lhsStr} = ${rhsStr}`)
+      } catch (err) {
+        // Fallback for equations that can't be formatted
+        equationLines.push(`    [equation formatting error]`)
+      }
+    }
+  }
+
+  // Build summary - this matches the spec format for individual models within EsmFile
+  const result = [`(${parameterCount} parameters, ${equationCount} equation${equationCount !== 1 ? 's' : ''})`]
+  if (equationLines.length > 0) {
+    result.push(...equationLines)
+  }
+
+  return result.join('\n')
 }
 
 /**
