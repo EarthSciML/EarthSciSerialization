@@ -102,6 +102,38 @@ function serialize_event(event::EventType)::Dict{String,Any}
 end
 
 """
+    serialize_discrete_event(event::DiscreteEvent) -> Dict{String,Any}
+
+Serialize DiscreteEvent to JSON-compatible format.
+"""
+function serialize_discrete_event(event::DiscreteEvent)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "trigger" => serialize_trigger(event.trigger),
+        "affects" => [serialize_functional_affect(a) for a in event.affects]
+    )
+    if event.description !== nothing
+        result["description"] = event.description
+    end
+    return result
+end
+
+"""
+    serialize_continuous_event(event::ContinuousEvent) -> Dict{String,Any}
+
+Serialize ContinuousEvent to JSON-compatible format.
+"""
+function serialize_continuous_event(event::ContinuousEvent)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "conditions" => [serialize_expression(c) for c in event.conditions],
+        "affects" => [serialize_affect_equation(a) for a in event.affects]
+    )
+    if event.description !== nothing
+        result["description"] = event.description
+    end
+    return result
+end
+
+"""
     serialize_affect_equation(affect::AffectEquation) -> Dict{String,Any}
 
 Serialize AffectEquation to JSON-compatible format.
@@ -172,9 +204,22 @@ function serialize_model(model::Model)::Dict{String,Any}
         "variables" => Dict(k => serialize_model_variable(v) for (k, v) in model.variables),
         "equations" => [serialize_equation(eq) for eq in model.equations]
     )
-    if !isempty(model.events)
-        result["events"] = [serialize_event(ev) for ev in model.events]
+
+    # Serialize discrete events if present
+    if !isempty(model.discrete_events)
+        result["discrete_events"] = [serialize_discrete_event(ev) for ev in model.discrete_events]
     end
+
+    # Serialize continuous events if present
+    if !isempty(model.continuous_events)
+        result["continuous_events"] = [serialize_continuous_event(ev) for ev in model.continuous_events]
+    end
+
+    # Add subsystems if present
+    if !isempty(model.subsystems)
+        result["subsystems"] = Dict(k => serialize_model(v) for (k, v) in model.subsystems)
+    end
+
     return result
 end
 

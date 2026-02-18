@@ -205,9 +205,27 @@ function coerce_model(data::Any)::Model
     end
 
     equations = [coerce_equation(eq) for eq in data.equations]
-    events = haskey(data, :events) ? [coerce_event(ev) for ev in data.events] : EventType[]
 
-    return Model(variables, equations, events=events)
+    # Handle new schema format with separate event arrays
+    discrete_events = DiscreteEvent[]
+    continuous_events = ContinuousEvent[]
+
+    if haskey(data, :discrete_events)
+        discrete_events = [coerce_discrete_event(ev) for ev in data.discrete_events]
+    end
+
+    if haskey(data, :continuous_events)
+        continuous_events = [coerce_continuous_event(ev) for ev in data.continuous_events]
+    end
+
+    # Backwards compatibility: handle old 'events' field
+    if haskey(data, :events)
+        mixed_events = [coerce_event(ev) for ev in data.events]
+        return create_model_with_mixed_events(variables, equations, mixed_events)
+    end
+
+    return Model(variables, equations, discrete_events=discrete_events,
+                continuous_events=continuous_events)
 end
 
 """
@@ -259,6 +277,38 @@ function coerce_event(data::Any)::EventType
     else
         throw(ParseError("Invalid EventType: missing 'conditions' or 'trigger' field"))
     end
+end
+
+"""
+    coerce_discrete_event(data::Any) -> DiscreteEvent
+
+Coerce JSON data specifically into DiscreteEvent.
+"""
+function coerce_discrete_event(data::Any)::DiscreteEvent
+    if !haskey(data, :trigger)
+        throw(ParseError("DiscreteEvent requires 'trigger' field"))
+    end
+
+    trigger = parse_trigger(data.trigger)
+    affects = [coerce_functional_affect(a) for a in data.affects]
+    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    return DiscreteEvent(trigger, affects, description=description)
+end
+
+"""
+    coerce_continuous_event(data::Any) -> ContinuousEvent
+
+Coerce JSON data specifically into ContinuousEvent.
+"""
+function coerce_continuous_event(data::Any)::ContinuousEvent
+    if !haskey(data, :conditions)
+        throw(ParseError("ContinuousEvent requires 'conditions' field"))
+    end
+
+    conditions = [parse_expression(c) for c in data.conditions]
+    affects = [coerce_affect_equation(a) for a in data.affects]
+    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    return ContinuousEvent(conditions, affects, description=description)
 end
 
 """
