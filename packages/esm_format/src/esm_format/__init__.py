@@ -143,12 +143,16 @@ from .codegen import (
     to_python_code,
 )
 
-# Data loading functionality
-from .csv_loader import (
-    CSVLoader,
-    CSVValidationError,
-    load_csv_data,
-)
+# Data loading functionality (optional - requires pandas)
+try:
+    from .csv_loader import (
+        CSVLoader,
+        CSVValidationError,
+        load_csv_data,
+    )
+except ImportError:
+    # pandas not available, skip CSV loader functionality
+    pass
 
 __version__ = "0.1.0"
 
