@@ -29,7 +29,13 @@ function parse_units(unit_str::String)::Union{Unitful.Units, Nothing}
         unit_str = replace(unit_str, r"\bJ\b" => "J")
 
         # Try to parse with Unitful
-        return uparse(unit_str)
+        parsed = uparse(unit_str)
+        # Handle both FreeUnits (for unit strings like "mol/L") and Quantity (for strings like "1/s")
+        if isa(parsed, Unitful.Units)
+            return parsed  # Already units
+        else
+            return unit(parsed)  # Extract units from quantity
+        end
     catch e
         @warn "Unable to parse unit string: '$unit_str'" exception=e
         return nothing
@@ -242,9 +248,8 @@ function validate_reaction_system_dimensions(rxn_sys::ReactionSystem)::Bool
 
     # Add species units
     for species in rxn_sys.species
-        # NOTE: Species struct currently missing units field in Julia implementation
-        # Should be added to match schema - using default concentration units for now
-        var_units[species.name] = "mol/L"  # Default concentration units
+        # Use species units field if available, otherwise default to concentration units
+        var_units[species.name] = species.units !== nothing ? species.units : "mol/L"
     end
 
     # Add parameter units
@@ -260,11 +265,25 @@ function validate_reaction_system_dimensions(rxn_sys::ReactionSystem)::Bool
         if rate_dim !== nothing
             # For mass action kinetics, rate should have dimensions of concentration/time
             # multiplied by concentration^(total_reactant_order - 1)
-            total_order = sum(values(reaction.reactants))
-            expected_conc_power = total_order - 1
+
+            # Calculate total reaction order from substrates (reactants)
+            total_order = 0
+            if reaction.substrates !== nothing
+                for substrate in reaction.substrates
+                    total_order += substrate.stoichiometry
+                end
+            end
+
+            # Expected dimensions for rate constant: concentration/time / concentration^total_order
+            # = concentration^(1-total_order) / time
+            # For zero-order: concentration/time
+            # For first-order: 1/time
+            # For second-order: 1/(concentration*time)
+            expected_conc_power = 1 - total_order
 
             # This is a simplified check - in practice, rate constant units depend on reaction order
             @debug "Reaction $i rate dimensions: $(dimension(rate_dim))"
+            @debug "Reaction $i total order: $total_order, expected concentration power: $expected_conc_power"
         else
             @warn "Cannot determine dimensions for reaction $i rate expression"
             all_valid = false
