@@ -118,7 +118,11 @@ pub struct Model {
 
     /// Discrete events
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub events: Option<Vec<DiscreteEvent>>,
+    pub discrete_events: Option<Vec<DiscreteEvent>>,
+
+    /// Continuous events
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continuous_events: Option<Vec<ContinuousEvent>>,
 
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]

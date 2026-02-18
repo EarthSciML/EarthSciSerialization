@@ -31,7 +31,8 @@ fn test_component_graph_generation() {
         name: Some("TestModel".to_string()),
         variables,
         equations: vec![],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -103,7 +104,8 @@ fn test_component_graph_exports() {
         name: Some("SimpleModel".to_string()),
         variables: HashMap::new(),
         equations: vec![],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -183,7 +185,8 @@ fn test_model_expression_graph() {
                 }),
             },
         ],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -279,7 +282,8 @@ fn test_component_existence() {
         name: Some("TestModel".to_string()),
         variables: HashMap::new(),
         equations: vec![],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -373,7 +377,8 @@ fn test_expected_graph_outputs() {
         name: Some("Simple".to_string()),
         variables,
         equations: vec![],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 

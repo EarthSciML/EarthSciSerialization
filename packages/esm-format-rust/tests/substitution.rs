@@ -178,7 +178,8 @@ fn test_model_substitution() {
                 }),
             },
         ],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 

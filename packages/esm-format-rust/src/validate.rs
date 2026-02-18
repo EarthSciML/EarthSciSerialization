@@ -380,12 +380,20 @@ fn validate_model(
 
     // Note: Validate observed variable expressions would go here when types support it
 
-    // Validate events (using current structure with single events field)
-    if let Some(ref events) = model.events {
-        for (event_idx, event) in events.iter().enumerate() {
+    // Validate discrete events
+    if let Some(ref discrete_events) = model.discrete_events {
+        for (event_idx, event) in discrete_events.iter().enumerate() {
             validate_discrete_event(event, event_idx, &model_path, &defined_vars, errors);
         }
     }
+
+    // Validate continuous events
+    // TODO: Implement validate_continuous_event function
+    // if let Some(ref continuous_events) = model.continuous_events {
+    //     for (event_idx, event) in continuous_events.iter().enumerate() {
+    //         validate_continuous_event(event, event_idx, &model_path, &defined_vars, errors);
+    //     }
+    // }
 }
 
 fn count_ode_equations(equations: &[crate::Equation]) -> usize {
@@ -885,7 +893,8 @@ mod tests {
                     rhs: Expr::Variable("undefined_var".to_string()), // This should cause an error
                 }
             ],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
 
@@ -949,7 +958,8 @@ mod tests {
                     rhs: Expr::Variable("x".to_string()),
                 }
             ],
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
 
@@ -1032,7 +1042,8 @@ mod tests {
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![], // No equations needed for this test
-            events: None,
+            discrete_events: None,
+            continuous_events: None,
             description: None,
         });
 

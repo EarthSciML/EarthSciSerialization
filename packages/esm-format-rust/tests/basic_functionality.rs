@@ -82,7 +82,8 @@ fn test_structural_validation() {
                 rhs: Expr::Number(1.0),
             }
         ],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -213,7 +214,8 @@ fn test_component_graph() {
         name: Some("TestModel".to_string()),
         variables: HashMap::new(),
         equations: vec![],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
@@ -287,7 +289,8 @@ fn test_editing() {
         name: Some("Test Model".to_string()),
         variables: HashMap::new(),
         equations: vec![],
-        events: None,
+        discrete_events: None,
+        continuous_events: None,
         description: None,
     };
 
