@@ -183,4 +183,89 @@ using ESMFormat
         end
     end
 
+    @testset "validate_coupling_references function" begin
+        metadata = ESMFormat.Metadata("test-model")
+
+        @testset "CouplingOperatorCompose validation" begin
+            model = ESMFormat.Model(Dict("x" => ESMFormat.ModelVariable(ESMFormat.StateVariable, default=1.0)),
+                                  [ESMFormat.Equation(ESMFormat.OpExpr("D", ESMFormat.Expr[ESMFormat.VarExpr("x")], wrt="t"), ESMFormat.NumExpr(1.0))])
+            esm_file = ESMFormat.EsmFile("0.1.0", metadata, models=Dict("test_model" => model))
+
+            # Valid system reference
+            coupling = ESMFormat.CouplingOperatorCompose(["test_model"])
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling, "coupling[1]")
+            @test isempty(errors)
+
+            # Invalid system reference
+            coupling_bad = ESMFormat.CouplingOperatorCompose(["nonexistent_system"])
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling_bad, "coupling[1]")
+            @test length(errors) == 1
+            @test errors[1].path == "coupling[1].systems[1]"
+            @test occursin("nonexistent_system", errors[1].message)
+            @test errors[1].error_type == "undefined_system"
+        end
+
+        @testset "CouplingOperatorApply validation" begin
+            operator = ESMFormat.Operator("test_op", ["x"])
+            esm_file = ESMFormat.EsmFile("0.1.0", metadata, operators=Dict("test_op" => operator))
+
+            # Valid operator reference
+            coupling = ESMFormat.CouplingOperatorApply("test_op")
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling, "coupling[1]")
+            @test isempty(errors)
+
+            # Invalid operator reference
+            coupling_bad = ESMFormat.CouplingOperatorApply("nonexistent_op")
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling_bad, "coupling[1]")
+            @test length(errors) == 1
+            @test errors[1].path == "coupling[1].operator"
+            @test occursin("nonexistent_op", errors[1].message)
+            @test errors[1].error_type == "undefined_operator"
+        end
+
+        @testset "CouplingCallback validation" begin
+            esm_file = ESMFormat.EsmFile("0.1.0", metadata)
+
+            # Valid callback
+            coupling = ESMFormat.CouplingCallback("my_callback")
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling, "coupling[1]")
+            @test isempty(errors)
+
+            # Empty callback ID
+            coupling_bad = ESMFormat.CouplingCallback("")
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling_bad, "coupling[1]")
+            @test length(errors) == 1
+            @test errors[1].path == "coupling[1].callback_id"
+            @test occursin("empty", errors[1].message)
+            @test errors[1].error_type == "empty_callback_id"
+        end
+
+        @testset "CouplingVariableMap validation" begin
+            model = ESMFormat.Model(Dict("x" => ESMFormat.ModelVariable(ESMFormat.StateVariable, default=1.0)),
+                                  [ESMFormat.Equation(ESMFormat.OpExpr("D", ESMFormat.Expr[ESMFormat.VarExpr("x")], wrt="t"), ESMFormat.NumExpr(1.0))])
+            esm_file = ESMFormat.EsmFile("0.1.0", metadata, models=Dict("test_model" => model))
+
+            # Valid variable mapping
+            coupling = ESMFormat.CouplingVariableMap("test_model.x", "test_model.x", "identity")
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling, "coupling[1]")
+            @test isempty(errors)
+
+            # Invalid 'from' reference
+            coupling_bad_from = ESMFormat.CouplingVariableMap("invalid.ref", "test_model.x", "identity")
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling_bad_from, "coupling[1]")
+            @test length(errors) == 1
+            @test errors[1].path == "coupling[1].from"
+            @test occursin("invalid.ref", errors[1].message)
+            @test errors[1].error_type == "unresolved_reference"
+
+            # Invalid 'to' reference
+            coupling_bad_to = ESMFormat.CouplingVariableMap("test_model.x", "invalid.ref", "identity")
+            errors = ESMFormat.validate_coupling_references(esm_file, coupling_bad_to, "coupling[1]")
+            @test length(errors) == 1
+            @test errors[1].path == "coupling[1].to"
+            @test occursin("invalid.ref", errors[1].message)
+            @test errors[1].error_type == "unresolved_reference"
+        end
+    end
+
 end
