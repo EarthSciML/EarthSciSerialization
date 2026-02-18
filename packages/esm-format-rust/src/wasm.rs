@@ -9,7 +9,8 @@ use crate::{
     EsmFile, load as rust_load, save as rust_save, validate as rust_validate,
     substitute_in_model, substitute_in_reaction_system,
     performance::{CompactExpr, PerformanceError},
-    stoichiometric_matrix
+    stoichiometric_matrix,
+    graph::component_graph as rust_component_graph
 };
 
 // WASM bindings
@@ -126,6 +127,35 @@ pub fn to_latex(json_str: &str) -> Result<String, JsValue> {
     Ok(result)
 }
 
+/// Convert ESM file to ASCII display (WASM version)
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn to_ascii(json_str: &str) -> Result<String, JsValue> {
+    let esm_file = rust_load(json_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Simple implementation: convert the JSON to an ASCII-friendly string representation
+    let mut result = String::new();
+    result.push_str(&format!("ESM Format v{}\n", esm_file.esm));
+
+    let metadata = &esm_file.metadata;
+    if let Some(ref name) = metadata.name {
+        result.push_str(&format!("Name: {}\n", name));
+    }
+    if let Some(ref desc) = metadata.description {
+        result.push_str(&format!("Description: {}\n", desc));
+    }
+
+    if let Some(models) = &esm_file.models {
+        result.push_str(&format!("\n{} Models:\n", models.len()));
+        for (name, _) in models {
+            result.push_str(&format!("• {}\n", name));
+        }
+    }
+
+    Ok(result)
+}
+
 /// Substitute expressions in ESM file (WASM version)
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
@@ -216,6 +246,21 @@ pub fn compute_stoichiometric_matrix(reaction_system_str: &str) -> Result<JsValu
     let matrix = stoichiometric_matrix(&reaction_system);
 
     match serde_wasm_bindgen::to_value(&matrix) {
+        Ok(js_value) => Ok(js_value),
+        Err(e) => Err(JsValue::from_str(&format!("Serialization error: {}", e))),
+    }
+}
+
+/// Generate component graph for ESM file (WASM version)
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn component_graph(json_str: &str) -> Result<JsValue, JsValue> {
+    let esm_file = rust_load(json_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    let graph = rust_component_graph(&esm_file);
+
+    match serde_wasm_bindgen::to_value(&graph) {
         Ok(js_value) => Ok(js_value),
         Err(e) => Err(JsValue::from_str(&format!("Serialization error: {}", e))),
     }
