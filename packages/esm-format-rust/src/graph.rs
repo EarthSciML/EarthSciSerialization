@@ -990,6 +990,7 @@ mod tests {
         reaction_systems.insert("test_rs".to_string(), ReactionSystem {
             name: Some("Test RS".to_string()),
             species: vec![],
+            parameters: HashMap::new(),
             reactions: vec![],
             description: None,
         });

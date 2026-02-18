@@ -3,6 +3,7 @@
 //! Tests for generating and analyzing stoichiometric matrices from reaction systems.
 
 use esm_format::*;
+use std::collections::HashMap;
 
 /// Test simple stoichiometric matrix generation
 #[test]
@@ -42,6 +43,7 @@ fn test_simple_stoichiometric_matrix() {
     let rs = ReactionSystem {
         name: Some("Simple RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
@@ -114,6 +116,7 @@ fn test_multiple_reaction_stoichiometric_matrix() {
     let rs = ReactionSystem {
         name: Some("Chain RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
@@ -185,6 +188,7 @@ fn test_stoichiometric_coefficients() {
     let rs = ReactionSystem {
         name: Some("Coefficients RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
@@ -248,6 +252,7 @@ fn test_reversible_reactions() {
     let rs = ReactionSystem {
         name: Some("Reversible RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
@@ -315,6 +320,7 @@ fn test_complex_reaction_network() {
     let rs = ReactionSystem {
         name: Some("Complex Network".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
@@ -353,6 +359,7 @@ fn test_empty_reaction_system() {
     let rs = ReactionSystem {
         name: Some("Empty RS".to_string()),
         species: vec![],
+        parameters: HashMap::new(),
         reactions: vec![],
         description: None,
     };
@@ -376,6 +383,7 @@ fn test_no_reactions() {
     let rs = ReactionSystem {
         name: Some("No Reactions RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions: vec![],
         description: None,
     };
@@ -423,6 +431,7 @@ fn test_fractional_coefficients() {
     let rs = ReactionSystem {
         name: Some("Fractional RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
@@ -471,6 +480,7 @@ fn test_default_coefficients() {
     let rs = ReactionSystem {
         name: Some("Default Coeffs RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };

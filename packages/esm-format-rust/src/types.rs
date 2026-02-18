@@ -283,6 +283,9 @@ pub struct ReactionSystem {
     /// Chemical species
     pub species: Vec<Species>,
 
+    /// Named parameters (rate constants, temperature, photolysis rates, etc.)
+    pub parameters: HashMap<String, Parameter>,
+
     /// Chemical reactions
     pub reactions: Vec<Reaction>,
 
@@ -302,6 +305,22 @@ pub struct Species {
     pub units: Option<String>,
 
     /// Default/initial concentration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<f64>,
+
+    /// Brief description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Parameter in a reaction system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Parameter {
+    /// Physical units
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
+
+    /// Default/initial value
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default: Option<f64>,
 

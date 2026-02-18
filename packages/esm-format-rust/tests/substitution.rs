@@ -246,6 +246,7 @@ fn test_reaction_system_substitution() {
     let rs = ReactionSystem {
         name: Some("Test RS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };

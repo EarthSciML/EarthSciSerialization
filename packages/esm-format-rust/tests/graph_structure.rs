@@ -51,6 +51,7 @@ fn test_component_graph_generation() {
     let rs = ReactionSystem {
         name: Some("TestRS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions: vec![],
         description: None,
     };
@@ -250,6 +251,7 @@ fn test_reaction_system_expression_graph() {
     let rs = ReactionSystem {
         name: Some("ExprRS".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     };
