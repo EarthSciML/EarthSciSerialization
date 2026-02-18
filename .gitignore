@@ -55,6 +55,9 @@ Cargo.lock
 *.dylib
 *.test
 *.out
+# Project-specific Go binaries
+esm-format-go
+esm-go
 
 # Editor files
 .vscode/
