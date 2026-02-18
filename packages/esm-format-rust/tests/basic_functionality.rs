@@ -247,7 +247,7 @@ fn test_component_graph() {
 /// Test pretty printing
 #[test]
 fn test_pretty_printing() {
-    let test_strings = ["H2O", "CO2", "CH4", "NO2", "d/dt", "*", "+"];
+    let test_strings = ["H2O", "CO2", "CH4", "NO2", "D", "*", "+"];
 
     for input in &test_strings {
         // Create simple expressions to test display functions

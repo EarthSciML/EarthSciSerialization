@@ -243,7 +243,7 @@ fn test_basic_formatting_functions() {
         "CH4",
         "NO3-",
         "SO4^2-",
-        "d/dt",
+        "D",
         "*",
         "+",
         "-",

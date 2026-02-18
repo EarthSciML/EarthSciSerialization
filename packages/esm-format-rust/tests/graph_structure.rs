@@ -167,7 +167,7 @@ fn test_model_expression_graph() {
         equations: vec![
             Equation {
                 lhs: Expr::Operator(ExpressionNode {
-                    op: "d/dt".to_string(),
+                    op: "D".to_string(),
                     args: vec![Expr::Variable("x".to_string())],
                     wrt: Some("t".to_string()),
                     dim: None,
