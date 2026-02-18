@@ -98,3 +98,89 @@ pub use performance::ModelAllocator;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// ESM schema version supported by this implementation
 pub const SCHEMA_VERSION: &str = "0.1.0";
+
+#[cfg(test)]
+mod coupling_field_tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn test_operator_compose_new_fields() {
+        // Test OperatorCompose with new systems field
+        let json = r#"{
+            "type": "operator_compose",
+            "systems": ["system1", "system2"]
+        }"#;
+
+        let entry: CouplingEntry = serde_json::from_str(json).unwrap();
+        match entry {
+            CouplingEntry::OperatorCompose { systems, .. } => {
+                assert_eq!(systems, vec!["system1", "system2"]);
+            }
+            _ => panic!("Expected OperatorCompose variant"),
+        }
+    }
+
+    #[test]
+    fn test_couple2_new_fields() {
+        // Test Couple2 with new systems field
+        let json = r#"{
+            "type": "couple2",
+            "systems": ["system1", "system2"],
+            "coupletype_pair": ["type1", "type2"],
+            "connector": {
+                "equations": []
+            }
+        }"#;
+
+        let entry: CouplingEntry = serde_json::from_str(json).unwrap();
+        match entry {
+            CouplingEntry::Couple2 { systems, coupletype_pair, .. } => {
+                assert_eq!(systems, vec!["system1", "system2"]);
+                assert_eq!(coupletype_pair, vec!["type1", "type2"]);
+            }
+            _ => panic!("Expected Couple2 variant"),
+        }
+    }
+
+    #[test]
+    fn test_variable_map_new_fields() {
+        // Test VariableMap with new from/to fields
+        let json = r#"{
+            "type": "variable_map",
+            "from": "source.var",
+            "to": "target.param",
+            "transform": "identity"
+        }"#;
+
+        let entry: CouplingEntry = serde_json::from_str(json).unwrap();
+        match entry {
+            CouplingEntry::VariableMap { from, to, transform, .. } => {
+                assert_eq!(from, "source.var");
+                assert_eq!(to, "target.param");
+                assert_eq!(transform, "identity");
+            }
+            _ => panic!("Expected VariableMap variant"),
+        }
+    }
+
+    #[test]
+    fn test_coupling_serialization_round_trip() {
+        // Test serialization round-trip
+        let coupling = CouplingEntry::OperatorCompose {
+            systems: vec!["sys1".to_string(), "sys2".to_string()],
+            translate: None,
+            description: None,
+        };
+
+        let serialized = serde_json::to_string(&coupling).unwrap();
+        let deserialized: CouplingEntry = serde_json::from_str(&serialized).unwrap();
+
+        match deserialized {
+            CouplingEntry::OperatorCompose { systems, .. } => {
+                assert_eq!(systems, vec!["sys1", "sys2"]);
+            }
+            _ => panic!("Round-trip failed"),
+        }
+    }
+}
