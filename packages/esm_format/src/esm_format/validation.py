@@ -112,6 +112,9 @@ def validate(esm_file: EsmFile) -> ValidationResult:
         # Schema validation is assumed to have been done during parsing
         # Focus on structural validation
 
+        # 0. Check that at least one of models or reaction_systems is present
+        _validate_content_presence(esm_file, error_collector)
+
         # 1. Equation-Unknown Balance validation
         _validate_equation_balance_enhanced(esm_file, error_collector)
 
@@ -130,24 +133,24 @@ def validate(esm_file: EsmFile) -> ValidationResult:
         # Convert enhanced errors back to old format for backward compatibility
         for error in error_collector.errors:
             structural_errors.append(ValidationError(
-                path=error.path,
+                path=error.context.path if error.context else "$",
                 message=error.message,
                 code=error.code.value,
-                details=error.debug_info
+                details=error.context.details if error.context else {}
             ))
 
         for warning in error_collector.warnings:
             if warning.code == ErrorCode.UNIT_MISMATCH:
                 unit_warnings.append(UnitWarning(
-                    path=warning.path,
+                    path=warning.context.path if warning.context else "$",
                     message=warning.message
                 ))
             else:
                 structural_errors.append(ValidationError(
-                    path=warning.path,
+                    path=warning.context.path if warning.context else "$",
                     message=warning.message,
                     code=warning.code.value,
-                    details=warning.debug_info
+                    details=warning.context.details if warning.context else {}
                 ))
 
     except Exception as e:
@@ -269,6 +272,38 @@ def validate_raw(esm_data: Union[str, Dict[str, Any]]) -> ValidationResult:
         structural_errors=structural_errors,
         unit_warnings=[]
     )
+
+
+def _validate_content_presence(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
+    """
+    Validate that at least one of models or reaction_systems is present and non-empty.
+
+    This ensures that the ESM file contains actual computational content rather than
+    being empty or containing only metadata.
+    """
+    has_models = esm_file.models and len(esm_file.models) > 0
+    has_reaction_systems = esm_file.reaction_systems and len(esm_file.reaction_systems) > 0
+
+    if not has_models and not has_reaction_systems:
+        error = ESMError(
+            code=ErrorCode.MISSING_REQUIRED_FIELD,
+            message="ESM file must contain at least one model or reaction system. Empty files are not valid.",
+            severity=Severity.ERROR,
+            context=ErrorContext(
+                path="$",
+                details={
+                    "models_count": len(esm_file.models) if esm_file.models else 0,
+                    "reaction_systems_count": len(esm_file.reaction_systems) if esm_file.reaction_systems else 0,
+                    "fix_suggestions": [
+                        "Add a model with variables and equations",
+                        "Add a reaction system with species and reactions",
+                        "Import content from existing ESM files"
+                    ]
+                }
+            ),
+            fix_suggestion=FixSuggestion("Add at least one model or reaction system to the ESM file")
+        )
+        error_collector.add_error(error)
 
 
 def _validate_equation_balance_enhanced(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
