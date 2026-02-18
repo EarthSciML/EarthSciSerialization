@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use esm_format::{
     Expr, performance::CompactExpr,
 };
