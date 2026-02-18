@@ -112,7 +112,7 @@ def derive_odes(system: ReactionSystem) -> Model:
     for species_name in species_names:
         if species_rates[species_name] != 0:  # Only create equations for species with non-zero rates
             # d[species]/dt = rate_expression
-            lhs = ExprNode(op="diff", args=[species_name], wrt="t")
+            lhs = ExprNode(op="D", args=[species_name], wrt="t")
             equations.append(Equation(lhs=lhs, rhs=species_rates[species_name]))
 
     # Handle constraint equations (algebraic equations)
@@ -252,7 +252,7 @@ def _multiply_expressions(expr1: Expr, expr2: Expr) -> Expr:
     if expr2 == 1:
         return expr1
 
-    return ExprNode(op="mul", args=[expr1, expr2])
+    return ExprNode(op="*", args=[expr1, expr2])
 
 
 def _add_expressions(expr1: Expr, expr2: Expr) -> Expr:
@@ -262,7 +262,7 @@ def _add_expressions(expr1: Expr, expr2: Expr) -> Expr:
     if expr2 == 0:
         return expr1
 
-    return ExprNode(op="add", args=[expr1, expr2])
+    return ExprNode(op="+", args=[expr1, expr2])
 
 
 def _power_expression(base: Expr, exponent: float) -> Expr:
@@ -272,4 +272,4 @@ def _power_expression(base: Expr, exponent: float) -> Expr:
     if exponent == 0:
         return 1
 
-    return ExprNode(op="pow", args=[base, exponent])
+    return ExprNode(op="^", args=[base, exponent])
