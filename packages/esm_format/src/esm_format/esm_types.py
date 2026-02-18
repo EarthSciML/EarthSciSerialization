@@ -64,10 +64,8 @@ class Model:
 @dataclass
 class Species:
     """A chemical species in a reaction system."""
-    name: str
-    formula: Optional[str] = None
-    mass: Optional[float] = None
     units: Optional[str] = None
+    default: Optional[float] = None
     description: Optional[str] = None
 
 
