@@ -31,6 +31,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
                 description: None,
                 initial_condition: Some(Expr::Number(1.0)),
                 bounds: None,
+        expression: None,
             });
         }
 

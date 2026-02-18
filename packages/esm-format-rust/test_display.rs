@@ -108,12 +108,14 @@ fn main() {
         units: Some("m/s".to_string()),
         default: None,
         description: Some("Wind speed in x direction".to_string()),
+        expression: None,
     });
     variables.insert("v_wind".to_string(), ModelVariable {
         var_type: VariableType::Parameter,
         units: Some("m/s".to_string()),
         default: None,
         description: Some("Wind speed in y direction".to_string()),
+        expression: None,
     });
 
     let equation = Equation {

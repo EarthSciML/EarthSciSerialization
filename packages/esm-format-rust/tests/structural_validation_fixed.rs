@@ -17,6 +17,7 @@ fn test_undefined_variable_in_model() {
         units: None,
         default: Some(1.0),
         description: None,
+        expression: None,
     });
 
     let model = Model {
@@ -77,12 +78,14 @@ fn test_equation_count_mismatch() {
         units: None,
         default: Some(1.0),
         description: None,
+        expression: None,
     });
     variables.insert("k".to_string(), ModelVariable {
         var_type: VariableType::Parameter,
         units: None,
         default: Some(0.1),
         description: None,
+        expression: None,
     });
 
     let model = Model {
@@ -241,6 +244,7 @@ fn test_valid_file_passes() {
         units: None,
         default: Some(0.1),
         description: None,
+        expression: None,
     });
 
     let model = Model {

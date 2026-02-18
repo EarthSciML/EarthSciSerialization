@@ -147,10 +147,14 @@ pub struct ModelVariable {
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// Defining expression for observed variables
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expression: Option<Expr>,
 }
 
 /// Type of model variable
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VariableType {
     /// State variable (appears in d/dt equations)

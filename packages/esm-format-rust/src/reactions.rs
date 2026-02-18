@@ -66,6 +66,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
             units: species.units.clone(),
             default: species.default,
             description: species.description.clone(),
+            expression: None,
         });
     }
 

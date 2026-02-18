@@ -378,7 +378,26 @@ fn validate_model(
         validate_expression_references(&equation.rhs, &defined_vars, &eq_path, "rhs", eq_idx, errors);
     }
 
-    // Note: Validate observed variable expressions would go here when types support it
+    // Validate observed variable expressions
+    for (var_name, variable) in &model.variables {
+        if variable.var_type == crate::VariableType::Observed && variable.expression.is_none() {
+            errors.push(StructuralError {
+                path: format!("{}/variables/{}", model_path, var_name),
+                code: StructuralErrorCode::MissingObservedExpr,
+                message: format!("Observed variable \"{}\" is missing its expression field", var_name),
+                details: serde_json::json!({
+                    "variable_name": var_name,
+                    "field": "expression"
+                }),
+            });
+        } else if variable.var_type == crate::VariableType::Observed {
+            // If the expression exists, validate its variable references
+            if let Some(ref expr) = variable.expression {
+                let expr_path = format!("{}/variables/{}/expression", model_path, var_name);
+                validate_expression_references(expr, &defined_vars, &expr_path, "expression", 0, errors);
+            }
+        }
+    }
 
     // Validate discrete events
     if let Some(ref discrete_events) = model.discrete_events {
@@ -877,6 +896,7 @@ mod tests {
             units: None,
             default: None,
             description: None,
+            expression: None,
         });
 
         models.insert("test".to_string(), Model {
@@ -935,12 +955,14 @@ mod tests {
             units: None,
             default: None,
             description: None,
+            expression: None,
         });
         variables.insert("y".to_string(), ModelVariable {
             var_type: VariableType::State,
             units: None,
             default: None,
             description: None,
+            expression: None,
         });
 
         models.insert("test".to_string(), Model {
@@ -1024,18 +1046,16 @@ mod tests {
 
     #[test]
     fn test_missing_observed_expression() {
-        // Note: This test is disabled until the types are updated to support expression validation
-        // Currently the ModelVariable type doesn't have an expression field
-
         let mut models = HashMap::new();
         let mut variables = HashMap::new();
 
-        // Observed variable (note: current type doesn't support expression validation yet)
+        // Observed variable without expression - should cause validation error
         variables.insert("total".to_string(), ModelVariable {
             var_type: VariableType::Observed,
             units: None,
             default: None,
             description: None,
+            expression: None, // Missing expression
         });
 
         models.insert("test".to_string(), Model {
@@ -1067,8 +1087,145 @@ mod tests {
         };
 
         let result = validate(&esm_file);
-        // Currently this passes because the validation isn't implemented yet
-        assert!(result.is_valid);
+        // Should fail validation due to missing expression
+        assert!(!result.is_valid);
+        assert_eq!(result.structural_errors.len(), 1);
+        assert!(matches!(result.structural_errors[0].code, StructuralErrorCode::MissingObservedExpr));
+        assert!(result.structural_errors[0].message.contains("Observed variable \"total\" is missing its expression field"));
+    }
+
+    #[test]
+    fn test_observed_variable_with_expression() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable
+        variables.insert("x".to_string(), ModelVariable {
+            var_type: VariableType::State,
+            units: Some("m".to_string()),
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        });
+
+        // Parameter
+        variables.insert("k".to_string(), ModelVariable {
+            var_type: VariableType::Parameter,
+            units: Some("1/s".to_string()),
+            default: Some(0.1),
+            description: None,
+            expression: None,
+        });
+
+        // Observed variable WITH expression - should pass validation
+        variables.insert("rate".to_string(), ModelVariable {
+            var_type: VariableType::Observed,
+            units: Some("m/s".to_string()),
+            default: None,
+            description: Some("Rate of change".to_string()),
+            expression: Some(Expr::Operator(ExpressionNode {
+                op: "*".to_string(),
+                args: vec![Expr::Variable("k".to_string()), Expr::Variable("x".to_string())],
+                wrt: None,
+                dim: None,
+            })),
+        });
+
+        models.insert("test".to_string(), Model {
+            name: Some("Test Model".to_string()),
+            variables,
+            equations: vec![
+                Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Variable("rate".to_string()),
+                }
+            ],
+            discrete_events: None,
+            continuous_events: None,
+            description: None,
+        });
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                version: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should pass validation - observed variable has expression
+        assert!(result.is_valid, "Validation failed: {:?}", result.structural_errors);
         assert!(result.structural_errors.is_empty());
+    }
+
+    #[test]
+    fn test_json_serialization_with_observed_expression() {
+        // Test that we can serialize and deserialize observed variables with expressions
+        let json_str = r#"{
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "TestModel",
+                "description": "Test observed variables with expressions"
+            },
+            "models": {
+                "TestModel": {
+                    "variables": {
+                        "x": { "type": "state", "units": "m", "default": 1.0 },
+                        "k": { "type": "parameter", "units": "1/s", "default": 0.1 },
+                        "rate": {
+                            "type": "observed",
+                            "units": "m/s",
+                            "expression": { "op": "*", "args": ["k", "x"] },
+                            "description": "Rate of change"
+                        }
+                    },
+                    "equations": [
+                        {
+                            "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+                            "rhs": "rate"
+                        }
+                    ]
+                }
+            }
+        }"#;
+
+        // Parse JSON
+        let esm_file: EsmFile = serde_json::from_str(json_str)
+            .expect("Failed to parse JSON");
+
+        // Validate the model
+        let result = validate(&esm_file);
+        assert!(result.is_valid, "Validation should pass: {:?}", result.structural_errors);
+
+        // Verify the observed variable has the expression
+        let model = esm_file.models.as_ref().unwrap().get("TestModel").unwrap();
+        let rate_var = model.variables.get("rate").unwrap();
+        assert_eq!(rate_var.var_type, VariableType::Observed);
+        assert!(rate_var.expression.is_some(), "Observed variable should have expression");
+
+        // Test serialization back to JSON
+        let serialized = serde_json::to_string_pretty(&esm_file)
+            .expect("Failed to serialize to JSON");
+
+        // Should be able to parse it again
+        let _reparsed: EsmFile = serde_json::from_str(&serialized)
+            .expect("Failed to reparse serialized JSON");
     }
 }
