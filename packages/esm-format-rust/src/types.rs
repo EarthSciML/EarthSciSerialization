@@ -189,6 +189,18 @@ pub struct DiscreteEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub affects: Option<Vec<AffectEquation>>,
 
+    /// Functional affect specification
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub functional_affect: Option<FunctionalAffect>,
+
+    /// Parameters modified by this event
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discrete_parameters: Option<Vec<String>>,
+
+    /// Whether to reinitialize the system after the event
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reinitialize: Option<bool>,
+
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -234,20 +246,23 @@ pub struct ContinuousEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    /// Condition expression (zero-crossing detection)
-    pub condition: Expr,
+    /// Condition expressions (zero-crossing detection)
+    pub conditions: Vec<Expr>,
 
-    /// What happens when the event fires
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub affects: Option<Vec<AffectEquation>>,
+    /// What happens when the event fires on positive-going zero crossings
+    pub affects: Vec<AffectEquation>,
 
-    /// Functional affect specification
+    /// Separate affects for negative-going zero crossings
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub functional_affect: Option<FunctionalAffect>,
+    pub affect_neg: Option<Vec<AffectEquation>>,
 
     /// Root finding direction
     #[serde(skip_serializing_if = "Option::is_none")]
     pub root_find: Option<RootFindDirection>,
+
+    /// Whether to reinitialize the system after the event
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reinitialize: Option<bool>,
 
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -257,12 +272,22 @@ pub struct ContinuousEvent {
 /// Functional affect specification for events
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionalAffect {
-    /// Function name or code
-    pub function: String,
+    /// Registered identifier for the affect implementation
+    pub handler_id: String,
 
-    /// Function parameters
+    /// State variables accessed by the handler
+    pub read_vars: Vec<String>,
+
+    /// Parameters accessed by the handler
+    pub read_params: Vec<String>,
+
+    /// Parameters modified by the handler
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<serde_json::Value>,
+    pub modified_params: Option<Vec<String>>,
+
+    /// Handler-specific configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
 }
 
 /// Root finding direction for continuous events
@@ -443,30 +468,55 @@ pub enum CouplingEntry {
     OperatorApply {
         /// Operator reference
         operator: String,
-        /// Target system reference
-        target: String,
-        /// Application parameters
+        /// Optional description
         #[serde(skip_serializing_if = "Option::is_none")]
-        config: Option<serde_json::Value>,
+        description: Option<String>,
     },
     /// Callback coupling
     Callback {
-        /// Callback function reference
-        callback: String,
-        /// Source system reference
-        source: String,
-        /// Target system reference
-        target: String,
+        /// Registered identifier for the callback
+        callback_id: String,
+        /// Configuration parameters
+        #[serde(skip_serializing_if = "Option::is_none")]
+        config: Option<serde_json::Value>,
+        /// Optional description
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
     },
     /// Event-based coupling
     Event {
-        /// Event reference
-        event: String,
-        /// Systems involved
-        systems: Vec<String>,
-        /// Event configuration
+        /// Whether this is a continuous or discrete event
+        event_type: String,
+        /// Human-readable identifier
         #[serde(skip_serializing_if = "Option::is_none")]
-        config: Option<serde_json::Value>,
+        name: Option<String>,
+        /// Condition expressions (zero-crossing for continuous, boolean for discrete)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        conditions: Option<Vec<Expr>>,
+        /// Trigger specification (for discrete events)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        trigger: Option<DiscreteEventTrigger>,
+        /// Affect equations
+        #[serde(skip_serializing_if = "Option::is_none")]
+        affects: Option<Vec<AffectEquation>>,
+        /// Functional affect handler
+        #[serde(skip_serializing_if = "Option::is_none")]
+        functional_affect: Option<FunctionalAffect>,
+        /// Separate affects for negative-going zero crossings
+        #[serde(skip_serializing_if = "Option::is_none")]
+        affect_neg: Option<Vec<AffectEquation>>,
+        /// Parameters modified by this event
+        #[serde(skip_serializing_if = "Option::is_none")]
+        discrete_parameters: Option<Vec<String>>,
+        /// Root finding direction
+        #[serde(skip_serializing_if = "Option::is_none")]
+        root_find: Option<RootFindDirection>,
+        /// Whether to reinitialize the system after the event
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reinitialize: Option<bool>,
+        /// Brief description
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
     },
 }
 
@@ -497,11 +547,10 @@ pub struct Domain {
 /// Solver configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Solver {
-    /// Solver algorithm
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub algorithm: Option<String>,
+    /// Solver strategy
+    pub strategy: String,
 
-    /// Solver-specific parameters
+    /// Strategy-specific configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
 }

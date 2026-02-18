@@ -88,7 +88,6 @@
               "rhs": 0
             }
           ],
-          "discrete_parameters": ["friction_active"],
           "description": "Disable friction when velocity drops below threshold"
         }
       ],

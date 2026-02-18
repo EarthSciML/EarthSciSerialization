@@ -416,7 +416,6 @@
           "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["EmissionSources.NOx_emission_rate"]}, 0.5]}
         }
       ],
-      "discrete_parameters": ["EmissionSources.NOx_emission_rate"],
       "description": "Reduce NOx emissions when ozone exceeds 80 ppb"
     },
 
