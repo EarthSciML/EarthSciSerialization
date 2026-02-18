@@ -697,14 +697,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("Coupling rules: {}", coupling.len());
                         for (i, rule) in coupling.iter().enumerate() {
                             match rule {
-                                esm_format::CouplingEntry::OperatorCompose { source, target, .. } => {
-                                    println!("  Rule {}: {} -> {} (OperatorCompose)", i+1, source, target);
+                                esm_format::CouplingEntry::OperatorCompose { systems, .. } => {
+                                    if systems.len() >= 2 {
+                                        println!("  Rule {}: {} -> {} (OperatorCompose)", i+1, systems[0], systems[1]);
+                                    }
                                 }
-                                esm_format::CouplingEntry::Couple2 { system1, system2, .. } => {
-                                    println!("  Rule {}: {} <-> {} (Couple2)", i+1, system1, system2);
+                                esm_format::CouplingEntry::Couple2 { systems, .. } => {
+                                    if systems.len() >= 2 {
+                                        println!("  Rule {}: {} <-> {} (Couple2)", i+1, systems[0], systems[1]);
+                                    }
                                 }
-                                esm_format::CouplingEntry::VariableMap { source, target, .. } => {
-                                    println!("  Rule {}: {} -> {} (VariableMap)", i+1, source, target);
+                                esm_format::CouplingEntry::VariableMap { from, to, .. } => {
+                                    println!("  Rule {}: {} -> {} (VariableMap)", i+1, from, to);
                                 }
                                 esm_format::CouplingEntry::OperatorApply { operator, target, .. } => {
                                     println!("  Rule {}: {} -> {} (OperatorApply)", i+1, operator, target);

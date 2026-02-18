@@ -376,32 +376,41 @@ pub struct Operator {
 pub enum CouplingEntry {
     /// Operator composition coupling
     OperatorCompose {
-        /// Source operator reference
-        source: String,
-        /// Target operator reference
-        target: String,
-        /// Additional parameters
+        /// The two systems to compose
+        systems: Vec<String>,
+        /// Variable mappings when LHS variables don't have matching names
         #[serde(skip_serializing_if = "Option::is_none")]
-        config: Option<serde_json::Value>,
+        translate: Option<serde_json::Value>,
+        /// Optional description
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
     },
     /// Two-way coupling between systems
     Couple2 {
-        /// First system reference
-        system1: String,
-        /// Second system reference
-        system2: String,
-        /// Variable mappings
+        /// The two systems involved in coupling
+        systems: Vec<String>,
+        /// The coupletype names for each system
+        coupletype_pair: Vec<String>,
+        /// Connector definition with equations
+        connector: serde_json::Value,
+        /// Optional description
         #[serde(skip_serializing_if = "Option::is_none")]
-        mappings: Option<Vec<VariableMapping>>,
+        description: Option<String>,
     },
     /// Variable mapping between systems
     VariableMap {
-        /// Source system reference
-        source: String,
-        /// Target system reference
-        target: String,
-        /// Variable mappings
-        mappings: Vec<VariableMapping>,
+        /// Source variable (scoped reference)
+        from: String,
+        /// Target parameter (scoped reference)
+        to: String,
+        /// How the mapping is applied
+        transform: String,
+        /// Conversion factor (for conversion_factor transform)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        factor: Option<f64>,
+        /// Optional description
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
     },
     /// Apply operator to system
     OperatorApply {

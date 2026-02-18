@@ -678,9 +678,9 @@ fn validate_coupling(
         let coupling_path = format!("/coupling/{}", idx);
 
         match entry {
-            crate::CouplingEntry::VariableMap { source, target, .. } => {
-                validate_scoped_reference(source, system_refs, &coupling_path, "variable_map", errors);
-                validate_scoped_reference(target, system_refs, &coupling_path, "variable_map", errors);
+            crate::CouplingEntry::VariableMap { from, to, .. } => {
+                validate_scoped_reference(from, system_refs, &coupling_path, "variable_map", errors);
+                validate_scoped_reference(to, system_refs, &coupling_path, "variable_map", errors);
             }
             crate::CouplingEntry::OperatorApply { operator, .. } => {
                 if let Some(ref operators) = esm_file.operators {
@@ -711,54 +711,60 @@ fn validate_coupling(
                     });
                 }
             }
-            crate::CouplingEntry::Couple2 { system1, system2, .. } => {
-                if !system_refs.contains_key(system1) {
+            crate::CouplingEntry::Couple2 { systems, .. } => {
+                if systems.len() >= 2 {
+                    for (_i, system) in systems.iter().take(2).enumerate() {
+                        if !system_refs.contains_key(system) {
+                            errors.push(StructuralError {
+                                path: coupling_path.clone(),
+                                code: StructuralErrorCode::UndefinedSystem,
+                                message: format!("Coupling entry references nonexistent system '{}'", system),
+                                details: serde_json::json!({
+                                    "system": system,
+                                    "coupling_type": "couple2",
+                                    "expected_in": "models, reaction_systems, data_loaders, operators"
+                                }),
+                            });
+                        }
+                    }
+                } else {
                     errors.push(StructuralError {
                         path: coupling_path.clone(),
                         code: StructuralErrorCode::UndefinedSystem,
-                        message: format!("Coupling entry references nonexistent system '{}'", system1),
+                        message: "Couple2 coupling requires exactly 2 systems".to_string(),
                         details: serde_json::json!({
-                            "system": system1,
                             "coupling_type": "couple2",
-                            "expected_in": "models, reaction_systems, data_loaders, operators"
-                        }),
-                    });
-                }
-                if !system_refs.contains_key(system2) {
-                    errors.push(StructuralError {
-                        path: coupling_path,
-                        code: StructuralErrorCode::UndefinedSystem,
-                        message: format!("Coupling entry references nonexistent system '{}'", system2),
-                        details: serde_json::json!({
-                            "system": system2,
-                            "coupling_type": "couple2",
-                            "expected_in": "models, reaction_systems, data_loaders, operators"
+                            "systems_count": systems.len(),
+                            "expected_count": 2
                         }),
                     });
                 }
             }
-            crate::CouplingEntry::OperatorCompose { source, target, .. } => {
-                if !system_refs.contains_key(source) {
+            crate::CouplingEntry::OperatorCompose { systems, .. } => {
+                if systems.len() >= 2 {
+                    for (_i, system) in systems.iter().take(2).enumerate() {
+                        if !system_refs.contains_key(system) {
+                            errors.push(StructuralError {
+                                path: coupling_path.clone(),
+                                code: StructuralErrorCode::UndefinedSystem,
+                                message: format!("Coupling entry references nonexistent system '{}'", system),
+                                details: serde_json::json!({
+                                    "system": system,
+                                    "coupling_type": "operator_compose",
+                                    "expected_in": "models, reaction_systems, data_loaders, operators"
+                                }),
+                            });
+                        }
+                    }
+                } else {
                     errors.push(StructuralError {
                         path: coupling_path.clone(),
                         code: StructuralErrorCode::UndefinedSystem,
-                        message: format!("Coupling entry references nonexistent system '{}'", source),
+                        message: "OperatorCompose coupling requires exactly 2 systems".to_string(),
                         details: serde_json::json!({
-                            "system": source,
                             "coupling_type": "operator_compose",
-                            "expected_in": "models, reaction_systems, data_loaders, operators"
-                        }),
-                    });
-                }
-                if !system_refs.contains_key(target) {
-                    errors.push(StructuralError {
-                        path: coupling_path,
-                        code: StructuralErrorCode::UndefinedSystem,
-                        message: format!("Coupling entry references nonexistent system '{}'", target),
-                        details: serde_json::json!({
-                            "system": target,
-                            "coupling_type": "operator_compose",
-                            "expected_in": "models, reaction_systems, data_loaders, operators"
+                            "systems_count": systems.len(),
+                            "expected_count": 2
                         }),
                     });
                 }

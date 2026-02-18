@@ -110,12 +110,22 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
         for entry in coupling_entries {
             // Extract coupling relationships based on the coupling type
             let (from, to, coupling_type_str) = match entry {
-                CouplingEntry::OperatorCompose { source, target, .. } =>
-                    (source.clone(), target.clone(), "operator_compose".to_string()),
-                CouplingEntry::Couple2 { system1, system2, .. } =>
-                    (system1.clone(), system2.clone(), "couple2".to_string()),
-                CouplingEntry::VariableMap { source, target, .. } =>
-                    (source.clone(), target.clone(), "variable_map".to_string()),
+                CouplingEntry::OperatorCompose { systems, .. } => {
+                    if systems.len() >= 2 {
+                        (systems[0].clone(), systems[1].clone(), "operator_compose".to_string())
+                    } else {
+                        continue; // Skip invalid coupling
+                    }
+                },
+                CouplingEntry::Couple2 { systems, .. } => {
+                    if systems.len() >= 2 {
+                        (systems[0].clone(), systems[1].clone(), "couple2".to_string())
+                    } else {
+                        continue; // Skip invalid coupling
+                    }
+                },
+                CouplingEntry::VariableMap { from, to, .. } =>
+                    (from.clone(), to.clone(), "variable_map".to_string()),
                 CouplingEntry::OperatorApply { operator, target, .. } =>
                     (operator.clone(), target.clone(), "operator_apply".to_string()),
                 CouplingEntry::Callback { source, target, .. } =>
