@@ -6,7 +6,7 @@ conformance testing, returning structured validation results.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any, Union, Tuple
+from typing import List, Dict, Any, Union, Tuple, Set
 import json
 import traceback
 
@@ -553,17 +553,76 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
                         details={"species": species_name, "stoichiometry": stoich, "stoichiometry_type": type(stoich).__name__}
                     ))
 
-            # Validate rate constant references (basic check - would need expression parsing for full validation)
+            # Validate rate constant references (full expression parsing)
             if hasattr(reaction, 'rate_constant') and reaction.rate_constant is not None:
-                if isinstance(reaction.rate_constant, str):
-                    # Rate constant is a parameter reference
-                    if reaction.rate_constant not in param_names:
-                        structural_errors.append(ValidationError(
-                            path=f"{reaction_path}/rate_constant",
-                            message=f"Rate constant parameter '{reaction.rate_constant}' not declared in reaction system '{rs.name}'",
-                            code="undeclared_parameter",
-                            details={"parameter": reaction.rate_constant, "reaction_system": rs.name, "available_parameters": list(param_names)}
-                        ))
+                _validate_rate_expression(reaction.rate_constant, param_names, species_names, rs.name, reaction_path, structural_errors)
+
+
+def _validate_rate_expression(rate_expr, param_names: Set[str], species_names: Set[str],
+                             reaction_system_name: str, reaction_path: str, structural_errors: List[ValidationError]) -> None:
+    """
+    Validate that a rate expression only references declared parameters and species.
+
+    Args:
+        rate_expr: The rate expression (string, number, or ExprNode)
+        param_names: Set of declared parameter names in the reaction system
+        species_names: Set of declared species names in the reaction system
+        reaction_system_name: Name of the reaction system for error messages
+        reaction_path: Path to the reaction for error reporting
+        structural_errors: List to append validation errors to
+    """
+    from .expression import free_variables
+
+    if isinstance(rate_expr, str):
+        # Simple parameter reference
+        if rate_expr not in param_names:
+            structural_errors.append(ValidationError(
+                path=f"{reaction_path}/rate_constant",
+                message=f"Rate constant parameter '{rate_expr}' not declared in reaction system '{reaction_system_name}'",
+                code="undeclared_parameter",
+                details={
+                    "parameter": rate_expr,
+                    "reaction_system": reaction_system_name,
+                    "available_parameters": list(param_names)
+                }
+            ))
+    elif isinstance(rate_expr, (int, float)):
+        # Numeric constant - always valid
+        pass
+    else:
+        # Complex expression - parse and validate all variables
+        try:
+            referenced_vars = free_variables(rate_expr)
+
+            # Check that all referenced variables are declared parameters or species
+            for var in referenced_vars:
+                if var not in param_names and var not in species_names:
+                    # Variable is not declared in this reaction system
+                    structural_errors.append(ValidationError(
+                        path=f"{reaction_path}/rate_constant",
+                        message=f"Rate expression references undeclared variable '{var}' in reaction system '{reaction_system_name}'",
+                        code="undeclared_rate_variable",
+                        details={
+                            "variable": var,
+                            "reaction_system": reaction_system_name,
+                            "available_parameters": list(param_names),
+                            "available_species": list(species_names),
+                            "rate_expression": str(rate_expr)
+                        }
+                    ))
+
+        except Exception as e:
+            # Error parsing expression - report as validation error
+            structural_errors.append(ValidationError(
+                path=f"{reaction_path}/rate_constant",
+                message=f"Could not parse rate expression in reaction system '{reaction_system_name}': {str(e)}",
+                code="invalid_rate_expression",
+                details={
+                    "reaction_system": reaction_system_name,
+                    "rate_expression": str(rate_expr),
+                    "parse_error": str(e)
+                }
+            ))
 
 
 def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
