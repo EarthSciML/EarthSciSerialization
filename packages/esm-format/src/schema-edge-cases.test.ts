@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateSchema, load, SchemaValidationError } from './index.js'
+import { validateSchema, load, SchemaValidationError, ParseError } from './index.js'
 
 describe('Schema Edge Cases', () => {
   describe('anyOf constraint: models OR reaction_systems required', () => {
@@ -617,9 +617,9 @@ describe('Schema Edge Cases', () => {
   })
 
   describe('schema evolution compatibility', () => {
-    it('should enforce exact version match', () => {
-      const wrongVersion = {
-        esm: "0.2.0", // Wrong version
+    it('should handle version compatibility for minor version differences', () => {
+      const minorVersionUpgrade = {
+        esm: "0.2.0", // Minor version upgrade - should be accepted with warnings
         metadata: { name: "test" },
         models: {
           "test": {
@@ -629,16 +629,35 @@ describe('Schema Edge Cases', () => {
         }
       }
 
-      const errors = validateSchema(wrongVersion)
-      expect(errors.length).toBeGreaterThan(0)
+      // Schema validation should pass (no const constraint anymore)
+      const errors = validateSchema(minorVersionUpgrade)
+      expect(errors.length).toBe(0)
 
-      // Should find const/enum validation error for version
-      const versionError = errors.find(error =>
-        error.keyword === 'const' && error.path.includes('esm')
-      )
-      expect(versionError).toBeDefined()
+      // Load function should succeed (version compatibility handles this)
+      const result = load(minorVersionUpgrade)
+      expect(result.esm).toBe("0.2.0")
+      expect(result.metadata.name).toBe("test")
+    })
 
-      expect(() => load(wrongVersion)).toThrow(SchemaValidationError)
+    it('should reject major version mismatches', () => {
+      const majorVersionUpgrade = {
+        esm: "1.0.0", // Major version mismatch - should be rejected
+        metadata: { name: "test" },
+        models: {
+          "test": {
+            variables: {},
+            equations: []
+          }
+        }
+      }
+
+      // Schema validation should pass (pattern allows any semver)
+      const errors = validateSchema(majorVersionUpgrade)
+      expect(errors.length).toBe(0)
+
+      // Load function should reject due to major version mismatch
+      expect(() => load(majorVersionUpgrade)).toThrow(ParseError)
+      expect(() => load(majorVersionUpgrade)).toThrow('Unsupported major version 1')
     })
 
     it('should fail with invalid version format', () => {
