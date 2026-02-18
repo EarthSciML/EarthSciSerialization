@@ -43,6 +43,26 @@ pub struct EsmFile {
     pub solver: Option<Solver>,
 }
 
+/// Academic citation or data source reference
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Reference {
+    /// DOI identifier
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doi: Option<String>,
+
+    /// Full citation text
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub citation: Option<String>,
+
+    /// URL reference
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    /// Additional notes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+}
+
 /// Metadata section
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
@@ -109,6 +129,10 @@ pub struct Model {
     /// Human-readable model name
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+
+    /// Academic citation or data source reference
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Reference>,
 
     /// State variables, parameters, and observed quantities (keyed by name)
     pub variables: HashMap<String, ModelVariable>,

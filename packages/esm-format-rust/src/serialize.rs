@@ -115,6 +115,7 @@ mod tests {
         });
 
         models.insert("test".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables,
             equations: vec![

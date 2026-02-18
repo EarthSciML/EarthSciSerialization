@@ -29,6 +29,7 @@ fn test_component_graph_generation() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("TestModel".to_string()),
         variables,
         equations: vec![],
@@ -103,6 +104,7 @@ fn test_component_graph_exports() {
     };
 
     let model = Model {
+        reference: None,
         name: Some("SimpleModel".to_string()),
         variables: HashMap::new(),
         equations: vec![],
@@ -168,6 +170,7 @@ fn test_model_expression_graph() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("ExprTest".to_string()),
         variables,
         equations: vec![
@@ -284,6 +287,7 @@ fn test_component_existence() {
     };
 
     let model = Model {
+        reference: None,
         name: Some("TestModel".to_string()),
         variables: HashMap::new(),
         equations: vec![],
@@ -380,6 +384,7 @@ fn test_expected_graph_outputs() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("Simple".to_string()),
         variables,
         equations: vec![],

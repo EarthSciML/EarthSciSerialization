@@ -905,6 +905,7 @@ mod tests {
     fn test_component_graph_with_models() {
         let mut models = HashMap::new();
         models.insert("model1".to_string(), Model {
+            reference: None,
             name: Some("Test Model 1".to_string()),
             variables: HashMap::new(),
             equations: vec![],
@@ -913,6 +914,7 @@ mod tests {
             description: None,
         });
         models.insert("model2".to_string(), Model {
+            reference: None,
             name: Some("Test Model 2".to_string()),
             variables: HashMap::new(),
             equations: vec![],
@@ -956,6 +958,7 @@ mod tests {
     fn test_component_exists() {
         let mut models = HashMap::new();
         models.insert("test_model".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables: HashMap::new(),
             equations: vec![],
@@ -991,6 +994,7 @@ mod tests {
     fn test_get_component_type() {
         let mut models = HashMap::new();
         models.insert("test_model".to_string(), Model {
+            reference: None,
             name: Some("Test Model".to_string()),
             variables: HashMap::new(),
             equations: vec![],

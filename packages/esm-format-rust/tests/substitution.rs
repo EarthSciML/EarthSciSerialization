@@ -160,6 +160,7 @@ fn test_model_substitution() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("Test Model".to_string()),
         variables,
         equations: vec![

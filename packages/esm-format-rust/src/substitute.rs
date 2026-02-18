@@ -62,6 +62,7 @@ pub fn substitute_in_model(
 
     Model {
         name: model.name.clone(),
+        reference: model.reference.clone(),
         variables: model.variables.clone(),
         equations: new_equations,
         discrete_events: model.discrete_events.clone(), // TODO: Substitute in discrete events too
@@ -326,6 +327,7 @@ pub fn substitute_in_model_with_context(
 
     Model {
         name: model.name.clone(),
+        reference: model.reference.clone(),
         variables: model.variables.clone(),
         equations: new_equations,
         discrete_events: model.discrete_events.clone(), // TODO: Substitute in discrete events too
@@ -452,6 +454,7 @@ mod tests {
 
         models.insert("Atmosphere".to_string(), Model {
             name: Some("Atmosphere".to_string()),
+            reference: None,
             variables: model_variables,
             equations: vec![],
             discrete_events: None,
@@ -499,6 +502,7 @@ mod tests {
 
         models.insert("Atmosphere".to_string(), Model {
             name: Some("Atmosphere".to_string()),
+            reference: None,
             variables: model_variables,
             equations: vec![],
             discrete_events: None,
@@ -556,6 +560,7 @@ mod tests {
 
         models.insert("Atmosphere".to_string(), Model {
             name: Some("Atmosphere".to_string()),
+            reference: None,
             variables: model_variables,
             equations: vec![],
             discrete_events: None,
@@ -620,6 +625,7 @@ mod tests {
 
         models.insert("Atmosphere".to_string(), Model {
             name: Some("Atmosphere".to_string()),
+            reference: None,
             variables: model_variables,
             equations: vec![],
             discrete_events: None,

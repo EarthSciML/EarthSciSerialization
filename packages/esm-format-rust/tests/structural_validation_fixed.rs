@@ -21,6 +21,7 @@ fn test_undefined_variable_in_model() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("Test Model".to_string()),
         variables,
         equations: vec![
@@ -89,6 +90,7 @@ fn test_equation_count_mismatch() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("Test Model".to_string()),
         variables,
         equations: vec![
@@ -248,6 +250,7 @@ fn test_valid_file_passes() {
     });
 
     let model = Model {
+        reference: None,
         name: Some("Valid Model".to_string()),
         variables,
         equations: vec![], // No equations needed for parameter-only model
