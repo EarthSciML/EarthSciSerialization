@@ -710,14 +710,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 esm_format::CouplingEntry::VariableMap { from, to, .. } => {
                                     println!("  Rule {}: {} -> {} (VariableMap)", i+1, from, to);
                                 }
-                                esm_format::CouplingEntry::OperatorApply { operator, target, .. } => {
-                                    println!("  Rule {}: {} -> {} (OperatorApply)", i+1, operator, target);
+                                esm_format::CouplingEntry::OperatorApply { operator, .. } => {
+                                    println!("  Rule {}: {} (OperatorApply)", i+1, operator);
                                 }
-                                esm_format::CouplingEntry::Callback { source, target, .. } => {
-                                    println!("  Rule {}: {} -> {} (Callback)", i+1, source, target);
+                                esm_format::CouplingEntry::Callback { callback_id, .. } => {
+                                    println!("  Rule {}: {} (Callback)", i+1, callback_id);
                                 }
-                                esm_format::CouplingEntry::Event { event, systems, .. } => {
-                                    println!("  Rule {}: {} -> {:?} (Event)", i+1, event, systems);
+                                esm_format::CouplingEntry::Event { name, affects, .. } => {
+                                    let event_name = name.as_deref().unwrap_or("unnamed_event");
+                                    let systems: Vec<String> = affects.as_ref().map(|affects| {
+                                        affects.iter().filter_map(|affect| {
+                                            if affect.lhs.contains('.') {
+                                                Some(affect.lhs.split('.').next().unwrap_or("").to_string())
+                                            } else {
+                                                None
+                                            }
+                                        }).collect()
+                                    }).unwrap_or_default();
+                                    println!("  Rule {}: {} -> {:?} (Event)", i+1, event_name, systems);
                                 }
                             }
                         }

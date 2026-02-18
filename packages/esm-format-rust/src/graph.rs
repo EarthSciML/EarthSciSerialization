@@ -126,17 +126,30 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
                 },
                 CouplingEntry::VariableMap { from, to, .. } =>
                     (from.clone(), to.clone(), "variable_map".to_string()),
-                CouplingEntry::OperatorApply { operator, target, .. } =>
-                    (operator.clone(), target.clone(), "operator_apply".to_string()),
-                CouplingEntry::Callback { source, target, .. } =>
-                    (source.clone(), target.clone(), "callback".to_string()),
-                CouplingEntry::Event { event, systems, .. } => {
+                CouplingEntry::OperatorApply { operator, .. } =>
+                    (operator.clone(), "unknown_target".to_string(), "operator_apply".to_string()),
+                CouplingEntry::Callback { callback_id, .. } =>
+                    (callback_id.clone(), "unknown_target".to_string(), "callback".to_string()),
+                CouplingEntry::Event { name, affects, .. } => {
+                    // Extract system names from affect variable references (e.g., "System1.var")
+                    let systems: Vec<String> = affects.as_ref().map(|affects| {
+                        affects.iter().filter_map(|affect| {
+                            if affect.lhs.contains('.') {
+                                Some(affect.lhs.split('.').next().unwrap_or("").to_string())
+                            } else {
+                                None
+                            }
+                        }).collect()
+                    }).unwrap_or_default();
+
                     if systems.len() >= 2 {
                         (systems[0].clone(), systems[1].clone(), "event".to_string())
                     } else if systems.len() == 1 {
-                        (event.clone(), systems[0].clone(), "event".to_string())
+                        let event_name = name.as_deref().unwrap_or("unknown_event");
+                        (event_name.to_string(), systems[0].clone(), "event".to_string())
                     } else {
-                        (event.clone(), "unknown".to_string(), "event".to_string())
+                        let event_name = name.as_deref().unwrap_or("unknown_event");
+                        (event_name.to_string(), "unknown".to_string(), "event".to_string())
                     }
                 }
             };

@@ -1457,9 +1457,7 @@ impl fmt::Display for EsmFile {
 
         // Display solver info
         if let Some(ref solver) = self.solver {
-            if let Some(ref algorithm) = solver.algorithm {
-                writeln!(f, "  Solver: {}", algorithm)?;
-            }
+            writeln!(f, "  Solver: {}", solver.strategy)?;
         }
 
         Ok(())
