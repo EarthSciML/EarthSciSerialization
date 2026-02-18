@@ -17,6 +17,7 @@ import { createSignal } from 'solid-js';
 import type { Expression, EsmFile, Model, ReactionSystem } from 'esm-format';
 
 // Import the editor components
+import { ExpressionEditor, type ExpressionEditorProps } from './components/ExpressionEditor.js';
 import { EquationEditor, type EquationEditorProps } from './components/EquationEditor.js';
 import { ModelEditor, type ModelEditorProps } from './components/ModelEditor.js';
 import { ReactionEditor, type ReactionEditorProps } from './components/ReactionEditor.js';
@@ -188,7 +189,7 @@ export const EsmExpressionEditorComponent = (props: any) => {
   try {
     const expression: Expression = JSON.parse(props.expression);
 
-    const componentProps: EquationEditorProps = {
+    const componentProps: ExpressionEditorProps = {
       initialExpression: expression,
       onChange: (newExpr: Expression) => {
         if (typeof window !== 'undefined' && props.element) {
@@ -204,7 +205,7 @@ export const EsmExpressionEditorComponent = (props: any) => {
       showValidation: props['show-validation'] !== 'false'
     };
 
-    return () => EquationEditor(componentProps);
+    return () => ExpressionEditor(componentProps);
   } catch (error) {
     return () => {
       const errorDiv = document.createElement('div');
