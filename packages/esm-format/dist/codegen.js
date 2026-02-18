@@ -163,23 +163,23 @@ function generateModelCode(name, model) {
     const stateVars = [];
     const parameters = [];
     if (model.variables) {
-        for (const variable of Object.values(model.variables)) {
+        for (const [varName, variable] of Object.entries(model.variables)) {
             if (variable.type === 'state') {
-                stateVars.push(variable);
+                stateVars.push({ ...variable, name: varName });
             }
             else if (variable.type === 'parameter') {
-                parameters.push(variable);
+                parameters.push({ ...variable, name: varName });
             }
         }
     }
     // Generate @variables declaration
     if (stateVars.length > 0) {
-        const varDecls = stateVars.map(v => formatVariableDeclaration(v)).join(' ');
+        const varDecls = stateVars.map(v => formatVariableDeclaration(v, v.name)).join(' ');
         lines.push(`@variables t ${varDecls}`);
     }
     // Generate @parameters declaration
     if (parameters.length > 0) {
-        const paramDecls = parameters.map(v => formatVariableDeclaration(v)).join(' ');
+        const paramDecls = parameters.map(v => formatVariableDeclaration(v, v.name)).join(' ');
         lines.push(`@parameters ${paramDecls}`);
     }
     // Generate equations
@@ -204,8 +204,8 @@ function generateReactionSystemCode(name, reactionSystem) {
     lines.push(`# Reaction System: ${name}`);
     // Generate @species declaration
     if (reactionSystem.species && Object.keys(reactionSystem.species).length > 0) {
-        const speciesDecls = Object.values(reactionSystem.species)
-            .map(s => formatSpeciesDeclaration(s)).join(' ');
+        const speciesDecls = Object.entries(reactionSystem.species)
+            .map(([name, s]) => formatSpeciesDeclaration(s, name)).join(' ');
         lines.push(`@species ${speciesDecls}`);
     }
     // Generate @parameters for reaction parameters
@@ -315,10 +315,10 @@ function generateDataLoaderComment(name, dataLoader) {
 /**
  * Format a variable declaration with defaults and units
  */
-function formatVariableDeclaration(variable) {
-    let decl = variable.name || 'unnamed';
+function formatVariableDeclaration(variable, name) {
+    let decl = name;
     // Add default value and units if present
-    if (variable.default !== undefined || variable.unit) {
+    if (variable.default !== undefined || variable.units) {
         decl += '(';
         const parts = [];
         if (variable.default !== undefined) {
@@ -331,8 +331,8 @@ function formatVariableDeclaration(variable) {
                 parts.push(`${defaultVal}`);
             }
         }
-        if (variable.unit) {
-            parts.push(`u"${variable.unit}"`);
+        if (variable.units) {
+            parts.push(`u"${variable.units}"`);
         }
         decl += parts.join(', ');
         decl += ')';
@@ -342,12 +342,12 @@ function formatVariableDeclaration(variable) {
 /**
  * Format a species declaration
  */
-function formatSpeciesDeclaration(species) {
-    let decl = species.name || 'unnamed';
+function formatSpeciesDeclaration(species, name) {
+    let decl = name;
     // Add default value if present
-    if (species.initial_value !== undefined) {
+    if (species.default !== undefined) {
         // Ensure decimal point for floating point numbers
-        const initialVal = species.initial_value;
+        const initialVal = species.default;
         if (typeof initialVal === 'number' && Number.isInteger(initialVal)) {
             decl += `(${initialVal}.0)`;
         }
@@ -370,9 +370,9 @@ function formatEquation(equation) {
  */
 function formatReaction(reaction) {
     const rate = reaction.rate ? formatExpression(reaction.rate) : '1.0';
-    // Format reactants
-    const reactants = reaction.reactants ?
-        reaction.reactants.map(r => r.stoichiometry && r.stoichiometry !== 1 ?
+    // Format substrates (reactants)
+    const reactants = reaction.substrates ?
+        reaction.substrates.map(r => r.stoichiometry && r.stoichiometry !== 1 ?
             `${r.stoichiometry}*${r.species}` : r.species).join(' + ') :
         '∅';
     // Format products
@@ -521,12 +521,12 @@ function generatePythonModelCode(name, model) {
     const stateVars = [];
     const parameters = [];
     if (model.variables) {
-        for (const variable of Object.values(model.variables)) {
+        for (const [varName, variable] of Object.entries(model.variables)) {
             if (variable.type === 'state') {
-                stateVars.push(variable);
+                stateVars.push({ ...variable, name: varName });
             }
             else if (variable.type === 'parameter') {
-                parameters.push(variable);
+                parameters.push({ ...variable, name: varName });
             }
         }
     }
@@ -541,7 +541,7 @@ function generatePythonModelCode(name, model) {
     if (stateVars.length > 0) {
         lines.push('# State variables');
         for (const variable of stateVars) {
-            const comment = variable.unit ? `  # ${variable.unit}` : '';
+            const comment = variable.units ? `  # ${variable.units}` : '';
             if (variable.name && variable.name.includes('(')) {
                 // Function symbol (e.g., contains parentheses)
                 lines.push(`${variable.name} = sp.Function('${variable.name.split('(')[0]}')${comment}`);
@@ -561,7 +561,7 @@ function generatePythonModelCode(name, model) {
     if (parameters.length > 0) {
         lines.push('# Parameters');
         for (const parameter of parameters) {
-            const comment = parameter.unit ? `  # ${parameter.unit}` : '';
+            const comment = parameter.units ? `  # ${parameter.units}` : '';
             lines.push(`${parameter.name} = sp.Symbol('${parameter.name}')${comment}`);
         }
         lines.push('');
@@ -586,8 +586,8 @@ function generatePythonReactionSystemCode(name, reactionSystem) {
     // Generate species symbols
     if (reactionSystem.species && Object.keys(reactionSystem.species).length > 0) {
         lines.push('# Species');
-        for (const species of Object.values(reactionSystem.species)) {
-            lines.push(`${species.name} = sp.Symbol('${species.name}')`);
+        for (const [name, species] of Object.entries(reactionSystem.species)) {
+            lines.push(`${name} = sp.Symbol('${name}')`);
         }
         lines.push('');
     }
@@ -604,8 +604,8 @@ function generatePythonReactionSystemCode(name, reactionSystem) {
         lines.push('# Stoichiometry setup (TODO: Implement reaction network)');
         for (const [reactionName, reaction] of Object.entries(reactionSystem.reactions)) {
             lines.push(`# Reaction: ${reactionName}`);
-            if (reaction.reactants) {
-                const reactantStr = reaction.reactants
+            if (reaction.substrates) {
+                const reactantStr = reaction.substrates
                     .map(r => r.stoichiometry && r.stoichiometry !== 1 ? `${r.stoichiometry}*${r.species}` : r.species)
                     .join(' + ');
                 lines.push(`#   Reactants: ${reactantStr}`);
