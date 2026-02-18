@@ -301,12 +301,156 @@ end
 """
     validate_coupling_references(file::EsmFile, coupling_entry::CouplingEntry, path::String) -> Vector{StructuralError}
 
-Validate coupling references - placeholder implementation.
+Validate coupling references based on the specific coupling type.
+Checks that systems, operators, and variable references can be resolved.
 """
 function validate_coupling_references(file::EsmFile, coupling_entry::CouplingEntry, path::String)::Vector{StructuralError}
-    # CouplingEntry is abstract - need concrete implementation based on actual coupling types
-    # For now, return empty as coupling validation would require specific coupling entry types
-    return StructuralError[]
+    errors = StructuralError[]
+
+    if isa(coupling_entry, CouplingOperatorCompose)
+        # Validate that all referenced systems exist
+        for (i, system_name) in enumerate(coupling_entry.systems)
+            if !system_exists_in_file(file, system_name)
+                push!(errors, StructuralError(
+                    "$path.systems[$i]",
+                    "System '$system_name' referenced in operator_compose coupling not found",
+                    "undefined_system"
+                ))
+            end
+        end
+
+    elseif isa(coupling_entry, CouplingCouple2)
+        # Validate that all referenced systems exist
+        for (i, system_name) in enumerate(coupling_entry.systems)
+            if !system_exists_in_file(file, system_name)
+                push!(errors, StructuralError(
+                    "$path.systems[$i]",
+                    "System '$system_name' referenced in couple2 coupling not found",
+                    "undefined_system"
+                ))
+            end
+        end
+
+    elseif isa(coupling_entry, CouplingVariableMap)
+        # Validate 'from' reference
+        if !validate_reference_syntax(coupling_entry.from)
+            push!(errors, StructuralError(
+                "$path.from",
+                "Invalid reference syntax: '$(coupling_entry.from)'",
+                "invalid_reference_syntax"
+            ))
+        else
+            # Try to resolve the 'from' reference
+            try
+                resolve_qualified_reference(file, coupling_entry.from)
+            catch e
+                if isa(e, QualifiedReferenceError)
+                    push!(errors, StructuralError(
+                        "$path.from",
+                        "Cannot resolve 'from' reference '$(coupling_entry.from)': $(e.message)",
+                        "unresolved_reference"
+                    ))
+                end
+            end
+        end
+
+        # Validate 'to' reference
+        if !validate_reference_syntax(coupling_entry.to)
+            push!(errors, StructuralError(
+                "$path.to",
+                "Invalid reference syntax: '$(coupling_entry.to)'",
+                "invalid_reference_syntax"
+            ))
+        else
+            # Try to resolve the 'to' reference
+            try
+                resolve_qualified_reference(file, coupling_entry.to)
+            catch e
+                if isa(e, QualifiedReferenceError)
+                    push!(errors, StructuralError(
+                        "$path.to",
+                        "Cannot resolve 'to' reference '$(coupling_entry.to)': $(e.message)",
+                        "unresolved_reference"
+                    ))
+                end
+            end
+        end
+
+    elseif isa(coupling_entry, CouplingOperatorApply)
+        # Validate that the referenced operator exists
+        if file.operators === nothing || !haskey(file.operators, coupling_entry.operator)
+            push!(errors, StructuralError(
+                "$path.operator",
+                "Operator '$(coupling_entry.operator)' referenced in operator_apply coupling not found",
+                "undefined_operator"
+            ))
+        end
+
+    elseif isa(coupling_entry, CouplingCallback)
+        # Basic validation - callback_id should be a non-empty string
+        if isempty(coupling_entry.callback_id)
+            push!(errors, StructuralError(
+                "$path.callback_id",
+                "Callback ID cannot be empty",
+                "empty_callback_id"
+            ))
+        end
+
+    elseif isa(coupling_entry, CouplingEvent)
+        # Validate affect equations
+        for (i, affect) in enumerate(coupling_entry.affects)
+            # Try to resolve the affect target as a qualified reference
+            try
+                resolve_qualified_reference(file, affect.lhs)
+            catch e
+                if isa(e, QualifiedReferenceError)
+                    push!(errors, StructuralError(
+                        "$path.affects[$i].lhs",
+                        "Cannot resolve affect target '$(affect.lhs)': $(e.message)",
+                        "unresolved_affect_target"
+                    ))
+                end
+            end
+
+            # Validate the affect expression references
+            append!(errors, validate_expression_references(file, affect.rhs, "$path.affects[$i].rhs"))
+        end
+
+        # Validate negative affect equations if present
+        if coupling_entry.affect_neg !== nothing
+            for (i, affect) in enumerate(coupling_entry.affect_neg)
+                # Try to resolve the affect target as a qualified reference
+                try
+                    resolve_qualified_reference(file, affect.lhs)
+                catch e
+                    if isa(e, QualifiedReferenceError)
+                        push!(errors, StructuralError(
+                            "$path.affect_neg[$i].lhs",
+                            "Cannot resolve negative affect target '$(affect.lhs)': $(e.message)",
+                            "unresolved_affect_target"
+                        ))
+                    end
+                end
+
+                # Validate the affect expression references
+                append!(errors, validate_expression_references(file, affect.rhs, "$path.affect_neg[$i].rhs"))
+            end
+        end
+
+        # Validate condition expressions if present (for continuous events)
+        if coupling_entry.conditions !== nothing
+            for (i, condition) in enumerate(coupling_entry.conditions)
+                append!(errors, validate_expression_references(file, condition, "$path.conditions[$i]"))
+            end
+        end
+
+        # Validate trigger expression if present (for discrete events)
+        if coupling_entry.trigger !== nothing && isa(coupling_entry.trigger, ConditionTrigger)
+            append!(errors, validate_expression_references(file, coupling_entry.trigger.expression, "$path.trigger.expression"))
+        end
+    end
+
+    return errors
 end
 
 """
@@ -434,6 +578,35 @@ function validate_reaction_consistency(rs::ReactionSystem, path::String)::Vector
     end
 
     return errors
+end
+
+"""
+    system_exists_in_file(file::EsmFile, system_name::String) -> Bool
+
+Check if a system (model, reaction_system, data_loader, or operator) exists in the ESM file.
+"""
+function system_exists_in_file(file::EsmFile, system_name::String)::Bool
+    # Check models
+    if file.models !== nothing && haskey(file.models, system_name)
+        return true
+    end
+
+    # Check reaction_systems
+    if file.reaction_systems !== nothing && haskey(file.reaction_systems, system_name)
+        return true
+    end
+
+    # Check data_loaders
+    if file.data_loaders !== nothing && haskey(file.data_loaders, system_name)
+        return true
+    end
+
+    # Check operators
+    if file.operators !== nothing && haskey(file.operators, system_name)
+        return true
+    end
+
+    return false
 end
 
 """
