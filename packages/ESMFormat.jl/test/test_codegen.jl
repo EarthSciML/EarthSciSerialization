@@ -9,11 +9,11 @@ using ESMFormat
     @testset "to_julia_code" begin
         @testset "should generate basic Julia script structure" begin
             file = EsmFile(
-                esm = "0.1.0",
-                metadata = Dict{Symbol,Any}(
-                    :title => "Test Model",
-                    :description => "A test model for code generation"
-                ),
+                "0.1.0",
+                Metadata(
+                    "Test Model";
+                    description = "A test model for code generation"
+                );
                 models = Dict{String,Model}(),
                 reaction_systems = Dict{String,ReactionSystem}()
             )
@@ -31,27 +31,25 @@ using ESMFormat
 
         @testset "should generate model code with variables and equations" begin
             file = EsmFile(
-                esm = "0.1.0",
+                "0.1.0",
+                Metadata("Test Model with Equations");
                 models = Dict(
                     "atmospheric" => Model(
-                        variables = Dict(
+                        Dict(
                             "O3" => ModelVariable(
-                                name = "O3",
-                                type = StateVariable,
+                                StateVariable;
                                 default = 50.0,
-                                unit = "ppb"
+                                units = "ppb"
                             ),
                             "k1" => ModelVariable(
-                                name = "k1",
-                                type = ParameterVariable,
-                                default = 1e-3,
-                                unit = nothing
+                                ParameterVariable;
+                                default = 1e-3
                             )
                         ),
-                        equations = [
+                        [
                             Equation(
-                                lhs = OpExpr("D", [VarExpr("O3")]),
-                                rhs = OpExpr("*", [VarExpr("k1"), VarExpr("O3")])
+                                OpExpr("D", ESMFormat.Expr[VarExpr("O3")]),
+                                OpExpr("*", ESMFormat.Expr[VarExpr("k1"), VarExpr("O3")])
                             )
                         ]
                     )
@@ -71,11 +69,11 @@ using ESMFormat
     @testset "to_python_code" begin
         @testset "should generate basic Python script structure" begin
             file = EsmFile(
-                esm = "0.1.0",
-                metadata = Dict{Symbol,Any}(
-                    :title => "Test Model",
-                    :description => "A test model for Python code generation"
-                ),
+                "0.1.0",
+                Metadata(
+                    "Test Model";
+                    description = "A test model for Python code generation"
+                );
                 models = Dict{String,Model}(),
                 reaction_systems = Dict{String,ReactionSystem}()
             )
@@ -94,27 +92,25 @@ using ESMFormat
 
         @testset "should generate model code with variables and equations" begin
             file = EsmFile(
-                esm = "0.1.0",
+                "0.1.0",
+                Metadata("Test Model for Python");
                 models = Dict(
                     "atmospheric" => Model(
-                        variables = Dict(
+                        Dict(
                             "O3" => ModelVariable(
-                                name = "O3",
-                                type = StateVariable,
+                                StateVariable;
                                 default = 50.0,
-                                unit = "ppb"
+                                units = "ppb"
                             ),
                             "k1" => ModelVariable(
-                                name = "k1",
-                                type = ParameterVariable,
-                                default = 1e-3,
-                                unit = nothing
+                                ParameterVariable;
+                                default = 1e-3
                             )
                         ),
-                        equations = [
+                        [
                             Equation(
-                                lhs = OpExpr("D", [VarExpr("O3")]),
-                                rhs = OpExpr("*", [VarExpr("k1"), VarExpr("O3")])
+                                OpExpr("D", ESMFormat.Expr[VarExpr("O3")]),
+                                OpExpr("*", ESMFormat.Expr[VarExpr("k1"), VarExpr("O3")])
                             )
                         ]
                     )
