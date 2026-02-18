@@ -90,7 +90,8 @@ pub use units::{parse_unit, check_dimensional_consistency, convert_units, Unit, 
 pub use edit::{
     add_model, remove_model, add_variable, remove_variable, add_equation, remove_equation,
     replace_equation, add_reaction_system, add_species, remove_species, add_reaction,
-    remove_reaction, update_model_metadata, substitute_in_expression, EditError
+    remove_reaction, update_model_metadata, substitute_in_expression, add_coupling,
+    remove_coupling, replace_coupling, EditError
 };
 pub use error::EsmError;
 pub use performance::{PerformanceError, CompactExpr};
