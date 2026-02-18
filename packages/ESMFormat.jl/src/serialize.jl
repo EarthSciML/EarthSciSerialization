@@ -197,10 +197,14 @@ end
 Serialize Equation to JSON-compatible format.
 """
 function serialize_equation(eq::Equation)::Dict{String,Any}
-    return Dict{String,Any}(
+    result = Dict{String,Any}(
         "lhs" => serialize_expression(eq.lhs),
         "rhs" => serialize_expression(eq.rhs)
     )
+    if eq._comment !== nothing
+        result["_comment"] = eq._comment
+    end
+    return result
 end
 
 """
