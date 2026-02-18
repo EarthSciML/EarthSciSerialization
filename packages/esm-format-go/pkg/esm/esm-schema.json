@@ -805,6 +805,10 @@
           "enum": ["continuous", "discrete"],
           "description": "Whether this is a continuous or discrete event."
         },
+        "name": {
+          "type": "string",
+          "description": "Human-readable identifier."
+        },
         "conditions": {
           "type": "array",
           "items": { "$ref": "#/$defs/Expression" },
@@ -816,7 +820,12 @@
         },
         "affects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/AffectEquation" }
+          "items": { "$ref": "#/$defs/AffectEquation" },
+          "description": "Affect equations. Required unless functional_affect is used."
+        },
+        "functional_affect": {
+          "$ref": "#/$defs/FunctionalAffect",
+          "description": "Registered functional affect handler (alternative to symbolic affects)."
         },
         "affect_neg": {
           "oneOf": [
@@ -838,13 +847,17 @@
         "reinitialize": { "type": "boolean" },
         "description": { "type": "string" }
       },
+      "oneOf": [
+        { "required": ["affects"] },
+        { "required": ["functional_affect"] }
+      ],
       "allOf": [
         {
           "if": {
             "properties": { "event_type": { "const": "continuous" } }
           },
           "then": {
-            "required": ["conditions", "affects"]
+            "required": ["conditions"]
           }
         },
         {
@@ -852,7 +865,7 @@
             "properties": { "event_type": { "const": "discrete" } }
           },
           "then": {
-            "required": ["trigger", "affects"]
+            "required": ["trigger"]
           }
         }
       ]
