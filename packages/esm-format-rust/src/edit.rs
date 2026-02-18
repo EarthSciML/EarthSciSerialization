@@ -1,6 +1,6 @@
 //! Immutable editing operations for ESM models
 
-use crate::{EsmFile, Model, ReactionSystem, Expr, ExpressionNode, Equation, Species, Reaction, ModelVariable};
+use crate::{EsmFile, Model, ReactionSystem, Expr, ExpressionNode, Equation, Species, Reaction, ModelVariable, DiscreteEvent, ContinuousEvent};
 use std::collections::HashMap;
 
 /// Result type for editing operations
@@ -21,6 +21,8 @@ pub enum EditError {
     SpeciesNotFound(String),
     /// Reaction not found
     ReactionNotFound(String),
+    /// Event index out of bounds
+    EventIndexError(usize),
 }
 
 impl std::fmt::Display for EditError {
@@ -32,6 +34,7 @@ impl std::fmt::Display for EditError {
             EditError::EquationIndexError(idx) => write!(f, "Equation index out of bounds: {}", idx),
             EditError::SpeciesNotFound(name) => write!(f, "Species not found: {}", name),
             EditError::ReactionNotFound(name) => write!(f, "Reaction not found: {}", name),
+            EditError::EventIndexError(idx) => write!(f, "Event index out of bounds: {}", idx),
         }
     }
 }
@@ -371,6 +374,110 @@ pub fn substitute_in_expression(expr: &Expr, substitutions: &HashMap<String, Exp
     }
 }
 
+/// Add a discrete event to a model
+///
+/// # Arguments
+///
+/// * `model` - The model to modify
+/// * `event` - The discrete event to add
+///
+/// # Returns
+///
+/// * `EditResult<Model>` - New model with the added discrete event
+pub fn add_discrete_event(model: &Model, event: DiscreteEvent) -> EditResult<Model> {
+    let mut new_model = model.clone();
+
+    // Initialize discrete_events if it doesn't exist
+    if new_model.discrete_events.is_none() {
+        new_model.discrete_events = Some(Vec::new());
+    }
+
+    new_model.discrete_events.as_mut().unwrap().push(event);
+    Ok(new_model)
+}
+
+/// Remove a discrete event from a model by index
+///
+/// # Arguments
+///
+/// * `model` - The model to modify
+/// * `index` - Index of the discrete event to remove
+///
+/// # Returns
+///
+/// * `EditResult<Model>` - New model without the discrete event
+pub fn remove_discrete_event(model: &Model, index: usize) -> EditResult<Model> {
+    let mut new_model = model.clone();
+
+    if let Some(ref mut events) = new_model.discrete_events {
+        if index >= events.len() {
+            return Err(EditError::EventIndexError(index));
+        }
+        events.remove(index);
+
+        // Clean up empty vector by setting to None
+        if events.is_empty() {
+            new_model.discrete_events = None;
+        }
+    } else {
+        return Err(EditError::EventIndexError(index));
+    }
+
+    Ok(new_model)
+}
+
+/// Add a continuous event to a model
+///
+/// # Arguments
+///
+/// * `model` - The model to modify
+/// * `event` - The continuous event to add
+///
+/// # Returns
+///
+/// * `EditResult<Model>` - New model with the added continuous event
+pub fn add_continuous_event(model: &Model, event: ContinuousEvent) -> EditResult<Model> {
+    let mut new_model = model.clone();
+
+    // Initialize continuous_events if it doesn't exist
+    if new_model.continuous_events.is_none() {
+        new_model.continuous_events = Some(Vec::new());
+    }
+
+    new_model.continuous_events.as_mut().unwrap().push(event);
+    Ok(new_model)
+}
+
+/// Remove a continuous event from a model by index
+///
+/// # Arguments
+///
+/// * `model` - The model to modify
+/// * `index` - Index of the continuous event to remove
+///
+/// # Returns
+///
+/// * `EditResult<Model>` - New model without the continuous event
+pub fn remove_continuous_event(model: &Model, index: usize) -> EditResult<Model> {
+    let mut new_model = model.clone();
+
+    if let Some(ref mut events) = new_model.continuous_events {
+        if index >= events.len() {
+            return Err(EditError::EventIndexError(index));
+        }
+        events.remove(index);
+
+        // Clean up empty vector by setting to None
+        if events.is_empty() {
+            new_model.continuous_events = None;
+        }
+    } else {
+        return Err(EditError::EventIndexError(index));
+    }
+
+    Ok(new_model)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -541,5 +648,201 @@ mod tests {
         } else {
             panic!("Expected operator expression");
         }
+    }
+
+    #[test]
+    fn test_add_discrete_event() {
+        use crate::{DiscreteEventTrigger, AffectEquation};
+
+        let model = create_simple_model();
+        let event = DiscreteEvent {
+            name: Some("test_discrete_event".to_string()),
+            trigger: DiscreteEventTrigger::Condition {
+                expression: Expr::Variable("x".to_string()),
+            },
+            affects: Some(vec![AffectEquation {
+                lhs: "state_var".to_string(),
+                rhs: Expr::Number(1.0),
+            }]),
+            functional_affect: None,
+            discrete_parameters: None,
+            reinitialize: None,
+            description: None,
+        };
+
+        let result = add_discrete_event(&model, event);
+        assert!(result.is_ok());
+
+        let new_model = result.unwrap();
+        assert!(new_model.discrete_events.is_some());
+        assert_eq!(new_model.discrete_events.as_ref().unwrap().len(), 1);
+        assert_eq!(new_model.discrete_events.as_ref().unwrap()[0].name, Some("test_discrete_event".to_string()));
+    }
+
+    #[test]
+    fn test_remove_discrete_event() {
+        use crate::{DiscreteEventTrigger, AffectEquation};
+
+        let mut model = create_simple_model();
+        model.discrete_events = Some(vec![DiscreteEvent {
+            name: Some("event_to_remove".to_string()),
+            trigger: DiscreteEventTrigger::Condition {
+                expression: Expr::Variable("x".to_string()),
+            },
+            affects: Some(vec![AffectEquation {
+                lhs: "state_var".to_string(),
+                rhs: Expr::Number(1.0),
+            }]),
+            functional_affect: None,
+            discrete_parameters: None,
+            reinitialize: None,
+            description: None,
+        }]);
+
+        // Test successful removal
+        let result = remove_discrete_event(&model, 0);
+        assert!(result.is_ok());
+
+        let new_model = result.unwrap();
+        assert!(new_model.discrete_events.is_none()); // Should be None when empty
+
+        // Test out of bounds error
+        let result = remove_discrete_event(&model, 1);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::EventIndexError(1)));
+
+        // Test error when no events exist
+        let empty_model = create_simple_model();
+        let result = remove_discrete_event(&empty_model, 0);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::EventIndexError(0)));
+    }
+
+    #[test]
+    fn test_add_continuous_event() {
+        use crate::AffectEquation;
+
+        let model = create_simple_model();
+        let event = ContinuousEvent {
+            name: Some("test_continuous_event".to_string()),
+            conditions: vec![Expr::Variable("x".to_string())],
+            affects: vec![AffectEquation {
+                lhs: "state_var".to_string(),
+                rhs: Expr::Number(2.0),
+            }],
+            affect_neg: None,
+            root_find: None,
+            reinitialize: None,
+            discrete_parameters: None,
+            priority: None,
+            description: None,
+        };
+
+        let result = add_continuous_event(&model, event);
+        assert!(result.is_ok());
+
+        let new_model = result.unwrap();
+        assert!(new_model.continuous_events.is_some());
+        assert_eq!(new_model.continuous_events.as_ref().unwrap().len(), 1);
+        assert_eq!(new_model.continuous_events.as_ref().unwrap()[0].name, Some("test_continuous_event".to_string()));
+    }
+
+    #[test]
+    fn test_remove_continuous_event() {
+        use crate::AffectEquation;
+
+        let mut model = create_simple_model();
+        model.continuous_events = Some(vec![ContinuousEvent {
+            name: Some("event_to_remove".to_string()),
+            conditions: vec![Expr::Variable("x".to_string())],
+            affects: vec![AffectEquation {
+                lhs: "state_var".to_string(),
+                rhs: Expr::Number(2.0),
+            }],
+            affect_neg: None,
+            root_find: None,
+            reinitialize: None,
+            discrete_parameters: None,
+            priority: None,
+            description: None,
+        }]);
+
+        // Test successful removal
+        let result = remove_continuous_event(&model, 0);
+        assert!(result.is_ok());
+
+        let new_model = result.unwrap();
+        assert!(new_model.continuous_events.is_none()); // Should be None when empty
+
+        // Test out of bounds error
+        let result = remove_continuous_event(&model, 1);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::EventIndexError(1)));
+
+        // Test error when no events exist
+        let empty_model = create_simple_model();
+        let result = remove_continuous_event(&empty_model, 0);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::EventIndexError(0)));
+    }
+
+    #[test]
+    fn test_multiple_discrete_events() {
+        use crate::{DiscreteEventTrigger, AffectEquation};
+
+        let model = create_simple_model();
+
+        let event1 = DiscreteEvent {
+            name: Some("event1".to_string()),
+            trigger: DiscreteEventTrigger::Condition {
+                expression: Expr::Variable("x".to_string()),
+            },
+            affects: None,
+            functional_affect: None,
+            discrete_parameters: None,
+            reinitialize: None,
+            description: None,
+        };
+
+        let event2 = DiscreteEvent {
+            name: Some("event2".to_string()),
+            trigger: DiscreteEventTrigger::Periodic {
+                interval: 1.0,
+                initial_offset: Some(0.5),
+            },
+            affects: Some(vec![AffectEquation {
+                lhs: "y".to_string(),
+                rhs: Expr::Number(5.0),
+            }]),
+            functional_affect: None,
+            discrete_parameters: None,
+            reinitialize: Some(true),
+            description: Some("Periodic event".to_string()),
+        };
+
+        // Add first event
+        let result1 = add_discrete_event(&model, event1);
+        assert!(result1.is_ok());
+        let model_with_one = result1.unwrap();
+
+        // Add second event
+        let result2 = add_discrete_event(&model_with_one, event2);
+        assert!(result2.is_ok());
+        let model_with_two = result2.unwrap();
+
+        assert!(model_with_two.discrete_events.is_some());
+        assert_eq!(model_with_two.discrete_events.as_ref().unwrap().len(), 2);
+
+        // Remove middle event (index 0)
+        let result3 = remove_discrete_event(&model_with_two, 0);
+        assert!(result3.is_ok());
+        let model_with_one_removed = result3.unwrap();
+
+        assert!(model_with_one_removed.discrete_events.is_some());
+        assert_eq!(model_with_one_removed.discrete_events.as_ref().unwrap().len(), 1);
+        assert_eq!(
+            model_with_one_removed.discrete_events.as_ref().unwrap()[0].name,
+            Some("event2".to_string())
+        );
     }
 }
