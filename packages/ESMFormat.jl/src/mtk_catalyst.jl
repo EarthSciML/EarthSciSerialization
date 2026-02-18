@@ -1143,10 +1143,11 @@ function from_mock_mtk_system(sys::MockMTKSystem, name::String)
         end
     end
 
-    # Events are simplified for mock systems
-    events = EventType[]
+    # Events are simplified for mock systems - separate into discrete and continuous
+    discrete_events = DiscreteEvent[]
+    continuous_events = ContinuousEvent[]
 
-    return Model(variables, equations; events=events)
+    return Model(variables, equations; discrete_events=discrete_events, continuous_events=continuous_events)
 end
 
 """
@@ -1217,12 +1218,12 @@ function extract_variable_name(symbolic_var)
 end
 
 """
-    parse_mock_expression(expr_str::String) -> Expr
+    parse_mock_expression(expr_str::AbstractString) -> Expr
 
 Parse a string representation of an expression into an ESM Expr.
 This is a simple parser for mock system string representations.
 """
-function parse_mock_expression(expr_str::String)
+function parse_mock_expression(expr_str::AbstractString)
     expr_str = strip(expr_str)
 
     # Handle numeric literals
@@ -1252,20 +1253,20 @@ function parse_mock_expression(expr_str::String)
             else
                 # Simple comma-separated argument parsing
                 arg_strs = split(args_str, ",")
-                args = [parse_mock_expression(strip(arg)) for arg in arg_strs]
+                args = ESMFormat.Expr[parse_mock_expression(strip(arg)) for arg in arg_strs]
             end
 
             # Handle differential operator specially
             if func_name == "D" && length(args) >= 2
                 return OpExpr("D", [args[1]], wrt=string(args[2]))
             else
-                return OpExpr(func_name, args)
+                return OpExpr(string(func_name), args)
             end
         end
     end
 
     # Fallback: treat as variable name
-    return VarExpr(expr_str)
+    return VarExpr(string(expr_str))
 end
 
 """

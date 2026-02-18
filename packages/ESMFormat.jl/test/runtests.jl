@@ -12,8 +12,7 @@ using JSON3
     include("display_test.jl")
     include("units_test.jl")
     include("error_handling_test.jl")
-    # Temporarily disabled due to precompilation issues
-    # include("mtk_catalyst_test.jl")
+    include("mtk_catalyst_test.jl")
     include("reference_resolution_test.jl")
     include("solver_test.jl")
     include("solver_optimization_test.jl")
