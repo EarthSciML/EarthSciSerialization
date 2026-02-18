@@ -1232,6 +1232,21 @@ The domain section corresponds to `EarthSciMLBase.DomainInfo`. It specifies the 
 | `constant` | Fixed value at boundaries |
 | `zero_gradient` | ∂u/∂n = 0 at boundaries (Neumann) |
 | `periodic` | Wrap-around boundaries |
+| `dirichlet` | Fixed value at boundaries (equivalent to `constant`) |
+| `neumann` | ∂u/∂n = 0 at boundaries (equivalent to `zero_gradient`) |
+| `robin` | Mixed boundary condition: αu + β∂u/∂n = γ |
+
+#### Additional Boundary Condition Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `value` | number | Boundary value (for `constant`/`dirichlet` types) |
+| `function` | string | Function specification for time/space-varying boundaries |
+| `robin_alpha` | number | Robin BC coefficient α for u term in αu + β∂u/∂n = γ |
+| `robin_beta` | number | Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ |
+| `robin_gamma` | number | Robin BC RHS value γ in αu + β∂u/∂n = γ |
+
+**Note:** `dirichlet` and `neumann` are alternative names for `constant` and `zero_gradient` respectively, following standard PDE nomenclature. The Robin boundary condition provides a general mixed formulation where appropriate coefficients can recover Dirichlet (α=1, β=0) or Neumann (α=0, β=1) conditions as special cases.
 
 ---
 
