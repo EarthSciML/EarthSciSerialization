@@ -585,7 +585,7 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
         # Map schema types to our enum types
         type_mapping = {
             "constant": InitialConditionType.CONSTANT,
-            "per_variable": InitialConditionType.CONSTANT,  # Treat as constant for now
+            "per_variable": InitialConditionType.PER_VARIABLE,
             "from_file": InitialConditionType.DATA
         }
 
@@ -593,12 +593,14 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
 
         # Extract appropriate fields based on type
         value = ic_data.get("value")
+        values = ic_data.get("values")  # For per_variable type
         function = None
         data_source = ic_data.get("path")  # Schema uses "path" for file source
 
         domain.initial_conditions = InitialCondition(
             type=ic_type,
             value=value,
+            values=values,
             function=function,
             data_source=data_source
         )

@@ -290,6 +290,7 @@ class CoordinateTransform:
 class InitialConditionType(Enum):
     """Types of initial conditions."""
     CONSTANT = "constant"
+    PER_VARIABLE = "per_variable"
     FUNCTION = "function"
     DATA = "data"
 
@@ -299,6 +300,7 @@ class InitialCondition:
     """Initial condition specification."""
     type: InitialConditionType
     value: Optional[Union[float, Expr]] = None
+    values: Optional[Dict[str, float]] = None  # For per_variable type
     function: Optional[str] = None
     data_source: Optional[str] = None
 
