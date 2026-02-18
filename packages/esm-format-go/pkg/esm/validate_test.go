@@ -190,6 +190,16 @@ func TestValidateComplexExpression(t *testing.T) {
 							},
 						},
 					},
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"y"}, Wrt: strPtr("t")},
+						RHS: ExprNode{
+							Op: "*",
+							Args: []interface{}{
+								"k",
+								ExprNode{Op: "-", Args: []interface{}{"x", "y"}},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -321,4 +331,166 @@ func TestValidateDataLoaderMissingRequiredFields(t *testing.T) {
 
 	assert.GreaterOrEqual(t, errorCount, 2) // Type and LoaderID missing
 	assert.GreaterOrEqual(t, warningCount, 1) // No variables provided
+}
+
+// Test equation-unknown balance validation
+func TestValidateEquationUnknownBalance(t *testing.T) {
+	tests := []struct {
+		name          string
+		model         Model
+		expectedValid bool
+		expectedError string
+	}{
+		{
+			name: "balanced model with one state variable and one ODE",
+			model: Model{
+				Variables: map[string]ModelVariable{
+					"x": {Type: "state"},
+				},
+				Equations: []Equation{
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"x"}, Wrt: strPtr("t")},
+						RHS: float64(1.0),
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			name: "balanced model with two state variables and two ODEs",
+			model: Model{
+				Variables: map[string]ModelVariable{
+					"x": {Type: "state"},
+					"y": {Type: "state"},
+					"k": {Type: "parameter"},
+				},
+				Equations: []Equation{
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"x"}, Wrt: strPtr("t")},
+						RHS: ExprNode{Op: "*", Args: []interface{}{"k", "y"}},
+					},
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"y"}, Wrt: strPtr("t")},
+						RHS: ExprNode{Op: "*", Args: []interface{}{"k", "x"}},
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			name: "unbalanced model with state variable but no ODE",
+			model: Model{
+				Variables: map[string]ModelVariable{
+					"x": {Type: "state"},
+					"y": {Type: "state"},
+				},
+				Equations: []Equation{
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"x"}, Wrt: strPtr("t")},
+						RHS: float64(1.0),
+					},
+				},
+			},
+			expectedValid: false,
+			expectedError: "state variables without ODE equations: [y]",
+		},
+		{
+			name: "unbalanced model with ODE for non-state variable",
+			model: Model{
+				Variables: map[string]ModelVariable{
+					"x": {Type: "state"},
+					"k": {Type: "parameter"},
+				},
+				Equations: []Equation{
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"x"}, Wrt: strPtr("t")},
+						RHS: float64(1.0),
+					},
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"k"}, Wrt: strPtr("t")},
+						RHS: float64(2.0),
+					},
+				},
+			},
+			expectedValid: false,
+			expectedError: "ODE equations for non-state variables: [k]",
+		},
+		{
+			name: "unbalanced model with no state variables but ODEs",
+			model: Model{
+				Variables: map[string]ModelVariable{
+					"k": {Type: "parameter"},
+				},
+				Equations: []Equation{
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"k"}, Wrt: strPtr("t")},
+						RHS: float64(1.0),
+					},
+				},
+			},
+			expectedValid: false,
+			expectedError: "found 0 state variables but 1 ODE equations",
+		},
+		{
+			name: "model with non-derivative equations (should be balanced)",
+			model: Model{
+				Variables: map[string]ModelVariable{
+					"x": {Type: "state"},
+					"y": {Type: "observed", Expression: ExprNode{Op: "*", Args: []interface{}{"x", 2.0}}},
+				},
+				Equations: []Equation{
+					{
+						LHS: ExprNode{Op: "D", Args: []interface{}{"x"}, Wrt: strPtr("t")},
+						RHS: float64(1.0),
+					},
+					{
+						// This is not an ODE, it's an algebraic constraint
+						LHS: "y",
+						RHS: ExprNode{Op: "*", Args: []interface{}{"x", 2.0}},
+					},
+				},
+			},
+			expectedValid: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			esmFile := &EsmFile{
+				Esm: "0.1.0",
+				Metadata: Metadata{
+					Name:    "TestModel",
+					Authors: []string{"Test Author"},
+				},
+				Models: map[string]Model{
+					"TestModel": tc.model,
+				},
+			}
+
+			result := Validate(esmFile)
+
+			assert.Equal(t, tc.expectedValid, result.Valid, "Validation result should match expected")
+
+			if !tc.expectedValid {
+				assert.NotEmpty(t, result.Messages, "Should have validation messages")
+
+				found := false
+				for _, msg := range result.Messages {
+					if tc.expectedError != "" && assert.Contains(t, msg.Message, tc.expectedError) {
+						found = true
+						break
+					}
+				}
+
+				if tc.expectedError != "" {
+					assert.True(t, found, "Should find expected error message containing: %s", tc.expectedError)
+				}
+			} else {
+				// Check that there are no equation-unknown balance errors
+				for _, msg := range result.Messages {
+					assert.NotContains(t, msg.Message, "Equation-unknown balance", "Should not have equation-unknown balance errors")
+				}
+			}
+		})
+	}
 }

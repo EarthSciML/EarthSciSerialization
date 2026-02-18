@@ -74,6 +74,9 @@ func validateModel(modelName string, model *Model, result *DetailedValidationRes
 		validateExpressionVariables(eq.RHS, allVars, fmt.Sprintf("%s.rhs", eqPath), result)
 	}
 
+	// Equation-unknown balance validation (Section 3.2.1)
+	validateEquationUnknownBalance(modelName, model, basePath, result)
+
 	// Check observed variables have expressions
 	for varName, variable := range model.Variables {
 		varPath := fmt.Sprintf("%s.variables.%s", basePath, varName)
@@ -380,5 +383,75 @@ func validateOperatorReferences(file *EsmFile, result *DetailedValidationResult)
 				Path:    fmt.Sprintf("%s.needed_vars", basePath),
 			})
 		}
+	}
+}
+
+// validateEquationUnknownBalance validates equation-unknown balance for models
+// as per ESM libraries specification Section 3.2.1
+func validateEquationUnknownBalance(modelName string, model *Model, basePath string, result *DetailedValidationResult) {
+	// Count state variables
+	stateVars := make(map[string]bool)
+	for varName, variable := range model.Variables {
+		if variable.Type == "state" {
+			stateVars[varName] = true
+		}
+	}
+	nStates := len(stateVars)
+
+	// Count ODE equations (equations whose LHS is a time derivative D(var, t))
+	odeEquations := make(map[string]bool) // track which state variables have ODE equations
+	nOdes := 0
+
+	for _, eq := range model.Equations {
+		if lhsNode, ok := eq.LHS.(ExprNode); ok {
+			if lhsNode.Op == "D" && len(lhsNode.Args) > 0 {
+				// Check if this is a time derivative
+				if lhsNode.Wrt != nil && *lhsNode.Wrt == "t" {
+					nOdes++
+					// Extract the variable name from the derivative
+					if varName, ok := lhsNode.Args[0].(string); ok {
+						odeEquations[varName] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Check equation-unknown balance: n_odes == n_states
+	if nOdes != nStates {
+		result.Valid = false
+
+		// Report which state variables lack ODE equations
+		missingEquations := []string{}
+		for varName := range stateVars {
+			if !odeEquations[varName] {
+				missingEquations = append(missingEquations, varName)
+			}
+		}
+
+		// Report which ODE equations lack corresponding state variables
+		extraEquations := []string{}
+		for varName := range odeEquations {
+			if !stateVars[varName] {
+				extraEquations = append(extraEquations, varName)
+			}
+		}
+
+		// Generate error message
+		message := fmt.Sprintf("Equation-unknown balance failed: found %d state variables but %d ODE equations", nStates, nOdes)
+
+		if len(missingEquations) > 0 {
+			message += fmt.Sprintf("; state variables without ODE equations: %v", missingEquations)
+		}
+
+		if len(extraEquations) > 0 {
+			message += fmt.Sprintf("; ODE equations for non-state variables: %v", extraEquations)
+		}
+
+		result.Messages = append(result.Messages, ValidationMessage{
+			Level:   "error",
+			Message: message,
+			Path:    basePath,
+		})
 	}
 }
