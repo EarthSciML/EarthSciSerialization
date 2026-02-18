@@ -629,20 +629,20 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
     metadata = _parse_metadata(data["metadata"])
 
     # Parse models
-    models = []
+    models = {}
     if "models" in data:
         for model_name, model_data in data["models"].items():
             model = _parse_model(model_data)
             model.name = model_name
-            models.append(model)
+            models[model_name] = model
 
     # Parse reaction systems
-    reaction_systems = []
+    reaction_systems = {}
     if "reaction_systems" in data:
         for rs_name, rs_data in data["reaction_systems"].items():
             rs = _parse_reaction_system(rs_data)
             rs.name = rs_name
-            reaction_systems.append(rs)
+            reaction_systems[rs_name] = rs
 
     # Parse domain if present
     domains = []
