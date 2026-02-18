@@ -1,6 +1,6 @@
 //! Immutable editing operations for ESM models
 
-use crate::{EsmFile, Model, ReactionSystem, Expr, ExpressionNode, Equation, Species, Reaction, ModelVariable, DiscreteEvent, ContinuousEvent};
+use crate::{EsmFile, Model, ReactionSystem, Expr, ExpressionNode, Equation, Species, Reaction, ModelVariable, DiscreteEvent, ContinuousEvent, CouplingEntry};
 use std::collections::HashMap;
 
 /// Result type for editing operations
@@ -23,6 +23,8 @@ pub enum EditError {
     ReactionNotFound(String),
     /// Event index out of bounds
     EventIndexError(usize),
+    /// Coupling index out of bounds
+    CouplingIndexError(usize),
 }
 
 impl std::fmt::Display for EditError {
@@ -35,6 +37,7 @@ impl std::fmt::Display for EditError {
             EditError::SpeciesNotFound(name) => write!(f, "Species not found: {}", name),
             EditError::ReactionNotFound(name) => write!(f, "Reaction not found: {}", name),
             EditError::EventIndexError(idx) => write!(f, "Event index out of bounds: {}", idx),
+            EditError::CouplingIndexError(idx) => write!(f, "Coupling index out of bounds: {}", idx),
         }
     }
 }
@@ -478,6 +481,84 @@ pub fn remove_continuous_event(model: &Model, index: usize) -> EditResult<Model>
     Ok(new_model)
 }
 
+/// Add a coupling entry to an ESM file
+///
+/// # Arguments
+///
+/// * `esm_file` - The ESM file to modify
+/// * `coupling` - The coupling entry to add
+///
+/// # Returns
+///
+/// * `EditResult<EsmFile>` - New ESM file with the added coupling entry
+pub fn add_coupling(esm_file: &EsmFile, coupling: CouplingEntry) -> EditResult<EsmFile> {
+    let mut new_file = esm_file.clone();
+
+    // Initialize coupling vector if it doesn't exist
+    if new_file.coupling.is_none() {
+        new_file.coupling = Some(Vec::new());
+    }
+
+    new_file.coupling.as_mut().unwrap().push(coupling);
+    Ok(new_file)
+}
+
+/// Remove a coupling entry from an ESM file by index
+///
+/// # Arguments
+///
+/// * `esm_file` - The ESM file to modify
+/// * `index` - Index of the coupling entry to remove
+///
+/// # Returns
+///
+/// * `EditResult<EsmFile>` - New ESM file without the coupling entry
+pub fn remove_coupling(esm_file: &EsmFile, index: usize) -> EditResult<EsmFile> {
+    let mut new_file = esm_file.clone();
+
+    if let Some(ref mut coupling_entries) = new_file.coupling {
+        if index >= coupling_entries.len() {
+            return Err(EditError::CouplingIndexError(index));
+        }
+        coupling_entries.remove(index);
+
+        // Clean up empty vector by setting to None
+        if coupling_entries.is_empty() {
+            new_file.coupling = None;
+        }
+    } else {
+        return Err(EditError::CouplingIndexError(index));
+    }
+
+    Ok(new_file)
+}
+
+/// Replace a coupling entry in an ESM file
+///
+/// # Arguments
+///
+/// * `esm_file` - The ESM file to modify
+/// * `index` - Index of the coupling entry to replace
+/// * `coupling` - The new coupling entry
+///
+/// # Returns
+///
+/// * `EditResult<EsmFile>` - New ESM file with the replaced coupling entry
+pub fn replace_coupling(esm_file: &EsmFile, index: usize, coupling: CouplingEntry) -> EditResult<EsmFile> {
+    let mut new_file = esm_file.clone();
+
+    if let Some(ref mut coupling_entries) = new_file.coupling {
+        if index >= coupling_entries.len() {
+            return Err(EditError::CouplingIndexError(index));
+        }
+        coupling_entries[index] = coupling;
+    } else {
+        return Err(EditError::CouplingIndexError(index));
+    }
+
+    Ok(new_file)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,5 +925,224 @@ mod tests {
             model_with_one_removed.discrete_events.as_ref().unwrap()[0].name,
             Some("event2".to_string())
         );
+    }
+
+    #[test]
+    fn test_add_coupling() {
+        let esm_file = create_empty_esm_file();
+        let coupling = CouplingEntry::OperatorCompose {
+            systems: vec!["system1".to_string(), "system2".to_string()],
+            translate: None,
+            description: Some("Test coupling".to_string()),
+        };
+
+        let result = add_coupling(&esm_file, coupling);
+        assert!(result.is_ok());
+
+        let new_file = result.unwrap();
+        assert!(new_file.coupling.is_some());
+        assert_eq!(new_file.coupling.as_ref().unwrap().len(), 1);
+
+        match &new_file.coupling.as_ref().unwrap()[0] {
+            CouplingEntry::OperatorCompose { systems, description, .. } => {
+                assert_eq!(systems, &vec!["system1", "system2"]);
+                assert_eq!(description, &Some("Test coupling".to_string()));
+            }
+            _ => panic!("Expected OperatorCompose coupling entry"),
+        }
+    }
+
+    #[test]
+    fn test_add_multiple_couplings() {
+        let esm_file = create_empty_esm_file();
+
+        let coupling1 = CouplingEntry::OperatorCompose {
+            systems: vec!["system1".to_string(), "system2".to_string()],
+            translate: None,
+            description: None,
+        };
+
+        let coupling2 = CouplingEntry::VariableMap {
+            from: "model1.x".to_string(),
+            to: "model2.y".to_string(),
+            transform: "identity".to_string(),
+            factor: None,
+            description: Some("Variable mapping".to_string()),
+        };
+
+        // Add first coupling
+        let result1 = add_coupling(&esm_file, coupling1);
+        assert!(result1.is_ok());
+        let file_with_one = result1.unwrap();
+
+        // Add second coupling
+        let result2 = add_coupling(&file_with_one, coupling2);
+        assert!(result2.is_ok());
+        let file_with_two = result2.unwrap();
+
+        assert!(file_with_two.coupling.is_some());
+        assert_eq!(file_with_two.coupling.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_remove_coupling() {
+        let mut esm_file = create_empty_esm_file();
+        esm_file.coupling = Some(vec![
+            CouplingEntry::OperatorCompose {
+                systems: vec!["system1".to_string(), "system2".to_string()],
+                translate: None,
+                description: Some("First coupling".to_string()),
+            },
+            CouplingEntry::VariableMap {
+                from: "model1.x".to_string(),
+                to: "model2.y".to_string(),
+                transform: "identity".to_string(),
+                factor: None,
+                description: Some("Second coupling".to_string()),
+            },
+        ]);
+
+        // Test successful removal of first entry
+        let result = remove_coupling(&esm_file, 0);
+        assert!(result.is_ok());
+
+        let new_file = result.unwrap();
+        assert!(new_file.coupling.is_some());
+        assert_eq!(new_file.coupling.as_ref().unwrap().len(), 1);
+
+        // Verify the remaining entry is the second one
+        match &new_file.coupling.as_ref().unwrap()[0] {
+            CouplingEntry::VariableMap { description, .. } => {
+                assert_eq!(description, &Some("Second coupling".to_string()));
+            }
+            _ => panic!("Expected VariableMap coupling entry"),
+        }
+
+        // Test out of bounds error
+        let result = remove_coupling(&esm_file, 5);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(5)));
+
+        // Test error when no coupling entries exist
+        let empty_file = create_empty_esm_file();
+        let result = remove_coupling(&empty_file, 0);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(0)));
+    }
+
+    #[test]
+    fn test_remove_last_coupling() {
+        let mut esm_file = create_empty_esm_file();
+        esm_file.coupling = Some(vec![
+            CouplingEntry::OperatorCompose {
+                systems: vec!["system1".to_string(), "system2".to_string()],
+                translate: None,
+                description: Some("Only coupling".to_string()),
+            },
+        ]);
+
+        // Remove the only coupling entry
+        let result = remove_coupling(&esm_file, 0);
+        assert!(result.is_ok());
+
+        let new_file = result.unwrap();
+        assert!(new_file.coupling.is_none()); // Should be None when empty
+    }
+
+    #[test]
+    fn test_replace_coupling() {
+        let mut esm_file = create_empty_esm_file();
+        esm_file.coupling = Some(vec![
+            CouplingEntry::OperatorCompose {
+                systems: vec!["old_system1".to_string(), "old_system2".to_string()],
+                translate: None,
+                description: Some("Old coupling".to_string()),
+            },
+        ]);
+
+        let new_coupling = CouplingEntry::VariableMap {
+            from: "new_source.var".to_string(),
+            to: "new_target.param".to_string(),
+            transform: "linear".to_string(),
+            factor: Some(2.0),
+            description: Some("New coupling".to_string()),
+        };
+
+        // Test successful replacement
+        let result = replace_coupling(&esm_file, 0, new_coupling);
+        assert!(result.is_ok());
+
+        let new_file = result.unwrap();
+        assert!(new_file.coupling.is_some());
+        assert_eq!(new_file.coupling.as_ref().unwrap().len(), 1);
+
+        // Verify the entry was replaced
+        match &new_file.coupling.as_ref().unwrap()[0] {
+            CouplingEntry::VariableMap { from, to, transform, factor, description } => {
+                assert_eq!(from, "new_source.var");
+                assert_eq!(to, "new_target.param");
+                assert_eq!(transform, "linear");
+                assert_eq!(factor, &Some(2.0));
+                assert_eq!(description, &Some("New coupling".to_string()));
+            }
+            _ => panic!("Expected VariableMap coupling entry"),
+        }
+
+        // Test out of bounds error
+        let dummy_coupling = CouplingEntry::OperatorCompose {
+            systems: vec!["dummy".to_string()],
+            translate: None,
+            description: None,
+        };
+        let result = replace_coupling(&esm_file, 5, dummy_coupling);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(5)));
+
+        // Test error when no coupling entries exist
+        let empty_file = create_empty_esm_file();
+        let dummy_coupling2 = CouplingEntry::OperatorCompose {
+            systems: vec!["dummy".to_string()],
+            translate: None,
+            description: None,
+        };
+        let result = replace_coupling(&empty_file, 0, dummy_coupling2);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(0)));
+    }
+
+    #[test]
+    fn test_coupling_with_different_entry_types() {
+        let esm_file = create_empty_esm_file();
+
+        // Test with OperatorApply coupling
+        let operator_apply = CouplingEntry::OperatorApply {
+            operator: "my_operator".to_string(),
+            description: Some("Operator application".to_string()),
+        };
+
+        let result = add_coupling(&esm_file, operator_apply);
+        assert!(result.is_ok());
+
+        let new_file = result.unwrap();
+        match &new_file.coupling.as_ref().unwrap()[0] {
+            CouplingEntry::OperatorApply { operator, description } => {
+                assert_eq!(operator, "my_operator");
+                assert_eq!(description, &Some("Operator application".to_string()));
+            }
+            _ => panic!("Expected OperatorApply coupling entry"),
+        }
+
+        // Test with Callback coupling
+        let callback_coupling = CouplingEntry::Callback {
+            callback_id: "my_callback".to_string(),
+            config: Some(serde_json::json!({"param": "value"})),
+            description: None,
+        };
+
+        let result2 = add_coupling(&new_file, callback_coupling);
+        assert!(result2.is_ok());
+
+        let final_file = result2.unwrap();
+        assert_eq!(final_file.coupling.as_ref().unwrap().len(), 2);
     }
 }
