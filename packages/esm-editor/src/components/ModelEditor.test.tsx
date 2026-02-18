@@ -9,12 +9,14 @@ describe('ModelEditor', () => {
     variables: [
       {
         name: 'x',
+        type: 'state',
         default_value: 1.0,
         unit: 'm',
         description: 'Position variable'
       },
       {
         name: 'k_rate',
+        type: 'parameter',
         default_value: 0.5,
         unit: 's⁻¹',
         description: 'Rate constant'
