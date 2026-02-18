@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateValidModel(t *testing.T) {
@@ -493,4 +494,94 @@ func TestValidateEquationUnknownBalance(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateFileSpecCompliant(t *testing.T) {
+	// Test the new spec-compliant ValidateFile function
+	jsonStr := `{
+		"esm": "0.1.0",
+		"metadata": {
+			"name": "Test",
+			"authors": ["Test Author"]
+		},
+		"models": {
+			"TestModel": {
+				"variables": {
+					"x": {"type": "state", "default": 0.0},
+					"y": {"type": "state", "default": 0.0}
+				},
+				"equations": [
+					{
+						"lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+						"rhs": "y"
+					}
+				]
+			}
+		}
+	}`
+
+	esmFile, err := LoadString(jsonStr)
+	require.NoError(t, err)
+
+	result := ValidateFile(esmFile, jsonStr)
+
+	// Check that result has the correct structure per spec
+	assert.NotNil(t, result)
+	assert.NotNil(t, result.SchemaErrors)
+	assert.NotNil(t, result.StructuralErrors)
+	assert.NotNil(t, result.UnitWarnings)
+
+	// Schema should be valid
+	assert.Empty(t, result.SchemaErrors, "No schema errors expected for valid JSON")
+
+	// Should have structural error due to equation-unknown balance (2 state vars, 1 ODE equation)
+	assert.NotEmpty(t, result.StructuralErrors, "Should have structural error for equation count mismatch")
+	assert.False(t, result.IsValid, "Should be invalid due to structural errors")
+
+	// Check that structural error has proper code
+	if len(result.StructuralErrors) > 0 {
+		foundEquationError := false
+		for _, err := range result.StructuralErrors {
+			if err.Code == ErrorEquationCountMismatch {
+				foundEquationError = true
+				assert.Contains(t, err.Message, "Equation-unknown balance")
+			}
+		}
+		assert.True(t, foundEquationError, "Should have equation count mismatch error")
+	}
+}
+
+func TestValidateFileValidModel(t *testing.T) {
+	// Test with a properly balanced model
+	jsonStr := `{
+		"esm": "0.1.0",
+		"metadata": {
+			"name": "Test",
+			"authors": ["Test Author"]
+		},
+		"models": {
+			"TestModel": {
+				"variables": {
+					"x": {"type": "state", "default": 0.0},
+					"k": {"type": "parameter", "default": 1.0}
+				},
+				"equations": [
+					{
+						"lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+						"rhs": {"op": "*", "args": ["k", "x"]}
+					}
+				]
+			}
+		}
+	}`
+
+	esmFile, err := LoadString(jsonStr)
+	require.NoError(t, err)
+
+	result := ValidateFile(esmFile, jsonStr)
+
+	// Should be valid - 1 state variable, 1 ODE equation
+	assert.Empty(t, result.SchemaErrors)
+	assert.Empty(t, result.StructuralErrors)
+	assert.True(t, result.IsValid)
 }

@@ -169,8 +169,8 @@ func TestValidateJSONSchemaWithEmbeddedSchema(t *testing.T) {
 	// With embedded schema, err should always be nil (no file lookup required)
 	assert.NoError(t, err)
 	// This JSON should fail validation because it's incomplete (missing metadata, models/reaction_systems)
-	assert.False(t, result.Valid)
-	assert.NotEmpty(t, result.Errors)
+	assert.False(t, result.IsValid)
+	assert.NotEmpty(t, result.SchemaErrors)
 }
 
 func TestValidateJSONSchemaValidDocument(t *testing.T) {
@@ -202,6 +202,6 @@ func TestValidateJSONSchemaValidDocument(t *testing.T) {
 
 	result, err := validateJSONSchema(validJSON)
 	assert.NoError(t, err)
-	assert.True(t, result.Valid, "Valid JSON should pass schema validation")
-	assert.Empty(t, result.Errors)
+	assert.True(t, result.IsValid, "Valid JSON should pass schema validation")
+	assert.Empty(t, result.SchemaErrors)
 }
