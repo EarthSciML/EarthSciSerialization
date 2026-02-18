@@ -216,6 +216,16 @@
           "description": "Whether to reinitialize the system after the event.",
           "default": false
         },
+        "discrete_parameters": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Parameters modified by this event. Required when affects modify parameters rather than state variables."
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Event priority (lower number = higher priority). Used for resolving simultaneous events."
+        },
         "description": { "type": "string" }
       }
     },

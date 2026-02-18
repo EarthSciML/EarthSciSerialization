@@ -296,6 +296,14 @@ pub struct ContinuousEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reinitialize: Option<bool>,
 
+    /// Parameters modified by this event
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discrete_parameters: Option<Vec<String>>,
+
+    /// Event priority (lower number = higher priority)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u32>,
+
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
