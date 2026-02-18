@@ -167,7 +167,12 @@ fn format_number_unicode(n: f64) -> String {
         return format_scientific_unicode(&sci);
     }
 
-    // For integers in normal range
+    // Special handling for 0.0 - display as "0.0" instead of "0"
+    if n == 0.0 {
+        return "0.0".to_string();
+    }
+
+    // For other integers in normal range
     if n.fract() == 0.0 {
         format!("{}", n as i64)
     } else {
@@ -674,7 +679,10 @@ pub fn to_unicode(expr: &Expr) -> String {
 pub fn to_latex(expr: &Expr) -> String {
     match expr {
         Expr::Number(n) => {
-            if n.fract() == 0.0 {
+            // Special handling for 0.0 - display as "0.0" instead of "0"
+            if *n == 0.0 {
+                "0.0".to_string()
+            } else if n.fract() == 0.0 {
                 format!("{}", *n as i64)
             } else {
                 let abs_n = n.abs();
@@ -1107,7 +1115,10 @@ fn format_operator_latex(op: &str, args: &[Expr], wrt: &Option<String>, dim: &Op
 pub fn to_ascii(expr: &Expr) -> String {
     match expr {
         Expr::Number(n) => {
-            if n.fract() == 0.0 {
+            // Special handling for 0.0 - display as "0.0" instead of "0"
+            if *n == 0.0 {
+                "0.0".to_string()
+            } else if n.fract() == 0.0 {
                 format!("{}", *n as i64)
             } else {
                 let abs_n = n.abs();
@@ -1484,6 +1495,37 @@ mod tests {
         assert_eq!(format_number_unicode(3.14), "3.14");
         assert_eq!(format_number_unicode(1.8e-12), "1.80×10⁻¹²");
         assert_eq!(format_number_unicode(2.46e19), "2.46×10¹⁹");
+
+        // Test special handling of 0.0 - should display as "0.0" not "0"
+        assert_eq!(format_number_unicode(0.0), "0.0");
+        assert_eq!(format_number_unicode(-0.0), "0.0");
+
+        // Other integers should still display without decimal point
+        assert_eq!(format_number_unicode(1.0), "1");
+        assert_eq!(format_number_unicode(-1.0), "-1");
+    }
+
+    #[test]
+    fn test_zero_formatting_all_formats() {
+        // Test that 0.0 is handled specially in all formatting functions
+        let zero_expr = Expr::Number(0.0);
+        let one_expr = Expr::Number(1.0);
+        let neg_zero_expr = Expr::Number(-0.0);
+
+        // Unicode formatting
+        assert_eq!(to_unicode(&zero_expr), "0.0");
+        assert_eq!(to_unicode(&neg_zero_expr), "0.0");
+        assert_eq!(to_unicode(&one_expr), "1");
+
+        // LaTeX formatting
+        assert_eq!(to_latex(&zero_expr), "0.0");
+        assert_eq!(to_latex(&neg_zero_expr), "0.0");
+        assert_eq!(to_latex(&one_expr), "1");
+
+        // ASCII formatting
+        assert_eq!(to_ascii(&zero_expr), "0.0");
+        assert_eq!(to_ascii(&neg_zero_expr), "0.0");
+        assert_eq!(to_ascii(&one_expr), "1");
     }
 
     #[test]
