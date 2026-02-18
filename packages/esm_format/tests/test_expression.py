@@ -104,6 +104,31 @@ class TestBasicExpressionFunctions:
         with pytest.raises(ValueError, match="Unbound variable: x"):
             evaluate("x", {})
 
+    def test_evaluate_multiple_unbound_variables(self):
+        """Test evaluate with multiple unbound variables reports all of them."""
+        # Test with two unbound variables
+        expr = ExprNode(op="+", args=["x", "y"])
+        with pytest.raises(ValueError, match="Unbound variables: x, y"):
+            evaluate(expr, {})
+
+        # Test with three unbound variables in complex expression
+        expr = ExprNode(op="+", args=[
+            "x",
+            ExprNode(op="*", args=["y", "z"])
+        ])
+        with pytest.raises(ValueError, match="Unbound variables: x, y, z"):
+            evaluate(expr, {})
+
+        # Test mixed bound and unbound variables
+        expr = ExprNode(op="+", args=["a", "b", "c"])
+        with pytest.raises(ValueError, match="Unbound variables: a, c"):
+            evaluate(expr, {"b": 5})
+
+        # Test duplicate unbound variables (should only report unique ones)
+        expr = ExprNode(op="+", args=["x", "x", "y"])
+        with pytest.raises(ValueError, match="Unbound variables: x, y"):
+            evaluate(expr, {})
+
     def test_evaluate_arithmetic(self):
         """Test evaluate with arithmetic operations."""
         expr = ExprNode(op="+", args=[2, "x"])

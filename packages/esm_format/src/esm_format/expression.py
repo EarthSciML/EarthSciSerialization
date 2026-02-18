@@ -75,6 +75,32 @@ def contains(expr: Expr, var_name: str) -> bool:
     return var_name in free_variables(expr)
 
 
+def _collect_unbound_variables(expr: Expr, bindings: Dict[str, float]) -> Set[str]:
+    """
+    Collect all unbound variables in an expression.
+
+    Args:
+        expr: Expression to analyze
+        bindings: Dictionary mapping variable names to values
+
+    Returns:
+        Set of unbound variable names
+    """
+    if isinstance(expr, (int, float)):
+        return set()
+    elif isinstance(expr, str):
+        if expr not in bindings:
+            return {expr}
+        return set()
+    elif isinstance(expr, ExprNode):
+        unbound_vars = set()
+        for arg in expr.args:
+            unbound_vars.update(_collect_unbound_variables(arg, bindings))
+        return unbound_vars
+    else:
+        return set()
+
+
 def evaluate(expr: Expr, bindings: Dict[str, float]) -> float:
     """
     Evaluate an expression with given variable bindings.
@@ -90,12 +116,23 @@ def evaluate(expr: Expr, bindings: Dict[str, float]) -> float:
         ValueError: If unbound variables are encountered
         TypeError: If unsupported operations are encountered
     """
+    # First, check for unbound variables and report them all at once
+    unbound_vars = _collect_unbound_variables(expr, bindings)
+    if unbound_vars:
+        sorted_vars = sorted(unbound_vars)  # Sort for consistent error messages
+        if len(sorted_vars) == 1:
+            raise ValueError(f"Unbound variable: {sorted_vars[0]}")
+        else:
+            vars_str = ", ".join(sorted_vars)
+            raise ValueError(f"Unbound variables: {vars_str}")
+
     if isinstance(expr, (int, float)):
         return float(expr)
     elif isinstance(expr, str):
         if expr in bindings:
             return bindings[expr]
         else:
+            # This should never happen due to the check above, but keep for safety
             raise ValueError(f"Unbound variable: {expr}")
     elif isinstance(expr, ExprNode):
         # Evaluate arguments first
