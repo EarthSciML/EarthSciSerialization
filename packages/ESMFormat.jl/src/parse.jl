@@ -340,20 +340,21 @@ end
 Coerce JSON data into ReactionSystem type.
 """
 function coerce_reaction_system(data::Any)::ReactionSystem
-    species = [coerce_species(s) for s in data.species]
+    # Convert species dict to vector - species are now keyed by name
+    species = [coerce_species(string(k), v) for (k, v) in pairs(data.species)]
     reactions = [coerce_reaction(r) for r in data.reactions]
-    parameters = haskey(data, :parameters) ? [coerce_parameter(p) for p in data.parameters] : Parameter[]
+    # Convert parameters dict to vector - parameters are now keyed by name
+    parameters = haskey(data, :parameters) ? [coerce_parameter(string(k), v) for (k, v) in pairs(data.parameters)] : Parameter[]
 
     return ReactionSystem(species, reactions, parameters=parameters)
 end
 
 """
-    coerce_species(data::Any) -> Species
+    coerce_species(name::String, data::Any) -> Species
 
-Coerce JSON data into Species type.
+Coerce JSON data into Species type with explicit name.
 """
-function coerce_species(data::Any)::Species
-    name = string(data.name)
+function coerce_species(name::String, data::Any)::Species
     units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
     default = haskey(data, :default) && data.default !== nothing ? Float64(data.default) : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
@@ -396,12 +397,11 @@ function coerce_reaction(data::Any)::Reaction
 end
 
 """
-    coerce_parameter(data::Any) -> Parameter
+    coerce_parameter(name::String, data::Any) -> Parameter
 
-Coerce JSON data into Parameter type.
+Coerce JSON data into Parameter type with explicit name.
 """
-function coerce_parameter(data::Any)::Parameter
-    name = string(data.name)
+function coerce_parameter(name::String, data::Any)::Parameter
     default = Float64(data.default)
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
     units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
