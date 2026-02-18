@@ -216,12 +216,10 @@ function convertWebComponentProps<T>(
 export const EsmExpressionNodeComponent = (props: any) => {
   // Validate required props
   if (!props.expression) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = 'Missing required attribute: expression';
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = 'Missing required attribute: expression';
+    return errorDiv;
   }
 
   try {
@@ -268,14 +266,12 @@ export const EsmExpressionNodeComponent = (props: any) => {
       allowEditing: props['allow-editing'] !== 'false'
     };
 
-    return () => ExpressionNode(componentProps);
+    return ExpressionNode(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
@@ -314,14 +310,12 @@ export const EsmModelEditorComponent = (props: any) => {
       validationErrors: validationErrors
     };
 
-    return () => ModelEditor(componentProps);
+    return ModelEditor(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
@@ -367,14 +361,12 @@ export const EsmCouplingGraphComponent = (props: any) => {
       interactive: props.interactive !== 'false'
     };
 
-    return () => CouplingGraph(componentProps);
+    return CouplingGraph(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
@@ -424,14 +416,12 @@ export const EsmValidationPanelComponent = (props: any) => {
       }
     };
 
-    return () => ValidationPanel(componentProps);
+    return ValidationPanel(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
@@ -476,14 +466,12 @@ export const EsmFileSummaryComponent = (props: any) => {
       }
     };
 
-    return () => FileSummary(componentProps);
+    return FileSummary(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
@@ -564,14 +552,12 @@ export const EsmSimulationControlsComponent = (props: any) => {
       }
     };
 
-    return () => SimulationControls(componentProps);
+    return SimulationControls(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
@@ -584,34 +570,49 @@ export function registerWebComponents() {
   try {
     // Register components with proper shadow DOM and styling
     customElement('esm-expression-node', {
-      ...EsmExpressionNodeComponent,
-      element: null  // Will be set by solid-element
-    }, ['expression', 'path', 'allow-editing', 'is-selected']);
+      expression: '',
+      path: '[]',
+      'allow-editing': true,
+      'is-selected': false
+    }, (props, { element }) => EsmExpressionNodeComponent({ ...props, element }));
 
     customElement('esm-model-editor', {
-      ...EsmModelEditorComponent,
-      element: null  // Will be set by solid-element
-    }, ['model', 'allow-editing', 'show-validation', 'validation-errors']);
+      model: '',
+      'allow-editing': true,
+      'show-validation': true,
+      'validation-errors': '[]'
+    }, (props, { element }) => EsmModelEditorComponent({ ...props, element }));
 
     customElement('esm-coupling-graph', {
-      ...EsmCouplingGraphComponent,
-      element: null  // Will be set by solid-element
-    }, ['esm-file', 'width', 'height', 'interactive']);
+      'esm-file': '',
+      width: 800,
+      height: 600,
+      interactive: true
+    }, (props, { element }) => EsmCouplingGraphComponent({ ...props, element }));
 
     customElement('esm-validation-panel', {
-      ...EsmValidationPanelComponent,
-      element: null  // Will be set by solid-element
-    }, ['model', 'validation-errors', 'validation-warnings', 'auto-validate', 'show-details']);
+      model: '',
+      'validation-errors': '[]',
+      'validation-warnings': '[]',
+      'auto-validate': true,
+      'show-details': true
+    }, (props, { element }) => EsmValidationPanelComponent({ ...props, element }));
 
     customElement('esm-file-summary', {
-      ...EsmFileSummaryComponent,
-      element: null  // Will be set by solid-element
-    }, ['esm-file', 'show-details', 'show-export-options']);
+      'esm-file': '',
+      'show-details': true,
+      'show-export-options': true
+    }, (props, { element }) => EsmFileSummaryComponent({ ...props, element }));
 
     customElement('esm-simulation-controls', {
-      ...EsmSimulationControlsComponent,
-      element: null  // Will be set by solid-element
-    }, ['esm-file', 'is-running', 'progress', 'status-message', 'available-backends', 'selected-backend', 'simulation-params']);
+      'esm-file': '',
+      'is-running': false,
+      progress: 0,
+      'status-message': '',
+      'available-backends': '[]',
+      'selected-backend': '',
+      'simulation-params': '{}'
+    }, (props, { element }) => EsmSimulationControlsComponent({ ...props, element }));
 
   } catch (error) {
     console.warn('Failed to register ESM web components:', error);
