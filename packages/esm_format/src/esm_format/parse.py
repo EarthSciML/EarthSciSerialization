@@ -87,6 +87,13 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         args = [_parse_expression(arg) for arg in expr_data["args"]]
         wrt = expr_data.get("wrt")
         dim = expr_data.get("dim")
+
+        # Validate operator-specific field requirements
+        if op == "D" and wrt is None:
+            raise ValueError(f"Operator 'D' requires 'wrt' field to be specified")
+        if op == "grad" and dim is None:
+            raise ValueError(f"Operator 'grad' requires 'dim' field to be specified")
+
         return ExprNode(op=op, args=args, wrt=wrt, dim=dim)
     else:
         raise ValueError(f"Invalid expression data: {expr_data}")

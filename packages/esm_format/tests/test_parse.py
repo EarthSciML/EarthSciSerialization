@@ -195,6 +195,38 @@ def test_expression_with_metadata():
     assert expr.dim == "x"
 
 
+def test_operator_field_requirements():
+    """Test that operators enforce required field requirements."""
+    # Test that D operator requires wrt field
+    expr_data_d_no_wrt = {
+        "op": "D",
+        "args": ["x"]
+        # Missing wrt field
+    }
+    with pytest.raises(ValueError, match="Operator 'D' requires 'wrt' field to be specified"):
+        _parse_expression(expr_data_d_no_wrt)
+
+    # Test that grad operator requires dim field
+    expr_data_grad_no_dim = {
+        "op": "grad",
+        "args": ["T"]
+        # Missing dim field
+    }
+    with pytest.raises(ValueError, match="Operator 'grad' requires 'dim' field to be specified"):
+        _parse_expression(expr_data_grad_no_dim)
+
+    # Test that other operators work without these fields
+    expr_data_other = {
+        "op": "+",
+        "args": [1, 2]
+    }
+    expr = _parse_expression(expr_data_other)
+    assert isinstance(expr, ExprNode)
+    assert expr.op == "+"
+    assert expr.wrt is None
+    assert expr.dim is None
+
+
 def test_load_comprehensive_fields():
     """Test loading ESM file with events, data_loaders, operators, coupling, and solver."""
     comprehensive_esm = {
