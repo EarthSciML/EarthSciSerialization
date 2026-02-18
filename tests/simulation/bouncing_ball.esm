@@ -28,34 +28,31 @@
           "rhs": { "op": "-", "args": ["g"] }
         }
       ],
-      "events": [
+      "continuous_events": [
         {
-          "id": "ground_collision",
-          "type": "continuous",
-          "condition": "height",
-          "direction": "negative",
+          "name": "ground_collision",
           "description": "Ball hits ground when height crosses zero from above",
-          "actions": [
+          "conditions": ["height"],
+          "affects": [
             {
-              "type": "assignment",
-              "variable": "height",
-              "value": 0.0
+              "lhs": "height",
+              "rhs": 0.0
             },
             {
-              "type": "assignment",
-              "variable": "velocity",
-              "value": { "op": "*", "args": [
+              "lhs": "velocity",
+              "rhs": { "op": "*", "args": [
                 { "op": "-", "args": ["restitution"] },
-                "velocity"
+                { "op": "Pre", "args": ["velocity"] }
               ]}
             }
-          ]
+          ],
+          "root_find": "left"
         }
       ]
     }
   },
   "domain": {
-    "temporal": { "start": 0.0, "end": 10.0, "step": 0.001 },
+    "temporal": { "start": "2026-01-01T00:00:00Z", "end": "2026-01-01T00:10:00Z" },
     "initial_conditions": { "type": "per_variable", "values": {
       "BallDynamics.height": 10.0,
       "BallDynamics.velocity": 0.0
