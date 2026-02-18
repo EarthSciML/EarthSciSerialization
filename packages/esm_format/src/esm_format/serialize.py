@@ -116,14 +116,16 @@ def _serialize_model(model: Model) -> Dict[str, Any]:
     """Serialize a model to JSON-compatible format."""
     result = {}
 
-    # Serialize variables
+    # Serialize variables (required by schema)
+    result["variables"] = {}
     if model.variables:
         result["variables"] = {
             name: _serialize_model_variable(var)
             for name, var in model.variables.items()
         }
 
-    # Serialize equations
+    # Serialize equations (required by schema)
+    result["equations"] = []
     if model.equations:
         result["equations"] = [_serialize_equation(eq) for eq in model.equations]
 
@@ -432,15 +434,15 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     # Serialize models
     if esm_file.models:
         result["models"] = {
-            model.name: _serialize_model(model)
-            for model in esm_file.models
+            model_name: _serialize_model(model)
+            for model_name, model in esm_file.models.items()
         }
 
     # Serialize reaction systems
     if esm_file.reaction_systems:
         result["reaction_systems"] = {
-            rs.name: _serialize_reaction_system(rs)
-            for rs in esm_file.reaction_systems
+            rs_name: _serialize_reaction_system(rs)
+            for rs_name, rs in esm_file.reaction_systems.items()
         }
 
     # Serialize domain (only first domain for now, as schema expects single domain)
