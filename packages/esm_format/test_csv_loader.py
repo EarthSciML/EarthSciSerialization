@@ -19,7 +19,7 @@ def test_csv_loader():
     # Create DataLoader configuration
     data_loader = DataLoader(
         name="test_weather",
-        type=DataLoaderType.CSV,
+        type=DataLoaderType.EMISSIONS,
         source=str(sample_csv),
         format_options={
             'delimiter': ',',
@@ -56,7 +56,7 @@ def test_csv_validation():
     # Test with column type validation
     data_loader = DataLoader(
         name="test_weather_typed",
-        type=DataLoaderType.CSV,
+        type=DataLoaderType.EMISSIONS,
         source=str(sample_csv),
         format_options={
             'column_types': {
@@ -76,7 +76,7 @@ def test_csv_validation():
     # Test missing file error
     missing_loader = DataLoader(
         name="test_missing",
-        type=DataLoaderType.CSV,
+        type=DataLoaderType.EMISSIONS,
         source="nonexistent_file.csv"
     )
 
@@ -107,7 +107,7 @@ def test_csv_missing_values():
         # Test fill_zero strategy
         data_loader = DataLoader(
             name="test_missing",
-            type=DataLoaderType.CSV,
+            type=DataLoaderType.EMISSIONS,
             source=temp_csv,
             format_options={
                 'missing_value_strategy': 'fill_zero'
@@ -131,7 +131,7 @@ def test_wrong_data_loader_type():
     # Try to create CSV loader with wrong type
     wrong_loader = DataLoader(
         name="test_wrong",
-        type=DataLoaderType.JSON,
+        type=DataLoaderType.CALLBACK,
         source="test.json"
     )
 
@@ -139,7 +139,7 @@ def test_wrong_data_loader_type():
         loader = CSVLoader(wrong_loader)
         assert False, "Should have raised ValueError"
     except ValueError as e:
-        assert "Expected CSV data loader" in str(e)
+        assert "CSV loader supports" in str(e)
         print("✓ Wrong data loader type test passed")
 
 def run_tests():

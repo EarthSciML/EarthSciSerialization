@@ -48,7 +48,7 @@ def example_basic_http():
     # Create data loader configuration
     data_loader = DataLoader(
         name="httpbin_test",
-        type=DataLoaderType.REMOTE,
+        type=DataLoaderType.CALLBACK,
         source=url,
         format_options={
             "enable_cache": True,
@@ -108,7 +108,7 @@ def example_authenticated_api():
 
     data_loader = DataLoader(
         name="authenticated_test",
-        type=DataLoaderType.REMOTE,
+        type=DataLoaderType.CALLBACK,
         source=url,
         format_options={
             "auth_token": "test_token_123",
@@ -138,7 +138,7 @@ def example_basic_auth():
 
     data_loader = DataLoader(
         name="basic_auth_test",
-        type=DataLoaderType.REMOTE,
+        type=DataLoaderType.CALLBACK,
         source=url,
         format_options={
             "username": "user",
@@ -166,7 +166,7 @@ def example_progress_tracking():
 
     data_loader = DataLoader(
         name="progress_test",
-        type=DataLoaderType.REMOTE,
+        type=DataLoaderType.CALLBACK,
         source=url,
         format_options={
             "progress_callback": progress_callback,
@@ -192,7 +192,7 @@ def example_cache_management():
 
     data_loader = DataLoader(
         name="cache_test",
-        type=DataLoaderType.REMOTE,
+        type=DataLoaderType.CALLBACK,
         source=url,
         format_options={
             "enable_cache": True,
@@ -234,7 +234,7 @@ def example_error_handling():
 
     data_loader = DataLoader(
         name="error_test",
-        type=DataLoaderType.REMOTE,
+        type=DataLoaderType.CALLBACK,
         source=url,
         format_options={
             "max_retries": 2,
@@ -269,10 +269,10 @@ def example_cloud_storage_urls():
         print(f"{url} -> {loader_type}")
 
         # Create loader to show protocol detection
-        if loader_type == DataLoaderType.REMOTE:
+        if loader_type == DataLoaderType.CALLBACK:
             data_loader = DataLoader(
                 name="cloud_test",
-                type=DataLoaderType.REMOTE,
+                type=DataLoaderType.CALLBACK,
                 source=url
             )
             loader = RemoteLoader(data_loader)

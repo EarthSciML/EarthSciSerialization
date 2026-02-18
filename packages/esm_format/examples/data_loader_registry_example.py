@@ -131,7 +131,7 @@ def demonstrate_custom_loader():
         """Simple CSV loader for demonstration."""
 
         def __init__(self, data_loader: DataLoader):
-            if data_loader.type != DataLoaderType.CSV:
+            if data_loader.type != DataLoaderType.EMISSIONS:
                 raise ValueError(f"Expected CSV type, got {data_loader.type}")
             self.config = data_loader
 
@@ -148,7 +148,7 @@ def demonstrate_custom_loader():
 
     # Register the custom loader
     register_loader(
-        DataLoaderType.CSV,
+        DataLoaderType.EMISSIONS,
         SimpleCSVLoader,
         extensions=['.csv', '.tsv'],
         mime_types=['text/csv', 'text/tab-separated-values']
@@ -159,7 +159,7 @@ def demonstrate_custom_loader():
     # Create and use the custom loader
     csv_config = DataLoader(
         name="test_csv",
-        type=DataLoaderType.CSV,
+        type=DataLoaderType.EMISSIONS,
         source="test.csv",
         variables=["column1", "column2"]
     )
@@ -178,7 +178,7 @@ def demonstrate_loader_chains():
     registry = get_registry()
 
     # Register a loader chain
-    chain = [DataLoaderType.JSON, DataLoaderType.CSV]
+    chain = [DataLoaderType.STATIC, DataLoaderType.EMISSIONS]
     registry.register_loader_chain("json_to_csv", chain)
 
     print("Registered loader chain: json_to_csv")

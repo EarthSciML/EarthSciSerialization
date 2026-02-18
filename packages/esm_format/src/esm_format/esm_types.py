@@ -147,15 +147,11 @@ class DiscreteEvent:
 
 class DataLoaderType(Enum):
     """Types of data loaders."""
-    CSV = "csv"
-    JSON = "json"
-    NETCDF = "netcdf"
-    HDF5 = "hdf5"
-    BINARY = "binary"
-    DATABASE = "database"
-    GRIB = "grib"
-    STREAMING = "streaming"
-    REMOTE = "remote"
+    GRIDDED_DATA = "gridded_data"
+    EMISSIONS = "emissions"
+    TIMESERIES = "timeseries"
+    STATIC = "static"
+    CALLBACK = "callback"
 
 
 @dataclass

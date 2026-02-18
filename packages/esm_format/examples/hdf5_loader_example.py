@@ -260,7 +260,7 @@ def demonstrate_hdf5_loading():
 
         config = DataLoader(
             name="atmospheric_data",
-            type=DataLoaderType.HDF5,
+            type=DataLoaderType.GRIDDED_DATA,
             source=tmp_path,
             format_options={"backend": "h5py", "mode": "r"}
         )
@@ -283,7 +283,7 @@ def demonstrate_hdf5_loading():
 
         filtered_config = DataLoader(
             name="temperature_only",
-            type=DataLoaderType.HDF5,
+            type=DataLoaderType.GRIDDED_DATA,
             source=tmp_path,
             variables=["temperature", "time", "lat", "lon", "height"]
         )
@@ -307,7 +307,7 @@ def demonstrate_hdf5_loading():
 
         hierarchical_config = DataLoader(
             name="chemistry_data",
-            type=DataLoaderType.HDF5,
+            type=DataLoaderType.GRIDDED_DATA,
             source=tmp_path,
             variables=["chemistry/species/O3", "chemistry/species/NO2",
                       "analysis/temperature_statistics"]
@@ -398,7 +398,7 @@ def demonstrate_hdf5_loading():
         # Using the registry factory
         factory_config = DataLoader(
             name="factory_test",
-            type=DataLoaderType.HDF5,
+            type=DataLoaderType.GRIDDED_DATA,
             source=tmp_path,
             variables=["surface_pressure"]
         )
@@ -439,7 +439,7 @@ def demonstrate_error_handling():
     try:
         config = DataLoader(
             name="missing_file",
-            type=DataLoaderType.HDF5,
+            type=DataLoaderType.GRIDDED_DATA,
             source="/nonexistent/path/file.h5"
         )
         loader = HDF5Loader(config)
@@ -459,7 +459,7 @@ def demonstrate_error_handling():
 
         config = DataLoader(
             name="missing_vars",
-            type=DataLoaderType.HDF5,
+            type=DataLoaderType.GRIDDED_DATA,
             source=tmp_path,
             variables=["temperature", "nonexistent_variable"]
         )
@@ -478,7 +478,7 @@ def demonstrate_error_handling():
     try:
         config = DataLoader(
             name="wrong_type",
-            type=DataLoaderType.NETCDF,  # Wrong type
+            type=DataLoaderType.GRIDDED_DATA,  # Wrong type
             source="test.h5"
         )
         HDF5Loader(config)
