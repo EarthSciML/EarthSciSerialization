@@ -110,6 +110,16 @@ type ReactionSystem struct {
 // 4. Events
 // ========================================
 
+// FunctionalAffect represents a registered functional affect handler for
+// discrete events that require complex behavior beyond symbolic expressions
+type FunctionalAffect struct {
+	HandlerID       string                 `json:"handler_id"`
+	ReadVars        []string               `json:"read_vars"`
+	ReadParams      []string               `json:"read_params"`
+	ModifiedParams  []string               `json:"modified_params,omitempty"`
+	Config          map[string]interface{} `json:"config,omitempty"`
+}
+
 // DiscreteEventTrigger represents different trigger types for discrete events
 type DiscreteEventTrigger struct {
 	Type          string      `json:"type"` // "condition", "periodic", "preset_times"
@@ -123,7 +133,8 @@ type DiscreteEventTrigger struct {
 type DiscreteEvent struct {
 	Name                string                `json:"name,omitempty"`
 	Trigger             DiscreteEventTrigger  `json:"trigger"`
-	Affects             []AffectEquation      `json:"affects"`
+	Affects             []AffectEquation      `json:"affects,omitempty"`
+	FunctionalAffect    *FunctionalAffect     `json:"functional_affect,omitempty"`
 	DiscreteParameters  []string              `json:"discrete_parameters,omitempty"`
 	Reinitialize        *bool                 `json:"reinitialize,omitempty"`
 	Description         *string               `json:"description,omitempty"`
