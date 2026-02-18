@@ -658,11 +658,10 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             reaction_systems[rs_name] = rs
 
     # Parse domain if present
-    domains = []
+    domain = None
     if "domain" in data:
         domain = _parse_domain(data["domain"])
         _validate_domain(domain)
-        domains.append(domain)
 
     # Parse data loaders
     data_loaders = []
@@ -681,16 +680,15 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             operators.append(operator)
 
     # Parse coupling entries
-    couplings = []
+    coupling = []
     if "coupling" in data:
         for coupling_data in data["coupling"]:
-            couplings.append(_parse_coupling_entry(coupling_data))
+            coupling.append(_parse_coupling_entry(coupling_data))
 
     # Parse solver
-    solvers = []
+    solver = None
     if "solver" in data:
         solver = _parse_solver(data["solver"])
-        solvers.append(solver)
 
     # Collect events from models and reaction systems
     events = []
@@ -723,9 +721,9 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         events=events,
         data_loaders=data_loaders,
         operators=operators,
-        couplings=couplings,
-        domains=domains,
-        solvers=solvers
+        coupling=coupling,
+        domain=domain,
+        solver=solver
     )
 
 

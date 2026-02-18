@@ -455,9 +455,9 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for rs_name, rs in esm_file.reaction_systems.items()
         }
 
-    # Serialize domain (only first domain for now, as schema expects single domain)
-    if esm_file.domains:
-        result["domain"] = _serialize_domain(esm_file.domains[0])
+    # Serialize domain
+    if esm_file.domain:
+        result["domain"] = _serialize_domain(esm_file.domain)
 
     # Serialize data loaders
     if esm_file.data_loaders:
@@ -473,16 +473,16 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for operator in esm_file.operators
         }
 
-    # Serialize couplings
-    if esm_file.couplings:
+    # Serialize coupling
+    if esm_file.coupling:
         result["coupling"] = [
             _serialize_coupling_entry(coupling)
-            for coupling in esm_file.couplings
+            for coupling in esm_file.coupling
         ]
 
-    # Serialize solver (only first solver for now, as schema expects single solver)
-    if esm_file.solvers:
-        result["solver"] = _serialize_solver(esm_file.solvers[0])
+    # Serialize solver
+    if esm_file.solver:
+        result["solver"] = _serialize_solver(esm_file.solver)
 
     # Serialize events
     if esm_file.events:

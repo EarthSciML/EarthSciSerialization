@@ -307,14 +307,14 @@ def _apply_coupling_rules(
         ode_exprs: List of ODE expressions to modify (modified in-place)
         species_indices: Mapping from species names to indices
     """
-    if not hasattr(file, 'couplings') or not file.couplings:
+    if not hasattr(file, 'coupling') or not file.coupling:
         return
 
     # Create symbol map for all species
     symbol_map = {name: sp.Symbol(name) for name in species_names}
 
     # Process each coupling entry
-    for coupling in file.couplings:
+    for coupling in file.coupling:
         if coupling.coupling_type == CouplingType.VARIABLE_MAP:
             # Handle variable mapping coupling
             if coupling.from_var and coupling.to_var:

@@ -131,7 +131,7 @@ def demo_subcycling():
     print(f"Fast component ({fast_comp[0]}): dt = {fast_comp[1].value} {fast_comp[1].units}")
     print(f"Slow component ({slow_comp[0]}): dt = {slow_comp[1].value} {slow_comp[1].units}")
     print(f"Alignment strategy: {sync.alignment_strategy.value}")
-    print(f"Number of couplings: {len(sync.couplings)}")
+    print(f"Number of couplings: {len(sync.coupling)}")
 
     # Show first few synchronization steps
     print("\nSynchronization schedule:")
