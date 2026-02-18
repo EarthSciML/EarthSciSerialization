@@ -124,6 +124,101 @@
   font-size: 0.9em;
 }
 
+/* ESM Specification Section 5.2.4 CSS classes for math typography */
+
+/* Fraction layout components */
+.esm-frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin: 0 2px;
+  text-align: center;
+}
+
+.esm-frac-bar {
+  width: 100%;
+  min-width: 1.2em;
+  height: 1px;
+  background-color: currentColor;
+  margin: 1px 0;
+  display: block;
+}
+
+/* Variable styling */
+.esm-var {
+  color: var(--esm-variable-color, rgb(59, 130, 246));
+  font-style: italic;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.esm-var:hover {
+  background-color: var(--esm-hover-bg, rgba(59, 130, 246, 0.1));
+  border-radius: 2px;
+}
+
+.esm-var-highlighted {
+  background-color: var(--esm-highlight-bg, rgba(245, 158, 11, 0.2));
+  color: var(--esm-variable-highlight, rgb(245, 158, 11));
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--esm-highlight-border, rgba(245, 158, 11, 0.5));
+}
+
+/* Selected element styling */
+.esm-selected {
+  background-color: var(--esm-selected-bg, rgba(59, 130, 246, 0.2));
+  outline: 2px solid var(--esm-primary-color, rgb(59, 130, 246));
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* Number styling */
+.esm-num {
+  color: var(--esm-number-color, rgb(16, 185, 129));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.esm-num:hover {
+  background-color: var(--esm-hover-bg, rgba(16, 185, 129, 0.1));
+  border-radius: 2px;
+}
+
+/* Operator styling */
+.esm-op {
+  color: var(--esm-operator-color, rgb(107, 114, 128));
+  font-weight: 600;
+  margin: 0 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.esm-op:hover {
+  background-color: var(--esm-hover-bg, rgba(107, 114, 128, 0.1));
+  border-radius: 2px;
+}
+
+/* Editable element styling */
+.esm-editable {
+  background-color: var(--esm-edit-bg, rgba(16, 185, 129, 0.1));
+  outline: 2px solid var(--esm-edit-border, rgb(16, 185, 129));
+  outline-offset: 1px;
+  border-radius: 2px;
+  cursor: text;
+  transition: all 0.15s ease;
+}
+
+.esm-editable:focus {
+  background-color: var(--esm-edit-input-bg, white);
+  outline-color: var(--esm-edit-border, rgb(16, 185, 129));
+  outline-width: 3px;
+}
+
 .esm-exponentiation {
   display: inline-block;
   position: relative;
