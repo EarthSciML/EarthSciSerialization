@@ -178,12 +178,10 @@ function convertWebComponentProps<T>(
 
 export const EsmExpressionEditorComponent = (props: any) => {
   if (!props.expression) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = 'Missing required attribute: expression';
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = 'Missing required attribute: expression';
+    return errorDiv;
   }
 
   try {
@@ -205,25 +203,21 @@ export const EsmExpressionEditorComponent = (props: any) => {
       showValidation: props['show-validation'] !== 'false'
     };
 
-    return () => ExpressionEditor(componentProps);
+    return ExpressionEditor(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
 export const EsmModelEditorComponent = (props: any) => {
   if (!props.model) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = 'Missing required attribute: model';
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = 'Missing required attribute: model';
+    return errorDiv;
   }
 
   try {
@@ -248,14 +242,12 @@ export const EsmModelEditorComponent = (props: any) => {
       validationErrors: validationErrors
     };
 
-    return () => ModelEditor(componentProps);
+    return ModelEditor(componentProps);
   } catch (error) {
-    return () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-state';
-      errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      return errorDiv;
-    };
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-state';
+    errorDiv.textContent = `Component error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    return errorDiv;
   }
 };
 
@@ -300,7 +292,7 @@ export const EsmFileEditorComponent = (props: any) => {
       }
     };
 
-    return () => FileSummary(componentProps);
+    return FileSummary(componentProps);
   } catch (error) {
     return () => {
       const errorDiv = document.createElement('div');
@@ -344,7 +336,7 @@ export const EsmReactionEditorComponent = (props: any) => {
       validationErrors: validationErrors
     };
 
-    return () => ReactionEditor(componentProps);
+    return ReactionEditor(componentProps);
   } catch (error) {
     return () => {
       const errorDiv = document.createElement('div');
@@ -395,7 +387,7 @@ export const EsmCouplingGraphComponent = (props: any) => {
       allowEditing: props['allow-editing'] !== 'false'
     };
 
-    return () => CouplingGraph(componentProps);
+    return CouplingGraph(componentProps);
   } catch (error) {
     return () => {
       const errorDiv = document.createElement('div');
@@ -417,29 +409,41 @@ export function registerWebComponents() {
   try {
     // Register editor components with proper shadow DOM and styling
     customElement('esm-expression-editor', {
-      ...EsmExpressionEditorComponent,
-      element: null  // Will be set by solid-element
-    }, ['expression', 'allow-editing', 'show-palette', 'show-validation']);
+      expression: '',
+      'allow-editing': true,
+      'show-palette': true,
+      'show-validation': true
+    }, (props, { element }) => EsmExpressionEditorComponent({ ...props, element }));
 
     customElement('esm-model-editor', {
-      ...EsmModelEditorComponent,
-      element: null  // Will be set by solid-element
-    }, ['model', 'allow-editing', 'show-validation', 'validation-errors']);
+      model: '',
+      'allow-editing': true,
+      'show-validation': true,
+      'validation-errors': '[]'
+    }, (props, { element }) => EsmModelEditorComponent({ ...props, element }));
 
     customElement('esm-file-editor', {
-      ...EsmFileEditorComponent,
-      element: null  // Will be set by solid-element
-    }, ['esm-file', 'allow-editing', 'enable-undo', 'show-summary', 'show-validation']);
+      'esm-file': '',
+      'allow-editing': true,
+      'enable-undo': true,
+      'show-summary': true,
+      'show-validation': true
+    }, (props, { element }) => EsmFileEditorComponent({ ...props, element }));
 
     customElement('esm-reaction-editor', {
-      ...EsmReactionEditorComponent,
-      element: null  // Will be set by solid-element
-    }, ['reaction-system', 'allow-editing', 'show-validation', 'validation-errors']);
+      'reaction-system': '',
+      'allow-editing': true,
+      'show-validation': true,
+      'validation-errors': '[]'
+    }, (props, { element }) => EsmReactionEditorComponent({ ...props, element }));
 
     customElement('esm-coupling-graph', {
-      ...EsmCouplingGraphComponent,
-      element: null  // Will be set by solid-element
-    }, ['esm-file', 'width', 'height', 'interactive', 'allow-editing']);
+      'esm-file': '',
+      width: 800,
+      height: 600,
+      interactive: true,
+      'allow-editing': true
+    }, (props, { element }) => EsmCouplingGraphComponent({ ...props, element }));
 
     console.log('ESM Editor web components registered successfully');
 
