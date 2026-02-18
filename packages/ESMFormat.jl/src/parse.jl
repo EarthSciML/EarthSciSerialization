@@ -253,7 +253,8 @@ Coerce JSON data into Equation type.
 function coerce_equation(data::Any)::Equation
     lhs = parse_expression(data.lhs)
     rhs = parse_expression(data.rhs)
-    return Equation(lhs, rhs)
+    comment = haskey(data, :_comment) && data._comment !== nothing ? string(data._comment) : nothing
+    return Equation(lhs, rhs; _comment=comment)
 end
 
 """

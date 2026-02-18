@@ -60,14 +60,19 @@ end
 # ========================================
 
 """
-    Equation(lhs::Expr, rhs::Expr)
+    Equation(lhs::Expr, rhs::Expr, _comment::Union{String,Nothing}=nothing)
 
 Mathematical equation with left-hand side and right-hand side expressions.
 Used for differential equations and algebraic constraints.
+Optional _comment field provides human-readable description.
 """
 struct Equation
     lhs::Expr
     rhs::Expr
+    _comment::Union{String,Nothing}
+
+    # Constructor with optional comment
+    Equation(lhs::Expr, rhs::Expr; _comment=nothing) = new(lhs, rhs, _comment)
 end
 
 """

@@ -29,6 +29,7 @@ class Equation:
     """Mathematical equation with left and right hand sides."""
     lhs: Expr
     rhs: Expr
+    _comment: Optional[str] = None
 
 
 @dataclass
