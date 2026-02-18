@@ -42,7 +42,6 @@ pub mod parse;
 pub mod serialize;
 pub mod validate;
 pub mod substitute;
-pub mod pretty_print;
 pub mod display;
 pub mod expression;
 pub mod graph;
