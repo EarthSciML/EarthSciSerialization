@@ -66,10 +66,11 @@ def run_tests():
 
     def test_species():
         from esm_format.types import Species
-        species = Species(name="CO2", formula="CO2", mass=44.01)
+        species = Species(name="CO2", formula="CO2", units="gram/mole", default=44.01)
         assert species.name == "CO2"
         assert species.formula == "CO2"
-        assert species.mass == 44.01
+        assert species.units == "gram/mole"
+        assert species.default == 44.01
 
     def test_esm_file():
         from esm_format.types import EsmFile, Metadata

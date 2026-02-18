@@ -65,8 +65,8 @@ def validate_conservation_laws(data: Dict[str, Any]) -> List[str]:
             for j, species in enumerate(system['species']):
                 if 'name' not in species:
                     system_errors.append(f"Species {j} missing 'name' field")
-                if 'mass' in species and not isinstance(species['mass'], (int, float)):
-                    system_errors.append(f"Species {j} 'mass' must be numeric")
+                if 'default' in species and not isinstance(species['default'], (int, float)):
+                    system_errors.append(f"Species {j} 'default' must be numeric")
 
         # Validate reactions
         if 'reactions' in system and isinstance(system['reactions'], list):
