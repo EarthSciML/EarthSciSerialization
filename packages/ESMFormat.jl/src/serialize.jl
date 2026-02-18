@@ -58,18 +58,27 @@ Serialize DiscreteEventTrigger to JSON-compatible format.
 """
 function serialize_trigger(trigger::DiscreteEventTrigger)::Dict{String,Any}
     if isa(trigger, ConditionTrigger)
-        return Dict("expression" => serialize_expression(trigger.expression))
+        return Dict("type" => "condition", "expression" => serialize_expression(trigger.expression))
     elseif isa(trigger, PeriodicTrigger)
-        result = Dict("period" => trigger.period)
+        result = Dict("type" => "periodic", "interval" => trigger.period)
         if trigger.phase != 0.0
-            result["phase"] = trigger.phase
+            result["initial_offset"] = trigger.phase
         end
         return result
     elseif isa(trigger, PresetTimesTrigger)
-        return Dict("times" => trigger.times)
+        return Dict("type" => "preset_times", "times" => trigger.times)
     else
         throw(ArgumentError("Unknown DiscreteEventTrigger type: $(typeof(trigger))"))
     end
+end
+
+"""
+    serialize_discrete_event_trigger(trigger::DiscreteEventTrigger) -> Dict{String,Any}
+
+Alias for serialize_trigger for backward compatibility.
+"""
+function serialize_discrete_event_trigger(trigger::DiscreteEventTrigger)::Dict{String,Any}
+    return serialize_trigger(trigger)
 end
 
 """
@@ -227,9 +236,10 @@ end
     serialize_species(species::Species) -> Dict{String,Any}
 
 Serialize Species to JSON-compatible format.
+Note: Species name is the key in the species dictionary, not a property of the Species object.
 """
 function serialize_species(species::Species)::Dict{String,Any}
-    result = Dict{String,Any}("name" => species.name)
+    result = Dict{String,Any}()
     if species.units !== nothing
         result["units"] = species.units
     end
@@ -246,12 +256,13 @@ end
     serialize_parameter(param::Parameter) -> Dict{String,Any}
 
 Serialize Parameter to JSON-compatible format.
+Note: Parameter name is the key in the parameters dictionary, not a property of the Parameter object.
 """
 function serialize_parameter(param::Parameter)::Dict{String,Any}
-    result = Dict{String,Any}(
-        "name" => param.name,
-        "default" => param.default
-    )
+    result = Dict{String,Any}()
+    if param.default !== nothing
+        result["default"] = param.default
+    end
     if param.description !== nothing
         result["description"] = param.description
     end
@@ -310,12 +321,10 @@ Serialize ReactionSystem to JSON-compatible format.
 """
 function serialize_reaction_system(rs::ReactionSystem)::Dict{String,Any}
     result = Dict{String,Any}(
-        "species" => [serialize_species(s) for s in rs.species],
+        "species" => Dict(s.name => serialize_species(s) for s in rs.species),
+        "parameters" => Dict(p.name => serialize_parameter(p) for p in rs.parameters),
         "reactions" => [serialize_reaction(r) for r in rs.reactions]
     )
-    if !isempty(rs.parameters)
-        result["parameters"] = [serialize_parameter(p) for p in rs.parameters]
-    end
     return result
 end
 
@@ -327,13 +336,23 @@ Serialize DataLoader to JSON-compatible format.
 function serialize_data_loader(loader::DataLoader)::Dict{String,Any}
     result = Dict{String,Any}(
         "type" => loader.type,
-        "source" => loader.source
+        "loader_id" => loader.loader_id,
+        "provides" => loader.provides
     )
-    if !isempty(loader.parameters)
-        result["parameters"] = loader.parameters
+    if loader.config !== nothing
+        result["config"] = loader.config
     end
-    if loader.description !== nothing
-        result["description"] = loader.description
+    if loader.reference !== nothing
+        result["reference"] = serialize_reference(loader.reference)
+    end
+    if loader.temporal_resolution !== nothing
+        result["temporal_resolution"] = loader.temporal_resolution
+    end
+    if loader.spatial_resolution !== nothing
+        result["spatial_resolution"] = loader.spatial_resolution
+    end
+    if loader.interpolation !== nothing
+        result["interpolation"] = loader.interpolation
     end
     return result
 end
@@ -345,11 +364,17 @@ Serialize Operator to JSON-compatible format.
 """
 function serialize_operator(op::Operator)::Dict{String,Any}
     result = Dict{String,Any}(
-        "type" => op.type,
-        "name" => op.name
+        "operator_id" => op.operator_id,
+        "needed_vars" => op.needed_vars
     )
-    if !isempty(op.parameters)
-        result["parameters"] = op.parameters
+    if op.reference !== nothing
+        result["reference"] = serialize_reference(op.reference)
+    end
+    if op.config !== nothing
+        result["config"] = op.config
+    end
+    if op.modifies !== nothing
+        result["modifies"] = op.modifies
     end
     if op.description !== nothing
         result["description"] = op.description

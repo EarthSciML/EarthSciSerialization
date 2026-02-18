@@ -335,6 +335,100 @@ Abstract base type for coupling entries that connect model components.
 abstract type CouplingEntry end
 
 """
+    CouplingOperatorCompose <: CouplingEntry
+
+Match LHS time derivatives and add RHS terms together.
+"""
+struct CouplingOperatorCompose <: CouplingEntry
+    systems::Vector{String}
+    translate::Union{Dict{String,Any},Nothing}
+    description::Union{String,Nothing}
+
+    CouplingOperatorCompose(systems::Vector{String}; translate=nothing, description=nothing) =
+        new(systems, translate, description)
+end
+
+"""
+    CouplingCouple2 <: CouplingEntry
+
+Bi-directional coupling via coupletype dispatch.
+"""
+struct CouplingCouple2 <: CouplingEntry
+    systems::Vector{String}
+    coupletype_pair::Vector{String}
+    connector::Dict{String,Any}
+    description::Union{String,Nothing}
+
+    CouplingCouple2(systems::Vector{String}, coupletype_pair::Vector{String}, connector::Dict{String,Any}; description=nothing) =
+        new(systems, coupletype_pair, connector, description)
+end
+
+"""
+    CouplingVariableMap <: CouplingEntry
+
+Replace a parameter in one system with a variable from another.
+"""
+struct CouplingVariableMap <: CouplingEntry
+    from::String
+    to::String
+    transform::String
+    factor::Union{Float64,Nothing}
+    description::Union{String,Nothing}
+
+    CouplingVariableMap(from::String, to::String, transform::String; factor=nothing, description=nothing) =
+        new(from, to, transform, factor, description)
+end
+
+"""
+    CouplingOperatorApply <: CouplingEntry
+
+Register an Operator to run during simulation.
+"""
+struct CouplingOperatorApply <: CouplingEntry
+    operator::String
+    description::Union{String,Nothing}
+
+    CouplingOperatorApply(operator::String; description=nothing) =
+        new(operator, description)
+end
+
+"""
+    CouplingCallback <: CouplingEntry
+
+Register a callback for simulation events.
+"""
+struct CouplingCallback <: CouplingEntry
+    callback_id::String
+    config::Union{Dict{String,Any},Nothing}
+    description::Union{String,Nothing}
+
+    CouplingCallback(callback_id::String; config=nothing, description=nothing) =
+        new(callback_id, config, description)
+end
+
+"""
+    CouplingEvent <: CouplingEntry
+
+Cross-system event involving variables from multiple coupled systems.
+"""
+struct CouplingEvent <: CouplingEntry
+    event_type::String
+    conditions::Union{Vector{Expr},Nothing}
+    trigger::Union{DiscreteEventTrigger,Nothing}
+    affects::Vector{AffectEquation}
+    affect_neg::Union{Vector{AffectEquation},Nothing}
+    discrete_parameters::Union{Vector{String},Nothing}
+    root_find::Union{String,Nothing}
+    reinitialize::Union{Bool,Nothing}
+    description::Union{String,Nothing}
+
+    CouplingEvent(event_type::String, affects::Vector{AffectEquation};
+                  conditions=nothing, trigger=nothing, affect_neg=nothing,
+                  discrete_parameters=nothing, root_find=nothing, reinitialize=nothing, description=nothing) =
+        new(event_type, conditions, trigger, affects, affect_neg, discrete_parameters, root_find, reinitialize, description)
+end
+
+"""
     DataLoader
 
 External data source registration (by reference).
