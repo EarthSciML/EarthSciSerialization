@@ -78,7 +78,11 @@ pub use graph::{
     ExpressionGraph, VariableNode, VariableKind, DependencyEdge, DependencyRelationship,
     ExpressionGraphInput
 };
-pub use reactions::{derive_odes, stoichiometric_matrix, DeriveError};
+pub use reactions::{
+    derive_odes, stoichiometric_matrix, DeriveError,
+    detect_conservation_violations, ConservationAnalysis, ConservationViolation,
+    ConservationLawType, LinearInvariant
+};
 
 #[cfg(feature = "parallel")]
 pub use reactions::stoichiometric_matrix_parallel;
