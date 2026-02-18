@@ -17,6 +17,20 @@ export { CouplingGraph, type CouplingGraphProps } from './components/CouplingGra
 export { ValidationPanel, type ValidationPanelProps } from './components/ValidationPanel';
 export { FileSummary, type FileSummaryProps } from './components/FileSummary';
 
+// Mathematical layout components (Section 5.2.3)
+export {
+  Fraction,
+  Superscript,
+  Subscript,
+  Radical,
+  Delimiters,
+  type FractionProps,
+  type SuperscriptProps,
+  type SubscriptProps,
+  type RadicalProps,
+  type DelimitersProps
+} from './layout';
+
 // Variable highlighting primitives
 export {
   buildVarEquivalences,
