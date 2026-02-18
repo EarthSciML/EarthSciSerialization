@@ -92,30 +92,12 @@ func ValidateFile(file *EsmFile, jsonStr string) *ValidationResult {
 		return result
 	}
 
-	// Perform structural validation
-	structuralResult := ValidateStructural(file)
+	// Perform structural validation with structured error codes
+	structuralResult := ValidateStructuralWithCodes(file)
 
-	// Convert structural validation results
-	for _, msg := range structuralResult.Messages {
-		if msg.Level == "error" {
-			structuralError := StructuralError{
-				Path:    msg.Path,
-				Code:    getErrorCodeFromMessage(msg.Message),
-				Message: msg.Message,
-				Details: map[string]interface{}{},
-			}
-			result.StructuralErrors = append(result.StructuralErrors, structuralError)
-		} else if msg.Level == "warning" {
-			// For now, treat non-unit warnings as unit warnings
-			unitWarning := UnitWarning{
-				Path:     msg.Path,
-				Message:  msg.Message,
-				LhsUnits: "unknown",
-				RhsUnits: "unknown",
-			}
-			result.UnitWarnings = append(result.UnitWarnings, unitWarning)
-		}
-	}
+	// Use the structured validation results directly
+	result.StructuralErrors = structuralResult.StructuralErrors
+	result.UnitWarnings = structuralResult.UnitWarnings
 
 	// Update IsValid based on both schema and structural errors
 	result.IsValid = len(result.SchemaErrors) == 0 && len(result.StructuralErrors) == 0
@@ -151,6 +133,13 @@ func getErrorCodeFromMessage(message string) string {
 // For the new spec-compliant validation, use ValidateFile
 func Validate(file *EsmFile) *DetailedValidationResult {
 	return ValidateStructural(file)
+}
+
+// StructuralValidationResult holds the structured validation errors for internal use
+type StructuralValidationResult struct {
+	Valid            bool               `json:"valid"`
+	StructuralErrors []StructuralError  `json:"structural_errors"`
+	UnitWarnings     []UnitWarning      `json:"unit_warnings"`
 }
 
 // ValidateStructural performs comprehensive structural validation of an ESM file (renamed for clarity)
@@ -192,6 +181,95 @@ func ValidateStructural(file *EsmFile) *DetailedValidationResult {
 	validateOperatorReferences(file, result)
 
 	return result
+}
+
+// ValidateStructuralWithCodes performs structural validation and returns structured errors directly
+func ValidateStructuralWithCodes(file *EsmFile) *StructuralValidationResult {
+	result := &StructuralValidationResult{
+		Valid:            true,
+		StructuralErrors: []StructuralError{},
+		UnitWarnings:     []UnitWarning{},
+	}
+
+	// Basic struct validation (already done in types.go)
+	if err := file.Validate(); err != nil {
+		result.Valid = false
+		result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+			Path:    "$",
+			Code:    "validation_failed",
+			Message: fmt.Sprintf("Basic validation failed: %v", err),
+			Details: map[string]interface{}{},
+		})
+		return result
+	}
+
+	// Validate models
+	for modelName, model := range file.Models {
+		validateModelWithCodes(modelName, &model, result, file)
+	}
+
+	// Validate reaction systems
+	for systemName, system := range file.ReactionSystems {
+		validateReactionSystemWithCodes(systemName, &system, result, file)
+	}
+
+	// Validate coupling references
+	validateCouplingReferencesWithCodes(file, result)
+
+	// Validate data loader references
+	validateDataLoaderReferencesWithCodes(file, result)
+
+	// Validate operator references
+	validateOperatorReferencesWithCodes(file, result)
+
+	return result
+}
+
+// validateModelWithCodes checks model-specific validation rules with structured error codes
+func validateModelWithCodes(modelName string, model *Model, result *StructuralValidationResult, file *EsmFile) {
+	basePath := fmt.Sprintf("$.models.%s", modelName)
+
+	// Check that all variables referenced in equations exist
+	allVars := make(map[string]bool)
+	for varName := range model.Variables {
+		allVars[varName] = true
+	}
+
+	for i, eq := range model.Equations {
+		eqPath := fmt.Sprintf("%s.equations[%d]", basePath, i)
+		validateExpressionVariablesWithStructuredCodes(eq.LHS, allVars, fmt.Sprintf("%s.lhs", eqPath), result, file, modelName)
+		validateExpressionVariablesWithStructuredCodes(eq.RHS, allVars, fmt.Sprintf("%s.rhs", eqPath), result, file, modelName)
+	}
+
+	// Equation-unknown balance validation (Section 3.2.1)
+	validateEquationUnknownBalanceWithCodes(modelName, model, basePath, result)
+
+	// Check observed variables have expressions
+	for varName, variable := range model.Variables {
+		varPath := fmt.Sprintf("%s.variables.%s", basePath, varName)
+		if variable.Type == "observed" && variable.Expression == nil {
+			result.Valid = false
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    varPath,
+				Code:    ErrorMissingObservedExpr,
+				Message: "Observed variable must have an expression",
+				Details: map[string]interface{}{
+					"variable": varName,
+					"model":    modelName,
+				},
+			})
+		}
+	}
+
+	// Validate discrete events
+	for i, event := range model.DiscreteEvents {
+		validateDiscreteEventWithCodes(&event, allVars, fmt.Sprintf("%s.discrete_events[%d]", basePath, i), result, file, modelName)
+	}
+
+	// Validate continuous events
+	for i, event := range model.ContinuousEvents {
+		validateContinuousEventWithCodes(&event, allVars, fmt.Sprintf("%s.continuous_events[%d]", basePath, i), result, file, modelName)
+	}
 }
 
 // validateModel checks model-specific validation rules
@@ -675,5 +753,514 @@ func validateEquationUnknownBalance(modelName string, model *Model, basePath str
 			Message: message,
 			Path:    basePath,
 		})
+	}
+}
+
+// validateExpressionVariablesWithStructuredCodes checks that all variables in an expression exist
+// with support for scoped reference resolution and structured error codes
+func validateExpressionVariablesWithStructuredCodes(expr Expression, allVars map[string]bool, path string, result *StructuralValidationResult, file *EsmFile, currentSystem string) {
+	switch e := expr.(type) {
+	case string:
+		// Variable reference - check if it exists
+		if !allVars[e] {
+			// If it's a scoped reference and we have file context, try to resolve it
+			if file != nil && strings.Contains(e, ".") {
+				if _, resolved := resolveScopedReference(e, file, currentSystem); !resolved {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    path,
+						Code:    ErrorUnresolvedScopedRef,
+						Message: fmt.Sprintf("Unresolved scoped reference '%s'", e),
+						Details: map[string]interface{}{
+							"variable":       e,
+							"current_system": currentSystem,
+						},
+					})
+				}
+			} else {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    path,
+					Code:    ErrorUndefinedVariable,
+					Message: fmt.Sprintf("Undefined variable '%s'", e),
+					Details: map[string]interface{}{
+						"variable":       e,
+						"current_system": currentSystem,
+					},
+				})
+			}
+		}
+	case ExprNode:
+		// Recursively validate arguments
+		for i, arg := range e.Args {
+			validateExpressionVariablesWithStructuredCodes(arg, allVars, fmt.Sprintf("%s.args[%d]", path, i), result, file, currentSystem)
+		}
+	case float64, int:
+		// Numeric literals are always valid
+	default:
+		result.UnitWarnings = append(result.UnitWarnings, UnitWarning{
+			Path:     path,
+			Message:  fmt.Sprintf("Unknown expression type: %T", e),
+			LhsUnits: "unknown",
+			RhsUnits: "unknown",
+		})
+	}
+}
+
+// validateEquationUnknownBalanceWithCodes validates equation-unknown balance with structured error codes
+func validateEquationUnknownBalanceWithCodes(modelName string, model *Model, basePath string, result *StructuralValidationResult) {
+	// Count state variables
+	stateVars := make(map[string]bool)
+	for varName, variable := range model.Variables {
+		if variable.Type == "state" {
+			stateVars[varName] = true
+		}
+	}
+	nStates := len(stateVars)
+
+	// Count ODE equations (equations whose LHS is a time derivative D(var, t))
+	odeEquations := make(map[string]bool) // track which state variables have ODE equations
+	nOdes := 0
+
+	for _, eq := range model.Equations {
+		if lhsNode, ok := eq.LHS.(ExprNode); ok {
+			if lhsNode.Op == "D" && len(lhsNode.Args) > 0 {
+				// Check if this is a time derivative
+				if lhsNode.Wrt != nil && *lhsNode.Wrt == "t" {
+					nOdes++
+					// Extract the variable name from the derivative
+					if varName, ok := lhsNode.Args[0].(string); ok {
+						odeEquations[varName] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Check equation-unknown balance: n_odes == n_states
+	if nOdes != nStates {
+		result.Valid = false
+
+		// Report which state variables lack ODE equations
+		missingEquations := []string{}
+		for varName := range stateVars {
+			if !odeEquations[varName] {
+				missingEquations = append(missingEquations, varName)
+			}
+		}
+
+		// Report which ODE equations lack corresponding state variables
+		extraEquations := []string{}
+		for varName := range odeEquations {
+			if !stateVars[varName] {
+				extraEquations = append(extraEquations, varName)
+			}
+		}
+
+		// Generate error message
+		message := fmt.Sprintf("Equation-unknown balance failed: found %d state variables but %d ODE equations", nStates, nOdes)
+
+		if len(missingEquations) > 0 {
+			message += fmt.Sprintf("; state variables without ODE equations: %v", missingEquations)
+		}
+
+		if len(extraEquations) > 0 {
+			message += fmt.Sprintf("; ODE equations for non-state variables: %v", extraEquations)
+		}
+
+		result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+			Path:    basePath,
+			Code:    ErrorEquationCountMismatch,
+			Message: message,
+			Details: map[string]interface{}{
+				"model":              modelName,
+				"state_count":        nStates,
+				"ode_count":          nOdes,
+				"missing_equations":  missingEquations,
+				"extra_equations":    extraEquations,
+			},
+		})
+	}
+}
+
+// validateReactionSystemWithCodes checks reaction system-specific validation rules with structured codes
+func validateReactionSystemWithCodes(systemName string, system *ReactionSystem, result *StructuralValidationResult, file *EsmFile) {
+	basePath := fmt.Sprintf("$.reaction_systems.%s", systemName)
+
+	// Check that all species referenced in reactions exist
+	allSpecies := make(map[string]bool)
+	for speciesName := range system.Species {
+		allSpecies[speciesName] = true
+	}
+
+	allParams := make(map[string]bool)
+	for paramName := range system.Parameters {
+		allParams[paramName] = true
+	}
+
+	// Combined variables for expression validation
+	allVars := make(map[string]bool)
+	for name := range allSpecies {
+		allVars[name] = true
+	}
+	for name := range allParams {
+		allVars[name] = true
+	}
+
+	for i, reaction := range system.Reactions {
+		reactionPath := fmt.Sprintf("%s.reactions[%d]", basePath, i)
+
+		// Check for null reaction
+		if len(reaction.Substrates) == 0 && len(reaction.Products) == 0 {
+			result.Valid = false
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    reactionPath,
+				Code:    ErrorNullReaction,
+				Message: "Reaction has both substrates: null and products: null",
+				Details: map[string]interface{}{
+					"reaction_index": i,
+					"system":         systemName,
+				},
+			})
+		}
+
+		// Check substrates reference valid species
+		for j, substrate := range reaction.Substrates {
+			if !allSpecies[substrate.Species] {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.substrates[%d].species", reactionPath, j),
+					Code:    ErrorUndefinedSpecies,
+					Message: fmt.Sprintf("Undefined species '%s' in reaction substrate", substrate.Species),
+					Details: map[string]interface{}{
+						"species":        substrate.Species,
+						"system":         systemName,
+						"reaction_index": i,
+						"substrate_index": j,
+					},
+				})
+			}
+		}
+
+		// Check products reference valid species
+		for j, product := range reaction.Products {
+			if !allSpecies[product.Species] {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.products[%d].species", reactionPath, j),
+					Code:    ErrorUndefinedSpecies,
+					Message: fmt.Sprintf("Undefined species '%s' in reaction product", product.Species),
+					Details: map[string]interface{}{
+						"species":       product.Species,
+						"system":        systemName,
+						"reaction_index": i,
+						"product_index": j,
+					},
+				})
+			}
+		}
+
+		// Validate rate expression
+		validateExpressionVariablesWithStructuredCodes(reaction.Rate, allVars, fmt.Sprintf("%s.rate", reactionPath), result, file, systemName)
+	}
+}
+
+// validateCouplingReferencesWithCodes validates coupling references with structured error codes
+func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValidationResult) {
+	allSystems := make(map[string]bool)
+
+	// Collect all system names
+	for name := range file.Models {
+		allSystems[name] = true
+	}
+	for name := range file.ReactionSystems {
+		allSystems[name] = true
+	}
+
+	for i, coupling := range file.Coupling {
+		basePath := fmt.Sprintf("$.coupling[%d]", i)
+
+		switch c := coupling.(type) {
+		case OperatorComposeCoupling:
+			for j, sysName := range c.Systems {
+				if !allSystems[sysName] {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    fmt.Sprintf("%s.systems[%d]", basePath, j),
+						Code:    ErrorUndefinedSystem,
+						Message: fmt.Sprintf("Undefined system '%s' in coupling", sysName),
+						Details: map[string]interface{}{
+							"system":        sysName,
+							"coupling_type": "operator_compose",
+							"coupling_index": i,
+							"system_index":  j,
+						},
+					})
+				}
+			}
+
+		case Couple2Coupling:
+			for j, sysName := range c.Systems {
+				if !allSystems[sysName] {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    fmt.Sprintf("%s.systems[%d]", basePath, j),
+						Code:    ErrorUndefinedSystem,
+						Message: fmt.Sprintf("Undefined system '%s' in coupling", sysName),
+						Details: map[string]interface{}{
+							"system":        sysName,
+							"coupling_type": "couple2",
+							"coupling_index": i,
+							"system_index":  j,
+						},
+					})
+				}
+			}
+
+		case VariableMapCoupling:
+			if !allSystems[c.From] {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.from", basePath),
+					Code:    ErrorUndefinedSystem,
+					Message: fmt.Sprintf("Undefined system '%s' in coupling", c.From),
+					Details: map[string]interface{}{
+						"system":        c.From,
+						"coupling_type": "variable_map",
+						"coupling_index": i,
+						"direction":     "from",
+					},
+				})
+			}
+			if !allSystems[c.To] {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.to", basePath),
+					Code:    ErrorUndefinedSystem,
+					Message: fmt.Sprintf("Undefined system '%s' in coupling", c.To),
+					Details: map[string]interface{}{
+						"system":        c.To,
+						"coupling_type": "variable_map",
+						"coupling_index": i,
+						"direction":     "to",
+					},
+				})
+			}
+
+		case OperatorApplyCoupling:
+			// For operator_apply coupling, check if the operator exists
+			if file.Operators != nil {
+				if _, exists := file.Operators[c.Operator]; !exists {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    fmt.Sprintf("%s.operator", basePath),
+						Code:    ErrorUndefinedOperator,
+						Message: fmt.Sprintf("Undefined operator '%s' in coupling", c.Operator),
+						Details: map[string]interface{}{
+							"operator":      c.Operator,
+							"coupling_type": "operator_apply",
+							"coupling_index": i,
+						},
+					})
+				}
+			}
+		}
+	}
+}
+
+// validateDataLoaderReferencesWithCodes validates data loader configurations with structured codes
+func validateDataLoaderReferencesWithCodes(file *EsmFile, result *StructuralValidationResult) {
+	for loaderName, loader := range file.DataLoaders {
+		basePath := fmt.Sprintf("$.data_loaders.%s", loaderName)
+
+		if loader.Type == "" {
+			result.Valid = false
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    fmt.Sprintf("%s.type", basePath),
+				Code:    "missing_loader_type", // Not in spec, but needed for validation
+				Message: "Data loader type is required",
+				Details: map[string]interface{}{
+					"loader": loaderName,
+				},
+			})
+		}
+
+		if loader.LoaderID == "" {
+			result.Valid = false
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    fmt.Sprintf("%s.loader_id", basePath),
+				Code:    "missing_loader_id", // Not in spec, but needed for validation
+				Message: "Data loader ID is required",
+				Details: map[string]interface{}{
+					"loader": loaderName,
+				},
+			})
+		}
+
+		if len(loader.Provides) == 0 {
+			result.UnitWarnings = append(result.UnitWarnings, UnitWarning{
+				Path:     fmt.Sprintf("%s.provides", basePath),
+				Message:  "Data loader provides no variables",
+				LhsUnits: "unknown",
+				RhsUnits: "unknown",
+			})
+		}
+	}
+}
+
+// validateOperatorReferencesWithCodes validates operator configurations with structured codes
+func validateOperatorReferencesWithCodes(file *EsmFile, result *StructuralValidationResult) {
+	for operatorName, operator := range file.Operators {
+		basePath := fmt.Sprintf("$.operators.%s", operatorName)
+
+		if operator.OperatorID == "" {
+			result.Valid = false
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    fmt.Sprintf("%s.operator_id", basePath),
+				Code:    "missing_operator_id", // Not in spec, but needed for validation
+				Message: "Operator ID is required",
+				Details: map[string]interface{}{
+					"operator": operatorName,
+				},
+			})
+		}
+
+		if len(operator.NeededVars) == 0 {
+			result.UnitWarnings = append(result.UnitWarnings, UnitWarning{
+				Path:     fmt.Sprintf("%s.needed_vars", basePath),
+				Message:  "Operator requires no variables",
+				LhsUnits: "unknown",
+				RhsUnits: "unknown",
+			})
+		}
+	}
+}
+
+// validateDiscreteEventWithCodes validates discrete event structure with structured codes
+func validateDiscreteEventWithCodes(event *DiscreteEvent, allVars map[string]bool, path string, result *StructuralValidationResult, file *EsmFile, currentSystem string) {
+	// Validate trigger expression if it's a condition type
+	if event.Trigger.Type == "condition" && event.Trigger.Expression != nil {
+		validateExpressionVariablesWithStructuredCodes(event.Trigger.Expression, allVars, fmt.Sprintf("%s.trigger.expression", path), result, file, currentSystem)
+	}
+
+	// Validate affect equations
+	for i, affect := range event.Affects {
+		affectPath := fmt.Sprintf("%s.affects[%d]", path, i)
+
+		// Check that the target variable exists (could be scoped)
+		if !allVars[affect.LHS] {
+			if file != nil && strings.Contains(affect.LHS, ".") {
+				if _, resolved := resolveScopedReference(affect.LHS, file, currentSystem); !resolved {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    fmt.Sprintf("%s.lhs", affectPath),
+						Code:    ErrorUnresolvedScopedRef,
+						Message: fmt.Sprintf("Unresolved scoped reference '%s' in affect equation", affect.LHS),
+						Details: map[string]interface{}{
+							"variable":       affect.LHS,
+							"current_system": currentSystem,
+							"event_type":     "discrete",
+						},
+					})
+				}
+			} else {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.lhs", affectPath),
+					Code:    ErrorEventVarUndeclared,
+					Message: fmt.Sprintf("Undefined variable '%s' in affect equation", affect.LHS),
+					Details: map[string]interface{}{
+						"variable":       affect.LHS,
+						"current_system": currentSystem,
+						"event_type":     "discrete",
+					},
+				})
+			}
+		}
+
+		// Validate the RHS expression
+		validateExpressionVariablesWithStructuredCodes(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result, file, currentSystem)
+	}
+}
+
+// validateContinuousEventWithCodes validates continuous event structure with structured codes
+func validateContinuousEventWithCodes(event *ContinuousEvent, allVars map[string]bool, path string, result *StructuralValidationResult, file *EsmFile, currentSystem string) {
+	// Validate condition expressions
+	for i, condition := range event.Conditions {
+		validateExpressionVariablesWithStructuredCodes(condition, allVars, fmt.Sprintf("%s.conditions[%d]", path, i), result, file, currentSystem)
+	}
+
+	// Validate affect equations
+	for i, affect := range event.Affects {
+		affectPath := fmt.Sprintf("%s.affects[%d]", path, i)
+
+		if !allVars[affect.LHS] {
+			if file != nil && strings.Contains(affect.LHS, ".") {
+				if _, resolved := resolveScopedReference(affect.LHS, file, currentSystem); !resolved {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    fmt.Sprintf("%s.lhs", affectPath),
+						Code:    ErrorUnresolvedScopedRef,
+						Message: fmt.Sprintf("Unresolved scoped reference '%s' in affect equation", affect.LHS),
+						Details: map[string]interface{}{
+							"variable":       affect.LHS,
+							"current_system": currentSystem,
+							"event_type":     "continuous",
+						},
+					})
+				}
+			} else {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.lhs", affectPath),
+					Code:    ErrorEventVarUndeclared,
+					Message: fmt.Sprintf("Undefined variable '%s' in affect equation", affect.LHS),
+					Details: map[string]interface{}{
+						"variable":       affect.LHS,
+						"current_system": currentSystem,
+						"event_type":     "continuous",
+					},
+				})
+			}
+		}
+
+		validateExpressionVariablesWithStructuredCodes(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result, file, currentSystem)
+	}
+
+	// Validate affect_neg equations if present
+	for i, affect := range event.AffectNeg {
+		affectPath := fmt.Sprintf("%s.affect_neg[%d]", path, i)
+
+		if !allVars[affect.LHS] {
+			if file != nil && strings.Contains(affect.LHS, ".") {
+				if _, resolved := resolveScopedReference(affect.LHS, file, currentSystem); !resolved {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    fmt.Sprintf("%s.lhs", affectPath),
+						Code:    ErrorUnresolvedScopedRef,
+						Message: fmt.Sprintf("Unresolved scoped reference '%s' in affect_neg equation", affect.LHS),
+						Details: map[string]interface{}{
+							"variable":       affect.LHS,
+							"current_system": currentSystem,
+							"event_type":     "continuous",
+						},
+					})
+				}
+			} else {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.lhs", affectPath),
+					Code:    ErrorEventVarUndeclared,
+					Message: fmt.Sprintf("Undefined variable '%s' in affect_neg equation", affect.LHS),
+					Details: map[string]interface{}{
+						"variable":       affect.LHS,
+						"current_system": currentSystem,
+						"event_type":     "continuous",
+					},
+				})
+			}
+		}
+
+		validateExpressionVariablesWithStructuredCodes(affect.RHS, allVars, fmt.Sprintf("%s.rhs", affectPath), result, file, currentSystem)
 	}
 }
