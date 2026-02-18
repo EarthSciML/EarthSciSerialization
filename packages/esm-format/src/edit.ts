@@ -521,19 +521,20 @@ export function compose(
  * @param file ESM file
  * @param from Source variable reference
  * @param to Target variable reference
- * @param transform Optional transformation expression
+ * @param transform Optional transformation type
  * @returns New ESM file with variable mapping coupling added
  */
 export function mapVariable(
   file: EsmFile,
   from: string,
   to: string,
-  transform?: Expr
+  transform: 'param_to_var' | 'identity' | 'additive' | 'multiplicative' | 'conversion_factor' = 'param_to_var'
 ): EsmFile {
   const coupling: CouplingEntry = {
-    type: 'couple2',
-    systems: [from.split('.')[0], to.split('.')[0]],
-    vars: [[from, to]]
+    type: 'variable_map',
+    from,
+    to,
+    transform
   }
 
   return addCoupling(file, coupling)

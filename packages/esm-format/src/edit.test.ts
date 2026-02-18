@@ -360,9 +360,10 @@ describe('edit', () => {
       expect(result).not.toBe(esmFile)
       expect(result.coupling).toHaveLength(1)
       expect(result.coupling![0]).toEqual({
-        type: 'couple2',
-        systems: ['TestModel', 'TestSystem'],
-        vars: [['TestModel.x', 'TestSystem.A']]
+        type: 'variable_map',
+        from: 'TestModel.x',
+        to: 'TestSystem.A',
+        transform: 'param_to_var'
       })
     })
   })
