@@ -54,43 +54,6 @@ pub fn contains(expr: &Expr, var_name: &str) -> bool {
     }
 }
 
-/// Substitute variables in an expression
-///
-/// Performs recursive replacement of variables with expressions, with support for
-/// scoped reference resolution. Returns a new expression (immutable).
-///
-/// # Arguments
-///
-/// * `expr` - The expression to substitute variables in
-/// * `bindings` - Map from variable names to replacement expressions
-///
-/// # Returns
-///
-/// * New expression with substitutions applied
-pub fn substitute(expr: &Expr, bindings: &HashMap<String, Expr>) -> Expr {
-    match expr {
-        Expr::Number(n) => Expr::Number(*n),
-        Expr::Variable(var_name) => {
-            if let Some(replacement) = bindings.get(var_name) {
-                replacement.clone()
-            } else {
-                Expr::Variable(var_name.clone())
-            }
-        },
-        Expr::Operator(op_node) => {
-            let new_args: Vec<Expr> = op_node.args.iter()
-                .map(|arg| substitute(arg, bindings))
-                .collect();
-
-            Expr::Operator(crate::types::ExpressionNode {
-                op: op_node.op.clone(),
-                args: new_args,
-                wrt: op_node.wrt.clone(),
-                dim: op_node.dim.clone(),
-            })
-        }
-    }
-}
 
 /// Evaluate an expression with given variable values
 ///
@@ -593,6 +556,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
 mod tests {
     use super::*;
     use crate::types::ExpressionNode;
+    use crate::substitute::substitute;
     use std::collections::HashMap;
 
     #[test]
