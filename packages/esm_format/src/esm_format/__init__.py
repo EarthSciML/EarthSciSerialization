@@ -2,8 +2,10 @@
 ESM Format - Earth System Model Serialization Format
 
 A Python package for handling Earth System Model serialization and mathematical expressions.
+This is the core implementation following the ESM Library Specification v0.1.0.
 """
 
+# Core data types
 from .esm_types import (
     Expr,
     ExprNode,
@@ -37,191 +39,38 @@ from .esm_types import (
     Metadata,
     EsmFile,
 )
+
+# Core parsing and serialization
 from .parse import load, SchemaValidationError, UnsupportedVersionError
 from .serialize import save
+
+# Validation (Core tier requirement)
 from .validation import validate, ValidationResult, ValidationError
-from .expression import free_variables, free_parameters, contains, evaluate, simplify, to_sympy, from_sympy, symbolic_jacobian as jacobian
+
+# Expression engine (Core tier requirement)
+from .expression import (
+    free_variables,
+    free_parameters,
+    contains,
+    evaluate,
+    simplify,
+    to_sympy,
+    from_sympy,
+    symbolic_jacobian as jacobian
+)
+
+# Substitution (Core tier requirement)
 from .substitute import substitute, substitute_in_model, substitute_in_reaction_system
-from .verification import (
-    MathematicalVerifier,
-    VerificationResult,
-    VerificationReport,
-    VerificationStatus,
-    verify_reaction_system,
-    verify_model,
-    compute_stoichiometric_matrix,
-)
-from .simulation import (
-    simulate,
-    simulate_with_discrete_events,
-    SimulationResult,
-    SimulationError,
-)
-from .data_loaders import (
-    NetCDFLoader,
-    JSONLoader,
-    BinaryLoader,
-    create_data_loader,
-)
-from .data_loader_registry import (
-    DataLoaderRegistry,
-    get_registry,
-    register_loader,
-    create_auto_loader,
-    detect_loader_type,
-)
-from .operator_registry import (
-    OperatorRegistry,
-    get_registry as get_operator_registry,
-    register_operator,
-    create_operator,
-    create_operator_by_name,
-    list_operators_by_type,
-    has_operator,
-)
-from .operator_dispatch import (
-    OperatorDispatcher,
-    TypeSignature,
-    OperatorOverload,
-    get_dispatcher,
-    dispatch_operator,
-    register_operator_overload,
-    get_operator_overloads,
-    get_dispatch_info,
-)
-from .coupling_graph import (
-    CouplingGraph,
-    CouplingNode,
-    CouplingEdge,
-    NodeType,
-    DependencyInfo,
-    construct_coupling_graph,
-    validate_coupling_graph,
-    ScopedReference,
-    ScopedReferenceResolver,
-    resolve_coupling_dependencies,
-    build_execution_order_from_dependencies,
-)
-from .coupling_iteration import (
-    CouplingIterator,
-    ConvergenceConfig,
-    RelaxationConfig,
-    AccelerationConfig,
-    IterationState,
-    CouplingResult,
-    ConvergenceMethod,
-    RelaxationMethod,
-    AccelerationMethod,
-    create_default_coupling_iterator,
-    create_adaptive_coupling_iterator,
-)
-from .coupling_error_handling import (
-    RobustCouplingIterator,
-    CouplingErrorType,
-    RecoveryStrategy,
-    ExecutionMode,
-    CouplingErrorContext,
-    CouplingError,
-    RecoveryConfig,
-    DiagnosticReport,
-    CouplingErrorAnalyzer,
-    CouplingRecoveryManager,
-    create_robust_coupling_iterator,
-    create_fault_tolerant_iterator,
-)
-from .hierarchical_scope_resolution import (
-    HierarchicalScopeResolver,
-    ScopeInfo,
-    VariableResolution,
-    create_enhanced_scoped_reference,
-)
-from .dynamic_scope_resolution import (
-    DynamicScopeResolver,
-    RuntimeVariable,
-    RuntimeContext,
-    ContextSwitchResult,
-)
-from .placeholder_expansion import (
-    expand_placeholder,
-    expand_multiple_placeholders,
-    validate_placeholder_expansion,
-    get_placeholder_variables,
-    create_expansion_template,
-    ExpansionContext,
-    CircularReferenceError,
-    PlaceholderExpansionError,
-)
-from .boundary_conditions import (
-    BoundaryConditionProcessor,
-    BoundaryProcessorConfig,
-    BoundaryConstraint,
-    BoundaryLocationError,
-    BoundaryValueError,
-    create_dirichlet_boundary,
-    create_neumann_boundary,
-    create_periodic_boundary,
-    validate_domain_boundary_consistency,
-)
-from .initial_conditions_setup import (
-    InitialConditionProcessor,
-    InitialConditionConfig,
-    FieldConstraint,
-    ConstraintOperator,
-    InitialConditionSetupError,
-    setup_initial_conditions,
-    create_atmospheric_constraints,
-)
-from .time_synchronization import (
-    TimeSynchronizer,
-    TimeStep,
-    TimePoint,
-    TimeSeries,
-    ComponentTimeState,
-    TimeInterpolationMethod,
-    TimeExtrapolationMethod,
-    TimeAlignmentStrategy,
-    synchronize_coupled_system,
-    create_subcycling_synchronizer,
-    validate_time_synchronization_config,
-)
-from .error_handling import (
-    ErrorCode,
-    Severity,
-    ErrorContext,
-    FixSuggestion,
-    ESMError,
-    ErrorCollector,
-    ESMErrorFactory,
-    PerformanceProfiler,
-    InteractiveErrorExplorer,
-    profile_operation,
-    get_profiler,
-    setup_error_logging,
-)
-from .temporal_operators import (
-    DerivativeOperator,
-    IntegralOperator,
-    TemporalAveragingOperator,
-    TimeSteppingOperator,
-    TemporalScheme,
-    IntegrationMethod,
-    TemporalOperatorConfig,
-)
-from .interpolation_operators import (
-    LinearInterpolationOperator,
-    CubicInterpolationOperator,
-    SplineInterpolationOperator,
-    GridInterpolationOperator,
-    InterpolationConfig,
-    BaseInterpolationOperator,
-    create_interpolation_operator,
-)
+
+# Analysis tier - reaction system analysis
 from .reactions import (
     derive_odes,
     stoichiometric_matrix,
     substrate_matrix,
     product_matrix,
 )
+
+# Analysis tier - graph representations
 from .graph import (
     component_graph,
     expression_graph,
@@ -236,6 +85,8 @@ from .graph import (
     CouplingEdge,
     DependencyEdge,
 )
+
+# Analysis tier - unit validation
 from .units import (
     validate_units,
     convert_units,
@@ -243,6 +94,8 @@ from .units import (
     UnitValidationResult,
     UnitConversionResult,
 )
+
+# Core editing operations
 from .edit import (
     ESMEditor,
     EditOperation,
@@ -267,19 +120,41 @@ from .edit import (
     merge_esm_files,
     extract_component_from_file,
 )
+
+# Simulation tier - box model simulation
+from .simulation import (
+    simulate,
+    simulate_with_discrete_events,
+    SimulationResult,
+    SimulationError,
+)
+
+# Display and pretty-printing (Core tier requirement)
 from .display import (
     explore,
     ESMExplorer,
     to_unicode,
     to_latex,
 )
+
+# Code generation (for interoperability)
 from .codegen import (
     to_julia_code,
     to_python_code,
 )
 
+# Data loading functionality
+from .csv_loader import (
+    CSVLoader,
+    CSVValidationError,
+    load_csv_data,
+)
+
 __version__ = "0.1.0"
+
+# Streamlined public API - only Core + Analysis + Simulation tier functionality
 __all__ = [
+    # Core data types
     "Expr",
     "ExprNode",
     "Equation",
@@ -307,134 +182,23 @@ __all__ = [
     "InitialConditionType",
     "BoundaryCondition",
     "BoundaryConditionType",
-    "BoundaryConditionProcessor",
-    "BoundaryProcessorConfig",
-    "BoundaryConstraint",
-    "BoundaryLocationError",
-    "BoundaryValueError",
-    "create_dirichlet_boundary",
-    "create_neumann_boundary",
-    "create_periodic_boundary",
-    "validate_domain_boundary_consistency",
-    # Initial condition setup and validation
-    "InitialConditionProcessor",
-    "InitialConditionConfig",
-    "FieldConstraint",
-    "ConstraintOperator",
-    "InitialConditionSetupError",
-    "setup_initial_conditions",
-    "create_atmospheric_constraints",
     "Solver",
     "Reference",
     "Metadata",
     "EsmFile",
+
+    # Core parsing and serialization
     "load",
     "save",
+
+    # Validation
     "validate",
     "ValidationResult",
     "ValidationError",
     "SchemaValidationError",
     "UnsupportedVersionError",
-    "MathematicalVerifier",
-    "VerificationResult",
-    "VerificationReport",
-    "VerificationStatus",
-    "verify_reaction_system",
-    "verify_model",
-    "compute_stoichiometric_matrix",
-    "simulate",
-    "simulate_with_discrete_events",
-    "SimulationResult",
-    "SimulationError",
-    "NetCDFLoader",
-    "JSONLoader",
-    "BinaryLoader",
-    "create_data_loader",
-    "DataLoaderRegistry",
-    "get_registry",
-    "register_loader",
-    "create_auto_loader",
-    "detect_loader_type",
-    "OperatorRegistry",
-    "get_operator_registry",
-    "register_operator",
-    "create_operator",
-    "create_operator_by_name",
-    "list_operators_by_type",
-    "has_operator",
-    # Operator dispatch system
-    "OperatorDispatcher",
-    "TypeSignature",
-    "OperatorOverload",
-    "get_dispatcher",
-    "dispatch_operator",
-    "register_operator_overload",
-    "get_operator_overloads",
-    "get_dispatch_info",
-    "CouplingGraph",
-    "CouplingNode",
-    "CouplingEdge",
-    "NodeType",
-    "DependencyInfo",
-    "construct_coupling_graph",
-    "validate_coupling_graph",
-    "ScopedReference",
-    "ScopedReferenceResolver",
-    "resolve_coupling_dependencies",
-    "build_execution_order_from_dependencies",
-    # Coupling iteration and convergence control
-    "CouplingIterator",
-    "ConvergenceConfig",
-    "RelaxationConfig",
-    "AccelerationConfig",
-    "IterationState",
-    "CouplingResult",
-    "ConvergenceMethod",
-    "RelaxationMethod",
-    "AccelerationMethod",
-    "create_default_coupling_iterator",
-    "create_adaptive_coupling_iterator",
-    # Coupling error handling and recovery
-    "RobustCouplingIterator",
-    "CouplingErrorType",
-    "RecoveryStrategy",
-    "ExecutionMode",
-    "CouplingErrorContext",
-    "CouplingError",
-    "RecoveryConfig",
-    "DiagnosticReport",
-    "CouplingErrorAnalyzer",
-    "CouplingRecoveryManager",
-    "create_robust_coupling_iterator",
-    "create_fault_tolerant_iterator",
-    "HierarchicalScopeResolver",
-    "ScopeInfo",
-    "VariableResolution",
-    "create_enhanced_scoped_reference",
-    # Dynamic scope resolution for runtime contexts
-    "DynamicScopeResolver",
-    "RuntimeVariable",
-    "RuntimeContext",
-    "ContextSwitchResult",
-    "expand_placeholder",
-    "expand_multiple_placeholders",
-    "validate_placeholder_expansion",
-    "get_placeholder_variables",
-    "create_expansion_template",
-    "ExpansionContext",
-    "CircularReferenceError",
-    "PlaceholderExpansionError",
-    "TimeSynchronizer",
-    "TimeStep",
-    "TimePoint",
-    "TimeSeries",
-    "ComponentTimeState",
-    "TimeInterpolationMethod",
-    "TimeExtrapolationMethod",
-    "TimeAlignmentStrategy",
-    "synchronize_coupled_system",
-    "create_subcycling_synchronizer",
-    "validate_time_synchronization_config",
+
+    # Expression engine
     "free_variables",
     "free_parameters",
     "contains",
@@ -443,43 +207,18 @@ __all__ = [
     "to_sympy",
     "from_sympy",
     "jacobian",
+
+    # Substitution
     "substitute",
     "substitute_in_model",
     "substitute_in_reaction_system",
-    # Error handling and diagnostics
-    "ErrorCode",
-    "Severity",
-    "ErrorContext",
-    "FixSuggestion",
-    "ESMError",
-    "ErrorCollector",
-    "ESMErrorFactory",
-    "PerformanceProfiler",
-    "InteractiveErrorExplorer",
-    "profile_operation",
-    "get_profiler",
-    "setup_error_logging",
-    # Temporal operators
-    "DerivativeOperator",
-    "IntegralOperator",
-    "TemporalAveragingOperator",
-    "TimeSteppingOperator",
-    "TemporalScheme",
-    "IntegrationMethod",
-    "TemporalOperatorConfig",
-    # Interpolation operators
-    "LinearInterpolationOperator",
-    "CubicInterpolationOperator",
-    "SplineInterpolationOperator",
-    "GridInterpolationOperator",
-    "InterpolationConfig",
-    "BaseInterpolationOperator",
-    "create_interpolation_operator",
+
     # Reaction system analysis
     "derive_odes",
     "stoichiometric_matrix",
     "substrate_matrix",
     "product_matrix",
+
     # Graph representations
     "component_graph",
     "expression_graph",
@@ -493,12 +232,14 @@ __all__ = [
     "VariableNode",
     "CouplingEdge",
     "DependencyEdge",
+
     # Unit validation
     "validate_units",
     "convert_units",
     "UnitValidator",
     "UnitValidationResult",
     "UnitConversionResult",
+
     # Editing operations
     "ESMEditor",
     "EditOperation",
@@ -522,13 +263,25 @@ __all__ = [
     "map_variable_in_file",
     "merge_esm_files",
     "extract_component_from_file",
-    # Jupyter integration
+
+    # Simulation
+    "simulate",
+    "simulate_with_discrete_events",
+    "SimulationResult",
+    "SimulationError",
+
+    # Display and pretty-printing
     "explore",
     "ESMExplorer",
-    # Display and conversion functions
     "to_unicode",
     "to_latex",
+
     # Code generation
     "to_julia_code",
     "to_python_code",
+
+    # Data loading
+    "CSVLoader",
+    "CSVValidationError",
+    "load_csv_data",
 ]
