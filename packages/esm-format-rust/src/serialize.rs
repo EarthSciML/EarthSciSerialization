@@ -111,6 +111,7 @@ mod tests {
             units: Some("m".to_string()),
             default: Some(0.0),
             description: None,
+            expression: None,
         });
 
         models.insert("test".to_string(), Model {

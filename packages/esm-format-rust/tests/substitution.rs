@@ -142,18 +142,21 @@ fn test_model_substitution() {
         units: None,
         default: Some(1.0),
         description: None,
+        expression: None,
     });
     variables.insert("k".to_string(), ModelVariable {
         var_type: VariableType::Parameter,
         units: None,
         default: Some(0.1),
         description: None,
+        expression: None,
     });
     variables.insert("y".to_string(), ModelVariable {
         var_type: VariableType::State,
         units: None,
         default: Some(0.0),
         description: None,
+        expression: None,
     });
 
     let model = Model {

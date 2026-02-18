@@ -20,12 +20,14 @@ fn test_analysis_features_integration() {
         units: None,
         default: Some(1.0),
         description: None,
+        expression: None,
     });
     variables.insert("k".to_string(), ModelVariable {
         var_type: VariableType::Parameter,
         units: None,
         default: Some(0.1),
         description: None,
+        expression: None,
     });
 
     let model = Model {
@@ -206,6 +208,7 @@ fn test_editing_operations() {
         units: Some("s^-1".to_string()),
         default: Some(0.1),
         description: Some("Test rate constant".to_string()),
+        expression: None,
     };
 
     let updated_model = add_variable(&model, "test_k", new_var).expect("Failed to add variable");

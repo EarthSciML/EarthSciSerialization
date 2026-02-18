@@ -444,6 +444,7 @@ mod tests {
             units: Some("mol/L".to_string()),
             default: Some(1.0),
             description: None,
+            expression: None,
         };
 
         let result = add_variable(&model, "test_var", variable);
@@ -461,6 +462,7 @@ mod tests {
             units: None,
             default: None,
             description: None,
+            expression: None,
         });
 
         let variable = ModelVariable {
@@ -468,6 +470,7 @@ mod tests {
             units: Some("mol/L".to_string()),
             default: Some(1.0),
             description: None,
+            expression: None,
         };
 
         let result = add_variable(&model, "existing_var", variable);

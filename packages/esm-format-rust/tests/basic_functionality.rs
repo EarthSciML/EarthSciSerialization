@@ -301,6 +301,7 @@ fn test_editing() {
         units: Some("s^-1".to_string()),
         default: Some(0.1),
         description: Some("Test rate constant".to_string()),
+        expression: None,
     };
 
     let updated_model = add_variable(&model, "k", new_var).expect("Failed to add variable");
