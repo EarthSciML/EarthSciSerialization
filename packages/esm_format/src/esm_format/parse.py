@@ -8,9 +8,13 @@ with schema validation using the bundled esm-schema.json file.
 import json
 import os
 from pathlib import Path
-from typing import Union, Dict, Any, List
+from typing import Union, Dict, Any, List, TYPE_CHECKING
 from dataclasses import fields
 from enum import Enum
+
+if TYPE_CHECKING:
+    from .esm_types import DataLoader
+    from .csv_loader import CSVValidationError
 
 import jsonschema
 from jsonschema import validate
@@ -827,3 +831,58 @@ def load(path_or_string: Union[str, Path]) -> EsmFile:
 
     # Parse into ESM objects
     return _parse_esm_data(data)
+
+
+def load_with_csv_data(esm_path_or_string: Union[str, Path], csv_data_loaders: List['DataLoader'] = None) -> 'EsmFile':
+    """
+    Load an ESM file and optionally integrate CSV data loaders.
+
+    This function provides a convenient way to load ESM files that reference CSV data
+    sources, automatically validating and integrating the CSV data.
+
+    Args:
+        esm_path_or_string: File path to JSON file or JSON string for the ESM file
+        csv_data_loaders: Optional list of DataLoader objects referencing CSV files
+
+    Returns:
+        EsmFile object with parsed data and integrated CSV data loaders
+
+    Raises:
+        ImportError: If pandas is not available for CSV processing
+        CSVValidationError: If CSV data validation fails
+
+    Example:
+        # Load ESM file with CSV data
+        data_loader = DataLoader(
+            name="emissions_data",
+            type=DataLoaderType.EMISSIONS,
+            source="emissions.csv",
+            variables=["time", "NO2", "O3"]
+        )
+        esm_file = load_with_csv_data("model.esm", [data_loader])
+    """
+    try:
+        from .csv_loader import load_csv_data, CSVValidationError
+    except ImportError:
+        raise ImportError("CSV integration requires pandas. Install with: pip install pandas")
+
+    # Load the main ESM file
+    esm_file = load(esm_path_or_string)
+
+    # If CSV data loaders are provided, validate them and add to ESM file
+    if csv_data_loaders:
+        # Validate each CSV data loader by attempting to load the data
+        for data_loader in csv_data_loaders:
+            try:
+                # This will validate the CSV file and configuration
+                df = load_csv_data(data_loader)
+                # TODO: Could add the DataFrame to the data_loader for caching
+            except Exception as e:
+                raise CSVValidationError(f"Failed to validate CSV data loader '{data_loader.name}': {e}")
+
+        # Add the validated data loaders to the ESM file
+        if esm_file.data_loaders is None:
+            esm_file.data_loaders = []
+        esm_file.data_loaders.extend(csv_data_loaders)
+
+    return esm_file

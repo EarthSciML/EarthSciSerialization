@@ -44,6 +44,13 @@ from .esm_types import (
 from .parse import load, SchemaValidationError, UnsupportedVersionError
 from .serialize import save
 
+# Enhanced parsing with CSV integration (optional - requires pandas)
+try:
+    from .parse import load_with_csv_data
+    _has_enhanced_loading = True
+except (ImportError, ValueError, Exception):
+    _has_enhanced_loading = False
+
 # Validation (Core tier requirement)
 from .validation import validate, ValidationResult, ValidationError
 
@@ -121,13 +128,19 @@ from .edit import (
     extract_component_from_file,
 )
 
-# Simulation tier - box model simulation
-from .simulation import (
-    simulate,
-    simulate_with_discrete_events,
-    SimulationResult,
-    SimulationError,
-)
+# Simulation tier - box model simulation (optional - requires scipy)
+_has_simulation = False
+try:
+    from .simulation import (
+        simulate,
+        simulate_with_discrete_events,
+        SimulationResult,
+        SimulationError,
+    )
+    _has_simulation = True
+except (ImportError, ValueError, Exception):
+    # scipy not available or compatibility issues, skip simulation functionality
+    pass
 
 # Display and pretty-printing (Core tier requirement)
 from .display import (
@@ -144,14 +157,16 @@ from .codegen import (
 )
 
 # Data loading functionality (optional - requires pandas)
+_has_csv_support = False
 try:
     from .csv_loader import (
         CSVLoader,
         CSVValidationError,
         load_csv_data,
     )
-except ImportError:
-    # pandas not available, skip CSV loader functionality
+    _has_csv_support = True
+except (ImportError, ValueError, Exception):
+    # pandas not available or compatibility issues, skip CSV loader functionality
     pass
 
 __version__ = "0.1.0"
@@ -268,11 +283,6 @@ __all__ = [
     "merge_esm_files",
     "extract_component_from_file",
 
-    # Simulation
-    "simulate",
-    "simulate_with_discrete_events",
-    "SimulationResult",
-    "SimulationError",
 
     # Display and pretty-printing
     "explore",
@@ -283,9 +293,25 @@ __all__ = [
     # Code generation
     "to_julia_code",
     "to_python_code",
-
-    # Data loading
-    "CSVLoader",
-    "CSVValidationError",
-    "load_csv_data",
 ]
+
+# Add CSV data loading components if pandas is available
+if _has_csv_support:
+    __all__.extend([
+        "CSVLoader",
+        "CSVValidationError",
+        "load_csv_data",
+    ])
+
+# Add enhanced loading if available
+if _has_enhanced_loading:
+    __all__.append("load_with_csv_data")
+
+# Add simulation components if scipy is available
+if _has_simulation:
+    __all__.extend([
+        "simulate",
+        "simulate_with_discrete_events",
+        "SimulationResult",
+        "SimulationError",
+    ])
