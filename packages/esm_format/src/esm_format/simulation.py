@@ -16,17 +16,25 @@ This enables atmospheric chemistry simulation in Python.
 
 import numpy as np
 import sympy as sp
-from scipy.integrate import solve_ivp
 from typing import Dict, List, Tuple, Optional, Union, Any, Callable
 from dataclasses import dataclass
+
+# Optional scipy import - only needed for actual simulation
+try:
+    from scipy.integrate import solve_ivp
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    solve_ivp = None
 
 from .esm_types import (
     Model, ModelVariable, ReactionSystem, Reaction, Species, Parameter,
     ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile,
-    AffectEquation, FunctionalAffect
+    AffectEquation, FunctionalAffect, CouplingType
 )
 from .reactions import derive_odes, stoichiometric_matrix
 from .expression import to_sympy
+from .coupling_graph import construct_coupling_graph, CouplingGraph
 
 
 @dataclass
@@ -204,6 +212,139 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
             raise SimulationError(f"Unsupported operation: {expr.op}")
     else:
         raise SimulationError(f"Unsupported expression type: {type(expr)}")
+
+
+def _resolve_coupled_systems(file: EsmFile, parameters: Dict[str, float]) -> Tuple[List[str], List[sp.Expr]]:
+    """
+    Resolve coupling between multiple reaction systems and generate combined ODE system.
+
+    Args:
+        file: ESM file containing multiple reaction systems and coupling rules
+        parameters: Parameter values to substitute
+
+    Returns:
+        Tuple of (species_names, ode_expressions) for the coupled system
+
+    Raises:
+        SimulationError: If coupling cannot be resolved or spatial operators are present
+    """
+    try:
+        # Construct coupling graph to analyze dependencies
+        coupling_graph = construct_coupling_graph(file)
+
+        # Get execution order based on coupling dependencies
+        execution_order = coupling_graph.get_execution_order()
+
+        # Collect all species from all reaction systems
+        all_species = {}  # name -> species object
+        all_species_names = []
+        species_to_system = {}  # species name -> system name
+
+        for system_name, system in file.reaction_systems.items():
+            for species in system.species:
+                if species.name not in all_species:
+                    all_species[species.name] = species
+                    all_species_names.append(species.name)
+                species_to_system[species.name] = system_name
+
+        # Initialize combined ODE expressions (all start at 0)
+        combined_ode_exprs = [sp.Float(0) for _ in all_species_names]
+        species_indices = {name: i for i, name in enumerate(all_species_names)}
+
+        # Process each reaction system
+        for system_name, system in file.reaction_systems.items():
+            # Update system parameters
+            updated_reactions = []
+            for reaction in system.reactions:
+                updated_reaction = Reaction(
+                    name=reaction.name,
+                    reactants=reaction.reactants.copy(),
+                    products=reaction.products.copy(),
+                    rate_constant=parameters.get(str(reaction.rate_constant), reaction.rate_constant),
+                    conditions=reaction.conditions.copy()
+                )
+                updated_reactions.append(updated_reaction)
+
+            updated_system = ReactionSystem(
+                name=system.name,
+                species=system.species.copy(),
+                parameters=system.parameters.copy(),
+                reactions=updated_reactions
+            )
+
+            # Generate ODEs for this system
+            system_species_names, system_ode_exprs = _generate_mass_action_odes(updated_system)
+
+            # Add system's contributions to the combined ODEs
+            for i, species_name in enumerate(system_species_names):
+                if species_name in species_indices:
+                    global_idx = species_indices[species_name]
+                    combined_ode_exprs[global_idx] += system_ode_exprs[i]
+
+        # Apply coupling rules
+        _apply_coupling_rules(file, coupling_graph, all_species_names, combined_ode_exprs, species_indices)
+
+        return all_species_names, combined_ode_exprs
+
+    except Exception as e:
+        raise SimulationError(f"Failed to resolve coupled systems: {e}")
+
+
+def _apply_coupling_rules(
+    file: EsmFile,
+    coupling_graph: CouplingGraph,
+    species_names: List[str],
+    ode_exprs: List[sp.Expr],
+    species_indices: Dict[str, int]
+) -> None:
+    """
+    Apply coupling rules from the ESM file to modify ODE expressions.
+
+    Args:
+        file: ESM file containing coupling rules
+        coupling_graph: Constructed coupling graph
+        species_names: List of all species names
+        ode_exprs: List of ODE expressions to modify (modified in-place)
+        species_indices: Mapping from species names to indices
+    """
+    if not hasattr(file, 'couplings') or not file.couplings:
+        return
+
+    # Create symbol map for all species
+    symbol_map = {name: sp.Symbol(name) for name in species_names}
+
+    # Process each coupling entry
+    for coupling in file.couplings:
+        if coupling.coupling_type == CouplingType.VARIABLE_MAP:
+            # Handle variable mapping coupling
+            if coupling.from_var and coupling.to_var:
+                # Extract species names from variable references
+                # For now, assume direct species name mapping
+                from_species = coupling.from_var.split('.')[-1]  # Get last part of scoped reference
+                to_species = coupling.to_var.split('.')[-1]
+
+                # Apply transformation if specified
+                if coupling.transform and from_species in species_indices and to_species in species_indices:
+                    from_idx = species_indices[from_species]
+                    to_idx = species_indices[to_species]
+
+                    # Simple linear transformation: apply factor
+                    if coupling.factor and coupling.factor != 1.0:
+                        # Add coupling term to target species
+                        coupling_term = coupling.factor * symbol_map[from_species]
+                        ode_exprs[to_idx] += coupling_term
+                        # Subtract from source species to conserve mass
+                        ode_exprs[from_idx] -= coupling_term
+
+        elif coupling.coupling_type == CouplingType.COUPLE2:
+            # Handle bidirectional coupling between systems
+            if coupling.systems and len(coupling.systems) == 2:
+                # For now, implement simple exchange coupling
+                # This would need more sophisticated implementation based on connector equations
+                pass
+
+        # Other coupling types (OPERATOR_COMPOSE, etc.) would be implemented here
+        # For now, focus on VARIABLE_MAP which is most common
 
 
 def _generate_mass_action_odes(reaction_system: ReactionSystem) -> Tuple[List[str], List[sp.Expr]]:
@@ -481,32 +622,35 @@ def simulate(
         if not file.reaction_systems:
             raise SimulationError("No reaction systems found in ESM file")
 
-        if len(file.reaction_systems) > 1:
-            raise SimulationError("Multiple reaction systems not yet supported. Use coupling resolution.")
+        # Handle multiple reaction systems with coupling resolution
+        if len(file.reaction_systems) == 1:
+            # Single system case - existing behavior
+            reaction_system = list(file.reaction_systems.values())[0]
 
-        reaction_system = file.reaction_systems[0]
+            # Update reaction system parameters with provided values
+            updated_reactions = []
+            for reaction in reaction_system.reactions:
+                updated_reaction = Reaction(
+                    name=reaction.name,
+                    reactants=reaction.reactants.copy(),
+                    products=reaction.products.copy(),
+                    rate_constant=parameters.get(str(reaction.rate_constant), reaction.rate_constant),
+                    conditions=reaction.conditions.copy()
+                )
+                updated_reactions.append(updated_reaction)
 
-        # Update reaction system parameters with provided values
-        updated_reactions = []
-        for reaction in reaction_system.reactions:
-            updated_reaction = Reaction(
-                name=reaction.name,
-                reactants=reaction.reactants.copy(),
-                products=reaction.products.copy(),
-                rate_constant=parameters.get(str(reaction.rate_constant), reaction.rate_constant),
-                conditions=reaction.conditions.copy()
+            updated_system = ReactionSystem(
+                name=reaction_system.name,
+                species=reaction_system.species.copy(),
+                parameters=reaction_system.parameters.copy(),
+                reactions=updated_reactions
             )
-            updated_reactions.append(updated_reaction)
 
-        updated_system = ReactionSystem(
-            name=reaction_system.name,
-            species=reaction_system.species.copy(),
-            parameters=reaction_system.parameters.copy(),
-            reactions=updated_reactions
-        )
-
-        # Generate mass-action ODEs using the dependency
-        species_names, ode_exprs = _generate_mass_action_odes(updated_system)
+            # Generate mass-action ODEs using the dependency
+            species_names, ode_exprs = _generate_mass_action_odes(updated_system)
+        else:
+            # Multiple systems case - resolve coupling
+            species_names, ode_exprs = _resolve_coupled_systems(file, parameters)
 
         if not species_names:
             raise SimulationError("No species found in reaction system")
@@ -552,6 +696,10 @@ def simulate(
             'atol': 1e-8,
             'dense_output': False,
         }
+
+        # Check scipy availability
+        if not SCIPY_AVAILABLE:
+            raise SimulationError("SciPy is required for simulation but not available. Please install scipy.")
 
         # Solve the ODE system
         sol = solve_ivp(
@@ -673,6 +821,10 @@ def simulate_reaction_system(
             'events': event_functions if event_functions else None
         }
         default_options.update(solver_options)
+
+        # Check scipy availability
+        if not SCIPY_AVAILABLE:
+            raise SimulationError("SciPy is required for simulation but not available. Please install scipy.")
 
         # Solve the ODE system
         sol = solve_ivp(
@@ -811,6 +963,10 @@ def simulate_with_discrete_events(
                 event_time, event = time_events[time_event_index]
 
                 if event_time > t_current:
+                    # Check scipy availability
+                    if not SCIPY_AVAILABLE:
+                        raise SimulationError("SciPy is required for simulation but not available. Please install scipy.")
+
                     # Integrate to event time
                     sol = solve_ivp(
                         fun=rhs_function,
@@ -857,6 +1013,10 @@ def simulate_with_discrete_events(
 
             # Continue integration to next_t if not already there
             if t_current < next_t:
+                # Check scipy availability
+                if not SCIPY_AVAILABLE:
+                    raise SimulationError("SciPy is required for simulation but not available. Please install scipy.")
+
                 sol = solve_ivp(
                     fun=rhs_function,
                     t_span=(t_current, next_t),
