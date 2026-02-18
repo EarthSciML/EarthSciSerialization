@@ -396,6 +396,7 @@ mod tests {
                     })
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -453,6 +454,7 @@ mod tests {
                     Expr::Variable("k3".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -481,6 +483,7 @@ mod tests {
             name: Some("Empty System".to_string()),
             species: vec![],
             reactions: vec![],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -494,6 +497,7 @@ mod tests {
             name: Some("Empty System".to_string()),
             species: vec![],
             reactions: vec![],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -514,6 +518,7 @@ mod tests {
                     Expr::Variable("k1".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -539,6 +544,7 @@ mod tests {
                     Expr::Variable("k1".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -569,6 +575,7 @@ mod tests {
                     Expr::Variable("k1".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -613,6 +620,7 @@ mod tests {
                     Expr::Variable("k0".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -641,6 +649,7 @@ mod tests {
                     Expr::Variable("k_deg".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -680,6 +689,7 @@ mod tests {
                     Expr::Variable("k1".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -722,6 +732,7 @@ mod tests {
                     Expr::Variable("k1".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -751,6 +762,7 @@ mod tests {
                     Expr::Variable("k1".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 
@@ -811,6 +823,7 @@ mod tests {
                     Expr::Variable("k3".to_string())
                 ),
             ],
+            parameters: HashMap::new(),
             description: None,
         };
 

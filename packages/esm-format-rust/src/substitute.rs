@@ -96,6 +96,7 @@ pub fn substitute_in_reaction_system(
     ReactionSystem {
         name: reaction_system.name.clone(),
         species: reaction_system.species.clone(),
+        parameters: reaction_system.parameters.clone(),
         reactions: new_reactions,
         description: reaction_system.description.clone(),
     }
