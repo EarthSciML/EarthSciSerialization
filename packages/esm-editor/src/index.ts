@@ -93,6 +93,16 @@ export {
   type PathSegment
 } from './primitives/ast-store';
 
+// Validation primitives for reactive validation signals
+export {
+  createValidationSignals,
+  createValidationContext,
+  createDebouncedValidation,
+  type ValidationSignals,
+  type ValidationConfig,
+  type ValidationErrorWithMetadata
+} from './primitives/validation';
+
 // Web components for framework integration
 export {
   registerWebComponents,
