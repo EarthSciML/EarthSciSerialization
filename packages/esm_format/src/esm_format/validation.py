@@ -349,8 +349,8 @@ def _validate_reference_integrity_enhanced(esm_file: EsmFile, error_collector: E
         all_operators[op.name] = op
 
     # Validate coupling references with enhanced error handling
-    for i, coupling in enumerate(esm_file.couplings):
-        coupling_path = f"/couplings/{i}"
+    for i, coupling in enumerate(esm_file.coupling):
+        coupling_path = f"/coupling/{i}"
 
         # Check source model/system existence
         if coupling.source_model not in all_models and coupling.source_model not in all_reaction_systems:
@@ -425,7 +425,7 @@ def _validate_reference_integrity(esm_file: EsmFile, structural_errors: List[Val
         _validate_reaction_system_references(rs, i, all_variables, structural_errors)
 
     # Validate coupling references
-    for i, coupling in enumerate(esm_file.couplings):
+    for i, coupling in enumerate(esm_file.coupling):
         _validate_coupling_references(coupling, i, all_models, all_reaction_systems, all_operators, structural_errors)
 
     # Validate event references
@@ -623,7 +623,7 @@ def _validate_coupling_references(coupling, coupling_idx: int, all_models: Dict[
                                 all_reaction_systems: Dict[str, Any], all_operators: Dict[str, Any],
                                 structural_errors: List[ValidationError]) -> None:
     """Validate coupling references."""
-    coupling_path = f"/couplings/{coupling_idx}"
+    coupling_path = f"/coupling/{coupling_idx}"
 
     # Check that source and target models/systems exist
     if coupling.source_model not in all_models and coupling.source_model not in all_reaction_systems:

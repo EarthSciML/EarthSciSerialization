@@ -399,6 +399,6 @@ class EsmFile:
     events: List[Union[ContinuousEvent, DiscreteEvent]] = field(default_factory=list)
     data_loaders: List[DataLoader] = field(default_factory=list)
     operators: List[Operator] = field(default_factory=list)
-    couplings: List[CouplingEntry] = field(default_factory=list)
-    domains: List[Domain] = field(default_factory=list)
-    solvers: List[Solver] = field(default_factory=list)
+    coupling: List[CouplingEntry] = field(default_factory=list)
+    domain: Optional[Domain] = None
+    solver: Optional[Solver] = None

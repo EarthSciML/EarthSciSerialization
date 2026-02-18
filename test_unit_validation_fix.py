@@ -53,13 +53,13 @@ def test_unit_validation_integration():
     esm_file = EsmFile()
     esm_file.models = [model]
     esm_file.reaction_systems = []
-    esm_file.couplings = []
+    esm_file.coupling = []
     esm_file.events = []
     esm_file.operators = []
-    esm_file.domains = []
+    esm_file.domain = None
     esm_file.initial_conditions = []
     esm_file.boundary_conditions = []
-    esm_file.solvers = []
+    esm_file.solver = None
     esm_file.references = []
     esm_file.metadata = None
 

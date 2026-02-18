@@ -267,8 +267,8 @@ def test_load_comprehensive_fields():
     assert len(esm_file.events) == 2
     assert len(esm_file.data_loaders) == 1
     assert len(esm_file.operators) == 1
-    assert len(esm_file.couplings) == 2
-    assert len(esm_file.solvers) == 1
+    assert len(esm_file.coupling) == 2
+    assert esm_file.solver is not None
 
     # Check events
     event_names = {event.name for event in esm_file.events}
@@ -288,12 +288,12 @@ def test_load_comprehensive_fields():
     assert "temperature" in operator.input_variables
     assert "temp_interp" in operator.output_variables
 
-    # Check couplings
-    coupling_systems = [(c.source_model, c.target_model) for c in esm_file.couplings]
+    # Check coupling
+    coupling_systems = [(c.source_model, c.target_model) for c in esm_file.coupling]
     assert ("model1", "model2") in coupling_systems
 
     # Check solver
-    solver = esm_file.solvers[0]
+    solver = esm_file.solver
     assert solver.algorithm == "strang_threads"
     assert "absolute" in solver.tolerances
     assert "relative" in solver.tolerances
