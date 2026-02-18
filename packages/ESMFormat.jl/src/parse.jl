@@ -317,12 +317,32 @@ end
 Coerce JSON data into Reaction type.
 """
 function coerce_reaction(data::Any)::Reaction
-    reactants = Dict{String,Int}(string(k) => Int(v) for (k, v) in pairs(data.reactants))
-    products = Dict{String,Int}(string(k) => Int(v) for (k, v) in pairs(data.products))
-    rate = parse_expression(data.rate)
-    reversible = haskey(data, :reversible) ? Bool(data.reversible) : false
+    id = string(data.id)
+    name = haskey(data, :name) && data.name !== nothing ? string(data.name) : nothing
 
-    return Reaction(reactants, products, rate, reversible=reversible)
+    # Handle substrates (can be null for source reactions)
+    substrates = if haskey(data, :substrates) && data.substrates !== nothing
+        [StoichiometryEntry(string(entry.species), Int(entry.stoichiometry)) for entry in data.substrates]
+    else
+        nothing
+    end
+
+    # Handle products (can be null for sink reactions)
+    products = if haskey(data, :products) && data.products !== nothing
+        [StoichiometryEntry(string(entry.species), Int(entry.stoichiometry)) for entry in data.products]
+    else
+        nothing
+    end
+
+    rate = parse_expression(data.rate)
+
+    reference = if haskey(data, :reference) && data.reference !== nothing
+        coerce_reference(data.reference)
+    else
+        nothing
+    end
+
+    return Reaction(id, substrates, products, rate, name=name, reference=reference)
 end
 
 """
