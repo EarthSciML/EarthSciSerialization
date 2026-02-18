@@ -304,10 +304,11 @@ Coerce JSON data into Species type.
 """
 function coerce_species(data::Any)::Species
     name = string(data.name)
-    molecular_weight = haskey(data, :molecular_weight) && data.molecular_weight !== nothing ? Float64(data.molecular_weight) : nothing
+    units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
+    default = haskey(data, :default) && data.default !== nothing ? Float64(data.default) : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
 
-    return Species(name, molecular_weight=molecular_weight, description=description)
+    return Species(name, units=units, default=default, description=description)
 end
 
 """
