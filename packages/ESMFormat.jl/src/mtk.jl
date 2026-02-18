@@ -6,33 +6,8 @@ Implements the core functionality for converting ESM expressions, variables,
 and equations into MTK symbolic form with proper event handling.
 """
 
-# Lazy loading approach to avoid precompilation issues
-const MTK_AVAILABLE = Ref(false)
-const SYMBOLICS_AVAILABLE = Ref(false)
-const MTK_CHECKED = Ref(false)
-
-# Lazy loading function
-function _check_mtk_availability()
-    if !MTK_CHECKED[]
-        try
-            @eval using ModelingToolkit
-            MTK_AVAILABLE[] = true
-        catch e
-            # Only warn if the check fails
-            MTK_AVAILABLE[] = false
-        end
-
-        try
-            @eval using Symbolics
-            SYMBOLICS_AVAILABLE[] = true
-        catch e
-            SYMBOLICS_AVAILABLE[] = false
-        end
-
-        MTK_CHECKED[] = true
-    end
-    return MTK_AVAILABLE[]
-end
+# Use shared availability checking from availability.jl
+# No need for local constants - they are defined in availability.jl
 
 # Also need to load Dates for the now() function
 try
@@ -83,7 +58,7 @@ function to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
     sys_name = name === nothing ? "anonymous" : name
 
     # Check MTK availability lazily
-    if !_check_mtk_availability()
+    if !check_mtk_availability()
         @info "Using mock MTK system (ModelingToolkit not available)"
         return create_mock_mtk_system_basic(model, sys_name)
     end
@@ -235,6 +210,105 @@ function esm_to_mtk_expr(expr::Expr, var_dict::Dict{String, Any}, t)
             left = esm_to_mtk_expr(expr.args[1], var_dict, t)
             right = esm_to_mtk_expr(expr.args[2], var_dict, t)
             return @eval $left / $right
+        elseif expr.op == "^"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left ^ $right
+        elseif expr.op == "exp"
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            return @eval exp($arg)
+        elseif expr.op == "log"
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            return @eval log($arg)
+        elseif expr.op == "sin"
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            return @eval sin($arg)
+        elseif expr.op == "cos"
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            return @eval cos($arg)
+        elseif expr.op == "tan"
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            return @eval tan($arg)
+        elseif expr.op == "ifelse"
+            # ifelse(condition, true_value, false_value)
+            condition = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            true_val = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            false_val = esm_to_mtk_expr(expr.args[3], var_dict, t)
+            return @eval ifelse($condition, $true_val, $false_val)
+        elseif expr.op == "Pre"
+            # Pre operator - previous value (for discrete events)
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            @eval using ModelingToolkit: Pre
+            return @eval Pre($arg)
+        elseif expr.op == "grad"
+            # Gradient operator with respect to spatial dimension
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            if expr.dim !== nothing
+                dim_var = Symbol(expr.dim)
+                @eval @variables $(dim_var)
+                dim_sym = @eval $(dim_var)
+                D = @eval Differential($dim_sym)
+                return @eval $D($arg)
+            else
+                error("grad operator requires dim parameter")
+            end
+        elseif expr.op == "div"
+            # Divergence operator with respect to spatial dimension
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            if expr.dim !== nothing
+                dim_var = Symbol(expr.dim)
+                @eval @variables $(dim_var)
+                dim_sym = @eval $(dim_var)
+                D = @eval Differential($dim_sym)
+                return @eval $D($arg)
+            else
+                error("div operator requires dim parameter")
+            end
+        elseif expr.op == "laplacian"
+            # Laplacian operator - second derivative
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            # For simplicity, assume spatial dimension x if not specified
+            @eval @variables x
+            x_sym = @eval x
+            D = @eval Differential($x_sym)
+            return @eval $D($D($arg))
+        # Comparison operators
+        elseif expr.op == ">"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left > $right
+        elseif expr.op == "<"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left < $right
+        elseif expr.op == ">="
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left >= $right
+        elseif expr.op == "<="
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left <= $right
+        elseif expr.op == "=="
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left == $right
+        elseif expr.op == "!="
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left != $right
+        # Logical operators
+        elseif expr.op == "&&"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left && $right
+        elseif expr.op == "||"
+            left = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            right = esm_to_mtk_expr(expr.args[2], var_dict, t)
+            return @eval $left || $right
+        elseif expr.op == "!"
+            arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
+            return @eval !($arg)
         else
             error("Unsupported operation: $(expr.op)")
         end

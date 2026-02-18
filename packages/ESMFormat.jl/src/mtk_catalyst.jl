@@ -23,40 +23,8 @@ This is the tier-defining feature of the Julia ESM library, enabling deep
 integration with Julia's symbolic ecosystem and EarthSciML.
 """
 
-# Lazy loading to handle precompilation issues
-const MTK_AVAILABLE = Ref(false)
-const CATALYST_AVAILABLE = Ref(false)
-const SYMBOLICS_AVAILABLE = Ref(false)
-const MTK_CATALYST_CHECKED = Ref(false)
-
-# Lazy loading function
-function _check_mtk_catalyst_availability()
-    if !MTK_CATALYST_CHECKED[]
-        try
-            @eval using ModelingToolkit
-            MTK_AVAILABLE[] = true
-        catch e
-            MTK_AVAILABLE[] = false
-        end
-
-        try
-            @eval using Catalyst
-            CATALYST_AVAILABLE[] = true
-        catch e
-            CATALYST_AVAILABLE[] = false
-        end
-
-        try
-            @eval using Symbolics
-            SYMBOLICS_AVAILABLE[] = true
-        catch e
-            SYMBOLICS_AVAILABLE[] = false
-        end
-
-        MTK_CATALYST_CHECKED[] = true
-    end
-    return MTK_AVAILABLE[] && CATALYST_AVAILABLE[]
-end
+# Use shared availability checking from availability.jl
+# No need for local constants - they are defined in availability.jl
 
 try
     using Dates
@@ -91,7 +59,7 @@ Convert an ESM Model to a ModelingToolkit ODESystem with comprehensive features.
 """
 function to_mtk_system(model::Model, name::String; advanced_features=false)
     # Check if real MTK is available, otherwise use mock
-    if !MTK_AVAILABLE[]
+    if !check_mtk_availability()
         @info "Using mock MTK system (ModelingToolkit not available)"
         return create_mock_mtk_system(model, name, advanced_features)
     end
@@ -256,7 +224,7 @@ Convert an ESM ReactionSystem to a Catalyst ReactionSystem with comprehensive fe
 """
 function to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false)
     # Check if real Catalyst is available, otherwise use mock
-    if !CATALYST_AVAILABLE[]
+    if !check_catalyst_availability()
         @info "Using mock Catalyst system (Catalyst not available)"
         return create_mock_catalyst_system(reaction_system, name, advanced_features)
     end
@@ -281,7 +249,7 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
     species_symbols = []
     species_dict = Dict{String, Any}()
 
-    for species in reaction_system.species
+    for species in rsys.species
         spec_sym = Symbolics.variable(Symbol(species.name), T=Symbolics.Real)  # Simplified species creation
         species_symbols = [species_symbols..., spec_sym]
         species_dict[species.name] = spec_sym
@@ -291,7 +259,7 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
     parameter_symbols = []
     param_dict = Dict{String, Any}()
 
-    for param in reaction_system.parameters
+    for param in rsys.parameters
         param_sym = Symbolics.variable(Symbol(param.name), T=Symbolics.Real)  # Simplified parameter creation
         parameter_symbols = [parameter_symbols..., param_sym]
         param_dict[param.name] = param_sym
@@ -299,7 +267,7 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
 
     # Convert reactions
     reactions = []
-    for esm_reaction in reaction_system.reactions
+    for esm_reaction in rsys.reactions
         # Convert substrates (reactants)
         reactants = []
         reactant_stoich = []
@@ -340,8 +308,8 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
     discrete_events = []
 
     # Check if the reaction_system has events field
-    if hasfield(typeof(reaction_system), :events) && !isempty(reaction_system.events)
-        for event in reaction_system.events
+    if hasfield(typeof(rsys), :events) && !isempty(rsys.events)
+        for event in rsys.events
             all_vars = merge(species_dict, param_dict)
 
             if event isa ContinuousEvent
@@ -434,7 +402,7 @@ function from_mtk_system(sys, name::String)
     end
 
     # Handle real MTK systems (when ModelingToolkit is available)
-    if !MTK_AVAILABLE[]
+    if !check_mtk_availability()
         error("Real ModelingToolkit system provided but MTK not available")
     end
 
@@ -585,7 +553,7 @@ function from_catalyst_system(rs, name::String)
     end
 
     # Handle real Catalyst systems (when Catalyst.jl is available)
-    if !CATALYST_AVAILABLE[]
+    if !check_catalyst_availability()
         error("Real Catalyst system provided but Catalyst.jl not available")
     end
 
@@ -878,7 +846,7 @@ function esm_to_symbolic_enhanced(expr::Expr, var_dict::Dict, advanced_features:
         else
             # Enhanced variable creation with better error handling
             @warn "Variable $(expr.name) not found in dictionary, creating new symbolic variable"
-            if MTK_AVAILABLE[]
+            if check_mtk_availability()
                 var_sym = Symbolics.variable(Symbol(expr.name), T=Symbolics.Real)
                 var_dict[expr.name] = var_sym
                 return var_sym
@@ -904,7 +872,7 @@ Enhanced operator conversion supporting more functions and advanced features.
 function convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,Nothing}, advanced_features::Bool)
     # Handle differential operators with enhanced support
     if op == "D" && wrt !== nothing
-        if MTK_AVAILABLE[]
+        if check_mtk_availability()
             if wrt == "t"
                 t_var = Symbolics.variable(:t, T=Symbolics.Real)
                 return Symbolics.Differential(t_var)(args[1])
@@ -919,27 +887,27 @@ function convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,N
 
     # Enhanced arithmetic operations with better mock system handling
     if op == "+"
-        if MTK_AVAILABLE[] && all(!(arg isa String) for arg in args)
+        if check_mtk_availability() && all(!(arg isa String) for arg in args)
             return length(args) > 1 ? sum(args) : args[1]
         else
             return "+($(join(args, ", ")))"
         end
     elseif op == "*"
-        if MTK_AVAILABLE[] && all(!(arg isa String) for arg in args)
+        if check_mtk_availability() && all(!(arg isa String) for arg in args)
             return length(args) > 1 ? prod(args) : args[1]
         else
             return "*($(join(args, ", ")))"
         end
     elseif op == "-"
-        if MTK_AVAILABLE[] && all(!(arg isa String) for arg in args)
+        if check_mtk_availability() && all(!(arg isa String) for arg in args)
             return length(args) == 1 ? -args[1] : args[1] - sum(args[2:end])
         else
             return "-($(join(args, ", ")))"
         end
     elseif op == "/"
-        return MTK_AVAILABLE[] && all(!(arg isa String) for arg in args) ? args[1] / args[2] : "/($(args[1]), $(args[2]))"
+        return check_mtk_availability() && all(!(arg isa String) for arg in args) ? args[1] / args[2] : "/($(args[1]), $(args[2]))"
     elseif op == "^"
-        return MTK_AVAILABLE[] && all(!(arg isa String) for arg in args) ? args[1] ^ args[2] : "^($(args[1]), $(args[2]))"
+        return check_mtk_availability() && all(!(arg isa String) for arg in args) ? args[1] ^ args[2] : "^($(args[1]), $(args[2]))"
     end
 
     # Enhanced function library with better coverage
@@ -951,7 +919,7 @@ function convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,N
     ]
 
     if op in enhanced_functions
-        if MTK_AVAILABLE[]
+        if check_mtk_availability()
             func_sym = Symbol(op)
             return length(args) == 1 ? eval(func_sym)(args[1]) : eval(func_sym)(args...)
         else
@@ -962,7 +930,7 @@ function convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,N
     # Advanced features: custom function support
     if advanced_features && startswith(op, "custom_")
         @info "Custom function $op detected"
-        if MTK_AVAILABLE[]
+        if check_mtk_availability()
             func_sym = Symbol(op)
             return eval(func_sym)(args...)
         else
@@ -972,7 +940,7 @@ function convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,N
 
     # Fallback handling
     @warn "Unknown operator: $op, treating as generic function"
-    return MTK_AVAILABLE[] ? eval(Symbol(op))(args...) : "$op($(join(args, ", ")))"
+    return check_mtk_availability() ? eval(Symbol(op))(args...) : "$op($(join(args, ", ")))"
 end
 
 # ========================================
@@ -988,7 +956,7 @@ function process_events_enhanced(events::Vector{EventType}, symbolic_vars::Dict,
     continuous_events = []
     discrete_events = []
 
-    if !MTK_AVAILABLE[]
+    if !check_mtk_availability()
         # Mock event processing
         return [], []
     end
@@ -1201,6 +1169,7 @@ Extract variable name from a symbolic variable, handling various formats.
 """
 function extract_variable_name(symbolic_var)
     try
+        # Check if Symbolics was loaded when availability was checked
         if SYMBOLICS_AVAILABLE[]
             var_name = string(Symbolics.getname(symbolic_var))
             # Remove (t) suffix if present
