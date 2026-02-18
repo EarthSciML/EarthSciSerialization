@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { substitute, substituteInModel, substituteInReactionSystem } from './substitute.js'
-import type { Expr, Model, ReactionSystem } from './types.js'
+import { substitute, substituteInModel, substituteInReactionSystem, type SubstitutionContext } from './substitute.js'
+import type { Expr, Model, ReactionSystem, EsmFile } from './types.js'
 
 describe('substitute', () => {
   it('handles number literals unchanged', () => {
@@ -109,6 +109,191 @@ describe('substitute', () => {
       ]
     }
     expect(substitute(expr, bindings)).toEqual(expected)
+  })
+
+  it('handles scoped references (Model.Subsystem.var)', () => {
+    const expr: Expr = {
+      op: '+',
+      args: [
+        'SuperFast.GasPhase.O3',
+        { op: '*', args: ['SuperFast.k_NO_O3', 'SuperFast.GasPhase.NO'] }
+      ]
+    }
+    const bindings = {
+      'SuperFast.GasPhase.O3': 1.0e-8,
+      'SuperFast.k_NO_O3': 1.8e-12,
+      'SuperFast.GasPhase.NO': 1.0e-10
+    }
+    const expected: Expr = {
+      op: '+',
+      args: [
+        1.0e-8,
+        { op: '*', args: [1.8e-12, 1.0e-10] }
+      ]
+    }
+    expect(substitute(expr, bindings)).toEqual(expected)
+  })
+
+  it('fails to resolve hierarchical scoped references without full context', () => {
+    // This test demonstrates the current limitation:
+    // When bindings only contain variable names without the full scoped path,
+    // the substitute function cannot resolve scoped references like "Model.Subsystem.var"
+    const expr: Expr = {
+      op: '+',
+      args: [
+        'SuperFast.GasPhase.O3',  // This scoped reference won't be found
+        'k_NO_O3'                 // This direct reference will be found
+      ]
+    }
+
+    // Bindings contain only local variable names (as they would appear within a system)
+    const bindings = {
+      O3: 1.0e-8,        // Local variable name within GasPhase subsystem
+      k_NO_O3: 1.8e-12   // Variable name within SuperFast system
+    }
+
+    const result = substitute(expr, bindings)
+
+    // The scoped reference should remain unresolved (as a string)
+    // because the current implementation can't navigate the hierarchy
+    expect(result).toEqual({
+      op: '+',
+      args: [
+        'SuperFast.GasPhase.O3',  // Unchanged - not resolved
+        1.8e-12                   // Resolved from direct binding
+      ]
+    })
+  })
+
+  it('resolves hierarchical scoped references with context', () => {
+    // Create a mock ESM file with hierarchical structure
+    const esmFile: EsmFile = {
+      esm: '0.1.0',
+      metadata: { name: 'test' },
+      models: {
+        SuperFast: {
+          variables: {
+            k_NO_O3: { type: 'parameter', default: 1.8e-12 }
+          },
+          equations: [],
+          subsystems: {
+            GasPhase: {
+              variables: {
+                O3: { type: 'state', default: 1.0e-8 },
+                NO: { type: 'state', default: 1.0e-10 }
+              },
+              equations: []
+            }
+          }
+        }
+      }
+    }
+
+    const context: SubstitutionContext = { esmFile }
+
+    const expr: Expr = {
+      op: '+',
+      args: [
+        'SuperFast.GasPhase.O3',           // Should resolve to 1.0e-8
+        { op: '*', args: ['SuperFast.k_NO_O3', 'SuperFast.GasPhase.NO'] }  // Should resolve to 1.8e-12 * 1.0e-10
+      ]
+    }
+
+    const bindings = {} // No direct bindings needed - using scoped resolution
+
+    const result = substitute(expr, bindings, context)
+
+    const expected: Expr = {
+      op: '+',
+      args: [
+        1.0e-8,
+        { op: '*', args: [1.8e-12, 1.0e-10] }
+      ]
+    }
+
+    expect(result).toEqual(expected)
+  })
+
+  it('resolves scoped references in reaction systems', () => {
+    const esmFile: EsmFile = {
+      esm: '0.1.0',
+      metadata: { name: 'test' },
+      reaction_systems: {
+        SimpleOzone: {
+          species: {
+            O3: { default: 40e-9 },
+            NO: { default: 0.1e-9 }
+          },
+          parameters: {
+            T: { default: 298.15 }
+          },
+          reactions: [
+            {
+              id: 'R1',
+              substrates: [],
+              products: [],
+              rate: 1.0
+            }
+          ]
+        }
+      }
+    }
+
+    const context: SubstitutionContext = { esmFile }
+
+    const expr: Expr = {
+      op: 'exp',
+      args: [
+        { op: '/', args: [-1370, 'SimpleOzone.T'] }
+      ]
+    }
+
+    const result = substitute(expr, {}, context)
+
+    const expected: Expr = {
+      op: 'exp',
+      args: [
+        { op: '/', args: [-1370, 298.15] }
+      ]
+    }
+
+    expect(result).toEqual(expected)
+  })
+
+  it('handles scoped references to data loaders', () => {
+    const esmFile: EsmFile = {
+      esm: '0.1.0',
+      metadata: { name: 'test' },
+      data_loaders: {
+        GEOSFP: {
+          type: 'gridded_data',
+          loader_id: 'GEOSFP',
+          provides: {
+            T: { units: 'K', description: 'Temperature' },
+            u: { units: 'm/s', description: 'Eastward wind' }
+          }
+        }
+      }
+    }
+
+    const context: SubstitutionContext = { esmFile }
+
+    const expr: Expr = {
+      op: '*',
+      args: ['GEOSFP.T', 'scale_factor']
+    }
+
+    const bindings = { scale_factor: 1.1 }
+
+    const result = substitute(expr, bindings, context)
+
+    // For data loaders, the reference should remain as is since they don't have default values
+    const expected: Expr = {
+      op: '*',
+      args: ['GEOSFP.T', 1.1]
+    }
+
+    expect(result).toEqual(expected)
   })
 })
 
