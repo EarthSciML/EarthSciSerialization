@@ -376,3 +376,104 @@ fn test_event_error_conditions() {
         }
     }
 }
+
+/// Test circular dependency detection
+#[test]
+fn test_circular_dependency_detection() {
+    let fixture = include_str!("../../../tests/invalid/circular_coupling.esm");
+
+    let parsed_result = load(fixture);
+
+    match parsed_result {
+        Ok(esm_file) => {
+            let validation_result = validate(&esm_file);
+            assert!(validation_result.has_errors(), "Expected circular coupling to have validation errors");
+
+            let has_circular_dependency_error = validation_result.errors().iter().any(|err| {
+                matches!(err.code, StructuralErrorCode::CircularDependency)
+            });
+            assert!(has_circular_dependency_error, "Expected CircularDependency error");
+
+            // Verify the error message contains cycle information
+            let errors = validation_result.errors();
+            let circular_error = errors.iter()
+                .find(|err| matches!(err.code, StructuralErrorCode::CircularDependency))
+                .expect("CircularDependency error should exist");
+
+            assert!(circular_error.message.contains("Circular dependency detected"));
+            assert!(circular_error.message.contains("ModelA"));
+            assert!(circular_error.message.contains("ModelB"));
+        },
+        Err(e) => {
+            panic!("Circular coupling file should parse successfully, but got error: {}", e);
+        }
+    }
+}
+
+/// Test that valid cross-model references (non-circular) pass validation
+#[test]
+fn test_valid_cross_model_references() {
+    // Test a valid model with cross-references but no circular dependencies
+    let json_str = r#"{
+        "esm": "0.1.0",
+        "metadata": {
+            "name": "ValidCrossModelTest",
+            "description": "Test file with valid cross-model references (no cycles)"
+        },
+        "models": {
+            "SourceModel": {
+                "variables": {
+                    "source_var": {
+                        "type": "state",
+                        "units": "mol/mol",
+                        "default": 1.0
+                    }
+                },
+                "equations": [
+                    {
+                        "lhs": { "op": "D", "args": ["source_var"], "wrt": "t" },
+                        "rhs": { "op": "*", "args": [-0.1, "source_var"] }
+                    }
+                ]
+            },
+            "SinkModel": {
+                "variables": {
+                    "sink_var": {
+                        "type": "state",
+                        "units": "mol/mol",
+                        "default": 0.0
+                    }
+                },
+                "equations": [
+                    {
+                        "lhs": { "op": "D", "args": ["sink_var"], "wrt": "t" },
+                        "rhs": { "op": "*", "args": [0.1, "SourceModel.source_var"] }
+                    }
+                ]
+            }
+        }
+    }"#;
+
+    let parsed_result = load(json_str);
+
+    match parsed_result {
+        Ok(esm_file) => {
+            let validation_result = validate(&esm_file);
+
+            // Should not have circular dependency errors
+            let has_circular_dependency_error = validation_result.errors().iter().any(|err| {
+                matches!(err.code, StructuralErrorCode::CircularDependency)
+            });
+            assert!(!has_circular_dependency_error, "Valid cross-model references should not trigger CircularDependency error");
+
+            // Should not have unresolved scoped reference errors for valid references
+            let has_unresolved_ref_error = validation_result.errors().iter().any(|err| {
+                matches!(err.code, StructuralErrorCode::UnresolvedScopedRef)
+            });
+            assert!(!has_unresolved_ref_error, "Valid scoped references should not trigger UnresolvedScopedRef error");
+        },
+        Err(e) => {
+            panic!("Valid cross-model reference file should parse successfully, but got error: {}", e);
+        }
+    }
+}
