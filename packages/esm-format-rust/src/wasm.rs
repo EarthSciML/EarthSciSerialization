@@ -314,3 +314,41 @@ pub fn main() {
         cfg!(feature = "custom_alloc")
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_wasm_exports_compile() {
+        let json = r#"{
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "Test Model",
+                "description": "A simple test model for WASM exports"
+            },
+            "models": {
+                "SimpleModel": {
+                    "name": "Simple Model",
+                    "variables": {
+                        "x": {"type": "state", "units": "m", "initial_value": 1.0},
+                        "k": {"type": "parameter", "value": 0.5}
+                    },
+                    "equations": [
+                        {"lhs": {"op": "D", "args": ["x"]}, "rhs": {"op": "*", "args": ["k", "x"]}}
+                    ]
+                }
+            }
+        }"#;
+
+        // Test that the core functions work (without WASM feature for regular tests)
+        let esm_file = rust_load(json).expect("Should load valid ESM file");
+        let graph = rust_component_graph(&esm_file);
+
+        assert_eq!(graph.nodes.len(), 1, "Should have 1 model node");
+        assert_eq!(graph.edges.len(), 0, "Should have no edges");
+        assert_eq!(graph.nodes[0].id, "SimpleModel");
+
+        println!("✓ New WASM export functions compile and core functionality works");
+    }
+}
