@@ -59,8 +59,8 @@ struct SchemaValidationError <: Exception
     errors::Vector{SchemaError}
 end
 
-# Load schema at module initialization from bundled package artifact
-const SCHEMA_PATH = joinpath(@__DIR__, "..", "data", "esm-schema.json")
+# Load schema at module initialization from bundled package data
+const SCHEMA_PATH = joinpath(pkgdir(@__MODULE__), "data", "esm-schema.json")
 
 # Global schema validator
 const ESM_SCHEMA = if isfile(SCHEMA_PATH)
@@ -247,9 +247,14 @@ function validate_model_references(file::EsmFile, model::Model, path::String)::V
         append!(errors, validate_expression_references(file, eq.rhs, "$path.equations[$i].rhs"))
     end
 
-    # Validate event references
-    for (i, event) in enumerate(model.events)
-        append!(errors, validate_event_references(file, event, "$path.events[$i]"))
+    # Validate discrete event references
+    for (i, event) in enumerate(model.discrete_events)
+        append!(errors, validate_event_references(file, event, "$path.discrete_events[$i]"))
+    end
+
+    # Validate continuous event references
+    for (i, event) in enumerate(model.continuous_events)
+        append!(errors, validate_event_references(file, event, "$path.continuous_events[$i]"))
     end
 
     # Recursively check subsystems
@@ -508,48 +513,54 @@ function validate_reaction_consistency(rs::ReactionSystem, path::String)::Vector
     for (i, reaction) in enumerate(rs.reactions)
         reaction_path = "$path.reactions[$i]"
 
-        # Check reactants are declared species
-        for (species_name, stoich) in reaction.reactants
-            if species_name ∉ species_names
-                push!(errors, StructuralError(
-                    "$reaction_path.reactants",
-                    "Species '$species_name' not declared",
-                    "undefined_species"
-                ))
-            end
+        # Check substrates (reactants) are declared species
+        if reaction.substrates !== nothing
+            for entry in reaction.substrates
+                if entry.species ∉ species_names
+                    push!(errors, StructuralError(
+                        "$reaction_path.substrates",
+                        "Species '$(entry.species)' not declared",
+                        "undefined_species"
+                    ))
+                end
 
-            # Check positive stoichiometry
-            if stoich <= 0
-                push!(errors, StructuralError(
-                    "$reaction_path.reactants",
-                    "Species '$species_name' has non-positive stoichiometry $stoich",
-                    "invalid_stoichiometry"
-                ))
+                # Check positive stoichiometry
+                if entry.stoichiometry <= 0
+                    push!(errors, StructuralError(
+                        "$reaction_path.substrates",
+                        "Species '$(entry.species)' has non-positive stoichiometry $(entry.stoichiometry)",
+                        "invalid_stoichiometry"
+                    ))
+                end
             end
         end
 
         # Check products are declared species
-        for (species_name, stoich) in reaction.products
-            if species_name ∉ species_names
-                push!(errors, StructuralError(
-                    "$reaction_path.products",
-                    "Species '$species_name' not declared",
-                    "undefined_species"
-                ))
-            end
+        if reaction.products !== nothing
+            for entry in reaction.products
+                if entry.species ∉ species_names
+                    push!(errors, StructuralError(
+                        "$reaction_path.products",
+                        "Species '$(entry.species)' not declared",
+                        "undefined_species"
+                    ))
+                end
 
-            # Check positive stoichiometry
-            if stoich <= 0
-                push!(errors, StructuralError(
-                    "$reaction_path.products",
-                    "Species '$species_name' has non-positive stoichiometry $stoich",
-                    "invalid_stoichiometry"
-                ))
+                # Check positive stoichiometry
+                if entry.stoichiometry <= 0
+                    push!(errors, StructuralError(
+                        "$reaction_path.products",
+                        "Species '$(entry.species)' has non-positive stoichiometry $(entry.stoichiometry)",
+                        "invalid_stoichiometry"
+                    ))
+                end
             end
         end
 
         # Check for null-null reaction (no reactants and no products)
-        if isempty(reaction.reactants) && isempty(reaction.products)
+        has_substrates = reaction.substrates !== nothing && !isempty(reaction.substrates)
+        has_products = reaction.products !== nothing && !isempty(reaction.products)
+        if !has_substrates && !has_products
             push!(errors, StructuralError(
                 reaction_path,
                 "Reaction has no reactants or products (null-null reaction)",
@@ -619,10 +630,35 @@ functional affect refs valid.
 function validate_event_consistency(model::Model, path::String)::Vector{StructuralError}
     errors = StructuralError[]
 
-    for (i, event) in enumerate(model.events)
-        event_path = "$path.events[$i]"
+    # Validate discrete events
+    for (i, event) in enumerate(model.discrete_events)
+        event_path = "$path.discrete_events[$i]"
+        append!(errors, validate_single_event_consistency(model, event, event_path))
+    end
 
-        if isa(event, ContinuousEvent)
+    # Validate continuous events
+    for (i, event) in enumerate(model.continuous_events)
+        event_path = "$path.continuous_events[$i]"
+        append!(errors, validate_single_event_consistency(model, event, event_path))
+    end
+
+    # Recursively check subsystems
+    for (subsys_name, subsys) in model.subsystems
+        append!(errors, validate_event_consistency(subsys, "$path.subsystems.$subsys_name"))
+    end
+
+    return errors
+end
+
+"""
+    validate_single_event_consistency(model::Model, event::EventType, event_path::String) -> Vector{StructuralError}
+
+Validate consistency of a single event.
+"""
+function validate_single_event_consistency(model::Model, event::EventType, event_path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    if isa(event, ContinuousEvent)
             # Continuous event conditions should be mathematical expressions (zero-crossing)
             # This is automatically satisfied by the type system (Vector{Expr})
 
@@ -655,12 +691,6 @@ function validate_event_consistency(model::Model, path::String)::Vector{Structur
                 end
             end
         end
-    end
-
-    # Recursively check subsystems
-    for (subsys_name, subsys) in model.subsystems
-        append!(errors, validate_event_consistency(subsys, "$path.subsystems.$subsys_name"))
-    end
 
     return errors
 end
