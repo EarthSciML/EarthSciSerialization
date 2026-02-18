@@ -1,7 +1,7 @@
 //! Structural validation for ESM files
 
 use crate::EsmFile;
-use crate::parse::validate_schema;
+use crate::parse::{validate_schema, load};
 use crate::units::{parse_unit, check_dimensional_consistency, Unit, UnitError};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -113,10 +113,12 @@ impl std::fmt::Display for StructuralErrorCode {
 
 /// Perform structural validation on an ESM file
 ///
-/// This goes beyond schema validation to check:
+/// **Note**: This function performs ONLY structural validation, not schema validation.
+/// For comprehensive validation (both schema and structural), use `validate_complete()` instead.
+///
+/// This function checks:
 /// - All variable references are defined
 /// - Unit consistency in equations
-/// - No circular dependencies
 /// - Mathematical validity of expressions
 /// - Equation-unknown balance
 /// - Reference integrity (scoped ref resolution via subsystem hierarchy)
@@ -125,40 +127,32 @@ impl std::fmt::Display for StructuralErrorCode {
 ///
 /// # Arguments
 ///
-/// * `esm_file` - The ESM file to validate
+/// * `esm_file` - The ESM file to validate (already parsed and schema-validated)
 ///
 /// # Returns
 ///
-/// * `ValidationResult` - Detailed validation results with schema_errors, structural_errors, unit_warnings, and is_valid flag
+/// * `ValidationResult` - Structural validation results (schema_errors will always be empty)
 ///
 /// # Examples
 ///
 /// ```rust
-/// use esm_format::{validate, EsmFile, Metadata};
+/// use esm_format::{validate, load, EsmFile, Metadata};
 ///
-/// let esm_file = EsmFile {
-///     esm: "0.1.0".to_string(),
-///     metadata: Metadata {
-///         name: Some("test".to_string()),
-///         description: None,
-///         authors: None,
-///         created: None,
-///         modified: None,
-///         license: None,
-///         tags: None,
-///         references: None,
-///     },
-///     models: None,
-///     reaction_systems: None,
-///     data_loaders: None,
-///     operators: None,
-///     coupling: None,
-///     domain: None,
-///     solver: None,
-/// };
+/// let json_str = r#"
+/// {
+///   "esm": "0.1.0",
+///   "metadata": {"name": "test"},
+///   "models": {"simple": {"variables": {}, "equations": []}}
+/// }
+/// "#;
 ///
+/// // First load and parse (includes schema validation)
+/// let esm_file = load(json_str).unwrap();
+///
+/// // Then do structural validation
 /// let result = validate(&esm_file);
 /// assert!(result.is_valid);
+/// assert!(result.schema_errors.is_empty()); // Always empty for this function
 /// ```
 pub fn validate(esm_file: &EsmFile) -> ValidationResult {
     let schema_errors = Vec::new();
@@ -201,9 +195,45 @@ pub fn validate(esm_file: &EsmFile) -> ValidationResult {
     }
 }
 
+/// Validate an ESM file completely (schema + structural validation)
+///
+/// This is the main validation function that performs both schema and structural validation.
+/// Most users should use this function instead of the lower-level `validate()`.
+///
+/// # Arguments
+///
+/// * `json_str` - The original JSON string to validate
+///
+/// # Returns
+///
+/// * `ValidationResult` - Comprehensive validation results with both schema and structural errors
+pub fn validate_complete(json_str: &str) -> ValidationResult {
+    // First try to parse the JSON and ESM file
+    match load(json_str) {
+        Ok(esm_file) => {
+            // If parsing/schema validation succeeded, do structural validation
+            validate_with_schema(json_str, &esm_file)
+        }
+        Err(e) => {
+            // If parsing failed, return the error as a schema error
+            ValidationResult {
+                schema_errors: vec![SchemaError {
+                    path: "".to_string(),
+                    message: format!("Failed to load ESM file: {}", e),
+                    keyword: "parse".to_string(),
+                }],
+                structural_errors: vec![],
+                unit_warnings: vec![],
+                is_valid: false,
+            }
+        }
+    }
+}
+
 /// Validate an ESM file including schema validation
 ///
-/// This function combines schema and structural validation
+/// This function combines schema and structural validation.
+/// Note: Consider using `validate_complete()` instead for a simpler API.
 pub fn validate_with_schema(json_str: &str, esm_file: &EsmFile) -> ValidationResult {
     let mut schema_errors = Vec::new();
     let mut structural_errors = Vec::new();
@@ -1841,5 +1871,140 @@ mod tests {
         assert!(!result.unit_warnings.is_empty(), "Should have unit warnings");
         assert!(result.unit_warnings[0].contains("requires dimensionless input"),
                "Should warn about dimensionless requirement: {:?}", result.unit_warnings);
+    }
+
+    #[test]
+    fn test_validate_vs_validate_complete() {
+        // Test to demonstrate the difference between validate() and validate_complete()
+        // validate() only does structural validation, validate_complete() does both
+
+        // Create a valid EsmFile structure
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: None,
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        // JSON that should fail schema validation (has invalid variable type)
+        let invalid_json = r#"
+        {
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "test"
+            },
+            "models": {
+                "test_model": {
+                    "variables": {
+                        "x": {
+                            "type": "invalid_type_that_should_fail_schema"
+                        }
+                    },
+                    "equations": []
+                }
+            }
+        }
+        "#;
+
+        // The validate() function - only does structural validation
+        let result1 = validate(&esm_file);
+
+        // The validate_complete() function - does both schema and structural validation
+        let result2 = validate_complete(invalid_json);
+
+        // Correct behavior: validate() should have empty schema_errors (it doesn't check schema)
+        assert!(result1.schema_errors.is_empty(), "validate() should have empty schema_errors because it only does structural validation");
+        assert!(result1.is_valid, "validate() should pass structural validation on valid ESM structure");
+
+        // validate_complete() should find schema errors
+        assert!(!result2.schema_errors.is_empty(), "validate_complete() should find schema errors");
+        assert!(!result2.is_valid, "validate_complete() should fail due to schema errors");
+
+        println!("CORRECT BEHAVIOR: validate() found {} schema errors, validate_complete() found {} schema errors",
+                result1.schema_errors.len(), result2.schema_errors.len());
+    }
+
+    #[test]
+    fn test_validate_complete_with_schema_errors() {
+        // Test the new validate_complete function that should detect schema errors
+        let invalid_json = r#"
+        {
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "test"
+            },
+            "models": {
+                "test_model": {
+                    "variables": {
+                        "x": {
+                            "type": "invalid_type_that_should_fail_schema"
+                        }
+                    },
+                    "equations": []
+                }
+            }
+        }
+        "#;
+
+        let result = validate_complete(invalid_json);
+
+        // Should detect schema errors
+        assert!(!result.is_valid, "validate_complete should detect schema validation failures");
+        assert!(!result.schema_errors.is_empty(), "validate_complete should find schema errors");
+
+        // Schema error should mention the validation failure
+        assert!(result.schema_errors[0].message.contains("Failed to load ESM file"),
+                "Should report load failure: {}", result.schema_errors[0].message);
+    }
+
+    #[test]
+    fn test_validate_complete_with_valid_json() {
+        // Test validate_complete with valid JSON
+        let valid_json = r#"
+        {
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "test"
+            },
+            "models": {
+                "test_model": {
+                    "variables": {
+                        "x": {
+                            "type": "state",
+                            "units": "m",
+                            "default": 1.0
+                        }
+                    },
+                    "equations": [
+                        {
+                            "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+                            "rhs": {"op": "*", "args": [0.1, "x"]}
+                        }
+                    ]
+                }
+            }
+        }
+        "#;
+
+        let result = validate_complete(valid_json);
+
+        // Should pass validation
+        assert!(result.is_valid, "validate_complete should pass with valid JSON: {:?}", result);
+        assert!(result.schema_errors.is_empty(), "Should have no schema errors");
+        assert!(result.structural_errors.is_empty(), "Should have no structural errors");
     }
 }

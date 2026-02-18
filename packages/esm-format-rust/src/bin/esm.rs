@@ -5,7 +5,7 @@
 #[cfg(feature = "cli")]
 use clap::{Parser, Subcommand};
 #[cfg(feature = "cli")]
-use esm_format::{load, save, save_compact, validate, component_graph, component_exists};
+use esm_format::{load, save, save_compact, validate, validate_complete, component_graph, component_exists};
 #[cfg(feature = "cli")]
 use std::fs;
 #[cfg(feature = "cli")]
@@ -917,46 +917,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Validate { file, verbose } => {
             let content = fs::read_to_string(&file)?;
 
-            // First try to load and parse
-            match load(&content) {
-                Ok(esm_file) => {
-                    println!("✓ JSON parsing and schema validation passed");
+            // Perform complete validation (schema + structural)
+            let validation_result = validate_complete(&content);
 
-                    // Perform structural validation
-                    let validation_result = validate(&esm_file);
-
-                    if validation_result.is_valid {
-                        println!("✓ Structural validation passed");
-                        if verbose && !validation_result.unit_warnings.is_empty() {
-                            println!("Warnings:");
-                            for warning in validation_result.unit_warnings {
-                                println!("  ⚠ {}", warning);
-                            }
-                        }
-                    } else {
-                        println!("✗ Structural validation failed");
-
-                        if !validation_result.schema_errors.is_empty() {
-                            println!("Schema errors:");
-                            for error in &validation_result.schema_errors {
-                                println!("  ✗ {}: {}", error.path, error.message);
-                            }
-                        }
-
-                        if !validation_result.structural_errors.is_empty() {
-                            println!("Structural errors:");
-                            for error in &validation_result.structural_errors {
-                                println!("  ✗ {}: {}", error.path, error.message);
-                            }
-                        }
-
-                        std::process::exit(1);
+            if validation_result.is_valid {
+                println!("✓ Validation passed");
+                if verbose && !validation_result.unit_warnings.is_empty() {
+                    println!("Warnings:");
+                    for warning in validation_result.unit_warnings {
+                        println!("  ⚠ {}", warning);
                     }
-                },
-                Err(e) => {
-                    println!("✗ Validation failed: {}", e);
-                    std::process::exit(1);
                 }
+            } else {
+                println!("✗ Validation failed");
+
+                if !validation_result.schema_errors.is_empty() {
+                    println!("Schema errors:");
+                    for error in &validation_result.schema_errors {
+                        println!("  ✗ {}: {}", error.path, error.message);
+                    }
+                }
+
+                if !validation_result.structural_errors.is_empty() {
+                    println!("Structural errors:");
+                    for error in &validation_result.structural_errors {
+                        if verbose {
+                            println!("  ✗ {} ({}): {}", error.path, error.code, error.message);
+                            if !error.details.is_null() {
+                                println!("    Details: {}", error.details);
+                            }
+                        } else {
+                            println!("  ✗ {}: {}", error.path, error.message);
+                        }
+                    }
+                }
+                std::process::exit(1);
             }
         },
         Commands::Pretty { file, format } | Commands::Display { file, format } => {
