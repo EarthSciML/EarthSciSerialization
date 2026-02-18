@@ -57,7 +57,7 @@ function renderChemicalName(name: string): string {
 }
 
 /**
- * Enhanced OperatorLayout component with drag-and-drop support
+ * Enhanced OperatorLayout component with proper mathematical layout and drag-and-drop support
  */
 function OperatorLayout(props: {
   node: ExprNode;
@@ -77,47 +77,181 @@ function OperatorLayout(props: {
   }
 
   const isCommutative = COMMUTATIVE_OPERATORS.has(props.node.op);
+  const { op, args } = props.node;
 
-  return (
-    <span class="esm-operator-layout" data-operator={props.node.op}>
-      <span class="esm-operator-name">{props.node.op}</span>
-      <span class="esm-operator-args">
-        ({props.node.args?.map((arg: Expression, index: number) => {
-          const argPath = [...props.path, 'args', index];
-          const childNode = (
-            <ExpressionNode
-              expr={arg}
-              path={argPath}
-              highlightedVars={props.highlightedVars}
-              onHoverVar={props.onHoverVar}
-              onSelect={props.onSelect}
-              onReplace={props.onReplace}
-              selectedPath={props.selectedPath}
-              parentPath={props.path}
-              indexInParent={index}
-            />
-          );
+  // Helper to create child nodes with drag support
+  const createChildNode = (arg: Expression, index: number) => {
+    const argPath = [...props.path, 'args', index];
+    const childNode = (
+      <ExpressionNode
+        expr={arg}
+        path={argPath}
+        highlightedVars={props.highlightedVars}
+        onHoverVar={props.onHoverVar}
+        onSelect={props.onSelect}
+        onReplace={props.onReplace}
+        selectedPath={props.selectedPath}
+        parentPath={props.path}
+        indexInParent={index}
+      />
+    );
 
-          // Wrap in draggable component for commutative operations
-          if (structuralEditing && isCommutative && (props.node.args?.length || 0) > 1) {
-            return (
-              <DraggableExpression
-                path={argPath}
-                index={index}
-                parentPath={props.path}
-                canDrag={true}
-              >
-                {childNode}
-              </DraggableExpression>
-            );
-          }
+    // Wrap in draggable component for commutative operations
+    if (structuralEditing && isCommutative && (args?.length || 0) > 1) {
+      return (
+        <DraggableExpression
+          path={argPath}
+          index={index}
+          parentPath={props.path}
+          canDrag={true}
+        >
+          {childNode}
+        </DraggableExpression>
+      );
+    }
 
-          return childNode;
-        })}
-        )
-      </span>
-    </span>
-  );
+    return childNode;
+  };
+
+  // Handle different operators with appropriate CSS layouts per Section 5.2.4
+  switch (op) {
+    case '+':
+    case '-':
+      return (
+        <span class="esm-infix-op" data-operator={op}>
+          {args?.map((arg, index) => (
+            <>
+              <Show when={index > 0}>
+                <span class="esm-operator"> {op} </span>
+              </Show>
+              {createChildNode(arg, index)}
+            </>
+          ))}
+        </span>
+      );
+
+    case '*':
+      return (
+        <span class="esm-multiplication" data-operator={op}>
+          {args?.map((arg, index) => (
+            <>
+              <Show when={index > 0}>
+                <span class="esm-multiply">⋅</span>
+              </Show>
+              {createChildNode(arg, index)}
+            </>
+          ))}
+        </span>
+      );
+
+    case '/':
+      return (
+        <span class="esm-fraction" data-operator={op}>
+          <span class="esm-fraction-numerator">
+            {args && createChildNode(args[0], 0)}
+          </span>
+          <span class="esm-fraction-denominator">
+            {args && createChildNode(args[1], 1)}
+          </span>
+        </span>
+      );
+
+    case '^':
+      return (
+        <span class="esm-exponentiation" data-operator={op}>
+          <span class="esm-base">
+            {args && createChildNode(args[0], 0)}
+          </span>
+          <span class="esm-exponent">
+            {args && createChildNode(args[1], 1)}
+          </span>
+        </span>
+      );
+
+    case 'D':
+      return (
+        <span class="esm-derivative" data-operator={op}>
+          <span class="esm-d-operator">d</span>
+          <span class="esm-derivative-body">
+            {args && createChildNode(args[0], 0)}
+          </span>
+          <Show when={(props.node as any).wrt}>
+            <span class="esm-derivative-wrt">
+              <span class="esm-d-operator">d</span>
+              <span class="esm-variable">{(props.node as any).wrt}</span>
+            </span>
+          </Show>
+        </span>
+      );
+
+    case 'sqrt':
+      return (
+        <span class="esm-function esm-sqrt" data-operator={op}>
+          <span class="esm-radical">√</span>
+          <span class="esm-sqrt-content">
+            {args && createChildNode(args[0], 0)}
+          </span>
+        </span>
+      );
+
+    case 'exp':
+    case 'log':
+    case 'sin':
+    case 'cos':
+    case 'tan':
+      return (
+        <span class="esm-function" data-operator={op}>
+          <span class="esm-function-name">{op}</span>
+          <span class="esm-function-args">
+            (
+            {args?.map((arg, index) => (
+              <>
+                <Show when={index > 0}>, </Show>
+                {createChildNode(arg, index)}
+              </>
+            ))}
+            )
+          </span>
+        </span>
+      );
+
+    case '>':
+    case '<':
+    case '>=':
+    case '<=':
+    case '==':
+    case '!=':
+      return (
+        <span class="esm-comparison" data-operator={op}>
+          {args?.map((arg, index) => (
+            <>
+              <Show when={index > 0}>
+                <span class="esm-operator"> {op} </span>
+              </Show>
+              {createChildNode(arg, index)}
+            </>
+          ))}
+        </span>
+      );
+
+    default:
+      // Fallback to generic function notation for unknown operators
+      return (
+        <span class="esm-generic-function" data-operator={op}>
+          <span class="esm-function-name">{op}</span>
+          <span class="esm-function-args">
+            (
+            {args?.map((arg, index) => (
+              <>
+                <Show when={index > 0}>, </Show>
+                {createChildNode(arg, index)}
+              </>
+            ))}
+            )
+          </span>
+        </span>
+      );
+  }
 }
 
 /**

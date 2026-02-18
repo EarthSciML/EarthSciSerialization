@@ -96,4 +96,75 @@ describe('ExpressionNode', () => {
     const element = screen.getByText('1.000e-4');
     expect(element).toBeInTheDocument();
   });
+
+  it('renders division as fraction layout, not prefix notation', () => {
+    const divisionExpr = {
+      op: '/' as const,
+      args: ['numerator', 'denominator']
+    };
+
+    const { container } = render(() => (
+      <ExpressionNode expr={divisionExpr} {...mockProps} />
+    ));
+
+    // Should use fraction layout, not prefix notation like "/(numerator, denominator)"
+    const fractionElement = container.querySelector('.esm-fraction');
+    const numeratorElement = container.querySelector('.esm-fraction-numerator');
+    const denominatorElement = container.querySelector('.esm-fraction-denominator');
+
+    expect(fractionElement).toBeInTheDocument();
+    expect(numeratorElement).toBeInTheDocument();
+    expect(denominatorElement).toBeInTheDocument();
+
+    // Should NOT have generic function layout (prefix notation)
+    const genericFunction = container.querySelector('.esm-generic-function');
+    expect(genericFunction).not.toBeInTheDocument();
+  });
+
+  it('renders exponentiation as superscript, not prefix notation', () => {
+    const exponentExpr = {
+      op: '^' as const,
+      args: ['x', 2]
+    };
+
+    const { container } = render(() => (
+      <ExpressionNode expr={exponentExpr} {...mockProps} />
+    ));
+
+    // Should use superscript layout, not prefix notation like "^(x, 2)"
+    const exponentElement = container.querySelector('.esm-exponentiation');
+    const baseElement = container.querySelector('.esm-base');
+    const superscriptElement = container.querySelector('.esm-exponent');
+
+    expect(exponentElement).toBeInTheDocument();
+    expect(baseElement).toBeInTheDocument();
+    expect(superscriptElement).toBeInTheDocument();
+
+    // Should NOT have generic function layout (prefix notation)
+    const genericFunction = container.querySelector('.esm-generic-function');
+    expect(genericFunction).not.toBeInTheDocument();
+  });
+
+  it('renders sqrt as radical notation, not prefix notation', () => {
+    const sqrtExpr = {
+      op: 'sqrt' as const,
+      args: ['x']
+    };
+
+    const { container } = render(() => (
+      <ExpressionNode expr={sqrtExpr} {...mockProps} />
+    ));
+
+    // Should use radical notation, not prefix notation like "sqrt(x)"
+    const sqrtElement = container.querySelector('.esm-sqrt');
+    const radicalElement = container.querySelector('.esm-radical');
+
+    expect(sqrtElement).toBeInTheDocument();
+    expect(radicalElement).toBeInTheDocument();
+    expect(radicalElement?.textContent).toBe('√');
+
+    // Should NOT have generic function layout (prefix notation)
+    const genericFunction = container.querySelector('.esm-generic-function');
+    expect(genericFunction).not.toBeInTheDocument();
+  });
 });
