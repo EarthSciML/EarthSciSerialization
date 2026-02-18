@@ -65,7 +65,8 @@ def _parse_equation(eq_data: Dict[str, Any]) -> Equation:
     """Parse an equation from JSON data."""
     lhs = _parse_expression(eq_data["lhs"])
     rhs = _parse_expression(eq_data["rhs"])
-    return Equation(lhs=lhs, rhs=rhs)
+    comment = eq_data.get("_comment")
+    return Equation(lhs=lhs, rhs=rhs, _comment=comment)
 
 
 def _parse_affect_equation(affect_data: Dict[str, Any]) -> AffectEquation:

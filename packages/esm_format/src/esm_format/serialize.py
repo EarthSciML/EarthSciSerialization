@@ -40,10 +40,13 @@ def _serialize_expression(expr: Expr) -> Union[int, float, str, Dict[str, Any]]:
 
 def _serialize_equation(equation: Equation) -> Dict[str, Any]:
     """Serialize an equation to JSON-compatible format."""
-    return {
+    result = {
         "lhs": _serialize_expression(equation.lhs),
         "rhs": _serialize_expression(equation.rhs)
     }
+    if equation._comment is not None:
+        result["_comment"] = equation._comment
+    return result
 
 
 def _serialize_affect_equation(affect: AffectEquation) -> Dict[str, Any]:
