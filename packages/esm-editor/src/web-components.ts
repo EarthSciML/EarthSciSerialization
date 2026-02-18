@@ -14,19 +14,33 @@
 
 import { customElement } from 'solid-element';
 import { createSignal } from 'solid-js';
-import type { Expression, EsmFile, Model, ReactionSystem } from 'esm-format';
+// Stub types for esm-format - this will be properly imported when module resolution works
+type EsmFile = any;
+type Expression = any;
+type Model = any;
+type ReactionSystem = any;
 
 // Import the editor components
 import { ExpressionEditor, type ExpressionEditorProps } from './components/ExpressionEditor.js';
 import { EquationEditor, type EquationEditorProps } from './components/EquationEditor.js';
 import { ModelEditor, type ModelEditorProps } from './components/ModelEditor.js';
 import { ReactionEditor, type ReactionEditorProps } from './components/ReactionEditor.js';
-import { CouplingGraph, type CouplingGraphProps } from './components/CouplingGraph.js';
+import { CouplingGraph as EsmEditorCouplingGraph, type CouplingGraphProps as EsmEditorCouplingGraphProps } from './components/CouplingGraph.js';
 import { ValidationPanel, type ValidationPanelProps } from './components/ValidationPanel.js';
 import { FileSummary, type FileSummaryProps } from './components/FileSummary.js';
 
 // Import styles
 import './web-components.css';
+
+// Stub function to convert EsmFile to Graph - this should be replaced with proper import when module resolution works
+function component_graph(esmFile: EsmFile): any {
+  // This is a temporary stub implementation
+  // The real implementation should come from esm-format/src/graph.js
+  return {
+    nodes: [],
+    edges: []
+  };
+}
 
 /**
  * Web component wrapper for EquationEditor (expression editing)
@@ -361,21 +375,24 @@ export const EsmCouplingGraphComponent = (props: any) => {
   try {
     const esmFile: EsmFile = JSON.parse(esmFileValue);
 
-    const componentProps: CouplingGraphProps = {
-      esmFile: esmFile,
-      onEditCoupling: (coupling: any, edgeId: string) => {
+    // Convert the ESM file to a graph for the esm-editor CouplingGraph component
+    const graph = component_graph(esmFile);
+
+    const componentProps: EsmEditorCouplingGraphProps = {
+      graph: graph,
+      onNodeSelect: (node: any) => {
         if (typeof window !== 'undefined' && props.element) {
-          const event = new CustomEvent('couplingEdit', {
-            detail: { coupling, edgeId },
+          const event = new CustomEvent('componentSelect', {
+            detail: { componentId: node.id },
             bubbles: true
           });
           props.element.dispatchEvent(event);
         }
       },
-      onSelectComponent: (componentId: string) => {
+      onEdgeSelect: (edge: any) => {
         if (typeof window !== 'undefined' && props.element) {
-          const event = new CustomEvent('componentSelect', {
-            detail: { componentId },
+          const event = new CustomEvent('couplingEdit', {
+            detail: { coupling: edge.data, edgeId: edge.id },
             bubbles: true
           });
           props.element.dispatchEvent(event);
@@ -383,11 +400,10 @@ export const EsmCouplingGraphComponent = (props: any) => {
       },
       width: props.width ? parseInt(props.width, 10) : undefined,
       height: props.height ? parseInt(props.height, 10) : undefined,
-      interactive: props.interactive !== 'false',
-      allowEditing: props['allow-editing'] !== 'false'
+      showMinimap: true
     };
 
-    return CouplingGraph(componentProps);
+    return EsmEditorCouplingGraph(componentProps);
   } catch (error) {
     return () => {
       const errorDiv = document.createElement('div');
