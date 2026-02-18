@@ -16,7 +16,9 @@ fn test_component_graph_generation() {
         authors: None,
         created: None,
         modified: None,
-        version: None,
+        license: None,
+        tags: None,
+        references: None,
     };
 
     let mut variables = HashMap::new();
@@ -100,7 +102,9 @@ fn test_component_graph_exports() {
         authors: None,
         created: None,
         modified: None,
-        version: None,
+        license: None,
+        tags: None,
+        references: None,
     };
 
     let model = Model {
@@ -283,7 +287,9 @@ fn test_component_existence() {
         authors: None,
         created: None,
         modified: None,
-        version: None,
+        license: None,
+        tags: None,
+        references: None,
     };
 
     let model = Model {

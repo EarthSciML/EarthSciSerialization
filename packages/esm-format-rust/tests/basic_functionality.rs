@@ -99,7 +99,9 @@ fn test_structural_validation() {
             authors: None,
             created: None,
             modified: None,
-            version: None,
+            license: None,
+        tags: None,
+        references: None,
         },
         models: Some(models),
         reaction_systems: None,
@@ -209,7 +211,9 @@ fn test_component_graph() {
         authors: None,
         created: None,
         modified: None,
-        version: None,
+        license: None,
+        tags: None,
+        references: None,
     };
 
     let model = Model {
