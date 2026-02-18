@@ -433,11 +433,21 @@ pub struct DataLoader {
 /// Runtime operator reference
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Operator {
-    /// Operator type identifier
-    #[serde(rename = "type")]
-    pub op_type: String,
+    /// Registered identifier the runtime uses to find the implementation
+    pub operator_id: String,
 
-    /// Configuration parameters
+    /// Variables required by the operator
+    pub needed_vars: Vec<String>,
+
+    /// Variables the operator modifies
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modifies: Option<Vec<String>>,
+
+    /// Academic citation or data source reference
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Reference>,
+
+    /// Implementation-specific configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
 

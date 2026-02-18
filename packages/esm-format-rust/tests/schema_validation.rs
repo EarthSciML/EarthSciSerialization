@@ -2,7 +2,7 @@
 //!
 //! Tests that invalid ESM files properly fail schema validation with appropriate error messages.
 
-use esm_format::*;
+use esm_format::{*, validate};
 
 /// Test that missing ESM version fails schema validation
 #[test]
@@ -124,8 +124,18 @@ fn test_operator_validation_errors() {
     ];
 
     for (name, fixture) in fixtures.iter() {
-        let result = load(fixture);
-        assert!(result.is_err(), "Expected operator {} to fail validation", name);
+        let load_result = load(fixture);
+
+        let validation_failed = match load_result {
+            Err(_) => true, // JSON parsing or schema validation failed
+            Ok(esm_file) => {
+                // JSON parsing passed, check structural validation
+                let validation_result = validate(&esm_file);
+                !validation_result.is_valid
+            }
+        };
+
+        assert!(validation_failed, "Expected operator {} to fail validation", name);
     }
 }
 
