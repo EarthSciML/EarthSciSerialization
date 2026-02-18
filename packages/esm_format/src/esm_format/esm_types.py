@@ -100,6 +100,7 @@ class ReactionSystem:
     species: List[Species] = field(default_factory=list)
     parameters: List[Parameter] = field(default_factory=list)
     reactions: List[Reaction] = field(default_factory=list)
+    constraint_equations: List[Equation] = field(default_factory=list)
     subsystems: Dict[str, 'ReactionSystem'] = field(default_factory=dict)
 
 
