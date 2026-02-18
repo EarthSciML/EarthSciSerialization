@@ -237,30 +237,38 @@ fn enhance_rate_with_mass_action(
         if coeff == 1.0 {
             // Simple concentration factor
             concentration_factors.push(species_var);
-        } else if coeff == coeff.floor() && coeff > 1.0 {
-            // Integer power - create explicit multiplication
-            let mut power_terms = Vec::new();
-            for _ in 0..(coeff as i32) {
-                power_terms.push(species_var.clone());
-            }
-            if power_terms.len() == 1 {
-                concentration_factors.push(power_terms.into_iter().next().unwrap());
+        } else {
+            // Check if coefficient is close to an integer (handle floating-point precision issues)
+            const TOLERANCE: f64 = 1e-10;
+            let rounded_coeff = coeff.round();
+            let is_close_to_integer = (coeff - rounded_coeff).abs() < TOLERANCE;
+
+            if is_close_to_integer && rounded_coeff > 1.0 {
+                // Integer power > 1 - create explicit multiplication
+                let int_coeff = rounded_coeff as i32;
+                let mut power_terms = Vec::new();
+                for _ in 0..int_coeff {
+                    power_terms.push(species_var.clone());
+                }
+                if power_terms.len() == 1 {
+                    concentration_factors.push(power_terms.into_iter().next().unwrap());
+                } else {
+                    concentration_factors.push(Expr::Operator(ExpressionNode {
+                        op: "*".to_string(),
+                        args: power_terms,
+                        wrt: None,
+                        dim: None,
+                    }));
+                }
             } else {
+                // Non-integer power or fractional power - use pow operator
                 concentration_factors.push(Expr::Operator(ExpressionNode {
-                    op: "*".to_string(),
-                    args: power_terms,
+                    op: "pow".to_string(),
+                    args: vec![species_var, Expr::Number(coeff)],
                     wrt: None,
                     dim: None,
                 }));
             }
-        } else {
-            // Non-integer power - use pow operator
-            concentration_factors.push(Expr::Operator(ExpressionNode {
-                op: "pow".to_string(),
-                args: vec![species_var, Expr::Number(coeff)],
-                wrt: None,
-                dim: None,
-            }));
         }
     }
 
@@ -872,5 +880,85 @@ mod tests {
         assert!(contains_variable(&expr3, "A"));
         assert!(contains_variable(&expr3, "k"));
         assert!(!contains_variable(&expr3, "B"));
+    }
+
+    #[test]
+    fn test_floating_point_precision_fix() {
+        // Test that coefficients with floating-point precision issues are handled correctly
+        let test_cases = vec![
+            (2.0, true),                        // Exact integer
+            (2.0000000000000004, true),         // Should be treated as 2
+            (1.9999999999999998, true),         // Should be treated as 2
+            (3.0 + std::f64::EPSILON, true),    // Should be treated as 3
+            (2.5, false),                       // True fractional, should use pow
+            (1.5, false),                       // True fractional, should use pow
+        ];
+
+        for (coeff, should_use_multiplication) in test_cases {
+            let system = ReactionSystem {
+                name: Some("Floating Point Test".to_string()),
+                species: vec![
+                    create_test_species("A"),
+                    create_test_species("B"),
+                ],
+                reactions: vec![
+                    create_test_reaction(
+                        vec![("A", Some(coeff))],
+                        vec![("B", Some(1.0))],
+                        Expr::Variable("k1".to_string())
+                    ),
+                ],
+                parameters: HashMap::new(),
+                description: None,
+            };
+
+            let model = derive_odes(&system).expect("Should derive ODEs successfully");
+
+            // Find the equation for species B
+            let b_equation = model.equations.iter()
+                .find(|eq| match &eq.lhs {
+                    Expr::Operator(node) if node.op == "D" => {
+                        match &node.args[0] {
+                            Expr::Variable(name) => name == "B",
+                            _ => false,
+                        }
+                    },
+                    _ => false,
+                })
+                .expect("Should find B equation");
+
+            // Check if the result uses multiplication or pow appropriately
+            let uses_multiplication = match &b_equation.rhs {
+                Expr::Operator(node) if node.op == "*" => {
+                    node.args.iter().any(|arg| match arg {
+                        Expr::Operator(inner) if inner.op == "*" => true,
+                        _ => false,
+                    })
+                },
+                _ => false,
+            };
+
+            let uses_pow = match &b_equation.rhs {
+                Expr::Operator(node) if node.op == "*" => {
+                    node.args.iter().any(|arg| match arg {
+                        Expr::Operator(inner) if inner.op == "pow" => true,
+                        _ => false,
+                    })
+                },
+                _ => false,
+            };
+
+            if should_use_multiplication {
+                assert!(uses_multiplication,
+                    "Coefficient {:.17} should use multiplication but uses pow", coeff);
+                assert!(!uses_pow,
+                    "Coefficient {:.17} should not use pow but does", coeff);
+            } else {
+                assert!(uses_pow,
+                    "Coefficient {:.17} should use pow but doesn't", coeff);
+                assert!(!uses_multiplication,
+                    "Coefficient {:.17} should not use multiplication but does", coeff);
+            }
+        }
     }
 }
