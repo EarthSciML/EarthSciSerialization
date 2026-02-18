@@ -298,11 +298,18 @@ def _parse_reaction_system(rs_data: Dict[str, Any]) -> ReactionSystem:
         for reaction_data in rs_data["reactions"]:
             reactions.append(_parse_reaction(reaction_data))
 
+    # Parse constraint equations
+    constraint_equations = []
+    if "constraint_equations" in rs_data:
+        for eq_data in rs_data["constraint_equations"]:
+            constraint_equations.append(_parse_equation(eq_data))
+
     return ReactionSystem(
         name="",  # Name comes from the key
         species=species,
         parameters=parameters,
-        reactions=reactions
+        reactions=reactions,
+        constraint_equations=constraint_equations
     )
 
 
