@@ -122,47 +122,24 @@ class ErrorConsistencyRunner:
         """Run validation using the TypeScript implementation."""
         ts_dir = self.project_root / "packages" / "esm-format"
 
-        # Create a temporary TypeScript script using existing validateSchema function
+        # Create a temporary TypeScript script that uses the validate function
         ts_script = f'''
         import {{ readFileSync }} from 'fs';
-        import {{ load, validateSchema }} from '{ts_dir}/dist/index.js';
+        import {{ validate }} from '{ts_dir}/dist/esm/index.js';
 
         try {{
             const content = readFileSync("{esm_file}", "utf8");
-            const data = JSON.parse(content);
 
-            // Perform schema validation first
-            const schemaErrors = validateSchema(data);
-
-            // Try to load for structural validation
-            let structuralErrors = [];
-            try {{
-                const esmFile = load(data);
-                // If load succeeds, no structural errors
-            }} catch (loadError) {{
-                structuralErrors.push({{
-                    path: "$",
-                    message: loadError.message || String(loadError),
-                    code: loadError.constructor.name.toLowerCase().replace('error', ''),
-                    details: {{
-                        exception_type: loadError.constructor.name,
-                        error: loadError.message || String(loadError)
-                    }}
-                }});
-            }}
+            // Use the full validate function which includes both schema and structural validation
+            const validationResult = validate(content);
 
             const output = {{
                 language: "typescript",
                 file: "{esm_file.name}",
                 validation_result: {{
-                    valid: schemaErrors.length === 0 && structuralErrors.length === 0,
-                    schema_errors: schemaErrors.map(err => ({{
-                        path: err.path,
-                        message: err.message,
-                        code: err.keyword || "",
-                        details: {{ keyword: err.keyword }}
-                    }})),
-                    structural_errors: structuralErrors
+                    valid: validationResult.is_valid,
+                    schema_errors: validationResult.schema_errors,
+                    structural_errors: validationResult.structural_errors
                 }}
             }};
 
