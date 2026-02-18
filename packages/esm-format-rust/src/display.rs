@@ -1320,12 +1320,12 @@ impl fmt::Display for Model {
         let param_count = self.variables.iter().filter(|(_, v)| matches!(v.var_type, VariableType::Parameter)).count();
         let eq_count = self.equations.len();
 
-        writeln!(f, "  {} ({} parameters, {} equation{})",
+        writeln!(f, "    {} ({} parameters, {} equation{})",
             name, param_count, eq_count, if eq_count == 1 { "" } else { "s" })?;
 
         // Display equations
         for eq in &self.equations {
-            writeln!(f, "    {} = {}", eq.lhs, eq.rhs)?;
+            writeln!(f, "      {} = {}", eq.lhs, eq.rhs)?;
         }
 
         Ok(())
@@ -1336,10 +1336,13 @@ impl fmt::Display for ReactionSystem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = self.name.as_deref().unwrap_or("Unnamed");
         let species_count = self.species.len();
-        let param_count = 0; // TODO: Count parameters if they exist
+
+        // Count parameters
+        let param_count = self.parameters.len();
+
         let reaction_count = self.reactions.len();
 
-        writeln!(f, "  {} ({} species, {} parameters, {} reaction{})",
+        writeln!(f, "    {} ({} species, {} parameters, {} reaction{})",
             name, species_count, param_count, reaction_count,
             if reaction_count == 1 { "" } else { "s" })?;
 
@@ -1355,7 +1358,7 @@ impl fmt::Display for ReactionSystem {
                         if coeff == 1.0 {
                             format_chemical_subscripts(&s.species)
                         } else {
-                            format!("{}{}", coeff, format_chemical_subscripts(&s.species))
+                            format!("{}·{}", format_number_unicode(coeff), format_chemical_subscripts(&s.species))
                         }
                     } else {
                         format_chemical_subscripts(&s.species)
@@ -1371,7 +1374,7 @@ impl fmt::Display for ReactionSystem {
                         if coeff == 1.0 {
                             format_chemical_subscripts(&p.species)
                         } else {
-                            format!("{}{}", coeff, format_chemical_subscripts(&p.species))
+                            format!("{}·{}", format_number_unicode(coeff), format_chemical_subscripts(&p.species))
                         }
                     } else {
                         format_chemical_subscripts(&p.species)
@@ -1380,7 +1383,7 @@ impl fmt::Display for ReactionSystem {
                 .collect::<Vec<_>>()
                 .join(" + ");
 
-            writeln!(f, "    {}: {} → {}    rate: {}",
+            writeln!(f, "      {}: {} → {}    rate: {}",
                 reaction_name, substrates, products, reaction.rate)?;
         }
 
@@ -1430,9 +1433,9 @@ impl fmt::Display for EsmFile {
             if !data_loaders.is_empty() {
                 writeln!(f, "  Data Loaders:")?;
                 for (name, loader) in data_loaders {
-                    writeln!(f, "    {}: {} ({})", name,
-                        loader.description.as_deref().unwrap_or("No description"),
-                        loader.loader_type)?;
+                    // Format description and loader type
+                    let description = loader.description.as_deref().unwrap_or("No description");
+                    writeln!(f, "    {}: {} ({})", name, description, loader.loader_type)?;
                 }
                 writeln!(f)?;
             }
@@ -1461,14 +1464,57 @@ impl fmt::Display for EsmFile {
             }
         }
 
-        // Display domain info (simplified)
-        if let Some(_domain) = &self.domain {
-            writeln!(f, "  Domain: [Domain information]")?;
+        // Display domain information
+        if let Some(ref domain) = self.domain {
+            write!(f, "  Domain: ")?;
+
+            // For now, since spatial and temporal are serde_json::Value,
+            // just show simplified domain info
+            let mut domain_parts = Vec::new();
+
+            if domain.spatial.is_some() {
+                domain_parts.push("spatial domain".to_string());
+            }
+
+            if domain.temporal.is_some() {
+                domain_parts.push("temporal domain".to_string());
+            }
+
+
+            if domain_parts.is_empty() {
+                writeln!(f, "[Domain information]")?;
+            } else {
+                writeln!(f, "{}", domain_parts.join(", "))?;
+            }
         }
 
-        // Display solver info
+        // Display solver information
         if let Some(ref solver) = self.solver {
-            writeln!(f, "  Solver: {}", solver.strategy)?;
+            write!(f, "  Solver: {}", solver.strategy)?;
+
+            // Add additional config if available
+            if let Some(ref config) = solver.config {
+                if let Ok(pretty) = serde_json::to_string_pretty(config) {
+                    // Try to extract common fields if it's an object
+                    if let Ok(obj) = serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(config.clone()) {
+                        let mut details = Vec::new();
+                        if let Some(method) = obj.get("method") {
+                            if let Some(method_str) = method.as_str() {
+                                details.push(method_str.to_string());
+                            }
+                        }
+                        if let Some(dt) = obj.get("dt") {
+                            if let Some(dt_num) = dt.as_f64() {
+                                details.push(format!("dt={}", dt_num));
+                            }
+                        }
+                        if !details.is_empty() {
+                            write!(f, " ({})", details.join(", "))?;
+                        }
+                    }
+                }
+            }
+            writeln!(f)?;
         }
 
         Ok(())
@@ -1478,7 +1524,7 @@ impl fmt::Display for EsmFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::ExpressionNode;
+    use crate::types::*;
 
     #[test]
     fn test_chemical_subscripts() {
@@ -1576,5 +1622,84 @@ mod tests {
             dim: None,
         });
         assert_eq!(format!("{}", mul), "(a + b)·c");
+    }
+
+    #[test]
+    fn test_model_summary_display() {
+        use std::collections::HashMap;
+
+        // Create minimal ESM file for testing display
+        let metadata = Metadata {
+            name: Some("TestModel".to_string()),
+            description: Some("Test description".to_string()),
+            authors: Some(vec!["Test Author".to_string()]),
+            license: None,
+            created: None,
+            modified: None,
+            tags: None,
+            references: None,
+        };
+
+        // Create a simple reaction system
+        let mut parameters = HashMap::new();
+        parameters.insert("k1".to_string(), Parameter {
+            default: Some(1.8e-12),
+            units: Some("cm3/molec/s".to_string()),
+            description: Some("Rate constant".to_string()),
+        });
+
+        let reactions = vec![
+            Reaction {
+                name: Some("R1".to_string()),
+                substrates: vec![
+                    StoichiometricEntry { species: "A".to_string(), coefficient: Some(1.0) }
+                ],
+                products: vec![
+                    StoichiometricEntry { species: "B".to_string(), coefficient: Some(1.0) }
+                ],
+                rate: Expr::Variable("k1".to_string()),
+                description: None,
+            }
+        ];
+
+        let species = vec![
+            Species { name: "A".to_string(), default: Some(1e-9), units: Some("molec/cm3".to_string()), description: None },
+            Species { name: "B".to_string(), default: Some(0.0), units: Some("molec/cm3".to_string()), description: None },
+        ];
+
+        let reaction_system = ReactionSystem {
+            name: Some("TestReactions".to_string()),
+            species,
+            parameters,
+            reactions,
+            description: None,
+        };
+
+        let mut reaction_systems = HashMap::new();
+        reaction_systems.insert("TestReactions".to_string(), reaction_system);
+
+        // Create ESM file
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata,
+            models: None,
+            reaction_systems: Some(reaction_systems),
+            operators: None,
+            data_loaders: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        // Test the display output
+        let output = format!("{}", esm_file);
+
+        // Check key components are present in the expected format
+        assert!(output.contains("ESM v0.1.0: TestModel"));
+        assert!(output.contains("\"Test description\""));
+        assert!(output.contains("Authors: Test Author"));
+        assert!(output.contains("Reaction Systems:"));
+        assert!(output.contains("TestReactions (2 species, 1 parameters, 1 reaction)"));
+        assert!(output.contains("R1: A → B    rate: k1"));
     }
 }
