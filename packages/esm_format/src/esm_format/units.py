@@ -13,6 +13,7 @@ try:
     import pint
     PINT_AVAILABLE = True
     ureg = pint.UnitRegistry()
+    UnitsContainer = UnitsContainer
 
     # Add common Earth system model units
     ureg.define('ppm = 1e-6 * dimensionless')  # parts per million
@@ -24,12 +25,13 @@ try:
 except ImportError:
     PINT_AVAILABLE = False
     ureg = None
+    UnitsContainer = Any
 
 try:
     from .esm_types import EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter, Expr, ExprNode
 except ImportError:
     # For direct imports when testing
-    from types import EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter, Expr, ExprNode
+    from esm_types import EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter, Expr, ExprNode
 
 
 @dataclass
@@ -261,7 +263,7 @@ class UnitValidator:
                 error_message=str(e)
             )
 
-    def _get_expression_dimension(self, expr: Expr) -> Optional[pint.util.UnitsContainer]:
+    def _get_expression_dimension(self, expr: Expr) -> Optional[UnitsContainer]:
         """Get the dimensional analysis of an expression."""
         if isinstance(expr, (int, float)):
             return self.ureg.dimensionless.dimensionality
@@ -279,7 +281,7 @@ class UnitValidator:
 
         return None
 
-    def _get_expr_node_dimension(self, node: ExprNode) -> Optional[pint.util.UnitsContainer]:
+    def _get_expr_node_dimension(self, node: ExprNode) -> Optional[UnitsContainer]:
         """Get dimension of an expression node (operator with arguments)."""
         if not node.args:
             return None
@@ -330,7 +332,7 @@ class UnitValidator:
         # For other operators (sin, cos, exp, etc.), assume dimensionless result
         return self.ureg.dimensionless.dimensionality
 
-    def _dimensions_compatible(self, dim1: pint.util.UnitsContainer, dim2: pint.util.UnitsContainer) -> bool:
+    def _dimensions_compatible(self, dim1: UnitsContainer, dim2: UnitsContainer) -> bool:
         """Check if two dimensions are compatible (same or convertible)."""
         try:
             # Create dummy quantities and try to convert

@@ -557,20 +557,48 @@ def _validate_units(esm_file: EsmFile, unit_warnings: List[UnitWarning]) -> None
     """
     Validate dimensional consistency (warnings only).
 
-    This is a basic implementation - full unit validation would require
-    parsing unit strings and dimensional analysis.
+    Uses the UnitValidator from units.py to perform comprehensive dimensional analysis
+    and unit validation across models and reaction systems.
     """
-    # Basic unit consistency checks - can be expanded
-    for model_idx, model in enumerate(esm_file.models):
-        model_path = f"/models/{model_idx}"
+    try:
+        from .units import UnitValidator
 
-        for eq_idx, equation in enumerate(model.equations):
-            eq_path = f"{model_path}/equations/{eq_idx}"
+        # Create unit validator instance
+        validator = UnitValidator()
 
-            # This would need actual expression parsing to extract units
-            # For now, just check if we have obvious unit mismatches
-            # TODO: Implement proper unit parsing and dimensional analysis
-            pass
+        # Validate the entire ESM file
+        unit_result = validator.validate_esm_file(esm_file)
+
+        # Convert validation errors to warnings (as per function contract)
+        for error_msg in unit_result.errors:
+            unit_warnings.append(UnitWarning(
+                path="unit_validation",
+                message=error_msg,
+                details={"validation_type": "dimensional_analysis"}
+            ))
+
+        # Convert validation warnings to our warning format
+        for warning_msg in unit_result.warnings:
+            unit_warnings.append(UnitWarning(
+                path="unit_validation",
+                message=warning_msg,
+                details={"validation_type": "unit_warning"}
+            ))
+
+    except ImportError:
+        # If pint is not available, add a warning about missing unit validation
+        unit_warnings.append(UnitWarning(
+            path="unit_validation",
+            message="Unit validation skipped: pint library not available. Install with: pip install pint",
+            details={"validation_type": "dependency_missing"}
+        ))
+    except Exception as e:
+        # If unit validation fails for any reason, add a warning but don't break validation
+        unit_warnings.append(UnitWarning(
+            path="unit_validation",
+            message=f"Unit validation failed: {str(e)}",
+            details={"validation_type": "validation_error", "exception": str(e)}
+        ))
 
 
 def _validate_model_references(model, model_idx: int, all_variables: Dict[str, Any], structural_errors: List[ValidationError]) -> None:
