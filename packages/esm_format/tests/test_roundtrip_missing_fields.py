@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from esm_format.types import (
+from esm_format.esm_types import (
     EsmFile, Metadata, DataLoader, DataLoaderType, Operator, OperatorType,
     CouplingEntry, CouplingType, Solver, SolverType, ContinuousEvent, AffectEquation
 )
