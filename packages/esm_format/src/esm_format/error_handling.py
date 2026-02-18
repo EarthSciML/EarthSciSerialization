@@ -162,3 +162,37 @@ class ESMErrorFactory:
             severity=Severity.ERROR,
             context=ErrorContext(component=component, details={"variable": variable})
         )
+
+    @staticmethod
+    def create_equation_imbalance_error(model_name: str, num_equations: int, num_unknowns: int, state_vars: list) -> ESMError:
+        """Create an equation-unknown balance error."""
+        return ESMError(
+            code=ErrorCode.EQUATION_COUNT_MISMATCH,
+            message=f"Equation-unknown balance error in model '{model_name}': {num_equations} equations for {num_unknowns} unknowns (state variables: {', '.join(state_vars)})",
+            severity=Severity.ERROR,
+            context=ErrorContext(
+                component=model_name,
+                details={
+                    "model_name": model_name,
+                    "num_equations": num_equations,
+                    "num_unknowns": num_unknowns,
+                    "state_variables": state_vars
+                }
+            )
+        )
+
+    @staticmethod
+    def create_undefined_reference_error(reference: str, available_options: list, path: str) -> ESMError:
+        """Create an undefined reference error."""
+        return ESMError(
+            code=ErrorCode.UNDEFINED_VARIABLE,
+            message=f"Undefined reference '{reference}'",
+            severity=Severity.ERROR,
+            context=ErrorContext(
+                path=path,
+                details={
+                    "reference": reference,
+                    "available_options": available_options
+                }
+            )
+        )

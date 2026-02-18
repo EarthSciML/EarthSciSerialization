@@ -381,33 +381,35 @@ def _validate_reference_integrity_enhanced(esm_file: EsmFile, error_collector: E
 
     # Collect all operators
     for op in esm_file.operators:
-        all_operators[op.name] = op
+        all_operators[op.operator_id] = op
 
     # Validate coupling references with enhanced error handling
     for i, coupling in enumerate(esm_file.coupling):
         coupling_path = f"/coupling/{i}"
 
-        # Check source model/system existence
-        if coupling.source_model not in all_models and coupling.source_model not in all_reaction_systems:
-            available_components = list(all_models.keys()) + list(all_reaction_systems.keys())
-            error = ESMErrorFactory.create_undefined_reference_error(
-                coupling.source_model,
-                available_components,
-                f"{coupling_path}/source_model"
-            )
-            error.message = f"Source model/system '{coupling.source_model}' not found"
-            error_collector.add_error(error)
+        # Check source model/system existence (only if field exists)
+        if hasattr(coupling, 'source_model') and coupling.source_model is not None:
+            if coupling.source_model not in all_models and coupling.source_model not in all_reaction_systems:
+                available_components = list(all_models.keys()) + list(all_reaction_systems.keys())
+                error = ESMErrorFactory.create_undefined_reference_error(
+                    coupling.source_model,
+                    available_components,
+                    f"{coupling_path}/source_model"
+                )
+                error.message = f"Source model/system '{coupling.source_model}' not found"
+                error_collector.add_error(error)
 
-        # Check target model/system existence
-        if coupling.target_model not in all_models and coupling.target_model not in all_reaction_systems:
-            available_components = list(all_models.keys()) + list(all_reaction_systems.keys())
-            error = ESMErrorFactory.create_undefined_reference_error(
-                coupling.target_model,
-                available_components,
-                f"{coupling_path}/target_model"
-            )
-            error.message = f"Target model/system '{coupling.target_model}' not found"
-            error_collector.add_error(error)
+        # Check target model/system existence (only if field exists)
+        if hasattr(coupling, 'target_model') and coupling.target_model is not None:
+            if coupling.target_model not in all_models and coupling.target_model not in all_reaction_systems:
+                available_components = list(all_models.keys()) + list(all_reaction_systems.keys())
+                error = ESMErrorFactory.create_undefined_reference_error(
+                    coupling.target_model,
+                    available_components,
+                    f"{coupling_path}/target_model"
+                )
+                error.message = f"Target model/system '{coupling.target_model}' not found"
+                error_collector.add_error(error)
 
 
 def _validate_reference_integrity(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
@@ -449,7 +451,7 @@ def _validate_reference_integrity(esm_file: EsmFile, structural_errors: List[Val
 
     # Collect all operators
     for op in esm_file.operators:
-        all_operators[op.name] = op
+        all_operators[op.operator_id] = op
 
     # Validate variable references in model equations
     for i, model in enumerate(esm_file.models):
@@ -572,14 +574,22 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
     - Continuous event conditions are expressions (not booleans)
     - Discrete event conditions produce boolean values
     - Variables in affects are declared
-    - Functional affect references are valid
+    - Variables in affect_neg (direction-dependent affects) are declared
+    - Functional affect references are valid (handler_id, read_vars, read_params, modified_params)
+    - discrete_parameters in coupling entries are valid
     """
     # Build variable lookup for validation
     all_variables = set()
+    all_parameters = set()
+
     for model in esm_file.models.values():
         for var_name in model.variables:
             all_variables.add(var_name)
             all_variables.add(f"{model.name}.{var_name}")
+            # Parameters are also variables
+            if model.variables[var_name].type == 'parameter':
+                all_parameters.add(var_name)
+                all_parameters.add(f"{model.name}.{var_name}")
 
     for rs in esm_file.reaction_systems.values():
         for species in rs.species:
@@ -588,21 +598,135 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
         for param in rs.parameters:
             all_variables.add(param.name)
             all_variables.add(f"{rs.name}.{param.name}")
+            all_parameters.add(param.name)
+            all_parameters.add(f"{rs.name}.{param.name}")
+
+    # Build operator/handler lookup for functional affects
+    all_operators = set()
+    for operator in esm_file.operators:
+        all_operators.add(operator.operator_id)
 
     for event_idx, event in enumerate(esm_file.events):
         event_path = f"/events/{event_idx}"
 
-        # Validate affects - check that target variables exist
+        # Validate affects - check that target variables exist and functional affects are valid
         for affect_idx, affect in enumerate(event.affects):
             affect_path = f"{event_path}/affects/{affect_idx}"
 
-            if isinstance(affect, type(event.affects[0])) and hasattr(affect, 'lhs'):  # AffectEquation
+            if hasattr(affect, 'lhs'):  # AffectEquation
                 if affect.lhs not in all_variables:
                     structural_errors.append(ValidationError(
                         path=f"{affect_path}/lhs",
                         message=f"Affect target variable '{affect.lhs}' not declared",
                         code="undeclared_affect_variable",
                         details={"variable": affect.lhs, "available_variables": sorted(list(all_variables))}
+                    ))
+            elif hasattr(affect, 'handler_id'):  # FunctionalAffect
+                # Validate handler_id exists as an operator
+                if affect.handler_id not in all_operators:
+                    structural_errors.append(ValidationError(
+                        path=f"{affect_path}/handler_id",
+                        message=f"Functional affect handler '{affect.handler_id}' not declared in operators",
+                        code="undeclared_handler",
+                        details={"handler": affect.handler_id, "available_operators": sorted(list(all_operators))}
+                    ))
+
+                # Validate read_vars exist
+                for var_idx, read_var in enumerate(affect.read_vars):
+                    if read_var not in all_variables:
+                        structural_errors.append(ValidationError(
+                            path=f"{affect_path}/read_vars/{var_idx}",
+                            message=f"Functional affect read variable '{read_var}' not declared",
+                            code="undeclared_read_variable",
+                            details={"variable": read_var, "available_variables": sorted(list(all_variables))}
+                        ))
+
+                # Validate read_params exist
+                for param_idx, read_param in enumerate(affect.read_params):
+                    if read_param not in all_parameters:
+                        structural_errors.append(ValidationError(
+                            path=f"{affect_path}/read_params/{param_idx}",
+                            message=f"Functional affect read parameter '{read_param}' not declared",
+                            code="undeclared_read_parameter",
+                            details={"parameter": read_param, "available_parameters": sorted(list(all_parameters))}
+                        ))
+
+                # Validate modified_params exist
+                for param_idx, mod_param in enumerate(affect.modified_params):
+                    if mod_param not in all_parameters:
+                        structural_errors.append(ValidationError(
+                            path=f"{affect_path}/modified_params/{param_idx}",
+                            message=f"Functional affect modified parameter '{mod_param}' not declared",
+                            code="undeclared_modified_parameter",
+                            details={"parameter": mod_param, "available_parameters": sorted(list(all_parameters))}
+                        ))
+
+        # Validate affect_neg (direction-dependent affects) if present
+        if hasattr(event, 'affect_neg') and event.affect_neg is not None:
+            for affect_idx, affect in enumerate(event.affect_neg):
+                affect_path = f"{event_path}/affect_neg/{affect_idx}"
+
+                if hasattr(affect, 'lhs'):  # AffectEquation
+                    if affect.lhs not in all_variables:
+                        structural_errors.append(ValidationError(
+                            path=f"{affect_path}/lhs",
+                            message=f"Affect_neg target variable '{affect.lhs}' not declared",
+                            code="undeclared_affect_neg_variable",
+                            details={"variable": affect.lhs, "available_variables": sorted(list(all_variables))}
+                        ))
+                elif hasattr(affect, 'handler_id'):  # FunctionalAffect
+                    # Same validation as regular affects
+                    if affect.handler_id not in all_operators:
+                        structural_errors.append(ValidationError(
+                            path=f"{affect_path}/handler_id",
+                            message=f"Affect_neg functional affect handler '{affect.handler_id}' not declared in operators",
+                            code="undeclared_handler",
+                            details={"handler": affect.handler_id, "available_operators": sorted(list(all_operators))}
+                        ))
+
+                    # Validate read_vars, read_params, modified_params for affect_neg functional affects
+                    for var_idx, read_var in enumerate(affect.read_vars):
+                        if read_var not in all_variables:
+                            structural_errors.append(ValidationError(
+                                path=f"{affect_path}/read_vars/{var_idx}",
+                                message=f"Affect_neg functional affect read variable '{read_var}' not declared",
+                                code="undeclared_read_variable",
+                                details={"variable": read_var, "available_variables": sorted(list(all_variables))}
+                            ))
+
+                    for param_idx, read_param in enumerate(affect.read_params):
+                        if read_param not in all_parameters:
+                            structural_errors.append(ValidationError(
+                                path=f"{affect_path}/read_params/{param_idx}",
+                                message=f"Affect_neg functional affect read parameter '{read_param}' not declared",
+                                code="undeclared_read_parameter",
+                                details={"parameter": read_param, "available_parameters": sorted(list(all_parameters))}
+                            ))
+
+                    for param_idx, mod_param in enumerate(affect.modified_params):
+                        if mod_param not in all_parameters:
+                            structural_errors.append(ValidationError(
+                                path=f"{affect_path}/modified_params/{param_idx}",
+                                message=f"Affect_neg functional affect modified parameter '{mod_param}' not declared",
+                                code="undeclared_modified_parameter",
+                                details={"parameter": mod_param, "available_parameters": sorted(list(all_parameters))}
+                            ))
+
+    # Validate discrete_parameters in coupling entries
+    for coupling_idx, coupling in enumerate(esm_file.coupling):
+        coupling_path = f"/coupling/{coupling_idx}"
+
+        # Check if this coupling entry has discrete_parameters
+        if hasattr(coupling, 'discrete_parameters') and coupling.discrete_parameters is not None:
+            for param_idx, discrete_param in enumerate(coupling.discrete_parameters):
+                param_path = f"{coupling_path}/discrete_parameters/{param_idx}"
+
+                if discrete_param not in all_parameters:
+                    structural_errors.append(ValidationError(
+                        path=param_path,
+                        message=f"Discrete parameter '{discrete_param}' not declared in any model or reaction system",
+                        code="undeclared_discrete_parameter",
+                        details={"parameter": discrete_param, "available_parameters": sorted(list(all_parameters))}
                     ))
 
 
