@@ -116,7 +116,6 @@ def to_python_code(file: Dict[str, Any]) -> str:
     lines.append("import sympy as sp")
     lines.append("import esm_format as esm")
     lines.append("import scipy")
-    lines.append("from sympy import Function")
     lines.append("")
 
     # Generate models
@@ -616,7 +615,7 @@ def _format_python_expression_node(node: Dict[str, Any]) -> str:
             return f"sp.Piecewise(({true_val}, {condition}), ({false_val}, True))"
         return "sp.Piecewise((0, True))"
     elif op == "Pre":
-        return f"Function('Pre')({', '.join(_format_python_expression(arg) for arg in args)})"
+        return f"sp.Function('Pre')({', '.join(_format_python_expression(arg) for arg in args)})"
     elif op == "^":
         return " ** ".join(_format_python_expression(arg) for arg in args)
     elif op == "grad":
