@@ -29,7 +29,7 @@ def run_tests():
             ExprNode, Expr, Equation, AffectEquation, ModelVariable, Model,
             Species, Parameter, Reaction, ReactionSystem,
             ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
-            DataLoader, DataLoaderType, Operator, OperatorType,
+            DataLoader, DataLoaderType, Operator,
             CouplingEntry, CouplingType, Domain, Solver, SolverType,
             Reference, Metadata, EsmFile
         )

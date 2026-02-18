@@ -1,23 +1,26 @@
 """
 Example demonstrating the operator registry functionality in ESM Format.
 
-This example shows how to:
+IMPORTANT: This example is NOT currently functional as it relies on
+operator registry functionality that is not implemented in the current
+ESM specification v0.1.0. The OperatorType enum has been removed as it
+is not part of the official specification.
+
+This example shows what would be possible with:
 1. Register custom operators
 2. Create operator instances
 3. Use operator versioning
 4. List available operators
 """
 
+# NOTE: This example relies on operator registry functionality that
+# is not currently implemented in the ESM format specification.
+# This is kept for future reference but will not work as-is.
+
 from esm_format import (
-    OperatorRegistry,
-    get_operator_registry,
-    register_operator,
-    create_operator,
-    create_operator_by_name,
-    list_operators_by_type,
-    has_operator,
     Operator,
-    OperatorType,
+    # OperatorRegistry functionality not implemented
+    # OperatorType removed - not in specification
 )
 
 

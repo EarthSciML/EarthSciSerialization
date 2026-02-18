@@ -4,7 +4,7 @@ import json
 import pytest
 
 from esm_format.esm_types import (
-    EsmFile, Metadata, DataLoader, DataLoaderType, Operator, OperatorType,
+    EsmFile, Metadata, DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, Solver, SolverType, ContinuousEvent, AffectEquation
 )
 from esm_format.serialize import save
@@ -77,11 +77,10 @@ def test_roundtrip_preserves_operators():
 
     # Create operator
     operator = Operator(
-        name="test_operator",
-        type=OperatorType.TRANSFORMATION,
-        parameters={"param1": "value1", "param2": 42},
-        input_variables=["x", "y"],
-        output_variables=["z"]
+        operator_id="test_operator",
+        needed_vars=["x", "y"],
+        modifies=["z"],
+        config={"param1": "value1", "param2": 42}
     )
 
     # Create ESM file
@@ -288,11 +287,10 @@ def test_roundtrip_preserves_all_missing_fields():
     )
 
     operator = Operator(
-        name="operator",
-        type=OperatorType.TRANSFORMATION,
-        parameters={},
-        input_variables=["temp"],
-        output_variables=["processed_temp"]
+        operator_id="operator",
+        needed_vars=["temp"],
+        modifies=["processed_temp"],
+        config={}
     )
 
     coupling = CouplingEntry(

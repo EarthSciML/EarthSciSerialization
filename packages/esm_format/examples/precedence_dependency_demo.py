@@ -15,7 +15,7 @@ from esm_format.operator_registry import (
     get_execution_order,
     topological_sort_operators
 )
-from esm_format.types import OperatorType
+# NOTE: OperatorType removed - not in ESM specification
 
 
 class DemoOperator:

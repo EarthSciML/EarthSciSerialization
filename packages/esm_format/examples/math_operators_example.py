@@ -9,12 +9,13 @@ This example shows how to:
 """
 
 import numpy as np
+# NOTE: This example relies on operator registry functionality that
+# is not currently implemented in the ESM format specification.
+# OperatorType has been removed as it's not part of the spec.
+
 from esm_format import (
-    get_registry,
-    create_operator_by_name,
-    list_operators_by_type,
     Operator,
-    OperatorType,
+    # Registry functionality not implemented
 )
 
 
