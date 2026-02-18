@@ -235,6 +235,30 @@ type OperatorApplyCoupling struct {
 
 func (o OperatorApplyCoupling) GetType() string { return o.Type }
 
+// CallbackCoupling represents callback-based coupling
+type CallbackCoupling struct {
+	Type        string                 `json:"type"` // "callback"
+	CallbackID  string                 `json:"callback_id"`
+	Config      map[string]interface{} `json:"config,omitempty"`
+	Description *string                `json:"description,omitempty"`
+}
+
+func (c CallbackCoupling) GetType() string { return c.Type }
+
+// EventCoupling represents event-based coupling
+type EventCoupling struct {
+	Type               string               `json:"type"` // "event"
+	EventType          string               `json:"event_type"` // "continuous" or "discrete"
+	Name               string               `json:"name"`
+	Conditions         []Expression         `json:"conditions,omitempty"`         // for continuous events
+	Trigger            *DiscreteEventTrigger `json:"trigger,omitempty"`            // for discrete events
+	Affects            []AffectEquation     `json:"affects"`
+	DiscreteParameters []string             `json:"discrete_parameters,omitempty"`
+	Description        *string              `json:"description,omitempty"`
+}
+
+func (e EventCoupling) GetType() string { return e.Type }
+
 // Connector represents the connector system for couple2
 type Connector struct {
 	Equations []ConnectorEquation `json:"equations"`
@@ -551,6 +575,47 @@ func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Custom JSON unmarshaling for EventCoupling
+func (ec *EventCoupling) UnmarshalJSON(data []byte) error {
+	type TempEventCoupling struct {
+		Type               string                 `json:"type"`
+		EventType          string                 `json:"event_type"`
+		Name               string                 `json:"name"`
+		Conditions         []json.RawMessage      `json:"conditions,omitempty"`
+		Trigger            *DiscreteEventTrigger  `json:"trigger,omitempty"`
+		Affects            []AffectEquation       `json:"affects"`
+		DiscreteParameters []string               `json:"discrete_parameters,omitempty"`
+		Description        *string                `json:"description,omitempty"`
+	}
+
+	var temp TempEventCoupling
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	ec.Type = temp.Type
+	ec.EventType = temp.EventType
+	ec.Name = temp.Name
+	ec.Trigger = temp.Trigger
+	ec.Affects = temp.Affects
+	ec.DiscreteParameters = temp.DiscreteParameters
+	ec.Description = temp.Description
+
+	// Unmarshal Conditions if present
+	if len(temp.Conditions) > 0 {
+		ec.Conditions = make([]Expression, len(temp.Conditions))
+		for i, conditionData := range temp.Conditions {
+			condition, err := UnmarshalExpression(conditionData)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
+			}
+			ec.Conditions[i] = condition
+		}
+	}
+
+	return nil
+}
+
 // Custom JSON unmarshaling for EsmFile
 func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	// Define a temporary struct that matches EsmFile but uses json.RawMessage for coupling
@@ -658,6 +723,20 @@ func UnmarshalCouplingEntry(data []byte) (CouplingEntry, error) {
 		var coupling OperatorApplyCoupling
 		if err := json.Unmarshal(data, &coupling); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal OperatorApplyCoupling: %w", err)
+		}
+		return coupling, nil
+
+	case "callback":
+		var coupling CallbackCoupling
+		if err := json.Unmarshal(data, &coupling); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal CallbackCoupling: %w", err)
+		}
+		return coupling, nil
+
+	case "event":
+		var coupling EventCoupling
+		if err := json.Unmarshal(data, &coupling); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal EventCoupling: %w", err)
 		}
 		return coupling, nil
 
