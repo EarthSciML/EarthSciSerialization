@@ -38,6 +38,26 @@ func TestToUnicodeBasic(t *testing.T) {
 			expected: "2.46×10¹⁹",
 		},
 		{
+			name:     "threshold value 0.001 - should use scientific",
+			input:    0.001,
+			expected: "1×10⁻³",
+		},
+		{
+			name:     "threshold value 0.005 - should use scientific",
+			input:    0.005,
+			expected: "5×10⁻³",
+		},
+		{
+			name:     "threshold value 0.009 - should use scientific",
+			input:    0.009,
+			expected: "9×10⁻³",
+		},
+		{
+			name:     "threshold value 0.01 - should NOT use scientific",
+			input:    0.01,
+			expected: "0.01",
+		},
+		{
 			name: "simple addition",
 			input: ExprNode{
 				Op:   "+",

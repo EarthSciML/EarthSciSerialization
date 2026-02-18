@@ -72,7 +72,7 @@ func formatNumber(num float64, format string) string {
 
 	// Handle scientific notation for very large or very small numbers
 	abs := math.Abs(num)
-	if abs >= 1e4 || abs < 1e-3 {
+	if abs >= 1e4 || abs < 0.01 {
 		// Calculate exponent manually for better control
 		exp := int(math.Floor(math.Log10(abs)))
 		mantissa := num / math.Pow(10, float64(exp))
