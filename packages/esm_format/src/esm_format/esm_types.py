@@ -176,7 +176,7 @@ class DataLoader:
 class Operator:
     """A registered runtime operator (e.g., dry deposition, wet scavenging)."""
     operator_id: str
-    needed_vars: List[str] = field(default_factory=list)
+    needed_vars: List[str]
     modifies: Optional[List[str]] = None
     reference: Optional['Reference'] = None
     config: Dict[str, Any] = field(default_factory=dict)
