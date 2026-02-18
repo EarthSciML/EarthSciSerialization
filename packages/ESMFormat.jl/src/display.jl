@@ -201,7 +201,7 @@ function format_number(num::Real, format::Symbol)
 
     # Use standard scientific notation formatting without @sprintf
     str = string(num)
-    if contains(str, "e") || contains(str, "E")
+    if Base.contains(str, "e") || Base.contains(str, "E")
         # Already in scientific notation
         parts = split(lowercase(str), "e")
         mantissa = parts[1]
