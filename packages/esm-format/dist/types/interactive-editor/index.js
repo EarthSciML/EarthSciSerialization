@@ -9,9 +9,9 @@
  * and real-time validation capabilities.
  */
 // Core component exports
-export { ExpressionNode as ExpressionNodeComponent } from './ExpressionNode.tsx';
-export { ModelEditor } from './ModelEditor.tsx';
-export { CouplingGraph } from './CouplingGraph.tsx';
+export { ExpressionNode as ExpressionNodeComponent } from './ExpressionNode.jsx';
+export { ModelEditor } from './ModelEditor.jsx';
+export { CouplingGraph } from './CouplingGraph.jsx';
 // Utility functions for path manipulation
 export const PathUtils = {
     toString: (path) => path.join('.'),
