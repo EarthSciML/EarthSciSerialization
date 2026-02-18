@@ -698,8 +698,11 @@ function Base.show(io::IO, reaction_system::ReactionSystem)
     println(io, "  Species ($(length(reaction_system.species))):")
     for species in reaction_system.species
         print(io, "    $(format_chemical_subscripts(species.name, :unicode))")
-        if !isnothing(species.molecular_weight)
-            print(io, " (MW: $(species.molecular_weight))")
+        if !isnothing(species.units)
+            print(io, " (units: $(species.units))")
+        end
+        if !isnothing(species.default)
+            print(io, " (default: $(species.default))")
         end
         if !isnothing(species.description)
             print(io, " - $(species.description)")

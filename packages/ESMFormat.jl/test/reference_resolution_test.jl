@@ -157,8 +157,8 @@ using ESMFormat
 
         # Create species and parameters
         species = [
-            Species("O3", molecular_weight=48.0, description="Ozone"),
-            Species("NO", molecular_weight=30.0, description="Nitric oxide")
+            Species("O3", units="ppb", default=80.0, description="Ozone"),
+            Species("NO", units="ppb", default=10.0, description="Nitric oxide")
         ]
         parameters = [
             Parameter("k1", 1.0e-3, description="Rate constant", units="1/s")
@@ -168,7 +168,7 @@ using ESMFormat
         ]
 
         # Create subsystem
-        sub_species = [Species("HO2", molecular_weight=33.0, description="Hydroperoxy radical")]
+        sub_species = [Species("HO2", units="ppb", default=0.1, description="Hydroperoxy radical")]
         sub_params = [Parameter("k2", 2.0e-4, description="HO2 rate", units="1/s")]
         sub_reactions = [Reaction(Dict("HO2" => 2), Dict("H2O2" => 1, "O2" => 1), VarExpr("k2"))]
         subsystem = ReactionSystem(sub_species, sub_reactions, parameters=sub_params)

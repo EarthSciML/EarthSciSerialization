@@ -185,8 +185,11 @@ Serialize Species to JSON-compatible format.
 """
 function serialize_species(species::Species)::Dict{String,Any}
     result = Dict{String,Any}("name" => species.name)
-    if species.molecular_weight !== nothing
-        result["molecular_weight"] = species.molecular_weight
+    if species.units !== nothing
+        result["units"] = species.units
+    end
+    if species.default !== nothing
+        result["default"] = species.default
     end
     if species.description !== nothing
         result["description"] = species.description

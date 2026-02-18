@@ -246,12 +246,13 @@ Chemical species definition with name and optional properties.
 """
 struct Species
     name::String
-    molecular_weight::Union{Float64,Nothing}
+    units::Union{String,Nothing}
+    default::Union{Float64,Nothing}
     description::Union{String,Nothing}
 
     # Constructor with optional parameters
-    Species(name::String; molecular_weight=nothing, description=nothing) =
-        new(name, molecular_weight, description)
+    Species(name::String; units=nothing, default=nothing, description=nothing) =
+        new(name, units, default, description)
 end
 
 """
