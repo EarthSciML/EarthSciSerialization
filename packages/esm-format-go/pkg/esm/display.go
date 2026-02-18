@@ -7,6 +7,34 @@ import (
 	"strings"
 )
 
+// chemicalElements contains all 118 chemical element symbols for element-aware tokenizer
+var chemicalElements = map[string]bool{
+	// Period 1
+	"H": true, "He": true,
+	// Period 2
+	"Li": true, "Be": true, "B": true, "C": true, "N": true, "O": true, "F": true, "Ne": true,
+	// Period 3
+	"Na": true, "Mg": true, "Al": true, "Si": true, "P": true, "S": true, "Cl": true, "Ar": true,
+	// Period 4
+	"K": true, "Ca": true, "Sc": true, "Ti": true, "V": true, "Cr": true, "Mn": true, "Fe": true,
+	"Co": true, "Ni": true, "Cu": true, "Zn": true, "Ga": true, "Ge": true, "As": true, "Se": true,
+	"Br": true, "Kr": true,
+	// Period 5
+	"Rb": true, "Sr": true, "Y": true, "Zr": true, "Nb": true, "Mo": true, "Tc": true, "Ru": true,
+	"Rh": true, "Pd": true, "Ag": true, "Cd": true, "In": true, "Sn": true, "Sb": true, "Te": true,
+	"I": true, "Xe": true,
+	// Period 6
+	"Cs": true, "Ba": true, "La": true, "Ce": true, "Pr": true, "Nd": true, "Pm": true, "Sm": true,
+	"Eu": true, "Gd": true, "Tb": true, "Dy": true, "Ho": true, "Er": true, "Tm": true, "Yb": true,
+	"Lu": true, "Hf": true, "Ta": true, "W": true, "Re": true, "Os": true, "Ir": true, "Pt": true,
+	"Au": true, "Hg": true, "Tl": true, "Pb": true, "Bi": true, "Po": true, "At": true, "Rn": true,
+	// Period 7
+	"Fr": true, "Ra": true, "Ac": true, "Th": true, "Pa": true, "U": true, "Np": true, "Pu": true,
+	"Am": true, "Cm": true, "Bk": true, "Cf": true, "Es": true, "Fm": true, "Md": true, "No": true,
+	"Lr": true, "Rf": true, "Db": true, "Sg": true, "Bh": true, "Hs": true, "Mt": true, "Ds": true,
+	"Rg": true, "Cn": true, "Nh": true, "Fl": true, "Mc": true, "Lv": true, "Ts": true, "Og": true,
+}
+
 // ToUnicode converts an expression to Unicode string with chemical subscripts and operator precedence
 func ToUnicode(target interface{}) string {
 	return formatExpression(target, "unicode")
@@ -79,34 +107,135 @@ func formatVariable(varName string, format string) string {
 	}
 }
 
-// isChemicalSpecies detects if a variable name represents a chemical species
+// isChemicalSpecies detects if a variable name represents a chemical species using element-aware tokenizer
 func isChemicalSpecies(name string) bool {
-	// Simple heuristic: contains numbers or common chemical patterns
-	matched, _ := regexp.MatchString(`[A-Z][a-z]?[0-9]|O[0-9]|NO[0-9]?|CO[0-9]?|SO[0-9]?|H[0-9]?O|CH[0-9]?`, name)
-	return matched
+	return hasElementPattern(name)
 }
 
-// formatChemicalSubscripts converts numbers in chemical formulas to subscripts
-func formatChemicalSubscripts(name string, format string) string {
-	// Pattern to match numbers that should become subscripts
-	re := regexp.MustCompile(`([A-Za-z])([0-9]+)`)
+// hasElementPattern checks if a variable has element patterns for chemical formula detection
+func hasElementPattern(variable string) bool {
+	i := 0
+	hasElement := false
 
-	switch format {
-	case "unicode":
-		return re.ReplaceAllStringFunc(name, func(match string) string {
-			parts := re.FindStringSubmatch(match)
-			if len(parts) == 3 {
-				letter := parts[1]
-				number := parts[2]
-				return letter + formatSubscript(number)
+	for i < len(variable) {
+		// Skip non-alphabetic characters at the start
+		for i < len(variable) && !isAlpha(variable[i]) {
+			i++
+		}
+
+		if i >= len(variable) {
+			break
+		}
+
+		// Try 2-character element first (greedy matching)
+		if i+1 < len(variable) {
+			twoChar := variable[i : i+2]
+			if chemicalElements[twoChar] {
+				hasElement = true
+				i += 2
+				// Skip digits
+				for i < len(variable) && isDigit(variable[i]) {
+					i++
+				}
+				continue
 			}
-			return match
-		})
-	case "latex":
-		return re.ReplaceAllString(name, `${1}_{${2}}`)
-	default:
+		}
+
+		// Try 1-character element
+		oneChar := string(variable[i])
+		if chemicalElements[oneChar] {
+			hasElement = true
+			i++
+			// Skip digits
+			for i < len(variable) && isDigit(variable[i]) {
+				i++
+			}
+			continue
+		}
+
+		// Not an element, move to next character
+		i++
+	}
+
+	return hasElement
+}
+
+// Helper functions for character classification
+func isAlpha(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+}
+
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+// formatChemicalSubscripts converts numbers in chemical formulas to subscripts using element-aware tokenizer
+func formatChemicalSubscripts(name string, format string) string {
+	// Check if variable looks like a chemical formula
+	hasElements := hasElementPattern(name)
+
+	// Handle LaTeX format first
+	if format == "latex" {
+		if hasElements {
+			// Chemical formula: convert digits to subscripts using regex
+			re := regexp.MustCompile(`([A-Za-z])([0-9]+)`)
+			result := re.ReplaceAllString(name, `${1}_{${2}}`)
+			return result
+		}
+		// Regular variable: return as-is
 		return name
 	}
+
+	// For unicode format, only apply subscript conversion if it has element patterns
+	if !hasElements {
+		return name
+	}
+
+	// Element-aware subscript conversion for unicode format
+	result := strings.Builder{}
+	i := 0
+
+	for i < len(name) {
+		matched := false
+
+		// Try 2-character element first (greedy matching)
+		if i+1 < len(name) {
+			twoChar := name[i : i+2]
+			if chemicalElements[twoChar] {
+				result.WriteString(twoChar)
+				i += 2
+				// Convert following digits to subscripts
+				for i < len(name) && isDigit(name[i]) {
+					result.WriteString(formatSubscript(string(name[i])))
+					i++
+				}
+				matched = true
+			}
+		}
+
+		// Try 1-character element if 2-char didn't match
+		if !matched && i < len(name) {
+			oneChar := string(name[i])
+			if chemicalElements[oneChar] {
+				result.WriteString(oneChar)
+				i++
+				// Convert following digits to subscripts
+				for i < len(name) && isDigit(name[i]) {
+					result.WriteString(formatSubscript(string(name[i])))
+					i++
+				}
+				matched = true
+			}
+		}
+
+		// If not an element, copy character as-is
+		if !matched {
+			result.WriteByte(name[i])
+			i++
+		}
+	}
+
+	return result.String()
 }
 
 // formatSubscript converts numbers to Unicode subscript characters
