@@ -332,7 +332,7 @@
   },
 
   "solver": {
-    "strategy": "adaptive_ode",
+    "strategy": "imex",
     "config": {
       "algorithm": "TRBDF2",
       "adaptive": true,

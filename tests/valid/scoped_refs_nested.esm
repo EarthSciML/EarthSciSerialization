@@ -279,7 +279,7 @@
   },
 
   "solver": {
-    "strategy": "adaptive_ode",
+    "strategy": "imex",
     "config": {
       "algorithm": "Tsit5",
       "adaptive": true,
