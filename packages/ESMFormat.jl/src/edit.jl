@@ -27,10 +27,9 @@ function add_variable(model::Model, name::String, variable::ModelVariable)::Mode
     return Model(
         new_variables,
         model.equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=get(model, :continuous_events, ContinuousEvent[]),
-        discrete_events=get(model, :discrete_events, DiscreteEvent[]),
-        description=get(model, :description, nothing)
+        model.discrete_events,
+        model.continuous_events,
+        model.subsystems
     )
 end
 
@@ -69,10 +68,9 @@ function remove_variable(model::Model, name::String)::Model
     return Model(
         new_variables,
         model.equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=get(model, :continuous_events, ContinuousEvent[]),
-        discrete_events=get(model, :discrete_events, DiscreteEvent[]),
-        description=get(model, :description, nothing)
+        model.discrete_events,
+        model.continuous_events,
+        model.subsystems
     )
 end
 
@@ -112,10 +110,9 @@ function rename_variable(model::Model, old_name::String, new_name::String)::Mode
     return Model(
         new_variables,
         new_equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=get(model, :continuous_events, ContinuousEvent[]),
-        discrete_events=get(model, :discrete_events, DiscreteEvent[]),
-        description=get(model, :description, nothing)
+        model.discrete_events,
+        model.continuous_events,
+        model.subsystems
     )
 end
 
@@ -135,10 +132,9 @@ function add_equation(model::Model, equation::Equation)::Model
     return Model(
         model.variables,
         new_equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=get(model, :continuous_events, ContinuousEvent[]),
-        discrete_events=get(model, :discrete_events, DiscreteEvent[]),
-        description=get(model, :description, nothing)
+        model.discrete_events,
+        model.continuous_events,
+        model.subsystems
     )
 end
 
@@ -162,10 +158,9 @@ function remove_equation(model::Model, index::Int)::Model
     return Model(
         model.variables,
         new_equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=get(model, :continuous_events, ContinuousEvent[]),
-        discrete_events=get(model, :discrete_events, DiscreteEvent[]),
-        description=get(model, :description, nothing)
+        model.discrete_events,
+        model.continuous_events,
+        model.subsystems
     )
 end
 
@@ -200,10 +195,9 @@ function substitute_in_equations(model::Model, bindings::Dict{String, ESMFormat.
     return Model(
         model.variables,
         new_equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=get(model, :continuous_events, ContinuousEvent[]),
-        discrete_events=get(model, :discrete_events, DiscreteEvent[]),
-        description=get(model, :description, nothing)
+        model.discrete_events,
+        model.continuous_events,
+        model.subsystems
     )
 end
 
@@ -222,8 +216,7 @@ function add_reaction(system::ReactionSystem, reaction::Reaction)::ReactionSyste
         system.species,
         new_reactions,
         parameters=system.parameters,
-        subsystems=get(system, :subsystems, Dict{String,ReactionSystem}()),
-        description=get(system, :description, nothing)
+        subsystems=system.subsystems
     )
 end
 
@@ -239,8 +232,7 @@ function remove_reaction(system::ReactionSystem, id::String)::ReactionSystem
     new_reactions = Reaction[]
 
     for reaction in system.reactions
-        reaction_id = get(reaction, :id, nothing)
-        if reaction_id != id
+        if reaction.id != id
             push!(new_reactions, reaction)
         end
     end
@@ -253,8 +245,7 @@ function remove_reaction(system::ReactionSystem, id::String)::ReactionSystem
         system.species,
         new_reactions,
         parameters=system.parameters,
-        subsystems=get(system, :subsystems, Dict{String,ReactionSystem}()),
-        description=get(system, :description, nothing)
+        subsystems=system.subsystems
     )
 end
 
@@ -282,8 +273,7 @@ function add_species(system::ReactionSystem, name::String, species::Species)::Re
         new_species,
         system.reactions,
         parameters=system.parameters,
-        subsystems=get(system, :subsystems, Dict{String,ReactionSystem}()),
-        description=get(system, :description, nothing)
+        subsystems=system.subsystems
     )
 end
 
@@ -318,8 +308,7 @@ function remove_species(system::ReactionSystem, name::String)::ReactionSystem
         new_species,
         system.reactions,
         parameters=system.parameters,
-        subsystems=get(system, :subsystems, Dict{String,ReactionSystem}()),
-        description=get(system, :description, nothing)
+        subsystems=system.subsystems
     )
 end
 
@@ -331,16 +320,15 @@ end
 Add a continuous event to a model.
 """
 function add_continuous_event(model::Model, event::ContinuousEvent)::Model
-    new_events = copy(get(model, :continuous_events, ContinuousEvent[]))
+    new_events = copy(model.continuous_events)
     push!(new_events, event)
 
     return Model(
         model.variables,
         model.equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=new_events,
-        discrete_events=get(model, :discrete_events, DiscreteEvent[]),
-        description=get(model, :description, nothing)
+        model.discrete_events,
+        new_events,
+        model.subsystems
     )
 end
 
@@ -350,16 +338,15 @@ end
 Add a discrete event to a model.
 """
 function add_discrete_event(model::Model, event::DiscreteEvent)::Model
-    new_events = copy(get(model, :discrete_events, DiscreteEvent[]))
+    new_events = copy(model.discrete_events)
     push!(new_events, event)
 
     return Model(
         model.variables,
         model.equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=get(model, :continuous_events, ContinuousEvent[]),
-        discrete_events=new_events,
-        description=get(model, :description, nothing)
+        new_events,
+        model.continuous_events,
+        model.subsystems
     )
 end
 
@@ -372,12 +359,12 @@ Searches both continuous and discrete events.
 """
 function remove_event(model::Model, name::String)::Model
     # Remove from continuous events
-    continuous_events = get(model, :continuous_events, ContinuousEvent[])
-    new_continuous = filter(e -> get(e, :name, "") != name, continuous_events)
+    continuous_events = model.continuous_events
+    new_continuous = filter(e -> (e.description !== nothing ? e.description : "") != name, continuous_events)
 
     # Remove from discrete events
-    discrete_events = get(model, :discrete_events, DiscreteEvent[])
-    new_discrete = filter(e -> get(e, :name, "") != name, discrete_events)
+    discrete_events = model.discrete_events
+    new_discrete = filter(e -> (e.description !== nothing ? e.description : "") != name, discrete_events)
 
     if length(new_continuous) == length(continuous_events) &&
        length(new_discrete) == length(discrete_events)
@@ -387,10 +374,9 @@ function remove_event(model::Model, name::String)::Model
     return Model(
         model.variables,
         model.equations,
-        subsystems=get(model, :subsystems, Dict{String,Model}()),
-        continuous_events=new_continuous,
-        discrete_events=new_discrete,
-        description=get(model, :description, nothing)
+        new_discrete,
+        new_continuous,
+        model.subsystems
     )
 end
 
@@ -406,15 +392,15 @@ function add_coupling(file::EsmFile, entry::CouplingEntry)::EsmFile
     push!(new_coupling, entry)
 
     return EsmFile(
-        file.models,
-        file.reaction_systems,
-        file.data_loaders,
-        file.operators,
-        new_coupling,
-        domain=get(file, :domain, nothing),
-        solver=get(file, :solver, nothing),
-        references=get(file, :references, Reference[]),
-        metadata=get(file, :metadata, nothing)
+        file.esm,
+        file.metadata;
+        models=file.models,
+        reaction_systems=file.reaction_systems,
+        data_loaders=file.data_loaders,
+        operators=file.operators,
+        coupling=new_coupling,
+        domain=file.domain,
+        solver=file.solver
     )
 end
 
@@ -433,15 +419,15 @@ function remove_coupling(file::EsmFile, index::Int)::EsmFile
     deleteat!(new_coupling, index)
 
     return EsmFile(
-        file.models,
-        file.reaction_systems,
-        file.data_loaders,
-        file.operators,
-        new_coupling,
-        domain=get(file, :domain, nothing),
-        solver=get(file, :solver, nothing),
-        references=get(file, :references, Reference[]),
-        metadata=get(file, :metadata, nothing)
+        file.esm,
+        file.metadata;
+        models=file.models,
+        reaction_systems=file.reaction_systems,
+        data_loaders=file.data_loaders,
+        operators=file.operators,
+        coupling=new_coupling,
+        domain=file.domain,
+        solver=file.solver
     )
 end
 
@@ -503,7 +489,7 @@ function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
 
     return EsmFile(
         file_b.esm,  # Use file_b's version
-        merged_metadata,
+        merged_metadata;
         models=merged_models,
         reaction_systems=merged_reaction_systems,
         data_loaders=merged_data_loaders,
@@ -540,11 +526,13 @@ function extract(file::EsmFile, component_name::String)::EsmFile
     else
         @warn "Component '$component_name' not found"
         return EsmFile(
-            Dict{String,Model}(),
-            Dict{String,ReactionSystem}(),
-            Dict{String,DataLoader}(),
-            Dict{String,Operator}(),
-            CouplingEntry[]
+            "1.0.0",
+            Metadata("empty");
+            models=Dict{String,Model}(),
+            reaction_systems=Dict{String,ReactionSystem}(),
+            data_loaders=Dict{String,DataLoader}(),
+            operators=Dict{String,Operator}(),
+            coupling=CouplingEntry[]
         )
     end
 
@@ -574,14 +562,14 @@ function extract(file::EsmFile, component_name::String)::EsmFile
     end
 
     return EsmFile(
-        extracted_models,
-        extracted_reaction_systems,
-        extracted_data_loaders,
-        extracted_operators,
-        relevant_coupling,
-        domain=get(file, :domain, nothing),
-        solver=get(file, :solver, nothing),
-        references=get(file, :references, Reference[]),
-        metadata=get(file, :metadata, nothing)
+        file.esm,
+        file.metadata;
+        models=extracted_models,
+        reaction_systems=extracted_reaction_systems,
+        data_loaders=extracted_data_loaders,
+        operators=extracted_operators,
+        coupling=relevant_coupling,
+        domain=file.domain,
+        solver=file.solver
     )
 end
