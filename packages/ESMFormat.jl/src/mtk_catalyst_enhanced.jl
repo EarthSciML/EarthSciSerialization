@@ -403,7 +403,7 @@ function create_mock_catalyst_system(rsys::ReactionSystem, name::String, advance
         "advanced_features_enabled" => advanced_features
     )
 
-    return MockCatalystSystem(name, species, parameters, reactions, events, metadata, advanced_features)
+    return MockCatalystSystem(name, species, parameters, reactions, events, String[], metadata, advanced_features)
 end
 
 # ========================================

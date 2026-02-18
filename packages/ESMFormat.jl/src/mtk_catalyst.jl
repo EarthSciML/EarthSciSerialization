@@ -413,7 +413,7 @@ function create_mock_catalyst_system(rsys::ReactionSystem, name::String, advance
         "mock_system" => true
     )
 
-    return MockCatalystSystem(name, species, parameters, reactions, events, metadata, advanced_features)
+    return MockCatalystSystem(name, species, parameters, reactions, events, String[], metadata, advanced_features)
 end
 
 """
@@ -858,20 +858,7 @@ end
 
 # Duplicate MockMTKSystem struct removed - defined in mtk.jl
 
-"""
-    MockCatalystSystem
-
-Mock Catalyst system for testing and fallback when Catalyst is unavailable.
-"""
-struct MockCatalystSystem
-    name::String
-    species::Vector{String}
-    parameters::Vector{String}
-    reactions::Vector{String}
-    events::Vector{String}
-    metadata::Dict{String, Any}
-    advanced_features::Bool
-end
+# MockCatalystSystem is defined in catalyst.jl
 
 # ========================================
 # Enhanced Expression Conversion
