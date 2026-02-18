@@ -15,115 +15,8 @@ The result is a simulatable system compatible with OrdinaryDiffEq.jl.
 """
 
 # ========================================
-# Concrete CouplingEntry Types
+# Concrete CouplingEntry Types (defined in types.jl)
 # ========================================
-
-"""
-    CouplingOperatorCompose <: CouplingEntry
-
-Match LHS time derivatives and add RHS terms together.
-Implements operator composition algorithm from specification Section 4.7.1.
-"""
-struct CouplingOperatorCompose <: CouplingEntry
-    systems::Vector{String}  # Two systems to compose
-    translate::Union{Dict{String,String},Dict{String,Dict{String,Any}},Nothing}  # Variable mappings
-    description::Union{String,Nothing}
-
-    # Constructor with optional parameters
-    CouplingOperatorCompose(systems::Vector{String};
-                          translate=nothing,
-                          description=nothing) =
-        new(systems, translate, description)
-end
-
-"""
-    CouplingCouple2 <: CouplingEntry
-
-Bi-directional coupling via coupletype dispatch.
-"""
-struct CouplingCouple2 <: CouplingEntry
-    systems::Vector{String}  # Two systems to couple
-    coupletype_pair::Vector{String}  # Coupletype names for each system
-    connector::Dict{String,Any}  # Connector with equations
-    description::Union{String,Nothing}
-
-    # Constructor with optional description
-    CouplingCouple2(systems::Vector{String}, coupletype_pair::Vector{String},
-                   connector::Dict{String,Any}; description=nothing) =
-        new(systems, coupletype_pair, connector, description)
-end
-
-"""
-    CouplingVariableMap <: CouplingEntry
-
-Replace a parameter in one system with a variable from another.
-"""
-struct CouplingVariableMap <: CouplingEntry
-    from::String  # Source variable (scoped reference)
-    to::String    # Target parameter (scoped reference)
-    transform::String  # How mapping is applied
-    factor::Union{Float64,Nothing}  # Conversion factor (optional)
-    description::Union{String,Nothing}
-
-    # Constructor with optional parameters
-    CouplingVariableMap(from::String, to::String, transform::String;
-                       factor=nothing, description=nothing) =
-        new(from, to, transform, factor, description)
-end
-
-"""
-    CouplingOperatorApply <: CouplingEntry
-
-Register an Operator to run during simulation.
-"""
-struct CouplingOperatorApply <: CouplingEntry
-    operator::String  # Name of the operator (key in operators section)
-    description::Union{String,Nothing}
-
-    # Constructor with optional description
-    CouplingOperatorApply(operator::String; description=nothing) =
-        new(operator, description)
-end
-
-"""
-    CouplingCallback <: CouplingEntry
-
-Register a callback for simulation events.
-"""
-struct CouplingCallback <: CouplingEntry
-    callback_id::String  # Registered identifier for callback
-    config::Union{Dict{String,Any},Nothing}
-    description::Union{String,Nothing}
-
-    # Constructor with optional parameters
-    CouplingCallback(callback_id::String; config=nothing, description=nothing) =
-        new(callback_id, config, description)
-end
-
-"""
-    CouplingEvent <: CouplingEntry
-
-Cross-system event involving variables from multiple coupled systems.
-"""
-struct CouplingEvent <: CouplingEntry
-    event_type::String  # "continuous" or "discrete"
-    conditions::Union{Vector{Expr},Nothing}  # For continuous events
-    trigger::Union{DiscreteEventTrigger,Nothing}  # For discrete events
-    affects::Vector{AffectEquation}
-    affect_neg::Union{Vector{AffectEquation},Nothing}
-    discrete_parameters::Union{Vector{String},Nothing}
-    root_find::Union{String,Nothing}  # "left", "right", "all"
-    reinitialize::Union{Bool,Nothing}
-    description::Union{String,Nothing}
-
-    # Constructor with optional parameters
-    CouplingEvent(event_type::String, affects::Vector{AffectEquation};
-                 conditions=nothing, trigger=nothing, affect_neg=nothing,
-                 discrete_parameters=nothing, root_find=nothing,
-                 reinitialize=nothing, description=nothing) =
-        new(event_type, conditions, trigger, affects, affect_neg,
-            discrete_parameters, root_find, reinitialize, description)
-end
 
 # ========================================
 # Mock CoupledSystem for demonstration
@@ -135,7 +28,7 @@ end
 Mock implementation of EarthSciMLBase.CoupledSystem for demonstration.
 This would be replaced with real EarthSciMLBase integration.
 """
-struct MockCoupledSystem
+mutable struct MockCoupledSystem
     systems::Dict{String,Any}  # Individual systems
     ops::Vector{Any}  # Registered operators
     couplings::Vector{CouplingEntry}  # Applied coupling rules
