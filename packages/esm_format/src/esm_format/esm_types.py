@@ -110,9 +110,11 @@ class ReactionSystem:
 @dataclass
 class FunctionalAffect:
     """A functional effect applied during an event."""
-    target: str
-    function: str
-    arguments: List[Any] = field(default_factory=list)
+    handler_id: str
+    read_vars: List[str] = field(default_factory=list)
+    read_params: List[str] = field(default_factory=list)
+    modified_params: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
