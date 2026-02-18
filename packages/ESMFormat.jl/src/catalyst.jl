@@ -304,7 +304,7 @@ function create_mock_catalyst_system(rs::ReactionSystem)
     )
 
     return MockCatalystSystem("ESM_ReactionSystem", species, parameters, reactions,
-                             events, constraints, metadata)
+                             events, constraints, metadata, false)
 end
 
 """
@@ -321,6 +321,7 @@ struct MockCatalystSystem
     events::Vector{String}
     constraints::Vector{String}  # Additional field for constraint equations
     metadata::Dict{String, Any}
+    advanced_features::Bool
 end
 
 """
