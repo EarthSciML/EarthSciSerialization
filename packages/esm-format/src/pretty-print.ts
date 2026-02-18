@@ -47,6 +47,57 @@ function toSuperscript(text: string): string {
   return text.split('').map(c => SUPERSCRIPT_MAP[c] || c).join('')
 }
 
+// Greek letter mapping for LaTeX
+const GREEK_LETTERS: Record<string, string> = {
+  'alpha': '\\alpha', 'beta': '\\beta', 'gamma': '\\gamma', 'delta': '\\delta',
+  'epsilon': '\\epsilon', 'zeta': '\\zeta', 'eta': '\\eta', 'theta': '\\theta',
+  'iota': '\\iota', 'kappa': '\\kappa', 'lambda': '\\lambda', 'mu': '\\mu',
+  'nu': '\\nu', 'xi': '\\xi', 'omicron': '\\omicron', 'pi': '\\pi',
+  'rho': '\\rho', 'sigma': '\\sigma', 'tau': '\\tau', 'upsilon': '\\upsilon',
+  'phi': '\\phi', 'chi': '\\chi', 'psi': '\\psi', 'omega': '\\omega',
+  'Gamma': '\\Gamma', 'Delta': '\\Delta', 'Theta': '\\Theta', 'Lambda': '\\Lambda',
+  'Xi': '\\Xi', 'Pi': '\\Pi', 'Sigma': '\\Sigma', 'Upsilon': '\\Upsilon',
+  'Phi': '\\Phi', 'Psi': '\\Psi', 'Omega': '\\Omega',
+  // Direct Unicode to LaTeX mappings
+  'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'δ': '\\delta',
+  'ε': '\\epsilon', 'ζ': '\\zeta', 'η': '\\eta', 'θ': '\\theta',
+  'ι': '\\iota', 'κ': '\\kappa', 'λ': '\\lambda', 'μ': '\\mu',
+  'ν': '\\nu', 'ξ': '\\xi', 'ο': '\\omicron', 'π': '\\pi',
+  'ρ': '\\rho', 'σ': '\\sigma', 'τ': '\\tau', 'υ': '\\upsilon',
+  'φ': '\\phi', 'χ': '\\chi', 'ψ': '\\psi', 'ω': '\\omega'
+}
+
+function convertGreekLetters(text: string, format: 'unicode' | 'latex' | 'ascii'): string {
+  if (format === 'latex') {
+    // Replace Greek letters with LaTeX commands
+    return text.replace(/[α-ωΑ-Ω]|(?:alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)/g,
+      (match) => GREEK_LETTERS[match] || match)
+  } else if (format === 'unicode') {
+    // Convert named Greek letters to Unicode symbols
+    const unicodeGreek: Record<string, string> = {
+      'phi': 'φ', 'theta': 'θ', 'gamma': 'γ', 'alpha': 'α', 'beta': 'β',
+      'delta': 'δ', 'epsilon': 'ε', 'zeta': 'ζ', 'eta': 'η', 'iota': 'ι',
+      'kappa': 'κ', 'lambda': 'λ', 'mu': 'μ', 'nu': 'ν', 'xi': 'ξ',
+      'omicron': 'ο', 'pi': 'π', 'rho': 'ρ', 'sigma': 'σ', 'tau': 'τ',
+      'upsilon': 'υ', 'chi': 'χ', 'psi': 'ψ', 'omega': 'ω'
+    }
+    return text.replace(/(?:alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)/g,
+      (match) => unicodeGreek[match] || match)
+  } else if (format === 'ascii') {
+    // Convert Unicode Greek letters to ASCII names
+    const asciiGreek: Record<string, string> = {
+      'φ': 'phi', 'θ': 'theta', 'γ': 'gamma', 'α': 'alpha', 'β': 'beta',
+      'δ': 'delta', 'ε': 'epsilon', 'ζ': 'zeta', 'η': 'eta', 'ι': 'iota',
+      'κ': 'kappa', 'λ': 'lambda', 'μ': 'mu', 'ν': 'nu', 'ξ': 'xi',
+      'ο': 'omicron', 'π': 'pi', 'ρ': 'rho', 'σ': 'sigma', 'τ': 'tau',
+      'υ': 'upsilon', 'χ': 'chi', 'ψ': 'psi', 'ω': 'omega'
+    }
+    return text.replace(/[α-ωΑ-Ω]/g, (match) => asciiGreek[match] || match)
+  }
+
+  return text
+}
+
 /**
  * Apply element-aware chemical subscript formatting to a variable name.
  * Uses greedy 2-char-before-1-char matching for element detection.
@@ -56,8 +107,19 @@ function formatChemicalSubscripts(variable: string, format: 'unicode' | 'latex')
   const hasElements = hasElementPattern(variable)
 
   if (format === 'latex') {
+    // First check if it's a mixed variable (non-element prefix + chemical suffix)
+    const chemicalInfo = getChemicalSuffix(variable)
+    if (chemicalInfo) {
+      // Split into prefix and chemical part
+      const { prefix, suffix } = chemicalInfo
+      const chemicalPart = formatChemicalSubscripts(suffix, 'latex')
+      // Remove outer \mathrm{} wrapper but keep the content formatted
+      const innerContent = chemicalPart.replace(/^\\mathrm\{|\}$/g, '')
+      return `${prefix}_{\\mathrm{${innerContent}}}`
+    }
+
     if (hasElements) {
-      // Chemical formula: wrap in \mathrm{} and convert digits to subscripts
+      // Pure chemical formula: wrap in \mathrm{} and convert digits to subscripts
       let result = variable
       result = result.replace(/(\d+)/g, (match, digits) => {
         // Single digits don't need braces in LaTeX subscripts
@@ -65,12 +127,28 @@ function formatChemicalSubscripts(variable: string, format: 'unicode' | 'latex')
       })
       return `\\mathrm{${result}}`
     } else {
-      // Regular variable: return as-is
+      // Regular variable: check if it should be in \mathrm{} (like var2)
+      if (/\d/.test(variable)) {
+        return `\\mathrm{${variable}}`
+      }
       return variable
     }
   }
 
   if (!hasElements) {
+    // Check if it's a mixed variable (non-element prefix + chemical suffix)
+    const chemicalInfo = getChemicalSuffix(variable)
+    if (chemicalInfo) {
+      // Split into prefix and chemical part
+      const { prefix, suffix } = chemicalInfo
+      const chemicalPart = formatChemicalSubscripts(suffix, 'unicode')
+      // For variables without underscores (like jNO2), don't add underscores
+      if (!variable.includes('_')) {
+        return `${prefix}${chemicalPart}`
+      }
+      // For variables with underscores (like k_NO_O3), preserve them
+      return `${prefix}_${chemicalPart}`
+    }
     // No element pattern found, return as-is
     return variable
   }
@@ -123,28 +201,72 @@ function formatChemicalSubscripts(variable: string, format: 'unicode' | 'latex')
 }
 
 /**
+ * Extract chemical formula suffix from a variable name
+ */
+function getChemicalSuffix(variable: string): { prefix: string; suffix: string } | null {
+  // Handle patterns like k_NO_O3 (with underscore)
+  if (variable.includes('_')) {
+    const parts = variable.split('_')
+    if (parts.length === 2) {
+      const [prefix, suffix] = parts
+      if (hasElementPattern(suffix) && !hasElementPattern(prefix)) {
+        return { prefix, suffix }
+      }
+    }
+    // For patterns like k_NO_O3, try treating NO_O3 as the chemical part
+    if (parts.length === 3) {
+      const prefix = parts[0]
+      const suffix = parts.slice(1).join('_')  // Keep underscore within chemical formula
+      if (hasElementPattern(suffix) && !hasElementPattern(prefix)) {
+        return { prefix, suffix }
+      }
+    }
+  }
+
+  // Handle patterns like jNO2 (without underscore)
+  // Try each position to split into non-element prefix and element suffix
+  for (let i = 1; i < variable.length; i++) {
+    const prefix = variable.substring(0, i)
+    const suffix = variable.substring(i)
+
+    if (hasElementPattern(suffix) && !hasElementPattern(prefix)) {
+      return { prefix, suffix }
+    }
+  }
+
+  return null
+}
+
+/**
  * Check if a variable has element patterns (for chemical formula detection)
+ * Must be PURELY a chemical formula (no non-element characters)
  */
 function hasElementPattern(variable: string): boolean {
+  // Remove underscores for pure chemical formula check
+  const cleanVariable = variable.replace(/_/g, '')
+
   let i = 0
   let hasElement = false
 
-  while (i < variable.length) {
+  while (i < cleanVariable.length) {
     // Skip non-alphabetic characters at the start
-    while (i < variable.length && !/[A-Za-z]/.test(variable[i])) {
+    while (i < cleanVariable.length && !/[A-Za-z]/.test(cleanVariable[i])) {
       i++
     }
 
-    if (i >= variable.length) break
+    if (i >= cleanVariable.length) break
+
+    let foundElement = false
 
     // Try 2-character element first
-    if (i + 1 < variable.length) {
-      const twoChar = variable.slice(i, i + 2)
+    if (i + 1 < cleanVariable.length) {
+      const twoChar = cleanVariable.slice(i, i + 2)
       if (ELEMENTS.has(twoChar)) {
         hasElement = true
+        foundElement = true
         i += 2
         // Skip digits
-        while (i < variable.length && /\d/.test(variable[i])) {
+        while (i < cleanVariable.length && /\d/.test(cleanVariable[i])) {
           i++
         }
         continue
@@ -152,19 +274,24 @@ function hasElementPattern(variable: string): boolean {
     }
 
     // Try 1-character element
-    const oneChar = variable[i]
-    if (ELEMENTS.has(oneChar)) {
-      hasElement = true
-      i++
-      // Skip digits
-      while (i < variable.length && /\d/.test(variable[i])) {
+    if (!foundElement) {
+      const oneChar = cleanVariable[i]
+      if (ELEMENTS.has(oneChar)) {
+        hasElement = true
+        foundElement = true
         i++
+        // Skip digits
+        while (i < cleanVariable.length && /\d/.test(cleanVariable[i])) {
+          i++
+        }
+        continue
       }
-      continue
     }
 
-    // Not an element, move to next character
-    i++
+    // If we encounter a non-element character, this is not a pure chemical formula
+    if (!foundElement) {
+      return false
+    }
   }
 
   return hasElement
@@ -226,10 +353,21 @@ function needsParentheses(parent: ExprNode, child: Expr, isRightOperand = false)
     return true
   }
 
-  // Special cases for function arguments - no parens needed for simple expressions
-  if (['sin', 'cos', 'tan', 'exp', 'log', 'sqrt', 'abs'].includes(parent.op)) {
-    // Only parenthesize for very low precedence operators
-    return childPrec <= 2
+  // Special cases for function arguments - avoid parentheses for simple expressions
+  if (['sin', 'cos', 'tan', 'exp', 'log', 'sqrt', 'abs', 'asin', 'acos', 'atan', 'floor', 'ceil', 'sign', 'log10'].includes(parent.op)) {
+    // For function arguments, be much more permissive - only parenthesize logical operations
+    return childPrec <= 1
+  }
+
+  // Special case for ifelse function - don't add unnecessary parens to arguments
+  if (parent.op === 'ifelse') {
+    // For function arguments, be much more permissive - only parenthesize logical operations
+    return childPrec <= 1
+  }
+
+  // For unary minus, be less aggressive
+  if (parent.op === '-' && parent.args.length === 1) {
+    return childPrec <= 1
   }
 
   return false
@@ -244,7 +382,7 @@ export function toUnicode(expr: Expr | Equation | Model | ReactionSystem | EsmFi
   }
 
   if (typeof expr === 'string') {
-    return formatChemicalSubscripts(expr, 'unicode')
+    return convertGreekLetters(formatChemicalSubscripts(expr, 'unicode'), 'unicode')
   }
 
   if ('op' in expr && 'args' in expr) {
@@ -284,7 +422,8 @@ export function toLatex(expr: Expr | Equation | Model | ReactionSystem | EsmFile
   }
 
   if (typeof expr === 'string') {
-    return formatChemicalSubscripts(expr, 'latex')
+    const chemicalFormatted = formatChemicalSubscripts(expr, 'latex')
+    return convertGreekLetters(chemicalFormatted, 'latex')
   }
 
   if ('op' in expr && 'args' in expr) {
@@ -324,7 +463,7 @@ export function toAscii(expr: Expr | Equation | Model | ReactionSystem | EsmFile
   }
 
   if (typeof expr === 'string') {
-    return expr // No special formatting for ASCII
+    return convertGreekLetters(expr, 'ascii')
   }
 
   if ('op' in expr && 'args' in expr) {
@@ -422,17 +561,23 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
       case '>=':
         if (format === 'unicode') {
           return `${formatArg(left)} ≥ ${formatArg(right, true)}`
+        } else if (format === 'latex') {
+          return `${formatArg(left)} \\geq ${formatArg(right, true)}`
         }
         return `${formatArg(left)} ${op} ${formatArg(right, true)}`
 
       case '<=':
         if (format === 'unicode') {
           return `${formatArg(left)} ≤ ${formatArg(right, true)}`
+        } else if (format === 'latex') {
+          return `${formatArg(left)} \\leq ${formatArg(right, true)}`
         }
         return `${formatArg(left)} ${op} ${formatArg(right, true)}`
 
       case '==':
         if (format === 'unicode') {
+          return `${formatArg(left)} = ${formatArg(right, true)}`
+        } else if (format === 'latex') {
           return `${formatArg(left)} = ${formatArg(right, true)}`
         }
         return `${formatArg(left)} ${op} ${formatArg(right, true)}`
@@ -440,18 +585,24 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
       case '!=':
         if (format === 'unicode') {
           return `${formatArg(left)} ≠ ${formatArg(right, true)}`
+        } else if (format === 'latex') {
+          return `${formatArg(left)} \\neq ${formatArg(right, true)}`
         }
         return `${formatArg(left)} ${op} ${formatArg(right, true)}`
 
       case 'and':
         if (format === 'unicode') {
           return `${formatArg(left)} ∧ ${formatArg(right, true)}`
+        } else if (format === 'latex') {
+          return `${formatArg(left)} \\land ${formatArg(right, true)}`
         }
         return `${formatArg(left)} and ${formatArg(right, true)}`
 
       case 'or':
         if (format === 'unicode') {
           return `${formatArg(left)} ∨ ${formatArg(right, true)}`
+        } else if (format === 'latex') {
+          return `${formatArg(left)} \\lor ${formatArg(right, true)}`
         }
         return `${formatArg(left)} or ${formatArg(right, true)}`
 
@@ -484,12 +635,14 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
       case 'not':
         if (format === 'unicode') {
           return `¬${formatArg(arg)}`
+        } else if (format === 'latex') {
+          return `\\neg ${formatArg(arg)}`
         }
         return `not ${formatArg(arg)}`
 
       case 'exp': case 'sin': case 'cos': case 'tan':
         if (format === 'latex') {
-          return `\\${op}\\left(${toLatex(arg)}\\right)`
+          return `\\${op}(${toLatex(arg)})`
         }
         return `${op}(${formatArg(arg)})`
 
@@ -497,7 +650,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
         if (format === 'unicode') {
           return `ln(${formatArg(arg)})`
         } else if (format === 'latex') {
-          return `\\${op}\\left(${toLatex(arg)}\\right)`
+          return `\\ln(${toLatex(arg)})`
         }
         return `${op}(${formatArg(arg)})`
 
@@ -505,7 +658,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
         if (format === 'unicode') {
           return `log₁₀(${formatArg(arg)})`
         } else if (format === 'latex') {
-          return `\\log_{10}\\left(${toLatex(arg)}\\right)`
+          return `\\log_{10}(${toLatex(arg)})`
         }
         return `${op}(${formatArg(arg)})`
 
@@ -545,7 +698,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
         if (format === 'unicode') {
           return `sgn(${formatArg(arg)})`
         } else if (format === 'latex') {
-          return `\\text{sgn}\\left(${toLatex(arg)}\\right)`
+          return `\\mathrm{sgn}(${toLatex(arg)})`
         }
         return `${op}(${formatArg(arg)})`
 
@@ -554,7 +707,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
         if (format === 'unicode') {
           return `${arcName}(${formatArg(arg)})`
         } else if (format === 'latex') {
-          return `\\${op}\\left(${toLatex(arg)}\\right)`
+          return `\\${arcName}(${toLatex(arg)})`
         }
         return `${op}(${formatArg(arg)})`
 
@@ -572,7 +725,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
         if (format === 'unicode') {
           return `∇·${formatArg(arg)}`
         } else if (format === 'latex') {
-          return `\\nabla \\cdot ${toLatex(arg)}`
+          return `\\nabla \\cdot \\mathbf{${toLatex(arg)}}`
         }
         return `${op}(${formatArg(arg)})`
 
@@ -586,7 +739,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
 
       case 'Pre':
         if (format === 'latex') {
-          return `\\mathrm{Pre}(${toLatex(arg)})`
+          return `\\mathrm{Pre}(\\mathrm{${toLatex(arg)}})`
         }
         return `Pre(${formatArg(arg)})`
 
@@ -626,6 +779,8 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
         // N-ary or
         if (format === 'unicode') {
           return args.map(arg => formatArg(arg)).join(' ∨ ')
+        } else if (format === 'latex') {
+          return args.map(arg => formatArg(arg)).join(' \\lor ')
         }
         return args.map(arg => formatArg(arg)).join(' or ')
 
