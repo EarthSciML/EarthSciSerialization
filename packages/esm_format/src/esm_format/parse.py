@@ -11,6 +11,19 @@ from pathlib import Path
 from typing import Union, Dict, Any, List, TYPE_CHECKING
 from dataclasses import fields
 from enum import Enum
+try:
+    # Python 3.9+
+    from importlib.resources import files
+    _RESOURCES_AVAILABLE = True
+except ImportError:
+    try:
+        # Python 3.7-3.8 fallback
+        from importlib_resources import files
+        _RESOURCES_AVAILABLE = True
+    except ImportError:
+        # No importlib resources available, will use fallback
+        _RESOURCES_AVAILABLE = False
+        files = None
 
 if TYPE_CHECKING:
     from .esm_types import DataLoader
@@ -42,6 +55,20 @@ class UnsupportedVersionError(Exception):
 
 def _get_schema() -> Dict[str, Any]:
     """Load the bundled ESM schema."""
+    if _RESOURCES_AVAILABLE:
+        try:
+            # Use importlib.resources to locate the schema file within the package
+            schema_files = files("esm_format") / "data"
+            schema_path = schema_files / "esm-schema.json"
+
+            # Read the schema content using the modern resource API
+            with schema_path.open('r', encoding='utf-8') as f:
+                return json.load(f)
+        except (FileNotFoundError, AttributeError, TypeError) as e:
+            # Fall through to the legacy path approach
+            pass
+
+    # Fallback to the original method if resources approach fails or is unavailable
     schema_path = Path(__file__).parent / "data" / "esm-schema.json"
     if not schema_path.exists():
         raise FileNotFoundError(f"ESM schema not found at {schema_path}")
