@@ -225,7 +225,7 @@
   },
 
   "solver": {
-    "strategy": "forward_euler",
+    "strategy": "strang_serial",
     "config": { "timestep": 300.0 }
   }
 }
