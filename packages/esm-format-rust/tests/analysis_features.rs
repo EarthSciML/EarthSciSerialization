@@ -11,7 +11,9 @@ fn test_analysis_features_integration() {
         authors: None,
         created: None,
         modified: None,
-        version: None,
+        license: None,
+        tags: None,
+        references: None,
     };
 
     let mut variables = HashMap::new();
