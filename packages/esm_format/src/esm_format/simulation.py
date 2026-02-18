@@ -23,7 +23,8 @@ from dataclasses import dataclass
 try:
     from scipy.integrate import solve_ivp
     SCIPY_AVAILABLE = True
-except ImportError:
+except (ImportError, ValueError):
+    # ValueError can occur due to numpy/scipy compatibility issues
     SCIPY_AVAILABLE = False
     solve_ivp = None
 
@@ -418,15 +419,49 @@ def _create_event_functions(events: List[ContinuousEvent], symbol_map: Dict[str,
             # Create lambda function
             condition_func = sp.lambdify(variables, condition_expr, 'numpy')
 
-            def event_function(t, y, condition_func=condition_func, var_names=var_names):
-                # Map y values to variable names
-                var_dict = {name: y[i] if i < len(y) else 0 for i, name in enumerate(var_names)}
-                var_values = [var_dict.get(name, 0) for name in var_names]
-                return condition_func(*var_values) if var_values else condition_func()
+            # Check if we have direction-dependent affects
+            has_affect_neg = event.affect_neg is not None and len(event.affect_neg) > 0
+            has_affect_pos = event.affects is not None and len(event.affects) > 0
 
-            event_function.terminal = True  # Stop integration when event occurs
-            event_function.direction = 0    # Detect all zero crossings
-            event_functions.append(event_function)
+            if has_affect_neg and has_affect_pos:
+                # Create separate event functions for positive and negative crossings
+
+                # Positive-going zero crossing (affects)
+                def event_function_pos(t, y, condition_func=condition_func, var_names=var_names, event=event):
+                    var_dict = {name: y[i] if i < len(y) else 0 for i, name in enumerate(var_names)}
+                    var_values = [var_dict.get(name, 0) for name in var_names]
+                    return condition_func(*var_values) if var_values else condition_func()
+
+                event_function_pos.terminal = True
+                event_function_pos.direction = 1    # Positive-going zero crossing only
+                event_function_pos.affects = event.affects  # Store affects for application
+                event_function_pos.event_name = event.name
+                event_functions.append(event_function_pos)
+
+                # Negative-going zero crossing (affect_neg)
+                def event_function_neg(t, y, condition_func=condition_func, var_names=var_names, event=event):
+                    var_dict = {name: y[i] if i < len(y) else 0 for i, name in enumerate(var_names)}
+                    var_values = [var_dict.get(name, 0) for name in var_names]
+                    return condition_func(*var_values) if var_values else condition_func()
+
+                event_function_neg.terminal = True
+                event_function_neg.direction = -1   # Negative-going zero crossing only
+                event_function_neg.affects = event.affect_neg  # Store affect_neg for application
+                event_function_neg.event_name = event.name
+                event_functions.append(event_function_neg)
+
+            else:
+                # Original behavior for events without affect_neg
+                def event_function(t, y, condition_func=condition_func, var_names=var_names, event=event):
+                    var_dict = {name: y[i] if i < len(y) else 0 for i, name in enumerate(var_names)}
+                    var_values = [var_dict.get(name, 0) for name in var_names]
+                    return condition_func(*var_values) if var_values else condition_func()
+
+                event_function.terminal = True
+                event_function.direction = 0    # Detect all zero crossings (original behavior)
+                event_function.affects = event.affects if has_affect_pos else []
+                event_function.event_name = event.name
+                event_functions.append(event_function)
 
     return event_functions
 
@@ -658,6 +693,9 @@ def simulate(
         # Create symbol map
         symbol_map = {name: sp.Symbol(name) for name in species_names}
 
+        # Extract continuous events from the ESM file
+        continuous_events = [event for event in file.events if isinstance(event, ContinuousEvent)]
+
         # Create initial condition vector
         y0 = np.array([initial_conditions.get(name, 0.0) for name in species_names])
 
@@ -689,6 +727,11 @@ def simulate(
             def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
                 return np.zeros_like(y)
 
+        # Create event functions for continuous events
+        event_functions = []
+        if continuous_events:
+            event_functions = _create_event_functions(continuous_events, symbol_map)
+
         # Set solver options based on method
         solver_options = {
             'method': method,
@@ -696,6 +739,10 @@ def simulate(
             'atol': 1e-8,
             'dense_output': False,
         }
+
+        # Add events to solver options if present
+        if event_functions:
+            solver_options['events'] = event_functions
 
         # Check scipy availability
         if not SCIPY_AVAILABLE:
