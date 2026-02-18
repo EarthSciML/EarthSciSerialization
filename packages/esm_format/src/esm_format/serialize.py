@@ -13,7 +13,7 @@ from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
-    DataLoader, DataLoaderType, Operator, OperatorType,
+    DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, Domain, Solver, SolverType,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
     InitialCondition, BoundaryCondition
@@ -380,19 +380,23 @@ def _serialize_operator(operator: Operator) -> Dict[str, Any]:
     result = {}
 
     # Schema requires operator_id
-    result["operator_id"] = operator.name or "default_operator"
+    result["operator_id"] = operator.operator_id
 
-    # Schema uses config for parameters
-    if operator.parameters:
-        result["config"] = operator.parameters
+    # Schema requires needed_vars
+    result["needed_vars"] = operator.needed_vars
 
-    # Schema uses needed_vars for input_variables
-    if operator.input_variables:
-        result["needed_vars"] = operator.input_variables
+    # Optional fields
+    if operator.modifies is not None:
+        result["modifies"] = operator.modifies
 
-    # Schema uses modifies for output_variables
-    if operator.output_variables:
-        result["modifies"] = operator.output_variables
+    if operator.config:
+        result["config"] = operator.config
+
+    if operator.description:
+        result["description"] = operator.description
+
+    if operator.reference:
+        result["reference"] = _serialize_reference(operator.reference)
 
     return result
 

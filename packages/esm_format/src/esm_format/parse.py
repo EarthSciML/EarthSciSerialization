@@ -23,7 +23,7 @@ from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
-    DataLoader, DataLoaderType, Operator, OperatorType,
+    DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain, Solver, SolverType,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
     InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionType
@@ -388,26 +388,23 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
 
 def _parse_operator(operator_data: Dict[str, Any]) -> Operator:
     """Parse an operator from JSON data."""
-    name = ""  # Name comes from the key
-
-    # Schema doesn't have type enum, default to transformation
-    operator_type = OperatorType.TRANSFORMATION
-
-    # Schema uses config, we use parameters
-    parameters = operator_data.get("config", {})
-
-    # Schema uses needed_vars, we use input_variables
-    input_variables = operator_data.get("needed_vars", [])
-
-    # Schema uses modifies, we use output_variables
-    output_variables = operator_data.get("modifies", [])
+    # Use schema fields directly
+    operator_id = operator_data.get("operator_id", "")
+    needed_vars = operator_data.get("needed_vars", [])
+    modifies = operator_data.get("modifies")
+    config = operator_data.get("config", {})
+    description = operator_data.get("description")
+    reference = None
+    if "reference" in operator_data:
+        reference = _parse_reference(operator_data["reference"])
 
     return Operator(
-        name=name,
-        type=operator_type,
-        parameters=parameters,
-        input_variables=input_variables,
-        output_variables=output_variables
+        operator_id=operator_id,
+        needed_vars=needed_vars,
+        modifies=modifies,
+        reference=reference,
+        config=config,
+        description=description
     )
 
 

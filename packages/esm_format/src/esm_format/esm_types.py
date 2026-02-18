@@ -172,26 +172,15 @@ class DataLoader:
     provides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
-class OperatorType(Enum):
-    """Types of mathematical operators."""
-    INTERPOLATION = "interpolation"
-    INTEGRATION = "integration"
-    DIFFERENTIATION = "differentiation"
-    FILTERING = "filtering"
-    TRANSFORMATION = "transformation"
-    ARITHMETIC = "arithmetic"
-    LOGICAL = "logical"
-    STATISTICAL = "statistical"
-
-
 @dataclass
 class Operator:
-    """Mathematical operator applied to data or expressions."""
-    name: str
-    type: OperatorType
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    input_variables: List[str] = field(default_factory=list)
-    output_variables: List[str] = field(default_factory=list)
+    """A registered runtime operator (e.g., dry deposition, wet scavenging)."""
+    operator_id: str
+    needed_vars: List[str] = field(default_factory=list)
+    modifies: Optional[List[str]] = None
+    reference: Optional['Reference'] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+    description: Optional[str] = None
 
 
 class CouplingType(Enum):

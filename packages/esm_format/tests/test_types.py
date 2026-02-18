@@ -5,7 +5,7 @@ from esm_format.esm_types import (
     ExprNode, Expr, Equation, AffectEquation, ModelVariable, Model,
     Species, Parameter, Reaction, ReactionSystem,
     ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
-    DataLoader, DataLoaderType, Operator, OperatorType,
+    DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, Domain, Solver, SolverType,
     Reference, Metadata, EsmFile
 )
@@ -105,9 +105,11 @@ def test_data_loader():
 
 def test_operator():
     """Test Operator creation."""
-    op = Operator(name="interp", type=OperatorType.INTERPOLATION)
-    assert op.name == "interp"
-    assert op.type == OperatorType.INTERPOLATION
+    op = Operator(operator_id="interp_op", needed_vars=["temperature", "pressure"])
+    assert op.operator_id == "interp_op"
+    assert op.needed_vars == ["temperature", "pressure"]
+    assert op.modifies is None
+    assert op.config == {}
 
 
 def test_coupling_entry():
