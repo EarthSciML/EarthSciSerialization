@@ -162,7 +162,7 @@ function get_expression_dimensions(expr::ESMFormat.Expr, var_units::Dict{String,
             var_dim = get_expression_dimensions(expr.args[1], var_units)
 
             # Check what we're differentiating with respect to
-            wrt = get(expr, :wrt, "t")  # Default to time
+            wrt = expr.wrt !== nothing ? expr.wrt : "t"  # Default to time
             wrt_unit_str = get(var_units, wrt, "s")  # Default to seconds
             wrt_dim = parse_units(wrt_unit_str)
 
@@ -215,7 +215,7 @@ function validate_model_dimensions(model::Model)::Bool
     # Build variable units dictionary
     var_units = Dict{String, String}()
     for (name, var) in model.variables
-        var_units[name] = get(var, :units, "")
+        var_units[name] = var.units !== nothing ? var.units : ""
     end
 
     # Validate each equation
@@ -242,12 +242,14 @@ function validate_reaction_system_dimensions(rxn_sys::ReactionSystem)::Bool
 
     # Add species units
     for species in rxn_sys.species
-        var_units[species.name] = get(species, :units, "mol/L")  # Default concentration units
+        # NOTE: Species struct currently missing units field in Julia implementation
+        # Should be added to match schema - using default concentration units for now
+        var_units[species.name] = "mol/L"  # Default concentration units
     end
 
     # Add parameter units
     for param in rxn_sys.parameters
-        var_units[param.name] = get(param, :units, "")
+        var_units[param.name] = param.units !== nothing ? param.units : ""
     end
 
     # Validate each reaction rate
