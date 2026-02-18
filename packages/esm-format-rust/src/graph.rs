@@ -124,8 +124,12 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
                         continue; // Skip invalid coupling
                     }
                 },
-                CouplingEntry::VariableMap { from, to, .. } =>
-                    (from.clone(), to.clone(), "variable_map".to_string()),
+                CouplingEntry::VariableMap { from, to, .. } => {
+                    // Parse scoped references to extract system names
+                    let from_system = from.split('.').next().unwrap_or(from).to_string();
+                    let to_system = to.split('.').next().unwrap_or(to).to_string();
+                    (from_system, to_system, "variable_map".to_string())
+                },
                 CouplingEntry::OperatorApply { operator, .. } =>
                     (operator.clone(), "unknown_target".to_string(), "operator_apply".to_string()),
                 CouplingEntry::Callback { callback_id, .. } =>
@@ -1125,5 +1129,74 @@ mod tests {
         assert!(!mermaid.contains("{+}"));    // No operator nodes
         // No edges for standalone expression
         assert!(!mermaid.contains("-->"));    // No edges
+    }
+
+    #[test]
+    fn test_component_graph_variable_map_edge_extraction() {
+        let mut models = HashMap::new();
+        models.insert("source".to_string(), Model {
+            reference: None,
+            name: Some("Source System".to_string()),
+            variables: HashMap::new(),
+            equations: vec![],
+            discrete_events: None,
+            continuous_events: None,
+            description: None,
+        });
+        models.insert("target".to_string(), Model {
+            reference: None,
+            name: Some("Target System".to_string()),
+            variables: HashMap::new(),
+            equations: vec![],
+            discrete_events: None,
+            continuous_events: None,
+            description: None,
+        });
+
+        let coupling_entries = vec![
+            crate::CouplingEntry::VariableMap {
+                from: "source.var".to_string(),
+                to: "target.param".to_string(),
+                transform: "identity".to_string(),
+                factor: None,
+                description: None,
+            }
+        ];
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: Some(coupling_entries),
+            domain: None,
+            solver: None,
+        };
+
+        let graph = component_graph(&esm_file);
+
+        // Should have 2 nodes (source and target systems)
+        assert_eq!(graph.nodes.len(), 2);
+
+        // Should have 1 edge for the variable mapping
+        assert_eq!(graph.edges.len(), 1);
+
+        let edge = &graph.edges[0];
+
+        // Edge should connect system names, not full scoped references
+        assert_eq!(edge.from, "source");  // Not "source.var"
+        assert_eq!(edge.to, "target");    // Not "target.param"
+        assert_eq!(edge.coupling_type, "variable_map");
     }
 }
