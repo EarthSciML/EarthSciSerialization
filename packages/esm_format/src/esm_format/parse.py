@@ -76,6 +76,23 @@ def _parse_affect_equation(affect_data: Dict[str, Any]) -> AffectEquation:
     return AffectEquation(lhs=lhs, rhs=rhs)
 
 
+def _parse_functional_affect(functional_affect_data: Dict[str, Any]) -> FunctionalAffect:
+    """Parse a functional affect from JSON data."""
+    handler_id = functional_affect_data["handler_id"]
+    read_vars = functional_affect_data.get("read_vars", [])
+    read_params = functional_affect_data.get("read_params", [])
+    modified_params = functional_affect_data.get("modified_params", [])
+    config = functional_affect_data.get("config", {})
+
+    return FunctionalAffect(
+        handler_id=handler_id,
+        read_vars=read_vars,
+        read_params=read_params,
+        modified_params=modified_params,
+        config=config
+    )
+
+
 def _parse_model_variable(var_data: Dict[str, Any]) -> ModelVariable:
     """Parse a model variable from JSON data."""
     var_type = var_data["type"]
@@ -116,13 +133,31 @@ def _parse_continuous_event(event_data: Dict[str, Any]) -> ContinuousEvent:
     """Parse a continuous event from JSON data."""
     name = event_data.get("name", "")
     conditions = [_parse_expression(cond) for cond in event_data["conditions"]]
-    affects = [_parse_affect_equation(affect) for affect in event_data["affects"]]
+    affects = []
+
+    # Parse affects (AffectEquation objects)
+    if "affects" in event_data:
+        affects = [_parse_affect_equation(affect) for affect in event_data["affects"]]
+
+    # Parse functional_affect (FunctionalAffect object)
+    if "functional_affect" in event_data:
+        functional_affect = _parse_functional_affect(event_data["functional_affect"])
+        affects.append(functional_affect)
+
     priority = event_data.get("priority", 0)
 
     # Parse new fields
     affect_neg = None
     if "affect_neg" in event_data:
-        affect_neg = [_parse_affect_equation(affect) for affect in event_data["affect_neg"]]
+        affect_neg_list = []
+        for affect in event_data["affect_neg"]:
+            if isinstance(affect, dict) and "handler_id" in affect:
+                # This is a functional affect
+                affect_neg_list.append(_parse_functional_affect(affect))
+            else:
+                # This is a regular affect equation
+                affect_neg_list.append(_parse_affect_equation(affect))
+        affect_neg = affect_neg_list
 
     root_find = event_data.get("root_find", "left")
     reinitialize = event_data.get("reinitialize", False)
@@ -145,8 +180,16 @@ def _parse_discrete_event(event_data: Dict[str, Any]) -> DiscreteEvent:
     name = event_data.get("name", "")
     trigger = _parse_discrete_event_trigger(event_data["trigger"])
     affects = []
+
+    # Parse affects (AffectEquation objects)
     if "affects" in event_data:
         affects = [_parse_affect_equation(affect) for affect in event_data["affects"]]
+
+    # Parse functional_affect (FunctionalAffect object)
+    if "functional_affect" in event_data:
+        functional_affect = _parse_functional_affect(event_data["functional_affect"])
+        affects.append(functional_affect)
+
     priority = event_data.get("priority", 0)
 
     return DiscreteEvent(
@@ -180,9 +223,8 @@ def _parse_species(species_data: Dict[str, Any]) -> Species:
     """Parse a species from JSON data."""
     return Species(
         name="",  # Name comes from the key
-        formula=None,
-        mass=None,
         units=species_data.get("units"),
+        default=species_data.get("default"),
         description=species_data.get("description")
     )
 
@@ -432,9 +474,24 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
         if "affects" in coupling_data:
             entry.affects = [_parse_affect_equation(affect) for affect in coupling_data["affects"]]
 
+        # Parse functional_affect (FunctionalAffect object)
+        if "functional_affect" in coupling_data:
+            functional_affect = _parse_functional_affect(coupling_data["functional_affect"])
+            if entry.affects is None:
+                entry.affects = []
+            entry.affects.append(functional_affect)
+
         # Parse affect_neg
         if "affect_neg" in coupling_data and coupling_data["affect_neg"] is not None:
-            entry.affect_neg = [_parse_affect_equation(affect) for affect in coupling_data["affect_neg"]]
+            affect_neg_list = []
+            for affect in coupling_data["affect_neg"]:
+                if isinstance(affect, dict) and "handler_id" in affect:
+                    # This is a functional affect
+                    affect_neg_list.append(_parse_functional_affect(affect))
+                else:
+                    # This is a regular affect equation
+                    affect_neg_list.append(_parse_affect_equation(affect))
+            entry.affect_neg = affect_neg_list
 
         # Parse other fields
         entry.discrete_parameters = coupling_data.get("discrete_parameters", [])
