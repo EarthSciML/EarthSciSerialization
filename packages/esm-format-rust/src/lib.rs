@@ -79,6 +79,9 @@ pub use graph::{
     ExpressionGraphInput
 };
 pub use reactions::{derive_odes, stoichiometric_matrix, DeriveError};
+
+#[cfg(feature = "parallel")]
+pub use reactions::stoichiometric_matrix_parallel;
 pub use units::{parse_unit, check_dimensional_consistency, convert_units, Unit, Dimension, UnitError};
 pub use edit::{
     add_model, remove_model, add_variable, remove_variable, add_equation, remove_equation,
