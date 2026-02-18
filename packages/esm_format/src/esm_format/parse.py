@@ -118,11 +118,24 @@ def _parse_continuous_event(event_data: Dict[str, Any]) -> ContinuousEvent:
     affects = [_parse_affect_equation(affect) for affect in event_data["affects"]]
     priority = event_data.get("priority", 0)
 
+    # Parse new fields
+    affect_neg = None
+    if "affect_neg" in event_data:
+        affect_neg = [_parse_affect_equation(affect) for affect in event_data["affect_neg"]]
+
+    root_find = event_data.get("root_find", "left")
+    reinitialize = event_data.get("reinitialize", False)
+    description = event_data.get("description")
+
     return ContinuousEvent(
         name=name,
-        condition=conditions[0],  # For now, take first condition
+        conditions=conditions,  # Fixed: use plural conditions
         affects=affects,
-        priority=priority
+        affect_neg=affect_neg,
+        root_find=root_find,
+        reinitialize=reinitialize,
+        priority=priority,
+        description=description
     )
 
 

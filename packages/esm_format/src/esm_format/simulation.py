@@ -265,25 +265,27 @@ def _create_event_functions(events: List[ContinuousEvent], symbol_map: Dict[str,
     event_functions = []
 
     for event in events:
-        # Convert condition to SymPy
-        condition_expr = _expr_to_sympy(event.condition, symbol_map)
+        # Handle multiple conditions - create a function for each condition
+        for condition in event.conditions:
+            # Convert condition to SymPy
+            condition_expr = _expr_to_sympy(condition, symbol_map)
 
-        # Get variables in the condition
-        variables = list(condition_expr.free_symbols)
-        var_names = [str(var) for var in variables]
+            # Get variables in the condition
+            variables = list(condition_expr.free_symbols)
+            var_names = [str(var) for var in variables]
 
-        # Create lambda function
-        condition_func = sp.lambdify(variables, condition_expr, 'numpy')
+            # Create lambda function
+            condition_func = sp.lambdify(variables, condition_expr, 'numpy')
 
-        def event_function(t, y, condition_func=condition_func, var_names=var_names):
-            # Map y values to variable names
-            var_dict = {name: y[i] if i < len(y) else 0 for i, name in enumerate(var_names)}
-            var_values = [var_dict.get(name, 0) for name in var_names]
-            return condition_func(*var_values) if var_values else condition_func()
+            def event_function(t, y, condition_func=condition_func, var_names=var_names):
+                # Map y values to variable names
+                var_dict = {name: y[i] if i < len(y) else 0 for i, name in enumerate(var_names)}
+                var_values = [var_dict.get(name, 0) for name in var_names]
+                return condition_func(*var_values) if var_values else condition_func()
 
-        event_function.terminal = True  # Stop integration when event occurs
-        event_function.direction = 0    # Detect all zero crossings
-        event_functions.append(event_function)
+            event_function.terminal = True  # Stop integration when event occurs
+            event_function.direction = 0    # Detect all zero crossings
+            event_functions.append(event_function)
 
     return event_functions
 

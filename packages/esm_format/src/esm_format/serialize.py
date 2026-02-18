@@ -87,13 +87,23 @@ def _serialize_discrete_event_trigger(trigger: DiscreteEventTrigger) -> Dict[str
 def _serialize_continuous_event(event: ContinuousEvent) -> Dict[str, Any]:
     """Serialize a continuous event to JSON-compatible format."""
     result = {
-        "conditions": [_serialize_expression(event.condition)],
+        "conditions": [_serialize_expression(cond) for cond in event.conditions],  # Fixed: use plural conditions
         "affects": [_serialize_affect_equation(affect) for affect in event.affects]
     }
     if event.name:
         result["name"] = event.name
     if event.priority != 0:
         result["priority"] = event.priority
+
+    # Add new fields
+    if event.affect_neg is not None:
+        result["affect_neg"] = [_serialize_affect_equation(affect) for affect in event.affect_neg]
+    if event.root_find and event.root_find != 'left':  # Only include if not default
+        result["root_find"] = event.root_find
+    if event.reinitialize:  # Only include if True (not default False)
+        result["reinitialize"] = event.reinitialize
+    if event.description:
+        result["description"] = event.description
 
     return result
 
