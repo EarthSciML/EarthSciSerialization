@@ -1,7 +1,7 @@
 //! Expression substitution utilities
 
 use crate::{Expr, Model, ReactionSystem, EsmFile};
-use crate::types::{ExpressionNode, Equation, Reaction};
+use crate::types::{ExpressionNode, Equation, Reaction, DiscreteEvent, ContinuousEvent, DiscreteEventTrigger, AffectEquation};
 use std::collections::HashMap;
 
 /// Substitute variables in an expression
@@ -39,6 +39,126 @@ pub fn substitute(expr: &Expr, substitutions: &std::collections::HashMap<String,
     }
 }
 
+/// Substitute variables in a discrete event trigger
+///
+/// # Arguments
+///
+/// * `trigger` - The discrete event trigger to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+///
+/// # Returns
+///
+/// * New discrete event trigger with substitutions applied
+pub fn substitute_in_discrete_event_trigger(
+    trigger: &DiscreteEventTrigger,
+    substitutions: &std::collections::HashMap<String, Expr>
+) -> DiscreteEventTrigger {
+    match trigger {
+        DiscreteEventTrigger::Condition { expression } => {
+            DiscreteEventTrigger::Condition {
+                expression: substitute(expression, substitutions),
+            }
+        },
+        DiscreteEventTrigger::Periodic { interval, initial_offset } => {
+            // Periodic triggers have no expressions to substitute
+            DiscreteEventTrigger::Periodic {
+                interval: *interval,
+                initial_offset: *initial_offset,
+            }
+        },
+        DiscreteEventTrigger::PresetTimes { times } => {
+            // Preset times have no expressions to substitute
+            DiscreteEventTrigger::PresetTimes {
+                times: times.clone(),
+            }
+        }
+    }
+}
+
+/// Substitute variables in an affect equation
+///
+/// # Arguments
+///
+/// * `affect` - The affect equation to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+///
+/// # Returns
+///
+/// * New affect equation with substitutions applied
+pub fn substitute_in_affect_equation(
+    affect: &AffectEquation,
+    substitutions: &std::collections::HashMap<String, Expr>
+) -> AffectEquation {
+    AffectEquation {
+        lhs: affect.lhs.clone(), // LHS is a variable name string, not an expression
+        rhs: substitute(&affect.rhs, substitutions),
+    }
+}
+
+/// Substitute variables in a discrete event
+///
+/// # Arguments
+///
+/// * `event` - The discrete event to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+///
+/// # Returns
+///
+/// * New discrete event with substitutions applied
+pub fn substitute_in_discrete_event(
+    event: &DiscreteEvent,
+    substitutions: &std::collections::HashMap<String, Expr>
+) -> DiscreteEvent {
+    DiscreteEvent {
+        name: event.name.clone(),
+        trigger: substitute_in_discrete_event_trigger(&event.trigger, substitutions),
+        affects: event.affects.as_ref().map(|affects| {
+            affects.iter()
+                .map(|affect| substitute_in_affect_equation(affect, substitutions))
+                .collect()
+        }),
+        functional_affect: event.functional_affect.clone(), // TODO: Could also substitute in functional affects if needed
+        discrete_parameters: event.discrete_parameters.clone(),
+        reinitialize: event.reinitialize,
+        description: event.description.clone(),
+    }
+}
+
+/// Substitute variables in a continuous event
+///
+/// # Arguments
+///
+/// * `event` - The continuous event to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+///
+/// # Returns
+///
+/// * New continuous event with substitutions applied
+pub fn substitute_in_continuous_event(
+    event: &ContinuousEvent,
+    substitutions: &std::collections::HashMap<String, Expr>
+) -> ContinuousEvent {
+    ContinuousEvent {
+        name: event.name.clone(),
+        conditions: event.conditions.iter()
+            .map(|condition| substitute(condition, substitutions))
+            .collect(),
+        affects: event.affects.iter()
+            .map(|affect| substitute_in_affect_equation(affect, substitutions))
+            .collect(),
+        affect_neg: event.affect_neg.as_ref().map(|affects| {
+            affects.iter()
+                .map(|affect| substitute_in_affect_equation(affect, substitutions))
+                .collect()
+        }),
+        root_find: event.root_find.clone(),
+        reinitialize: event.reinitialize,
+        discrete_parameters: event.discrete_parameters.clone(),
+        priority: event.priority,
+        description: event.description.clone(),
+    }
+}
+
 /// Substitute variables in all expressions within a model
 ///
 /// # Arguments
@@ -65,8 +185,16 @@ pub fn substitute_in_model(
         reference: model.reference.clone(),
         variables: model.variables.clone(),
         equations: new_equations,
-        discrete_events: model.discrete_events.clone(), // TODO: Substitute in discrete events too
-        continuous_events: model.continuous_events.clone(), // TODO: Substitute in continuous events too
+        discrete_events: model.discrete_events.as_ref().map(|events| {
+            events.iter()
+                .map(|event| substitute_in_discrete_event(event, substitutions))
+                .collect()
+        }),
+        continuous_events: model.continuous_events.as_ref().map(|events| {
+            events.iter()
+                .map(|event| substitute_in_continuous_event(event, substitutions))
+                .collect()
+        }),
         description: model.description.clone(),
     }
 }
@@ -330,9 +458,145 @@ pub fn substitute_in_model_with_context(
         reference: model.reference.clone(),
         variables: model.variables.clone(),
         equations: new_equations,
-        discrete_events: model.discrete_events.clone(), // TODO: Substitute in discrete events too
-        continuous_events: model.continuous_events.clone(), // TODO: Substitute in continuous events too
+        discrete_events: model.discrete_events.as_ref().map(|events| {
+            events.iter()
+                .map(|event| substitute_in_discrete_event_with_context(event, substitutions, context))
+                .collect()
+        }),
+        continuous_events: model.continuous_events.as_ref().map(|events| {
+            events.iter()
+                .map(|event| substitute_in_continuous_event_with_context(event, substitutions, context))
+                .collect()
+        }),
         description: model.description.clone(),
+    }
+}
+
+/// Substitute variables in a discrete event trigger using scoped reference resolution
+///
+/// # Arguments
+///
+/// * `trigger` - The discrete event trigger to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+/// * `context` - Scoped context for hierarchical resolution
+///
+/// # Returns
+///
+/// * New discrete event trigger with substitutions applied using scoped resolution
+pub fn substitute_in_discrete_event_trigger_with_context(
+    trigger: &DiscreteEventTrigger,
+    substitutions: &std::collections::HashMap<String, Expr>,
+    context: &ScopedContext
+) -> DiscreteEventTrigger {
+    match trigger {
+        DiscreteEventTrigger::Condition { expression } => {
+            DiscreteEventTrigger::Condition {
+                expression: substitute_with_context(expression, substitutions, context),
+            }
+        },
+        DiscreteEventTrigger::Periodic { interval, initial_offset } => {
+            // Periodic triggers have no expressions to substitute
+            DiscreteEventTrigger::Periodic {
+                interval: *interval,
+                initial_offset: *initial_offset,
+            }
+        },
+        DiscreteEventTrigger::PresetTimes { times } => {
+            // Preset times have no expressions to substitute
+            DiscreteEventTrigger::PresetTimes {
+                times: times.clone(),
+            }
+        }
+    }
+}
+
+/// Substitute variables in an affect equation using scoped reference resolution
+///
+/// # Arguments
+///
+/// * `affect` - The affect equation to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+/// * `context` - Scoped context for hierarchical resolution
+///
+/// # Returns
+///
+/// * New affect equation with substitutions applied using scoped resolution
+pub fn substitute_in_affect_equation_with_context(
+    affect: &AffectEquation,
+    substitutions: &std::collections::HashMap<String, Expr>,
+    context: &ScopedContext
+) -> AffectEquation {
+    AffectEquation {
+        lhs: affect.lhs.clone(), // LHS is a variable name string, not an expression
+        rhs: substitute_with_context(&affect.rhs, substitutions, context),
+    }
+}
+
+/// Substitute variables in a discrete event using scoped reference resolution
+///
+/// # Arguments
+///
+/// * `event` - The discrete event to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+/// * `context` - Scoped context for hierarchical resolution
+///
+/// # Returns
+///
+/// * New discrete event with substitutions applied using scoped resolution
+pub fn substitute_in_discrete_event_with_context(
+    event: &DiscreteEvent,
+    substitutions: &std::collections::HashMap<String, Expr>,
+    context: &ScopedContext
+) -> DiscreteEvent {
+    DiscreteEvent {
+        name: event.name.clone(),
+        trigger: substitute_in_discrete_event_trigger_with_context(&event.trigger, substitutions, context),
+        affects: event.affects.as_ref().map(|affects| {
+            affects.iter()
+                .map(|affect| substitute_in_affect_equation_with_context(affect, substitutions, context))
+                .collect()
+        }),
+        functional_affect: event.functional_affect.clone(), // TODO: Could also substitute in functional affects if needed
+        discrete_parameters: event.discrete_parameters.clone(),
+        reinitialize: event.reinitialize,
+        description: event.description.clone(),
+    }
+}
+
+/// Substitute variables in a continuous event using scoped reference resolution
+///
+/// # Arguments
+///
+/// * `event` - The continuous event to modify
+/// * `substitutions` - Map from variable names to replacement expressions
+/// * `context` - Scoped context for hierarchical resolution
+///
+/// # Returns
+///
+/// * New continuous event with substitutions applied using scoped resolution
+pub fn substitute_in_continuous_event_with_context(
+    event: &ContinuousEvent,
+    substitutions: &std::collections::HashMap<String, Expr>,
+    context: &ScopedContext
+) -> ContinuousEvent {
+    ContinuousEvent {
+        name: event.name.clone(),
+        conditions: event.conditions.iter()
+            .map(|condition| substitute_with_context(condition, substitutions, context))
+            .collect(),
+        affects: event.affects.iter()
+            .map(|affect| substitute_in_affect_equation_with_context(affect, substitutions, context))
+            .collect(),
+        affect_neg: event.affect_neg.as_ref().map(|affects| {
+            affects.iter()
+                .map(|affect| substitute_in_affect_equation_with_context(affect, substitutions, context))
+                .collect()
+        }),
+        root_find: event.root_find.clone(),
+        reinitialize: event.reinitialize,
+        discrete_parameters: event.discrete_parameters.clone(),
+        priority: event.priority,
+        description: event.description.clone(),
     }
 }
 
@@ -696,6 +960,186 @@ mod tests {
                 }
             },
             _ => panic!("Expected operator expression"),
+        }
+    }
+
+    #[test]
+    fn test_substitute_in_discrete_event() {
+        let mut substitutions = HashMap::new();
+        substitutions.insert("x".to_string(), Expr::Number(10.0));
+        substitutions.insert("y".to_string(), Expr::Variable("z".to_string()));
+
+        // Create a discrete event with condition trigger and affects
+        let event = DiscreteEvent {
+            name: Some("test_event".to_string()),
+            trigger: DiscreteEventTrigger::Condition {
+                expression: Expr::Variable("x".to_string()),
+            },
+            affects: Some(vec![
+                AffectEquation {
+                    lhs: "target".to_string(),
+                    rhs: Expr::Variable("y".to_string()),
+                },
+            ]),
+            functional_affect: None,
+            discrete_parameters: None,
+            reinitialize: None,
+            description: None,
+        };
+
+        let result = substitute_in_discrete_event(&event, &substitutions);
+
+        // Verify trigger expression was substituted
+        match &result.trigger {
+            DiscreteEventTrigger::Condition { expression } => {
+                match expression {
+                    Expr::Number(n) => assert_eq!(*n, 10.0),
+                    _ => panic!("Expected number after substitution"),
+                }
+            },
+            _ => panic!("Expected condition trigger"),
+        }
+
+        // Verify affects expressions were substituted
+        let affects = result.affects.unwrap();
+        assert_eq!(affects.len(), 1);
+        assert_eq!(affects[0].lhs, "target");
+        match &affects[0].rhs {
+            Expr::Variable(name) => assert_eq!(name, "z"),
+            _ => panic!("Expected variable after substitution"),
+        }
+    }
+
+    #[test]
+    fn test_substitute_in_continuous_event() {
+        let mut substitutions = HashMap::new();
+        substitutions.insert("threshold".to_string(), Expr::Number(5.0));
+        substitutions.insert("action_value".to_string(), Expr::Number(100.0));
+
+        // Create a continuous event with conditions and affects
+        let event = ContinuousEvent {
+            name: Some("continuous_test".to_string()),
+            conditions: vec![
+                Expr::Variable("threshold".to_string()),
+            ],
+            affects: vec![
+                AffectEquation {
+                    lhs: "output".to_string(),
+                    rhs: Expr::Variable("action_value".to_string()),
+                },
+            ],
+            affect_neg: None,
+            root_find: None,
+            reinitialize: None,
+            discrete_parameters: None,
+            priority: None,
+            description: None,
+        };
+
+        let result = substitute_in_continuous_event(&event, &substitutions);
+
+        // Verify conditions were substituted
+        assert_eq!(result.conditions.len(), 1);
+        match &result.conditions[0] {
+            Expr::Number(n) => assert_eq!(*n, 5.0),
+            _ => panic!("Expected number after substitution"),
+        }
+
+        // Verify affects were substituted
+        assert_eq!(result.affects.len(), 1);
+        assert_eq!(result.affects[0].lhs, "output");
+        match &result.affects[0].rhs {
+            Expr::Number(n) => assert_eq!(*n, 100.0),
+            _ => panic!("Expected number after substitution"),
+        }
+    }
+
+    #[test]
+    fn test_substitute_in_model_with_events() {
+        use crate::{VariableType, ModelVariable};
+
+        let mut substitutions = HashMap::new();
+        substitutions.insert("param".to_string(), Expr::Number(42.0));
+
+        // Create a model with discrete and continuous events
+        let model = Model {
+            name: Some("TestModel".to_string()),
+            reference: None,
+            variables: {
+                let mut vars = HashMap::new();
+                vars.insert("state_var".to_string(), ModelVariable {
+                    var_type: VariableType::State,
+                    units: Some("m".to_string()),
+                    default: Some(0.0),
+                    description: None,
+                    expression: None,
+                });
+                vars
+            },
+            equations: vec![],
+            discrete_events: Some(vec![DiscreteEvent {
+                name: Some("discrete_test".to_string()),
+                trigger: DiscreteEventTrigger::Condition {
+                    expression: Expr::Variable("param".to_string()),
+                },
+                affects: Some(vec![AffectEquation {
+                    lhs: "state_var".to_string(),
+                    rhs: Expr::Variable("param".to_string()),
+                }]),
+                functional_affect: None,
+                discrete_parameters: None,
+                reinitialize: None,
+                description: None,
+            }]),
+            continuous_events: Some(vec![ContinuousEvent {
+                name: Some("continuous_test".to_string()),
+                conditions: vec![Expr::Variable("param".to_string())],
+                affects: vec![AffectEquation {
+                    lhs: "state_var".to_string(),
+                    rhs: Expr::Variable("param".to_string()),
+                }],
+                affect_neg: None,
+                root_find: None,
+                reinitialize: None,
+                discrete_parameters: None,
+                priority: None,
+                description: None,
+            }]),
+            description: None,
+        };
+
+        let result = substitute_in_model(&model, &substitutions);
+
+        // Verify discrete events were substituted
+        let discrete_events = result.discrete_events.unwrap();
+        assert_eq!(discrete_events.len(), 1);
+        match &discrete_events[0].trigger {
+            DiscreteEventTrigger::Condition { expression } => {
+                match expression {
+                    Expr::Number(n) => assert_eq!(*n, 42.0),
+                    _ => panic!("Expected number after substitution in discrete event trigger"),
+                }
+            },
+            _ => panic!("Expected condition trigger"),
+        }
+
+        let discrete_affects = discrete_events[0].affects.as_ref().unwrap();
+        match &discrete_affects[0].rhs {
+            Expr::Number(n) => assert_eq!(*n, 42.0),
+            _ => panic!("Expected number after substitution in discrete event affect"),
+        }
+
+        // Verify continuous events were substituted
+        let continuous_events = result.continuous_events.unwrap();
+        assert_eq!(continuous_events.len(), 1);
+        match &continuous_events[0].conditions[0] {
+            Expr::Number(n) => assert_eq!(*n, 42.0),
+            _ => panic!("Expected number after substitution in continuous event condition"),
+        }
+
+        match &continuous_events[0].affects[0].rhs {
+            Expr::Number(n) => assert_eq!(*n, 42.0),
+            _ => panic!("Expected number after substitution in continuous event affect"),
         }
     }
 }
