@@ -148,6 +148,90 @@ def evaluate(expr: Expr, bindings: Dict[str, float]) -> float:
                 raise TypeError(f"Cosine requires exactly 1 argument, got {len(arg_values)}")
             import math
             return math.cos(arg_values[0])
+        elif expr.op == "tan":
+            if len(arg_values) != 1:
+                raise TypeError(f"Tangent requires exactly 1 argument, got {len(arg_values)}")
+            import math
+            return math.tan(arg_values[0])
+        elif expr.op == "asin":
+            if len(arg_values) != 1:
+                raise TypeError(f"Arcsine requires exactly 1 argument, got {len(arg_values)}")
+            import math
+            return math.asin(arg_values[0])
+        elif expr.op == "acos":
+            if len(arg_values) != 1:
+                raise TypeError(f"Arccosine requires exactly 1 argument, got {len(arg_values)}")
+            import math
+            return math.acos(arg_values[0])
+        elif expr.op == "atan":
+            if len(arg_values) != 1:
+                raise TypeError(f"Arctangent requires exactly 1 argument, got {len(arg_values)}")
+            import math
+            return math.atan(arg_values[0])
+        elif expr.op == "atan2":
+            if len(arg_values) != 2:
+                raise TypeError(f"Arctangent2 requires exactly 2 arguments, got {len(arg_values)}")
+            import math
+            return math.atan2(arg_values[0], arg_values[1])
+        elif expr.op == "abs":
+            if len(arg_values) != 1:
+                raise TypeError(f"Absolute value requires exactly 1 argument, got {len(arg_values)}")
+            return abs(arg_values[0])
+        elif expr.op == "sign":
+            if len(arg_values) != 1:
+                raise TypeError(f"Sign function requires exactly 1 argument, got {len(arg_values)}")
+            val = arg_values[0]
+            return 1.0 if val > 0 else (-1.0 if val < 0 else 0.0)
+        elif expr.op == "sqrt":
+            if len(arg_values) != 1:
+                raise TypeError(f"Square root requires exactly 1 argument, got {len(arg_values)}")
+            if arg_values[0] < 0:
+                raise ValueError("Square root of negative number")
+            import math
+            return math.sqrt(arg_values[0])
+        elif expr.op == "log10":
+            if len(arg_values) != 1:
+                raise TypeError(f"Log10 requires exactly 1 argument, got {len(arg_values)}")
+            if arg_values[0] <= 0:
+                raise ValueError("Log10 of non-positive number")
+            import math
+            return math.log10(arg_values[0])
+        elif expr.op == "floor":
+            if len(arg_values) != 1:
+                raise TypeError(f"Floor requires exactly 1 argument, got {len(arg_values)}")
+            import math
+            return math.floor(arg_values[0])
+        elif expr.op == "ceil":
+            if len(arg_values) != 1:
+                raise TypeError(f"Ceiling requires exactly 1 argument, got {len(arg_values)}")
+            import math
+            return math.ceil(arg_values[0])
+        elif expr.op == "min":
+            if len(arg_values) < 1:
+                raise TypeError(f"Min requires at least 1 argument, got {len(arg_values)}")
+            return min(arg_values)
+        elif expr.op == "max":
+            if len(arg_values) < 1:
+                raise TypeError(f"Max requires at least 1 argument, got {len(arg_values)}")
+            return max(arg_values)
+        elif expr.op == "and":
+            if len(arg_values) < 2:
+                raise TypeError(f"Logical AND requires at least 2 arguments, got {len(arg_values)}")
+            return float(all(bool(v) for v in arg_values))
+        elif expr.op == "or":
+            if len(arg_values) < 2:
+                raise TypeError(f"Logical OR requires at least 2 arguments, got {len(arg_values)}")
+            return float(any(bool(v) for v in arg_values))
+        elif expr.op == "not":
+            if len(arg_values) != 1:
+                raise TypeError(f"Logical NOT requires exactly 1 argument, got {len(arg_values)}")
+            return float(not bool(arg_values[0]))
+        elif expr.op in ("div", "laplacian"):
+            # Vector operators - for evaluation, we'll return the first argument for now
+            # These are mainly used in symbolic contexts
+            if len(arg_values) != 1:
+                raise TypeError(f"{expr.op.capitalize()} requires exactly 1 argument, got {len(arg_values)}")
+            return arg_values[0]
         else:
             raise TypeError(f"Unsupported operation: {expr.op}")
     else:
@@ -323,6 +407,83 @@ def to_sympy(expr: Expr, symbol_map: Optional[Dict[str, sp.Symbol]] = None) -> s
             if len(sympy_args) != 1:
                 raise TypeError(f"Cosine requires exactly 1 argument, got {len(sympy_args)}")
             return sp.cos(sympy_args[0])
+        elif expr.op == "tan":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Tangent requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.tan(sympy_args[0])
+        elif expr.op == "asin":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Arcsine requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.asin(sympy_args[0])
+        elif expr.op == "acos":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Arccosine requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.acos(sympy_args[0])
+        elif expr.op == "atan":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Arctangent requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.atan(sympy_args[0])
+        elif expr.op == "atan2":
+            if len(sympy_args) != 2:
+                raise TypeError(f"Arctangent2 requires exactly 2 arguments, got {len(sympy_args)}")
+            # Use a custom function to preserve structure when possible
+            return sp.Function('atan2')(sympy_args[0], sympy_args[1])
+        elif expr.op == "abs":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Absolute value requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.Abs(sympy_args[0])
+        elif expr.op == "sign":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Sign function requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.sign(sympy_args[0])
+        elif expr.op == "sqrt":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Square root requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.sqrt(sympy_args[0])
+        elif expr.op == "log10":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Log10 requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.log(sympy_args[0], 10)
+        elif expr.op == "floor":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Floor requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.floor(sympy_args[0])
+        elif expr.op == "ceil":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Ceiling requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.ceiling(sympy_args[0])
+        elif expr.op == "min":
+            if len(sympy_args) < 1:
+                raise TypeError(f"Min requires at least 1 argument, got {len(sympy_args)}")
+            return sp.Min(*sympy_args)
+        elif expr.op == "max":
+            if len(sympy_args) < 1:
+                raise TypeError(f"Max requires at least 1 argument, got {len(sympy_args)}")
+            return sp.Max(*sympy_args)
+        elif expr.op == "and":
+            if len(sympy_args) < 2:
+                raise TypeError(f"Logical AND requires at least 2 arguments, got {len(sympy_args)}")
+            # Use custom function to preserve structure better
+            return sp.Function('and')(*sympy_args)
+        elif expr.op == "or":
+            if len(sympy_args) < 2:
+                raise TypeError(f"Logical OR requires at least 2 arguments, got {len(sympy_args)}")
+            # Use custom function to preserve structure better
+            return sp.Function('or')(*sympy_args)
+        elif expr.op == "not":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Logical NOT requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.Function('not')(sympy_args[0])
+        elif expr.op == "div":
+            # Divergence operator - represent as a function
+            if len(sympy_args) != 1:
+                raise TypeError(f"Divergence requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.Function('div')(sympy_args[0])
+        elif expr.op == "laplacian":
+            # Laplacian operator - represent as a function
+            if len(sympy_args) != 1:
+                raise TypeError(f"Laplacian requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.Function('laplacian')(sympy_args[0])
         elif expr.op == "D" and expr.wrt:
             # Derivative operation
             if len(sympy_args) != 1:
@@ -390,14 +551,62 @@ def from_sympy(sympy_expr: sp.Expr) -> Expr:
         # Exponential
         return ExprNode(op="exp", args=[from_sympy(sympy_expr.args[0])])
     elif isinstance(sympy_expr, sp.log):
-        # Logarithm
-        return ExprNode(op="log", args=[from_sympy(sympy_expr.args[0])])
+        # Logarithm - check if it's log10 or natural log
+        if len(sympy_expr.args) == 2 and sympy_expr.args[1] == 10:
+            return ExprNode(op="log10", args=[from_sympy(sympy_expr.args[0])])
+        else:
+            return ExprNode(op="log", args=[from_sympy(sympy_expr.args[0])])
     elif isinstance(sympy_expr, sp.sin):
         # Sine
         return ExprNode(op="sin", args=[from_sympy(sympy_expr.args[0])])
     elif isinstance(sympy_expr, sp.cos):
         # Cosine
         return ExprNode(op="cos", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'tan':
+        # Tangent
+        return ExprNode(op="tan", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'asin':
+        # Arcsine
+        return ExprNode(op="asin", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'acos':
+        # Arccosine
+        return ExprNode(op="acos", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'atan':
+        # Arctangent
+        return ExprNode(op="atan", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'atan2':
+        # Arctangent2
+        return ExprNode(op="atan2", args=[from_sympy(arg) for arg in sympy_expr.args])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'Abs':
+        # Absolute value
+        return ExprNode(op="abs", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'sign':
+        # Sign function
+        return ExprNode(op="sign", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ in ['sqrt', 'Pow'] and len(sympy_expr.args) == 2 and sympy_expr.args[1] == sp.Rational(1, 2):
+        # Square root (represented as x^(1/2))
+        return ExprNode(op="sqrt", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'floor':
+        # Floor
+        return ExprNode(op="floor", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'ceiling':
+        # Ceiling
+        return ExprNode(op="ceil", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'Min':
+        # Min
+        return ExprNode(op="min", args=[from_sympy(arg) for arg in sympy_expr.args])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'Max':
+        # Max
+        return ExprNode(op="max", args=[from_sympy(arg) for arg in sympy_expr.args])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'And':
+        # Logical AND
+        return ExprNode(op="and", args=[from_sympy(arg) for arg in sympy_expr.args])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'Or':
+        # Logical OR
+        return ExprNode(op="or", args=[from_sympy(arg) for arg in sympy_expr.args])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'Not':
+        # Logical NOT
+        return ExprNode(op="not", args=[from_sympy(sympy_expr.args[0])])
     elif isinstance(sympy_expr, sp.Derivative):
         # Derivative
         expr_arg, wrt_arg = sympy_expr.args[0], sympy_expr.args[1]
@@ -414,11 +623,16 @@ def from_sympy(sympy_expr: sp.Expr) -> Expr:
     elif hasattr(sympy_expr, 'func') and str(sympy_expr.func) == 'Pre':
         # Pre function
         return ExprNode(op="Pre", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, '__class__') and sympy_expr.__class__.__name__ in ['BooleanTrue', 'BooleanFalse']:
+        # Boolean constants - just return as number
+        return float(sympy_expr)
     elif isinstance(sympy_expr, sp.Function):
         # Generic function - check if it's one we know
         func_name = str(sympy_expr.func)
         if func_name == 'Pre':
             return ExprNode(op="Pre", args=[from_sympy(arg) for arg in sympy_expr.args])
+        elif func_name in ['atan2', 'div', 'laplacian']:
+            return ExprNode(op=func_name, args=[from_sympy(arg) for arg in sympy_expr.args])
         else:
             # Unknown function - represent as operation with function name
             return ExprNode(op=func_name, args=[from_sympy(arg) for arg in sympy_expr.args])
