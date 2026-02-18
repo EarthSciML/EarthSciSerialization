@@ -358,17 +358,20 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     # Schema uses config, we use format_options
     format_options = loader_data.get("config", {})
 
-    # Extract variable names from provides
+    # Extract variable names and metadata from provides
     variables = []
+    provides = {}
     if "provides" in loader_data:
         variables = list(loader_data["provides"].keys())
+        provides = loader_data["provides"]
 
     return DataLoader(
         name=name,
         type=loader_type,
         source=source,
         format_options=format_options,
-        variables=variables
+        variables=variables,
+        provides=provides
     )
 
 
