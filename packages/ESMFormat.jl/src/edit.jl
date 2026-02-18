@@ -476,31 +476,41 @@ Combines all components from both files. In case of conflicts, components
 from file_b take precedence.
 """
 function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
-    # Merge dictionaries (file_b takes precedence)
-    merged_models = merge(file_a.models, file_b.models)
-    merged_reaction_systems = merge(file_a.reaction_systems, file_b.reaction_systems)
-    merged_data_loaders = merge(file_a.data_loaders, file_b.data_loaders)
-    merged_operators = merge(file_a.operators, file_b.operators)
+    # Merge dictionaries (file_b takes precedence), handling nothing values
+    merged_models = file_a.models === nothing ? file_b.models :
+                   file_b.models === nothing ? file_a.models :
+                   Base.merge(file_a.models, file_b.models)
+
+    merged_reaction_systems = file_a.reaction_systems === nothing ? file_b.reaction_systems :
+                             file_b.reaction_systems === nothing ? file_a.reaction_systems :
+                             Base.merge(file_a.reaction_systems, file_b.reaction_systems)
+
+    merged_data_loaders = file_a.data_loaders === nothing ? file_b.data_loaders :
+                         file_b.data_loaders === nothing ? file_a.data_loaders :
+                         Base.merge(file_a.data_loaders, file_b.data_loaders)
+
+    merged_operators = file_a.operators === nothing ? file_b.operators :
+                      file_b.operators === nothing ? file_a.operators :
+                      Base.merge(file_a.operators, file_b.operators)
 
     # Combine coupling arrays
     merged_coupling = vcat(file_a.coupling, file_b.coupling)
 
     # Merge other fields (file_b takes precedence)
-    merged_domain = get(file_b, :domain, get(file_a, :domain, nothing))
-    merged_solver = get(file_b, :solver, get(file_a, :solver, nothing))
-    merged_references = vcat(get(file_a, :references, Reference[]), get(file_b, :references, Reference[]))
-    merged_metadata = get(file_b, :metadata, get(file_a, :metadata, nothing))
+    merged_domain = file_b.domain !== nothing ? file_b.domain : file_a.domain
+    merged_solver = file_b.solver !== nothing ? file_b.solver : file_a.solver
+    merged_metadata = file_b.metadata
 
     return EsmFile(
-        merged_models,
-        merged_reaction_systems,
-        merged_data_loaders,
-        merged_operators,
-        merged_coupling,
+        file_b.esm,  # Use file_b's version
+        merged_metadata,
+        models=merged_models,
+        reaction_systems=merged_reaction_systems,
+        data_loaders=merged_data_loaders,
+        operators=merged_operators,
+        coupling=merged_coupling,
         domain=merged_domain,
-        solver=merged_solver,
-        references=merged_references,
-        metadata=merged_metadata
+        solver=merged_solver
     )
 end
 
