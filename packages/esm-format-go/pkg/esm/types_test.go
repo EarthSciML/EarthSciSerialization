@@ -2,6 +2,7 @@ package esm
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -167,6 +168,216 @@ func TestUnmarshalExpression(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestCouplingDeserialization(t *testing.T) {
+	// Test JSON with various coupling types
+	jsonData := `{
+		"esm": "0.1.0",
+		"metadata": {
+			"name": "TestCoupling",
+			"authors": ["Test Author"]
+		},
+		"models": {
+			"model1": {
+				"variables": {"x": {"type": "state"}},
+				"equations": []
+			},
+			"model2": {
+				"variables": {"y": {"type": "state"}},
+				"equations": []
+			}
+		},
+		"coupling": [
+			{
+				"type": "operator_compose",
+				"systems": ["model1", "model2"],
+				"description": "Operator composition coupling"
+			},
+			{
+				"type": "variable_map",
+				"from": "model1",
+				"to": "model2",
+				"transform": "identity",
+				"factor": 1.0
+			},
+			{
+				"type": "couple2",
+				"systems": ["model1", "model2"],
+				"coupletype_pair": ["type1", "type2"],
+				"connector": {
+					"equations": [
+						{
+							"from": "x",
+							"to": "y",
+							"transform": "additive",
+							"expression": 1.0
+						}
+					]
+				}
+			},
+			{
+				"type": "operator_apply",
+				"operator": "test_operator",
+				"description": "Apply operator coupling"
+			}
+		]
+	}`
+
+	// Unmarshal the JSON
+	var esmFile EsmFile
+	err := json.Unmarshal([]byte(jsonData), &esmFile)
+	require.NoError(t, err)
+
+	// Verify we have the right number of coupling entries
+	assert.Len(t, esmFile.Coupling, 4)
+
+	// Check each coupling entry is properly typed
+	operatorCompose, ok := esmFile.Coupling[0].(OperatorComposeCoupling)
+	require.True(t, ok, "First coupling entry should be OperatorComposeCoupling")
+	assert.Equal(t, "operator_compose", operatorCompose.Type)
+	assert.Equal(t, [2]string{"model1", "model2"}, operatorCompose.Systems)
+	assert.Equal(t, "Operator composition coupling", *operatorCompose.Description)
+
+	variableMap, ok := esmFile.Coupling[1].(VariableMapCoupling)
+	require.True(t, ok, "Second coupling entry should be VariableMapCoupling")
+	assert.Equal(t, "variable_map", variableMap.Type)
+	assert.Equal(t, "model1", variableMap.From)
+	assert.Equal(t, "model2", variableMap.To)
+	assert.Equal(t, "identity", variableMap.Transform)
+	require.NotNil(t, variableMap.Factor)
+	assert.Equal(t, 1.0, *variableMap.Factor)
+
+	couple2, ok := esmFile.Coupling[2].(Couple2Coupling)
+	require.True(t, ok, "Third coupling entry should be Couple2Coupling")
+	assert.Equal(t, "couple2", couple2.Type)
+	assert.Equal(t, [2]string{"model1", "model2"}, couple2.Systems)
+	assert.Equal(t, [2]string{"type1", "type2"}, couple2.CoupleTypePair)
+	assert.Len(t, couple2.Connector.Equations, 1)
+
+	operatorApply, ok := esmFile.Coupling[3].(OperatorApplyCoupling)
+	require.True(t, ok, "Fourth coupling entry should be OperatorApplyCoupling")
+	assert.Equal(t, "operator_apply", operatorApply.Type)
+	assert.Equal(t, "test_operator", operatorApply.Operator)
+	assert.Equal(t, "Apply operator coupling", *operatorApply.Description)
+}
+
+func TestCouplingDeserializationErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonData string
+		errorMsg string
+	}{
+		{
+			name: "missing type field",
+			jsonData: `{
+				"esm": "0.1.0",
+				"metadata": {"name": "Test", "authors": ["Test"]},
+				"models": {"model1": {"variables": {"x": {"type": "state"}}, "equations": []}},
+				"coupling": [{"systems": ["model1"]}]
+			}`,
+			errorMsg: "coupling entry missing required 'type' field",
+		},
+		{
+			name: "invalid type field",
+			jsonData: `{
+				"esm": "0.1.0",
+				"metadata": {"name": "Test", "authors": ["Test"]},
+				"models": {"model1": {"variables": {"x": {"type": "state"}}, "equations": []}},
+				"coupling": [{"type": 123}]
+			}`,
+			errorMsg: "coupling entry 'type' field must be a string",
+		},
+		{
+			name: "unknown coupling type",
+			jsonData: `{
+				"esm": "0.1.0",
+				"metadata": {"name": "Test", "authors": ["Test"]},
+				"models": {"model1": {"variables": {"x": {"type": "state"}}, "equations": []}},
+				"coupling": [{"type": "unknown_type"}]
+			}`,
+			errorMsg: "unknown coupling type: unknown_type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var esmFile EsmFile
+			err := json.Unmarshal([]byte(tt.jsonData), &esmFile)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errorMsg)
+		})
+	}
+}
+
+func TestCouplingValidationWithTypedEntries(t *testing.T) {
+	// Test that validation works properly with the new typed coupling entries
+	jsonData := `{
+		"esm": "0.1.0",
+		"metadata": {
+			"name": "TestCouplingValidation",
+			"authors": ["Test Author"]
+		},
+		"models": {
+			"model1": {
+				"variables": {"x": {"type": "state"}},
+				"equations": []
+			},
+			"model2": {
+				"variables": {"y": {"type": "state"}},
+				"equations": []
+			}
+		},
+		"coupling": [
+			{
+				"type": "operator_compose",
+				"systems": ["model1", "model2"]
+			},
+			{
+				"type": "couple2",
+				"systems": ["model1", "model3"],
+				"coupletype_pair": ["type1", "type2"],
+				"connector": {
+					"equations": []
+				}
+			}
+		]
+	}`
+
+	// Unmarshal the JSON
+	var esmFile EsmFile
+	err := json.Unmarshal([]byte(jsonData), &esmFile)
+	require.NoError(t, err)
+
+	// Verify coupling entries are properly typed
+	assert.Len(t, esmFile.Coupling, 2)
+
+	operatorCompose, ok := esmFile.Coupling[0].(OperatorComposeCoupling)
+	require.True(t, ok, "First coupling entry should be OperatorComposeCoupling")
+	assert.Equal(t, "operator_compose", operatorCompose.Type)
+
+	couple2, ok := esmFile.Coupling[1].(Couple2Coupling)
+	require.True(t, ok, "Second coupling entry should be Couple2Coupling")
+	assert.Equal(t, "couple2", couple2.Type)
+
+	// Now test validation - this should detect the reference to non-existent "model3"
+	// We'll test the detailed validation since it should now work properly with typed coupling entries
+	result := Validate(&esmFile)
+
+	// The validation should still work even with typed coupling entries
+	// The validation should find the invalid system reference
+	assert.False(t, result.Valid)
+	assert.NotEmpty(t, result.Messages)
+
+	// Look for the specific error about unknown system
+	foundError := false
+	for _, msg := range result.Messages {
+		if msg.Level == "error" && strings.Contains(msg.Message, "Unknown system 'model3'") {
+			foundError = true
+			break
+		}
+	}
+	assert.True(t, foundError, "Should find error about unknown system 'model3' in coupling")
 }
 
 // Helper function to get string pointers

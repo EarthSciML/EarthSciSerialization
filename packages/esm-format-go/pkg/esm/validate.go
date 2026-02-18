@@ -301,29 +301,64 @@ func validateCouplingReferences(file *EsmFile, result *DetailedValidationResult)
 	for i, coupling := range file.Coupling {
 		basePath := fmt.Sprintf("$.coupling[%d]", i)
 
-		// This would need proper type assertion for different coupling types
-		// For now, we'll do basic validation that we can implement
+		// Now we can use proper type assertions for the typed coupling entries
 		switch c := coupling.(type) {
-		case map[string]interface{}:
-			if cType, ok := c["type"].(string); ok {
-				switch cType {
-				case "operator_compose", "couple2":
-					if systems, ok := c["systems"].([]interface{}); ok && len(systems) == 2 {
-						for j, sys := range systems {
-							if sysName, ok := sys.(string); ok {
-								if !allSystems[sysName] {
-									result.Valid = false
-									result.Messages = append(result.Messages, ValidationMessage{
-										Level:   "error",
-										Message: fmt.Sprintf("Unknown system '%s' in coupling", sysName),
-										Path:    fmt.Sprintf("%s.systems[%d]", basePath, j),
-									})
-								}
-							}
-						}
-					}
+		case OperatorComposeCoupling:
+			for j, sysName := range c.Systems {
+				if !allSystems[sysName] {
+					result.Valid = false
+					result.Messages = append(result.Messages, ValidationMessage{
+						Level:   "error",
+						Message: fmt.Sprintf("Unknown system '%s' in coupling", sysName),
+						Path:    fmt.Sprintf("%s.systems[%d]", basePath, j),
+					})
 				}
 			}
+
+		case Couple2Coupling:
+			for j, sysName := range c.Systems {
+				if !allSystems[sysName] {
+					result.Valid = false
+					result.Messages = append(result.Messages, ValidationMessage{
+						Level:   "error",
+						Message: fmt.Sprintf("Unknown system '%s' in coupling", sysName),
+						Path:    fmt.Sprintf("%s.systems[%d]", basePath, j),
+					})
+				}
+			}
+
+		case VariableMapCoupling:
+			// For variable_map coupling, validate from/to system references
+			if !allSystems[c.From] {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: fmt.Sprintf("Unknown system '%s' in coupling", c.From),
+					Path:    fmt.Sprintf("%s.from", basePath),
+				})
+			}
+			if !allSystems[c.To] {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: fmt.Sprintf("Unknown system '%s' in coupling", c.To),
+					Path:    fmt.Sprintf("%s.to", basePath),
+				})
+			}
+
+		case OperatorApplyCoupling:
+			// For operator_apply coupling, we would need to validate operator references
+			// but that would require checking if the operator exists in the operators section
+			// For now, we'll skip this validation
+
+		default:
+			// Handle the case where coupling is still a map[string]interface{} (shouldn't happen with proper deserialization)
+			result.Valid = false
+			result.Messages = append(result.Messages, ValidationMessage{
+				Level:   "warning",
+				Message: fmt.Sprintf("Coupling entry has unknown type: %T", coupling),
+				Path:    basePath,
+			})
 		}
 	}
 }
