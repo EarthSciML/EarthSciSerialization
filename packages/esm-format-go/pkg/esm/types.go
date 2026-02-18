@@ -334,7 +334,7 @@ type EsmFile struct {
 	ReactionSystems map[string]ReactionSystem `json:"reaction_systems,omitempty"`
 	DataLoaders     map[string]DataLoader     `json:"data_loaders,omitempty"`
 	Operators       map[string]Operator       `json:"operators,omitempty"`
-	Coupling        []interface{}             `json:"coupling,omitempty"` // Will need custom unmarshaling
+	Coupling        []interface{}             `json:"coupling,omitempty"` // Properly deserialized coupling entries
 	Domain          *Domain                   `json:"domain,omitempty"`
 	Solver          *Solver                   `json:"solver,omitempty"`
 }
@@ -538,4 +538,119 @@ func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Custom JSON unmarshaling for EsmFile
+func (esm *EsmFile) UnmarshalJSON(data []byte) error {
+	// Define a temporary struct that matches EsmFile but uses json.RawMessage for coupling
+	type TempEsmFile struct {
+		Esm             string                    `json:"esm"`
+		Metadata        Metadata                  `json:"metadata"`
+		Models          map[string]Model          `json:"models,omitempty"`
+		ReactionSystems map[string]ReactionSystem `json:"reaction_systems,omitempty"`
+		DataLoaders     map[string]DataLoader     `json:"data_loaders,omitempty"`
+		Operators       map[string]Operator       `json:"operators,omitempty"`
+		Coupling        json.RawMessage           `json:"coupling,omitempty"`
+		Domain          *Domain                   `json:"domain,omitempty"`
+		Solver          *Solver                   `json:"solver,omitempty"`
+	}
+
+	var temp TempEsmFile
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// Copy all fields except coupling
+	esm.Esm = temp.Esm
+	esm.Metadata = temp.Metadata
+	esm.Models = temp.Models
+	esm.ReactionSystems = temp.ReactionSystems
+	esm.DataLoaders = temp.DataLoaders
+	esm.Operators = temp.Operators
+	esm.Domain = temp.Domain
+	esm.Solver = temp.Solver
+
+	// Handle coupling array with proper type deserialization
+	if len(temp.Coupling) > 0 && string(temp.Coupling) != "null" {
+		couplingEntries, err := UnmarshalCouplingArray(temp.Coupling)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal coupling: %w", err)
+		}
+		esm.Coupling = couplingEntries
+	}
+
+	return nil
+}
+
+// UnmarshalCouplingArray handles the deserialization of the coupling array
+func UnmarshalCouplingArray(data []byte) ([]interface{}, error) {
+	// First unmarshal as a slice of raw messages
+	var rawEntries []json.RawMessage
+	if err := json.Unmarshal(data, &rawEntries); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal coupling array: %w", err)
+	}
+
+	var result []interface{}
+	for i, rawEntry := range rawEntries {
+		entry, err := UnmarshalCouplingEntry(rawEntry)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal coupling entry at index %d: %w", i, err)
+		}
+		result = append(result, entry)
+	}
+
+	return result, nil
+}
+
+// UnmarshalCouplingEntry handles the deserialization of a single coupling entry
+func UnmarshalCouplingEntry(data []byte) (CouplingEntry, error) {
+	// First, determine the type by unmarshaling into a map
+	var typeMap map[string]interface{}
+	if err := json.Unmarshal(data, &typeMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal coupling entry as map: %w", err)
+	}
+
+	typeVal, ok := typeMap["type"]
+	if !ok {
+		return nil, fmt.Errorf("coupling entry missing required 'type' field")
+	}
+
+	typeStr, ok := typeVal.(string)
+	if !ok {
+		return nil, fmt.Errorf("coupling entry 'type' field must be a string, got %T", typeVal)
+	}
+
+	// Unmarshal into the appropriate concrete type based on the type field
+	switch typeStr {
+	case "operator_compose":
+		var coupling OperatorComposeCoupling
+		if err := json.Unmarshal(data, &coupling); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal OperatorComposeCoupling: %w", err)
+		}
+		return coupling, nil
+
+	case "couple2":
+		var coupling Couple2Coupling
+		if err := json.Unmarshal(data, &coupling); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Couple2Coupling: %w", err)
+		}
+		return coupling, nil
+
+	case "variable_map":
+		var coupling VariableMapCoupling
+		if err := json.Unmarshal(data, &coupling); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal VariableMapCoupling: %w", err)
+		}
+		return coupling, nil
+
+	case "operator_apply":
+		var coupling OperatorApplyCoupling
+		if err := json.Unmarshal(data, &coupling); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal OperatorApplyCoupling: %w", err)
+		}
+		return coupling, nil
+
+	default:
+		return nil, fmt.Errorf("unknown coupling type: %s", typeStr)
+	}
 }
