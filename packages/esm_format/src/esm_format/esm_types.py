@@ -122,7 +122,7 @@ class ContinuousEvent:
 @dataclass
 class DiscreteEventTrigger:
     """Trigger condition for a discrete event."""
-    type: Literal['time', 'condition', 'external']
+    type: Literal['condition', 'periodic', 'preset_times']
     value: Union[float, Expr, str]  # time value, condition expression, or external identifier
 
 
