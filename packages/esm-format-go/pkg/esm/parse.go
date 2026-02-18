@@ -44,10 +44,10 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
-	// Validate using our struct validation
-	if err := esmFile.Validate(); err != nil {
-		return nil, fmt.Errorf("structural validation failed: %w", err)
-	}
+	// According to spec Section 2.1a: load() should succeed for valid JSON that
+	// passes schema validation but fails structural validation. Structural issues
+	// should only be reported by the separate validate() function.
+	// Therefore, we skip the structural validation here.
 
 	return &esmFile, nil
 }
