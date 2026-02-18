@@ -67,6 +67,11 @@ impl Unit {
         self.dimensions == other.dimensions
     }
 
+    /// Check if this unit is dimensionless
+    pub fn is_dimensionless(&self) -> bool {
+        self.dimensions.is_empty()
+    }
+
     /// Multiply two units
     pub fn multiply(&self, other: &Unit) -> Unit {
         let mut dimensions = self.dimensions.clone();

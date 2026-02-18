@@ -2,6 +2,7 @@
 
 use crate::EsmFile;
 use crate::parse::validate_schema;
+use crate::units::{parse_unit, check_dimensional_consistency, Unit, UnitError};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
@@ -371,11 +372,14 @@ fn validate_model(
         });
     }
 
-    // Check that all equation references are defined
+    // Check that all equation references are defined and validate dimensional consistency
     for (eq_idx, equation) in model.equations.iter().enumerate() {
         let eq_path = format!("{}/equations/{}", model_path, eq_idx);
         validate_expression_references(&equation.lhs, &defined_vars, &eq_path, "lhs", eq_idx, errors);
         validate_expression_references(&equation.rhs, &defined_vars, &eq_path, "rhs", eq_idx, errors);
+
+        // Validate dimensional consistency of equation
+        validate_equation_units(equation, &model.variables, &eq_path, eq_idx, _warnings);
     }
 
     // Validate observed variable expressions
@@ -851,7 +855,261 @@ fn validate_scoped_reference(
     }
 }
 
-// Note: This function would be implemented when Operator type has the required fields
+/// Validate dimensional consistency of an equation
+fn validate_equation_units(
+    equation: &crate::Equation,
+    variables: &HashMap<String, crate::ModelVariable>,
+    eq_path: &str,
+    eq_idx: usize,
+    warnings: &mut Vec<String>,
+) {
+    // Get units for LHS and RHS
+    let lhs_unit = get_expression_unit(&equation.lhs, variables);
+    let rhs_unit = get_expression_unit(&equation.rhs, variables);
+
+    // Check if both sides have units defined
+    match (lhs_unit, rhs_unit) {
+        (Ok(lhs), Ok(rhs)) => {
+            // Check dimensional consistency
+            if let Err(unit_error) = check_dimensional_consistency(&lhs, &rhs) {
+                warnings.push(format!(
+                    "Equation {}: {} (in {})",
+                    eq_idx,
+                    unit_error,
+                    eq_path
+                ));
+            }
+        }
+        (Err(e), _) => {
+            warnings.push(format!(
+                "Equation {} LHS: Could not determine units - {} (in {})",
+                eq_idx, e, eq_path
+            ));
+        }
+        (_, Err(e)) => {
+            warnings.push(format!(
+                "Equation {} RHS: Could not determine units - {} (in {})",
+                eq_idx, e, eq_path
+            ));
+        }
+    }
+}
+
+/// Get the dimensional units of an expression
+fn get_expression_unit(
+    expr: &crate::Expr,
+    variables: &HashMap<String, crate::ModelVariable>,
+) -> Result<Unit, UnitError> {
+    match expr {
+        crate::Expr::Variable(var_name) => {
+            // Handle special time variable
+            if var_name == "t" {
+                return parse_unit("s"); // time has units of seconds
+            }
+
+            // Look up variable units
+            if let Some(var) = variables.get(var_name) {
+                if let Some(ref units_str) = var.units {
+                    parse_unit(units_str)
+                } else {
+                    // No units specified, assume dimensionless
+                    Ok(Unit::dimensionless())
+                }
+            } else {
+                // Variable not found, assume dimensionless for built-in functions
+                if is_builtin_function(var_name) {
+                    Ok(Unit::dimensionless())
+                } else {
+                    Err(UnitError::UnknownUnit(format!("Variable: {}", var_name)))
+                }
+            }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers are dimensionless
+            Ok(Unit::dimensionless())
+        }
+        crate::Expr::Operator(op) => {
+            get_operator_unit(op, variables)
+        }
+    }
+}
+
+/// Get the dimensional units of an operator expression
+fn get_operator_unit(
+    op: &crate::ExpressionNode,
+    variables: &HashMap<String, crate::ModelVariable>,
+) -> Result<Unit, UnitError> {
+    match op.op.as_str() {
+        // Arithmetic operations
+        "+" | "-" => {
+            // Addition/subtraction: all operands must have same units
+            if op.args.is_empty() {
+                return Ok(Unit::dimensionless());
+            }
+
+            let first_unit = get_expression_unit(&op.args[0], variables)?;
+            for arg in op.args.iter().skip(1) {
+                let arg_unit = get_expression_unit(arg, variables)?;
+                if !first_unit.is_compatible(&arg_unit) {
+                    return Err(UnitError::DimensionMismatch(format!(
+                        "Incompatible units in {} operation", op.op
+                    )));
+                }
+            }
+            Ok(first_unit)
+        }
+        "*" => {
+            // Multiplication: multiply units
+            let mut result = Unit::dimensionless();
+            for arg in &op.args {
+                let arg_unit = get_expression_unit(arg, variables)?;
+                result = result.multiply(&arg_unit);
+            }
+            Ok(result)
+        }
+        "/" => {
+            // Division: divide units
+            if op.args.len() != 2 {
+                return Err(UnitError::ParseError("Division requires exactly 2 operands".to_string()));
+            }
+            let numerator = get_expression_unit(&op.args[0], variables)?;
+            let denominator = get_expression_unit(&op.args[1], variables)?;
+            Ok(numerator.divide(&denominator))
+        }
+        "^" | "power" => {
+            // Power: raise units to power
+            if op.args.len() != 2 {
+                return Err(UnitError::ParseError("Power requires exactly 2 operands".to_string()));
+            }
+            let base_unit = get_expression_unit(&op.args[0], variables)?;
+
+            // For now, only handle constant integer exponents
+            if let crate::Expr::Number(exp) = &op.args[1] {
+                let exponent = *exp as i32;
+                Ok(base_unit.power(exponent))
+            } else {
+                // For variable exponents, we can't determine units statically
+                Err(UnitError::ParseError("Variable exponents not supported for unit analysis".to_string()))
+            }
+        }
+        "D" => {
+            // Derivative: d/dt has units of [quantity]/[time]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError("Derivative requires at least one argument".to_string()));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+
+            // Check what we're differentiating with respect to
+            if let Some(ref wrt) = op.wrt {
+                if wrt == "t" {
+                    // d/dt: divide by time units
+                    let time_unit = parse_unit("s")?;
+                    Ok(quantity_unit.divide(&time_unit))
+                } else {
+                    // For spatial derivatives, we need to know the coordinate units
+                    // For now, assume length units
+                    let coord_unit = parse_unit("m")?;
+                    Ok(quantity_unit.divide(&coord_unit))
+                }
+            } else {
+                Err(UnitError::ParseError("Derivative missing 'wrt' specification".to_string()))
+            }
+        }
+        "grad" => {
+            // Gradient: has units of [quantity]/[length]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError("Gradient requires at least one argument".to_string()));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+            let length_unit = parse_unit("m")?;
+            Ok(quantity_unit.divide(&length_unit))
+        }
+        "div" => {
+            // Divergence: has units of [quantity]/[length]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError("Divergence requires at least one argument".to_string()));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+            let length_unit = parse_unit("m")?;
+            Ok(quantity_unit.divide(&length_unit))
+        }
+        "laplacian" => {
+            // Laplacian: has units of [quantity]/[length^2]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError("Laplacian requires at least one argument".to_string()));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+            let length_squared = parse_unit("m")?.power(2);
+            Ok(quantity_unit.divide(&length_squared))
+        }
+        // Transcendental functions (typically dimensionless input/output)
+        "exp" | "log" | "log10" | "sin" | "cos" | "tan" |
+        "asin" | "acos" | "atan" | "sqrt" | "abs" | "sign" |
+        "floor" | "ceil" => {
+            // These functions require dimensionless input for mathematical validity
+            if !op.args.is_empty() {
+                let arg_unit = get_expression_unit(&op.args[0], variables)?;
+                if !arg_unit.is_dimensionless() {
+                    return Err(UnitError::DimensionMismatch(format!(
+                        "Function {} requires dimensionless input, got units with dimensions",
+                        op.op
+                    )));
+                }
+            }
+            Ok(Unit::dimensionless())
+        }
+        "min" | "max" => {
+            // Min/max: all operands must have same units
+            if op.args.is_empty() {
+                return Ok(Unit::dimensionless());
+            }
+
+            let first_unit = get_expression_unit(&op.args[0], variables)?;
+            for arg in op.args.iter().skip(1) {
+                let arg_unit = get_expression_unit(arg, variables)?;
+                if !first_unit.is_compatible(&arg_unit) {
+                    return Err(UnitError::DimensionMismatch(format!(
+                        "Incompatible units in {} operation", op.op
+                    )));
+                }
+            }
+            Ok(first_unit)
+        }
+        "ifelse" => {
+            // ifelse(condition, true_val, false_val): condition must be dimensionless,
+            // true_val and false_val must have same units
+            if op.args.len() != 3 {
+                return Err(UnitError::ParseError("ifelse requires exactly 3 arguments".to_string()));
+            }
+
+            let condition_unit = get_expression_unit(&op.args[0], variables)?;
+            if !condition_unit.is_dimensionless() {
+                return Err(UnitError::DimensionMismatch(
+                    "ifelse condition must be dimensionless".to_string()
+                ));
+            }
+
+            let true_unit = get_expression_unit(&op.args[1], variables)?;
+            let false_unit = get_expression_unit(&op.args[2], variables)?;
+
+            if !true_unit.is_compatible(&false_unit) {
+                return Err(UnitError::DimensionMismatch(
+                    "ifelse true and false branches must have compatible units".to_string()
+                ));
+            }
+
+            Ok(true_unit)
+        }
+        _ => {
+            // Unknown operator - assume dimensionless for now
+            Ok(Unit::dimensionless())
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1227,5 +1485,217 @@ mod tests {
         // Should be able to parse it again
         let _reparsed: EsmFile = serde_json::from_str(&serialized)
             .expect("Failed to reparse serialized JSON");
+    }
+
+    #[test]
+    fn test_unit_validation() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with units
+        variables.insert("x".to_string(), ModelVariable {
+            var_type: VariableType::State,
+            units: Some("m".to_string()), // meters
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        });
+
+        // Parameter with units
+        variables.insert("k".to_string(), ModelVariable {
+            var_type: VariableType::Parameter,
+            units: Some("1/s".to_string()), // per second
+            default: Some(0.1),
+            description: None,
+            expression: None,
+        });
+
+        models.insert("test".to_string(), Model {
+            name: Some("Test Model".to_string()),
+            variables,
+            equations: vec![
+                Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Operator(ExpressionNode {
+                        op: "*".to_string(),
+                        args: vec![Expr::Variable("k".to_string()), Expr::Variable("x".to_string())],
+                        wrt: None,
+                        dim: None,
+                    }),
+                }
+            ],
+            discrete_events: None,
+            continuous_events: None,
+            description: None,
+        });
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                version: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should pass validation - units are dimensionally consistent
+        // LHS: d(m)/dt = m/s, RHS: (1/s) * m = m/s
+        assert!(result.is_valid, "Validation should pass: {:?}", result.structural_errors);
+        assert!(result.structural_errors.is_empty());
+        // Unit warnings should be empty since dimensions are consistent
+        assert!(result.unit_warnings.is_empty(), "Unit warnings: {:?}", result.unit_warnings);
+    }
+
+    #[test]
+    fn test_unit_validation_mismatch() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with units
+        variables.insert("x".to_string(), ModelVariable {
+            var_type: VariableType::State,
+            units: Some("m".to_string()), // meters
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        });
+
+        // Parameter with incompatible units
+        variables.insert("k".to_string(), ModelVariable {
+            var_type: VariableType::Parameter,
+            units: Some("kg".to_string()), // mass units (incompatible)
+            default: Some(0.1),
+            description: None,
+            expression: None,
+        });
+
+        models.insert("test".to_string(), Model {
+            name: Some("Test Model".to_string()),
+            variables,
+            equations: vec![
+                Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Variable("k".to_string()), // Just k, not k*x
+                }
+            ],
+            discrete_events: None,
+            continuous_events: None,
+            description: None,
+        });
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                version: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should still be structurally valid (no structural errors)
+        assert!(result.is_valid, "Structural validation should pass");
+        assert!(result.structural_errors.is_empty());
+        // But should have unit warnings
+        assert!(!result.unit_warnings.is_empty(), "Should have unit warnings");
+        assert!(result.unit_warnings[0].contains("Dimension mismatch"), "Should contain dimension mismatch warning");
+    }
+
+    #[test]
+    fn test_transcendental_function_units() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with units (should cause warning when used in exp)
+        variables.insert("x".to_string(), ModelVariable {
+            var_type: VariableType::State,
+            units: Some("m".to_string()), // meters
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        });
+
+        models.insert("test".to_string(), Model {
+            name: Some("Test Model".to_string()),
+            variables,
+            equations: vec![
+                Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Operator(ExpressionNode {
+                        op: "exp".to_string(),
+                        args: vec![Expr::Variable("x".to_string())], // exp(x) where x has units - should warn
+                        wrt: None,
+                        dim: None,
+                    }),
+                }
+            ],
+            discrete_events: None,
+            continuous_events: None,
+            description: None,
+        });
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                version: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should still be structurally valid
+        assert!(result.is_valid, "Structural validation should pass: {:?}", result);
+        assert!(result.structural_errors.is_empty());
+        // But should have unit warnings about exp requiring dimensionless input
+        assert!(!result.unit_warnings.is_empty(), "Should have unit warnings");
+        assert!(result.unit_warnings[0].contains("requires dimensionless input"),
+               "Should warn about dimensionless requirement: {:?}", result.unit_warnings);
     }
 }
