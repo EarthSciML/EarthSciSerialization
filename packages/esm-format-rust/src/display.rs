@@ -824,14 +824,13 @@ impl fmt::Display for EsmFile {
                 writeln!(f, "  Coupling:")?;
                 for (i, entry) in coupling.iter().enumerate() {
                     match entry {
-                        CouplingEntry::OperatorCompose { source, target, .. } => {
-                            writeln!(f, "    {}. operator_compose: {} + {}", i + 1, source, target)?;
-                        },
-                        CouplingEntry::VariableMap { source, target, mappings } => {
-                            for mapping in mappings {
-                                writeln!(f, "    {}. variable_map: {}.{} → {}.{}",
-                                    i + 1, source, mapping.source_var, target, mapping.target_var)?;
+                        CouplingEntry::OperatorCompose { systems, .. } => {
+                            if systems.len() >= 2 {
+                                writeln!(f, "    {}. operator_compose: {} + {}", i + 1, systems[0], systems[1])?;
                             }
+                        },
+                        CouplingEntry::VariableMap { from, to, .. } => {
+                            writeln!(f, "    {}. variable_map: {} → {}", i + 1, from, to)?;
                         },
                         _ => {
                             writeln!(f, "    {}. {:?}", i + 1, entry)?;
