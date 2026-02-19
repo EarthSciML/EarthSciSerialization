@@ -514,8 +514,10 @@ function validate_reaction_consistency(rs::ReactionSystem, path::String)::Vector
         reaction_path = "$path.reactions[$i]"
 
         # Check substrates (reactants) are declared species
-        if reaction.substrates !== nothing
-            for entry in reaction.substrates
+        # Use getfield to access the actual Vector{StoichiometryEntry} instead of backward-compatibility Dict
+        substrates_field = getfield(reaction, :substrates)
+        if substrates_field !== nothing
+            for entry in substrates_field
                 if entry.species ∉ species_names
                     push!(errors, StructuralError(
                         "$reaction_path.substrates",
@@ -536,8 +538,10 @@ function validate_reaction_consistency(rs::ReactionSystem, path::String)::Vector
         end
 
         # Check products are declared species
-        if reaction.products !== nothing
-            for entry in reaction.products
+        # Use getfield to access the actual Vector{StoichiometryEntry} instead of backward-compatibility Dict
+        products_field = getfield(reaction, :products)
+        if products_field !== nothing
+            for entry in products_field
                 if entry.species ∉ species_names
                     push!(errors, StructuralError(
                         "$reaction_path.products",
@@ -558,8 +562,8 @@ function validate_reaction_consistency(rs::ReactionSystem, path::String)::Vector
         end
 
         # Check for null-null reaction (no reactants and no products)
-        has_substrates = reaction.substrates !== nothing && !isempty(reaction.substrates)
-        has_products = reaction.products !== nothing && !isempty(reaction.products)
+        has_substrates = substrates_field !== nothing && !isempty(substrates_field)
+        has_products = products_field !== nothing && !isempty(products_field)
         if !has_substrates && !has_products
             push!(errors, StructuralError(
                 reaction_path,
