@@ -39,7 +39,7 @@ export declare function validateSchema(data: unknown): SchemaError[];
  *
  * @param input - JSON string or pre-parsed JavaScript object
  * @returns Typed EsmFile object
- * @throws {ParseError} When JSON parsing fails
+ * @throws {ParseError} When JSON parsing fails or version is incompatible
  * @throws {SchemaValidationError} When schema validation fails
  */
 export declare function load(input: string | object): EsmFile;
