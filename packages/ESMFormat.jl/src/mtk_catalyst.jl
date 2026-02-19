@@ -107,7 +107,7 @@ function create_real_mtk_system(model::Model, name::String, advanced_features::B
         if model_var.type == StateVariable
             # Create state variable with time dependency
             @eval @variables $(var_symbol)(t)
-            var_sym = @eval $(var_symbol)(t)
+            var_sym = @eval $(var_symbol)
             symbolic_vars[var_name] = var_sym
             push!(states, var_sym)
 
@@ -123,7 +123,7 @@ function create_real_mtk_system(model::Model, name::String, advanced_features::B
             try
                 obs_expr = esm_to_symbolic_enhanced(model_var.expression, symbolic_vars, advanced_features)
                 @eval @variables $(var_symbol)(t)
-                var_sym = @eval $(var_symbol)(t)
+                var_sym = @eval $(var_symbol)
                 observed_eq = var_sym ~ obs_expr
                 push!(observed, observed_eq)
                 symbolic_vars[var_name] = var_sym
