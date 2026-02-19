@@ -78,103 +78,166 @@ end
 Create a real ModelingToolkit ODESystem from an ESM model.
 """
 function create_real_mtk_system(model::Model, name::String, advanced_features::Bool)
-    # Import required symbols into current scope
+    # Import required symbols into current scope - use the same approach as the working mtk.jl
     @eval using ModelingToolkit: @variables, @parameters, ODESystem, Differential, Equation
-    @eval using Symbolics: Num, variable
+    @eval using Symbolics: Num
 
     # Create time variable
     @eval @variables t
     t_sym = @eval t
 
-    # Enhanced variable processing with metadata preservation
-    symbolic_vars = Dict{String, Any}()
+    # Create symbolic variables for each model variable
     states = []
     parameters = []
     observed = []
-    variable_metadata = Dict{String, Any}()
+    var_dict = Dict{String, Any}()
 
-    # Process model variables with comprehensive metadata handling
     for (var_name, model_var) in model.variables
-        var_symbol = Symbol(var_name)
-
-        # Store metadata for advanced features
-        variable_metadata[var_name] = Dict(
-            "description" => getfield(model_var, :description),
-            "units" => getfield(model_var, :units),
-            "default" => getfield(model_var, :default)
-        )
-
         if model_var.type == StateVariable
-            # Create state variable with time dependency
+            # Create state variable as function of time
+            var_symbol = Symbol(var_name)
             @eval @variables $(var_symbol)(t)
-            var_sym = @eval $(var_symbol)
-            symbolic_vars[var_name] = var_sym
-            push!(states, var_sym)
-
+            sym_var = @eval $(var_symbol)
+            push!(states, sym_var)
+            var_dict[var_name] = sym_var
         elseif model_var.type == ParameterVariable
             # Create parameter
-            @eval @parameters $(var_symbol)
-            var_sym = @eval $(var_symbol)
-            symbolic_vars[var_name] = var_sym
-            push!(parameters, var_sym)
-
-        elseif model_var.type == ObservedVariable && model_var.expression !== nothing
-            # Create observed variable with enhanced expression conversion
-            try
-                obs_expr = esm_to_symbolic_enhanced(model_var.expression, symbolic_vars, advanced_features)
+            @eval @parameters $(Symbol(var_name))
+            param_var = @eval $(Symbol(var_name))
+            push!(parameters, param_var)
+            var_dict[var_name] = param_var
+        elseif model_var.type == ObservedVariable
+            if model_var.expression !== nothing
+                # Create observed variable with expression - use basic conversion for now
+                expr_sym = esm_to_mtk_expr(model_var.expression, var_dict, t_sym)
+                var_symbol = Symbol(var_name)
                 @eval @variables $(var_symbol)(t)
-                var_sym = @eval $(var_symbol)
-                observed_eq = var_sym ~ obs_expr
-                push!(observed, observed_eq)
-                symbolic_vars[var_name] = var_sym
-            catch e
-                @warn "Failed to convert observed variable $var_name: $e"
+                obs_var = @eval $(var_symbol)
+                push!(observed, obs_var)
+                var_dict[var_name] = obs_var
             end
         end
     end
 
-    # Enhanced equation processing
-    equations = []
-    for (i, eq) in enumerate(model.equations)
+    # Convert equations using the working esm_to_mtk_expr function
+    eqs = []
+    for equation in model.equations
+        lhs = esm_to_mtk_expr(equation.lhs, var_dict, t_sym)
+        rhs = esm_to_mtk_expr(equation.rhs, var_dict, t_sym)
+
+        # Create MTK equation
+        mtk_eq = @eval Equation($lhs, $rhs)
+        push!(eqs, mtk_eq)
+    end
+
+    # Process events using simplified approach for now
+    continuous_callbacks = []
+    discrete_callbacks = []
+
+    # Process continuous events
+    for event in model.continuous_events
         try
-            lhs_symbolic = esm_to_symbolic_enhanced(eq.lhs, symbolic_vars, advanced_features)
-            rhs_symbolic = esm_to_symbolic_enhanced(eq.rhs, symbolic_vars, advanced_features)
-            mtk_eq = lhs_symbolic ~ rhs_symbolic
-            push!(equations, mtk_eq)
+            # Convert all conditions to MTK symbolic expressions
+            conditions_mtk = []
+            for condition in event.conditions
+                cond_mtk = esm_to_mtk_expr(condition, var_dict, t_sym)
+                push!(conditions_mtk, cond_mtk)
+            end
+
+            # Convert affects to MTK equations
+            affects_mtk = []
+            for affect in event.affects
+                if haskey(var_dict, affect.lhs)
+                    target_var = var_dict[affect.lhs]
+                    rhs_mtk = esm_to_mtk_expr(affect.rhs, var_dict, t_sym)
+                    affect_eq = @eval Equation($target_var, $rhs_mtk)
+                    push!(affects_mtk, affect_eq)
+                else
+                    @warn "Target variable $(affect.lhs) not found for continuous event affect"
+                end
+            end
+
+            if !isempty(conditions_mtk) && !isempty(affects_mtk)
+                # Use the first condition
+                condition = conditions_mtk[1]
+                @eval using ModelingToolkit: SymbolicContinuousCallback
+                cb = @eval SymbolicContinuousCallback($condition, $affects_mtk)
+                push!(continuous_callbacks, cb)
+            end
         catch e
-            @warn "Failed to convert equation $i: $e"
+            @warn "Failed to process continuous event: $e"
         end
     end
 
-    # Enhanced event processing - combine both event types
-    all_events = vcat(Vector{EventType}(model.discrete_events), Vector{EventType}(model.continuous_events))
-    continuous_events, discrete_events = process_events_enhanced(all_events, symbolic_vars, advanced_features)
+    # Process discrete events
+    for event in model.discrete_events
+        try
+            # Convert affects to MTK equations
+            affects_mtk = []
+            for affect in event.affects
+                if affect isa FunctionalAffect && haskey(var_dict, affect.target)
+                    target_var = var_dict[affect.target]
+                    rhs_mtk = esm_to_mtk_expr(affect.expression, var_dict, t_sym)
 
-    # Create the ODESystem with appropriate components
-    sys_name = Symbol(name)
-    system_kwargs = Dict(:name => sys_name)
+                    # Handle different operation types
+                    if affect.operation == "set"
+                        affect_eq = @eval Equation($target_var, $rhs_mtk)
+                    elseif affect.operation == "add"
+                        affect_eq = @eval Equation($target_var, $target_var + $rhs_mtk)
+                    elseif affect.operation == "multiply"
+                        affect_eq = @eval Equation($target_var, $target_var * $rhs_mtk)
+                    else
+                        # Default to set operation
+                        affect_eq = @eval Equation($target_var, $rhs_mtk)
+                    end
+                    push!(affects_mtk, affect_eq)
+                else
+                    @warn "Target variable not found for discrete event affect"
+                end
+            end
 
-    if !isempty(observed)
-        system_kwargs[:observed] = observed
+            if !isempty(affects_mtk)
+                @eval using ModelingToolkit: SymbolicDiscreteCallback
+
+                if event.trigger isa ConditionTrigger
+                    # Condition-based discrete event
+                    condition = esm_to_mtk_expr(event.trigger.expression, var_dict, t_sym)
+                    cb = @eval SymbolicDiscreteCallback($condition, $affects_mtk)
+                    push!(discrete_callbacks, cb)
+                elseif event.trigger isa PeriodicTrigger
+                    # Periodic discrete event
+                    period = event.trigger.period
+                    cb = @eval SymbolicDiscreteCallback($period, $affects_mtk)
+                    push!(discrete_callbacks, cb)
+                elseif event.trigger isa PresetTimesTrigger
+                    # Preset times trigger - use first time as trigger
+                    if !isempty(event.trigger.times)
+                        first_time = event.trigger.times[1]
+                        cb = @eval SymbolicDiscreteCallback($first_time, $affects_mtk)
+                        push!(discrete_callbacks, cb)
+                    end
+                else
+                    @warn "Unknown discrete event trigger type: $(typeof(event.trigger))"
+                end
+            end
+        catch e
+            @warn "Failed to process discrete event: $e"
+        end
     end
 
-    if !isempty(continuous_events)
-        system_kwargs[:continuous_events] = continuous_events
+    # Create ODESystem with events if any exist
+    system_kwargs = Dict(:name => Symbol(name))
+    if !isempty(continuous_callbacks)
+        system_kwargs[:continuous_events] = continuous_callbacks
+    end
+    if !isempty(discrete_callbacks)
+        system_kwargs[:discrete_events] = discrete_callbacks
     end
 
-    if !isempty(discrete_events)
-        system_kwargs[:discrete_events] = discrete_events
-    end
+    # Use @eval to create the system in the proper scope
+    system = @eval ODESystem($eqs, $t_sym, $states, $parameters; $(system_kwargs...))
 
-    # Build the system
-    sys = ModelingToolkit.ODESystem(equations, t, states, parameters; system_kwargs...)
-
-    # Apply advanced features if requested
-    if advanced_features
-        sys = apply_advanced_mtk_features(sys, variable_metadata)
-    end
-
-    return sys
+    return system
 end
 
 """
@@ -1358,6 +1421,7 @@ function parse_species_list(species_str::String)
 
     return species_dict
 end
+
 
 # Keep compatibility aliases for existing tests
 const esm_to_mock_symbolic = esm_to_symbolic_enhanced
