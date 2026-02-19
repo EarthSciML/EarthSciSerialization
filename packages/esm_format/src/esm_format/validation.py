@@ -661,8 +661,8 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
             if not reaction.reactants and not reaction.products:
                 structural_errors.append(ValidationError(
                     path=reaction_path,
-                    message=f"Invalid reaction '{reaction.name}': both substrates and products are empty",
-                    code="null_null_reaction",
+                    message=f"Reaction has both substrates: null and products: null",
+                    code=ErrorCode.NULL_REACTION.value,
                     details={"reaction_name": reaction.name}
                 ))
 
@@ -843,8 +843,8 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
                 if affect.lhs not in all_variables:
                     structural_errors.append(ValidationError(
                         path=f"{affect_path}/lhs",
-                        message=f"Affect target variable '{affect.lhs}' not declared",
-                        code="undeclared_affect_variable",
+                        message=f"Variable '{affect.lhs}' in event affects/conditions is not declared",
+                        code=ErrorCode.EVENT_VAR_UNDECLARED.value,
                         details={"variable": affect.lhs, "available_variables": sorted(list(all_variables))}
                     ))
             elif hasattr(affect, 'handler_id'):  # FunctionalAffect
@@ -852,9 +852,9 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
                 if affect.handler_id not in all_operators:
                     structural_errors.append(ValidationError(
                         path=f"{affect_path}/handler_id",
-                        message=f"Functional affect handler '{affect.handler_id}' not declared in operators",
-                        code="undeclared_handler",
-                        details={"handler": affect.handler_id, "available_operators": sorted(list(all_operators))}
+                        message=f"Operator '{affect.handler_id}' is not defined",
+                        code=ErrorCode.UNDEFINED_OPERATOR.value,
+                        details={"operator": affect.handler_id, "available_operators": sorted(list(all_operators))}
                     ))
 
                 # Validate read_vars exist
@@ -862,8 +862,8 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
                     if read_var not in all_variables:
                         structural_errors.append(ValidationError(
                             path=f"{affect_path}/read_vars/{var_idx}",
-                            message=f"Functional affect read variable '{read_var}' not declared",
-                            code="undeclared_read_variable",
+                            message=f"Variable '{read_var}' in event affects/conditions is not declared",
+                            code=ErrorCode.EVENT_VAR_UNDECLARED.value,
                             details={"variable": read_var, "available_variables": sorted(list(all_variables))}
                         ))
 
@@ -896,8 +896,8 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
                     if affect.lhs not in all_variables:
                         structural_errors.append(ValidationError(
                             path=f"{affect_path}/lhs",
-                            message=f"Affect_neg target variable '{affect.lhs}' not declared",
-                            code="undeclared_affect_neg_variable",
+                            message=f"Variable '{affect.lhs}' in event affects/conditions is not declared",
+                            code=ErrorCode.EVENT_VAR_UNDECLARED.value,
                             details={"variable": affect.lhs, "available_variables": sorted(list(all_variables))}
                         ))
                 elif hasattr(affect, 'handler_id'):  # FunctionalAffect
@@ -905,9 +905,9 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
                     if affect.handler_id not in all_operators:
                         structural_errors.append(ValidationError(
                             path=f"{affect_path}/handler_id",
-                            message=f"Affect_neg functional affect handler '{affect.handler_id}' not declared in operators",
-                            code="undeclared_handler",
-                            details={"handler": affect.handler_id, "available_operators": sorted(list(all_operators))}
+                            message=f"Operator '{affect.handler_id}' is not defined",
+                            code=ErrorCode.UNDEFINED_OPERATOR.value,
+                            details={"operator": affect.handler_id, "available_operators": sorted(list(all_operators))}
                         ))
 
                     # Validate read_vars, read_params, modified_params for affect_neg functional affects
@@ -915,8 +915,8 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
                         if read_var not in all_variables:
                             structural_errors.append(ValidationError(
                                 path=f"{affect_path}/read_vars/{var_idx}",
-                                message=f"Affect_neg functional affect read variable '{read_var}' not declared",
-                                code="undeclared_read_variable",
+                                message=f"Variable '{read_var}' in event affects/conditions is not declared",
+                                code=ErrorCode.EVENT_VAR_UNDECLARED.value,
                                 details={"variable": read_var, "available_variables": sorted(list(all_variables))}
                             ))
 
@@ -950,8 +950,8 @@ def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[Valid
                 if discrete_param not in all_parameters:
                     structural_errors.append(ValidationError(
                         path=param_path,
-                        message=f"Discrete parameter '{discrete_param}' not declared in any model or reaction system",
-                        code="undeclared_discrete_parameter",
+                        message=f"Discrete parameter '{discrete_param}' does not match a declared parameter",
+                        code=ErrorCode.INVALID_DISCRETE_PARAM.value,
                         details={"parameter": discrete_param, "available_parameters": sorted(list(all_parameters))}
                     ))
 
