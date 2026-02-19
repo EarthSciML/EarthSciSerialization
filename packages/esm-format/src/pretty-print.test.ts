@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { toUnicode, toLatex, toAscii } from './pretty-print.js'
+import { toUnicode, toLatex, toAscii, toMathML } from './pretty-print.js'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
@@ -104,5 +104,71 @@ describe('Basic expressions', () => {
     expect(toUnicode(expr)).toBe('∂x/∂t')
     expect(toLatex(expr)).toBe('\\frac{\\partial x}{\\partial t}')
     expect(toAscii(expr)).toBe('D(x)/Dt')
+  })
+})
+
+describe('MathML formatting', () => {
+  it('should format numbers correctly', () => {
+    expect(toMathML(42)).toBe('<mn>42</mn>')
+    expect(toMathML(3.14)).toBe('<mn>3.14</mn>')
+  })
+
+  it('should format simple variables correctly', () => {
+    expect(toMathML('x')).toBe('<mi>x</mi>')
+    expect(toMathML('theta')).toBe('<mi>theta</mi>')
+  })
+
+  it('should format chemical formulas correctly', () => {
+    expect(toMathML('O3')).toContain('<mi>O</mi>')
+    expect(toMathML('O3')).toContain('<msub>')
+    expect(toMathML('O3')).toContain('<mn>3</mn>')
+  })
+
+  it('should format simple expressions correctly', () => {
+    const expr = { op: '+', args: ['a', 'b'] }
+    expect(toMathML(expr)).toBe('<mrow><mi>a</mi><mo>+</mo><mi>b</mi></mrow>')
+  })
+
+  it('should format multiplication correctly', () => {
+    const expr = { op: '*', args: ['a', 'b'] }
+    expect(toMathML(expr)).toBe('<mrow><mi>a</mi><mo>&cdot;</mo><mi>b</mi></mrow>')
+  })
+
+  it('should format division correctly', () => {
+    const expr = { op: '/', args: ['a', 'b'] }
+    expect(toMathML(expr)).toBe('<mfrac><mi>a</mi><mi>b</mi></mfrac>')
+  })
+
+  it('should format power correctly', () => {
+    const expr = { op: '^', args: ['x', 3] }
+    expect(toMathML(expr)).toBe('<msup><mi>x</mi><mn>3</mn></msup>')
+  })
+
+  it('should format square root correctly', () => {
+    const expr = { op: 'sqrt', args: ['x'] }
+    expect(toMathML(expr)).toBe('<msqrt><mi>x</mi></msqrt>')
+  })
+
+  it('should format complex expressions correctly', () => {
+    const expr = { op: 'sqrt', args: [{ op: '+', args: [{ op: '^', args: ['x', 2] }, { op: '^', args: ['y', 2] }] }] }
+    const expected = '<msqrt><mrow><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><msup><mi>y</mi><mn>2</mn></msup></mrow></msqrt>'
+    expect(toMathML(expr)).toBe(expected)
+  })
+
+  it('should format derivatives correctly', () => {
+    const expr = { op: 'D', args: ['x'], wrt: 't' }
+    const result = toMathML(expr)
+    expect(result).toContain('<mfrac>')
+    expect(result).toContain('&part;')
+    expect(result).toContain('<mi>x</mi>')
+    expect(result).toContain('<mi>t</mi>')
+  })
+
+  it('should format equations correctly', () => {
+    const equation = { lhs: 'y', rhs: { op: '+', args: ['m', { op: '*', args: ['x', 'b'] }] } }
+    const result = toMathML(equation)
+    expect(result).toContain('<math>')
+    expect(result).toContain('<mo>=</mo>')
+    expect(result).toContain('<mi>y</mi>')
   })
 })

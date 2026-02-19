@@ -358,14 +358,6 @@ function needsParentheses(parent: ExprNode, child: Expr, isRightOperand = false)
   const parentPrec = getOperatorPrecedence(parent.op)
   const childPrec = getOperatorPrecedence(child.op)
 
-  if (childPrec < parentPrec) return true
-  if (childPrec > parentPrec) return false
-
-  // Same precedence: need parens if child is right operand and operator is not associative
-  if (isRightOperand && (parent.op === '-' || parent.op === '/' || parent.op === '^')) {
-    return true
-  }
-
   // Special cases for function arguments - avoid parentheses for simple expressions
   if (['sin', 'cos', 'tan', 'exp', 'log', 'sqrt', 'abs', 'asin', 'acos', 'atan', 'floor', 'ceil', 'sign', 'log10'].includes(parent.op)) {
     // For function arguments, be much more permissive - only parenthesize logical operations
@@ -381,6 +373,14 @@ function needsParentheses(parent: ExprNode, child: Expr, isRightOperand = false)
   // For unary minus, be less aggressive
   if (parent.op === '-' && parent.args.length === 1) {
     return childPrec <= 1
+  }
+
+  if (childPrec < parentPrec) return true
+  if (childPrec > parentPrec) return false
+
+  // Same precedence: need parens if child is right operand and operator is not associative
+  if (isRightOperand && (parent.op === '-' || parent.op === '/' || parent.op === '^')) {
+    return true
   }
 
   return false
@@ -505,6 +505,290 @@ export function toAscii(expr: Expr | Equation | Model | ReactionSystem | EsmFile
   }
 
   throw new Error(`Unsupported expression type: ${typeof expr}`)
+}
+
+/**
+ * Format an expression as MathML markup for web/academic publishing
+ */
+export function toMathML(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
+  if (typeof expr === 'number') {
+    return `<mn>${formatNumber(expr, 'ascii')}</mn>`
+  }
+
+  if (typeof expr === 'string') {
+    return formatMathMLVariable(expr)
+  }
+
+  if ('op' in expr && 'args' in expr) {
+    return formatExpressionNodeMathML(expr as ExprNode)
+  }
+
+  if ('lhs' in expr && 'rhs' in expr) {
+    // Equation
+    const equation = expr as Equation
+    return `<math><mrow>${toMathML(equation.lhs)}<mo>=</mo>${toMathML(equation.rhs)}</mrow></math>`
+  }
+
+  if ('models' in expr || 'metadata' in expr) {
+    // EsmFile - return plain text in MathML text element
+    return `<math><mtext>${formatEsmFileSummary(expr as EsmFile, 'ascii')}</mtext></math>`
+  }
+
+  if ('variables' in expr && 'equations' in expr) {
+    // Model - return plain text in MathML text element
+    return `<math><mtext>${formatModelSummary(expr as Model, 'ascii')}</mtext></math>`
+  }
+
+  if ('species' in expr && 'reactions' in expr) {
+    // ReactionSystem - return plain text in MathML text element
+    return `<math><mtext>${formatReactionSystemSummary(expr as ReactionSystem, 'ascii')}</mtext></math>`
+  }
+
+  throw new Error(`Unsupported expression type: ${typeof expr}`)
+}
+
+/**
+ * Format a variable name with chemical subscripts for MathML
+ */
+function formatMathMLVariable(variable: string): string {
+  // Check if variable looks like a chemical formula (starts with element and has digits)
+  const hasElements = hasElementPattern(variable)
+
+  if (hasElements) {
+    // Pure chemical formula: wrap in <mi> and convert digits to subscripts
+    let result = ''
+    let i = 0
+
+    while (i < variable.length) {
+      let matched = false
+
+      // Try 2-character element first
+      if (i + 1 < variable.length) {
+        const twoChar = variable.slice(i, i + 2)
+        if (ELEMENTS.has(twoChar)) {
+          result += `<mi>${twoChar}</mi>`
+          i += 2
+          // Convert following digits to subscripts
+          if (i < variable.length && /\d/.test(variable[i])) {
+            const digits = variable.slice(i).match(/^\d+/)?.[0] || ''
+            result += `<msub><mi></mi><mn>${digits}</mn></msub>`
+            i += digits.length
+          }
+          matched = true
+        }
+      }
+
+      // Try 1-character element if 2-char didn't match
+      if (!matched && i < variable.length) {
+        const oneChar = variable[i]
+        if (ELEMENTS.has(oneChar)) {
+          result += `<mi>${oneChar}</mi>`
+          i++
+          // Convert following digits to subscripts
+          if (i < variable.length && /\d/.test(variable[i])) {
+            const digits = variable.slice(i).match(/^\d+/)?.[0] || ''
+            result += `<msub><mi></mi><mn>${digits}</mn></msub>`
+            i += digits.length
+          }
+          matched = true
+        }
+      }
+
+      // If not an element, copy character as-is
+      if (!matched) {
+        result += variable[i]
+        i++
+      }
+    }
+
+    return result
+  }
+
+  // Check if it's a mixed variable (non-element prefix + chemical suffix)
+  const chemicalInfo = getChemicalSuffix(variable)
+  if (chemicalInfo) {
+    const { prefix, suffix } = chemicalInfo
+    return `<mi>${prefix}</mi><msub><mi></mi><mrow>${formatMathMLVariable(suffix)}</mrow></msub>`
+  }
+
+  // Regular variable: check for Greek letters
+  const greekConverted = convertGreekLettersToMathML(variable)
+  return `<mi>${greekConverted}</mi>`
+}
+
+/**
+ * Convert Greek letters to MathML entities
+ */
+function convertGreekLettersToMathML(text: string): string {
+  const mathMLGreek: Record<string, string> = {
+    'α': '&alpha;', 'β': '&beta;', 'γ': '&gamma;', 'δ': '&delta;',
+    'ε': '&epsilon;', 'ζ': '&zeta;', 'η': '&eta;', 'θ': '&theta;',
+    'ι': '&iota;', 'κ': '&kappa;', 'λ': '&lambda;', 'μ': '&mu;',
+    'ν': '&nu;', 'ξ': '&xi;', 'ο': '&omicron;', 'π': '&pi;',
+    'ρ': '&rho;', 'σ': '&sigma;', 'τ': '&tau;', 'υ': '&upsilon;',
+    'φ': '&phi;', 'χ': '&chi;', 'ψ': '&psi;', 'ω': '&omega;',
+    'Α': '&Alpha;', 'Β': '&Beta;', 'Γ': '&Gamma;', 'Δ': '&Delta;',
+    'Ε': '&Epsilon;', 'Ζ': '&Zeta;', 'Η': '&Eta;', 'Θ': '&Theta;',
+    'Ι': '&Iota;', 'Κ': '&Kappa;', 'Λ': '&Lambda;', 'Μ': '&Mu;',
+    'Ν': '&Nu;', 'Ξ': '&Xi;', 'Ο': '&Omicron;', 'Π': '&Pi;',
+    'Ρ': '&Rho;', 'Σ': '&Sigma;', 'Τ': '&Tau;', 'Υ': '&Upsilon;',
+    'Φ': '&Phi;', 'Χ': '&Chi;', 'Ψ': '&Psi;', 'Ω': '&Omega;'
+  }
+
+  return text.replace(/[α-ωΑ-Ω]/g, (match) => mathMLGreek[match] || match)
+    .replace(/(?:alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)/g,
+      (match) => mathMLGreek[match] || match)
+}
+
+/**
+ * Format an ExpressionNode for MathML output
+ */
+function formatExpressionNodeMathML(node: ExprNode): string {
+  const { op, args, wrt } = node
+
+  // Helper to format arguments
+  const formatArg = (arg: Expr): string => toMathML(arg)
+
+  // Binary operators
+  if (args.length === 2) {
+    const [left, right] = args
+
+    switch (op) {
+      case '+':
+        return `<mrow>${formatArg(left)}<mo>+</mo>${formatArg(right)}</mrow>`
+
+      case '-':
+        return `<mrow>${formatArg(left)}<mo>-</mo>${formatArg(right)}</mrow>`
+
+      case '*':
+        return `<mrow>${formatArg(left)}<mo>&cdot;</mo>${formatArg(right)}</mrow>`
+
+      case '/':
+        return `<mfrac>${formatArg(left)}${formatArg(right)}</mfrac>`
+
+      case '^':
+        return `<msup>${formatArg(left)}${formatArg(right)}</msup>`
+
+      case '>':
+        return `<mrow>${formatArg(left)}<mo>&gt;</mo>${formatArg(right)}</mrow>`
+
+      case '<':
+        return `<mrow>${formatArg(left)}<mo>&lt;</mo>${formatArg(right)}</mrow>`
+
+      case '>=':
+        return `<mrow>${formatArg(left)}<mo>&geq;</mo>${formatArg(right)}</mrow>`
+
+      case '<=':
+        return `<mrow>${formatArg(left)}<mo>&leq;</mo>${formatArg(right)}</mrow>`
+
+      case '==':
+        return `<mrow>${formatArg(left)}<mo>=</mo>${formatArg(right)}</mrow>`
+
+      case '!=':
+        return `<mrow>${formatArg(left)}<mo>&neq;</mo>${formatArg(right)}</mrow>`
+
+      case 'and':
+        return `<mrow>${formatArg(left)}<mo>&and;</mo>${formatArg(right)}</mrow>`
+
+      case 'or':
+        return `<mrow>${formatArg(left)}<mo>&or;</mo>${formatArg(right)}</mrow>`
+
+      case 'atan2':
+        return `<mrow><mi>atan2</mi><mo>(</mo>${formatArg(left)}<mo>,</mo>${formatArg(right)}<mo>)</mo></mrow>`
+
+      case 'min': case 'max':
+        return `<mrow><mi>${op}</mi><mo>(</mo>${formatArg(left)}<mo>,</mo>${formatArg(right)}<mo>)</mo></mrow>`
+    }
+  }
+
+  // Unary operators
+  if (args.length === 1) {
+    const [arg] = args
+
+    switch (op) {
+      case '-':
+        // Unary minus
+        return `<mrow><mo>-</mo>${formatArg(arg)}</mrow>`
+
+      case 'not':
+        return `<mrow><mo>&not;</mo>${formatArg(arg)}</mrow>`
+
+      case 'exp': case 'sin': case 'cos': case 'tan': case 'asin': case 'acos': case 'atan':
+        return `<mrow><mi>${op}</mi><mo>(</mo>${formatArg(arg)}<mo>)</mo></mrow>`
+
+      case 'log':
+        return `<mrow><mi>ln</mi><mo>(</mo>${formatArg(arg)}<mo>)</mo></mrow>`
+
+      case 'log10':
+        return `<mrow><msub><mi>log</mi><mn>10</mn></msub><mo>(</mo>${formatArg(arg)}<mo>)</mo></mrow>`
+
+      case 'sqrt':
+        return `<msqrt>${formatArg(arg)}</msqrt>`
+
+      case 'abs':
+        return `<mrow><mo>|</mo>${formatArg(arg)}<mo>|</mo></mrow>`
+
+      case 'floor':
+        return `<mrow><mo>&lfloor;</mo>${formatArg(arg)}<mo>&rfloor;</mo></mrow>`
+
+      case 'ceil':
+        return `<mrow><mo>&lceil;</mo>${formatArg(arg)}<mo>&rceil;</mo></mrow>`
+
+      case 'sign':
+        return `<mrow><mi>sgn</mi><mo>(</mo>${formatArg(arg)}<mo>)</mo></mrow>`
+
+      case 'grad':
+        const dim = (node as any).dim || 'x'
+        return `<mfrac><mrow><mo>&part;</mo>${formatArg(arg)}</mrow><mrow><mo>&part;</mo><mi>${dim}</mi></mrow></mfrac>`
+
+      case 'div':
+        return `<mrow><mo>&nabla;</mo><mo>&cdot;</mo>${formatArg(arg)}</mrow>`
+
+      case 'laplacian':
+        return `<mrow><msup><mo>&nabla;</mo><mn>2</mn></msup>${formatArg(arg)}</mrow>`
+
+      case 'Pre':
+        return `<mrow><mi>Pre</mi><mo>(</mo>${formatArg(arg)}<mo>)</mo></mrow>`
+
+      case 'D':
+        // Derivative operator
+        const wrtVar = wrt || 't'
+        return `<mfrac><mrow><mo>&part;</mo>${formatArg(arg)}</mrow><mrow><mo>&part;</mo><mi>${wrtVar}</mi></mrow></mfrac>`
+    }
+  }
+
+  // Ternary and n-ary operators
+  if (args.length >= 3) {
+    switch (op) {
+      case 'ifelse':
+        if (args.length === 3) {
+          const [cond, thenExpr, elseExpr] = args
+          return `<mrow><mi>ifelse</mi><mo>(</mo>${formatArg(cond)}<mo>,</mo>${formatArg(thenExpr)}<mo>,</mo>${formatArg(elseExpr)}<mo>)</mo></mrow>`
+        }
+        break
+
+      case '+':
+        // N-ary addition
+        return `<mrow>${args.map(arg => formatArg(arg)).join('<mo>+</mo>')}</mrow>`
+
+      case '*':
+        // N-ary multiplication
+        return `<mrow>${args.map(arg => formatArg(arg)).join('<mo>&cdot;</mo>')}</mrow>`
+
+      case 'or':
+        // N-ary or
+        return `<mrow>${args.map(arg => formatArg(arg)).join('<mo>&or;</mo>')}</mrow>`
+
+      case 'max':
+        // N-ary max
+        const maxArgList = args.map(arg => formatArg(arg)).join('<mo>,</mo>')
+        return `<mrow><mi>max</mi><mo>(</mo>${maxArgList}<mo>)</mo></mrow>`
+    }
+  }
+
+  // Fallback: function call notation
+  const argList = args.map(arg => formatArg(arg)).join('<mo>,</mo>')
+  return `<mrow><mi>${op}</mi><mo>(</mo>${argList}<mo>)</mo></mrow>`
 }
 
 /**
