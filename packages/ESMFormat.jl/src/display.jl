@@ -4,6 +4,7 @@ Pretty-printing formatters for ESM format expressions, equations, models, and fi
 Implements display methods for various ESM format types:
 - Base.show(io::IO, ::MIME"text/plain", expr::Expr): Unicode display with chemical subscripts
 - Base.show(io::IO, ::MIME"text/latex", expr::Expr): LaTeX mathematical notation
+- Base.show(io::IO, ::MIME"text/ascii", expr::Expr): Plain ASCII mathematical notation
 - Base.show(io::IO, model::Model): Model summary display
 - Base.show(io::IO, esm_file::EsmFile): Structured ESM file summary per spec Section 6.3
 - Base.show(io::IO, reaction_system::ReactionSystem): Chemical reaction notation
@@ -137,6 +138,11 @@ function format_chemical_subscripts(variable::String, format::Symbol)
         end
     end
 
+    if format == :ascii
+        # For ASCII, just return as-is (no special formatting for chemical subscripts)
+        return variable
+    end
+
     if !has_element_pattern(variable)
         # No element pattern found, return as-is
         return variable
@@ -211,8 +217,10 @@ function format_number(num::Real, format::Symbol)
             return "$(mantissa)×10$(to_superscript(string(exponent)))"
         elseif format == :latex
             return "$(mantissa) \\times 10^{$(exponent)}"
+        elseif format == :ascii
+            return "$(mantissa)*10^$(exponent)"
         else
-            return str # Plain scientific notation for ASCII
+            return str # Plain scientific notation for fallback
         end
     else
         # For very large/small numbers, convert to scientific notation manually
@@ -225,6 +233,8 @@ function format_number(num::Real, format::Symbol)
                 return "$(round(mantissa, digits=2))×10$(to_superscript(string(exponent)))"
             elseif format == :latex
                 return "$(round(mantissa, digits=2)) \\times 10^{$(exponent)}"
+            elseif format == :ascii
+                return "$(round(mantissa, digits=2))*10^$(exponent)"
             else
                 return "$(round(mantissa, digits=2))e$(exponent)"
             end
@@ -311,6 +321,15 @@ function Base.show(io::IO, ::MIME"text/latex", expr::Expr)
 end
 
 """
+    Base.show(io::IO, ::MIME"text/ascii", expr::Expr)
+
+ASCII display: plain ASCII mathematical notation with standard operators (*, /, ^).
+"""
+function Base.show(io::IO, ::MIME"text/ascii", expr::Expr)
+    print(io, format_expression_ascii(expr))
+end
+
+"""
     format_expression_unicode(expr::Expr) -> String
 
 Format an expression as Unicode mathematical notation.
@@ -353,6 +372,27 @@ function format_expression_latex(expr::Expr)
 end
 
 """
+    format_expression_ascii(expr::Expr) -> String
+
+Format an expression as plain ASCII mathematical notation.
+"""
+function format_expression_ascii(expr::Expr)
+    if isa(expr, NumExpr)
+        return format_number(expr.value, :ascii)
+    end
+
+    if isa(expr, VarExpr)
+        return format_chemical_subscripts(expr.name, :ascii)
+    end
+
+    if isa(expr, OpExpr)
+        return format_operator_expression(expr, :ascii)
+    end
+
+    throw(ArgumentError("Unsupported expression type: $(typeof(expr))"))
+end
+
+"""
     format_operator_expression(node::OpExpr, format::Symbol) -> String
 
 Format an OpExpr (operator with arguments).
@@ -366,8 +406,12 @@ function format_operator_expression(node::OpExpr, format::Symbol)
     format_arg = function(arg, is_right_operand=false)
         if format == :unicode
             result = format_expression_unicode(arg)
-        else
+        elseif format == :latex
             result = format_expression_latex(arg)
+        elseif format == :ascii
+            result = format_expression_ascii(arg)
+        else
+            throw(ArgumentError("Unsupported format: $format"))
         end
 
         if needs_parentheses(op, arg, is_right_operand)
@@ -397,12 +441,16 @@ function format_operator_expression(node::OpExpr, format::Symbol)
                 return "$(format_arg(left))·$(format_arg(right, true))"
             elseif format == :latex
                 return "$(format_arg(left)) \\cdot $(format_arg(right, true))"
+            elseif format == :ascii
+                return "$(format_arg(left))*$(format_arg(right, true))"
             else
                 return "$(format_arg(left)) * $(format_arg(right, true))"
             end
         elseif op == "/"
             if format == :latex
                 return "\\frac{$(format_expression_latex(left))}{$(format_expression_latex(right))}"
+            elseif format == :ascii
+                return "$(format_arg(left))/$(format_arg(right, true))"
             else
                 return "$(format_arg(left))/$(format_arg(right, true))"
             end
@@ -411,6 +459,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
                 return "$(format_arg(left))^{$(format_expression_latex(right))}"
             elseif format == :unicode && isa(right, NumExpr) && isinteger(right.value)
                 return "$(format_arg(left))$(to_superscript(string(Int(right.value))))"
+            elseif format == :ascii
+                return "$(format_arg(left))^$(format_arg(right, true))"
             else
                 return "$(format_arg(left))^$(format_arg(right, true))"
             end
@@ -483,6 +533,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
                 return "ln($(format_arg(arg)))"
             elseif format == :latex
                 return "\\$op\\left($(format_expression_latex(arg))\\right)"
+            elseif format == :ascii
+                return "log($(format_arg(arg)))"
             else
                 return "$op($(format_arg(arg)))"
             end
@@ -491,6 +543,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
                 return "log₁₀($(format_arg(arg)))"
             elseif format == :latex
                 return "\\log_{10}\\left($(format_expression_latex(arg))\\right)"
+            elseif format == :ascii
+                return "log10($(format_arg(arg)))"
             else
                 return "$op($(format_arg(arg)))"
             end
@@ -499,6 +553,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
                 return "√$(format_arg(arg))"
             elseif format == :latex
                 return "\\sqrt{$(format_expression_latex(arg))}"
+            elseif format == :ascii
+                return "sqrt($(format_arg(arg)))"
             else
                 return "$op($(format_arg(arg)))"
             end
@@ -507,6 +563,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
                 return "|$(format_arg(arg))|"
             elseif format == :latex
                 return "|$(format_expression_latex(arg))|"
+            elseif format == :ascii
+                return "abs($(format_arg(arg)))"
             else
                 return "$op($(format_arg(arg)))"
             end
@@ -518,6 +576,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
                 return "∂$variable/∂$wrt_var"
             elseif format == :latex
                 return "\\frac{\\partial $(format_expression_latex(arg))}{\\partial $wrt_var}"
+            elseif format == :ascii
+                return "d($(format_arg(arg)))/d$wrt_var"
             else
                 return "D($(format_arg(arg)))/D$wrt_var"
             end
@@ -531,7 +591,7 @@ function format_operator_expression(node::OpExpr, format::Symbol)
             return join([format_arg(arg) for arg in args], " + ")
         elseif op == "*"
             # N-ary multiplication
-            sep = format == :unicode ? "·" : (format == :latex ? " \\cdot " : " * ")
+            sep = format == :unicode ? "·" : (format == :latex ? " \\cdot " : (format == :ascii ? "*" : " * "))
             return join([format_arg(arg) for arg in args], sep)
         elseif op == "or"
             # N-ary or
@@ -543,7 +603,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
         elseif op == "max"
             # N-ary max
             arg_list = join([format == :unicode ? format_expression_unicode(arg) :
-                           (format == :latex ? format_expression_latex(arg) : format_arg(arg))
+                           (format == :latex ? format_expression_latex(arg) :
+                           (format == :ascii ? format_expression_ascii(arg) : format_arg(arg)))
                            for arg in args], ", ")
 
             if format == :latex
@@ -556,7 +617,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
 
     # Fallback: function call notation
     arg_list = join([format == :unicode ? format_expression_unicode(arg) :
-                    (format == :latex ? format_expression_latex(arg) : format_arg(arg))
+                    (format == :latex ? format_expression_latex(arg) :
+                    (format == :ascii ? format_expression_ascii(arg) : format_arg(arg)))
                     for arg in args], ", ")
 
     if format == :latex
@@ -611,18 +673,31 @@ function Base.show(io::IO, model::Model)
         println(io, "    $i. $(format_expression_unicode(eq.lhs)) = $(format_expression_unicode(eq.rhs))")
     end
 
-    if length(model.events) > 0
-        println(io, "  Events ($(length(model.events))):")
-        for (i, event) in enumerate(model.events)
-            if isa(event, ContinuousEvent)
-                conditions_str = join([format_expression_unicode(cond) for cond in event.conditions], ", ")
-                affects_str = join(["$(affect.lhs) = $(format_expression_unicode(affect.rhs))" for affect in event.affects], ", ")
-                println(io, "    $i. Continuous: when [$conditions_str] → [$affects_str]")
-            elseif isa(event, DiscreteEvent)
-                trigger_str = "discrete trigger"  # Simplified for now
-                affects_str = join(["$(affect.target) $(affect.operation) $(format_expression_unicode(affect.expression))" for affect in event.affects], ", ")
-                println(io, "    $i. Discrete: $trigger_str → [$affects_str]")
+    # Display discrete events
+    if length(model.discrete_events) > 0
+        println(io, "  Discrete Events ($(length(model.discrete_events))):")
+        for (i, event) in enumerate(model.discrete_events)
+            trigger_str = if isa(event.trigger, ConditionTrigger)
+                "when $(format_expression_unicode(event.trigger.expression))"
+            elseif isa(event.trigger, PeriodicTrigger)
+                "every $(event.trigger.period)s"
+            elseif isa(event.trigger, PresetTimesTrigger)
+                "at times [$(join(event.trigger.times, ", "))]"
+            else
+                "$(typeof(event.trigger))"
             end
+            affects_str = join(["$(affect.target) $(affect.operation) $(format_expression_unicode(affect.expression))" for affect in event.affects], ", ")
+            println(io, "    $i. $trigger_str: $affects_str")
+        end
+    end
+
+    # Display continuous events
+    if length(model.continuous_events) > 0
+        println(io, "  Continuous Events ($(length(model.continuous_events))):")
+        for (i, event) in enumerate(model.continuous_events)
+            conditions_str = join([format_expression_unicode(cond) for cond in event.conditions], ", ")
+            affects_str = join(["$(affect.lhs) = $(format_expression_unicode(affect.rhs))" for affect in event.affects], ", ")
+            println(io, "    $i. when [$conditions_str] → [$affects_str]")
         end
     end
 
@@ -767,4 +842,69 @@ function Base.show(io::IO, reaction_system::ReactionSystem)
             println(io, "    $name")
         end
     end
+end
+
+"""
+    to_ascii(target) -> String
+
+Format target as plain ASCII mathematical notation.
+
+Provides plain ASCII output for expressions, equations, models, reaction systems,
+and ESM files. Uses standard ASCII operators (*, /, ^) and function call notation
+for mathematical functions.
+
+# Arguments
+- `target`: Expression, equation, model, reaction system, or ESM file to format
+
+# Returns
+- Plain ASCII string representation (no Unicode symbols)
+
+# Examples
+```julia
+expr = OpExpr("*", [VarExpr("x"), NumExpr(2.0)])
+to_ascii(expr)  # Returns "x*2"
+
+eq = Equation(VarExpr("y"), OpExpr("+", [VarExpr("x"), NumExpr(1.0)]))
+to_ascii(eq)   # Returns "y = x + 1"
+```
+"""
+function to_ascii(target)
+    if target === nothing
+        return "nothing"
+    end
+
+    if isa(target, Real)
+        return format_number(target, :ascii)
+    end
+
+    if isa(target, String)
+        return format_chemical_subscripts(target, :ascii)
+    end
+
+    if isa(target, Expr)
+        return format_expression_ascii(target)
+    end
+
+    if isa(target, Equation)
+        lhs_str = format_expression_ascii(target.lhs)
+        rhs_str = format_expression_ascii(target.rhs)
+        return "$lhs_str = $rhs_str"
+    end
+
+    if isa(target, Model)
+        # Simple ASCII summary for models
+        return "Model($(length(target.variables)) variables, $(length(target.equations)) equations)"
+    end
+
+    if isa(target, ReactionSystem)
+        # Simple ASCII summary for reaction systems
+        return "ReactionSystem($(length(target.species)) species, $(length(target.reactions)) reactions)"
+    end
+
+    if isa(target, EsmFile)
+        # Simple ASCII summary for ESM files
+        return "ESM v$(target.esm): $(target.metadata.name)"
+    end
+
+    throw(ArgumentError("Unsupported type for ASCII formatting: $(typeof(target))"))
 end

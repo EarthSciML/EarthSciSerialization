@@ -38,6 +38,12 @@ using ESMFormat
         @test ESMFormat.format_chemical_subscripts("CO2", :latex) == "\\mathrm{CO_{2}}"
         @test ESMFormat.format_chemical_subscripts("NH3", :latex) == "\\mathrm{NH_{3}}"
         @test ESMFormat.format_chemical_subscripts("temp", :latex) == "temp"  # Non-chemical variable unchanged
+
+        # Test format_chemical_subscripts for ascii
+        @test ESMFormat.format_chemical_subscripts("H2O", :ascii) == "H2O"   # No subscripts in ASCII
+        @test ESMFormat.format_chemical_subscripts("CO2", :ascii) == "CO2"   # No subscripts in ASCII
+        @test ESMFormat.format_chemical_subscripts("NH3", :ascii) == "NH3"   # No subscripts in ASCII
+        @test ESMFormat.format_chemical_subscripts("temp", :ascii) == "temp" # Non-chemical variable unchanged
     end
 
     @testset "Number Formatting" begin
@@ -111,6 +117,24 @@ using ESMFormat
         # Test LaTeX output
         show(io, "text/latex", num_expr)
         @test String(take!(io)) == "2.5"
+
+        # Test ASCII output
+        show(io, "text/ascii", num_expr)
+        @test String(take!(io)) == "2.5"
+
+        # Test more complex expressions with ASCII MIME type
+        mul_expr = OpExpr("*", ESMFormat.Expr[VarExpr("x"), NumExpr(2.0)])
+        show(io, "text/ascii", mul_expr)
+        @test String(take!(io)) == "x*2"
+
+        pow_expr = OpExpr("^", ESMFormat.Expr[VarExpr("x"), NumExpr(2.0)])
+        show(io, "text/ascii", pow_expr)
+        @test String(take!(io)) == "x^2"
+
+        # Test chemical formula in ASCII (no subscripts)
+        chem_var = VarExpr("H2O")
+        show(io, "text/ascii", chem_var)
+        @test String(take!(io)) == "H2O"  # Plain ASCII, no Unicode subscripts
     end
 
     @testset "Equation Display" begin

@@ -1192,6 +1192,8 @@ end
 Base.getproperty(reaction::Reaction, name::Symbol) = begin
     if name == :reactants
         return get_reactants_dict(reaction)
+    elseif name == :products
+        return get_products_dict(reaction)
     elseif name == :reversible
         return false  # Not supported in new schema
     else
@@ -1203,7 +1205,7 @@ end
 Base.propertynames(::Type{Reaction}, private::Bool=false) = begin
     names = fieldnames(Reaction)
     if private
-        return (names..., :reactants, :reversible)
+        return (names..., :reactants, :products, :reversible)
     else
         return names
     end

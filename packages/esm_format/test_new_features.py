@@ -79,7 +79,7 @@ def test_graph_functionality():
     print("Mermaid format generated successfully")
 
     # Test JSON export
-    json_output = comp_graph.to_json()
+    json_output = comp_graph.to_json_graph()
     print("JSON format generated successfully")
 
     # Test expression graph
