@@ -89,6 +89,10 @@ export type CouplingEvent = CouplingEvent1 & {
      */
     event_type: "continuous" | "discrete";
     /**
+     * Human-readable identifier.
+     */
+    name?: string;
+    /**
      * Condition expressions (zero-crossing for continuous, boolean for discrete).
      */
     conditions?: Expression[];
@@ -117,16 +121,25 @@ export type CouplingEvent = CouplingEvent1 & {
          */
         times: [number, ...number[]];
     };
+    /**
+     * Affect equations. Required unless functional_affect is used.
+     */
     affects?: AffectEquation[];
+    functional_affect?: FunctionalAffect1;
     affect_neg?: null | AffectEquation[];
     discrete_parameters?: string[];
     root_find?: "left" | "right" | "all";
     reinitialize?: boolean;
     description?: string;
-};
+} & CouplingEvent2;
 export type CouplingEvent1 = {
     [k: string]: unknown;
 } & {
+    [k: string]: unknown;
+};
+export type CouplingEvent2 = {
+    [k: string]: unknown;
+} | {
     [k: string]: unknown;
 };
 /**
@@ -629,6 +642,33 @@ export interface CouplingCallback {
         [k: string]: unknown;
     };
     description?: string;
+}
+/**
+ * Registered functional affect handler (alternative to symbolic affects).
+ */
+export interface FunctionalAffect1 {
+    /**
+     * Registered identifier for the affect implementation.
+     */
+    handler_id: string;
+    /**
+     * State variables accessed by the handler.
+     */
+    read_vars: string[];
+    /**
+     * Parameters accessed by the handler.
+     */
+    read_params: string[];
+    /**
+     * Parameters modified by the handler (implicitly discrete parameters).
+     */
+    modified_params?: string[];
+    /**
+     * Handler-specific configuration.
+     */
+    config?: {
+        [k: string]: unknown;
+    };
 }
 /**
  * Spatiotemporal domain specification (DomainInfo).

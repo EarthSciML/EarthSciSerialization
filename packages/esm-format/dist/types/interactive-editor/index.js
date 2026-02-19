@@ -9,9 +9,14 @@
  * and real-time validation capabilities.
  */
 // Core component exports
-export { ExpressionNode as ExpressionNodeComponent } from './ExpressionNode.jsx';
-export { ModelEditor } from './ModelEditor.jsx';
-export { CouplingGraph } from './CouplingGraph.jsx';
+export { ExpressionNode as ExpressionNodeComponent } from './ExpressionNode.tsx';
+export { ModelEditor } from './ModelEditor.tsx';
+export { CouplingGraph } from './CouplingGraph.tsx';
+export { ValidationPanel } from './ValidationPanel.tsx';
+export { FileSummary } from './FileSummary.tsx';
+export { SimulationControls } from './SimulationControls.tsx';
+// Layout components for mathematical typography
+export * from '../layout/index.js';
 // Utility functions for path manipulation
 export const PathUtils = {
     toString: (path) => path.join('.'),

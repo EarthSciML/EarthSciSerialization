@@ -41,6 +41,54 @@ const SUPERSCRIPT_MAP = {
 function toSuperscript(text) {
     return text.split('').map(c => SUPERSCRIPT_MAP[c] || c).join('');
 }
+// Greek letter mapping for LaTeX
+const GREEK_LETTERS = {
+    'alpha': '\\alpha', 'beta': '\\beta', 'gamma': '\\gamma', 'delta': '\\delta',
+    'epsilon': '\\epsilon', 'zeta': '\\zeta', 'eta': '\\eta', 'theta': '\\theta',
+    'iota': '\\iota', 'kappa': '\\kappa', 'lambda': '\\lambda', 'mu': '\\mu',
+    'nu': '\\nu', 'xi': '\\xi', 'omicron': '\\omicron', 'pi': '\\pi',
+    'rho': '\\rho', 'sigma': '\\sigma', 'tau': '\\tau', 'upsilon': '\\upsilon',
+    'phi': '\\phi', 'chi': '\\chi', 'psi': '\\psi', 'omega': '\\omega',
+    'Gamma': '\\Gamma', 'Delta': '\\Delta', 'Theta': '\\Theta', 'Lambda': '\\Lambda',
+    'Xi': '\\Xi', 'Pi': '\\Pi', 'Sigma': '\\Sigma', 'Upsilon': '\\Upsilon',
+    'Phi': '\\Phi', 'Psi': '\\Psi', 'Omega': '\\Omega',
+    // Direct Unicode to LaTeX mappings
+    'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'δ': '\\delta',
+    'ε': '\\epsilon', 'ζ': '\\zeta', 'η': '\\eta', 'θ': '\\theta',
+    'ι': '\\iota', 'κ': '\\kappa', 'λ': '\\lambda', 'μ': '\\mu',
+    'ν': '\\nu', 'ξ': '\\xi', 'ο': '\\omicron', 'π': '\\pi',
+    'ρ': '\\rho', 'σ': '\\sigma', 'τ': '\\tau', 'υ': '\\upsilon',
+    'φ': '\\phi', 'χ': '\\chi', 'ψ': '\\psi', 'ω': '\\omega'
+};
+function convertGreekLetters(text, format) {
+    if (format === 'latex') {
+        // Replace Greek letters with LaTeX commands
+        return text.replace(/[α-ωΑ-Ω]|(?:alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)/g, (match) => GREEK_LETTERS[match] || match);
+    }
+    else if (format === 'unicode') {
+        // Convert named Greek letters to Unicode symbols
+        const unicodeGreek = {
+            'phi': 'φ', 'theta': 'θ', 'gamma': 'γ', 'alpha': 'α', 'beta': 'β',
+            'delta': 'δ', 'epsilon': 'ε', 'zeta': 'ζ', 'eta': 'η', 'iota': 'ι',
+            'kappa': 'κ', 'lambda': 'λ', 'mu': 'μ', 'nu': 'ν', 'xi': 'ξ',
+            'omicron': 'ο', 'pi': 'π', 'rho': 'ρ', 'sigma': 'σ', 'tau': 'τ',
+            'upsilon': 'υ', 'chi': 'χ', 'psi': 'ψ', 'omega': 'ω'
+        };
+        return text.replace(/(?:alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)/g, (match) => unicodeGreek[match] || match);
+    }
+    else if (format === 'ascii') {
+        // Convert Unicode Greek letters to ASCII names
+        const asciiGreek = {
+            'φ': 'phi', 'θ': 'theta', 'γ': 'gamma', 'α': 'alpha', 'β': 'beta',
+            'δ': 'delta', 'ε': 'epsilon', 'ζ': 'zeta', 'η': 'eta', 'ι': 'iota',
+            'κ': 'kappa', 'λ': 'lambda', 'μ': 'mu', 'ν': 'nu', 'ξ': 'xi',
+            'ο': 'omicron', 'π': 'pi', 'ρ': 'rho', 'σ': 'sigma', 'τ': 'tau',
+            'υ': 'upsilon', 'χ': 'chi', 'ψ': 'psi', 'ω': 'omega'
+        };
+        return text.replace(/[α-ωΑ-Ω]/g, (match) => asciiGreek[match] || match);
+    }
+    return text;
+}
 /**
  * Apply element-aware chemical subscript formatting to a variable name.
  * Uses greedy 2-char-before-1-char matching for element detection.
@@ -49,18 +97,47 @@ function formatChemicalSubscripts(variable, format) {
     // Check if variable looks like a chemical formula (starts with element and has digits)
     const hasElements = hasElementPattern(variable);
     if (format === 'latex') {
+        // First check if it's a mixed variable (non-element prefix + chemical suffix)
+        const chemicalInfo = getChemicalSuffix(variable);
+        if (chemicalInfo) {
+            // Split into prefix and chemical part
+            const { prefix, suffix } = chemicalInfo;
+            const chemicalPart = formatChemicalSubscripts(suffix, 'latex');
+            // Remove outer \mathrm{} wrapper but keep the content formatted
+            const innerContent = chemicalPart.replace(/^\\mathrm\{|\}$/g, '');
+            return `${prefix}_{\\mathrm{${innerContent}}}`;
+        }
         if (hasElements) {
-            // Chemical formula: wrap in \mathrm{} and convert digits to subscripts
+            // Pure chemical formula: wrap in \mathrm{} and convert digits to subscripts
             let result = variable;
-            result = result.replace(/(\d+)/g, '_{$1}');
+            result = result.replace(/(\d+)/g, (match, digits) => {
+                // Single digits don't need braces in LaTeX subscripts
+                return digits.length === 1 ? `_${digits}` : `_{${digits}}`;
+            });
             return `\\mathrm{${result}}`;
         }
         else {
-            // Regular variable: return as-is
+            // Regular variable: check if it should be in \mathrm{} (like var2)
+            if (/\d/.test(variable)) {
+                return `\\mathrm{${variable}}`;
+            }
             return variable;
         }
     }
     if (!hasElements) {
+        // Check if it's a mixed variable (non-element prefix + chemical suffix)
+        const chemicalInfo = getChemicalSuffix(variable);
+        if (chemicalInfo) {
+            // Split into prefix and chemical part
+            const { prefix, suffix } = chemicalInfo;
+            const chemicalPart = formatChemicalSubscripts(suffix, 'unicode');
+            // For variables without underscores (like jNO2), don't add underscores
+            if (!variable.includes('_')) {
+                return `${prefix}${chemicalPart}`;
+            }
+            // For variables with underscores (like k_NO_O3), preserve them
+            return `${prefix}_${chemicalPart}`;
+        }
         // No element pattern found, return as-is
         return variable;
     }
@@ -106,44 +183,87 @@ function formatChemicalSubscripts(variable, format) {
     return result;
 }
 /**
+ * Extract chemical formula suffix from a variable name
+ */
+function getChemicalSuffix(variable) {
+    // Handle patterns like k_NO_O3 (with underscore)
+    if (variable.includes('_')) {
+        const parts = variable.split('_');
+        if (parts.length === 2) {
+            const [prefix, suffix] = parts;
+            if (hasElementPattern(suffix) && !hasElementPattern(prefix)) {
+                return { prefix, suffix };
+            }
+        }
+        // For patterns like k_NO_O3, try treating NO_O3 as the chemical part
+        if (parts.length === 3) {
+            const prefix = parts[0];
+            const suffix = parts.slice(1).join('_'); // Keep underscore within chemical formula
+            if (hasElementPattern(suffix) && !hasElementPattern(prefix)) {
+                return { prefix, suffix };
+            }
+        }
+    }
+    // Handle patterns like jNO2 (without underscore)
+    // Try each position to split into non-element prefix and element suffix
+    for (let i = 1; i < variable.length; i++) {
+        const prefix = variable.substring(0, i);
+        const suffix = variable.substring(i);
+        if (hasElementPattern(suffix) && !hasElementPattern(prefix)) {
+            return { prefix, suffix };
+        }
+    }
+    return null;
+}
+/**
  * Check if a variable has element patterns (for chemical formula detection)
+ * Must be PURELY a chemical formula (no non-element characters)
  */
 function hasElementPattern(variable) {
+    // Remove underscores for pure chemical formula check
+    const cleanVariable = variable.replace(/_/g, '');
     let i = 0;
     let hasElement = false;
-    while (i < variable.length) {
+    while (i < cleanVariable.length) {
         // Skip non-alphabetic characters at the start
-        while (i < variable.length && !/[A-Za-z]/.test(variable[i])) {
+        while (i < cleanVariable.length && !/[A-Za-z]/.test(cleanVariable[i])) {
             i++;
         }
-        if (i >= variable.length)
+        if (i >= cleanVariable.length)
             break;
+        let foundElement = false;
         // Try 2-character element first
-        if (i + 1 < variable.length) {
-            const twoChar = variable.slice(i, i + 2);
+        if (i + 1 < cleanVariable.length) {
+            const twoChar = cleanVariable.slice(i, i + 2);
             if (ELEMENTS.has(twoChar)) {
                 hasElement = true;
+                foundElement = true;
                 i += 2;
                 // Skip digits
-                while (i < variable.length && /\d/.test(variable[i])) {
+                while (i < cleanVariable.length && /\d/.test(cleanVariable[i])) {
                     i++;
                 }
                 continue;
             }
         }
         // Try 1-character element
-        const oneChar = variable[i];
-        if (ELEMENTS.has(oneChar)) {
-            hasElement = true;
-            i++;
-            // Skip digits
-            while (i < variable.length && /\d/.test(variable[i])) {
+        if (!foundElement) {
+            const oneChar = cleanVariable[i];
+            if (ELEMENTS.has(oneChar)) {
+                hasElement = true;
+                foundElement = true;
                 i++;
+                // Skip digits
+                while (i < cleanVariable.length && /\d/.test(cleanVariable[i])) {
+                    i++;
+                }
+                continue;
             }
-            continue;
         }
-        // Not an element, move to next character
-        i++;
+        // If we encounter a non-element character, this is not a pure chemical formula
+        if (!foundElement) {
+            return false;
+        }
     }
     return hasElement;
 }
@@ -151,21 +271,32 @@ function hasElementPattern(variable) {
  * Format a number in scientific notation with appropriate formatting
  */
 function formatNumber(num, format) {
-    if (Number.isInteger(num) && Math.abs(num) < 1e6) {
+    // Format according to ESM spec Section 6.1
+    if (num === 0)
+        return '0';
+    const absNum = Math.abs(num);
+    // Use scientific notation for very small or large numbers (spec Section 6.1)
+    if (absNum < 0.01 || absNum >= 10000) {
+        const str = num.toExponential();
+        const [mantissa, exponent] = str.split('e');
+        const cleanMantissa = parseFloat(mantissa).toString(); // Remove trailing zeros
+        const exp = parseInt(exponent);
+        if (format === 'unicode') {
+            return `${cleanMantissa}×10${toSuperscript(exp.toString())}`;
+        }
+        else if (format === 'latex') {
+            return `${cleanMantissa} \\times 10^{${exp}}`;
+        }
+        else {
+            return `${cleanMantissa}e${exp >= 0 ? '+' : ''}${exp}`; // ASCII with explicit sign
+        }
+    }
+    // For integers, show as plain integer
+    if (Number.isInteger(num)) {
         return num.toString();
     }
-    const str = num.toExponential();
-    const [mantissa, exponent] = str.split('e');
-    const exp = parseInt(exponent);
-    if (format === 'unicode') {
-        return `${mantissa}×10${toSuperscript(exp.toString())}`;
-    }
-    else if (format === 'latex') {
-        return `${mantissa} \\times 10^{${exp}}`;
-    }
-    else {
-        return str; // Plain scientific notation for ASCII
-    }
+    // For decimals, use standard notation
+    return num.toString();
 }
 /**
  * Get operator precedence for proper parenthesization
@@ -198,6 +329,20 @@ function needsParentheses(parent, child, isRightOperand = false) {
     }
     const parentPrec = getOperatorPrecedence(parent.op);
     const childPrec = getOperatorPrecedence(child.op);
+    // Special cases for function arguments - avoid parentheses for simple expressions
+    if (['sin', 'cos', 'tan', 'exp', 'log', 'sqrt', 'abs', 'asin', 'acos', 'atan', 'floor', 'ceil', 'sign', 'log10'].includes(parent.op)) {
+        // For function arguments, be much more permissive - only parenthesize logical operations
+        return childPrec <= 1;
+    }
+    // Special case for ifelse function - don't add unnecessary parens to arguments
+    if (parent.op === 'ifelse') {
+        // For function arguments, be much more permissive - only parenthesize logical operations
+        return childPrec <= 1;
+    }
+    // For unary minus, be less aggressive
+    if (parent.op === '-' && parent.args.length === 1) {
+        return childPrec <= 1;
+    }
     if (childPrec < parentPrec)
         return true;
     if (childPrec > parentPrec)
@@ -205,11 +350,6 @@ function needsParentheses(parent, child, isRightOperand = false) {
     // Same precedence: need parens if child is right operand and operator is not associative
     if (isRightOperand && (parent.op === '-' || parent.op === '/' || parent.op === '^')) {
         return true;
-    }
-    // Special cases for function arguments - no parens needed for simple expressions
-    if (['sin', 'cos', 'tan', 'exp', 'log', 'sqrt', 'abs'].includes(parent.op)) {
-        // Only parenthesize for very low precedence operators
-        return childPrec <= 2;
     }
     return false;
 }
@@ -221,7 +361,7 @@ export function toUnicode(expr) {
         return formatNumber(expr, 'unicode');
     }
     if (typeof expr === 'string') {
-        return formatChemicalSubscripts(expr, 'unicode');
+        return convertGreekLetters(formatChemicalSubscripts(expr, 'unicode'), 'unicode');
     }
     if ('op' in expr && 'args' in expr) {
         return formatExpressionNode(expr, 'unicode');
@@ -253,7 +393,8 @@ export function toLatex(expr) {
         return formatNumber(expr, 'latex');
     }
     if (typeof expr === 'string') {
-        return formatChemicalSubscripts(expr, 'latex');
+        const chemicalFormatted = formatChemicalSubscripts(expr, 'latex');
+        return convertGreekLetters(chemicalFormatted, 'latex');
     }
     if ('op' in expr && 'args' in expr) {
         return formatExpressionNode(expr, 'latex');
@@ -285,7 +426,7 @@ export function toAscii(expr) {
         return formatNumber(expr, 'ascii');
     }
     if (typeof expr === 'string') {
-        return expr; // No special formatting for ASCII
+        return convertGreekLetters(expr, 'ascii');
     }
     if ('op' in expr && 'args' in expr) {
         return formatExpressionNode(expr, 'ascii');
@@ -374,14 +515,23 @@ function formatExpressionNode(node, format) {
                 if (format === 'unicode') {
                     return `${formatArg(left)} ≥ ${formatArg(right, true)}`;
                 }
+                else if (format === 'latex') {
+                    return `${formatArg(left)} \\geq ${formatArg(right, true)}`;
+                }
                 return `${formatArg(left)} ${op} ${formatArg(right, true)}`;
             case '<=':
                 if (format === 'unicode') {
                     return `${formatArg(left)} ≤ ${formatArg(right, true)}`;
                 }
+                else if (format === 'latex') {
+                    return `${formatArg(left)} \\leq ${formatArg(right, true)}`;
+                }
                 return `${formatArg(left)} ${op} ${formatArg(right, true)}`;
             case '==':
                 if (format === 'unicode') {
+                    return `${formatArg(left)} = ${formatArg(right, true)}`;
+                }
+                else if (format === 'latex') {
                     return `${formatArg(left)} = ${formatArg(right, true)}`;
                 }
                 return `${formatArg(left)} ${op} ${formatArg(right, true)}`;
@@ -389,15 +539,24 @@ function formatExpressionNode(node, format) {
                 if (format === 'unicode') {
                     return `${formatArg(left)} ≠ ${formatArg(right, true)}`;
                 }
+                else if (format === 'latex') {
+                    return `${formatArg(left)} \\neq ${formatArg(right, true)}`;
+                }
                 return `${formatArg(left)} ${op} ${formatArg(right, true)}`;
             case 'and':
                 if (format === 'unicode') {
                     return `${formatArg(left)} ∧ ${formatArg(right, true)}`;
                 }
+                else if (format === 'latex') {
+                    return `${formatArg(left)} \\land ${formatArg(right, true)}`;
+                }
                 return `${formatArg(left)} and ${formatArg(right, true)}`;
             case 'or':
                 if (format === 'unicode') {
                     return `${formatArg(left)} ∨ ${formatArg(right, true)}`;
+                }
+                else if (format === 'latex') {
+                    return `${formatArg(left)} \\lor ${formatArg(right, true)}`;
                 }
                 return `${formatArg(left)} or ${formatArg(right, true)}`;
             case 'atan2':
@@ -427,13 +586,16 @@ function formatExpressionNode(node, format) {
                 if (format === 'unicode') {
                     return `¬${formatArg(arg)}`;
                 }
+                else if (format === 'latex') {
+                    return `\\neg ${formatArg(arg)}`;
+                }
                 return `not ${formatArg(arg)}`;
             case 'exp':
             case 'sin':
             case 'cos':
             case 'tan':
                 if (format === 'latex') {
-                    return `\\${op}\\left(${toLatex(arg)}\\right)`;
+                    return `\\${op}(${toLatex(arg)})`;
                 }
                 return `${op}(${formatArg(arg)})`;
             case 'log':
@@ -441,7 +603,7 @@ function formatExpressionNode(node, format) {
                     return `ln(${formatArg(arg)})`;
                 }
                 else if (format === 'latex') {
-                    return `\\${op}\\left(${toLatex(arg)}\\right)`;
+                    return `\\ln(${toLatex(arg)})`;
                 }
                 return `${op}(${formatArg(arg)})`;
             case 'log10':
@@ -449,7 +611,7 @@ function formatExpressionNode(node, format) {
                     return `log₁₀(${formatArg(arg)})`;
                 }
                 else if (format === 'latex') {
-                    return `\\log_{10}\\left(${toLatex(arg)}\\right)`;
+                    return `\\log_{10}(${toLatex(arg)})`;
                 }
                 return `${op}(${formatArg(arg)})`;
             case 'sqrt':
@@ -489,7 +651,7 @@ function formatExpressionNode(node, format) {
                     return `sgn(${formatArg(arg)})`;
                 }
                 else if (format === 'latex') {
-                    return `\\text{sgn}\\left(${toLatex(arg)}\\right)`;
+                    return `\\mathrm{sgn}(${toLatex(arg)})`;
                 }
                 return `${op}(${formatArg(arg)})`;
             case 'asin':
@@ -500,7 +662,7 @@ function formatExpressionNode(node, format) {
                     return `${arcName}(${formatArg(arg)})`;
                 }
                 else if (format === 'latex') {
-                    return `\\${op}\\left(${toLatex(arg)}\\right)`;
+                    return `\\${arcName}(${toLatex(arg)})`;
                 }
                 return `${op}(${formatArg(arg)})`;
             case 'grad':
@@ -518,7 +680,7 @@ function formatExpressionNode(node, format) {
                     return `∇·${formatArg(arg)}`;
                 }
                 else if (format === 'latex') {
-                    return `\\nabla \\cdot ${toLatex(arg)}`;
+                    return `\\nabla \\cdot \\mathbf{${toLatex(arg)}}`;
                 }
                 return `${op}(${formatArg(arg)})`;
             case 'laplacian':
@@ -531,7 +693,7 @@ function formatExpressionNode(node, format) {
                 return `${op}(${formatArg(arg)})`;
             case 'Pre':
                 if (format === 'latex') {
-                    return `\\mathrm{Pre}(${toLatex(arg)})`;
+                    return `\\mathrm{Pre}(\\mathrm{${toLatex(arg)}})`;
                 }
                 return `Pre(${formatArg(arg)})`;
             case 'D':
@@ -568,6 +730,9 @@ function formatExpressionNode(node, format) {
                 if (format === 'unicode') {
                     return args.map(arg => formatArg(arg)).join(' ∨ ');
                 }
+                else if (format === 'latex') {
+                    return args.map(arg => formatArg(arg)).join(' \\lor ');
+                }
                 return args.map(arg => formatArg(arg)).join(' or ');
             case 'max':
                 // N-ary max
@@ -600,13 +765,34 @@ function formatExpressionNode(node, format) {
     return `${op}(${argList})`;
 }
 /**
- * Format model summary (implementation placeholder)
+ * Format model summary (implementation per spec Section 6.3)
  */
 function formatModelSummary(model, format) {
-    // This is a placeholder - full implementation would need to format
-    // the model according to spec Section 6.3
-    const name = model.name || 'unnamed'; // name might not be in Model type yet
-    return `Model: ${name} (${model.variables?.length || 0} variables, ${model.equations?.length || 0} equations)`;
+    // Count parameter and state variables
+    const variables = model.variables || {};
+    const parameterCount = Object.values(variables).filter(v => v.type === 'parameter').length;
+    const equationCount = model.equations?.length || 0;
+    // Format equation list
+    const equationLines = [];
+    if (model.equations) {
+        for (const equation of model.equations) {
+            try {
+                const lhsStr = format === 'unicode' ? toUnicode(equation.lhs) : toAscii(equation.lhs);
+                const rhsStr = format === 'unicode' ? toUnicode(equation.rhs) : toAscii(equation.rhs);
+                equationLines.push(`    ${lhsStr} = ${rhsStr}`);
+            }
+            catch (err) {
+                // Fallback for equations that can't be formatted
+                equationLines.push(`    [equation formatting error]`);
+            }
+        }
+    }
+    // Build summary - this matches the spec format for individual models within EsmFile
+    const result = [`(${parameterCount} parameters, ${equationCount} equation${equationCount !== 1 ? 's' : ''})`];
+    if (equationLines.length > 0) {
+        result.push(...equationLines);
+    }
+    return result.join('\n');
 }
 /**
  * Format reaction system summary (implementation placeholder)

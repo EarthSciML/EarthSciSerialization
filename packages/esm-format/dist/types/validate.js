@@ -5,6 +5,7 @@
  * by the conformance test runner across all language implementations.
  */
 import { validateSchema, load } from './parse.js';
+import { validateUnits } from './units.js';
 /**
  * Extract all variable references from an expression
  */
@@ -474,6 +475,7 @@ function convertSchemaError(error) {
 export function validate(data) {
     const schema_errors = [];
     const structural_errors = [];
+    let unit_warnings = [];
     try {
         let parsedData;
         // Parse JSON if string
@@ -491,7 +493,8 @@ export function validate(data) {
                             code: 'json_parse_error',
                             details: { error: error.message }
                         }],
-                    structural_errors: []
+                    structural_errors: [],
+                    unit_warnings: []
                 };
             }
         }
@@ -513,6 +516,8 @@ export function validate(data) {
                     code: err.code,
                     details: err.details
                 })));
+                // Perform unit validation
+                unit_warnings = validateUnits(esmFile);
             }
             catch (e) {
                 const error = e;
@@ -542,13 +547,15 @@ export function validate(data) {
                         error: error.message || String(e)
                     }
                 }],
-            structural_errors: []
+            structural_errors: [],
+            unit_warnings: []
         };
     }
     return {
         is_valid: schema_errors.length === 0 && structural_errors.length === 0,
         schema_errors,
-        structural_errors
+        structural_errors,
+        unit_warnings
     };
 }
 //# sourceMappingURL=validate.js.map

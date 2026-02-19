@@ -1,8 +1,6 @@
 /**
- * Test Setup for SolidJS Components in Vitest
+ * Test Setup for Core Library Tests
  *
- * Configures the testing environment to properly handle SolidJS components
- * in a jsdom environment with proper cleanup and browser-like behavior.
+ * Simple test setup for the core esm-format library without UI dependencies.
  */
-import '@testing-library/jest-dom';
 //# sourceMappingURL=test-setup.d.ts.map

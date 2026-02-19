@@ -147,17 +147,10 @@ function operator_compose(coupled_system::MockCoupledSystem, coupling::CouplingO
     matched_vars = intersect(deps1, translated_deps2)
     @info "Matched variables: $(matched_vars)"
 
-    # Create composed system (placeholder implementation)
+    # Create actual composed system by combining equations
     composed_name = "$(system1_name)_$(system2_name)_composed"
-    # In real implementation, would combine equations by adding RHS terms
-    # For now, just record the composition
-    coupled_system.systems[composed_name] = Dict(
-        "type" => "composed",
-        "system1" => system1_name,
-        "system2" => system2_name,
-        "matched_variables" => matched_vars,
-        "translate" => coupling.translate
-    )
+    composed_system = compose_systems(system1, system2, matched_vars, coupling.translate, composed_name)
+    coupled_system.systems[composed_name] = composed_system
 
     push!(coupled_system.couplings, coupling)
     @info "Created composed system: $(composed_name)"
@@ -219,6 +212,113 @@ function apply_translations(vars::Vector{String}, translate)
     return translated
 end
 
+"""
+    compose_systems(system1, system2, matched_vars, translate, composed_name)
+
+Actually compose two systems by combining equations for matched variables.
+This implements the core operator_compose algorithm:
+1. For each matched variable, combine RHS terms by addition
+2. Preserve unmatched equations from both systems
+3. Create a unified system with merged variables, parameters, and equations
+"""
+function compose_systems(system1, system2, matched_vars, translate, composed_name)
+    if system1 isa MockMTKSystem && system2 isa MockMTKSystem
+        # Combine variables
+        all_states = unique([system1.states; system2.states])
+        all_parameters = unique([system1.parameters; system2.parameters])
+        all_observed = unique([system1.observed_variables; system2.observed_variables])
+
+        # Create equations map for system1
+        equations1_map = Dict{String, String}()
+        for (i, state) in enumerate(system1.states)
+            if i <= length(system1.equations)
+                equations1_map[state] = system1.equations[i]
+            end
+        end
+
+        # Create equations map for system2 (with translation)
+        equations2_map = Dict{String, String}()
+        translated_states = apply_translations(system2.states, translate)
+        for (i, orig_state) in enumerate(system2.states)
+            if i <= length(system2.equations)
+                translated_state = translated_states[i]
+                equations2_map[translated_state] = system2.equations[i]
+            end
+        end
+
+        # Compose equations for matched variables
+        composed_equations = String[]
+        processed_vars = Set{String}()
+
+        # Process matched variables - combine their equations
+        for var in matched_vars
+            if haskey(equations1_map, var) && haskey(equations2_map, var)
+                # Combine RHS terms by addition
+                rhs1 = equations1_map[var]
+                rhs2 = equations2_map[var]
+                combined_eq = "$(var)_composed: $(rhs1) + $(rhs2)"
+                push!(composed_equations, combined_eq)
+                push!(processed_vars, var)
+                @info "Combined equation for $(var): $(combined_eq)"
+            elseif haskey(equations1_map, var)
+                push!(composed_equations, "$(var): $(equations1_map[var])")
+                push!(processed_vars, var)
+            elseif haskey(equations2_map, var)
+                push!(composed_equations, "$(var): $(equations2_map[var])")
+                push!(processed_vars, var)
+            end
+        end
+
+        # Add unmatched equations from both systems
+        for (var, eq) in equations1_map
+            if !(var in processed_vars)
+                push!(composed_equations, "$(var): $(eq)")
+            end
+        end
+
+        for (var, eq) in equations2_map
+            if !(var in processed_vars)
+                push!(composed_equations, "$(var): $(eq)")
+            end
+        end
+
+        # Combine events
+        all_events = [system1.events; system2.events]
+
+        # Create composed metadata
+        composed_metadata = Dict{String, Any}(
+            "composition_source" => "operator_compose",
+            "system1" => system1.name,
+            "system2" => system2.name,
+            "matched_variables" => matched_vars,
+            "translate_mapping" => translate,
+            "composition_time" => try; string(Dates.now()); catch; "unknown"; end,
+            "advanced_features" => system1.advanced_features || system2.advanced_features
+        )
+
+        return MockMTKSystem(
+            composed_name,
+            all_states,
+            all_parameters,
+            all_observed,
+            composed_equations,
+            all_events,
+            composed_metadata,
+            system1.advanced_features || system2.advanced_features
+        )
+    else
+        @warn "Cannot compose non-MockMTKSystem systems: $(typeof(system1)), $(typeof(system2))"
+        return Dict(
+            "type" => "composed_fallback",
+            "system1" => system1,
+            "system2" => system2,
+            "matched_variables" => matched_vars,
+            "translate" => translate,
+            "name" => composed_name
+        )
+    end
+end
+
 # ========================================
 # 2. Couple2 Implementation
 # ========================================
@@ -261,6 +361,97 @@ function couple2(coupled_system::MockCoupledSystem, coupling::CouplingCouple2)
 end
 
 """
+    create_connector_constraint(coupled_system, from_ref, to_ref, transform, systems)
+
+Create an actual coupling constraint from connector equation specification.
+This processes scoped references and applies the specified transform.
+"""
+function create_connector_constraint(coupled_system, from_ref, to_ref, transform, systems)
+    system1_name, system2_name = systems
+
+    # Parse scoped references
+    from_parts = split(from_ref, ".")
+    to_parts = split(to_ref, ".")
+
+    if length(from_parts) != 2 || length(to_parts) != 2
+        throw(ArgumentError("Connector references must be scoped (System.variable): $(from_ref), $(to_ref)"))
+    end
+
+    from_system, from_var = from_parts
+    to_system, to_var = to_parts
+
+    # Validate systems exist
+    if !haskey(coupled_system.systems, from_system)
+        throw(ArgumentError("Source system '$(from_system)' not found"))
+    end
+    if !haskey(coupled_system.systems, to_system)
+        throw(ArgumentError("Target system '$(to_system)' not found"))
+    end
+
+    # Create constraint specification
+    constraint = Dict{String, Any}(
+        "type" => "connector_constraint",
+        "from_system" => from_system,
+        "from_variable" => from_var,
+        "to_system" => to_system,
+        "to_variable" => to_var,
+        "transform" => transform,
+        "created_by" => "couple2"
+    )
+
+    # Apply the transform by modifying the target system
+    target_system = coupled_system.systems[to_system]
+    if target_system isa MockMTKSystem
+        apply_connector_transform(target_system, constraint)
+    else
+        @warn "Cannot apply connector constraint to non-MockMTKSystem: $(typeof(target_system))"
+    end
+
+    return constraint
+end
+
+"""
+    apply_connector_transform(system, constraint)
+
+Apply a connector transform to modify equations in the target system.
+"""
+function apply_connector_transform(system::MockMTKSystem, constraint)
+    transform = constraint["transform"]
+    from_var = constraint["from_variable"]
+    to_var = constraint["to_variable"]
+    from_system = constraint["from_system"]
+
+    # Find the equation index for the target variable
+    target_var_idx = findfirst(==(to_var), system.states)
+    if target_var_idx === nothing
+        @warn "Target variable $(to_var) not found in system states"
+        return
+    end
+
+    if target_var_idx <= length(system.equations)
+        current_eq = system.equations[target_var_idx]
+
+        # Apply transform to modify the equation
+        if transform == "additive"
+            # Add the source variable to the RHS
+            modified_eq = "$(current_eq) + $(from_system).$(from_var)"
+        elseif transform == "multiplicative"
+            # Multiply the RHS by the source variable
+            modified_eq = "($(current_eq)) * $(from_system).$(from_var)"
+        elseif transform == "replacement"
+            # Replace the RHS with the source variable
+            modified_eq = "$(from_system).$(from_var)"
+        else
+            @warn "Unknown transform type: $(transform)"
+            modified_eq = current_eq
+        end
+
+        system.equations[target_var_idx] = modified_eq
+        @info "Modified equation for $(to_var): $(modified_eq)"
+    end
+end
+
+"""
     process_connector_equation(coupled_system, equation, systems)
 
 Process a single connector equation, resolving scoped references and applying transforms.
@@ -277,10 +468,14 @@ function process_connector_equation(coupled_system, equation, systems)
 
     @info "Connector equation: $(from_ref) -> $(to_ref) [$(transform)]"
 
-    # In a real implementation, would:
-    # 1. Resolve scoped references (e.g., "System1.var" -> actual variable)
-    # 2. Apply transform (additive, multiplicative, replacement)
-    # 3. Create coupling constraint in the coupled system
+    # Actually process the connector equation
+    try
+        # Create a coupling constraint between the systems
+        constraint = create_connector_constraint(coupled_system, from_ref, to_ref, transform, systems)
+        @info "Created connector constraint: $(constraint)"
+    catch e
+        @error "Failed to create connector constraint: $(e)"
+    end
 end
 
 # ========================================
@@ -328,28 +523,166 @@ Apply the specified transform operation between variables.
 function apply_variable_transform(coupled_system, from_resolution, to_resolution, coupling)
     transform = coupling.transform
 
+    # Actually create coupling constraints based on transform type
+    constraint = create_variable_mapping_constraint(coupled_system, from_resolution, to_resolution, coupling)
+    @info "Created variable mapping constraint: $(constraint)"
+end
+
+"""
+    create_variable_mapping_constraint(coupled_system, from_resolution, to_resolution, coupling)
+
+Create an actual variable mapping constraint that modifies the coupled system.
+"""
+function create_variable_mapping_constraint(coupled_system, from_resolution, to_resolution, coupling)
+    transform = coupling.transform
+
+    # Create constraint specification
+    constraint = Dict{String, Any}(
+        "type" => "variable_mapping",
+        "from_system_path" => join(from_resolution.system_path, "."),
+        "from_variable" => from_resolution.variable_name,
+        "to_system_path" => join(to_resolution.system_path, "."),
+        "to_variable" => to_resolution.variable_name,
+        "transform" => transform,
+        "created_by" => "variable_map"
+    )
+
+    # Apply the transform to the coupled system
     if transform == "param_to_var"
-        @info "Transform: promoting parameter $(to_resolution.variable_name) to shared variable"
-        # In real implementation: promote parameter to state variable, create coupling constraint
+        apply_param_to_var_transform(coupled_system, from_resolution, to_resolution, constraint)
     elseif transform == "identity"
-        @info "Transform: identity mapping $(from_resolution.variable_name) = $(to_resolution.variable_name)"
-        # In real implementation: create equality constraint
+        apply_identity_transform(coupled_system, from_resolution, to_resolution, constraint)
     elseif transform == "additive"
-        @info "Transform: additive mapping $(from_resolution.variable_name) + $(to_resolution.variable_name)"
-        # In real implementation: create additive coupling
+        apply_additive_transform(coupled_system, from_resolution, to_resolution, constraint)
     elseif transform == "multiplicative"
-        @info "Transform: multiplicative mapping $(from_resolution.variable_name) * $(to_resolution.variable_name)"
-        # In real implementation: create multiplicative coupling
+        apply_multiplicative_transform(coupled_system, from_resolution, to_resolution, constraint)
     elseif transform == "conversion_factor"
-        factor = coupling.factor
-        if factor === nothing
+        if coupling.factor === nothing
             @error "conversion_factor transform requires a factor"
-            return
+            return constraint
         end
-        @info "Transform: conversion with factor $(factor)"
-        # In real implementation: create scaled coupling constraint
+        constraint["factor"] = coupling.factor
+        apply_conversion_factor_transform(coupled_system, from_resolution, to_resolution, constraint)
     else
         @error "Unknown transform type: $(transform)"
+        constraint["error"] = "Unknown transform type"
+    end
+
+    return constraint
+end
+
+"""
+    apply_param_to_var_transform(coupled_system, from_resolution, to_resolution, constraint)
+
+Promote a parameter to a shared state variable between systems.
+"""
+function apply_param_to_var_transform(coupled_system, from_resolution, to_resolution, constraint)
+    from_system_name = from_resolution.system_path[1]
+    to_system_name = to_resolution.system_path[1]
+
+    if haskey(coupled_system.systems, to_system_name)
+        to_system = coupled_system.systems[to_system_name]
+        if to_system isa MockMTKSystem
+            # Move parameter to state variable if it exists in parameters
+            param_idx = findfirst(==(to_resolution.variable_name), to_system.parameters)
+            if param_idx !== nothing
+                # Remove from parameters and add to states
+                param_name = splice!(to_system.parameters, param_idx)
+                push!(to_system.states, param_name)
+                @info "Promoted parameter $(param_name) to state variable in $(to_system_name)"
+            end
+            # Add coupling equation to share the variable
+            coupling_eq = "shared_$(to_resolution.variable_name): $(from_system_name).$(from_resolution.variable_name) = $(to_system_name).$(to_resolution.variable_name)"
+            push!(to_system.equations, coupling_eq)
+        end
+    end
+end
+
+"""
+    apply_identity_transform(coupled_system, from_resolution, to_resolution, constraint)
+
+Create an identity mapping constraint between two variables.
+"""
+function apply_identity_transform(coupled_system, from_resolution, to_resolution, constraint)
+    from_system_name = from_resolution.system_path[1]
+    to_system_name = to_resolution.system_path[1]
+
+    # Create identity constraint in the target system
+    if haskey(coupled_system.systems, to_system_name)
+        to_system = coupled_system.systems[to_system_name]
+        if to_system isa MockMTKSystem
+            coupling_eq = "identity_$(to_resolution.variable_name): $(to_resolution.variable_name) = $(from_system_name).$(from_resolution.variable_name)"
+            push!(to_system.equations, coupling_eq)
+            @info "Created identity constraint: $(coupling_eq)"
+        end
+    end
+end
+
+"""
+    apply_additive_transform(coupled_system, from_resolution, to_resolution, constraint)
+
+Create an additive coupling between two variables.
+"""
+function apply_additive_transform(coupled_system, from_resolution, to_resolution, constraint)
+    from_system_name = from_resolution.system_path[1]
+    to_system_name = to_resolution.system_path[1]
+
+    if haskey(coupled_system.systems, to_system_name)
+        to_system = coupled_system.systems[to_system_name]
+        if to_system isa MockMTKSystem
+            # Find existing equation for the target variable and modify it
+            var_idx = findfirst(==(to_resolution.variable_name), to_system.states)
+            if var_idx !== nothing && var_idx <= length(to_system.equations)
+                current_eq = to_system.equations[var_idx]
+                modified_eq = "$(current_eq) + $(from_system_name).$(from_resolution.variable_name)"
+                to_system.equations[var_idx] = modified_eq
+                @info "Added additive coupling to $(to_resolution.variable_name): $(modified_eq)"
+            end
+        end
+    end
+end
+
+"""
+    apply_multiplicative_transform(coupled_system, from_resolution, to_resolution, constraint)
+
+Create a multiplicative coupling between two variables.
+"""
+function apply_multiplicative_transform(coupled_system, from_resolution, to_resolution, constraint)
+    from_system_name = from_resolution.system_path[1]
+    to_system_name = to_resolution.system_path[1]
+
+    if haskey(coupled_system.systems, to_system_name)
+        to_system = coupled_system.systems[to_system_name]
+        if to_system isa MockMTKSystem
+            # Find existing equation for the target variable and modify it
+            var_idx = findfirst(==(to_resolution.variable_name), to_system.states)
+            if var_idx !== nothing && var_idx <= length(to_system.equations)
+                current_eq = to_system.equations[var_idx]
+                modified_eq = "($(current_eq)) * $(from_system_name).$(from_resolution.variable_name)"
+                to_system.equations[var_idx] = modified_eq
+                @info "Added multiplicative coupling to $(to_resolution.variable_name): $(modified_eq)"
+            end
+        end
+    end
+end
+
+"""
+    apply_conversion_factor_transform(coupled_system, from_resolution, to_resolution, constraint)
+
+Create a conversion factor coupling with scaling between two variables.
+"""
+function apply_conversion_factor_transform(coupled_system, from_resolution, to_resolution, constraint)
+    from_system_name = from_resolution.system_path[1]
+    to_system_name = to_resolution.system_path[1]
+    factor = constraint["factor"]
+
+    if haskey(coupled_system.systems, to_system_name)
+        to_system = coupled_system.systems[to_system_name]
+        if to_system isa MockMTKSystem
+            coupling_eq = "conversion_$(to_resolution.variable_name): $(to_resolution.variable_name) = $(factor) * $(from_system_name).$(from_resolution.variable_name)"
+            push!(to_system.equations, coupling_eq)
+            @info "Created conversion factor constraint ($(factor)): $(coupling_eq)"
+        end
     end
 end
 

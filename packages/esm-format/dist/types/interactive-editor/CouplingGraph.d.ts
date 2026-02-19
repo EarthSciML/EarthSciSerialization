@@ -14,6 +14,7 @@
  */
 import { Component } from 'solid-js';
 import type { EsmFile, CouplingEntry } from '../types.js';
+import type { ComponentNode } from '../graph.js';
 import './CouplingGraph.css';
 export interface CouplingGraphProps {
     /** The ESM file to visualize */
@@ -28,6 +29,22 @@ export interface CouplingGraphProps {
     height?: number;
     /** Whether the visualization should be interactive */
     interactive?: boolean;
+    /** Callback when graph is exported */
+    onExport?: (format: 'svg' | 'png' | 'pdf', data: string) => void;
+    /** Layout algorithm to use */
+    layoutAlgorithm?: 'force-directed' | 'hierarchical' | 'circular' | 'grid';
+    /** Filter settings for what to show */
+    filters?: {
+        couplingTypes?: string[];
+        componentTypes?: ComponentNode['type'][];
+        searchTerm?: string;
+    };
+    /** Whether to show analysis overlays */
+    showAnalysis?: {
+        circularDependencies?: boolean;
+        criticalPath?: boolean;
+        centrality?: boolean;
+    };
 }
 /**
  * CouplingGraph component for visualizing ESM system coupling

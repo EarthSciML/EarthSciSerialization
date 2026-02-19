@@ -63,7 +63,7 @@ using ESMFormat
         @testset "Reaction system with undefined species" begin
             species = [ESMFormat.Species("A"), ESMFormat.Species("B")]
             reactions = [
-                ESMFormat.Reaction(Dict("A" => 1), Dict("C" => 1), ESMFormat.VarExpr("k1"))  # C not defined
+                ESMFormat.Reaction("rxn1", [ESMFormat.StoichiometryEntry("A", 1)], [ESMFormat.StoichiometryEntry("C", 1)], ESMFormat.VarExpr("k1"))  # C not defined
             ]
             rs = ESMFormat.ReactionSystem(species, reactions)
             esm_file = ESMFormat.EsmFile("0.1.0", metadata, reaction_systems=Dict("test_reactions" => rs))
@@ -78,14 +78,14 @@ using ESMFormat
         @testset "Reaction with invalid stoichiometry" begin
             species = [ESMFormat.Species("A"), ESMFormat.Species("B")]
             reactions = [
-                ESMFormat.Reaction(Dict("A" => -1), Dict("B" => 1), ESMFormat.VarExpr("k1"))  # Negative stoichiometry
+                ESMFormat.Reaction("rxn1", [ESMFormat.StoichiometryEntry("A", -1)], [ESMFormat.StoichiometryEntry("B", 1)], ESMFormat.VarExpr("k1"))  # Negative stoichiometry
             ]
             rs = ESMFormat.ReactionSystem(species, reactions)
             esm_file = ESMFormat.EsmFile("0.1.0", metadata, reaction_systems=Dict("test_reactions" => rs))
 
             errors = ESMFormat.validate_structural(esm_file)
             @test length(errors) == 1
-            @test errors[1].path == "reaction_systems.test_reactions.reactions[1].reactants"
+            @test errors[1].path == "reaction_systems.test_reactions.reactions[1].substrates"
             @test occursin("non-positive stoichiometry -1", errors[1].message)
             @test errors[1].error_type == "invalid_stoichiometry"
         end
@@ -93,7 +93,7 @@ using ESMFormat
         @testset "Null-null reaction" begin
             species = [ESMFormat.Species("A")]
             reactions = [
-                ESMFormat.Reaction(Dict{String,Int}(), Dict{String,Int}(), ESMFormat.VarExpr("k1"))  # No reactants or products
+                ESMFormat.Reaction("rxn1", nothing, nothing, ESMFormat.VarExpr("k1"))  # No reactants or products
             ]
             rs = ESMFormat.ReactionSystem(species, reactions)
             esm_file = ESMFormat.EsmFile("0.1.0", metadata, reaction_systems=Dict("test_reactions" => rs))
@@ -118,12 +118,12 @@ using ESMFormat
                     [ESMFormat.AffectEquation("undefined_var", ESMFormat.NumExpr(0.0))]
                 )
             ]
-            model = ESMFormat.Model(variables, equations, events=events)
+            model = ESMFormat.Model(variables, equations, continuous_events=events)
             esm_file = ESMFormat.EsmFile("0.1.0", metadata, models=Dict("test_model" => model))
 
             errors = ESMFormat.validate_structural(esm_file)
             @test length(errors) == 1
-            @test errors[1].path == "models.test_model.events[1].affects[1]"
+            @test errors[1].path == "models.test_model.continuous_events[1].affects[1]"
             @test occursin("Affect target variable 'undefined_var' not declared", errors[1].message)
             @test errors[1].error_type == "undefined_affect_variable"
         end

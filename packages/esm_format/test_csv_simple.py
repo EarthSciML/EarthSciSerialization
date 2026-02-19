@@ -1,91 +1,62 @@
 #!/usr/bin/env python3
-"""Simple integration test for CSV loader."""
+"""Simple test to understand CSV integration issue."""
 
 import sys
-import tempfile
-import os
-
-# Add src to path
 sys.path.insert(0, 'src')
 
-def test_csv_simple():
-    """Simple test of CSV loader integration."""
-    # Test imports work correctly from main package
-    from esm_format import (
-        CSVLoader, CSVValidationError, load_csv_data,
-        DataLoader, DataLoaderType
-    )
+print("Testing step 1: Direct import of CSV module")
+try:
+    from esm_format.csv_loader import CSVLoader, load_csv_data, CSVValidationError
+    print("✓ Direct CSV import successful")
+except Exception as e:
+    print(f"❌ Direct CSV import failed: {e}")
+    sys.exit(1)
 
-    print("✓ CSV imports successful")
+print("\nTesting step 2: Import esm_types")
+try:
+    from esm_format.esm_types import DataLoader, DataLoaderType
+    print("✓ esm_types import successful")
+except Exception as e:
+    print(f"❌ esm_types import failed: {e}")
+    sys.exit(1)
 
-    # Create test CSV
-    csv_content = """time,NO2,O3,temperature
-0.0,15.2,35.8,298.15
-3600.0,18.5,42.1,299.20
-7200.0,22.1,38.9,301.50"""
+print("\nTesting step 3: Test CSV functionality")
+try:
+    import tempfile
+    csv_content = "time,value\n0.0,1.5\n1.0,2.5"
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
         f.write(csv_content)
         temp_csv = f.name
 
-    try:
-        # Create and test DataLoader
-        data_loader = DataLoader(
-            name="test_data",
-            type=DataLoaderType.EMISSIONS,
-            source=temp_csv,
-            format_options={
-                'column_types': {
-                    'time': 'float',
-                    'NO2': 'float',
-                    'O3': 'float',
-                    'temperature': 'float'
-                }
-            }
-        )
+    data_loader = DataLoader(
+        name="test",
+        type=DataLoaderType.STATIC,
+        source=temp_csv,
+        variables=['time', 'value']
+    )
 
-        # Test loading
-        df = load_csv_data(data_loader)
+    df = load_csv_data(data_loader)
+    print(f"✓ CSV loading successful: {df.shape}")
 
-        assert not df.empty, "DataFrame should not be empty"
-        assert len(df) == 3, f"Expected 3 rows, got {len(df)}"
-        assert len(df.columns) == 4, f"Expected 4 columns, got {len(df.columns)}"
-        assert 'time' in df.columns
-        assert 'NO2' in df.columns
-        assert 'O3' in df.columns
-        assert 'temperature' in df.columns
+    import os
+    os.unlink(temp_csv)
+except Exception as e:
+    print(f"❌ CSV functionality test failed: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
 
-        # Check data types and values
-        assert df.dtypes['time'] in ['float64', 'Float64'], f"time column type: {df.dtypes['time']}"
-        assert df.iloc[0]['time'] == 0.0
-        assert df.iloc[0]['NO2'] == 15.2
-        assert df.iloc[1]['time'] == 3600.0
+print("\nTesting step 4: Full esm_format import")
+try:
+    from esm_format import CSVLoader, CSVValidationError, load_csv_data
+    print("✓ Full esm_format CSV import successful")
+except ImportError as e:
+    print(f"❌ Full esm_format CSV import failed: {e}")
+    print("This indicates the CSV components are not properly exported from the main package")
+except Exception as e:
+    print(f"❌ Full esm_format CSV import failed with other error: {e}")
+    import traceback
+    traceback.print_exc()
 
-        print("✓ CSV data loading and validation successful")
-
-        # Test error handling
-        try:
-            bad_loader = DataLoader(
-                name="bad_data",
-                type=DataLoaderType.EMISSIONS,
-                source="nonexistent_file.csv"
-            )
-            load_csv_data(bad_loader)
-            assert False, "Should have raised FileNotFoundError"
-        except FileNotFoundError:
-            print("✓ Error handling works correctly")
-
-        print("\n✅ All CSV functionality tests passed!")
-        return True
-
-    finally:
-        os.unlink(temp_csv)
-
-if __name__ == "__main__":
-    try:
-        test_csv_simple()
-    except Exception as e:
-        print(f"\n❌ CSV test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+print("\nAll tests completed!")

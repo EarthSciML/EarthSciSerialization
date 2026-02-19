@@ -4,6 +4,7 @@
  * Provides a standardized validation interface that matches the format expected
  * by the conformance test runner across all language implementations.
  */
+import { type UnitWarning } from './units.js';
 /**
  * Validation error with structured details
  */
@@ -20,6 +21,7 @@ export interface ValidationResult {
     is_valid: boolean;
     schema_errors: ValidationError[];
     structural_errors: ValidationError[];
+    unit_warnings: UnitWarning[];
 }
 /**
  * Structural error type matching the format specification

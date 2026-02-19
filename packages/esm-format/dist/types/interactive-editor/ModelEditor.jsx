@@ -62,6 +62,27 @@ export const ModelEditor = (props) => {
     const handleEquationSelect = (index) => {
         setSelectedEquationIndex(index === selectedEquationIndex() ? null : index);
     };
+    // Handle keyboard navigation between tabs
+    const handleTabKeyDown = (e, currentTab) => {
+        const tabs = ['variables', 'equations', 'events'];
+        const currentIndex = tabs.indexOf(currentTab);
+        if (e.key === 'ArrowRight' && currentIndex < tabs.length - 1) {
+            e.preventDefault();
+            const nextTab = tabs[currentIndex + 1];
+            setActiveTab(nextTab);
+            // Move focus to the next tab button
+            const nextButton = e.target.parentElement?.children[currentIndex + 1];
+            nextButton?.focus();
+        }
+        else if (e.key === 'ArrowLeft' && currentIndex > 0) {
+            e.preventDefault();
+            const prevTab = tabs[currentIndex - 1];
+            setActiveTab(prevTab);
+            // Move focus to the previous tab button
+            const prevButton = e.target.parentElement?.children[currentIndex - 1];
+            prevButton?.focus();
+        }
+    };
     // Handle expression replacement in equations
     const handleExpressionReplace = (equationIndex, side, path, newExpr) => {
         const updatedModel = { ...props.model };
@@ -147,13 +168,13 @@ export const ModelEditor = (props) => {
 
       {/* Tab Navigation */}
       <nav class="esm-model-tabs" role="tablist">
-        <button class={`esm-tab ${activeTab() === 'variables' ? 'active' : ''}`} role="tab" aria-selected={activeTab() === 'variables'} onClick={() => setActiveTab('variables')}>
+        <button class={`esm-tab ${activeTab() === 'variables' ? 'active' : ''}`} role="tab" aria-selected={activeTab() === 'variables'} onClick={() => setActiveTab('variables')} onKeyDown={(e) => handleTabKeyDown(e, 'variables')}>
           Variables ({Object.keys(props.model.variables).length})
         </button>
-        <button class={`esm-tab ${activeTab() === 'equations' ? 'active' : ''}`} role="tab" aria-selected={activeTab() === 'equations'} onClick={() => setActiveTab('equations')}>
+        <button class={`esm-tab ${activeTab() === 'equations' ? 'active' : ''}`} role="tab" aria-selected={activeTab() === 'equations'} onClick={() => setActiveTab('equations')} onKeyDown={(e) => handleTabKeyDown(e, 'equations')}>
           Equations ({props.model.equations.length})
         </button>
-        <button class={`esm-tab ${activeTab() === 'events' ? 'active' : ''}`} role="tab" aria-selected={activeTab() === 'events'}>
+        <button class={`esm-tab ${activeTab() === 'events' ? 'active' : ''}`} role="tab" aria-selected={activeTab() === 'events'} onClick={() => setActiveTab('events')} onKeyDown={(e) => handleTabKeyDown(e, 'events')}>
           Events ({(props.model.discrete_events?.length || 0) + (props.model.continuous_events?.length || 0)})
         </button>
       </nav>

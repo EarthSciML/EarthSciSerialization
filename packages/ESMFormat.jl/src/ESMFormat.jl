@@ -18,24 +18,26 @@ include("availability.jl")  # Include before other modules that need availabilit
 include("types.jl")
 include("error_handling.jl")
 include("validate.jl")
-include("coupled.jl")  # Include before parse.jl and serialize.jl since they use coupling types
+include("reactions.jl")
+# MTK and Catalyst modules - need to be loaded before coupled.jl since it uses their mock systems
+include("mtk.jl")
+include("catalyst.jl")
+include("mtk_catalyst.jl")
+include("coupled.jl")  # Include after mtk.jl and catalyst.jl since it uses MockMTKSystem and MockCatalystSystem
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
 include("display.jl")
-include("reactions.jl")
-include("catalyst.jl")
 # Analysis features
 include("graph.jl")
 include("units.jl")
 include("edit.jl")
-# MTK modules - conditionally loaded to avoid precompilation issues
-include("mtk.jl")
-include("mtk_catalyst.jl")
 # Code generation
 include("codegen.jl")
 # Solver optimization
 include("solver_optimization.jl")
+# Migration functionality
+include("migration.jl")
 
 # Export main types
 export
@@ -116,6 +118,10 @@ export
     # Availability checking functions
     check_mtk_availability, check_catalyst_availability, check_mtk_catalyst_availability,
     # Code generation
-    to_julia_code, to_python_code
+    to_julia_code, to_python_code,
+    # ASCII display format
+    to_ascii, format_expression_ascii,
+    # Migration functionality
+    migrate, can_migrate, get_supported_migration_targets, MigrationError
 
 end # module ESMFormat

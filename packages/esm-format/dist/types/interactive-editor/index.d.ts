@@ -11,6 +11,10 @@
 export { ExpressionNode as ExpressionNodeComponent, type ExpressionNodeProps } from './ExpressionNode.tsx';
 export { ModelEditor, type ModelEditorProps } from './ModelEditor.tsx';
 export { CouplingGraph, type CouplingGraphProps } from './CouplingGraph.tsx';
+export { ValidationPanel, type ValidationPanelProps } from './ValidationPanel.tsx';
+export { FileSummary, type FileSummaryProps } from './FileSummary.tsx';
+export { SimulationControls, type SimulationControlsProps } from './SimulationControls.tsx';
+export * from '../layout/index.js';
 export interface EditorState {
     editMode: boolean;
     activeEdit: string | null;

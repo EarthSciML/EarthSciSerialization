@@ -113,7 +113,7 @@ export const ExpressionNode = (props) => {
         </span>);
         }
         // Render operator node
-        if (typeof props.expr === 'object' && 'op' in props.expr) {
+        if (typeof props.expr === 'object' && props.expr !== null && 'op' in props.expr) {
             return renderOperatorNode(props.expr);
         }
         return <span class="esm-unknown">?</span>;
@@ -253,7 +253,7 @@ export const ExpressionNode = (props) => {
         if (typeof props.expr === 'string') {
             return `Variable: ${props.expr}`;
         }
-        if (typeof props.expr === 'object' && 'op' in props.expr) {
+        if (typeof props.expr === 'object' && props.expr !== null && 'op' in props.expr) {
             return `Operator: ${props.expr.op}`;
         }
         return 'Expression';
@@ -264,11 +264,35 @@ function isNumericString(str) {
     return /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(str);
 }
 function formatNumber(num) {
-    // Format number for display (scientific notation if needed)
-    if (Math.abs(num) >= 1e6 || (Math.abs(num) < 1e-3 && num !== 0)) {
-        return num.toExponential(3);
+    // Format number according to ESM spec Section 6.1
+    if (num === 0)
+        return '0';
+    const absNum = Math.abs(num);
+    // Use scientific notation for very small or large numbers
+    if (absNum < 0.01 || absNum >= 10000) {
+        const exp = num.toExponential();
+        const [mantissa, exponent] = exp.split('e');
+        // Convert to Unicode superscript notation
+        const cleanMantissa = parseFloat(mantissa).toString(); // Remove trailing zeros
+        const expNum = parseInt(exponent, 10);
+        const superscriptExp = formatSuperscript(expNum);
+        return `${cleanMantissa}×10${superscriptExp}`;
     }
+    // For integers, show as plain integer
+    if (Number.isInteger(num)) {
+        return num.toString();
+    }
+    // For decimals, use standard notation
     return num.toString();
+}
+function formatSuperscript(exp) {
+    // Convert number to Unicode superscript
+    const superscriptMap = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+        '-': '⁻', '+': '⁺'
+    };
+    return exp.toString().split('').map(char => superscriptMap[char] || char).join('');
 }
 export default ExpressionNode;
 //# sourceMappingURL=ExpressionNode.jsx.map
