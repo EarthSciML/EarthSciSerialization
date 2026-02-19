@@ -214,6 +214,23 @@ except (ImportError, ValueError, Exception):
     # callback loader functionality failed to load
     pass
 
+# Operator registry functionality (Core tier requirement)
+from .operator_registry import (
+    register_operator,
+    has_operator,
+    get_operator_registry,
+    create_operator,
+    create_operator_by_name,
+    list_all_operators,
+    get_operator_info,
+    unregister_operator,
+    OperatorRegistry,
+    OperatorSignature,
+    RegisteredOperator,
+    OperatorRegistryError,
+    OperatorValidationError,
+)
+
 __version__ = "0.1.0"
 
 # Streamlined public API - only Core + Analysis + Simulation tier functionality
@@ -350,6 +367,21 @@ __all__ = [
     "can_migrate",
     "get_supported_migration_targets",
     "MigrationError",
+
+    # Operator registry functionality
+    "register_operator",
+    "has_operator",
+    "get_operator_registry",
+    "create_operator",
+    "create_operator_by_name",
+    "list_all_operators",
+    "get_operator_info",
+    "unregister_operator",
+    "OperatorRegistry",
+    "OperatorSignature",
+    "RegisteredOperator",
+    "OperatorRegistryError",
+    "OperatorValidationError",
 ]
 
 # Add CSV data loading components if pandas is available
