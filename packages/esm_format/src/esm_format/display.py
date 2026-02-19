@@ -556,9 +556,42 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
 def _format_model_summary(model: Model, format_type: str) -> str:
     """Format model summary (implementation per spec Section 6.3)."""
     name = getattr(model, 'name', 'unnamed')
-    var_count = len(model.variables) if model.variables else 0
     eq_count = len(model.equations) if model.equations else 0
-    return f"Model: {name} ({var_count} variables, {eq_count} equations)"
+
+    if not model.variables:
+        return f"Model: {name} (0 variables, {eq_count} equations)"
+
+    # Count variables by type according to spec Section 6.3
+    type_counts = {"state": 0, "parameter": 0, "observed": 0}
+
+    for var_name, var_info in model.variables.items():
+        var_type = getattr(var_info, 'type', 'unknown')
+        if var_type in type_counts:
+            type_counts[var_type] += 1
+
+    # Create the type summary according to spec Section 6.3 format
+    type_parts = []
+    if type_counts["state"] > 0:
+        if type_counts["state"] == 1:
+            type_parts.append("1 state")
+        else:
+            type_parts.append(f"{type_counts['state']} state")
+
+    if type_counts["parameter"] > 0:
+        if type_counts["parameter"] == 1:
+            type_parts.append("1 parameter")
+        else:
+            type_parts.append(f"{type_counts['parameter']} parameters")
+
+    if type_counts["observed"] > 0:
+        if type_counts["observed"] == 1:
+            type_parts.append("1 observed")
+        else:
+            type_parts.append(f"{type_counts['observed']} observed")
+
+    type_summary = ", ".join(type_parts) if type_parts else "0 variables"
+    eq_text = "equation" if eq_count == 1 else "equations"
+    return f"Model: {name} ({type_summary}, {eq_count} {eq_text})"
 
 
 def _format_reaction_system_summary(reaction_system: ReactionSystem, format_type: str) -> str:
