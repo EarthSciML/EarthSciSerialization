@@ -78,7 +78,13 @@ end
 Create a real ModelingToolkit ODESystem from an ESM model.
 """
 function create_real_mtk_system(model::Model, name::String, advanced_features::Bool)
-    t = Symbolics.variable(:t, T=Symbolics.Real)  # Time variable
+    # Import required symbols into current scope
+    @eval using ModelingToolkit: @variables, @parameters, ODESystem, Differential, Equation
+    @eval using Symbolics: Num, variable
+
+    # Create time variable
+    @eval @variables t
+    t_sym = @eval t
 
     # Enhanced variable processing with metadata preservation
     symbolic_vars = Dict{String, Any}()
@@ -99,16 +105,16 @@ function create_real_mtk_system(model::Model, name::String, advanced_features::B
         )
 
         if model_var.type == StateVariable
-            # Create state variable with time dependency and default value
-            default_val = getfield(model_var, :default)
-            var_sym = Symbolics.variable(var_symbol, T=Symbolics.Real)  # Simplified approach
+            # Create state variable with time dependency
+            @eval @variables $(var_symbol)(t)
+            var_sym = @eval $(var_symbol)(t)
             symbolic_vars[var_name] = var_sym
             push!(states, var_sym)
 
         elseif model_var.type == ParameterVariable
-            # Create parameter with default value
-            default_val = getfield(model_var, :default)
-            var_sym = Symbolics.variable(var_symbol, T=Symbolics.Real)  # Simplified approach
+            # Create parameter
+            @eval @parameters $(var_symbol)
+            var_sym = @eval $(var_symbol)
             symbolic_vars[var_name] = var_sym
             push!(parameters, var_sym)
 
@@ -116,7 +122,8 @@ function create_real_mtk_system(model::Model, name::String, advanced_features::B
             # Create observed variable with enhanced expression conversion
             try
                 obs_expr = esm_to_symbolic_enhanced(model_var.expression, symbolic_vars, advanced_features)
-                var_sym = Symbolics.variable(var_symbol, T=Symbolics.Real)
+                @eval @variables $(var_symbol)(t)
+                var_sym = @eval $(var_symbol)(t)
                 observed_eq = var_sym ~ obs_expr
                 push!(observed, observed_eq)
                 symbolic_vars[var_name] = var_sym
@@ -139,8 +146,9 @@ function create_real_mtk_system(model::Model, name::String, advanced_features::B
         end
     end
 
-    # Enhanced event processing
-    continuous_events, discrete_events = process_events_enhanced(model.events, symbolic_vars, advanced_features)
+    # Enhanced event processing - combine both event types
+    all_events = vcat(Vector{EventType}(model.discrete_events), Vector{EventType}(model.continuous_events))
+    continuous_events, discrete_events = process_events_enhanced(all_events, symbolic_vars, advanced_features)
 
     # Create the ODESystem with appropriate components
     sys_name = Symbol(name)
@@ -191,7 +199,14 @@ function create_mock_mtk_system(model::Model, name::String, advanced_features::B
     end
 
     equations = ["equation_$i: $(eq.lhs) ~ $(eq.rhs)" for (i, eq) in enumerate(model.equations)]
-    events = ["event_$i" for i in 1:length(model.events)]
+    # Process both discrete and continuous events
+    events = []
+    for (i, event) in enumerate(model.discrete_events)
+        push!(events, "discrete_event_$i: trigger=$(typeof(event.trigger))")
+    end
+    for (i, event) in enumerate(model.continuous_events)
+        push!(events, "continuous_event_$i: conditions=$(length(event.conditions))")
+    end
 
     metadata = Dict{String, Any}(
         "creation_time" => string(Dates.now()),
