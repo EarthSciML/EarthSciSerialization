@@ -93,7 +93,15 @@ function create_mock_mtk_system_basic(model::Model, name::String)
     end
 
     equations = ["equation_$i" for i in 1:length(model.equations)]
-    events = ["event_$i" for i in 1:length(model.events)]
+
+    # Process both discrete and continuous events
+    events = []
+    for (i, event) in enumerate(model.discrete_events)
+        push!(events, "discrete_event_$i: trigger=$(typeof(event.trigger))")
+    end
+    for (i, event) in enumerate(model.continuous_events)
+        push!(events, "continuous_event_$i: conditions=$(length(event.conditions))")
+    end
 
     # Try to get current time, fallback if not available
     current_time = try
@@ -106,6 +114,8 @@ function create_mock_mtk_system_basic(model::Model, name::String)
         "creation_time" => current_time,
         "esm_variables_count" => length(model.variables),
         "esm_equations_count" => length(model.equations),
+        "esm_discrete_events_count" => length(model.discrete_events),
+        "esm_continuous_events_count" => length(model.continuous_events),
         "advanced_features_enabled" => false,
         "mock_system" => true
     )
@@ -132,8 +142,9 @@ function create_real_mtk_system_basic(model::Model, name::String)
     for (var_name, model_var) in model.variables
         if model_var.type == StateVariable
             # Create state variable as function of time
-            @eval @variables $(Symbol(var_name))(t)
-            sym_var = @eval $(Symbol(var_name))(t)
+            var_symbol = Symbol(var_name)
+            @eval @variables $(var_symbol)(t)
+            sym_var = @eval $(var_symbol)
             push!(states, sym_var)
             var_dict[var_name] = sym_var
         elseif model_var.type == ParameterVariable
@@ -146,8 +157,9 @@ function create_real_mtk_system_basic(model::Model, name::String)
             if model_var.expression !== nothing
                 # Create observed variable with expression
                 expr_sym = esm_to_mtk_expr(model_var.expression, var_dict, t_sym)
-                @eval @variables $(Symbol(var_name))(t)
-                obs_var = @eval $(Symbol(var_name))(t)
+                var_symbol = Symbol(var_name)
+                @eval @variables $(var_symbol)(t)
+                obs_var = @eval $(var_symbol)
                 push!(observed, obs_var)
                 var_dict[var_name] = obs_var
             end
@@ -165,8 +177,115 @@ function create_real_mtk_system_basic(model::Model, name::String)
         push!(eqs, mtk_eq)
     end
 
-    # Create ODESystem
-    system = @eval ODESystem($eqs, $t_sym, $states, $parameters; name=Symbol($name))
+    # Process events and create callbacks
+    continuous_callbacks = []
+    discrete_callbacks = []
+
+    # Process continuous events
+    for event in model.continuous_events
+        try
+            # Convert all conditions to MTK symbolic expressions
+            conditions_mtk = []
+            for condition in event.conditions
+                cond_mtk = esm_to_mtk_expr(condition, var_dict, t_sym)
+                push!(conditions_mtk, cond_mtk)
+            end
+
+            # Convert affects to MTK equations
+            affects_mtk = []
+            for affect in event.affects
+                if haskey(var_dict, affect.lhs)
+                    target_var = var_dict[affect.lhs]
+                    rhs_mtk = esm_to_mtk_expr(affect.rhs, var_dict, t_sym)
+                    affect_eq = @eval Equation($target_var, $rhs_mtk)
+                    push!(affects_mtk, affect_eq)
+                else
+                    @warn "Target variable $(affect.lhs) not found for continuous event affect"
+                end
+            end
+
+            if !isempty(conditions_mtk) && !isempty(affects_mtk)
+                # For now, use the first condition (MTK callbacks typically have single condition)
+                condition = conditions_mtk[1]
+                @eval using ModelingToolkit: SymbolicContinuousCallback
+                cb = @eval SymbolicContinuousCallback($condition, $affects_mtk)
+                push!(continuous_callbacks, cb)
+            end
+        catch e
+            @warn "Failed to process continuous event: $e"
+        end
+    end
+
+    # Process discrete events
+    for event in model.discrete_events
+        try
+            # Convert affects to MTK equations
+            affects_mtk = []
+            for affect in event.affects
+                if affect isa FunctionalAffect && haskey(var_dict, affect.target)
+                    target_var = var_dict[affect.target]
+                    rhs_mtk = esm_to_mtk_expr(affect.expression, var_dict, t_sym)
+
+                    # Handle different operation types
+                    if affect.operation == "set"
+                        affect_eq = @eval Equation($target_var, $rhs_mtk)
+                    elseif affect.operation == "add"
+                        affect_eq = @eval Equation($target_var, $target_var + $rhs_mtk)
+                    elseif affect.operation == "multiply"
+                        affect_eq = @eval Equation($target_var, $target_var * $rhs_mtk)
+                    else
+                        # Default to set operation
+                        affect_eq = @eval Equation($target_var, $rhs_mtk)
+                    end
+                    push!(affects_mtk, affect_eq)
+                else
+                    @warn "Target variable $(affect.target) not found for discrete event affect"
+                end
+            end
+
+            if !isempty(affects_mtk)
+                @eval using ModelingToolkit: SymbolicDiscreteCallback
+
+                if event.trigger isa ConditionTrigger
+                    # Condition-based discrete event
+                    condition = esm_to_mtk_expr(event.trigger.expression, var_dict, t_sym)
+                    cb = @eval SymbolicDiscreteCallback($condition, $affects_mtk)
+                    push!(discrete_callbacks, cb)
+                elseif event.trigger isa PeriodicTrigger
+                    # Periodic discrete event - use period as the condition
+                    period = event.trigger.period
+                    phase = event.trigger.phase
+                    # For periodic triggers, we can use a simple periodic callback with the period
+                    # Note: This is a simplified implementation
+                    cb = @eval SymbolicDiscreteCallback($period, $affects_mtk)
+                    push!(discrete_callbacks, cb)
+                elseif event.trigger isa PresetTimesTrigger
+                    # Preset times trigger - use first time as trigger (simplified)
+                    # In a full implementation, we'd create multiple callbacks or handle differently
+                    if !isempty(event.trigger.times)
+                        first_time = event.trigger.times[1]
+                        cb = @eval SymbolicDiscreteCallback($first_time, $affects_mtk)
+                        push!(discrete_callbacks, cb)
+                    end
+                else
+                    @warn "Unknown discrete event trigger type: $(typeof(event.trigger))"
+                end
+            end
+        catch e
+            @warn "Failed to process discrete event: $e"
+        end
+    end
+
+    # Create ODESystem with events if any exist
+    system_kwargs = Dict(:name => Symbol(name))
+    if !isempty(continuous_callbacks)
+        system_kwargs[:continuous_events] = continuous_callbacks
+    end
+    if !isempty(discrete_callbacks)
+        system_kwargs[:discrete_events] = discrete_callbacks
+    end
+
+    system = @eval ODESystem($eqs, $t_sym, $states, $parameters; $(system_kwargs...))
 
     return system
 end
