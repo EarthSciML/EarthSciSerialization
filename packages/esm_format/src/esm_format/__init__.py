@@ -156,6 +156,14 @@ from .codegen import (
     to_python_code,
 )
 
+# Migration functionality
+from .migration import (
+    migrate,
+    can_migrate,
+    get_supported_migration_targets,
+    MigrationError,
+)
+
 # Data loading functionality (optional - requires pandas)
 _has_csv_support = False
 try:
@@ -167,6 +175,33 @@ try:
     _has_csv_support = True
 except (ImportError, ValueError, Exception):
     # pandas not available or compatibility issues, skip CSV loader functionality
+    pass
+
+# Gridded data loading functionality (optional - requires xarray/netCDF4/h5py)
+_has_gridded_support = False
+try:
+    from .gridded_loader import (
+        GriddedDataLoader,
+        GriddedValidationError,
+        load_gridded_data,
+    )
+    _has_gridded_support = True
+except (ImportError, ValueError, Exception):
+    # gridded data libraries not available or compatibility issues
+    pass
+
+# Callback data loading functionality (no external dependencies)
+_has_callback_support = False
+try:
+    from .callback_loader import (
+        CallbackLoader,
+        CallbackValidationError,
+        CallbackDataSource,
+        load_callback_data,
+    )
+    _has_callback_support = True
+except (ImportError, ValueError, Exception):
+    # callback loader functionality failed to load
     pass
 
 __version__ = "0.1.0"
@@ -293,6 +328,12 @@ __all__ = [
     # Code generation
     "to_julia_code",
     "to_python_code",
+
+    # Migration functionality
+    "migrate",
+    "can_migrate",
+    "get_supported_migration_targets",
+    "MigrationError",
 ]
 
 # Add CSV data loading components if pandas is available
@@ -301,6 +342,23 @@ if _has_csv_support:
         "CSVLoader",
         "CSVValidationError",
         "load_csv_data",
+    ])
+
+# Add gridded data loading components if libraries are available
+if _has_gridded_support:
+    __all__.extend([
+        "GriddedDataLoader",
+        "GriddedValidationError",
+        "load_gridded_data",
+    ])
+
+# Add callback data loading components
+if _has_callback_support:
+    __all__.extend([
+        "CallbackLoader",
+        "CallbackValidationError",
+        "CallbackDataSource",
+        "load_callback_data",
     ])
 
 # Add enhanced loading if available
