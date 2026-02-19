@@ -6,7 +6,8 @@ from esm_format.esm_types import (
     Species, Parameter, Reaction, ReactionSystem,
     ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
     DataLoader, DataLoaderType, Operator,
-    CouplingEntry, CouplingType, Domain, Solver, SolverType,
+    CouplingEntry, CouplingType, VariableMapCoupling, OperatorComposeCoupling,
+    Domain, Solver, SolverType,
     Reference, Metadata, EsmFile
 )
 
@@ -113,17 +114,30 @@ def test_operator():
 
 
 def test_coupling_entry():
-    """Test CouplingEntry creation."""
-    coupling = CouplingEntry(
-        source_model="Model1",
-        target_model="Model2",
-        source_variables=["x"],
-        target_variables=["y"],
-        coupling_type=CouplingType.DIRECT
+    """Test CouplingEntry discriminated union creation."""
+    # Test VariableMapCoupling
+    coupling = VariableMapCoupling(
+        from_var="Model1.x",
+        to_var="Model2.y",
+        transform="identity",
+        factor=1.0,
+        description="Test variable mapping"
     )
-    assert coupling.source_model == "Model1"
-    assert coupling.target_model == "Model2"
-    assert coupling.coupling_type == CouplingType.DIRECT
+    assert coupling.from_var == "Model1.x"
+    assert coupling.to_var == "Model2.y"
+    assert coupling.coupling_type == CouplingType.VARIABLE_MAP
+    assert coupling.transform == "identity"
+    assert coupling.factor == 1.0
+
+    # Test OperatorComposeCoupling
+    op_coupling = OperatorComposeCoupling(
+        systems=["model1", "model2"],
+        translate={"var1": "var2"},
+        description="Operator composition"
+    )
+    assert op_coupling.systems == ["model1", "model2"]
+    assert op_coupling.translate == {"var1": "var2"}
+    assert op_coupling.coupling_type == CouplingType.OPERATOR_COMPOSE
 
 
 def test_domain():

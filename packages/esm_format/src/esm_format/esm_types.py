@@ -208,44 +208,79 @@ class Connector:
     equations: List[ConnectorEquation] = field(default_factory=list)
 
 
+# Base class for all coupling entries
 @dataclass
-class CouplingEntry:
-    """Entry describing how model components are coupled."""
+class BaseCouplingEntry:
+    """Base class for all coupling entry types."""
     coupling_type: CouplingType
     description: Optional[str] = None
 
-    # Fields for operator_compose and couple2
-    systems: Optional[List[str]] = None
 
-    # Fields for couple2
-    coupletype_pair: Optional[List[str]] = None
+@dataclass
+class OperatorComposeCoupling(BaseCouplingEntry):
+    """Coupling entry for operator_compose type."""
+    coupling_type: CouplingType = field(default=CouplingType.OPERATOR_COMPOSE, init=False)
+    systems: List[str] = field(default_factory=list)
+    translate: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Couple2Coupling(BaseCouplingEntry):
+    """Coupling entry for couple2 type."""
+    coupling_type: CouplingType = field(default=CouplingType.COUPLE2, init=False)
+    systems: List[str] = field(default_factory=list)
+    coupletype_pair: List[str] = field(default_factory=list)
     connector: Optional[Connector] = None
 
-    # Fields for operator_compose (variable translation)
-    translate: Optional[Dict[str, Any]] = None
 
-    # Fields for variable_map
+@dataclass
+class VariableMapCoupling(BaseCouplingEntry):
+    """Coupling entry for variable_map type."""
+    coupling_type: CouplingType = field(default=CouplingType.VARIABLE_MAP, init=False)
     from_var: Optional[str] = None
     to_var: Optional[str] = None
     transform: Optional[str] = None
     factor: Optional[float] = None
 
-    # Fields for operator_apply
+
+@dataclass
+class OperatorApplyCoupling(BaseCouplingEntry):
+    """Coupling entry for operator_apply type."""
+    coupling_type: CouplingType = field(default=CouplingType.OPERATOR_APPLY, init=False)
     operator: Optional[str] = None
 
-    # Fields for callback
-    callback_id: Optional[str] = None
-    config: Optional[Dict[str, Any]] = None
 
-    # Fields for event
+@dataclass
+class CallbackCoupling(BaseCouplingEntry):
+    """Coupling entry for callback type."""
+    coupling_type: CouplingType = field(default=CouplingType.CALLBACK, init=False)
+    callback_id: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EventCoupling(BaseCouplingEntry):
+    """Coupling entry for event type."""
+    coupling_type: CouplingType = field(default=CouplingType.EVENT, init=False)
     event_type: Optional[str] = None
-    conditions: Optional[List[Expr]] = None
+    conditions: List[Expr] = field(default_factory=list)
     trigger: Optional["DiscreteEventTrigger"] = None
-    affects: Optional[List["AffectEquation"]] = None
-    affect_neg: Optional[List["AffectEquation"]] = None
-    discrete_parameters: Optional[List[str]] = None
+    affects: List["AffectEquation"] = field(default_factory=list)
+    affect_neg: List["AffectEquation"] = field(default_factory=list)
+    discrete_parameters: List[str] = field(default_factory=list)
     root_find: Optional[str] = None
     reinitialize: Optional[bool] = None
+
+
+# Discriminated union of all coupling entry types
+CouplingEntry = Union[
+    OperatorComposeCoupling,
+    Couple2Coupling,
+    VariableMapCoupling,
+    OperatorApplyCoupling,
+    CallbackCoupling,
+    EventCoupling
+]
 
 
 # ========================================
