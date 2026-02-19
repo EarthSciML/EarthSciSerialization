@@ -34,7 +34,7 @@ export type { ComponentGraph, ComponentNode, CouplingEdge, Graph, VariableNode, 
 export * from './analysis/index.js'
 
 // Export pretty-printing utilities
-export { toUnicode, toLatex, toAscii } from './pretty-print.js'
+export { toUnicode, toLatex, toAscii, toMathML } from './pretty-print.js'
 
 // Export substitution utilities
 export { substitute, substituteInModel, substituteInReactionSystem } from './substitute.js'
@@ -54,6 +54,9 @@ export type { DimensionalRep, UnitResult, UnitWarning } from './units.js'
 
 // Export code generation utilities
 export { toJuliaCode, toPythonCode } from './codegen.js'
+
+// Export migration functionality
+export { migrate, canMigrate, getSupportedMigrationTargets, MigrationError } from './migration.js'
 
 // Interactive editor components (SolidJS) - moved to esm-editor package
 // export * from './interactive-editor/index.js'
