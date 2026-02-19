@@ -1,0 +1,92 @@
+[
+  {
+    "description": "ValidationResult structure with all required fields",
+    "test_case": "complete_validation_result",
+    "expected_fields": {
+      "schema_errors": {
+        "type": "array",
+        "required": true,
+        "description": "List of JSON Schema violations"
+      },
+      "structural_errors": {
+        "type": "array",
+        "required": true,
+        "description": "List of mathematical and semantic consistency errors"
+      },
+      "unit_warnings": {
+        "type": "array",
+        "required": true,
+        "description": "List of dimensional inconsistency warnings"
+      },
+      "is_valid": {
+        "type": "boolean",
+        "required": true,
+        "description": "True if no schema or structural errors"
+      }
+    }
+  },
+  {
+    "description": "Valid file with no errors",
+    "input_file": "minimal_chemistry.esm",
+    "expected_result": {
+      "schema_errors": [],
+      "structural_errors": [],
+      "unit_warnings": [],
+      "is_valid": true
+    }
+  },
+  {
+    "description": "File with schema error",
+    "input_file": "missing_esm_version.esm",
+    "expected_result": {
+      "schema_errors": [
+        {
+          "path": "/",
+          "message": "Required property 'esm' is missing",
+          "keyword": "required"
+        }
+      ],
+      "structural_errors": [],
+      "unit_warnings": [],
+      "is_valid": false
+    }
+  },
+  {
+    "description": "File with structural error",
+    "input_file": "equation_count_mismatch.esm",
+    "expected_result": {
+      "schema_errors": [],
+      "structural_errors": [
+        {
+          "path": "/models/TestModel",
+          "code": "equation_count_mismatch",
+          "message": "Number of ODE equations (1) does not match number of state variables (2)",
+          "details": {
+            "state_variables": 2,
+            "ode_equations": 1,
+            "missing_equations": ["y"]
+          }
+        }
+      ],
+      "unit_warnings": [],
+      "is_valid": false
+    }
+  },
+  {
+    "description": "File with unit warnings but otherwise valid",
+    "input_file": "unit_inconsistency.esm",
+    "expected_result": {
+      "schema_errors": [],
+      "structural_errors": [],
+      "unit_warnings": [
+        {
+          "path": "/models/ChemModel/equations/0",
+          "message": "Unit mismatch: LHS has units mol/mol/s, RHS has units 1/s",
+          "lhs_units": "mol/mol/s",
+          "rhs_units": "1/s"
+        }
+      ],
+      "is_valid": true
+    }
+  }
+]

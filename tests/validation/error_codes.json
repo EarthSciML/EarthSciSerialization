@@ -1,0 +1,114 @@
+[
+  {
+    "description": "Standard structural error codes as defined in esm-libraries-spec.md Section 3.4",
+    "reference": "esm-libraries-spec.md:3.4",
+    "required_codes": [
+      {
+        "code": "equation_count_mismatch",
+        "description": "Number of ODE equations does not match number of state variables",
+        "example_context": "Models with unbalanced equations"
+      },
+      {
+        "code": "undefined_variable",
+        "description": "Variable referenced in an equation is not declared",
+        "example_context": "Equation references unknown variable"
+      },
+      {
+        "code": "undefined_species",
+        "description": "Species referenced in a reaction is not declared",
+        "example_context": "Reaction substrates/products not in species list"
+      },
+      {
+        "code": "undefined_parameter",
+        "description": "Parameter referenced in a rate expression is not declared",
+        "example_context": "Reaction rate uses undeclared parameter"
+      },
+      {
+        "code": "undefined_system",
+        "description": "Coupling entry references a nonexistent model, reaction system, data loader, or operator",
+        "example_context": "operator_compose references missing model"
+      },
+      {
+        "code": "undefined_operator",
+        "description": "operator_apply references a nonexistent operator",
+        "example_context": "Coupling tries to apply undefined operator"
+      },
+      {
+        "code": "unresolved_scoped_ref",
+        "description": "Scoped reference (e.g., 'Model.Subsystem.var') cannot be resolved — a segment in the system path does not exist or the final variable is not declared",
+        "example_context": "Coupling uses invalid dotted reference"
+      },
+      {
+        "code": "invalid_discrete_param",
+        "description": "discrete_parameters entry does not match a declared parameter",
+        "example_context": "Event discrete_parameters references unknown parameter"
+      },
+      {
+        "code": "null_reaction",
+        "description": "Reaction has both substrates: null and products: null",
+        "example_context": "Reaction with no inputs or outputs"
+      },
+      {
+        "code": "missing_observed_expr",
+        "description": "Observed variable is missing its expression field",
+        "example_context": "Variable type 'observed' without expression"
+      },
+      {
+        "code": "event_var_undeclared",
+        "description": "Variable in event affects/conditions is not declared",
+        "example_context": "Event references undefined variable"
+      }
+    ]
+  },
+  {
+    "description": "Error code validation examples",
+    "validation_cases": [
+      {
+        "test": "All required codes are recognized",
+        "input_codes": [
+          "equation_count_mismatch",
+          "undefined_variable",
+          "undefined_species",
+          "undefined_parameter",
+          "undefined_system",
+          "undefined_operator",
+          "unresolved_scoped_ref",
+          "invalid_discrete_param",
+          "null_reaction",
+          "missing_observed_expr",
+          "event_var_undeclared"
+        ],
+        "expected": "all_valid"
+      },
+      {
+        "test": "Unknown error code should be rejected",
+        "input_codes": ["invalid_error_code"],
+        "expected": "unknown_code_error"
+      },
+      {
+        "test": "Empty code should be rejected",
+        "input_codes": [""],
+        "expected": "empty_code_error"
+      }
+    ]
+  },
+  {
+    "description": "Error code formatting requirements",
+    "requirements": [
+      {
+        "rule": "Error codes must be lowercase with underscores",
+        "valid_examples": ["equation_count_mismatch", "undefined_variable"],
+        "invalid_examples": ["EquationCountMismatch", "undefined-variable", "UndefinedVariable"]
+      },
+      {
+        "rule": "Error codes must be descriptive and unambiguous",
+        "valid_examples": ["undefined_variable", "invalid_discrete_param"],
+        "invalid_examples": ["error1", "bad_thing", "issue"]
+      },
+      {
+        "rule": "Error codes should be stable across library versions",
+        "note": "Code changes require major version bump"
+      }
+    ]
+  }
+]

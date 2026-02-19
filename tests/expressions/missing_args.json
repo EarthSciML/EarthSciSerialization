@@ -1,0 +1,55 @@
+{
+  "description": "Test cases for ExprNode missing required 'args' field",
+  "test_cases": [
+    {
+      "name": "has_op_no_args",
+      "ast": {
+        "op": "add",
+        "metadata": "some_value"
+      },
+      "valid": false,
+      "expected_error": "ExprNode must have 'args' field",
+      "description": "Object with op but no args field"
+    },
+    {
+      "name": "args_null",
+      "ast": {
+        "op": "add",
+        "args": null
+      },
+      "valid": false,
+      "expected_error": "ExprNode 'args' field cannot be null",
+      "description": "args field cannot be null"
+    },
+    {
+      "name": "args_wrong_type",
+      "ast": {
+        "op": "add",
+        "args": "not_an_array"
+      },
+      "valid": false,
+      "expected_error": "ExprNode 'args' field must be array",
+      "description": "args field must be array type"
+    },
+    {
+      "name": "args_object_not_array",
+      "ast": {
+        "op": "add",
+        "args": {"x": 1, "y": 2}
+      },
+      "valid": false,
+      "expected_error": "ExprNode 'args' field must be array, not object",
+      "description": "args field cannot be object"
+    },
+    {
+      "name": "args_number_not_array",
+      "ast": {
+        "op": "sin",
+        "args": 3.14
+      },
+      "valid": false,
+      "expected_error": "ExprNode 'args' field must be array, not number",
+      "description": "args field cannot be number"
+    }
+  ]
+}
