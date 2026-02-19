@@ -125,8 +125,9 @@ end
 
 # Real MTK system creation when ModelingToolkit is available
 function create_real_mtk_system_basic(model::Model, name::String)
-    # Import ModelingToolkit symbols into current scope
-    @eval using ModelingToolkit: @variables, @parameters, ODESystem, Differential, Equation
+    # Import ModelingToolkit symbols into current scope (avoid conflict with ESMFormat.Equation)
+    @eval using ModelingToolkit: @variables, @parameters, ODESystem, Differential
+    @eval using ModelingToolkit
     @eval using Symbolics: Num
 
     # Create time variable
@@ -173,7 +174,7 @@ function create_real_mtk_system_basic(model::Model, name::String)
         rhs = esm_to_mtk_expr(equation.rhs, var_dict, t_sym)
 
         # Create MTK equation
-        mtk_eq = @eval Equation($lhs, $rhs)
+        mtk_eq = @eval ModelingToolkit.Equation($lhs, $rhs)
         push!(eqs, mtk_eq)
     end
 
@@ -197,7 +198,7 @@ function create_real_mtk_system_basic(model::Model, name::String)
                 if haskey(var_dict, affect.lhs)
                     target_var = var_dict[affect.lhs]
                     rhs_mtk = esm_to_mtk_expr(affect.rhs, var_dict, t_sym)
-                    affect_eq = @eval Equation($target_var, $rhs_mtk)
+                    affect_eq = @eval ModelingToolkit.Equation($target_var, $rhs_mtk)
                     push!(affects_mtk, affect_eq)
                 else
                     @warn "Target variable $(affect.lhs) not found for continuous event affect"
@@ -228,14 +229,14 @@ function create_real_mtk_system_basic(model::Model, name::String)
 
                     # Handle different operation types
                     if affect.operation == "set"
-                        affect_eq = @eval Equation($target_var, $rhs_mtk)
+                        affect_eq = @eval ModelingToolkit.Equation($target_var, $rhs_mtk)
                     elseif affect.operation == "add"
-                        affect_eq = @eval Equation($target_var, $target_var + $rhs_mtk)
+                        affect_eq = @eval ModelingToolkit.Equation($target_var, $target_var + $rhs_mtk)
                     elseif affect.operation == "multiply"
-                        affect_eq = @eval Equation($target_var, $target_var * $rhs_mtk)
+                        affect_eq = @eval ModelingToolkit.Equation($target_var, $target_var * $rhs_mtk)
                     else
                         # Default to set operation
-                        affect_eq = @eval Equation($target_var, $rhs_mtk)
+                        affect_eq = @eval ModelingToolkit.Equation($target_var, $rhs_mtk)
                     end
                     push!(affects_mtk, affect_eq)
                 else

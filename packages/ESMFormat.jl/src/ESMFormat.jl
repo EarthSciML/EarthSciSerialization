@@ -9,6 +9,9 @@ their composition, and runtime configuration.
 """
 module ESMFormat
 
+# Disable precompilation to avoid method overwriting errors with dependencies
+__precompile__(false)
+
 # Import required dependencies
 using JSON3
 using JSONSchema
