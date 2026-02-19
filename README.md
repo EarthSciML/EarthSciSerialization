@@ -141,7 +141,8 @@ The ESM format supports:
 - **[Format Specification](esm-spec.md)** — Complete ESM format documentation
 - **[Library Specification](esm-libraries-spec.md)** — Requirements for ESM library implementations
 - **[Schema Reference](esm-schema.json)** — Authoritative JSON schema
-- **[Conformance Testing](CONFORMANCE_TESTING.md)** — Cross-language test suite
+- **[Conformance Testing](CONFORMANCE_TESTING.md)** — Cross-language test suite (detailed technical docs)
+- **[Conformance Testing Guide](CONFORMANCE_TESTING_GUIDE.md)** — Practical usage guide and current status
 - **[Validation Matrix](ESM_COMPLIANCE_VALIDATION_MATRIX.md)** — Implementation compliance tracking
 
 ## Contributing
@@ -151,6 +152,19 @@ We welcome contributions! This project uses:
 - **[Beads](https://github.com/beadshq/beads)** for issue tracking and project management
 - **Julia** testing with `julia --project=. -e 'using Pkg; Pkg.test()'`
 - **Cross-language conformance tests** to ensure implementation consistency
+
+### Testing the Conformance Infrastructure
+
+```bash
+# Test conformance infrastructure with demonstration data
+./scripts/demo-conformance.sh
+
+# Test infrastructure components only
+./scripts/test-conformance-minimal.sh
+
+# Run full conformance tests (requires working language implementations)
+./scripts/test-conformance.sh
+```
 
 See individual package directories for language-specific development guides.
 
