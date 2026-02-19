@@ -498,6 +498,6 @@ mod tests {
         assert_eq!(result, vec![3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 17.0]);
 
         let dot = simd_math::dot_product_simd(&a, &b).unwrap();
-        assert_eq!(dot, 204.0); // 1*2 + 2*3 + ... + 8*9
+        assert_eq!(dot, 240.0); // 1*2 + 2*3 + ... + 8*9 = 240.0
     }
 }

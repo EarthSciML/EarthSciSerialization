@@ -49,6 +49,7 @@ pub mod error;
 pub mod reactions;
 pub mod units;
 pub mod edit;
+pub mod migration;
 
 #[cfg(feature = "wasm")]
 pub mod wasm;
@@ -86,6 +87,8 @@ pub use reactions::{
 
 #[cfg(feature = "parallel")]
 pub use reactions::stoichiometric_matrix_parallel;
+#[cfg(feature = "simd")]
+pub use reactions::compute_conservation_weights_simd;
 pub use units::{parse_unit, check_dimensional_consistency, convert_units, Unit, Dimension, UnitError};
 pub use edit::{
     add_model, remove_model, add_variable, remove_variable, add_equation, remove_equation,
@@ -93,6 +96,7 @@ pub use edit::{
     remove_reaction, update_model_metadata, substitute_in_expression, add_coupling,
     remove_coupling, replace_coupling, EditError
 };
+pub use migration::{migrate, can_migrate, get_supported_migration_targets, MigrationError};
 pub use error::EsmError;
 pub use performance::{PerformanceError, CompactExpr};
 
