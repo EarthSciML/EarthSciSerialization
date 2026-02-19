@@ -546,4 +546,48 @@ describe('toPythonCode', () => {
     expect(code).toContain('weather_loader = esm.GriddedDataLoader("weather")')
     expect(code).toContain('weather_data = weather_loader.load("weather_data.nc")')
   })
+
+  it('should populate parameters and initial_conditions dictionaries with default values', () => {
+    const file: EsmFile = {
+      esm: '0.1.0',
+      models: {
+        test: {
+          variables: {
+            O3: {
+              name: 'O3',
+              type: 'state',
+              default: 42.0,
+              units: 'ppb'
+            },
+            k1: {
+              name: 'k1',
+              type: 'parameter',
+              default: 0.123,
+              units: 's^-1'
+            }
+          }
+        }
+      },
+      reaction_systems: {
+        chemistry: {
+          species: {
+            A: { name: 'A', initial_value: 1e-6 },
+            B: { name: 'B', default: 2e-7 }
+          }
+        }
+      }
+    }
+
+    const code = toPythonCode(file)
+
+    // Check that parameters dictionary is populated with parameter defaults
+    expect(code).toContain('parameters = {')
+    expect(code).toContain('"k1": 0.123,')
+
+    // Check that initial_conditions dictionary is populated with state defaults and species defaults
+    expect(code).toContain('initial_conditions = {')
+    expect(code).toContain('"O3": 42,')  // State variable default
+    expect(code).toContain('"A": 0.000001,')  // Species initial_value (1e-6 in decimal)
+    expect(code).toContain('"B": 2e-7,')  // Species default (takes precedence)
+  })
 })
