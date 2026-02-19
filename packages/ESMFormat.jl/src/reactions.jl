@@ -155,9 +155,9 @@ function stoichiometric_matrix(rxn_sys::ReactionSystem)::Matrix{Int}
         # Handle substrates (negative stoichiometry)
         if reaction.substrates !== nothing
             for entry in reaction.substrates
-                if haskey(species_idx, entry.species)
-                    i = species_idx[entry.species]
-                    S[i, j] -= entry.stoichiometry
+                if haskey(species_idx, entry.first)
+                    i = species_idx[entry.first]
+                    S[i, j] -= entry.second
                 end
             end
         end
@@ -165,9 +165,9 @@ function stoichiometric_matrix(rxn_sys::ReactionSystem)::Matrix{Int}
         # Handle products (positive stoichiometry)
         if reaction.products !== nothing
             for entry in reaction.products
-                if haskey(species_idx, entry.species)
-                    i = species_idx[entry.species]
-                    S[i, j] += entry.stoichiometry
+                if haskey(species_idx, entry.first)
+                    i = species_idx[entry.first]
+                    S[i, j] += entry.second
                 end
             end
         end

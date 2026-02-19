@@ -104,7 +104,7 @@ function create_real_catalyst_system(rs::ReactionSystem)
 
     # Convert reactions to Reaction() objects
     catalyst_reactions = []
-    all_vars = merge(species_dict, param_dict)
+    all_vars = Base.merge(species_dict, param_dict)
 
     for (i, esm_reaction) in enumerate(rs.reactions)
         try
