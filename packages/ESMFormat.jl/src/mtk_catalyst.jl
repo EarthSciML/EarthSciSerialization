@@ -348,23 +348,23 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
     reactions = []
     for esm_reaction in rsys.reactions
         # Convert substrates (reactants)
-        reactants = []
-        reactant_stoich = []
+        reactants = Vector{Any}()
+        reactant_stoich = Vector{Real}()
         for (species_name, stoich) in esm_reaction.reactants
             push!(reactants, species_dict[species_name])
             push!(reactant_stoich, stoich)
         end
 
         # Convert products
-        products = []
-        product_stoich = []
+        products = Vector{Any}()
+        product_stoich = Vector{Real}()
         for (species_name, stoich) in esm_reaction.products
             push!(products, species_dict[species_name])
             push!(product_stoich, stoich)
         end
 
         # Convert rate expression
-        all_vars = merge(species_dict, param_dict)
+        all_vars = Base.merge(species_dict, param_dict)
         rate_expr = esm_to_symbolic_enhanced(esm_reaction.rate, all_vars, false)
 
         # Create Catalyst reaction
@@ -389,7 +389,7 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
     # Check if the reaction_system has events field
     if hasfield(typeof(rsys), :events) && !isempty(rsys.events)
         for event in rsys.events
-            all_vars = merge(species_dict, param_dict)
+            all_vars = Base.merge(species_dict, param_dict)
 
             if event isa ContinuousEvent
                 condition = esm_to_symbolic_enhanced(event.condition, all_vars, false)
