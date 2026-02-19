@@ -756,6 +756,118 @@ fn calculate_matrix_rank(matrix: &[Vec<f64>]) -> usize {
     rank
 }
 
+/// SIMD-optimized computation of conservation weights for batch analysis
+///
+/// This function demonstrates the use of SIMD operations for accelerated
+/// computation of conservation weights across multiple species concentrations.
+/// It uses the existing SIMD functions from the performance module.
+///
+/// # Arguments
+///
+/// * `species_concentrations` - Current concentrations of all species
+/// * `conservation_coefficients` - Linear combination coefficients for conservation laws
+///
+/// # Returns
+///
+/// * `Result<Vec<f64>, crate::PerformanceError>` - Conservation weights for each invariant
+///
+/// # Example
+///
+/// ```rust
+/// # #[cfg(feature = "simd")]
+/// # {
+/// use esm_format::compute_conservation_weights_simd;
+///
+/// let concentrations = vec![1.0, 2.0, 3.0, 4.0];
+/// let coefficients = vec![1.0, 1.0, -1.0, -1.0]; // Mass balance: A + B - C - D = 0
+/// let weights = compute_conservation_weights_simd(&concentrations, &coefficients).unwrap();
+/// # }
+/// ```
+#[cfg(feature = "simd")]
+pub fn compute_conservation_weights_simd(
+    species_concentrations: &[f64],
+    conservation_coefficients: &[f64]
+) -> Result<f64, crate::PerformanceError> {
+    if species_concentrations.len() != conservation_coefficients.len() {
+        return Err(crate::PerformanceError::SimdError(
+            "Concentration and coefficient arrays must have the same length".to_string()
+        ));
+    }
+
+    // Use SIMD dot product to compute the conservation weight
+    // This represents how well a conservation law is satisfied
+    crate::performance::simd_math::dot_product_simd(species_concentrations, conservation_coefficients)
+}
+
+/// Batch computation of multiple conservation weights using SIMD
+///
+/// Computes conservation weights for multiple invariants simultaneously,
+/// leveraging SIMD operations for improved performance with large datasets.
+///
+/// # Arguments
+///
+/// * `species_concentrations` - Current concentrations of all species
+/// * `conservation_matrix` - Matrix where each row represents conservation coefficients
+///
+/// # Returns
+///
+/// * `Result<Vec<f64>, crate::PerformanceError>` - Conservation weights for each invariant
+#[cfg(feature = "simd")]
+pub fn compute_batch_conservation_weights_simd(
+    species_concentrations: &[f64],
+    conservation_matrix: &[Vec<f64>]
+) -> Result<Vec<f64>, crate::PerformanceError> {
+    let mut weights = Vec::with_capacity(conservation_matrix.len());
+
+    for coefficients in conservation_matrix {
+        let weight = compute_conservation_weights_simd(species_concentrations, coefficients)?;
+        weights.push(weight);
+    }
+
+    Ok(weights)
+}
+
+/// SIMD-accelerated analysis of conservation law violations
+///
+/// Uses SIMD operations to efficiently compute conservation violations across
+/// multiple chemical species, which is useful for validating reaction mechanisms.
+///
+/// # Arguments
+///
+/// * `current_concentrations` - Species concentrations at current time
+/// * `previous_concentrations` - Species concentrations at previous time
+/// * `conservation_coefficients` - Linear combination coefficients
+///
+/// # Returns
+///
+/// * `Result<f64, crate::PerformanceError>` - Magnitude of conservation violation
+#[cfg(feature = "simd")]
+pub fn analyze_conservation_violation_simd(
+    current_concentrations: &[f64],
+    previous_concentrations: &[f64],
+    conservation_coefficients: &[f64]
+) -> Result<f64, crate::PerformanceError> {
+    if current_concentrations.len() != previous_concentrations.len() ||
+       current_concentrations.len() != conservation_coefficients.len() {
+        return Err(crate::PerformanceError::SimdError(
+            "All arrays must have the same length".to_string()
+        ));
+    }
+
+    // Compute change in concentrations using SIMD subtraction
+    let mut concentration_changes = vec![0.0; current_concentrations.len()];
+    let negated_previous: Vec<f64> = previous_concentrations.iter().map(|x| -x).collect();
+
+    crate::performance::simd_math::add_vectors_simd(
+        current_concentrations,
+        &negated_previous,
+        &mut concentration_changes
+    )?;
+
+    // Compute conservation violation using SIMD dot product
+    crate::performance::simd_math::dot_product_simd(&concentration_changes, conservation_coefficients)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1671,5 +1783,63 @@ mod tests {
         assert_eq!(violation.reaction_index, Some(0));
         assert_eq!(violation.magnitude, 1.5);
         assert_eq!(violation.species.len(), 2);
+    }
+
+    #[cfg(feature = "simd")]
+    #[test]
+    fn test_conservation_weights_simd() {
+        // Test SIMD computation of conservation weights
+        let concentrations = vec![2.0, 3.0, 4.0, 5.0];
+        let coefficients = vec![1.0, 1.0, -1.0, -1.0]; // A + B - C - D
+
+        let weight = compute_conservation_weights_simd(&concentrations, &coefficients).unwrap();
+
+        // Expected: 2*1 + 3*1 + 4*(-1) + 5*(-1) = 2 + 3 - 4 - 5 = -4
+        assert_eq!(weight, -4.0);
+    }
+
+    #[cfg(feature = "simd")]
+    #[test]
+    fn test_batch_conservation_weights_simd() {
+        // Test batch computation
+        let concentrations = vec![1.0, 2.0, 3.0, 4.0];
+        let matrix = vec![
+            vec![1.0, 1.0, 0.0, 0.0],     // First invariant: A + B
+            vec![0.0, 0.0, 1.0, 1.0],     // Second invariant: C + D
+            vec![1.0, -1.0, 1.0, -1.0],   // Third invariant: A - B + C - D
+        ];
+
+        let weights = compute_batch_conservation_weights_simd(&concentrations, &matrix).unwrap();
+
+        assert_eq!(weights.len(), 3);
+        assert_eq!(weights[0], 3.0);  // 1*1 + 2*1 = 3
+        assert_eq!(weights[1], 7.0);  // 3*1 + 4*1 = 7
+        assert_eq!(weights[2], -2.0); // 1*1 + (-1)*2 + 1*3 + (-1)*4 = 1 - 2 + 3 - 4 = -2
+    }
+
+    #[cfg(feature = "simd")]
+    #[test]
+    fn test_conservation_violation_simd() {
+        // Test SIMD analysis of conservation violations
+        let current = vec![5.0, 3.0, 2.0, 4.0];
+        let previous = vec![4.0, 2.0, 1.0, 3.0];
+        let coefficients = vec![1.0, 1.0, -1.0, -1.0]; // Conservation law: A + B - C - D = 0
+
+        let violation = analyze_conservation_violation_simd(&current, &previous, &coefficients).unwrap();
+
+        // Changes: [1.0, 1.0, 1.0, 1.0] (all increased by 1)
+        // Violation: 1*1 + 1*1 + (-1)*1 + (-1)*1 = 1 + 1 - 1 - 1 = 0
+        assert_eq!(violation, 0.0);
+    }
+
+    #[cfg(feature = "simd")]
+    #[test]
+    fn test_conservation_weights_simd_error_cases() {
+        // Test error handling
+        let concentrations = vec![1.0, 2.0];
+        let coefficients = vec![1.0, 1.0, 1.0]; // Wrong length
+
+        let result = compute_conservation_weights_simd(&concentrations, &coefficients);
+        assert!(result.is_err());
     }
 }
