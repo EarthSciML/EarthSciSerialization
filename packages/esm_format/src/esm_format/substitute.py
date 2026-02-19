@@ -2,8 +2,11 @@
 Expression substitution and variable replacement functions.
 """
 
-from typing import Dict, Union
-from .esm_types import Expr, ExprNode, Model, ReactionSystem, ModelVariable, Equation, AffectEquation, Parameter, Reaction
+from typing import Dict, Union, List
+from .esm_types import (
+    Expr, ExprNode, Model, ReactionSystem, ModelVariable, Equation,
+    AffectEquation, Parameter, Reaction, EsmFile, CouplingType, OperatorComposeCoupling
+)
 
 
 def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
@@ -130,4 +133,197 @@ def substitute_in_reaction_system(system: ReactionSystem, bindings: Dict[str, Ex
         species=system.species.copy(),  # Species don't contain expressions typically
         parameters=new_parameters,
         reactions=new_reactions
+    )
+
+
+def expand_var_placeholders(expr: Expr, variable_names: List[str]) -> List[Expr]:
+    """
+    Expand _var placeholders in an expression to create multiple expressions,
+    one for each variable name in the list.
+
+    Args:
+        expr: Expression that may contain _var placeholders
+        variable_names: List of variable names to substitute for _var
+
+    Returns:
+        List of expressions with _var replaced by each variable name
+    """
+    expanded_expressions = []
+    for var_name in variable_names:
+        # Create binding to replace _var with the actual variable name
+        bindings = {"_var": var_name}
+        expanded_expr = substitute(expr, bindings)
+        expanded_expressions.append(expanded_expr)
+
+    return expanded_expressions
+
+
+def expand_equation_placeholders(equation: Equation, variable_names: List[str]) -> List[Equation]:
+    """
+    Expand _var placeholders in an equation to create multiple equations,
+    one for each variable name in the list.
+
+    Args:
+        equation: Equation that may contain _var placeholders
+        variable_names: List of variable names to substitute for _var
+
+    Returns:
+        List of equations with _var replaced by each variable name
+    """
+    expanded_equations = []
+    for var_name in variable_names:
+        # Create binding to replace _var with the actual variable name
+        bindings = {"_var": var_name}
+        expanded_lhs = substitute(equation.lhs, bindings)
+        expanded_rhs = substitute(equation.rhs, bindings)
+        expanded_equation = Equation(lhs=expanded_lhs, rhs=expanded_rhs)
+        expanded_equations.append(expanded_equation)
+
+    return expanded_equations
+
+
+def has_var_placeholder(expr: Expr) -> bool:
+    """
+    Check if an expression contains _var placeholder.
+
+    Args:
+        expr: Expression to check
+
+    Returns:
+        True if expression contains _var placeholder, False otherwise
+    """
+    if isinstance(expr, str):
+        return expr == "_var"
+    elif isinstance(expr, ExprNode):
+        # Check recursively in all arguments
+        return any(has_var_placeholder(arg) for arg in expr.args)
+    else:
+        # Numbers and other types don't contain placeholders
+        return False
+
+
+def get_state_variables(model: Model) -> List[str]:
+    """
+    Extract state variable names from a model.
+
+    Args:
+        model: Model to extract state variables from
+
+    Returns:
+        List of state variable names
+    """
+    state_variables = []
+    for name, var in model.variables.items():
+        if var.type == "state":
+            state_variables.append(name)
+    return state_variables
+
+
+def expand_model_placeholders(model: Model, state_variables: List[str]) -> Model:
+    """
+    Expand _var placeholders in a model's equations using the provided state variables.
+
+    Args:
+        model: Model containing equations that may have _var placeholders
+        state_variables: List of state variable names to expand _var to
+
+    Returns:
+        New model with _var placeholders expanded to create multiple equations
+    """
+    new_equations = []
+
+    for equation in model.equations:
+        # Check if this equation has _var placeholders
+        has_lhs_placeholder = has_var_placeholder(equation.lhs)
+        has_rhs_placeholder = has_var_placeholder(equation.rhs)
+
+        if has_lhs_placeholder or has_rhs_placeholder:
+            # Expand this equation for each state variable
+            expanded_equations = expand_equation_placeholders(equation, state_variables)
+            new_equations.extend(expanded_equations)
+        else:
+            # Keep equation unchanged
+            new_equations.append(equation)
+
+    # Return new model with expanded equations
+    return Model(
+        name=model.name,
+        variables=model.variables.copy(),
+        equations=new_equations,
+        metadata=model.metadata.copy()
+    )
+
+
+def process_operator_compose_placeholders(esm_file: EsmFile) -> EsmFile:
+    """
+    Process operator_compose couplings in an ESM file and expand _var placeholders.
+
+    This function implements the operator_compose coupling algorithm:
+    1. Find all operator_compose couplings
+    2. For each coupling, collect state variables from all coupled systems
+    3. Expand _var placeholders in models that contain them
+    4. Return the modified ESM file
+
+    Args:
+        esm_file: ESM file containing models and couplings
+
+    Returns:
+        New ESM file with _var placeholders expanded in operator_compose couplings
+    """
+    if not esm_file.coupling:
+        return esm_file
+
+    # Create a copy of the ESM file to avoid modifying the original
+    new_models = esm_file.models.copy() if esm_file.models else {}
+
+    # Find all operator_compose couplings
+    for coupling in esm_file.coupling:
+        if (isinstance(coupling, OperatorComposeCoupling) or
+            (hasattr(coupling, 'coupling_type') and coupling.coupling_type == CouplingType.OPERATOR_COMPOSE)):
+
+            if not coupling.systems or len(coupling.systems) < 2:
+                continue
+
+            # Collect state variables from all coupled systems
+            all_state_variables = []
+            for system_name in coupling.systems:
+                if system_name in new_models:
+                    model = new_models[system_name]
+                    state_vars = get_state_variables(model)
+                    all_state_variables.extend(state_vars)
+
+            # Remove duplicates while preserving order
+            unique_state_variables = []
+            for var in all_state_variables:
+                if var not in unique_state_variables:
+                    unique_state_variables.append(var)
+
+            # Process each system in the coupling
+            for system_name in coupling.systems:
+                if system_name in new_models:
+                    model = new_models[system_name]
+
+                    # Check if this model has any equations with _var placeholders
+                    has_placeholders = any(
+                        has_var_placeholder(eq.lhs) or has_var_placeholder(eq.rhs)
+                        for eq in model.equations
+                    )
+
+                    if has_placeholders and unique_state_variables:
+                        # Expand placeholders using state variables from all coupled systems
+                        expanded_model = expand_model_placeholders(model, unique_state_variables)
+                        new_models[system_name] = expanded_model
+
+    # Create a new ESM file with the modified models
+    return EsmFile(
+        version=esm_file.version,
+        metadata=esm_file.metadata,
+        models=new_models,
+        reaction_systems=esm_file.reaction_systems,
+        coupling=esm_file.coupling,
+        data_loaders=esm_file.data_loaders,
+        operators=esm_file.operators,
+        events=esm_file.events,
+        domain=esm_file.domain,
+        solver=esm_file.solver
     )
