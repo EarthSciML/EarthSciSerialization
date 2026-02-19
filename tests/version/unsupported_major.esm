@@ -1,0 +1,30 @@
+{
+  "esm": "2.0.0",
+  "metadata": {
+    "name": "UnsupportedVersion",
+    "description": "ESM file with unsupported major version",
+    "authors": ["Test Suite"],
+    "license": "MIT",
+    "created": "2026-02-19T00:00:00Z",
+    "modified": "2026-02-19T00:00:00Z"
+  },
+  "models": {
+    "future_model": {
+      "variables": {
+        "x": {
+          "initial": 1.0,
+          "rhs": {"op": "future_operator", "args": ["x"]},
+          "units": "kg"
+        }
+      },
+      "future_field": {
+        "new_feature": "This field doesn't exist in version 0.1.0"
+      }
+    }
+  },
+  "future_top_level": {
+    "advanced_coupling": {
+      "quantum_entanglement": true
+    }
+  }
+}

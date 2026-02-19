@@ -1,0 +1,41 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "VariableTypesTest",
+    "description": "Model variables with valid type field values",
+    "authors": ["Test Author"]
+  },
+  "models": {
+    "VariableTypesModel": {
+      "variables": {
+        "state_var": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1.0e-6,
+          "description": "Example state variable (time-dependent unknown)"
+        },
+        "param_var": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 0.001,
+          "description": "Example parameter (externally set constant)"
+        },
+        "observed_var": {
+          "type": "observed",
+          "units": "mol/mol/s",
+          "expression": {
+            "op": "*",
+            "args": ["param_var", "state_var"]
+          },
+          "description": "Example observed variable (derived quantity with expression)"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["state_var"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["param_var"]}, "state_var"]}
+        }
+      ]
+    }
+  }
+}

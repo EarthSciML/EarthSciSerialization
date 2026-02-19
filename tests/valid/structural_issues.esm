@@ -1,0 +1,39 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "StructuralIssuesTest",
+    "description": "Valid JSON and schema but with structural validation issues",
+    "authors": ["Test Author"],
+    "created": "2026-02-19T00:00:00Z"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1e-6,
+          "description": "Test state variable x"
+        },
+        "y": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 2e-6,
+          "description": "Test state variable y"
+        },
+        "k": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 0.001,
+          "description": "Rate constant"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["k"]}, "x"]}
+        }
+      ]
+    }
+  }
+}

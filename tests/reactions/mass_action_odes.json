@@ -1,0 +1,179 @@
+[
+  {
+    "description": "Simple bimolecular reaction: A + B → C",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1e-6},
+        "B": {"units": "mol/mol", "default": 2e-6},
+        "C": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "k1": {"units": "1/s", "default": 1e-3}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [
+            {"species": "A", "stoichiometry": 1},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "C", "stoichiometry": 1}
+          ],
+          "rate": "k1"
+        }
+      ]
+    },
+    "expected_odes": {
+      "A": {
+        "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+        "rhs": {"op": "*", "args": [{"op": "-", "args": ["k1"]}, "A", "B"]}
+      },
+      "B": {
+        "lhs": {"op": "D", "args": ["B"], "wrt": "t"},
+        "rhs": {"op": "*", "args": [{"op": "-", "args": ["k1"]}, "A", "B"]}
+      },
+      "C": {
+        "lhs": {"op": "D", "args": ["C"], "wrt": "t"},
+        "rhs": {"op": "*", "args": ["k1", "A", "B"]}
+      }
+    },
+    "mass_action_formula": "v = k1 * A * B"
+  },
+  {
+    "description": "Reaction with stoichiometry > 1: 2A → B",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 2e-6},
+        "B": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "k2": {"units": "1/s", "default": 5e-4}
+      },
+      "reactions": [
+        {
+          "id": "R2",
+          "substrates": [
+            {"species": "A", "stoichiometry": 2}
+          ],
+          "products": [
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "rate": "k2"
+        }
+      ]
+    },
+    "expected_odes": {
+      "A": {
+        "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+        "rhs": {"op": "*", "args": [{"op": "-", "args": [2]}, "k2", {"op": "^", "args": ["A", 2]}]}
+      },
+      "B": {
+        "lhs": {"op": "D", "args": ["B"], "wrt": "t"},
+        "rhs": {"op": "*", "args": ["k2", {"op": "^", "args": ["A", 2]}]}
+      }
+    },
+    "mass_action_formula": "v = k2 * A^2"
+  },
+  {
+    "description": "Reversible reaction: A ⇌ B",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1e-6},
+        "B": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "k_forward": {"units": "1/s", "default": 1e-3},
+        "k_reverse": {"units": "1/s", "default": 5e-4}
+      },
+      "reactions": [
+        {
+          "id": "R_forward",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": [{"species": "B", "stoichiometry": 1}],
+          "rate": "k_forward"
+        },
+        {
+          "id": "R_reverse",
+          "substrates": [{"species": "B", "stoichiometry": 1}],
+          "products": [{"species": "A", "stoichiometry": 1}],
+          "rate": "k_reverse"
+        }
+      ]
+    },
+    "expected_odes": {
+      "A": {
+        "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+        "rhs": {
+          "op": "+",
+          "args": [
+            {"op": "*", "args": [{"op": "-", "args": ["k_forward"]}, "A"]},
+            {"op": "*", "args": ["k_reverse", "B"]}
+          ]
+        }
+      },
+      "B": {
+        "lhs": {"op": "D", "args": ["B"], "wrt": "t"},
+        "rhs": {
+          "op": "+",
+          "args": [
+            {"op": "*", "args": ["k_forward", "A"]},
+            {"op": "*", "args": [{"op": "-", "args": ["k_reverse"]}, "B"]}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "description": "Source reaction: ∅ → A",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "production_rate": {"units": "mol/mol/s", "default": 1e-8}
+      },
+      "reactions": [
+        {
+          "id": "R_source",
+          "substrates": null,
+          "products": [{"species": "A", "stoichiometry": 1}],
+          "rate": "production_rate"
+        }
+      ]
+    },
+    "expected_odes": {
+      "A": {
+        "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+        "rhs": "production_rate"
+      }
+    },
+    "mass_action_formula": "v = production_rate"
+  },
+  {
+    "description": "Sink reaction: A → ∅",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1e-6}
+      },
+      "parameters": {
+        "decay_rate": {"units": "1/s", "default": 1e-4}
+      },
+      "reactions": [
+        {
+          "id": "R_sink",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": null,
+          "rate": "decay_rate"
+        }
+      ]
+    },
+    "expected_odes": {
+      "A": {
+        "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+        "rhs": {"op": "*", "args": [{"op": "-", "args": ["decay_rate"]}, "A"]}
+      }
+    },
+    "mass_action_formula": "v = decay_rate * A"
+  }
+]

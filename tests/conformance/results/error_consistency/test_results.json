@@ -4,28 +4,53 @@
     "julia": {
       "language": "julia",
       "file": "equation_count_mismatch.esm",
-      "error": {
-        "type": "timeout",
-        "message": "Julia validation timed out"
+      "load_error": {
+        "message": "MethodError(get, (SchemaError(\"/\", \"Validation failed:\\npath:         top-level\\ninstance:     Dict{String, Any}(\\\"esm\\\" => \\\"0.1.0\\\", \\\"metadata\\\" => Dict(\\\"name\\\" => \\\"EquationCountMismatch\\\"))\\nschema key:   anyOf\\nschema value: Dict{String, Any}[Dict(\\\"required\\\" => [\\\"models\\\"]), Dict(\\\"required\\\" => [\\\"reaction_systems\\\"])]\\n\", \"unknown\"), :keyword, \"\"), 0x0000000000009749)",
+        "type": "MethodError"
       }
     },
     "typescript": {
       "language": "typescript",
       "file": "equation_count_mismatch.esm",
-      "error": {
-        "type": "execution_error",
-        "returncode": 1,
-        "stdout": "",
-        "stderr": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/dist/index.js' imported from /tmp/tmphxnwbhl0.mjs\nDid you mean to import \"../home/ctessum/EarthSciSerialization/packages/esm-format/dist/index.js\"?\n    at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n    at moduleResolve (node:internal/modules/esm/resolve:864:10)\n    at defaultResolve (node:internal/modules/esm/resolve:990:11)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:718:20)\n    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:735:38)\n    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:764:52)\n    at #resolve (node:internal/modules/esm/loader:700:17)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:620:35)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:143:33)\n    at ModuleJob.link (node:internal/modules/esm/module_job:228:17) {\n  code: 'ERR_MODULE_NOT_FOUND',\n  url: 'file:///tmp/dist/index.js'\n}\n\nNode.js v24.13.0\n"
+      "validation_result": {
+        "valid": false,
+        "schema_errors": [],
+        "structural_errors": [
+          {
+            "path": "/models/TestModel",
+            "message": "Number of ODE equations (1) does not match number of state variables (2)",
+            "code": "equation_count_mismatch",
+            "details": {
+              "state_variables": [
+                "x",
+                "y"
+              ],
+              "ode_equations": 1,
+              "missing_equations_for": [
+                "y"
+              ]
+            }
+          }
+        ]
       }
     },
     "python": {
       "language": "python",
       "file": "equation_count_mismatch.esm",
       "validation_result": {
-        "valid": true,
+        "valid": false,
         "schema_errors": [],
-        "structural_errors": []
+        "structural_errors": [
+          {
+            "path": "$",
+            "message": "Validation failed with unexpected error: 'str' object has no attribute 'models'",
+            "code": "validation_error",
+            "details": {
+              "exception_type": "AttributeError",
+              "traceback": "Traceback (most recent call last):\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 116, in validate\n    _validate_equation_balance_enhanced(esm_file, error_collector)\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 276, in _validate_equation_balance_enhanced\n    for i, model in enumerate(esm_file.models):\n                              ^^^^^^^^^^^^^^^\nAttributeError: 'str' object has no attribute 'models'\n"
+            }
+          }
+        ]
       }
     }
   },
@@ -34,19 +59,843 @@
     "julia": {
       "language": "julia",
       "file": "complete_error_coverage.esm",
-      "error": {
-        "type": "timeout",
-        "message": "Julia validation timed out"
+      "load_error": {
+        "message": "SchemaValidationError(\"Schema validation failed with 1 error(s):\\\\n  - /: Validation failed:\\npath:         [coupling][1]\\ninstance:     Dict{String, Any}(\\\"to\\\" => \\\"BadModel.x\\\", \\\"from\\\" => \\\"NonExistentSystem.var\\\", \\\"type\\\" => \\\"variable_map\\\")\\nschema key:   oneOf\\nschema value: Dict{String, Any}[Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"systems\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"translate\\\" => Dict{String, Any}(\\\"additionalProperties\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"required\\\" => [\\\"var\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"factor\\\" => Dict{String, Any}(\\\"type\\\" => \\\"number\\\"), \\\"var\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\")], \\\"description\\\" => \\\"Translation target: a simple variable reference string or an object with var and factor.\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Variable mappings when LHS variables don't have matching names.\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"operator_compose\\\"), \\\"systems\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"minItems\\\" => 2, \\\"maxItems\\\" => 2, \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"The two systems to compose.\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Match LHS time derivatives and add RHS terms together.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"systems\\\", \\\"coupletype_pair\\\", \\\"connector\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"systems\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"minItems\\\" => 2, \\\"maxItems\\\" => 2, \\\"type\\\" => \\\"array\\\"), \\\"coupletype_pair\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"minItems\\\" => 2, \\\"maxItems\\\" => 2, \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"The coupletype names for each system.\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"connector\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"equations\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"equations\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"from\\\", \\\"to\\\", \\\"transform\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"expression\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\"), \\\"description\\\" => \\\"The coupling expression.\\\"), \\\"to\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target variable (scoped reference).\\\"), \\\"from\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Source variable (scoped reference).\\\"), \\\"transform\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"How the expression modifies the target.\\\", \\\"enum\\\" => [\\\"additive\\\", \\\"multiplicative\\\", \\\"replacement\\\"])), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"A single equation in a ConnectorSystem linking two coupled systems.\\\")), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\")), \\\"type\\\" => \\\"object\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"couple2\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Bi-directional coupling via coupletype dispatch.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"from\\\", \\\"to\\\", \\\"transform\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"factor\\\" => Dict{String, Any}(\\\"type\\\" => \\\"number\\\", \\\"description\\\" => \\\"Conversion factor (for conversion_factor transform).\\\"), \\\"to\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target parameter (scoped reference, e.g., \\\\\\\"SuperFast.T\\\\\\\").\\\"), \\\"from\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Source variable (scoped reference, e.g., \\\\\\\"GEOSFP.T\\\\\\\").\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"variable_map\\\"), \\\"transform\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"How the mapping is applied.\\\", \\\"enum\\\" => [\\\"param_to_var\\\", \\\"identity\\\", \\\"additive\\\", \\\"multiplicative\\\", \\\"conversion_factor\\\"]), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Replace a parameter in one system with a variable from another.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"operator\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"operator\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Name of the operator (key in the operators section).\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"operator_apply\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Register an Operator to run during simulation.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"callback_id\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"config\\\" => Dict{String, Any}(\\\"additionalProperties\\\" => true, \\\"type\\\" => \\\"object\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"callback\\\"), \\\"callback_id\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Registered identifier for the callback.\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Register a callback for simulation events.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"event_type\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"functional_affect\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"handler_id\\\", \\\"read_vars\\\", \\\"read_params\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"read_vars\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"State variables accessed by the handler.\\\"), \\\"read_params\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Parameters accessed by the handler.\\\"), \\\"config\\\" => Dict{String, Any}(\\\"additionalProperties\\\" => true, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Handler-specific configuration.\\\"), \\\"modified_params\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Parameters modified by the handler (implicitly discrete parameters).\\\"), \\\"handler_id\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Registered identifier for the affect implementation.\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"A registered functional affect handler for complex event behavior that cannot be expressed symbolically.\\\"), \\\"description\\\" => \\\"Registered functional affect handler (alternative to symbolic affects).\\\"), \\\"discrete_parameters\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\"), \\\"reinitialize\\\" => Dict{String, Any}(\\\"type\\\" => \\\"boolean\\\"), \\\"name\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Human-readable identifier.\\\"), \\\"event_type\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Whether this is a continuous or discrete event.\\\", \\\"enum\\\" => [\\\"continuous\\\", \\\"discrete\\\"]), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"trigger\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"required\\\" => [\\\"type\\\", \\\"expression\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"expression\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\")), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"condition\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Fires when the boolean expression is true at the end of a timestep.\\\"), Dict(\\\"required\\\" => [\\\"type\\\", \\\"interval\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"interval\\\" => Dict{String, Any}(\\\"exclusiveMinimum\\\" => 0, \\\"type\\\" => \\\"number\\\", \\\"description\\\" => \\\"Interval in simulation time units.\\\"), \\\"initial_offset\\\" => Dict{String, Any}(\\\"default\\\" => 0, \\\"type\\\" => \\\"number\\\", \\\"description\\\" => \\\"Offset from t=0 for the first firing.\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"periodic\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Fires every interval time units.\\\"), Dict(\\\"required\\\" => [\\\"type\\\", \\\"times\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"times\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"number\\\"), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Array of simulation times at which to fire.\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"preset_times\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Fires at each specified time.\\\")], \\\"description\\\" => \\\"Trigger specification for a discrete event.\\\"), \\\"description\\\" => \\\"Trigger specification (for discrete events).\\\"), \\\"conditions\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\")), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Condition expressions (zero-crossing for continuous, boolean for discrete).\\\"), \\\"affect_neg\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"null\\\"), Dict(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"lhs\\\", \\\"rhs\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"rhs\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\"), \\\"description\\\" => \\\"Expression for the new value. Use Pre(var) to reference pre-event values.\\\"), \\\"lhs\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target variable name (value after the event).\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An affect equation in an event: lhs is the target variable (string), rhs is an expression.\\\")), \\\"type\\\" => \\\"array\\\")]), \\\"affects\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"lhs\\\", \\\"rhs\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"rhs\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\"), \\\"description\\\" => \\\"Expression for the new value. Use Pre(var) to reference pre-event values.\\\"), \\\"lhs\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target variable name (value after the event).\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An affect equation in an event: lhs is the target variable (string), rhs is an expression.\\\")), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Affect equations. Required unless functional_affect is used.\\\"), \\\"root_find\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"enum\\\" => [\\\"left\\\", \\\"right\\\", \\\"all\\\"]), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"event\\\")), \\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"required\\\" => [\\\"affects\\\"]), Dict(\\\"required\\\" => [\\\"functional_affect\\\"])], \\\"allOf\\\" => Dict{String, Any}[Dict(\\\"if\\\" => Dict{String, Any}(\\\"properties\\\" => Dict{String, Any}(\\\"event_type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"continuous\\\"))), \\\"then\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"conditions\\\"])), Dict(\\\"if\\\" => Dict{String, Any}(\\\"properties\\\" => Dict{String, Any}(\\\"event_type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"discrete\\\"))), \\\"then\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"trigger\\\"]))], \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Cross-system event involving variables from multiple coupled systems.\\\"))]\\n (unknown)\\\\n\", SchemaError[SchemaError(\"/\", \"Validation failed:\\npath:         [coupling][1]\\ninstance:     Dict{String, Any}(\\\"to\\\" => \\\"BadModel.x\\\", \\\"from\\\" => \\\"NonExistentSystem.var\\\", \\\"type\\\" => \\\"variable_map\\\")\\nschema key:   oneOf\\nschema value: Dict{String, Any}[Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"systems\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"translate\\\" => Dict{String, Any}(\\\"additionalProperties\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"required\\\" => [\\\"var\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"factor\\\" => Dict{String, Any}(\\\"type\\\" => \\\"number\\\"), \\\"var\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\")], \\\"description\\\" => \\\"Translation target: a simple variable reference string or an object with var and factor.\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Variable mappings when LHS variables don't have matching names.\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"operator_compose\\\"), \\\"systems\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"minItems\\\" => 2, \\\"maxItems\\\" => 2, \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"The two systems to compose.\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Match LHS time derivatives and add RHS terms together.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"systems\\\", \\\"coupletype_pair\\\", \\\"connector\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"systems\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"minItems\\\" => 2, \\\"maxItems\\\" => 2, \\\"type\\\" => \\\"array\\\"), \\\"coupletype_pair\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"minItems\\\" => 2, \\\"maxItems\\\" => 2, \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"The coupletype names for each system.\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"connector\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"equations\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"equations\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"from\\\", \\\"to\\\", \\\"transform\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"expression\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\"), \\\"description\\\" => \\\"The coupling expression.\\\"), \\\"to\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target variable (scoped reference).\\\"), \\\"from\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Source variable (scoped reference).\\\"), \\\"transform\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"How the expression modifies the target.\\\", \\\"enum\\\" => [\\\"additive\\\", \\\"multiplicative\\\", \\\"replacement\\\"])), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"A single equation in a ConnectorSystem linking two coupled systems.\\\")), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\")), \\\"type\\\" => \\\"object\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"couple2\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Bi-directional coupling via coupletype dispatch.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"from\\\", \\\"to\\\", \\\"transform\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"factor\\\" => Dict{String, Any}(\\\"type\\\" => \\\"number\\\", \\\"description\\\" => \\\"Conversion factor (for conversion_factor transform).\\\"), \\\"to\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target parameter (scoped reference, e.g., \\\\\\\"SuperFast.T\\\\\\\").\\\"), \\\"from\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Source variable (scoped reference, e.g., \\\\\\\"GEOSFP.T\\\\\\\").\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"variable_map\\\"), \\\"transform\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"How the mapping is applied.\\\", \\\"enum\\\" => [\\\"param_to_var\\\", \\\"identity\\\", \\\"additive\\\", \\\"multiplicative\\\", \\\"conversion_factor\\\"]), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Replace a parameter in one system with a variable from another.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"operator\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"operator\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Name of the operator (key in the operators section).\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"operator_apply\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Register an Operator to run during simulation.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"callback_id\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"config\\\" => Dict{String, Any}(\\\"additionalProperties\\\" => true, \\\"type\\\" => \\\"object\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"callback\\\"), \\\"callback_id\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Registered identifier for the callback.\\\"), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Register a callback for simulation events.\\\")), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"type\\\", \\\"event_type\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"functional_affect\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"handler_id\\\", \\\"read_vars\\\", \\\"read_params\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"read_vars\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"State variables accessed by the handler.\\\"), \\\"read_params\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Parameters accessed by the handler.\\\"), \\\"config\\\" => Dict{String, Any}(\\\"additionalProperties\\\" => true, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Handler-specific configuration.\\\"), \\\"modified_params\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Parameters modified by the handler (implicitly discrete parameters).\\\"), \\\"handler_id\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Registered identifier for the affect implementation.\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"A registered functional affect handler for complex event behavior that cannot be expressed symbolically.\\\"), \\\"description\\\" => \\\"Registered functional affect handler (alternative to symbolic affects).\\\"), \\\"discrete_parameters\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"type\\\" => \\\"array\\\"), \\\"reinitialize\\\" => Dict{String, Any}(\\\"type\\\" => \\\"boolean\\\"), \\\"name\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Human-readable identifier.\\\"), \\\"event_type\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Whether this is a continuous or discrete event.\\\", \\\"enum\\\" => [\\\"continuous\\\", \\\"discrete\\\"]), \\\"description\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\"), \\\"trigger\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"required\\\" => [\\\"type\\\", \\\"expression\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"expression\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\")), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"condition\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Fires when the boolean expression is true at the end of a timestep.\\\"), Dict(\\\"required\\\" => [\\\"type\\\", \\\"interval\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"interval\\\" => Dict{String, Any}(\\\"exclusiveMinimum\\\" => 0, \\\"type\\\" => \\\"number\\\", \\\"description\\\" => \\\"Interval in simulation time units.\\\"), \\\"initial_offset\\\" => Dict{String, Any}(\\\"default\\\" => 0, \\\"type\\\" => \\\"number\\\", \\\"description\\\" => \\\"Offset from t=0 for the first firing.\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"periodic\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Fires every interval time units.\\\"), Dict(\\\"required\\\" => [\\\"type\\\", \\\"times\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"times\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"type\\\" => \\\"number\\\"), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Array of simulation times at which to fire.\\\"), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"preset_times\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Fires at each specified time.\\\")], \\\"description\\\" => \\\"Trigger specification for a discrete event.\\\"), \\\"description\\\" => \\\"Trigger specification (for discrete events).\\\"), \\\"conditions\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\")), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Condition expressions (zero-crossing for continuous, boolean for discrete).\\\"), \\\"affect_neg\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"null\\\"), Dict(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"lhs\\\", \\\"rhs\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"rhs\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\"), \\\"description\\\" => \\\"Expression for the new value. Use Pre(var) to reference pre-event values.\\\"), \\\"lhs\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target variable name (value after the event).\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An affect equation in an event: lhs is the target variable (string), rhs is an expression.\\\")), \\\"type\\\" => \\\"array\\\")]), \\\"affects\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"lhs\\\", \\\"rhs\\\"], \\\"additionalProperties\\\" => false, \\\"properties\\\" => Dict{String, Any}(\\\"rhs\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"type\\\" => \\\"number\\\"), Dict(\\\"type\\\" => \\\"string\\\"), Dict(\\\"\\\\\\$ref\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"op\\\", \\\"args\\\"], \\\"properties\\\" => Dict{String, Any}(\\\"args\\\" => Dict{String, Any}(\\\"items\\\" => Dict{String, Any}(\\\"\\\\\\$ref\\\" => Dict{String, Any}(#= circular reference @-7 =#)), \\\"minItems\\\" => 1, \\\"type\\\" => \\\"array\\\"), \\\"dim\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Spatial dimension for grad operator (e.g., \\\\\\\"x\\\\\\\", \\\\\\\"y\\\\\\\", \\\\\\\"z\\\\\\\").\\\"), \\\"op\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Operator name.\\\", \\\"enum\\\" => [\\\"+\\\", \\\"-\\\", \\\"*\\\", \\\"/\\\", \\\"^\\\", \\\"D\\\", \\\"grad\\\", \\\"div\\\", \\\"laplacian\\\", \\\"exp\\\", \\\"log\\\", \\\"log10\\\", \\\"sqrt\\\", \\\"abs\\\", \\\"sin\\\", \\\"cos\\\", \\\"tan\\\", \\\"asin\\\", \\\"acos\\\", \\\"atan\\\", \\\"atan2\\\", \\\"min\\\", \\\"max\\\", \\\"floor\\\", \\\"ceil\\\", \\\"ifelse\\\", \\\">\\\", \\\"<\\\", \\\">=\\\", \\\"<=\\\", \\\"==\\\", \\\"!=\\\", \\\"and\\\", \\\"or\\\", \\\"not\\\", \\\"Pre\\\", \\\"sign\\\"]), \\\"wrt\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Differentiation variable for D operator (e.g., \\\\\\\"t\\\\\\\").\\\")), \\\"additionalProperties\\\" => false, \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An operation in the expression AST.\\\"))], \\\"description\\\" => \\\"Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.\\\"), \\\"description\\\" => \\\"Expression for the new value. Use Pre(var) to reference pre-event values.\\\"), \\\"lhs\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"description\\\" => \\\"Target variable name (value after the event).\\\")), \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"An affect equation in an event: lhs is the target variable (string), rhs is an expression.\\\")), \\\"type\\\" => \\\"array\\\", \\\"description\\\" => \\\"Affect equations. Required unless functional_affect is used.\\\"), \\\"root_find\\\" => Dict{String, Any}(\\\"type\\\" => \\\"string\\\", \\\"enum\\\" => [\\\"left\\\", \\\"right\\\", \\\"all\\\"]), \\\"type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"event\\\")), \\\"oneOf\\\" => Dict{String, Any}[Dict(\\\"required\\\" => [\\\"affects\\\"]), Dict(\\\"required\\\" => [\\\"functional_affect\\\"])], \\\"allOf\\\" => Dict{String, Any}[Dict(\\\"if\\\" => Dict{String, Any}(\\\"properties\\\" => Dict{String, Any}(\\\"event_type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"continuous\\\"))), \\\"then\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"conditions\\\"])), Dict(\\\"if\\\" => Dict{String, Any}(\\\"properties\\\" => Dict{String, Any}(\\\"event_type\\\" => Dict{String, Any}(\\\"const\\\" => \\\"discrete\\\"))), \\\"then\\\" => Dict{String, Any}(\\\"required\\\" => [\\\"trigger\\\"]))], \\\"type\\\" => \\\"object\\\", \\\"description\\\" => \\\"Cross-system event involving variables from multiple coupled systems.\\\"))]\\n\", \"unknown\")])",
+        "type": "SchemaValidationError"
       }
     },
     "typescript": {
       "language": "typescript",
       "file": "complete_error_coverage.esm",
-      "error": {
-        "type": "execution_error",
-        "returncode": 1,
-        "stdout": "",
-        "stderr": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/dist/index.js' imported from /tmp/tmp3fkzx8ss.mjs\nDid you mean to import \"../home/ctessum/EarthSciSerialization/packages/esm-format/dist/index.js\"?\n    at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n    at moduleResolve (node:internal/modules/esm/resolve:864:10)\n    at defaultResolve (node:internal/modules/esm/resolve:990:11)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:718:20)\n    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:735:38)\n    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:764:52)\n    at #resolve (node:internal/modules/esm/loader:700:17)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:620:35)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:143:33)\n    at ModuleJob.link (node:internal/modules/esm/module_job:228:17) {\n  code: 'ERR_MODULE_NOT_FOUND',\n  url: 'file:///tmp/dist/index.js'\n}\n\nNode.js v24.13.0\n"
+      "validation_result": {
+        "valid": false,
+        "schema_errors": [
+          {
+            "path": "/models/BadModel",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/models/BadModel/variables/observed_without_expr",
+            "message": "must have required property 'expression'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/models/BadModel/variables/observed_without_expr",
+            "message": "must match \"then\" schema",
+            "code": "if",
+            "details": {
+              "keyword": "if"
+            }
+          },
+          {
+            "path": "/models/BadModel/equations/0",
+            "message": "must be object",
+            "code": "type",
+            "details": {
+              "keyword": "type"
+            }
+          },
+          {
+            "path": "/models/BadModel/discrete_events/0/trigger",
+            "message": "must be object",
+            "code": "type",
+            "details": {
+              "keyword": "type"
+            }
+          },
+          {
+            "path": "/models/BadModel/discrete_events/0/trigger",
+            "message": "must be object",
+            "code": "type",
+            "details": {
+              "keyword": "type"
+            }
+          },
+          {
+            "path": "/models/BadModel/discrete_events/0/trigger",
+            "message": "must be object",
+            "code": "type",
+            "details": {
+              "keyword": "type"
+            }
+          },
+          {
+            "path": "/models/BadModel/discrete_events/0/trigger",
+            "message": "must match exactly one schema in oneOf",
+            "code": "oneOf",
+            "details": {
+              "keyword": "oneOf"
+            }
+          },
+          {
+            "path": "/models/BadModel/continuous_events/0",
+            "message": "must have required property 'conditions'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/models/BadModel/continuous_events/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'systems'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'systems'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'coupletype_pair'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'connector'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'transform'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'operator'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'callback_id'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'affects'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'functional_affect'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must match exactly one schema in oneOf",
+            "code": "oneOf",
+            "details": {
+              "keyword": "oneOf"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'conditions'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must match \"then\" schema",
+            "code": "if",
+            "details": {
+              "keyword": "if"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'trigger'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must match \"then\" schema",
+            "code": "if",
+            "details": {
+              "keyword": "if"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must have required property 'event_type'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/0/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/0",
+            "message": "must match exactly one schema in oneOf",
+            "code": "oneOf",
+            "details": {
+              "keyword": "oneOf"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/1/systems",
+            "message": "must NOT have fewer than 2 items",
+            "code": "minItems",
+            "details": {
+              "keyword": "minItems"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'coupletype_pair'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'connector'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/1/systems",
+            "message": "must NOT have fewer than 2 items",
+            "code": "minItems",
+            "details": {
+              "keyword": "minItems"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'from'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'to'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'transform'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'callback_id'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'affects'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'functional_affect'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must match exactly one schema in oneOf",
+            "code": "oneOf",
+            "details": {
+              "keyword": "oneOf"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'conditions'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must match \"then\" schema",
+            "code": "if",
+            "details": {
+              "keyword": "if"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'trigger'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must match \"then\" schema",
+            "code": "if",
+            "details": {
+              "keyword": "if"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must have required property 'event_type'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/1/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/1",
+            "message": "must match exactly one schema in oneOf",
+            "code": "oneOf",
+            "details": {
+              "keyword": "oneOf"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/2/systems",
+            "message": "must NOT have fewer than 2 items",
+            "code": "minItems",
+            "details": {
+              "keyword": "minItems"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'coupletype_pair'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'connector'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/2/systems",
+            "message": "must NOT have fewer than 2 items",
+            "code": "minItems",
+            "details": {
+              "keyword": "minItems"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'from'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'to'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'transform'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'callback_id'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'affects'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'functional_affect'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must match exactly one schema in oneOf",
+            "code": "oneOf",
+            "details": {
+              "keyword": "oneOf"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'conditions'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must match \"then\" schema",
+            "code": "if",
+            "details": {
+              "keyword": "if"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'trigger'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must match \"then\" schema",
+            "code": "if",
+            "details": {
+              "keyword": "if"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must have required property 'event_type'",
+            "code": "required",
+            "details": {
+              "keyword": "required"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must NOT have additional properties",
+            "code": "additionalProperties",
+            "details": {
+              "keyword": "additionalProperties"
+            }
+          },
+          {
+            "path": "/coupling/2/type",
+            "message": "must be equal to constant",
+            "code": "const",
+            "details": {
+              "keyword": "const"
+            }
+          },
+          {
+            "path": "/coupling/2",
+            "message": "must match exactly one schema in oneOf",
+            "code": "oneOf",
+            "details": {
+              "keyword": "oneOf"
+            }
+          }
+        ],
+        "structural_errors": []
       }
     },
     "python": {
@@ -54,386 +903,18 @@
       "file": "complete_error_coverage.esm",
       "validation_result": {
         "valid": false,
-        "schema_errors": [
+        "schema_errors": [],
+        "structural_errors": [
           {
-            "path": "models.BadModel",
-            "message": "Additional properties are not allowed ('type' was unexpected)",
-            "code": "additionalProperties",
+            "path": "$",
+            "message": "Validation failed with unexpected error: 'str' object has no attribute 'models'",
+            "code": "validation_error",
             "details": {
-              "validator": "additionalProperties",
-              "validator_value": false,
-              "schema_path": [
-                "properties",
-                "models",
-                "additionalProperties",
-                "additionalProperties"
-              ],
-              "instance": {
-                "type": "ode",
-                "variables": {
-                  "x": {
-                    "type": "state",
-                    "units": "kg",
-                    "description": "State variable x",
-                    "default": 1.0
-                  },
-                  "y": {
-                    "type": "state",
-                    "units": "kg",
-                    "description": "State variable y",
-                    "default": 0.0
-                  },
-                  "observed_without_expr": {
-                    "type": "observed",
-                    "units": "kg",
-                    "description": "Observed variable missing expression"
-                  }
-                },
-                "equations": [
-                  "dx/dt = undefined_rate + undefined_var"
-                ],
-                "continuous_events": [
-                  {
-                    "name": "bad_event",
-                    "condition": "undefined_condition_var > 0",
-                    "affects": [
-                      {
-                        "lhs": "nonexistent_var",
-                        "rhs": "0.0"
-                      }
-                    ]
-                  }
-                ],
-                "discrete_events": [
-                  {
-                    "name": "bad_discrete_event",
-                    "trigger": "t > 5.0",
-                    "discrete_parameters": [
-                      "undefined_discrete_param"
-                    ],
-                    "affects": [
-                      {
-                        "lhs": "x",
-                        "rhs": "1.0"
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "path": "models.BadModel.variables.observed_without_expr",
-            "message": "'expression' is a required property",
-            "code": "required",
-            "details": {
-              "validator": "required",
-              "validator_value": [
-                "expression"
-              ],
-              "schema_path": [
-                "properties",
-                "models",
-                "additionalProperties",
-                "properties",
-                "variables",
-                "additionalProperties",
-                "then",
-                "required"
-              ],
-              "instance": {
-                "type": "observed",
-                "units": "kg",
-                "description": "Observed variable missing expression"
-              }
-            }
-          },
-          {
-            "path": "models.BadModel.equations[0]",
-            "message": "'dx/dt = undefined_rate + undefined_var' is not of type 'object'",
-            "code": "type",
-            "details": {
-              "validator": "type",
-              "validator_value": "object",
-              "schema_path": [
-                "properties",
-                "models",
-                "additionalProperties",
-                "properties",
-                "equations",
-                "items",
-                "type"
-              ],
-              "instance": "dx/dt = undefined_rate + undefined_var"
-            }
-          },
-          {
-            "path": "models.BadModel.discrete_events[0].trigger",
-            "message": "'t > 5.0' is not valid under any of the given schemas",
-            "code": "oneOf",
-            "details": {
-              "validator": "oneOf",
-              "validator_value": [
-                {
-                  "type": "object",
-                  "description": "Fires when the boolean expression is true at the end of a timestep.",
-                  "required": [
-                    "type",
-                    "expression"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "const": "condition"
-                    },
-                    "expression": {
-                      "$ref": "#/$defs/Expression"
-                    }
-                  }
-                },
-                {
-                  "type": "object",
-                  "description": "Fires every interval time units.",
-                  "required": [
-                    "type",
-                    "interval"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "const": "periodic"
-                    },
-                    "interval": {
-                      "type": "number",
-                      "exclusiveMinimum": 0,
-                      "description": "Interval in simulation time units."
-                    },
-                    "initial_offset": {
-                      "type": "number",
-                      "description": "Offset from t=0 for the first firing.",
-                      "default": 0
-                    }
-                  }
-                },
-                {
-                  "type": "object",
-                  "description": "Fires at each specified time.",
-                  "required": [
-                    "type",
-                    "times"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "const": "preset_times"
-                    },
-                    "times": {
-                      "type": "array",
-                      "items": {
-                        "type": "number"
-                      },
-                      "minItems": 1,
-                      "description": "Array of simulation times at which to fire."
-                    }
-                  }
-                }
-              ],
-              "schema_path": [
-                "properties",
-                "models",
-                "additionalProperties",
-                "properties",
-                "discrete_events",
-                "items",
-                "properties",
-                "trigger",
-                "oneOf"
-              ],
-              "instance": "t > 5.0"
-            }
-          },
-          {
-            "path": "models.BadModel.continuous_events[0]",
-            "message": "'conditions' is a required property",
-            "code": "required",
-            "details": {
-              "validator": "required",
-              "validator_value": [
-                "conditions",
-                "affects"
-              ],
-              "schema_path": [
-                "properties",
-                "models",
-                "additionalProperties",
-                "properties",
-                "continuous_events",
-                "items",
-                "required"
-              ],
-              "instance": {
-                "name": "bad_event",
-                "condition": "undefined_condition_var > 0",
-                "affects": [
-                  {
-                    "lhs": "nonexistent_var",
-                    "rhs": "0.0"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "path": "models.BadModel.continuous_events[0]",
-            "message": "Additional properties are not allowed ('condition' was unexpected)",
-            "code": "additionalProperties",
-            "details": {
-              "validator": "additionalProperties",
-              "validator_value": false,
-              "schema_path": [
-                "properties",
-                "models",
-                "additionalProperties",
-                "properties",
-                "continuous_events",
-                "items",
-                "additionalProperties"
-              ],
-              "instance": {
-                "name": "bad_event",
-                "condition": "undefined_condition_var > 0",
-                "affects": [
-                  {
-                    "lhs": "nonexistent_var",
-                    "rhs": "0.0"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "path": "coupling[0]",
-            "message": "{'type': 'variable_map', 'from': 'NonExistentSystem.var', 'to': 'BadModel.x'} is not valid under any of the given schemas",
-            "code": "oneOf",
-            "details": {
-              "validator": "oneOf",
-              "validator_value": [
-                {
-                  "$ref": "#/$defs/CouplingOperatorCompose"
-                },
-                {
-                  "$ref": "#/$defs/CouplingCouple2"
-                },
-                {
-                  "$ref": "#/$defs/CouplingVariableMap"
-                },
-                {
-                  "$ref": "#/$defs/CouplingOperatorApply"
-                },
-                {
-                  "$ref": "#/$defs/CouplingCallback"
-                },
-                {
-                  "$ref": "#/$defs/CouplingEvent"
-                }
-              ],
-              "schema_path": [
-                "properties",
-                "coupling",
-                "items",
-                "oneOf"
-              ],
-              "instance": {
-                "type": "variable_map",
-                "from": "NonExistentSystem.var",
-                "to": "BadModel.x"
-              }
-            }
-          },
-          {
-            "path": "coupling[1]",
-            "message": "{'type': 'operator_apply', 'operator': 'MissingOperator', 'systems': ['BadModel']} is not valid under any of the given schemas",
-            "code": "oneOf",
-            "details": {
-              "validator": "oneOf",
-              "validator_value": [
-                {
-                  "$ref": "#/$defs/CouplingOperatorCompose"
-                },
-                {
-                  "$ref": "#/$defs/CouplingCouple2"
-                },
-                {
-                  "$ref": "#/$defs/CouplingVariableMap"
-                },
-                {
-                  "$ref": "#/$defs/CouplingOperatorApply"
-                },
-                {
-                  "$ref": "#/$defs/CouplingCallback"
-                },
-                {
-                  "$ref": "#/$defs/CouplingEvent"
-                }
-              ],
-              "schema_path": [
-                "properties",
-                "coupling",
-                "items",
-                "oneOf"
-              ],
-              "instance": {
-                "type": "operator_apply",
-                "operator": "MissingOperator",
-                "systems": [
-                  "BadModel"
-                ]
-              }
-            }
-          },
-          {
-            "path": "coupling[2]",
-            "message": "{'type': 'operator_apply', 'operator': 'TestOperator', 'systems': ['BadModel']} is not valid under any of the given schemas",
-            "code": "oneOf",
-            "details": {
-              "validator": "oneOf",
-              "validator_value": [
-                {
-                  "$ref": "#/$defs/CouplingOperatorCompose"
-                },
-                {
-                  "$ref": "#/$defs/CouplingCouple2"
-                },
-                {
-                  "$ref": "#/$defs/CouplingVariableMap"
-                },
-                {
-                  "$ref": "#/$defs/CouplingOperatorApply"
-                },
-                {
-                  "$ref": "#/$defs/CouplingCallback"
-                },
-                {
-                  "$ref": "#/$defs/CouplingEvent"
-                }
-              ],
-              "schema_path": [
-                "properties",
-                "coupling",
-                "items",
-                "oneOf"
-              ],
-              "instance": {
-                "type": "operator_apply",
-                "operator": "TestOperator",
-                "systems": [
-                  "BadModel"
-                ]
-              }
+              "exception_type": "AttributeError",
+              "traceback": "Traceback (most recent call last):\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 116, in validate\n    _validate_equation_balance_enhanced(esm_file, error_collector)\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 276, in _validate_equation_balance_enhanced\n    for i, model in enumerate(esm_file.models):\n                              ^^^^^^^^^^^^^^^\nAttributeError: 'str' object has no attribute 'models'\n"
             }
           }
-        ],
-        "structural_errors": []
+        ]
       }
     }
   }

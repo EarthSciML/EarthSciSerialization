@@ -1,0 +1,53 @@
+{
+  "description": "Invalid Expression AST structures that violate grammar: Expr := number | string | ExprNode",
+  "test_cases": [
+    {
+      "name": "array_not_allowed",
+      "ast": [1, 2, 3],
+      "valid": false,
+      "expected_error": "Arrays are not valid expressions",
+      "description": "Arrays violate the grammar"
+    },
+    {
+      "name": "object_without_op",
+      "ast": {
+        "args": [1, 2],
+        "not_op": "add"
+      },
+      "valid": false,
+      "expected_error": "ExprNode must have 'op' field",
+      "description": "Object without 'op' field is invalid"
+    },
+    {
+      "name": "object_without_args",
+      "ast": {
+        "op": "add",
+        "not_args": [1, 2]
+      },
+      "valid": false,
+      "expected_error": "ExprNode must have 'args' field",
+      "description": "Object without 'args' field is invalid"
+    },
+    {
+      "name": "null_value",
+      "ast": null,
+      "valid": false,
+      "expected_error": "null is not a valid expression",
+      "description": "null values are not valid expressions"
+    },
+    {
+      "name": "boolean_value",
+      "ast": true,
+      "valid": false,
+      "expected_error": "Booleans are not valid expressions",
+      "description": "Boolean values are not valid expressions"
+    },
+    {
+      "name": "empty_object",
+      "ast": {},
+      "valid": false,
+      "expected_error": "Empty object missing required 'op' field",
+      "description": "Empty objects are invalid"
+    }
+  ]
+}

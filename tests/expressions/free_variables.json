@@ -1,0 +1,70 @@
+[
+  {
+    "description": "Simple variable reference",
+    "input": "O3",
+    "expected": ["O3"]
+  },
+  {
+    "description": "Number literal has no variables",
+    "input": 42.5,
+    "expected": []
+  },
+  {
+    "description": "Addition with two variables",
+    "input": {
+      "op": "+",
+      "args": ["a", "b"]
+    },
+    "expected": ["a", "b"]
+  },
+  {
+    "description": "Nested expression with mixed variables and constants",
+    "input": {
+      "op": "*",
+      "args": [
+        {"op": "+", "args": ["k1", 1.8e-12]},
+        "O3",
+        "NO"
+      ]
+    },
+    "expected": ["k1", "O3", "NO"]
+  },
+  {
+    "description": "Time derivative expression",
+    "input": {
+      "op": "D",
+      "args": ["concentration"],
+      "wrt": "t"
+    },
+    "expected": ["concentration"]
+  },
+  {
+    "description": "Function call with multiple arguments",
+    "input": {
+      "op": "exp",
+      "args": [
+        {"op": "/", "args": [-1370, "T"]}
+      ]
+    },
+    "expected": ["T"]
+  },
+  {
+    "description": "Complex reaction rate expression",
+    "input": {
+      "op": "*",
+      "args": [
+        {"op": "*", "args": [1.8e-12, {"op": "exp", "args": [{"op": "/", "args": [-1370, "T"]}]}]},
+        "M"
+      ]
+    },
+    "expected": ["T", "M"]
+  },
+  {
+    "description": "Empty args array",
+    "input": {
+      "op": "random",
+      "args": []
+    },
+    "expected": []
+  }
+]

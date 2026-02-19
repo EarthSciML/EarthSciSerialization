@@ -1,0 +1,161 @@
+[
+  {
+    "description": "StructuralError structure with required fields",
+    "expected_fields": ["path", "code", "message", "details"],
+    "field_descriptions": {
+      "path": "JSON Pointer to the relevant component (e.g., '/models/SuperFast')",
+      "code": "Machine-readable error code for automated handling",
+      "message": "Human-readable description of the error",
+      "details": "Additional context with key-value pairs"
+    }
+  },
+  {
+    "description": "Equation count mismatch",
+    "input_violation": {
+      "type": "equation_count_mismatch",
+      "model_name": "TestModel",
+      "state_variables": ["x", "y"],
+      "equations": [{"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": "k"}]
+    },
+    "expected_structural_error": {
+      "path": "/models/TestModel",
+      "code": "equation_count_mismatch",
+      "message": "Number of ODE equations (1) does not match number of state variables (2)",
+      "details": {
+        "state_variables": 2,
+        "ode_equations": 1,
+        "missing_equations": ["y"]
+      }
+    }
+  },
+  {
+    "description": "Undefined variable in equation",
+    "input_violation": {
+      "type": "undefined_variable",
+      "model_name": "TestModel",
+      "variable_name": "unknown_var",
+      "location": "equation RHS"
+    },
+    "expected_structural_error": {
+      "path": "/models/TestModel/equations/0",
+      "code": "undefined_variable",
+      "message": "Variable 'unknown_var' referenced in equation is not declared",
+      "details": {
+        "variable": "unknown_var",
+        "expected_in": "variables"
+      }
+    }
+  },
+  {
+    "description": "Undefined species in reaction",
+    "input_violation": {
+      "type": "undefined_species",
+      "system_name": "TestRxns",
+      "species_name": "CO3",
+      "reaction_id": "R1"
+    },
+    "expected_structural_error": {
+      "path": "/reaction_systems/TestRxns/reactions/0",
+      "code": "undefined_species",
+      "message": "Species 'CO3' referenced in reaction R1 is not declared",
+      "details": {
+        "species": "CO3",
+        "reaction": "R1",
+        "expected_in": "species"
+      }
+    }
+  },
+  {
+    "description": "Unresolved scoped reference",
+    "input_violation": {
+      "type": "unresolved_scoped_ref",
+      "reference": "NonExistent.Model.var",
+      "location": "coupling"
+    },
+    "expected_structural_error": {
+      "path": "/coupling/0",
+      "code": "unresolved_scoped_ref",
+      "message": "Scoped reference 'NonExistent.Model.var' cannot be resolved",
+      "details": {
+        "scoped_reference": "NonExistent.Model.var",
+        "missing_segment": "NonExistent",
+        "resolution_path": []
+      }
+    }
+  },
+  {
+    "description": "Invalid discrete parameter",
+    "input_violation": {
+      "type": "invalid_discrete_param",
+      "event_name": "test_event",
+      "parameter": "not_a_param",
+      "model_name": "TestModel"
+    },
+    "expected_structural_error": {
+      "path": "/models/TestModel/discrete_events/0",
+      "code": "invalid_discrete_param",
+      "message": "discrete_parameters entry 'not_a_param' does not match a declared parameter",
+      "details": {
+        "parameter": "not_a_param",
+        "event": "test_event",
+        "expected_in": "parameters"
+      }
+    }
+  },
+  {
+    "description": "Null reaction (both substrates and products null)",
+    "input_violation": {
+      "type": "null_reaction",
+      "reaction_id": "R_null",
+      "system_name": "TestRxns"
+    },
+    "expected_structural_error": {
+      "path": "/reaction_systems/TestRxns/reactions/0",
+      "code": "null_reaction",
+      "message": "Reaction R_null has both substrates: null and products: null",
+      "details": {
+        "reaction": "R_null",
+        "substrates": null,
+        "products": null
+      }
+    }
+  },
+  {
+    "description": "Event variable undeclared",
+    "input_violation": {
+      "type": "event_var_undeclared",
+      "event_name": "test_event",
+      "variable": "undeclared_var",
+      "location": "affects"
+    },
+    "expected_structural_error": {
+      "path": "/models/TestModel/discrete_events/0",
+      "code": "event_var_undeclared",
+      "message": "Variable 'undeclared_var' in event affects is not declared",
+      "details": {
+        "variable": "undeclared_var",
+        "event": "test_event",
+        "location": "affects",
+        "expected_in": "variables"
+      }
+    }
+  },
+  {
+    "description": "Undefined system in coupling",
+    "input_violation": {
+      "type": "undefined_system",
+      "coupling_type": "operator_compose",
+      "system_name": "NonExistentModel"
+    },
+    "expected_structural_error": {
+      "path": "/coupling/0",
+      "code": "undefined_system",
+      "message": "Coupling entry references nonexistent system 'NonExistentModel'",
+      "details": {
+        "system": "NonExistentModel",
+        "coupling_type": "operator_compose",
+        "expected_in": ["models", "reaction_systems", "data_loaders", "operators"]
+      }
+    }
+  }
+]

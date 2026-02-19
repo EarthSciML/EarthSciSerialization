@@ -1,0 +1,68 @@
+{
+  "description": "Valid Expression AST structures following grammar: Expr := number | string | ExprNode",
+  "test_cases": [
+    {
+      "name": "simple_number",
+      "ast": 3.14,
+      "valid": true,
+      "description": "Numbers are valid expressions"
+    },
+    {
+      "name": "negative_number",
+      "ast": -1.5,
+      "valid": true,
+      "description": "Negative numbers are valid"
+    },
+    {
+      "name": "scientific_notation",
+      "ast": 1.8e-12,
+      "valid": true,
+      "description": "Scientific notation numbers are valid"
+    },
+    {
+      "name": "string_reference",
+      "ast": "O3",
+      "valid": true,
+      "description": "String variable references are valid"
+    },
+    {
+      "name": "parameter_reference",
+      "ast": "k1",
+      "valid": true,
+      "description": "String parameter references are valid"
+    },
+    {
+      "name": "simple_expr_node",
+      "ast": {
+        "op": "add",
+        "args": [1, 2]
+      },
+      "valid": true,
+      "description": "ExprNode with op and args is valid"
+    },
+    {
+      "name": "nested_expr_node",
+      "ast": {
+        "op": "mult",
+        "args": [
+          {
+            "op": "add",
+            "args": ["x", 1]
+          },
+          "y"
+        ]
+      },
+      "valid": true,
+      "description": "Nested ExprNodes are valid"
+    },
+    {
+      "name": "unary_operator",
+      "ast": {
+        "op": "neg",
+        "args": ["x"]
+      },
+      "valid": true,
+      "description": "Unary operators are valid"
+    }
+  ]
+}

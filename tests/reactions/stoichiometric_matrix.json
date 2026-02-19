@@ -1,0 +1,211 @@
+[
+  {
+    "description": "Simple bimolecular reaction: A + B → C",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1e-6},
+        "B": {"units": "mol/mol", "default": 2e-6},
+        "C": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "k1": {"units": "1/s", "default": 1e-3}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [
+            {"species": "A", "stoichiometry": 1},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "C", "stoichiometry": 1}
+          ],
+          "rate": "k1"
+        }
+      ]
+    },
+    "expected_matrix": {
+      "species_order": ["A", "B", "C"],
+      "reaction_order": ["R1"],
+      "matrix": [
+        [-1],
+        [-1],
+        [1]
+      ],
+      "description": "Species × Reactions matrix, net stoichiometry (products - substrates)"
+    }
+  },
+  {
+    "description": "Multiple reactions with shared species: A → B, B → C",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1e-6},
+        "B": {"units": "mol/mol", "default": 0.0},
+        "C": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "k1": {"units": "1/s", "default": 1e-3},
+        "k2": {"units": "1/s", "default": 5e-4}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": [{"species": "B", "stoichiometry": 1}],
+          "rate": "k1"
+        },
+        {
+          "id": "R2",
+          "substrates": [{"species": "B", "stoichiometry": 1}],
+          "products": [{"species": "C", "stoichiometry": 1}],
+          "rate": "k2"
+        }
+      ]
+    },
+    "expected_matrix": {
+      "species_order": ["A", "B", "C"],
+      "reaction_order": ["R1", "R2"],
+      "matrix": [
+        [-1, 0],
+        [1, -1],
+        [0, 1]
+      ]
+    }
+  },
+  {
+    "description": "Reaction with stoichiometry > 1: 2A + B → 3C",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 2e-6},
+        "B": {"units": "mol/mol", "default": 1e-6},
+        "C": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "k": {"units": "1/s", "default": 1e-4}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [
+            {"species": "A", "stoichiometry": 2},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "C", "stoichiometry": 3}
+          ],
+          "rate": "k"
+        }
+      ]
+    },
+    "expected_matrix": {
+      "species_order": ["A", "B", "C"],
+      "reaction_order": ["R1"],
+      "matrix": [
+        [-2],
+        [-1],
+        [3]
+      ]
+    }
+  },
+  {
+    "description": "Source and sink reactions: ∅ → A, A → ∅",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1e-6}
+      },
+      "parameters": {
+        "production": {"units": "mol/mol/s", "default": 1e-8},
+        "decay": {"units": "1/s", "default": 1e-5}
+      },
+      "reactions": [
+        {
+          "id": "R_source",
+          "substrates": null,
+          "products": [{"species": "A", "stoichiometry": 1}],
+          "rate": "production"
+        },
+        {
+          "id": "R_sink",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": null,
+          "rate": "decay"
+        }
+      ]
+    },
+    "expected_matrix": {
+      "species_order": ["A"],
+      "reaction_order": ["R_source", "R_sink"],
+      "matrix": [
+        [1, -1]
+      ]
+    }
+  },
+  {
+    "description": "Complex network: A + B ⇌ C, C → D + E",
+    "reaction_system": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1e-6},
+        "B": {"units": "mol/mol", "default": 1e-6},
+        "C": {"units": "mol/mol", "default": 0.0},
+        "D": {"units": "mol/mol", "default": 0.0},
+        "E": {"units": "mol/mol", "default": 0.0}
+      },
+      "parameters": {
+        "k_f": {"units": "1/s", "default": 1e-3},
+        "k_r": {"units": "1/s", "default": 5e-4},
+        "k_3": {"units": "1/s", "default": 2e-4}
+      },
+      "reactions": [
+        {
+          "id": "R_forward",
+          "substrates": [
+            {"species": "A", "stoichiometry": 1},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "products": [{"species": "C", "stoichiometry": 1}],
+          "rate": "k_f"
+        },
+        {
+          "id": "R_reverse",
+          "substrates": [{"species": "C", "stoichiometry": 1}],
+          "products": [
+            {"species": "A", "stoichiometry": 1},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "rate": "k_r"
+        },
+        {
+          "id": "R_decomp",
+          "substrates": [{"species": "C", "stoichiometry": 1}],
+          "products": [
+            {"species": "D", "stoichiometry": 1},
+            {"species": "E", "stoichiometry": 1}
+          ],
+          "rate": "k_3"
+        }
+      ]
+    },
+    "expected_matrix": {
+      "species_order": ["A", "B", "C", "D", "E"],
+      "reaction_order": ["R_forward", "R_reverse", "R_decomp"],
+      "matrix": [
+        [-1, 1, 0],
+        [-1, 1, 0],
+        [1, -1, -1],
+        [0, 0, 1],
+        [0, 0, 1]
+      ]
+    }
+  },
+  {
+    "description": "Matrix properties and validation",
+    "validation_requirements": {
+      "dimensions": "Species (rows) × Reactions (columns)",
+      "values": "Integer stoichiometric coefficients, net = products - substrates",
+      "negative": "Species consumed as substrate",
+      "positive": "Species produced as product",
+      "zero": "Species not involved in reaction",
+      "conservation": "Column sums may be non-zero (not all reactions are mass-conserving individually)"
+    }
+  }
+]

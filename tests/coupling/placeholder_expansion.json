@@ -1,0 +1,165 @@
+[
+  {
+    "description": "_var placeholder expansion algorithm",
+    "test_cases": [
+      {
+        "name": "Single state variable expansion",
+        "target_system": {
+          "variables": {
+            "C": {"type": "state", "units": "mol/mol"},
+            "k": {"type": "parameter", "units": "1/s"}
+          }
+        },
+        "operator_equation": {
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["decay_rate"]}, "_var"]}
+        },
+        "expected_expansions": [
+          {
+            "lhs": {"op": "D", "args": ["C"], "wrt": "t"},
+            "rhs": {"op": "*", "args": [{"op": "-", "args": ["decay_rate"]}, "C"]}
+          }
+        ]
+      },
+      {
+        "name": "Multiple state variables expansion",
+        "target_system": {
+          "variables": {
+            "O3": {"type": "state"},
+            "NO": {"type": "state"},
+            "NO2": {"type": "state"},
+            "T": {"type": "parameter"}
+          }
+        },
+        "operator_equation": {
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "+", "args": [
+            {"op": "*", "args": [{"op": "-", "args": ["u"]}, {"op": "grad", "args": ["_var"], "dim": "x"}]},
+            {"op": "*", "args": [{"op": "-", "args": ["v"]}, {"op": "grad", "args": ["_var"], "dim": "y"}]}
+          ]}
+        },
+        "expected_expansions": [
+          {
+            "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+            "rhs": {"op": "+", "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["u"]}, {"op": "grad", "args": ["O3"], "dim": "x"}]},
+              {"op": "*", "args": [{"op": "-", "args": ["v"]}, {"op": "grad", "args": ["O3"], "dim": "y"}]}
+            ]}
+          },
+          {
+            "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
+            "rhs": {"op": "+", "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["u"]}, {"op": "grad", "args": ["NO"], "dim": "x"}]},
+              {"op": "*", "args": [{"op": "-", "args": ["v"]}, {"op": "grad", "args": ["NO"], "dim": "y"}]}
+            ]}
+          },
+          {
+            "lhs": {"op": "D", "args": ["NO2"], "wrt": "t"},
+            "rhs": {"op": "+", "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["u"]}, {"op": "grad", "args": ["NO2"], "dim": "x"}]},
+              {"op": "*", "args": [{"op": "-", "args": ["v"]}, {"op": "grad", "args": ["NO2"], "dim": "y"}]}
+            ]}
+          }
+        ],
+        "note": "Parameters (T) are not state variables, so not expanded"
+      },
+      {
+        "name": "Complex placeholder in nested expression",
+        "target_system": {
+          "variables": {
+            "X": {"type": "state"},
+            "Y": {"type": "state"}
+          }
+        },
+        "operator_equation": {
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "laplacian", "args": [{"op": "*", "args": ["D", "_var"]}]}
+        },
+        "expected_expansions": [
+          {
+            "lhs": {"op": "D", "args": ["X"], "wrt": "t"},
+            "rhs": {"op": "laplacian", "args": [{"op": "*", "args": ["D", "X"]}]}
+          },
+          {
+            "lhs": {"op": "D", "args": ["Y"], "wrt": "t"},
+            "rhs": {"op": "laplacian", "args": [{"op": "*", "args": ["D", "Y"]}]}
+          }
+        ]
+      },
+      {
+        "name": "No state variables - no expansion",
+        "target_system": {
+          "variables": {
+            "a": {"type": "parameter"},
+            "b": {"type": "parameter"}
+          }
+        },
+        "operator_equation": {
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "*", "args": ["rate", "_var"]}
+        },
+        "expected_expansions": [],
+        "note": "No state variables found, placeholder equation not expanded"
+      }
+    ]
+  },
+  {
+    "description": "Placeholder substitution rules",
+    "substitution_rules": [
+      {
+        "rule": "_var placeholder matches only state variables",
+        "explanation": "Parameters and observed variables are not substituted"
+      },
+      {
+        "rule": "All occurrences of _var in equation are replaced with same variable",
+        "explanation": "Consistent substitution within each expanded equation"
+      },
+      {
+        "rule": "Placeholder occurs only on LHS derivative argument and in RHS expressions",
+        "explanation": "D(_var, t) and references to _var in RHS are both substituted"
+      },
+      {
+        "rule": "One expanded equation per state variable",
+        "explanation": "N state variables produce N expanded equations"
+      }
+    ]
+  },
+  {
+    "description": "Edge cases and validation",
+    "edge_cases": [
+      {
+        "case": "Placeholder in non-derivative LHS",
+        "equation": {
+          "lhs": "_var",
+          "rhs": {"op": "*", "args": ["k", "_var"]}
+        },
+        "validity": "valid",
+        "note": "Algebraic equations with placeholders are allowed"
+      },
+      {
+        "case": "Multiple placeholders in expression",
+        "equation": {
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "+", "args": ["_var", "_var"]}
+        },
+        "expanded_example": {
+          "variable": "A",
+          "result": {
+            "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+            "rhs": {"op": "+", "args": ["A", "A"]}
+          }
+        },
+        "note": "All _var occurrences replaced with same variable"
+      },
+      {
+        "case": "Mixed placeholder and explicit variables",
+        "equation": {
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "*", "args": ["temperature", "_var"]}
+        },
+        "validity": "valid",
+        "note": "Explicit variable references preserved during expansion"
+      }
+    ]
+  }
+]

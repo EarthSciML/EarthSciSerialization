@@ -1,0 +1,30 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "InvalidNoSystems",
+    "description": "ESM file with neither models nor reaction_systems",
+    "authors": ["Test Suite"],
+    "license": "MIT",
+    "created": "2026-02-19T00:00:00Z",
+    "modified": "2026-02-19T00:00:00Z"
+  },
+  "data_loaders": {
+    "weather": {
+      "type": "netcdf",
+      "path": "weather.nc",
+      "provides_vars": ["temperature", "pressure"]
+    }
+  },
+  "domain": {
+    "temporal": {
+      "start": "2023-01-01T00:00:00Z",
+      "end": "2023-01-02T00:00:00Z",
+      "step": "PT1H"
+    }
+  },
+  "solver": {
+    "strategy": "coupled_explicit",
+    "rtol": 1e-6,
+    "atol": 1e-8
+  }
+}
