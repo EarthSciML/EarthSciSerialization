@@ -145,11 +145,66 @@ export function toPythonCode(file: EsmFile): string {
     }
   }
 
-  // Generate simulation stub
-  lines.push('# Simulation setup (TODO: Configure parameters)')
+  // Generate simulation setup with actual default values
+  lines.push('# Simulation setup')
   lines.push('tspan = (0, 10)  # time span')
-  lines.push('parameters = {}  # parameter values')
-  lines.push('initial_conditions = {}  # initial values')
+
+  // Collect default values from all models and reaction systems
+  const parameters: { [key: string]: any } = {}
+  const initialConditions: { [key: string]: any } = {}
+
+  // Collect from models
+  if (file.models) {
+    for (const model of Object.values(file.models)) {
+      if (model.variables) {
+        for (const [varName, variable] of Object.entries(model.variables)) {
+          if (variable.type === 'parameter' && variable.default !== undefined) {
+            parameters[varName] = variable.default
+          } else if (variable.type === 'state' && variable.default !== undefined) {
+            initialConditions[varName] = variable.default
+          }
+        }
+      }
+    }
+  }
+
+  // Collect from reaction systems
+  if (file.reaction_systems) {
+    for (const reactionSystem of Object.values(file.reaction_systems)) {
+      if (reactionSystem.species) {
+        for (const [speciesName, species] of Object.entries(reactionSystem.species)) {
+          // Handle both "default" and "initial_value" properties, with "default" taking precedence
+          const initialValue = species.default !== undefined ? species.default : (species as any).initial_value
+          if (initialValue !== undefined) {
+            initialConditions[speciesName] = initialValue
+          }
+        }
+      }
+    }
+  }
+
+  // Generate parameters dictionary
+  if (Object.keys(parameters).length > 0) {
+    lines.push('parameters = {')
+    for (const [name, value] of Object.entries(parameters)) {
+      lines.push(`    "${name}": ${value},`)
+    }
+    lines.push('}')
+  } else {
+    lines.push('parameters = {}  # no parameter defaults specified')
+  }
+
+  // Generate initial conditions dictionary
+  if (Object.keys(initialConditions).length > 0) {
+    lines.push('initial_conditions = {')
+    for (const [name, value] of Object.entries(initialConditions)) {
+      lines.push(`    "${name}": ${value},`)
+    }
+    lines.push('}')
+  } else {
+    lines.push('initial_conditions = {}  # no initial condition defaults specified')
+  }
+
   lines.push('')
   lines.push('# result = esm.simulate(tspan=tspan, parameters=parameters, initial_conditions=initial_conditions)')
   lines.push('')
