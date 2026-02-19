@@ -372,7 +372,10 @@ function esm_to_mtk_expr(expr::Expr, var_dict::Dict{String, Any}, t)
                 error("grad operator requires dim parameter")
             end
         elseif expr.op == "div"
-            # Divergence operator with respect to spatial dimension
+            # Divergence operator: In ESM format, div(F, dim) computes the partial derivative ∂F/∂dim
+            # where F is a vector field component and dim is the spatial dimension.
+            # This is used to build up the full divergence ∇·F = ∂Fx/∂x + ∂Fy/∂y + ∂Fz/∂z
+            # by applying div to each component separately.
             arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
             if expr.dim !== nothing
                 dim_var = Symbol(expr.dim)
@@ -381,16 +384,47 @@ function esm_to_mtk_expr(expr::Expr, var_dict::Dict{String, Any}, t)
                 D = @eval Differential($dim_sym)
                 return @eval $D($arg)
             else
-                error("div operator requires dim parameter")
+                # If no dimension specified, compute full divergence assuming arg is a vector with x,y,z components
+                # This is a fallback - typically dim should be specified
+                @warn "div operator used without dim parameter - computing divergence assuming x,y,z components"
+                @eval @variables x y z
+                x_sym = @eval x
+                y_sym = @eval y
+                z_sym = @eval z
+
+                Dx = @eval Differential($x_sym)
+                Dy = @eval Differential($y_sym)
+                Dz = @eval Differential($z_sym)
+
+                # Assume arg represents vector components (this is a simplification)
+                dFxdx = @eval $Dx($arg)
+                dFydy = @eval $Dy($arg)
+                dFzdz = @eval $Dz($arg)
+
+                return @eval $dFxdx + $dFydy + $dFzdz
             end
         elseif expr.op == "laplacian"
-            # Laplacian operator - second derivative
+            # Laplacian operator: ∇²f = ∂²f/∂x² + ∂²f/∂y² + ∂²f/∂z²
             arg = esm_to_mtk_expr(expr.args[1], var_dict, t)
-            # For simplicity, assume spatial dimension x if not specified
-            @eval @variables x
+
+            # Create spatial dimension variables
+            @eval @variables x y z
             x_sym = @eval x
-            D = @eval Differential($x_sym)
-            return @eval $D($D($arg))
+            y_sym = @eval y
+            z_sym = @eval z
+
+            # Create differential operators for each spatial dimension
+            Dx = @eval Differential($x_sym)
+            Dy = @eval Differential($y_sym)
+            Dz = @eval Differential($z_sym)
+
+            # Compute second derivatives: ∂²f/∂x² + ∂²f/∂y² + ∂²f/∂z²
+            d2dx2 = @eval $Dx($Dx($arg))
+            d2dy2 = @eval $Dy($Dy($arg))
+            d2dz2 = @eval $Dz($Dz($arg))
+
+            # Return sum of second derivatives
+            return @eval $d2dx2 + $d2dy2 + $d2dz2
         # Comparison operators
         elseif expr.op == ">"
             left = esm_to_mtk_expr(expr.args[1], var_dict, t)
