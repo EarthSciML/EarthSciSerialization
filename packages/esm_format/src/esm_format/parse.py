@@ -38,6 +38,8 @@ from .esm_types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain, Solver, SolverType,
+    OperatorComposeCoupling, Couple2Coupling, VariableMapCoupling,
+    OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
     InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionType
 )
@@ -461,23 +463,19 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
         raise ValueError(f"Unknown coupling type: {schema_type}")
 
     coupling_type = type_mapping[schema_type]
+    description = coupling_data.get("description")
 
-    # Create base coupling entry
-    entry = CouplingEntry(
-        coupling_type=coupling_type,
-        description=coupling_data.get("description")
-    )
-
-    # Parse type-specific fields
+    # Create appropriate coupling entry based on type
     if coupling_type == CouplingType.OPERATOR_COMPOSE:
-        entry.systems = coupling_data.get("systems", [])
-        entry.translate = coupling_data.get("translate", {})
+        return OperatorComposeCoupling(
+            description=description,
+            systems=coupling_data.get("systems", []),
+            translate=coupling_data.get("translate", {})
+        )
 
     elif coupling_type == CouplingType.COUPLE2:
-        entry.systems = coupling_data.get("systems", [])
-        entry.coupletype_pair = coupling_data.get("coupletype_pair", [])
-
-        # Parse connector
+        # Parse connector if present
+        connector = None
         if "connector" in coupling_data:
             connector_data = coupling_data["connector"]
             equations = []
@@ -489,61 +487,83 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
                     expression=_parse_expression(eq_data["expression"]) if "expression" in eq_data else None
                 )
                 equations.append(equation)
-            entry.connector = Connector(equations=equations)
+            connector = Connector(equations=equations)
+
+        return Couple2Coupling(
+            description=description,
+            systems=coupling_data.get("systems", []),
+            coupletype_pair=coupling_data.get("coupletype_pair", []),
+            connector=connector
+        )
 
     elif coupling_type == CouplingType.VARIABLE_MAP:
-        entry.from_var = coupling_data.get("from")
-        entry.to_var = coupling_data.get("to")
-        entry.transform = coupling_data.get("transform")
-        entry.factor = coupling_data.get("factor")
+        return VariableMapCoupling(
+            description=description,
+            from_var=coupling_data.get("from"),
+            to_var=coupling_data.get("to"),
+            transform=coupling_data.get("transform"),
+            factor=coupling_data.get("factor")
+        )
 
     elif coupling_type == CouplingType.OPERATOR_APPLY:
-        entry.operator = coupling_data.get("operator")
+        return OperatorApplyCoupling(
+            description=description,
+            operator=coupling_data.get("operator")
+        )
 
     elif coupling_type == CouplingType.CALLBACK:
-        entry.callback_id = coupling_data.get("callback_id")
-        entry.config = coupling_data.get("config", {})
+        return CallbackCoupling(
+            description=description,
+            callback_id=coupling_data.get("callback_id"),
+            config=coupling_data.get("config", {})
+        )
 
     elif coupling_type == CouplingType.EVENT:
-        entry.event_type = coupling_data.get("event_type")
-
         # Parse conditions
+        conditions = []
         if "conditions" in coupling_data:
-            entry.conditions = [_parse_expression(cond) for cond in coupling_data["conditions"]]
+            conditions = [_parse_expression(cond) for cond in coupling_data["conditions"]]
 
         # Parse trigger for discrete events
+        trigger = None
         if "trigger" in coupling_data:
-            entry.trigger = _parse_discrete_event_trigger(coupling_data["trigger"])
+            trigger = _parse_discrete_event_trigger(coupling_data["trigger"])
 
         # Parse affects
+        affects = []
         if "affects" in coupling_data:
-            entry.affects = [_parse_affect_equation(affect) for affect in coupling_data["affects"]]
+            affects = [_parse_affect_equation(affect) for affect in coupling_data["affects"]]
 
         # Parse functional_affect (FunctionalAffect object)
         if "functional_affect" in coupling_data:
             functional_affect = _parse_functional_affect(coupling_data["functional_affect"])
-            if entry.affects is None:
-                entry.affects = []
-            entry.affects.append(functional_affect)
+            affects.append(functional_affect)
 
         # Parse affect_neg
+        affect_neg = []
         if "affect_neg" in coupling_data and coupling_data["affect_neg"] is not None:
-            affect_neg_list = []
             for affect in coupling_data["affect_neg"]:
                 if isinstance(affect, dict) and "handler_id" in affect:
                     # This is a functional affect
-                    affect_neg_list.append(_parse_functional_affect(affect))
+                    affect_neg.append(_parse_functional_affect(affect))
                 else:
                     # This is a regular affect equation
-                    affect_neg_list.append(_parse_affect_equation(affect))
-            entry.affect_neg = affect_neg_list
+                    affect_neg.append(_parse_affect_equation(affect))
 
-        # Parse other fields
-        entry.discrete_parameters = coupling_data.get("discrete_parameters", [])
-        entry.root_find = coupling_data.get("root_find")
-        entry.reinitialize = coupling_data.get("reinitialize")
+        return EventCoupling(
+            description=description,
+            event_type=coupling_data.get("event_type"),
+            conditions=conditions,
+            trigger=trigger,
+            affects=affects,
+            affect_neg=affect_neg,
+            discrete_parameters=coupling_data.get("discrete_parameters", []),
+            root_find=coupling_data.get("root_find"),
+            reinitialize=coupling_data.get("reinitialize")
+        )
 
-    return entry
+    else:
+        raise ValueError(f"Unknown coupling type: {coupling_type}")
 
 
 def _parse_solver(solver_data: Dict[str, Any]) -> Solver:

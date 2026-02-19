@@ -15,6 +15,8 @@ from .esm_types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, Domain, Solver, SolverType,
+    OperatorComposeCoupling, Couple2Coupling, VariableMapCoupling,
+    OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
     InitialCondition, BoundaryCondition
 )
@@ -405,13 +407,78 @@ def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
     """Serialize a coupling entry to JSON-compatible format."""
     result = {}
 
-    # Map our enum to schema types (using variable_map as default)
-    result["type"] = "variable_map"
+    # Add description if present
+    if coupling.description:
+        result["description"] = coupling.description
 
-    # Create from/to strings from model and variable names
-    if coupling.source_variables and coupling.target_variables:
-        result["from"] = f"{coupling.source_model}.{coupling.source_variables[0]}"
-        result["to"] = f"{coupling.target_model}.{coupling.target_variables[0]}"
+    # Handle different coupling types
+    if isinstance(coupling, OperatorComposeCoupling):
+        result["type"] = "operator_compose"
+        if coupling.systems:
+            result["systems"] = coupling.systems
+        if coupling.translate:
+            result["translate"] = coupling.translate
+
+    elif isinstance(coupling, Couple2Coupling):
+        result["type"] = "couple2"
+        if coupling.systems:
+            result["systems"] = coupling.systems
+        if coupling.coupletype_pair:
+            result["coupletype_pair"] = coupling.coupletype_pair
+        if coupling.connector:
+            result["connector"] = {
+                "equations": [
+                    {
+                        "from": eq.from_var,
+                        "to": eq.to_var,
+                        "transform": eq.transform,
+                        **({"expression": _serialize_expression(eq.expression)} if eq.expression else {})
+                    }
+                    for eq in coupling.connector.equations
+                ]
+            }
+
+    elif isinstance(coupling, VariableMapCoupling):
+        result["type"] = "variable_map"
+        if coupling.from_var:
+            result["from"] = coupling.from_var
+        if coupling.to_var:
+            result["to"] = coupling.to_var
+        if coupling.transform:
+            result["transform"] = coupling.transform
+        if coupling.factor is not None:
+            result["factor"] = coupling.factor
+
+    elif isinstance(coupling, OperatorApplyCoupling):
+        result["type"] = "operator_apply"
+        if coupling.operator:
+            result["operator"] = coupling.operator
+
+    elif isinstance(coupling, CallbackCoupling):
+        result["type"] = "callback"
+        if coupling.callback_id:
+            result["callback_id"] = coupling.callback_id
+        if coupling.config:
+            result["config"] = coupling.config
+
+    elif isinstance(coupling, EventCoupling):
+        result["type"] = "event"
+        if coupling.event_type:
+            result["event_type"] = coupling.event_type
+        if coupling.conditions:
+            result["conditions"] = [_serialize_expression(cond) for cond in coupling.conditions]
+        if coupling.trigger:
+            result["trigger"] = _serialize_discrete_event_trigger(coupling.trigger)
+        if coupling.affects:
+            result["affects"] = [_serialize_affect_equation(affect) for affect in coupling.affects]
+        if coupling.affect_neg:
+            result["affect_neg"] = [_serialize_affect_equation(affect) for affect in coupling.affect_neg]
+        if coupling.discrete_parameters:
+            result["discrete_parameters"] = coupling.discrete_parameters
+        if coupling.root_find:
+            result["root_find"] = coupling.root_find
+        if coupling.reinitialize is not None:
+            result["reinitialize"] = coupling.reinitialize
 
     return result
 
