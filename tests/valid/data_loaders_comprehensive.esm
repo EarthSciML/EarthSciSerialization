@@ -1,0 +1,140 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "data_loaders_comprehensive_test",
+    "description": "Comprehensive test fixture exercising all data_loader features",
+    "authors": ["EarthSciML Contributors"],
+    "license": "MIT",
+    "created": "2024-01-01T00:00:00Z",
+    "modified": "2024-01-01T00:00:00Z",
+    "tags": ["test", "data_loaders"]
+  },
+  "models": {
+    "SimpleTransport": {
+      "variables": {
+        "T": { "type": "parameter", "units": "K", "default": 300.0, "description": "Temperature" },
+        "u": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Eastward wind" },
+        "resolution": { "type": "parameter", "units": "1", "default": 1.0, "description": "Grid resolution tag" },
+        "C": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "Tracer concentration" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["C"], "wrt": "t" }, "rhs": 0.0, "_comment": "Placeholder transport" }
+      ]
+    }
+  },
+  "data_loaders": {
+    "GEOSFP": {
+      "type": "gridded_data",
+      "loader_id": "GEOSFP",
+      "config": {
+        "resolution": "4x5",
+        "coord_defaults": { "lat": 34.0, "lev": 1 }
+      },
+      "reference": {
+        "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC",
+        "url": "https://gmao.gsfc.nasa.gov/GEOS_systems/"
+      },
+      "provides": {
+        "u": { "units": "m/s", "description": "Eastward wind component" },
+        "v": { "units": "m/s", "description": "Northward wind component" },
+        "T": { "units": "K", "description": "Air temperature" },
+        "PBLH": { "units": "m", "description": "Planetary boundary layer height" },
+        "PS": { "units": "Pa", "description": "Surface pressure" },
+        "Q": { "units": "kg/kg", "description": "Specific humidity" }
+      },
+      "temporal_resolution": "PT3H",
+      "spatial_resolution": { "lon": 5.0, "lat": 4.0, "lev": 72 },
+      "interpolation": "linear"
+    },
+    "NEI_Emissions": {
+      "type": "emissions",
+      "loader_id": "NEI2016",
+      "config": {
+        "year": 2016,
+        "sector": "all"
+      },
+      "reference": {
+        "citation": "US EPA National Emissions Inventory 2016",
+        "url": "https://www.epa.gov/air-emissions-inventories"
+      },
+      "provides": {
+        "NO_emis": { "units": "kg/m^2/s", "description": "NO emissions flux" },
+        "CO_emis": { "units": "kg/m^2/s", "description": "CO emissions flux" },
+        "SO2_emis": { "units": "kg/m^2/s", "description": "SO2 emissions flux" }
+      },
+      "temporal_resolution": "PT1H",
+      "spatial_resolution": { "lon": 0.1, "lat": 0.1 },
+      "interpolation": "nearest"
+    },
+    "StationObs": {
+      "type": "timeseries",
+      "loader_id": "AQS_hourly",
+      "config": {
+        "station_id": "060371103",
+        "parameters": ["ozone", "pm25"]
+      },
+      "provides": {
+        "O3_obs": { "units": "ppb", "description": "Observed ozone mixing ratio" },
+        "PM25_obs": { "units": "ug/m^3", "description": "Observed PM2.5 concentration" }
+      },
+      "temporal_resolution": "PT1H"
+    },
+    "Topography": {
+      "type": "static",
+      "loader_id": "ETOPO1",
+      "provides": {
+        "elevation": { "units": "m", "description": "Surface elevation above sea level" },
+        "land_fraction": { "units": "1", "description": "Land fraction (0-1)" }
+      },
+      "spatial_resolution": { "lon": 1.0, "lat": 1.0 },
+      "interpolation": "cubic"
+    },
+    "CustomCallback": {
+      "type": "callback",
+      "loader_id": "nudging_handler",
+      "config": {
+        "relaxation_timescale": 21600,
+        "variables": ["T", "u", "v"]
+      },
+      "provides": {
+        "T_nudge": { "units": "K", "description": "Nudging temperature tendency" },
+        "u_nudge": { "units": "m/s^2", "description": "Nudging u-wind tendency" },
+        "v_nudge": { "units": "m/s^2", "description": "Nudging v-wind tendency" }
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "GEOSFP.T",
+      "to": "SimpleTransport.T",
+      "transform": "param_to_var",
+      "description": "Replace constant temperature with GEOS-FP field"
+    },
+    {
+      "type": "variable_map",
+      "from": "GEOSFP.u",
+      "to": "SimpleTransport.u",
+      "transform": "param_to_var",
+      "description": "Replace constant wind with GEOS-FP field"
+    }
+  ],
+  "domain": {
+    "temporal": {
+      "start": "2024-07-01T00:00:00Z",
+      "end": "2024-07-02T00:00:00Z"
+    },
+    "spatial": {
+      "lon": { "min": -180.0, "max": 175.0, "units": "degrees_east", "grid_spacing": 5.0 },
+      "lat": { "min": -90.0, "max": 86.0, "units": "degrees_north", "grid_spacing": 4.0 },
+      "lev": { "min": 1, "max": 72, "units": "level" }
+    },
+    "spatial_ref": "WGS84"
+  },
+  "solver": {
+    "strategy": "strang_serial",
+    "config": {
+      "timestep": 1800
+    }
+  }
+}
