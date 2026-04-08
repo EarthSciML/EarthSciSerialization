@@ -1,0 +1,39 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventVarUndeclared",
+    "description": "Event affects reference undeclared variable"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0 },
+        "v": { "type": "state", "units": "m/s", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": -9.8
+        }
+      ],
+      "continuous_events": [
+        {
+          "name": "ground_bounce",
+          "conditions": [
+            { "op": "-", "args": ["x", 0] }
+          ],
+          "affects": [
+            {
+              "lhs": "undefined_velocity",
+              "rhs": { "op": "*", "args": [-0.9, { "op": "Pre", "args": ["v"] }] }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

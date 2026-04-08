@@ -1,0 +1,33 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "TemporalResolutionInvalid",
+    "description": "Test case: data loader with invalid ISO 8601 temporal resolution",
+    "authors": ["Test Suite"]
+  },
+
+  "data_loaders": {
+    "BadTemporal": {
+      "type": "timeseries",
+      "loader_id": "TestLoader",
+      "provides": {
+        "T": { "units": "K", "description": "Temperature" }
+      },
+      "temporal_resolution": "invalid_iso8601_duration"
+    }
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "InvalidURLFormatExample",
+    "description": "Metadata with invalid URL format in references",
+    "authors": ["URL Test Author"],
+    "created": "2024-01-01T00:00:00Z",
+    "references": [
+      {
+        "url": "not-a-valid-url",
+        "citation": "Invalid URL format example"
+      },
+      {
+        "url": "ftp://example.com/path",
+        "citation": "Non-HTTP URL that may not be accepted",
+        "notes": "Some validators only accept http/https"
+      },
+      {
+        "url": "//missing-protocol.com",
+        "citation": "URL missing protocol"
+      }
+    ]
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for invalid URL format" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}

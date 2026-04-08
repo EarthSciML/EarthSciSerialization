@@ -1,0 +1,652 @@
+[
+  {
+    "name": "Basic numeric literals",
+    "tests": [
+      {
+        "description": "Integer literal round-trip",
+        "input": 42,
+        "expected_type": "NumExpr",
+        "expected_value": 42.0,
+        "serialized": 42.0,
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 42.0
+        }
+      },
+      {
+        "description": "Floating-point literal round-trip",
+        "input": 3.14159,
+        "expected_type": "NumExpr",
+        "expected_value": 3.14159,
+        "serialized": 3.14159,
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 3.14159
+        }
+      },
+      {
+        "description": "Scientific notation literal",
+        "input": 1.23e-4,
+        "expected_type": "NumExpr",
+        "expected_value": 0.000123,
+        "serialized": 0.000123,
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 0.000123
+        }
+      },
+      {
+        "description": "Negative number literal",
+        "input": -2.718,
+        "expected_type": "NumExpr",
+        "expected_value": -2.718,
+        "serialized": -2.718,
+        "evaluation": {
+          "bindings": {},
+          "expected_result": -2.718
+        }
+      },
+      {
+        "description": "Zero literal",
+        "input": 0,
+        "expected_type": "NumExpr",
+        "expected_value": 0.0,
+        "serialized": 0.0,
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 0.0
+        }
+      }
+    ]
+  },
+  {
+    "name": "Variable references",
+    "tests": [
+      {
+        "description": "Simple variable reference",
+        "input": "x",
+        "expected_type": "VarExpr",
+        "expected_name": "x",
+        "serialized": "x",
+        "evaluation": {
+          "bindings": {"x": 5.0},
+          "expected_result": 5.0
+        }
+      },
+      {
+        "description": "Chemical species variable",
+        "input": "CO2",
+        "expected_type": "VarExpr",
+        "expected_name": "CO2",
+        "serialized": "CO2",
+        "evaluation": {
+          "bindings": {"CO2": 400e-6},
+          "expected_result": 400e-6
+        }
+      },
+      {
+        "description": "Temperature variable",
+        "input": "Temperature",
+        "expected_type": "VarExpr",
+        "expected_name": "Temperature",
+        "serialized": "Temperature",
+        "evaluation": {
+          "bindings": {"Temperature": 298.15},
+          "expected_result": 298.15
+        }
+      },
+      {
+        "description": "Greek letter variable",
+        "input": "α",
+        "expected_type": "VarExpr",
+        "expected_name": "α",
+        "serialized": "α",
+        "evaluation": {
+          "bindings": {"α": 0.5},
+          "expected_result": 0.5
+        }
+      }
+    ]
+  },
+  {
+    "name": "Binary arithmetic operations",
+    "tests": [
+      {
+        "description": "Addition of numbers",
+        "input": {"op": "+", "args": [2, 3]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": [2.0, 3.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 5.0
+        }
+      },
+      {
+        "description": "Addition with variables",
+        "input": {"op": "+", "args": ["x", "y"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": ["x", "y"]},
+        "evaluation": {
+          "bindings": {"x": 2.5, "y": 3.7},
+          "expected_result": 6.2
+        }
+      },
+      {
+        "description": "Subtraction",
+        "input": {"op": "-", "args": [10, 4]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "-", "args": [10.0, 4.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 6.0
+        }
+      },
+      {
+        "description": "Multiplication",
+        "input": {"op": "*", "args": [3, 7]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": [3.0, 7.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 21.0
+        }
+      },
+      {
+        "description": "Division",
+        "input": {"op": "/", "args": [15, 3]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": [15.0, 3.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 5.0
+        }
+      },
+      {
+        "description": "Exponentiation",
+        "input": {"op": "^", "args": [2, 3]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "^", "args": [2.0, 3.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 8.0
+        }
+      },
+      {
+        "description": "Division with variables creating fraction",
+        "input": {"op": "/", "args": ["numerator", "denominator"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": ["numerator", "denominator"]},
+        "evaluation": {
+          "bindings": {"numerator": 22.0, "denominator": 7.0},
+          "expected_result": 3.142857142857143
+        }
+      }
+    ]
+  },
+  {
+    "name": "N-ary operations",
+    "tests": [
+      {
+        "description": "Multiple addition",
+        "input": {"op": "+", "args": [1, 2, 3, 4, 5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": [1.0, 2.0, 3.0, 4.0, 5.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 15.0
+        }
+      },
+      {
+        "description": "Multiple multiplication",
+        "input": {"op": "*", "args": [2, 3, 5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": [2.0, 3.0, 5.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 30.0
+        }
+      },
+      {
+        "description": "Mixed variables and constants",
+        "input": {"op": "+", "args": ["a", 10, "b", 5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": ["a", 10.0, "b", 5.0]},
+        "evaluation": {
+          "bindings": {"a": 2.5, "b": 7.3},
+          "expected_result": 24.8
+        }
+      }
+    ]
+  },
+  {
+    "name": "Elementary functions",
+    "tests": [
+      {
+        "description": "Exponential function",
+        "input": {"op": "exp", "args": [1]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "exp", "args": [1.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 2.718281828459045
+        }
+      },
+      {
+        "description": "Natural logarithm",
+        "input": {"op": "log", "args": [2.718281828459045]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "log", "args": [2.718281828459045]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 1.0
+        }
+      },
+      {
+        "description": "Square root",
+        "input": {"op": "sqrt", "args": [16]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "sqrt", "args": [16.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 4.0
+        }
+      },
+      {
+        "description": "Sine function",
+        "input": {"op": "sin", "args": [1.5707963267948966]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "sin", "args": [1.5707963267948966]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 1.0
+        }
+      },
+      {
+        "description": "Cosine function",
+        "input": {"op": "cos", "args": [0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "cos", "args": [0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 1.0
+        }
+      },
+      {
+        "description": "Absolute value positive",
+        "input": {"op": "abs", "args": [5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "abs", "args": [5.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 5.0
+        }
+      },
+      {
+        "description": "Absolute value negative",
+        "input": {"op": "abs", "args": [-5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "abs", "args": [-5.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 5.0
+        }
+      },
+      {
+        "description": "Minimum function",
+        "input": {"op": "min", "args": [3, 1, 4, 1, 5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "min", "args": [3.0, 1.0, 4.0, 1.0, 5.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 1.0
+        }
+      },
+      {
+        "description": "Maximum function",
+        "input": {"op": "max", "args": [3, 1, 4, 1, 5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "max", "args": [3.0, 1.0, 4.0, 1.0, 5.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 5.0
+        }
+      }
+    ]
+  },
+  {
+    "name": "Logical and comparison operations",
+    "tests": [
+      {
+        "description": "Greater than true",
+        "input": {"op": ">", "args": [5, 3]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": ">", "args": [5.0, 3.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": true
+        }
+      },
+      {
+        "description": "Greater than false",
+        "input": {"op": ">", "args": [2, 7]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": ">", "args": [2.0, 7.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": false
+        }
+      },
+      {
+        "description": "Less than or equal true",
+        "input": {"op": "<=", "args": [3, 3]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "<=", "args": [3.0, 3.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": true
+        }
+      },
+      {
+        "description": "Equality true",
+        "input": {"op": "==", "args": ["x", "x"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "==", "args": ["x", "x"]},
+        "evaluation": {
+          "bindings": {"x": 42.0},
+          "expected_result": true
+        }
+      },
+      {
+        "description": "Inequality with variables",
+        "input": {"op": "!=", "args": ["a", "b"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "!=", "args": ["a", "b"]},
+        "evaluation": {
+          "bindings": {"a": 3.0, "b": 4.0},
+          "expected_result": true
+        }
+      },
+      {
+        "description": "Logical AND true",
+        "input": {"op": "and", "args": [{"op": ">", "args": ["x", 0]}, {"op": "<", "args": ["x", 10]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "and", "args": [{"op": ">", "args": ["x", 0.0]}, {"op": "<", "args": ["x", 10.0]}]},
+        "evaluation": {
+          "bindings": {"x": 5.0},
+          "expected_result": true
+        }
+      },
+      {
+        "description": "Logical OR false",
+        "input": {"op": "or", "args": [{"op": "<", "args": ["y", 0]}, {"op": ">", "args": ["y", 100]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "or", "args": [{"op": "<", "args": ["y", 0.0]}, {"op": ">", "args": ["y", 100.0]}]},
+        "evaluation": {
+          "bindings": {"y": 50.0},
+          "expected_result": false
+        }
+      },
+      {
+        "description": "Logical NOT",
+        "input": {"op": "not", "args": [{"op": ">", "args": ["z", 100]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "not", "args": [{"op": ">", "args": ["z", 100.0]}]},
+        "evaluation": {
+          "bindings": {"z": 25.0},
+          "expected_result": true
+        }
+      }
+    ]
+  },
+  {
+    "name": "Complex nested expressions",
+    "tests": [
+      {
+        "description": "Nested arithmetic (order of operations)",
+        "input": {"op": "+", "args": [{"op": "*", "args": [2, 3]}, {"op": "*", "args": [4, 5]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": [{"op": "*", "args": [2.0, 3.0]}, {"op": "*", "args": [4.0, 5.0]}]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 26.0
+        }
+      },
+      {
+        "description": "Polynomial evaluation",
+        "input": {"op": "+", "args": [{"op": "*", "args": ["a", {"op": "^", "args": ["x", 2]}]}, {"op": "*", "args": ["b", "x"]}, "c"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": [{"op": "*", "args": ["a", {"op": "^", "args": ["x", 2.0]}]}, {"op": "*", "args": ["b", "x"]}, "c"]},
+        "evaluation": {
+          "bindings": {"a": 2.0, "b": -3.0, "c": 1.0, "x": 4.0},
+          "expected_result": 21.0
+        }
+      },
+      {
+        "description": "Arrhenius rate expression",
+        "input": {"op": "*", "args": ["A", {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["Ea"]}, {"op": "*", "args": ["R", "T"]}]}]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": ["A", {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["Ea"]}, {"op": "*", "args": ["R", "T"]}]}]}]},
+        "evaluation": {
+          "bindings": {"A": 1e13, "Ea": 5000, "R": 8.314, "T": 300},
+          "expected_result": 497870683.6544984
+        }
+      },
+      {
+        "description": "Gaussian function",
+        "input": {"op": "*", "args": ["A", {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": [{"op": "^", "args": [{"op": "-", "args": ["x", "μ"]}, 2]}]}, {"op": "*", "args": [2, {"op": "^", "args": ["σ", 2]}]}]}]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": ["A", {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": [{"op": "^", "args": [{"op": "-", "args": ["x", "μ"]}, 2.0]}]}, {"op": "*", "args": [2.0, {"op": "^", "args": ["σ", 2.0]}]}]}]}]},
+        "evaluation": {
+          "bindings": {"A": 1.0, "x": 0.0, "μ": 0.0, "σ": 1.0},
+          "expected_result": 1.0
+        }
+      },
+      {
+        "description": "Distance formula in 3D",
+        "input": {"op": "sqrt", "args": [{"op": "+", "args": [{"op": "^", "args": [{"op": "-", "args": ["x2", "x1"]}, 2]}, {"op": "^", "args": [{"op": "-", "args": ["y2", "y1"]}, 2]}, {"op": "^", "args": [{"op": "-", "args": ["z2", "z1"]}, 2]}]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "sqrt", "args": [{"op": "+", "args": [{"op": "^", "args": [{"op": "-", "args": ["x2", "x1"]}, 2.0]}, {"op": "^", "args": [{"op": "-", "args": ["y2", "y1"]}, 2.0]}, {"op": "^", "args": [{"op": "-", "args": ["z2", "z1"]}, 2.0]}]}]},
+        "evaluation": {
+          "bindings": {"x1": 1.0, "y1": 2.0, "z1": 3.0, "x2": 4.0, "y2": 6.0, "z2": 8.0},
+          "expected_result": 7.0710678118654755
+        }
+      }
+    ]
+  },
+  {
+    "name": "Conditional expressions",
+    "tests": [
+      {
+        "description": "If-else condition true branch",
+        "input": {"op": "ifelse", "args": [{"op": ">", "args": ["x", 0]}, "x", {"op": "-", "args": ["x"]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "ifelse", "args": [{"op": ">", "args": ["x", 0.0]}, "x", {"op": "-", "args": ["x"]}]},
+        "evaluation": {
+          "bindings": {"x": 5.0},
+          "expected_result": 5.0
+        }
+      },
+      {
+        "description": "If-else condition false branch",
+        "input": {"op": "ifelse", "args": [{"op": ">", "args": ["x", 0]}, "x", {"op": "-", "args": ["x"]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "ifelse", "args": [{"op": ">", "args": ["x", 0.0]}, "x", {"op": "-", "args": ["x"]}]},
+        "evaluation": {
+          "bindings": {"x": -3.0},
+          "expected_result": 3.0
+        }
+      },
+      {
+        "description": "Piecewise function with multiple conditions",
+        "input": {"op": "ifelse", "args": [{"op": "<", "args": ["t", 1]}, 0, {"op": "ifelse", "args": [{"op": "<", "args": ["t", 2]}, "t", 2]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "ifelse", "args": [{"op": "<", "args": ["t", 1.0]}, 0.0, {"op": "ifelse", "args": [{"op": "<", "args": ["t", 2.0]}, "t", 2.0]}]},
+        "evaluation": {
+          "bindings": {"t": 1.5},
+          "expected_result": 1.5
+        }
+      }
+    ]
+  },
+  {
+    "name": "Calculus operators with special fields",
+    "tests": [
+      {
+        "description": "Time derivative",
+        "input": {"op": "D", "args": ["concentration"], "wrt": "t"},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "D", "args": ["concentration"], "wrt": "t"},
+        "evaluation": {
+          "note": "Derivatives cannot be evaluated without symbolic computation",
+          "round_trip_only": true
+        }
+      },
+      {
+        "description": "Partial derivative with respect to space",
+        "input": {"op": "D", "args": ["temperature"], "wrt": "x"},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "D", "args": ["temperature"], "wrt": "x"},
+        "evaluation": {
+          "note": "Derivatives cannot be evaluated without symbolic computation",
+          "round_trip_only": true
+        }
+      },
+      {
+        "description": "Gradient operator with dimension",
+        "input": {"op": "grad", "args": ["phi"], "dim": "x"},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "grad", "args": ["phi"], "dim": "x"},
+        "evaluation": {
+          "note": "Spatial operators cannot be evaluated without field data",
+          "round_trip_only": true
+        }
+      },
+      {
+        "description": "Divergence operator",
+        "input": {"op": "div", "args": ["velocity"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "div", "args": ["velocity"]},
+        "evaluation": {
+          "note": "Spatial operators cannot be evaluated without field data",
+          "round_trip_only": true
+        }
+      },
+      {
+        "description": "Laplacian operator",
+        "input": {"op": "laplacian", "args": ["u"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "laplacian", "args": ["u"]},
+        "evaluation": {
+          "note": "Spatial operators cannot be evaluated without field data",
+          "round_trip_only": true
+        }
+      },
+      {
+        "description": "Mixed derivative with both wrt and dim",
+        "input": {"op": "D", "args": [{"op": "grad", "args": ["field"], "dim": "x"}], "wrt": "t"},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "D", "args": [{"op": "grad", "args": ["field"], "dim": "x"}], "wrt": "t"},
+        "evaluation": {
+          "note": "Mixed spatial-temporal operators cannot be evaluated without field data",
+          "round_trip_only": true
+        }
+      }
+    ]
+  },
+  {
+    "name": "Event-specific operators",
+    "tests": [
+      {
+        "description": "Pre operator for accessing previous values",
+        "input": {"op": "Pre", "args": ["velocity"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "Pre", "args": ["velocity"]},
+        "evaluation": {
+          "note": "Pre operator requires event context for evaluation",
+          "round_trip_only": true
+        }
+      },
+      {
+        "description": "Pre operator in conditional context",
+        "input": {"op": ">", "args": [{"op": "Pre", "args": ["position"]}, "threshold"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": ">", "args": [{"op": "Pre", "args": ["position"]}, "threshold"]},
+        "evaluation": {
+          "note": "Pre operator requires event context for evaluation",
+          "round_trip_only": true
+        }
+      }
+    ]
+  },
+  {
+    "name": "Edge cases and error conditions",
+    "tests": [
+      {
+        "description": "Very small number near machine epsilon",
+        "input": 1e-16,
+        "expected_type": "NumExpr",
+        "expected_value": 1e-16,
+        "serialized": 1e-16,
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 1e-16
+        }
+      },
+      {
+        "description": "Very large number",
+        "input": 1e15,
+        "expected_type": "NumExpr",
+        "expected_value": 1e15,
+        "serialized": 1e15,
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 1e15
+        }
+      },
+      {
+        "description": "Variable with special characters and subscripts",
+        "input": "CO₂_concentration",
+        "expected_type": "VarExpr",
+        "expected_name": "CO₂_concentration",
+        "serialized": "CO₂_concentration",
+        "evaluation": {
+          "bindings": {"CO₂_concentration": 415.0},
+          "expected_result": 415.0
+        }
+      },
+      {
+        "description": "Zero division handling",
+        "input": {"op": "/", "args": [1, 0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": [1.0, 0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "Inf",
+          "note": "Division by zero results in infinity"
+        }
+      },
+      {
+        "description": "Square root of negative number",
+        "input": {"op": "sqrt", "args": [-1]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "sqrt", "args": [-1.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Square root of negative number results in NaN"
+        }
+      },
+      {
+        "description": "Logarithm of zero",
+        "input": {"op": "log", "args": [0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "log", "args": [0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "-Inf",
+          "note": "Logarithm of zero results in negative infinity"
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,308 @@
+{
+  "description": "Invalid expression graph test cases with circular dependencies",
+  "test_type": "invalid_circular_dependencies",
+
+  "test_cases": [
+    {
+      "name": "Simple variable self-dependency",
+      "description": "Variable depends on itself in a non-differential context",
+      "esm_content": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "SimpleSelfDependency"
+        },
+        "models": {
+          "CircularModel": {
+            "variables": {
+              "x": { "type": "parameter", "units": "dimensionless", "default": 1.0 }
+            },
+            "equations": [
+              {
+                "lhs": "x",
+                "rhs": { "op": "+", "args": ["x", 1.0] }
+              }
+            ]
+          }
+        }
+      },
+      "expected_error": {
+        "type": "circular_dependency",
+        "message": "Variable 'x' depends on itself in non-differential equation",
+        "variables_involved": ["x"],
+        "cycle": ["x -> x"]
+      }
+    },
+
+    {
+      "name": "Two-variable circular dependency",
+      "description": "Variables A and B mutually depend on each other",
+      "esm_content": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "TwoVariableCircular"
+        },
+        "models": {
+          "CircularModel": {
+            "variables": {
+              "A": { "type": "parameter", "units": "dimensionless", "default": 1.0 },
+              "B": { "type": "parameter", "units": "dimensionless", "default": 2.0 }
+            },
+            "equations": [
+              {
+                "lhs": "A",
+                "rhs": { "op": "*", "args": [2.0, "B"] }
+              },
+              {
+                "lhs": "B",
+                "rhs": { "op": "+", "args": ["A", 1.0] }
+              }
+            ]
+          }
+        }
+      },
+      "expected_error": {
+        "type": "circular_dependency",
+        "message": "Circular dependency detected between variables A and B",
+        "variables_involved": ["A", "B"],
+        "cycle": ["A -> B -> A"]
+      }
+    },
+
+    {
+      "name": "Three-variable circular chain",
+      "description": "Variables form a circular chain: X -> Y -> Z -> X",
+      "esm_content": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "ThreeVariableChain"
+        },
+        "models": {
+          "CircularChain": {
+            "variables": {
+              "X": { "type": "parameter", "units": "mol/L", "default": 1.0 },
+              "Y": { "type": "parameter", "units": "mol/L", "default": 1.0 },
+              "Z": { "type": "parameter", "units": "mol/L", "default": 1.0 }
+            },
+            "equations": [
+              {
+                "lhs": "X",
+                "rhs": { "op": "exp", "args": ["Z"] }
+              },
+              {
+                "lhs": "Y",
+                "rhs": { "op": "log", "args": ["X"] }
+              },
+              {
+                "lhs": "Z",
+                "rhs": { "op": "sqrt", "args": ["Y"] }
+              }
+            ]
+          }
+        }
+      },
+      "expected_error": {
+        "type": "circular_dependency",
+        "message": "Circular dependency chain detected: X -> Y -> Z -> X",
+        "variables_involved": ["X", "Y", "Z"],
+        "cycle": ["X -> Y -> Z -> X"]
+      }
+    },
+
+    {
+      "name": "Reaction parameter circular dependency",
+      "description": "Reaction parameters depend on each other circularly",
+      "esm_content": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "ReactionParameterCircular"
+        },
+        "reaction_systems": {
+          "CircularReactionSystem": {
+            "species": [
+              { "name": "A", "units": "mol/L" },
+              { "name": "B", "units": "mol/L" }
+            ],
+            "parameters": [
+              { "name": "k1", "units": "1/s", "default": 0.1 },
+              { "name": "k2", "units": "1/s", "default": 0.2 },
+              { "name": "scaling", "units": "dimensionless", "default": 1.0 }
+            ],
+            "reactions": [
+              {
+                "id": "R1",
+                "equation": "A → B",
+                "rate": { "op": "*", "args": ["k1", "scaling", "A"] }
+              }
+            ]
+          }
+        },
+        "models": {
+          "ParameterModel": {
+            "variables": {
+              "k1": { "type": "parameter", "units": "1/s", "default": 0.1 },
+              "k2": { "type": "parameter", "units": "1/s", "default": 0.2 },
+              "scaling": { "type": "parameter", "units": "dimensionless", "default": 1.0 }
+            },
+            "equations": [
+              {
+                "lhs": "k1",
+                "rhs": { "op": "*", "args": [2.0, "k2"] }
+              },
+              {
+                "lhs": "k2",
+                "rhs": { "op": "/", "args": ["scaling", 3.0] }
+              },
+              {
+                "lhs": "scaling",
+                "rhs": { "op": "+", "args": ["k1", 1.0] }
+              }
+            ]
+          }
+        },
+        "coupling": [
+          {
+            "type": "variable_map",
+            "systems": ["CircularReactionSystem", "ParameterModel"],
+            "variable_map": {
+              "CircularReactionSystem.k1": "ParameterModel.k1",
+              "CircularReactionSystem.k2": "ParameterModel.k2",
+              "CircularReactionSystem.scaling": "ParameterModel.scaling"
+            }
+          }
+        ]
+      },
+      "expected_error": {
+        "type": "circular_dependency",
+        "message": "Cross-system circular dependency in coupled parameters: k1 -> k2 -> scaling -> k1",
+        "variables_involved": ["k1", "k2", "scaling"],
+        "cycle": ["k1 -> k2 -> scaling -> k1"],
+        "systems_involved": ["CircularReactionSystem", "ParameterModel"]
+      }
+    },
+
+    {
+      "name": "Complex nested circular dependency",
+      "description": "Circular dependency within nested expressions",
+      "esm_content": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "NestedCircularDependency"
+        },
+        "models": {
+          "NestedCircular": {
+            "variables": {
+              "u": { "type": "parameter", "units": "dimensionless", "default": 1.0 },
+              "v": { "type": "parameter", "units": "dimensionless", "default": 1.0 },
+              "w": { "type": "parameter", "units": "dimensionless", "default": 1.0 }
+            },
+            "equations": [
+              {
+                "lhs": "u",
+                "rhs": {
+                  "op": "+",
+                  "args": [
+                    { "op": "sin", "args": ["v"] },
+                    { "op": "cos", "args": ["w"] }
+                  ]
+                }
+              },
+              {
+                "lhs": "v",
+                "rhs": {
+                  "op": "*",
+                  "args": [
+                    { "op": "exp", "args": ["w"] },
+                    { "op": "log", "args": [{ "op": "+", "args": ["u", 1.0] }] }
+                  ]
+                }
+              },
+              {
+                "lhs": "w",
+                "rhs": {
+                  "op": "^",
+                  "args": [
+                    { "op": "sqrt", "args": ["u"] },
+                    { "op": "/", "args": ["v", 2.0] }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "expected_error": {
+        "type": "circular_dependency",
+        "message": "Complex circular dependency detected in nested expressions: u -> v -> w -> u",
+        "variables_involved": ["u", "v", "w"],
+        "cycle": ["u -> v -> w -> u"],
+        "nested_expressions": [
+          "u depends on v through sin(v)",
+          "u depends on w through cos(w)",
+          "v depends on u through log(u+1)",
+          "v depends on w through exp(w)",
+          "w depends on u through sqrt(u)",
+          "w depends on v through v/2"
+        ]
+      }
+    },
+
+    {
+      "name": "Valid differential equation (not circular)",
+      "description": "Example showing that dx/dt = f(x) is valid, not circular",
+      "esm_content": {
+        "esm": "0.1.0",
+        "metadata": {
+          "name": "ValidDifferentialEquation"
+        },
+        "models": {
+          "ValidODE": {
+            "variables": {
+              "x": { "type": "state", "units": "dimensionless", "default": 1.0 },
+              "k": { "type": "parameter", "units": "1/s", "default": -1.0 }
+            },
+            "equations": [
+              {
+                "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+                "rhs": { "op": "*", "args": ["k", "x"] }
+              }
+            ]
+          }
+        }
+      },
+      "expected_result": {
+        "type": "valid",
+        "message": "Differential equation dx/dt = k*x is valid - no circular dependency",
+        "explanation": "State variables can appear on RHS of their own differential equations"
+      }
+    }
+  ],
+
+  "validation_rules": {
+    "algebraic_equations": {
+      "self_dependency": "forbidden",
+      "mutual_dependency": "forbidden",
+      "chain_dependency": "forbidden"
+    },
+    "differential_equations": {
+      "self_dependency": "allowed_for_state_variables",
+      "mutual_dependency": "allowed_if_through_derivatives",
+      "chain_dependency": "requires_careful_analysis"
+    },
+    "parameter_definitions": {
+      "self_dependency": "forbidden",
+      "mutual_dependency": "forbidden",
+      "cross_system_circular": "forbidden"
+    }
+  },
+
+  "detection_algorithm": {
+    "method": "depth_first_search_with_cycle_detection",
+    "steps": [
+      "1. Build dependency graph from all non-differential equations",
+      "2. For each variable, perform DFS to detect back edges",
+      "3. Report strongly connected components as circular dependencies",
+      "4. Exclude differential equations (D(...)/dt) from circular dependency checks",
+      "5. Handle cross-system dependencies through coupling rules"
+    ]
+  }
+}

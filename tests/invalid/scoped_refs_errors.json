@@ -1,0 +1,267 @@
+{
+  "test_suite": "scoped_reference_errors",
+  "description": "Invalid scoped reference patterns and expected validation errors",
+  "created": "2026-02-16T00:00:00Z",
+  "version": "1.0.0",
+
+  "error_categories": {
+    "malformed_syntax": [
+      {
+        "test_id": "scoped_001",
+        "description": "Empty component in scoped reference",
+        "scoped_ref": "System..Subsystem.variable",
+        "expected_error": "empty_component_in_scoped_reference",
+        "error_message": "Scoped reference contains empty component between dots"
+      },
+      {
+        "test_id": "scoped_002",
+        "description": "Leading dot in scoped reference",
+        "scoped_ref": ".System.Subsystem.variable",
+        "expected_error": "invalid_scoped_reference_format",
+        "error_message": "Scoped reference cannot start with a dot"
+      },
+      {
+        "test_id": "scoped_003",
+        "description": "Trailing dot in scoped reference",
+        "scoped_ref": "System.Subsystem.variable.",
+        "expected_error": "invalid_scoped_reference_format",
+        "error_message": "Scoped reference cannot end with a dot"
+      },
+      {
+        "test_id": "scoped_004",
+        "description": "Multiple consecutive dots",
+        "scoped_ref": "System...Subsystem.variable",
+        "expected_error": "empty_component_in_scoped_reference",
+        "error_message": "Scoped reference contains multiple consecutive dots"
+      },
+      {
+        "test_id": "scoped_005",
+        "description": "Invalid characters in component name",
+        "scoped_ref": "System.Sub@system.variable",
+        "expected_error": "invalid_component_name",
+        "error_message": "Component names can only contain letters, numbers, and underscores"
+      },
+      {
+        "test_id": "scoped_006",
+        "description": "Component name starting with number",
+        "scoped_ref": "System.2Subsystem.variable",
+        "expected_error": "invalid_component_name",
+        "error_message": "Component names cannot start with a number"
+      }
+    ],
+
+    "reference_resolution_errors": [
+      {
+        "test_id": "scoped_007",
+        "description": "Reference to non-existent top-level system",
+        "scoped_ref": "NonExistentSystem.variable",
+        "expected_error": "undefined_system",
+        "error_message": "System 'NonExistentSystem' is not defined"
+      },
+      {
+        "test_id": "scoped_008",
+        "description": "Reference to non-existent subsystem",
+        "scoped_ref": "ValidSystem.NonExistentSubsystem.variable",
+        "expected_error": "undefined_subsystem",
+        "error_message": "Subsystem 'NonExistentSubsystem' not found in system 'ValidSystem'"
+      },
+      {
+        "test_id": "scoped_009",
+        "description": "Reference to non-existent variable",
+        "scoped_ref": "ValidSystem.ValidSubsystem.non_existent_var",
+        "expected_error": "undefined_variable",
+        "error_message": "Variable 'non_existent_var' not found in system 'ValidSystem.ValidSubsystem'"
+      },
+      {
+        "test_id": "scoped_010",
+        "description": "Deep nesting reference to non-existent system",
+        "scoped_ref": "Level1.Level2.Level3.NonExistent.variable",
+        "expected_error": "undefined_subsystem",
+        "error_message": "Subsystem 'NonExistent' not found in system 'Level1.Level2.Level3'"
+      },
+      {
+        "test_id": "scoped_011",
+        "description": "Attempting to reference a system as a variable",
+        "scoped_ref": "ValidSystem.ValidSubsystem",
+        "expected_error": "invalid_reference_type",
+        "error_message": "Cannot reference a system as a variable - expected variable name after 'ValidSubsystem'"
+      }
+    ],
+
+    "circular_dependencies": [
+      {
+        "test_id": "scoped_012",
+        "description": "Direct self-reference in equation",
+        "scoped_ref": "System.variable",
+        "context": "In equation for System.variable",
+        "expected_error": "circular_dependency",
+        "error_message": "Variable 'System.variable' references itself in its own definition"
+      },
+      {
+        "test_id": "scoped_013",
+        "description": "Indirect circular dependency through scoped references",
+        "circular_chain": [
+          "SystemA.var1 -> SystemB.var2",
+          "SystemB.var2 -> SystemC.var3",
+          "SystemC.var3 -> SystemA.var1"
+        ],
+        "expected_error": "circular_dependency_chain",
+        "error_message": "Circular dependency detected in chain: SystemA.var1 -> SystemB.var2 -> SystemC.var3 -> SystemA.var1"
+      }
+    ],
+
+    "scoping_violations": [
+      {
+        "test_id": "scoped_014",
+        "description": "Reference to sibling subsystem without full path",
+        "scoped_ref": "SiblingSubsystem.variable",
+        "context": "From within ParentSystem.ChildSubsystem",
+        "expected_error": "unresolved_scoped_ref",
+        "error_message": "Cannot resolve relative reference 'SiblingSubsystem.variable' - use full path 'ParentSystem.SiblingSubsystem.variable'"
+      },
+      {
+        "test_id": "scoped_015",
+        "description": "Accessing private variable from external system",
+        "scoped_ref": "ExternalSystem.InternalSubsystem._private_var",
+        "expected_error": "access_violation",
+        "error_message": "Cannot access private variable '_private_var' from external system"
+      },
+      {
+        "test_id": "scoped_016",
+        "description": "Reference beyond maximum nesting depth",
+        "scoped_ref": "L1.L2.L3.L4.L5.L6.L7.L8.L9.L10.variable",
+        "expected_error": "maximum_nesting_exceeded",
+        "error_message": "Scoped reference exceeds maximum nesting depth of 8 levels"
+      }
+    ],
+
+    "coupling_errors": [
+      {
+        "test_id": "scoped_017",
+        "description": "Invalid scoped reference in coupling transform",
+        "coupling_context": {
+          "type": "variable_map",
+          "from": "SourceSystem.valid_var",
+          "to": "TargetSystem.valid_var"
+        },
+        "transform_scoped_ref": "NonExistent.System.variable",
+        "expected_error": "coupling_reference_error",
+        "error_message": "Invalid scoped reference in coupling transform: system 'NonExistent' not found"
+      },
+      {
+        "test_id": "scoped_018",
+        "description": "Scoped reference in coupling points to wrong variable type",
+        "coupling_context": {
+          "type": "variable_map",
+          "from": "SourceSystem.state_var",
+          "to": "TargetSystem.parameter_var"
+        },
+        "transform_scoped_ref": "HelperSystem.constant_value",
+        "expected_error": "type_mismatch_in_coupling",
+        "error_message": "Cannot use parameter 'HelperSystem.constant_value' in transform for state variable coupling"
+      }
+    ],
+
+    "edge_cases": [
+      {
+        "test_id": "scoped_019",
+        "description": "Empty scoped reference string",
+        "scoped_ref": "",
+        "expected_error": "empty_scoped_reference",
+        "error_message": "Scoped reference cannot be empty"
+      },
+      {
+        "test_id": "scoped_020",
+        "description": "Single component (should be local variable)",
+        "scoped_ref": "variable_name",
+        "context": "Used as scoped_ref when should be local variable",
+        "expected_error": "incorrect_reference_type",
+        "error_message": "Single component 'variable_name' should be a local variable reference, not a scoped reference"
+      },
+      {
+        "test_id": "scoped_021",
+        "description": "Extremely long scoped reference",
+        "scoped_ref": "A.very.long.scoped.reference.that.exceeds.reasonable.component.name.length.limits.and.should.be.rejected.for.being.too.verbose.and.potentially.problematic.variable",
+        "expected_error": "reference_too_long",
+        "error_message": "Scoped reference exceeds maximum allowed length of 200 characters"
+      },
+      {
+        "test_id": "scoped_022",
+        "description": "Unicode characters in component names",
+        "scoped_ref": "System.子系统.变量",
+        "expected_error": "invalid_character_encoding",
+        "error_message": "Component names must use ASCII characters only"
+      },
+      {
+        "test_id": "scoped_023",
+        "description": "Reserved keyword as component name",
+        "scoped_ref": "System.class.variable",
+        "expected_error": "reserved_keyword",
+        "error_message": "Component name 'class' is a reserved keyword and cannot be used"
+      },
+      {
+        "test_id": "scoped_024",
+        "description": "Case sensitivity error",
+        "scoped_ref": "system.subsystem.variable",
+        "note": "When actual system is 'System' (capital S)",
+        "expected_error": "case_mismatch",
+        "error_message": "Case mismatch: found 'System' but reference uses 'system'"
+      }
+    ]
+  },
+
+  "test_fixtures": [
+    {
+      "fixture_name": "malformed_scoped_refs.esm",
+      "description": "ESM file with various malformed scoped references that should fail validation",
+      "test_cases": ["scoped_001", "scoped_002", "scoped_003", "scoped_004", "scoped_005", "scoped_006"]
+    },
+    {
+      "fixture_name": "unresolved_scoped_refs.esm",
+      "description": "ESM file with scoped references to non-existent systems/variables",
+      "test_cases": ["scoped_007", "scoped_008", "scoped_009", "scoped_010", "scoped_011"]
+    },
+    {
+      "fixture_name": "circular_scoped_refs.esm",
+      "description": "ESM file with circular dependencies through scoped references",
+      "test_cases": ["scoped_012", "scoped_013"]
+    },
+    {
+      "fixture_name": "scoped_access_violations.esm",
+      "description": "ESM file with scoping rule violations",
+      "test_cases": ["scoped_014", "scoped_015", "scoped_016"]
+    },
+    {
+      "fixture_name": "coupling_scoped_errors.esm",
+      "description": "ESM file with invalid scoped references in coupling definitions",
+      "test_cases": ["scoped_017", "scoped_018"]
+    },
+    {
+      "fixture_name": "scoped_edge_cases.esm",
+      "description": "ESM file with edge cases and boundary conditions for scoped references",
+      "test_cases": ["scoped_019", "scoped_020", "scoped_021", "scoped_022", "scoped_023", "scoped_024"]
+    }
+  ],
+
+  "validation_rules": {
+    "scoped_reference_format": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+      "min_components": 2,
+      "max_components": 8,
+      "max_length": 200,
+      "case_sensitive": true
+    },
+    "component_naming": {
+      "allowed_chars": "[A-Za-z0-9_]",
+      "first_char": "[A-Za-z_]",
+      "reserved_keywords": ["class", "function", "return", "if", "else", "for", "while", "do", "switch", "case", "break", "continue"],
+      "max_component_length": 50
+    },
+    "resolution_requirements": {
+      "all_components_must_exist": true,
+      "final_component_must_be_variable": true,
+      "no_circular_dependencies": true,
+      "respect_scoping_rules": true
+    }
+  }
+}

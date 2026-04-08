@@ -1,0 +1,319 @@
+[
+  {
+    "description": "Add reaction to existing reaction system",
+    "operation": "add_reaction",
+    "input_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "M": { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, "M"] }
+        }
+      ]
+    },
+    "parameters": {
+      "reaction": {
+        "id": "R2",
+        "name": "NO2_photolysis",
+        "substrates": [
+          { "species": "NO2", "stoichiometry": 1 }
+        ],
+        "products": [
+          { "species": "NO", "stoichiometry": 1 },
+          { "species": "O3", "stoichiometry": 1 }
+        ],
+        "rate": 0.005
+      }
+    },
+    "expected_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "M": { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, "M"] }
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": 0.005
+        }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove reaction by ID",
+    "operation": "remove_reaction",
+    "input_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": 1.8e-12
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": 0.005
+        }
+      ]
+    },
+    "parameters": {
+      "id": "R1"
+    },
+    "expected_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": 0.005
+        }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Add species to reaction system",
+    "operation": "add_species",
+    "input_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": 1.8e-12
+        }
+      ]
+    },
+    "parameters": {
+      "name": "NO2",
+      "species": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+    },
+    "expected_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": 1.8e-12
+        }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove unused species",
+    "operation": "remove_species",
+    "input_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" },
+        "HO2": { "units": "mol/mol", "default": 5e-12, "description": "Hydroperoxyl radical (unused)" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": 1.8e-12
+        }
+      ]
+    },
+    "parameters": {
+      "name": "HO2"
+    },
+    "expected_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": 1.8e-12
+        }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove species used in reactions (should warn)",
+    "operation": "remove_species",
+    "input_system": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": 1.8e-12
+        }
+      ]
+    },
+    "parameters": {
+      "name": "O3"
+    },
+    "expected_system": {
+      "species": {
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": 1.8e-12
+        }
+      ]
+    },
+    "expected_warnings": ["Species 'O3' is used in reactions but being removed"]
+  }
+]

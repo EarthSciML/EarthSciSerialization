@@ -1,0 +1,51 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "StackOverflowSubstitutions",
+    "description": "Test stack overflow in deep substitution chains",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "DeepSubstitutionModel": {
+      "variables": {
+        "base_var": { "type": "parameter", "units": "1", "default": 1.0 },
+        "level_1": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "substitute", "var": "base_var", "with": { "op": "+", "args": ["level_2", 1] } }
+        },
+        "level_2": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "substitute", "var": "level_1", "with": { "op": "*", "args": ["level_3", 2] } }
+        },
+        "level_3": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "substitute", "var": "level_2", "with": { "op": "/", "args": ["level_4", 3] } }
+        },
+        "level_4": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "substitute", "var": "level_3", "with": { "op": "pow", "args": ["level_5", 4] } }
+        },
+        "level_5": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "substitute", "var": "level_4", "with": { "op": "sqrt", "args": ["level_1"] } }
+        }
+      }
+    }
+  },
+  "substitution_chains": {
+    "deep_chain": {
+      "depth": 10000,
+      "pattern": "nested_substitution",
+      "variables": Array.from({length: 1000}, (_, i) => ({
+        "name": `sub_var_${i}`,
+        "substitutes": `sub_var_${(i + 1) % 1000}`,
+        "expression": { "op": "deep_sub", "level": i }
+      }))
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BoxModelOzone",
+    "description": "Simple 0D ozone-NOx photochemistry box model with known analytical behavior",
+    "authors": ["Test Suite"],
+    "created": "2026-02-16T00:00:00Z",
+    "tags": ["test", "simulation", "atmospheric", "chemistry", "0D"]
+  },
+  "models": {
+    "AtmosphericChemistry": {
+      "reference": {
+        "notes": "Simplified O3-NO-NO2 photostationary state chemistry: NO2 + hν → NO + O, O + O2 → O3, O3 + NO → NO2 + O2"
+      },
+      "variables": {
+        "O3": { "type": "state", "units": "ppbv", "default": 50.0, "description": "Ozone concentration" },
+        "NO": { "type": "state", "units": "ppbv", "default": 10.0, "description": "Nitric oxide concentration" },
+        "NO2": { "type": "state", "units": "ppbv", "default": 20.0, "description": "Nitrogen dioxide concentration" },
+        "j_NO2": { "type": "parameter", "units": "s^-1", "default": 0.008, "description": "NO2 photolysis rate constant" },
+        "k_NO_O3": { "type": "parameter", "units": "ppbv^-1*s^-1", "default": 1.8e-5, "description": "NO + O3 reaction rate constant" },
+        "k_O_O2": { "type": "parameter", "units": "s^-1", "default": 100.0, "description": "O + O2 → O3 rate (fast, assumed instantaneous)" },
+        "O": { "type": "observed", "units": "ppbv", "description": "Oxygen atom (pseudo-steady state)", "expression": { "op": "/", "args": [
+          { "op": "*", "args": ["j_NO2", "NO2"] },
+          "k_O_O2"
+        ]}}
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "*", "args": ["j_NO2", "NO2"] },
+            { "op": "*", "args": ["k_NO_O3", "NO", "O3"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["NO2"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "*", "args": ["k_NO_O3", "NO", "O3"] },
+            { "op": "*", "args": ["j_NO2", "NO2"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "*", "args": ["j_NO2", "NO2"] },
+            { "op": "*", "args": ["k_NO_O3", "NO", "O3"] }
+          ]}
+        }
+      ]
+    }
+  },
+  "domain": {
+    "temporal": { "start": "2026-01-01T00:00:00Z", "end": "2026-01-01T01:00:00Z" },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "AtmosphericChemistry.O3": 50.0,
+      "AtmosphericChemistry.NO": 10.0,
+      "AtmosphericChemistry.NO2": 20.0
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "algorithm": "Tsit5",
+      "rtol": 1e-6,
+      "atol": 1e-8
+    }
+  }
+}

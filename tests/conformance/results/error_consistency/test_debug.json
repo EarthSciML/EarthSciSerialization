@@ -1,0 +1,57 @@
+{
+  "equation_count_mismatch.esm": {
+    "file": "equation_count_mismatch.esm",
+    "julia": {
+      "language": "julia",
+      "file": "equation_count_mismatch.esm",
+      "load_error": {
+        "message": "MethodError(get, (SchemaError(\"/\", \"Validation failed:\\npath:         top-level\\ninstance:     Dict{String, Any}(\\\"esm\\\" => \\\"0.1.0\\\", \\\"metadata\\\" => Dict(\\\"name\\\" => \\\"EquationCountMismatch\\\"))\\nschema key:   anyOf\\nschema value: Dict{String, Any}[Dict(\\\"required\\\" => [\\\"models\\\"]), Dict(\\\"required\\\" => [\\\"reaction_systems\\\"])]\\n\", \"unknown\"), :keyword, \"\"), 0x0000000000009749)",
+        "type": "MethodError"
+      }
+    },
+    "typescript": {
+      "language": "typescript",
+      "file": "equation_count_mismatch.esm",
+      "validation_result": {
+        "valid": false,
+        "schema_errors": [],
+        "structural_errors": [
+          {
+            "path": "/models/TestModel",
+            "message": "Number of ODE equations (1) does not match number of state variables (2)",
+            "code": "equation_count_mismatch",
+            "details": {
+              "state_variables": [
+                "x",
+                "y"
+              ],
+              "ode_equations": 1,
+              "missing_equations_for": [
+                "y"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "python": {
+      "language": "python",
+      "file": "equation_count_mismatch.esm",
+      "validation_result": {
+        "valid": false,
+        "schema_errors": [],
+        "structural_errors": [
+          {
+            "path": "$",
+            "message": "Validation failed with unexpected error: 'str' object has no attribute 'models'",
+            "code": "validation_error",
+            "details": {
+              "exception_type": "AttributeError",
+              "traceback": "Traceback (most recent call last):\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 116, in validate\n    _validate_equation_balance_enhanced(esm_file, error_collector)\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 276, in _validate_equation_balance_enhanced\n    for i, model in enumerate(esm_file.models):\n                              ^^^^^^^^^^^^^^^\nAttributeError: 'str' object has no attribute 'models'\n"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

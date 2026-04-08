@@ -1,0 +1,61 @@
+{
+  "esm": "2.5.1",
+  "metadata": {
+    "name": "Version_2_5_1_MajorRejection",
+    "description": "Test file with version 2.5.1 - should be rejected by 0.x.x and 1.x.x libraries",
+    "authors": ["ESM Format Team"],
+    "created": "2026-01-01T00:00:00Z",
+    "format_notes": "This represents a hypothetical future major version with breaking changes"
+  },
+  "reaction_systems_v2": {
+    "comment": "In version 2.x.x, 'reaction_systems' might be renamed to 'reaction_systems_v2'",
+    "ModernChemistry": {
+      "species": {
+        "O3": {
+          "units": "mol/mol",
+          "default": 40e-9,
+          "description": "Ozone",
+          "molecular_weight": 48.0,
+          "phase": "gas"
+        }
+      },
+      "parameters": {
+        "T": {
+          "units": "K",
+          "default": 298.15,
+          "description": "Temperature",
+          "bounds": { "min": 200.0, "max": 400.0 }
+        }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "reaction_type": "elementary",
+          "mechanism": "thermal_decomposition",
+          "substrates": [{ "species": "O3", "stoichiometry": 1 }],
+          "products": [
+            { "species": "O2", "stoichiometry": 1 },
+            { "species": "O", "stoichiometry": 1 }
+          ],
+          "rate_law": {
+            "type": "arrhenius",
+            "A": 1.8e13,
+            "Ea": 14700,
+            "n": 0
+          },
+          "reversible": true
+        }
+      ]
+    }
+  },
+  "solver_config_v2": {
+    "comment": "Version 2.x.x might have restructured solver configuration",
+    "integrator": "CVODE",
+    "tolerances": {
+      "relative": 1e-8,
+      "absolute": 1e-12
+    },
+    "linear_solver": "KLU",
+    "preconditioner": "ILUT"
+  }
+}

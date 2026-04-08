@@ -1,0 +1,142 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "PerformanceBenchmarksTest",
+    "description": "Large-scale system for performance and scalability testing",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["test", "performance", "scalability", "large_system"]
+  },
+  "reaction_systems": {
+    "LargeReactionNetwork": {
+      "reference": {
+        "notes": "Simplified atmospheric chemistry network with 50+ species and 200+ reactions"
+      },
+      "species": {
+        "O2": { "units": "mol/L", "default": 0.21, "description": "Oxygen" },
+        "N2": { "units": "mol/L", "default": 0.78, "description": "Nitrogen" },
+        "H2O": { "units": "mol/L", "default": 0.01, "description": "Water vapor" },
+        "CO2": { "units": "mol/L", "default": 0.0004, "description": "Carbon dioxide" },
+        "O3": { "units": "mol/L", "default": 1e-8, "description": "Ozone" },
+        "NO": { "units": "mol/L", "default": 1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/L", "default": 1e-9, "description": "Nitrogen dioxide" },
+        "OH": { "units": "mol/L", "default": 1e-12, "description": "Hydroxyl radical" },
+        "HO2": { "units": "mol/L", "default": 1e-11, "description": "Hydroperoxyl radical" },
+        "CH4": { "units": "mol/L", "default": 1.8e-6, "description": "Methane" },
+        "CO": { "units": "mol/L", "default": 1e-7, "description": "Carbon monoxide" },
+        "H2O2": { "units": "mol/L", "default": 1e-9, "description": "Hydrogen peroxide" },
+        "HCHO": { "units": "mol/L", "default": 1e-9, "description": "Formaldehyde" },
+        "CH3O2": { "units": "mol/L", "default": 1e-12, "description": "Methyl peroxy radical" },
+        "CH3OH": { "units": "mol/L", "default": 1e-10, "description": "Methanol" },
+        "C2H4": { "units": "mol/L", "default": 1e-9, "description": "Ethylene" },
+        "C2H6": { "units": "mol/L", "default": 1e-9, "description": "Ethane" },
+        "C3H8": { "units": "mol/L", "default": 1e-9, "description": "Propane" },
+        "SO2": { "units": "mol/L", "default": 1e-9, "description": "Sulfur dioxide" },
+        "NH3": { "units": "mol/L", "default": 1e-9, "description": "Ammonia" }
+      },
+      "parameters": {
+        "k_photo_O3": { "units": "1/s", "default": 1e-5, "description": "O3 photolysis rate" },
+        "k_photo_NO2": { "units": "1/s", "default": 8e-3, "description": "NO2 photolysis rate" },
+        "k_OH_CO": { "units": "L/(mol*s)", "default": 2.3e-13, "description": "OH + CO rate" },
+        "k_OH_CH4": { "units": "L/(mol*s)", "default": 6.4e-15, "description": "OH + CH4 rate" },
+        "k_NO_O3": { "units": "L/(mol*s)", "default": 1.4e-14, "description": "NO + O3 rate" },
+        "k_NO2_OH": { "units": "L/(mol*s)", "default": 1.1e-11, "description": "NO2 + OH rate" },
+        "temperature": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "pressure": { "units": "Pa", "default": 101325.0, "description": "Pressure" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "O3_photolysis",
+          "substrates": [{ "species": "O3", "stoichiometry": 1 }],
+          "products": [{ "species": "O2", "stoichiometry": 1 }],
+          "rate": { "op": "*", "args": ["k_photo_O3", "O3"] }
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["k_photo_NO2", "NO2"] }
+        },
+        {
+          "id": "R3",
+          "name": "OH_CO_reaction",
+          "substrates": [
+            { "species": "OH", "stoichiometry": 1 },
+            { "species": "CO", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "HO2", "stoichiometry": 1 },
+            { "species": "CO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["k_OH_CO", "OH", "CO"] }
+        },
+        {
+          "id": "R4",
+          "name": "OH_CH4_reaction",
+          "substrates": [
+            { "species": "OH", "stoichiometry": 1 },
+            { "species": "CH4", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "CH3O2", "stoichiometry": 1 },
+            { "species": "H2O", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["k_OH_CH4", "OH", "CH4"] }
+        },
+        {
+          "id": "R5",
+          "name": "NO_O3_reaction",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": ["k_NO_O3", "NO", "O3"] }
+        }
+      ]
+    }
+  },
+  "domain": {
+    "temporal": { "start": 0.0, "end": 86400.0, "step": 1.0 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "LargeReactionNetwork.O2": 0.21,
+      "LargeReactionNetwork.N2": 0.78,
+      "LargeReactionNetwork.H2O": 0.01,
+      "LargeReactionNetwork.CO2": 0.0004,
+      "LargeReactionNetwork.O3": 1e-8,
+      "LargeReactionNetwork.NO": 1e-9,
+      "LargeReactionNetwork.NO2": 1e-9,
+      "LargeReactionNetwork.OH": 1e-12,
+      "LargeReactionNetwork.HO2": 1e-11,
+      "LargeReactionNetwork.CH4": 1.8e-6,
+      "LargeReactionNetwork.CO": 1e-7,
+      "LargeReactionNetwork.H2O2": 1e-9,
+      "LargeReactionNetwork.HCHO": 1e-9,
+      "LargeReactionNetwork.CH3O2": 1e-12,
+      "LargeReactionNetwork.CH3OH": 1e-10,
+      "LargeReactionNetwork.C2H4": 1e-9,
+      "LargeReactionNetwork.C2H6": 1e-9,
+      "LargeReactionNetwork.C3H8": 1e-9,
+      "LargeReactionNetwork.SO2": 1e-9,
+      "LargeReactionNetwork.NH3": 1e-9
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "algorithm": "CVODE_BDF",
+      "rtol": 1e-4,
+      "atol": 1e-12,
+      "max_order": 5,
+      "parallel": true
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "InvalidTriggerTypeTest",
+    "description": "Test case for invalid discrete event trigger type",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-18T00:00:00Z"
+  },
+
+  "models": {
+    "SimpleModel": {
+      "reference": { "notes": "Simple model with invalid trigger type" },
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 0.0, "description": "State variable" }
+      },
+      "parameters": {
+        "rate": { "units": "1/s", "default": 1.0, "description": "Rate parameter" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["rate", "x"] }
+        }
+      ],
+      "events": [
+        {
+          "type": "discrete",
+          "trigger": {
+            "type": "invalid_trigger_type",
+            "parameter": "some_value"
+          },
+          "affect": [
+            {
+              "variable": "x",
+              "value": { "op": "+", "args": ["x", 1.0] }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,428 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CouplingResolutionErrorFixtures",
+    "description": "Invalid coupling configurations that should produce deterministic errors",
+    "authors": ["Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "notes": [
+      "Tests error conditions that coupling resolution algorithms must detect and report:",
+      "1. Invalid scoped references in coupling entries",
+      "2. Type mismatches in variable mappings",
+      "3. Invalid transform types or missing required fields",
+      "4. Circular dependencies that cannot be resolved",
+      "5. Invalid operator or callback references",
+      "Each test case specifies the expected error code and message"
+    ]
+  },
+
+  "models": {
+    "ValidSystem": {
+      "description": "Valid system for testing error conditions",
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0, "description": "Position" },
+        "v": { "type": "state", "units": "m/s", "default": 1.0, "description": "Velocity" }
+      },
+      "parameters": {
+        "mass": { "units": "kg", "default": 1.0, "description": "Mass" },
+        "friction": { "units": "1/s", "default": 0.1, "description": "Friction coefficient" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "friction", "v"] }
+        }
+      ]
+    },
+
+    "IncompatibleUnitsSystem": {
+      "description": "System with variables that have incompatible units for testing",
+      "variables": {
+        "temperature": { "type": "state", "units": "K", "default": 300.0, "description": "Temperature" }
+      },
+      "parameters": {
+        "heat_capacity": { "units": "J/K", "default": 1000.0, "description": "Heat capacity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "heat_capacity", "temperature"] }
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "ValidDataLoader": {
+      "description": "Valid data loader for testing error conditions",
+      "data_source": {
+        "type": "csv",
+        "url": "file://data.csv",
+        "time_column": "time"
+      },
+      "provided_variables": {
+        "external_force": { "units": "N", "description": "External force" },
+        "ambient_temp": { "units": "K", "description": "Ambient temperature" }
+      }
+    }
+  },
+
+  "operators": {
+    "ValidOperator": {
+      "description": "Valid operator for testing error conditions",
+      "inputs": ["input_var"],
+      "outputs": ["output_var"],
+      "algorithm": "test_algorithm"
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["NonExistentSystem", "ValidSystem"],
+      "description": "ERROR CASE 1: Invalid system reference in operator_compose",
+      "_expected_error": {
+        "code": "undefined_system",
+        "message": "System 'NonExistentSystem' not found in models, reaction_systems, data_loaders, or operators",
+        "algorithm_step": "System resolution"
+      }
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["ValidSystem", "ValidDataLoader"],
+      "translate": {
+        "x": { "target": "nonexistent_variable", "factor": 1.0 }
+      },
+      "description": "ERROR CASE 2: Invalid translation target variable",
+      "_expected_error": {
+        "code": "unresolved_scoped_ref",
+        "message": "Translation target 'nonexistent_variable' not found in ValidDataLoader",
+        "algorithm_step": "Translation map validation"
+      }
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["ValidSystem", "ValidSystem"],
+      "translate": {
+        "x": { "target": "x", "factor": "invalid_factor" }
+      },
+      "description": "ERROR CASE 3: Invalid translation factor type",
+      "_expected_error": {
+        "code": "invalid_conversion_factor",
+        "message": "Translation factor must be a number, got 'invalid_factor'",
+        "algorithm_step": "Translation factor validation"
+      }
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ValidDataLoader.nonexistent_var",
+      "to": "ValidSystem.mass",
+      "transform": "param_to_var",
+      "description": "ERROR CASE 4: Invalid source variable in variable_map",
+      "_expected_error": {
+        "code": "unresolved_scoped_ref",
+        "message": "Source variable 'ValidDataLoader.nonexistent_var' not found",
+        "algorithm_step": "Variable_map source resolution"
+      }
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ValidDataLoader.external_force",
+      "to": "ValidSystem.nonexistent_param",
+      "transform": "param_to_var",
+      "description": "ERROR CASE 5: Invalid target parameter in variable_map",
+      "_expected_error": {
+        "code": "unresolved_scoped_ref",
+        "message": "Target parameter 'ValidSystem.nonexistent_param' not found",
+        "algorithm_step": "Variable_map target resolution"
+      }
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ValidDataLoader.external_force",
+      "to": "ValidSystem.mass",
+      "transform": "invalid_transform",
+      "description": "ERROR CASE 6: Invalid transform type in variable_map",
+      "_expected_error": {
+        "code": "invalid_transform_type",
+        "message": "Invalid transform type 'invalid_transform'. Must be one of: param_to_var, identity, additive, multiplicative, conversion_factor",
+        "algorithm_step": "Transform type validation"
+      }
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ValidDataLoader.external_force",
+      "to": "ValidSystem.mass",
+      "transform": "conversion_factor",
+      "description": "ERROR CASE 7: Missing required factor field for conversion_factor transform",
+      "_expected_error": {
+        "code": "missing_required_field",
+        "message": "Transform type 'conversion_factor' requires 'factor' field",
+        "algorithm_step": "Transform configuration validation"
+      }
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ValidDataLoader.external_force",
+      "to": "IncompatibleUnitsSystem.temperature",
+      "transform": "param_to_var",
+      "description": "ERROR CASE 8: Unit incompatibility in variable_map",
+      "_expected_error": {
+        "code": "unit_mismatch",
+        "message": "Unit incompatibility: source 'N' cannot be assigned to target 'K'",
+        "algorithm_step": "Unit compatibility check"
+      }
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["ValidSystem", "NonExistentSystem"],
+      "coupletype_pair": ["ValidCoupler", "NonExistentCoupler"],
+      "connector": {
+        "equations": []
+      },
+      "description": "ERROR CASE 9: Invalid system reference in couple2",
+      "_expected_error": {
+        "code": "undefined_system",
+        "message": "System 'NonExistentSystem' not found in models, reaction_systems, data_loaders, or operators",
+        "algorithm_step": "System resolution"
+      }
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["ValidSystem", "IncompatibleUnitsSystem"],
+      "coupletype_pair": ["ValidCoupler", "IncompatibleCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "ValidSystem.nonexistent_var",
+            "to": "IncompatibleUnitsSystem.temperature",
+            "transform": "additive",
+            "expression": { "op": "+", "args": [1.0, "nonexistent_var"] }
+          }
+        ]
+      },
+      "description": "ERROR CASE 10: Invalid from reference in couple2 connector",
+      "_expected_error": {
+        "code": "unresolved_scoped_ref",
+        "message": "Connector equation 'from' reference 'ValidSystem.nonexistent_var' not found",
+        "algorithm_step": "Connector equation validation"
+      }
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["ValidSystem", "IncompatibleUnitsSystem"],
+      "coupletype_pair": ["ValidCoupler", "IncompatibleCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "ValidSystem.x",
+            "to": "IncompatibleUnitsSystem.nonexistent_target",
+            "transform": "additive",
+            "expression": "x"
+          }
+        ]
+      },
+      "description": "ERROR CASE 11: Invalid to reference in couple2 connector",
+      "_expected_error": {
+        "code": "unresolved_scoped_ref",
+        "message": "Connector equation 'to' reference 'IncompatibleUnitsSystem.nonexistent_target' not found",
+        "algorithm_step": "Connector equation validation"
+      }
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["ValidSystem", "IncompatibleUnitsSystem"],
+      "coupletype_pair": ["ValidCoupler", "IncompatibleCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "ValidSystem.x",
+            "to": "IncompatibleUnitsSystem.temperature",
+            "transform": "invalid_transform_type",
+            "expression": "x"
+          }
+        ]
+      },
+      "description": "ERROR CASE 12: Invalid transform type in couple2 connector",
+      "_expected_error": {
+        "code": "invalid_transform_type",
+        "message": "Invalid connector transform type 'invalid_transform_type'. Must be one of: additive, multiplicative, replacement",
+        "algorithm_step": "Connector transform validation"
+      }
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["ValidSystem", "IncompatibleUnitsSystem"],
+      "coupletype_pair": ["ValidCoupler", "IncompatibleCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "ValidSystem.x",
+            "to": "IncompatibleUnitsSystem.temperature",
+            "transform": "additive"
+          }
+        ]
+      },
+      "description": "ERROR CASE 13: Missing required expression field in couple2 connector",
+      "_expected_error": {
+        "code": "missing_required_field",
+        "message": "Connector equation missing required 'expression' field",
+        "algorithm_step": "Connector equation validation"
+      }
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "NonExistentOperator",
+      "target": "ValidSystem",
+      "description": "ERROR CASE 14: Invalid operator reference in operator_apply",
+      "_expected_error": {
+        "code": "undefined_operator",
+        "message": "Operator 'NonExistentOperator' not found in operators section",
+        "algorithm_step": "Operator resolution"
+      }
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "ValidOperator",
+      "target": "NonExistentSystem",
+      "description": "ERROR CASE 15: Invalid target system in operator_apply",
+      "_expected_error": {
+        "code": "undefined_system",
+        "message": "Target system 'NonExistentSystem' not found",
+        "algorithm_step": "Target system resolution"
+      }
+    },
+
+    {
+      "type": "callback",
+      "callback": "NonExistentCallback",
+      "target": "ValidSystem",
+      "description": "ERROR CASE 16: Invalid callback reference",
+      "_expected_error": {
+        "code": "undefined_callback",
+        "message": "Callback 'NonExistentCallback' not found in registered callbacks",
+        "algorithm_step": "Callback resolution"
+      }
+    },
+
+    {
+      "type": "invalid_coupling_type",
+      "systems": ["ValidSystem"],
+      "description": "ERROR CASE 17: Invalid coupling type",
+      "_expected_error": {
+        "code": "invalid_coupling_type",
+        "message": "Invalid coupling type 'invalid_coupling_type'. Must be one of: operator_compose, couple2, variable_map, operator_apply, callback",
+        "algorithm_step": "Coupling type validation"
+      }
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["ValidSystem"],
+      "description": "ERROR CASE 18: Insufficient systems for operator_compose",
+      "_expected_error": {
+        "code": "insufficient_systems",
+        "message": "operator_compose requires exactly 2 systems, got 1",
+        "algorithm_step": "System count validation"
+      }
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["ValidSystem", "ValidDataLoader", "IncompatibleUnitsSystem"],
+      "description": "ERROR CASE 19: Too many systems for operator_compose",
+      "_expected_error": {
+        "code": "too_many_systems",
+        "message": "operator_compose requires exactly 2 systems, got 3",
+        "algorithm_step": "System count validation"
+      }
+    },
+
+    {
+      "type": "variable_map",
+      "from": "ValidSystem.x",
+      "to": "ValidSystem.x",
+      "transform": "param_to_var",
+      "description": "ERROR CASE 20: Self-referential variable_map that creates circular dependency",
+      "_expected_error": {
+        "code": "circular_dependency",
+        "message": "Circular dependency detected: ValidSystem.x depends on itself",
+        "algorithm_step": "Circular dependency detection"
+      }
+    }
+  ],
+
+  "_test_verification": {
+    "error_classification": {
+      "undefined_system": ["case_1", "case_9", "case_15"],
+      "unresolved_scoped_ref": ["case_2", "case_4", "case_5", "case_10", "case_11"],
+      "invalid_conversion_factor": ["case_3"],
+      "invalid_transform_type": ["case_6", "case_12"],
+      "missing_required_field": ["case_7", "case_13"],
+      "unit_mismatch": ["case_8"],
+      "undefined_operator": ["case_14"],
+      "undefined_callback": ["case_16"],
+      "invalid_coupling_type": ["case_17"],
+      "insufficient_systems": ["case_18"],
+      "too_many_systems": ["case_19"],
+      "circular_dependency": ["case_20"]
+    },
+
+    "algorithm_steps_tested": {
+      "system_resolution": ["case_1", "case_9", "case_15"],
+      "translation_map_validation": ["case_2", "case_3"],
+      "variable_map_source_resolution": ["case_4"],
+      "variable_map_target_resolution": ["case_5"],
+      "transform_type_validation": ["case_6", "case_12"],
+      "transform_configuration_validation": ["case_7"],
+      "unit_compatibility_check": ["case_8"],
+      "connector_equation_validation": ["case_10", "case_11", "case_13"],
+      "operator_resolution": ["case_14"],
+      "callback_resolution": ["case_16"],
+      "coupling_type_validation": ["case_17"],
+      "system_count_validation": ["case_18", "case_19"],
+      "circular_dependency_detection": ["case_20"]
+    },
+
+    "error_handling_requirements": {
+      "deterministic_errors": "All coupling resolution errors must be deterministic and reproducible across implementations",
+      "error_codes": "Error codes must be consistent across all library implementations",
+      "error_messages": "Error messages should be descriptive and include context about which algorithm step failed",
+      "early_validation": "Errors should be detected as early as possible in the resolution process",
+      "cascading_prevention": "One coupling error should not prevent validation of other independent coupling rules"
+    },
+
+    "implementation_notes": {
+      "validation_order": [
+        "1. Validate coupling entry schema",
+        "2. Resolve all system references",
+        "3. Validate system-specific requirements (equation count, variable count)",
+        "4. Resolve all scoped variable references",
+        "5. Check unit compatibility",
+        "6. Detect circular dependencies",
+        "7. Validate transform configurations",
+        "8. Apply coupling transformations"
+      ],
+      "error_recovery": "Libraries should continue processing other coupling entries after encountering errors in one entry",
+      "aggregated_reporting": "Multiple errors should be collected and reported together rather than failing on first error"
+    }
+  }
+}

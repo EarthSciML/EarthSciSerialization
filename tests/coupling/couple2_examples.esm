@@ -1,0 +1,126 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "Couple2Examples",
+    "description": "Test fixtures for couple2 coupling type with connector equations",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "FluidFlow": {
+      "reference": { "notes": "1D fluid flow system" },
+      "variables": {
+        "velocity": { "type": "state", "units": "m/s", "default": 1.0, "description": "Flow velocity" },
+        "pressure": { "type": "state", "units": "Pa", "default": 101325.0, "description": "Fluid pressure" }
+      },
+      "parameters": {
+        "density": { "units": "kg/m^3", "default": 1000.0, "description": "Fluid density" },
+        "viscosity": { "units": "Pa·s", "default": 1e-3, "description": "Dynamic viscosity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["velocity"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              { "op": "/", "args": [{ "op": "grad", "args": ["pressure"], "dim": "x" }, "density"] },
+              { "op": "*", "args": [{ "op": "/", "args": ["viscosity", "density"] }, "velocity"] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "HeatTransfer": {
+      "reference": { "notes": "1D heat conduction system" },
+      "variables": {
+        "temperature": { "type": "state", "units": "K", "default": 300.0, "description": "Temperature" }
+      },
+      "parameters": {
+        "thermal_diffusivity": { "units": "m^2/s", "default": 1e-7, "description": "Thermal diffusivity" },
+        "heat_capacity": { "units": "J/(kg·K)", "default": 4180.0, "description": "Specific heat capacity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": ["thermal_diffusivity", { "op": "laplacian", "args": ["temperature"] }] },
+              { "connector_variable": "convective_heat_flux" }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "couple2",
+      "system1": "FluidFlow",
+      "system2": "HeatTransfer",
+      "connector_equations": [
+        {
+          "variable": "convective_heat_flux",
+          "units": "K/s",
+          "expression": {
+            "op": "*", "args": [
+              { "scoped_ref": "FluidFlow.velocity" },
+              { "op": "grad", "args": [{ "scoped_ref": "HeatTransfer.temperature" }], "dim": "x" }
+            ]
+          }
+        },
+        {
+          "variable": "viscous_heating",
+          "units": "Pa/s",
+          "expression": {
+            "op": "*", "args": [
+              { "scoped_ref": "FluidFlow.viscosity" },
+              { "op": "^", "args": [{ "op": "grad", "args": [{ "scoped_ref": "FluidFlow.velocity" }], "dim": "x" }, 2] }
+            ]
+          }
+        }
+      ],
+      "feedback": {
+        "FluidFlow": {
+          "pressure": {
+            "op": "+", "args": [
+              { "scoped_ref": "FluidFlow.pressure" },
+              { "op": "*", "args": [0.1, { "connector_variable": "viscous_heating" }] }
+            ]
+          }
+        },
+        "HeatTransfer": {
+          "temperature": {
+            "op": "+", "args": [
+              { "scoped_ref": "HeatTransfer.temperature" },
+              { "op": "/", "args": [{ "connector_variable": "viscous_heating" }, { "scoped_ref": "HeatTransfer.heat_capacity" }] }
+            ]
+          }
+        }
+      }
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T01:00:00Z" },
+    "spatial": {
+      "x": { "min": 0.0, "max": 1.0, "grid_spacing": 0.01, "units": "m" }
+    },
+    "initial_conditions": { "type": "default" },
+    "boundary_conditions": [
+      { "type": "dirichlet", "variable": "velocity", "value": 1.0, "location": "x_min" },
+      { "type": "neumann", "variable": "temperature", "value": 0.0, "location": "x_max" }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "coupled_implicit",
+    "config": {
+      "algorithm": "NewtonKrylov",
+      "tolerance": 1e-8,
+      "coupling_iteration": "picard"
+    }
+  }
+}

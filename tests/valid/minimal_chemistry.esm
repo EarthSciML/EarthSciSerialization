@@ -1,0 +1,111 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MinimalChemAdvection",
+    "description": "O3-NO-NO2 chemistry with advection and external meteorology",
+    "authors": ["Chris Tessum"],
+    "created": "2026-02-11T00:00:00Z"
+  },
+
+  "reaction_systems": {
+    "SimpleOzone": {
+      "coupletype": "SimpleOzoneCoupler",
+      "reference": { "notes": "Minimal O3-NOx photochemical cycle" },
+      "species": {
+        "O3":  { "units": "mol/mol", "default": 40e-9,  "description": "Ozone" },
+        "NO":  { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T":    { "units": "K", "default": 298.15, "description": "Temperature" },
+        "M":    { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" },
+        "jNO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }, "M"] }
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [ { "species": "NO2", "stoichiometry": 1 } ],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": "jNO2"
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "Advection": {
+      "reference": { "notes": "First-order advection" },
+      "variables": {
+        "u_wind": { "type": "parameter", "units": "m/s", "default": 0.0 },
+        "v_wind": { "type": "parameter", "units": "m/s", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "GEOSFP": {
+      "type": "gridded_data",
+      "loader_id": "GEOSFP",
+      "config": { "resolution": "0.25x0.3125_NA", "coord_defaults": { "lat": 34.0, "lev": 1 } },
+      "provides": {
+        "u": { "units": "m/s", "description": "Eastward wind" },
+        "v": { "units": "m/s", "description": "Northward wind" },
+        "T": { "units": "K", "description": "Temperature" }
+      }
+    }
+  },
+
+  "coupling": [
+    { "type": "operator_compose", "systems": ["SimpleOzone", "Advection"] },
+    { "type": "variable_map", "from": "GEOSFP.T", "to": "SimpleOzone.T", "transform": "param_to_var" },
+    { "type": "variable_map", "from": "GEOSFP.u", "to": "Advection.u_wind", "transform": "param_to_var" },
+    { "type": "variable_map", "from": "GEOSFP.v", "to": "Advection.v_wind", "transform": "param_to_var" }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z" },
+    "spatial": {
+      "lon": { "min": -130.0, "max": -100.0, "grid_spacing": 0.3125, "units": "degrees" }
+    },
+    "coordinate_transforms": [
+      { "id": "lonlat_to_meters", "dimensions": ["lon"] }
+    ],
+    "initial_conditions": { "type": "constant", "value": 1.0e-9 },
+    "boundary_conditions": [
+      { "type": "zero_gradient", "dimensions": ["lon"] }
+    ],
+    "element_type": "Float32"
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": { "stiff_algorithm": "Rosenbrock23", "timestep": 1.0 }
+  }
+}

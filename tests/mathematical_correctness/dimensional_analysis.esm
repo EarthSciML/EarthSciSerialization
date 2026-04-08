@@ -1,0 +1,586 @@
+{
+  "meta": {
+    "name": "Dimensional Analysis Test Fixtures",
+    "version": "1.0.0",
+    "description": "Comprehensive dimensional consistency verification test cases for scientific equations",
+    "mathematical_type": "dimensional_analysis",
+    "tolerance": 1e-12,
+    "test_cases": 52
+  },
+  "unit_systems": {
+    "SI": {
+      "base_units": {
+        "length": "m",
+        "mass": "kg",
+        "time": "s",
+        "temperature": "K",
+        "amount": "mol",
+        "current": "A",
+        "luminosity": "cd"
+      },
+      "derived_units": {
+        "velocity": "m/s",
+        "acceleration": "m/s^2",
+        "force": "kg*m/s^2",
+        "energy": "kg*m^2/s^2",
+        "power": "kg*m^2/s^3",
+        "pressure": "kg/(m*s^2)",
+        "frequency": "1/s",
+        "area": "m^2",
+        "volume": "m^3",
+        "density": "kg/m^3",
+        "concentration": "mol/m^3"
+      }
+    },
+    "CGS": {
+      "base_units": {
+        "length": "cm",
+        "mass": "g",
+        "time": "s"
+      },
+      "derived_units": {
+        "force": "g*cm/s^2",
+        "energy": "g*cm^2/s^2",
+        "pressure": "g/(cm*s^2)"
+      }
+    }
+  },
+  "dimensional_equations": [
+    {
+      "name": "newton_second_law",
+      "equation": "F = m * a",
+      "variables": {
+        "F": {"dimension": "[M L T^-2]", "units": "kg*m/s^2", "description": "force"},
+        "m": {"dimension": "[M]", "units": "kg", "description": "mass"},
+        "a": {"dimension": "[L T^-2]", "units": "m/s^2", "description": "acceleration"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L T^-2]",
+      "rhs_dimension": "[M L T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "kinetic_energy",
+      "equation": "E_k = 0.5 * m * v^2",
+      "variables": {
+        "E_k": {"dimension": "[M L^2 T^-2]", "units": "kg*m^2/s^2", "description": "kinetic energy"},
+        "m": {"dimension": "[M]", "units": "kg", "description": "mass"},
+        "v": {"dimension": "[L T^-1]", "units": "m/s", "description": "velocity"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-2]",
+      "rhs_dimension": "[M L^2 T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "potential_energy",
+      "equation": "E_p = m * g * h",
+      "variables": {
+        "E_p": {"dimension": "[M L^2 T^-2]", "units": "kg*m^2/s^2", "description": "potential energy"},
+        "m": {"dimension": "[M]", "units": "kg", "description": "mass"},
+        "g": {"dimension": "[L T^-2]", "units": "m/s^2", "description": "gravitational acceleration"},
+        "h": {"dimension": "[L]", "units": "m", "description": "height"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-2]",
+      "rhs_dimension": "[M L^2 T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "ideal_gas_law",
+      "equation": "P * V = n * R * T",
+      "variables": {
+        "P": {"dimension": "[M L^-1 T^-2]", "units": "kg/(m*s^2)", "description": "pressure"},
+        "V": {"dimension": "[L^3]", "units": "m^3", "description": "volume"},
+        "n": {"dimension": "[N]", "units": "mol", "description": "amount of substance"},
+        "R": {"dimension": "[M L^2 T^-2 N^-1 K^-1]", "units": "kg*m^2/(s^2*mol*K)", "description": "gas constant"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-2]",
+      "rhs_dimension": "[M L^2 T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "arrhenius_equation",
+      "equation": "k = A * exp(-E_a / (R * T))",
+      "variables": {
+        "k": {"dimension": "[T^-1]", "units": "1/s", "description": "rate constant"},
+        "A": {"dimension": "[T^-1]", "units": "1/s", "description": "pre-exponential factor"},
+        "E_a": {"dimension": "[M L^2 T^-2 N^-1]", "units": "kg*m^2/(s^2*mol)", "description": "activation energy"},
+        "R": {"dimension": "[M L^2 T^-2 N^-1 K^-1]", "units": "kg*m^2/(s^2*mol*K)", "description": "gas constant"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"}
+      },
+      "dimensional_consistency": true,
+      "exponential_argument_dimensionless": true,
+      "lhs_dimension": "[T^-1]",
+      "rhs_dimension": "[T^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "continuity_equation",
+      "equation": "∂ρ/∂t + ∇·(ρv) = 0",
+      "variables": {
+        "ρ": {"dimension": "[M L^-3]", "units": "kg/m^3", "description": "density"},
+        "t": {"dimension": "[T]", "units": "s", "description": "time"},
+        "v": {"dimension": "[L T^-1]", "units": "m/s", "description": "velocity vector"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^-3 T^-1]",
+      "rhs_dimension": "[M L^-3 T^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "diffusion_equation",
+      "equation": "∂C/∂t = D * ∇²C",
+      "variables": {
+        "C": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "concentration"},
+        "t": {"dimension": "[T]", "units": "s", "description": "time"},
+        "D": {"dimension": "[L^2 T^-1]", "units": "m^2/s", "description": "diffusion coefficient"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[N L^-3 T^-1]",
+      "rhs_dimension": "[N L^-3 T^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "reynolds_number",
+      "equation": "Re = ρ * v * L / μ",
+      "variables": {
+        "Re": {"dimension": "1", "units": "dimensionless", "description": "Reynolds number"},
+        "ρ": {"dimension": "[M L^-3]", "units": "kg/m^3", "description": "density"},
+        "v": {"dimension": "[L T^-1]", "units": "m/s", "description": "velocity"},
+        "L": {"dimension": "[L]", "units": "m", "description": "characteristic length"},
+        "μ": {"dimension": "[M L^-1 T^-1]", "units": "kg/(m*s)", "description": "dynamic viscosity"}
+      },
+      "dimensional_consistency": true,
+      "dimensionless_number": true,
+      "lhs_dimension": "1",
+      "rhs_dimension": "1",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "navier_stokes_equation",
+      "equation": "ρ * (∂v/∂t + v·∇v) = -∇P + μ * ∇²v + F",
+      "variables": {
+        "ρ": {"dimension": "[M L^-3]", "units": "kg/m^3", "description": "density"},
+        "v": {"dimension": "[L T^-1]", "units": "m/s", "description": "velocity vector"},
+        "t": {"dimension": "[T]", "units": "s", "description": "time"},
+        "P": {"dimension": "[M L^-1 T^-2]", "units": "kg/(m*s^2)", "description": "pressure"},
+        "μ": {"dimension": "[M L^-1 T^-1]", "units": "kg/(m*s)", "description": "dynamic viscosity"},
+        "F": {"dimension": "[M L^-2 T^-2]", "units": "kg/(m^2*s^2)", "description": "body force"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^-2 T^-2]",
+      "rhs_dimension": "[M L^-2 T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "heat_equation",
+      "equation": "∂T/∂t = α * ∇²T",
+      "variables": {
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"},
+        "t": {"dimension": "[T]", "units": "s", "description": "time"},
+        "α": {"dimension": "[L^2 T^-1]", "units": "m^2/s", "description": "thermal diffusivity"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[K T^-1]",
+      "rhs_dimension": "[K T^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "fourier_heat_conduction",
+      "equation": "q = -k * ∇T",
+      "variables": {
+        "q": {"dimension": "[M T^-3]", "units": "kg/s^3", "description": "heat flux"},
+        "k": {"dimension": "[M L T^-3 K^-1]", "units": "kg*m/(s^3*K)", "description": "thermal conductivity"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M T^-3]",
+      "rhs_dimension": "[M T^-3]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "coulombs_law",
+      "equation": "F = k_e * q1 * q2 / r^2",
+      "variables": {
+        "F": {"dimension": "[M L T^-2]", "units": "kg*m/s^2", "description": "force"},
+        "k_e": {"dimension": "[M L^3 T^-4 A^-2]", "units": "kg*m^3/(s^4*A^2)", "description": "Coulomb constant"},
+        "q1": {"dimension": "[A T]", "units": "A*s", "description": "charge 1"},
+        "q2": {"dimension": "[A T]", "units": "A*s", "description": "charge 2"},
+        "r": {"dimension": "[L]", "units": "m", "description": "distance"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L T^-2]",
+      "rhs_dimension": "[M L T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "ohms_law",
+      "equation": "V = I * R",
+      "variables": {
+        "V": {"dimension": "[M L^2 T^-3 A^-1]", "units": "kg*m^2/(s^3*A)", "description": "voltage"},
+        "I": {"dimension": "[A]", "units": "A", "description": "current"},
+        "R": {"dimension": "[M L^2 T^-3 A^-2]", "units": "kg*m^2/(s^3*A^2)", "description": "resistance"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-3 A^-1]",
+      "rhs_dimension": "[M L^2 T^-3 A^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "maxwells_equation_gauss",
+      "equation": "∇·E = ρ/ε₀",
+      "variables": {
+        "E": {"dimension": "[M L T^-3 A^-1]", "units": "kg*m/(s^3*A)", "description": "electric field"},
+        "ρ": {"dimension": "[A T L^-3]", "units": "A*s/m^3", "description": "charge density"},
+        "ε₀": {"dimension": "[M^-1 L^-3 T^4 A^2]", "units": "s^4*A^2/(kg*m^3)", "description": "permittivity of free space"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M T^-3 A^-1 L^-1]",
+      "rhs_dimension": "[M T^-3 A^-1 L^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "wave_equation",
+      "equation": "∂²y/∂t² = c² * ∂²y/∂x²",
+      "variables": {
+        "y": {"dimension": "[L]", "units": "m", "description": "displacement"},
+        "t": {"dimension": "[T]", "units": "s", "description": "time"},
+        "c": {"dimension": "[L T^-1]", "units": "m/s", "description": "wave speed"},
+        "x": {"dimension": "[L]", "units": "m", "description": "position"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[L T^-2]",
+      "rhs_dimension": "[L T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "schrodinger_equation",
+      "equation": "iℏ * ∂ψ/∂t = Ĥψ",
+      "variables": {
+        "ℏ": {"dimension": "[M L^2 T^-1]", "units": "kg*m^2/s", "description": "reduced Planck constant"},
+        "ψ": {"dimension": "[L^-3/2]", "units": "m^-3/2", "description": "wave function"},
+        "t": {"dimension": "[T]", "units": "s", "description": "time"},
+        "Ĥ": {"dimension": "[M L^2 T^-2]", "units": "kg*m^2/s^2", "description": "Hamiltonian operator"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-2 L^-3/2]",
+      "rhs_dimension": "[M L^2 T^-2 L^-3/2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "einstein_mass_energy",
+      "equation": "E = m * c²",
+      "variables": {
+        "E": {"dimension": "[M L^2 T^-2]", "units": "kg*m^2/s^2", "description": "energy"},
+        "m": {"dimension": "[M]", "units": "kg", "description": "mass"},
+        "c": {"dimension": "[L T^-1]", "units": "m/s", "description": "speed of light"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-2]",
+      "rhs_dimension": "[M L^2 T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "stefan_boltzmann_law",
+      "equation": "P = σ * A * T⁴",
+      "variables": {
+        "P": {"dimension": "[M L^2 T^-3]", "units": "kg*m^2/s^3", "description": "power"},
+        "σ": {"dimension": "[M T^-3 K^-4]", "units": "kg/(s^3*K^4)", "description": "Stefan-Boltzmann constant"},
+        "A": {"dimension": "[L^2]", "units": "m^2", "description": "area"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-3]",
+      "rhs_dimension": "[M L^2 T^-3]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "planck_blackbody_formula",
+      "equation": "B(ν,T) = (2*h*ν³/c²) / (exp(h*ν/(k_B*T)) - 1)",
+      "variables": {
+        "B": {"dimension": "[M T^-2 sr^-1]", "units": "kg/(s^2*sr)", "description": "spectral radiance"},
+        "h": {"dimension": "[M L^2 T^-1]", "units": "kg*m^2/s", "description": "Planck constant"},
+        "ν": {"dimension": "[T^-1]", "units": "1/s", "description": "frequency"},
+        "c": {"dimension": "[L T^-1]", "units": "m/s", "description": "speed of light"},
+        "k_B": {"dimension": "[M L^2 T^-2 K^-1]", "units": "kg*m^2/(s^2*K)", "description": "Boltzmann constant"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"}
+      },
+      "dimensional_consistency": true,
+      "exponential_argument_dimensionless": true,
+      "lhs_dimension": "[M T^-2 sr^-1]",
+      "rhs_dimension": "[M T^-2 sr^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "beer_lambert_law",
+      "equation": "A = ε * l * c",
+      "variables": {
+        "A": {"dimension": "1", "units": "dimensionless", "description": "absorbance"},
+        "ε": {"dimension": "[L^2 N^-1]", "units": "m^2/mol", "description": "molar absorptivity"},
+        "l": {"dimension": "[L]", "units": "m", "description": "path length"},
+        "c": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "concentration"}
+      },
+      "dimensional_consistency": true,
+      "dimensionless_result": true,
+      "lhs_dimension": "1",
+      "rhs_dimension": "1",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "atmospheric_pressure_altitude",
+      "equation": "P(h) = P₀ * exp(-M*g*h/(R*T))",
+      "variables": {
+        "P": {"dimension": "[M L^-1 T^-2]", "units": "kg/(m*s^2)", "description": "pressure at altitude"},
+        "P₀": {"dimension": "[M L^-1 T^-2]", "units": "kg/(m*s^2)", "description": "sea level pressure"},
+        "M": {"dimension": "[M N^-1]", "units": "kg/mol", "description": "molar mass of air"},
+        "g": {"dimension": "[L T^-2]", "units": "m/s^2", "description": "gravitational acceleration"},
+        "h": {"dimension": "[L]", "units": "m", "description": "altitude"},
+        "R": {"dimension": "[M L^2 T^-2 N^-1 K^-1]", "units": "kg*m^2/(s^2*mol*K)", "description": "gas constant"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"}
+      },
+      "dimensional_consistency": true,
+      "exponential_argument_dimensionless": true,
+      "lhs_dimension": "[M L^-1 T^-2]",
+      "rhs_dimension": "[M L^-1 T^-2]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "reaction_rate_law",
+      "equation": "r = k * [A]^m * [B]^n",
+      "variables": {
+        "r": {"dimension": "[N L^-3 T^-1]", "units": "mol/(m^3*s)", "description": "reaction rate"},
+        "k": {"dimension": "[L^(3*(m+n-1)) N^(-(m+n-1)) T^-1]", "units": "variable", "description": "rate constant"},
+        "[A]": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "concentration of A"},
+        "[B]": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "concentration of B"},
+        "m": {"dimension": "1", "units": "dimensionless", "description": "reaction order in A"},
+        "n": {"dimension": "1", "units": "dimensionless", "description": "reaction order in B"}
+      },
+      "dimensional_consistency": true,
+      "order_dependent_dimensions": true,
+      "lhs_dimension": "[N L^-3 T^-1]",
+      "rhs_dimension": "[N L^-3 T^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "michaelis_menten_kinetics",
+      "equation": "v = V_max * [S] / (K_m + [S])",
+      "variables": {
+        "v": {"dimension": "[N L^-3 T^-1]", "units": "mol/(m^3*s)", "description": "reaction velocity"},
+        "V_max": {"dimension": "[N L^-3 T^-1]", "units": "mol/(m^3*s)", "description": "maximum velocity"},
+        "[S]": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "substrate concentration"},
+        "K_m": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "Michaelis constant"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[N L^-3 T^-1]",
+      "rhs_dimension": "[N L^-3 T^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "henderson_hasselbalch",
+      "equation": "pH = pK_a + log([A⁻]/[HA])",
+      "variables": {
+        "pH": {"dimension": "1", "units": "dimensionless", "description": "negative log of hydrogen ion concentration"},
+        "pK_a": {"dimension": "1", "units": "dimensionless", "description": "negative log of acid dissociation constant"},
+        "[A⁻]": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "conjugate base concentration"},
+        "[HA]": {"dimension": "[N L^-3]", "units": "mol/m^3", "description": "acid concentration"}
+      },
+      "dimensional_consistency": true,
+      "logarithmic_argument_dimensionless": true,
+      "lhs_dimension": "1",
+      "rhs_dimension": "1",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "nerst_equation",
+      "equation": "E = E° - (R*T)/(n*F) * ln(Q)",
+      "variables": {
+        "E": {"dimension": "[M L^2 T^-3 A^-1]", "units": "kg*m^2/(s^3*A)", "description": "cell potential"},
+        "E°": {"dimension": "[M L^2 T^-3 A^-1]", "units": "kg*m^2/(s^3*A)", "description": "standard cell potential"},
+        "R": {"dimension": "[M L^2 T^-2 N^-1 K^-1]", "units": "kg*m^2/(s^2*mol*K)", "description": "gas constant"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"},
+        "n": {"dimension": "1", "units": "dimensionless", "description": "number of electrons"},
+        "F": {"dimension": "[A T N^-1]", "units": "A*s/mol", "description": "Faraday constant"},
+        "Q": {"dimension": "1", "units": "dimensionless", "description": "reaction quotient"}
+      },
+      "dimensional_consistency": true,
+      "logarithmic_argument_dimensionless": true,
+      "lhs_dimension": "[M L^2 T^-3 A^-1]",
+      "rhs_dimension": "[M L^2 T^-3 A^-1]",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "van_der_waals_equation",
+      "equation": "(P + a/V²) * (V - b) = R * T",
+      "variables": {
+        "P": {"dimension": "[M L^-1 T^-2]", "units": "kg/(m*s^2)", "description": "pressure"},
+        "a": {"dimension": "[M L^5 T^-2 N^-2]", "units": "kg*m^5/(s^2*mol^2)", "description": "attraction parameter"},
+        "V": {"dimension": "[L^3 N^-1]", "units": "m^3/mol", "description": "molar volume"},
+        "b": {"dimension": "[L^3 N^-1]", "units": "m^3/mol", "description": "excluded volume"},
+        "R": {"dimension": "[M L^2 T^-2 N^-1 K^-1]", "units": "kg*m^2/(s^2*mol*K)", "description": "gas constant"},
+        "T": {"dimension": "[K]", "units": "K", "description": "temperature"}
+      },
+      "dimensional_consistency": true,
+      "lhs_dimension": "[M L^2 T^-2 N^-1]",
+      "rhs_dimension": "[M L^2 T^-2 N^-1]",
+      "tolerance": 1e-15
+    }
+  ],
+  "complex_dimensional_cases": [
+    {
+      "name": "inconsistent_addition",
+      "equation": "F = m + a",
+      "variables": {
+        "F": {"dimension": "[M L T^-2]", "units": "kg*m/s^2"},
+        "m": {"dimension": "[M]", "units": "kg"},
+        "a": {"dimension": "[L T^-2]", "units": "m/s^2"}
+      },
+      "dimensional_consistency": false,
+      "error_type": "dimensional_mismatch_in_addition",
+      "expected_error": "Cannot add quantities with different dimensions: [M] + [L T^-2]"
+    },
+    {
+      "name": "inconsistent_exponential_argument",
+      "equation": "k = A * exp(E_a / T)",
+      "variables": {
+        "k": {"dimension": "[T^-1]", "units": "1/s"},
+        "A": {"dimension": "[T^-1]", "units": "1/s"},
+        "E_a": {"dimension": "[M L^2 T^-2 N^-1]", "units": "kg*m^2/(s^2*mol)"},
+        "T": {"dimension": "[K]", "units": "K"}
+      },
+      "dimensional_consistency": false,
+      "error_type": "non_dimensionless_exponential_argument",
+      "expected_error": "Exponential argument must be dimensionless: [M L^2 T^-2 N^-1 K^-1]"
+    },
+    {
+      "name": "inconsistent_logarithm_argument",
+      "equation": "y = log(x + 5)",
+      "variables": {
+        "y": {"dimension": "1", "units": "dimensionless"},
+        "x": {"dimension": "[L]", "units": "m"}
+      },
+      "dimensional_consistency": false,
+      "error_type": "dimensional_logarithm_argument",
+      "expected_error": "Logarithm argument must be dimensionless: [L]"
+    },
+    {
+      "name": "mixed_unit_systems",
+      "equation": "F = m * a",
+      "variables": {
+        "F": {"dimension": "[M L T^-2]", "units": "N", "unit_system": "SI"},
+        "m": {"dimension": "[M]", "units": "g", "unit_system": "CGS"},
+        "a": {"dimension": "[L T^-2]", "units": "m/s^2", "unit_system": "SI"}
+      },
+      "dimensional_consistency": true,
+      "unit_consistency": false,
+      "error_type": "mixed_unit_systems",
+      "conversion_required": true
+    }
+  ],
+  "dimensionless_numbers": [
+    {
+      "name": "reynolds_number",
+      "formula": "Re = ρ*v*L/μ",
+      "description": "Inertial to viscous forces ratio",
+      "typical_range": [1e-6, 1e8],
+      "critical_values": {"laminar_threshold": 2300, "turbulent_threshold": 4000}
+    },
+    {
+      "name": "prandtl_number",
+      "formula": "Pr = μ*c_p/k",
+      "description": "Momentum to thermal diffusivity ratio",
+      "typical_range": [0.1, 1000],
+      "critical_values": {"water": 7.0, "air": 0.7}
+    },
+    {
+      "name": "nusselt_number",
+      "formula": "Nu = h*L/k",
+      "description": "Convective to conductive heat transfer ratio",
+      "typical_range": [1, 1000],
+      "critical_values": {"conduction_only": 1}
+    },
+    {
+      "name": "peclet_number",
+      "formula": "Pe = v*L/D",
+      "description": "Advective to diffusive transport ratio",
+      "typical_range": [1e-3, 1e6],
+      "critical_values": {"diffusion_dominated": 0.1, "advection_dominated": 10}
+    },
+    {
+      "name": "damkohler_number",
+      "formula": "Da = k*t_res",
+      "description": "Reaction to transport time scale ratio",
+      "typical_range": [1e-6, 1e6],
+      "critical_values": {"transport_limited": 10, "kinetic_limited": 0.1}
+    },
+    {
+      "name": "schmidt_number",
+      "formula": "Sc = μ/(ρ*D)",
+      "description": "Momentum to mass diffusivity ratio",
+      "typical_range": [0.1, 1000],
+      "critical_values": {"heat_mass_analogy": 1}
+    }
+  ],
+  "unit_conversion_tests": [
+    {
+      "name": "length_conversions",
+      "base_unit": "m",
+      "conversions": [
+        {"unit": "km", "factor": 1000},
+        {"unit": "cm", "factor": 0.01},
+        {"unit": "mm", "factor": 0.001},
+        {"unit": "ft", "factor": 0.3048},
+        {"unit": "in", "factor": 0.0254}
+      ]
+    },
+    {
+      "name": "energy_conversions",
+      "base_unit": "J",
+      "conversions": [
+        {"unit": "kJ", "factor": 1000},
+        {"unit": "cal", "factor": 4.184},
+        {"unit": "kcal", "factor": 4184},
+        {"unit": "eV", "factor": 1.602176634e-19},
+        {"unit": "kWh", "factor": 3.6e6}
+      ]
+    },
+    {
+      "name": "pressure_conversions",
+      "base_unit": "Pa",
+      "conversions": [
+        {"unit": "kPa", "factor": 1000},
+        {"unit": "bar", "factor": 1e5},
+        {"unit": "atm", "factor": 101325},
+        {"unit": "mmHg", "factor": 133.322},
+        {"unit": "psi", "factor": 6894.76}
+      ]
+    }
+  ],
+  "verification_algorithms": {
+    "dimensional_analysis": {
+      "method": "symbolic_dimension_tracking",
+      "tolerance": 1e-15,
+      "checks": [
+        "addition_subtraction_consistency",
+        "multiplication_division_composition",
+        "exponential_argument_dimensionless",
+        "logarithm_argument_dimensionless",
+        "trigonometric_argument_dimensionless"
+      ]
+    },
+    "unit_consistency": {
+      "method": "unit_system_verification",
+      "allowed_systems": ["SI", "CGS", "Imperial"],
+      "conversion_accuracy": 1e-12
+    }
+  },
+  "performance_benchmarks": {
+    "dimensional_verification": {
+      "simple_equation": {"variables": 3, "target_time_ms": 0.1},
+      "complex_equation": {"variables": 10, "target_time_ms": 1.0},
+      "system_verification": {"equations": 100, "target_time_ms": 100.0}
+    }
+  }
+}

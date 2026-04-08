@@ -1,0 +1,36 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ResourceExhaustionTest",
+    "description": "Test resource exhaustion with very long strings and excessive field repetition. This string is intentionally very long to test memory allocation limits and string parsing performance. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Repeated text: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "authors": ["Security Test", "Another Author", "Third Author", "Fourth Author", "Fifth Author"]
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "var001": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 001" },
+        "var002": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 002" },
+        "var003": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 003" },
+        "var004": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 004" },
+        "var005": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 005" },
+        "var006": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 006" },
+        "var007": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 007" },
+        "var008": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 008" },
+        "var009": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 009" },
+        "var010": { "type": "state", "units": "m", "default": 0.0, "description": "Variable 010" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["var001"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var002"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var003"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var004"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var005"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var006"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var007"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var008"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var009"], "wrt": "t" }, "rhs": 0.1 },
+        { "lhs": { "op": "D", "args": ["var010"], "wrt": "t" }, "rhs": 0.1 }
+      ]
+    }
+  }
+}

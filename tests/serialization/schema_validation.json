@@ -1,0 +1,19 @@
+[
+  {
+    "description": "Serialization must produce schema-valid output",
+    "test_cases": [
+      {
+        "name": "Round-trip preserves schema validity",
+        "input_file": "minimal_chemistry.esm",
+        "process": "load -> serialize -> validate_against_schema",
+        "expected": "schema_valid"
+      },
+      {
+        "name": "Programmatically constructed file serializes to valid schema",
+        "input_type": "constructed",
+        "process": "construct -> serialize -> validate_against_schema",
+        "expected": "schema_valid"
+      }
+    ]
+  }
+]

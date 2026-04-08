@@ -1,0 +1,180 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ScopedReferenceResolutionErrors",
+    "description": "Test fixture containing multiple scoped reference resolution errors that should be caught by validators",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["scoping", "reference-resolution", "errors", "validation"]
+  },
+
+  "models": {
+    "SystemA": {
+      "variables": {
+        "valid_var": {"type": "state", "units": "m", "default": 1.0, "description": "Valid variable"},
+        "another_var": {"type": "parameter", "units": "1/s", "default": 0.1, "description": "Another valid variable"}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["valid_var"], "wrt": "t"},
+          "rhs": {"op": "*", "args": ["another_var", "valid_var"]}
+        }
+      ],
+      "subsystems": {
+        "SubsystemB": {
+          "variables": {
+            "nested_var": {"type": "state", "units": "kg", "default": 2.0, "description": "Nested variable"}
+          },
+          "equations": []
+        }
+      }
+    },
+
+    "SystemC": {
+      "variables": {
+        "temperature": {"type": "parameter", "units": "K", "default": 298.0, "description": "Temperature"}
+      },
+      "equations": []
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "ERROR 1: Reference to nonexistent top-level system",
+      "type": "variable_map",
+      "from": "NonExistentSystem.some_var",
+      "to": "SystemA.valid_var",
+      "transform": "identity",
+      "description": "This should fail - NonExistentSystem does not exist"
+    },
+
+    {
+      "_comment": "ERROR 2: Reference to nonexistent subsystem in valid system",
+      "type": "variable_map",
+      "from": "SystemA.NonExistentSubsystem.some_var",
+      "to": "SystemC.temperature",
+      "transform": "identity",
+      "description": "This should fail - NonExistentSubsystem does not exist in SystemA"
+    },
+
+    {
+      "_comment": "ERROR 3: Reference to nonexistent variable in valid system",
+      "type": "variable_map",
+      "from": "SystemA.nonexistent_var",
+      "to": "SystemC.temperature",
+      "transform": "identity",
+      "description": "This should fail - nonexistent_var does not exist in SystemA"
+    },
+
+    {
+      "_comment": "ERROR 4: Reference to nonexistent variable in valid subsystem",
+      "type": "variable_map",
+      "from": "SystemA.SubsystemB.nonexistent_nested_var",
+      "to": "SystemC.temperature",
+      "transform": "identity",
+      "description": "This should fail - nonexistent_nested_var does not exist in SystemA.SubsystemB"
+    },
+
+    {
+      "_comment": "ERROR 5: Too many nested levels - trying to go deeper than subsystem structure",
+      "type": "variable_map",
+      "from": "SystemA.SubsystemB.NonExistentDeeperLevel.some_var",
+      "to": "SystemC.temperature",
+      "transform": "identity",
+      "description": "This should fail - SubsystemB has no subsystems"
+    },
+
+    {
+      "_comment": "ERROR 6: Event with invalid scoped reference in conditions",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "invalid_condition_reference",
+      "conditions": [
+        {
+          "op": ">",
+          "args": [
+            "SystemA.SubsystemB.NonExistentVar",
+            10.0
+          ]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "SystemA.valid_var",
+          "rhs": 0.0
+        }
+      ],
+      "description": "This should fail - NonExistentVar does not exist in SystemA.SubsystemB"
+    },
+
+    {
+      "_comment": "ERROR 7: Event with invalid scoped reference in affects",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "invalid_affects_reference",
+      "conditions": [
+        {
+          "op": ">",
+          "args": ["SystemA.valid_var", 5.0]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "SystemA.SubsystemB.NonExistentTarget",
+          "rhs": {"op": "*", "args": [2.0, "SystemA.valid_var"]}
+        }
+      ],
+      "description": "This should fail - NonExistentTarget does not exist in SystemA.SubsystemB"
+    },
+
+    {
+      "_comment": "ERROR 8: operator_compose with invalid system reference",
+      "type": "operator_compose",
+      "systems": [
+        "SystemA.SubsystemB",
+        "SystemA.NonExistentSubsystem"
+      ],
+      "description": "This should fail - NonExistentSubsystem does not exist in SystemA"
+    },
+
+    {
+      "_comment": "ERROR 9: operator_compose with invalid translate reference",
+      "type": "operator_compose",
+      "systems": ["SystemA", "SystemC"],
+      "translate": {
+        "SystemA.NonExistentVar": "SystemC.temperature"
+      },
+      "description": "This should fail - NonExistentVar does not exist in SystemA"
+    },
+
+    {
+      "_comment": "ERROR 10: couple2 with invalid system reference",
+      "type": "couple2",
+      "systems": [
+        "SystemA.SubsystemB",
+        "NonExistentSystem.SomeSubsystem"
+      ],
+      "coupletype_pair": ["TypeA", "TypeB"],
+      "connector": {"equations": []},
+      "description": "This should fail - NonExistentSystem does not exist"
+    },
+
+    {
+      "_comment": "ERROR 11: couple2 connector with invalid scoped reference",
+      "type": "couple2",
+      "systems": ["SystemA", "SystemC"],
+      "coupletype_pair": ["TypeA", "TypeC"],
+      "connector": {
+        "equations": [
+          {
+            "from": "SystemA.NonExistentVar",
+            "to": "SystemC.temperature",
+            "transform": "identity",
+            "expression": {"op": "*", "args": [1.0, "SystemA.NonExistentVar"]}
+          }
+        ]
+      },
+      "description": "This should fail - NonExistentVar does not exist in SystemA"
+    }
+  ]
+}

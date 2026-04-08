@@ -1,0 +1,23 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "NullReactionExplicitNulls",
+    "description": "Reaction with explicitly null substrates and products"
+  },
+  "reaction_systems": {
+    "EmptySystem": {
+      "species": {},
+      "parameters": {
+        "k": { "units": "1/s", "default": 0.1 }
+      },
+      "reactions": [
+        {
+          "id": "empty_reaction",
+          "substrates": null,
+          "products": null,
+          "rate": "k"
+        }
+      ]
+    }
+  }
+}

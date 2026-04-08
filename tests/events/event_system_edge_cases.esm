@@ -1,0 +1,432 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventSystemEdgeCases",
+    "description": "Edge case test fixtures for advanced event system behaviors",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+
+  "models": {
+    "EventOrderingSystem": {
+      "description": "Test event firing order and simultaneity",
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.0, "description": "Primary variable" },
+        "y": { "type": "state", "units": "m", "default": 2.0, "description": "Secondary variable" },
+        "z": { "type": "state", "units": "m", "default": 0.0, "description": "Tertiary variable" },
+        "event_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Event counter" },
+        "priority_flag": { "type": "parameter", "units": "1", "default": 0, "description": "Priority processing flag" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-2.0, "y"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["z"], "wrt": "t" },
+          "rhs": { "op": "+", "args": ["x", "y"] }
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "simultaneous_zero_crossing_1",
+          "conditions": [
+            { "op": "-", "args": ["x", 0.5] }
+          ],
+          "affects": [
+            {
+              "lhs": "event_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["event_counter"] }, 100] }
+            },
+            {
+              "lhs": "priority_flag",
+              "rhs": 1
+            }
+          ],
+          "discrete_parameters": ["event_counter", "priority_flag"],
+          "description": "First event in simultaneous firing (higher priority due to alphabetical ordering)"
+        },
+        {
+          "name": "simultaneous_zero_crossing_2",
+          "conditions": [
+            { "op": "-", "args": ["y", 1.0] }
+          ],
+          "affects": [
+            {
+              "lhs": "event_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["event_counter"] }, 10] }
+            },
+            {
+              "lhs": "z",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["z"] }, -1] }
+            }
+          ],
+          "discrete_parameters": ["event_counter"],
+          "description": "Second event in simultaneous firing"
+        },
+        {
+          "name": "chained_condition_dependency",
+          "conditions": [
+            { "op": "-", "args": ["priority_flag", 0.5] }
+          ],
+          "affects": [
+            {
+              "lhs": "z",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["z"] }, 1000] }
+            }
+          ],
+          "description": "Event that depends on another event's discrete parameter change"
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "discrete_chain_start",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": ">", "args": ["event_counter", 50] }
+          },
+          "affects": [
+            {
+              "lhs": "x",
+              "rhs": 10.0
+            }
+          ],
+          "description": "Discrete event triggered by continuous event counter"
+        }
+      ]
+    },
+
+    "BoundaryConditionSystem": {
+      "description": "Test numerical precision and boundary condition evaluation",
+      "variables": {
+        "position": { "type": "state", "units": "m", "default": 1e-15, "description": "Near-zero position" },
+        "velocity": { "type": "state", "units": "m/s", "default": -1e-10, "description": "Very small velocity" },
+        "temperature": { "type": "state", "units": "K", "default": 273.15000001, "description": "Temperature near freezing" },
+        "precision_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Precision event counter" },
+        "epsilon": { "type": "parameter", "units": "1", "default": 1e-12, "description": "Machine epsilon tolerance" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["position"], "wrt": "t" },
+          "rhs": "velocity"
+        },
+        {
+          "lhs": { "op": "D", "args": ["velocity"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.001, "velocity"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.1, { "op": "-", "args": [273.15, "temperature"] }] }
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "exact_zero_crossing",
+          "conditions": [
+            { "op": "-", "args": ["position", 0.0] }
+          ],
+          "affects": [
+            {
+              "lhs": "precision_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["precision_counter"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["precision_counter"],
+          "root_find": "all",
+          "description": "Event at exactly zero (tests numerical precision)"
+        },
+        {
+          "name": "near_zero_tolerance",
+          "conditions": [
+            { "op": "-", "args": [{ "op": "abs", "args": ["velocity"] }, "epsilon"] }
+          ],
+          "affects": [
+            {
+              "lhs": "velocity",
+              "rhs": 0.0
+            }
+          ],
+          "description": "Snap to zero when velocity is within machine epsilon"
+        },
+        {
+          "name": "freezing_point_hysteresis",
+          "conditions": [
+            { "op": "-", "args": ["temperature", 273.15] }
+          ],
+          "affects": [
+            {
+              "lhs": "precision_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["precision_counter"] }, 10] }
+            }
+          ],
+          "affect_neg": [
+            {
+              "lhs": "precision_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["precision_counter"] }, 20] }
+            }
+          ],
+          "discrete_parameters": ["precision_counter"],
+          "description": "Different behavior for warming vs cooling past freezing point"
+        }
+      ]
+    },
+
+    "VariableScopingSystem": {
+      "description": "Test affect equation variable scoping and access",
+      "variables": {
+        "local_var": { "type": "state", "units": "1", "default": 1.0, "description": "Local state variable" },
+        "shared_param": { "type": "parameter", "units": "1", "default": 5.0, "description": "Parameter shared across systems" },
+        "observed_value": {
+          "type": "observed",
+          "units": "1",
+          "expression": { "op": "*", "args": ["local_var", "shared_param"] },
+          "description": "Observed variable for testing scoped access"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["local_var"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.1, { "op": "-", "args": [1.0, "local_var"] }] }
+        }
+      ],
+
+      "continuous_events": [
+        {
+          "name": "cross_system_reference_test",
+          "conditions": [
+            { "op": "-", "args": ["BoundaryConditionSystem.position", -1e-10] }
+          ],
+          "affects": [
+            {
+              "lhs": "shared_param",
+              "rhs": { "op": "Pre", "args": ["BoundaryConditionSystem.precision_counter"] }
+            }
+          ],
+          "discrete_parameters": ["shared_param"],
+          "description": "Event that references variables from another system"
+        },
+        {
+          "name": "observed_variable_in_condition",
+          "conditions": [
+            { "op": "-", "args": ["observed_value", 10.0] }
+          ],
+          "affects": [
+            {
+              "lhs": "local_var",
+              "rhs": { "op": "/", "args": [{ "op": "Pre", "args": ["local_var"] }, 2] }
+            }
+          ],
+          "description": "Event condition using observed variable"
+        }
+      ]
+    },
+
+    "DiscreteParameterChainSystem": {
+      "description": "Test cascading discrete parameter modifications",
+      "variables": {
+        "state_var": { "type": "state", "units": "1", "default": 1.0, "description": "State variable" },
+        "param_a": { "type": "parameter", "units": "1", "default": 1.0, "description": "First parameter in chain" },
+        "param_b": { "type": "parameter", "units": "1", "default": 2.0, "description": "Second parameter in chain" },
+        "param_c": { "type": "parameter", "units": "1", "default": 3.0, "description": "Third parameter in chain" },
+        "chain_trigger": { "type": "parameter", "units": "1", "default": 0, "description": "Chain trigger flag" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["state_var"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["param_a", { "op": "-", "args": ["param_b", "state_var"] }] }
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "parameter_chain_step1",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": ">", "args": ["state_var", 5.0] }
+          },
+          "affects": [
+            {
+              "lhs": "param_a",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["param_a"] }, 2] }
+            },
+            {
+              "lhs": "chain_trigger",
+              "rhs": 1
+            }
+          ],
+          "discrete_parameters": ["param_a", "chain_trigger"],
+          "reinitialize": true,
+          "description": "First step in parameter modification chain"
+        },
+        {
+          "name": "parameter_chain_step2",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "==", "args": ["chain_trigger", 1] }
+          },
+          "affects": [
+            {
+              "lhs": "param_b",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["param_b"] }, { "op": "Pre", "args": ["param_a"] }] }
+            },
+            {
+              "lhs": "chain_trigger",
+              "rhs": 2
+            }
+          ],
+          "discrete_parameters": ["param_b", "chain_trigger"],
+          "description": "Second step triggered by first step's parameter change"
+        },
+        {
+          "name": "parameter_chain_step3",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "==", "args": ["chain_trigger", 2] }
+          },
+          "affects": [
+            {
+              "lhs": "param_c",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["param_c"] }, { "op": "Pre", "args": ["param_b"] }] }
+            },
+            {
+              "lhs": "chain_trigger",
+              "rhs": 0
+            }
+          ],
+          "discrete_parameters": ["param_c", "chain_trigger"],
+          "description": "Final step in parameter chain, resets trigger"
+        }
+      ]
+    },
+
+    "FunctionalAffectEdgeCases": {
+      "description": "Test edge cases in functional affects",
+      "variables": {
+        "input_signal": { "type": "state", "units": "V", "default": 0.0, "description": "Input signal" },
+        "output_signal": { "type": "state", "units": "V", "default": 0.0, "description": "Output signal" },
+        "controller_state": { "type": "parameter", "units": "1", "default": 0.0, "description": "Internal controller state" },
+        "error_accumulator": { "type": "parameter", "units": "V*s", "default": 0.0, "description": "Error integral" },
+        "setpoint": { "type": "parameter", "units": "V", "default": 5.0, "description": "Target setpoint" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["input_signal"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.1, { "op": "-", "args": ["output_signal", "input_signal"] }] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["output_signal"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["controller_state", { "op": "-", "args": ["setpoint", "input_signal"] }] }
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "complex_pid_controller",
+          "trigger": {
+            "type": "periodic",
+            "interval": 0.1,
+            "initial_offset": 0.0
+          },
+          "functional_affect": {
+            "handler_id": "AdvancedPIDController",
+            "read_vars": ["input_signal", "output_signal"],
+            "read_params": ["setpoint", "error_accumulator"],
+            "modified_params": ["controller_state", "error_accumulator"],
+            "config": {
+              "kp": 2.0,
+              "ki": 0.5,
+              "kd": 0.1,
+              "anti_windup": true,
+              "output_limits": [-10.0, 10.0],
+              "derivative_filter": 0.8,
+              "deadband": 0.01
+            }
+          },
+          "reinitialize": false,
+          "description": "Complex PID controller with anti-windup and filtering"
+        },
+        {
+          "name": "adaptive_setpoint",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": ">", "args": [{ "op": "abs", "args": [{ "op": "-", "args": ["input_signal", "setpoint"] }] }, 1.0] }
+          },
+          "functional_affect": {
+            "handler_id": "AdaptiveSetpointController",
+            "read_vars": ["input_signal", "output_signal"],
+            "read_params": ["setpoint", "controller_state"],
+            "modified_params": ["setpoint"],
+            "config": {
+              "adaptation_rate": 0.1,
+              "stability_threshold": 0.05,
+              "max_setpoint_change": 0.5
+            }
+          },
+          "description": "Adaptive setpoint adjustment based on system performance"
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "conditions": [
+        { "op": ">", "args": ["EventOrderingSystem.event_counter", 150] }
+      ],
+      "affects": [
+        {
+          "lhs": "BoundaryConditionSystem.temperature",
+          "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["BoundaryConditionSystem.temperature"] }, 10.0] }
+        },
+        {
+          "lhs": "VariableScopingSystem.local_var",
+          "rhs": 0.5
+        }
+      ],
+      "description": "Cross-system event affecting multiple systems simultaneously"
+    },
+    {
+      "type": "event",
+      "event_type": "discrete",
+      "trigger": {
+        "type": "condition",
+        "expression": { "op": "and", "args": [
+          { "op": ">", "args": ["DiscreteParameterChainSystem.param_c", 50.0] },
+          { "op": "<", "args": ["BoundaryConditionSystem.position", 1e-12] }
+        ]}
+      },
+      "affects": [
+        {
+          "lhs": "FunctionalAffectEdgeCases.setpoint",
+          "rhs": { "op": "Pre", "args": ["VariableScopingSystem.shared_param"] }
+        }
+      ],
+      "discrete_parameters": ["FunctionalAffectEdgeCases.setpoint"],
+      "description": "Complex cross-system discrete event with compound conditions"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:10:00Z" },
+    "initial_conditions": { "type": "constant", "value": 0.0 }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 1e-6,
+      "abstol": 1e-12,
+      "reltol": 1e-9
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "esm": "0.2.0",
+  "metadata": {
+    "name": "Version_0_2_0_MinorUpgrade",
+    "description": "Test file with version 0.2.0 - should warn for forward compatibility but still load",
+    "authors": ["ESM Format Team"],
+    "created": "2024-06-01T00:00:00Z"
+  },
+  "reaction_systems": {
+    "SimpleChemistry": {
+      "species": {
+        "A": { "units": "mol/mol", "default": 1e-6, "description": "Chemical species A" },
+        "B": { "units": "mol/mol", "default": 2e-6, "description": "Chemical species B" }
+      },
+      "parameters": {
+        "k1": { "units": "1/s", "default": 0.01, "description": "Rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [{ "species": "A", "stoichiometry": 1 }],
+          "products": [{ "species": "B", "stoichiometry": 1 }],
+          "rate": "k1"
+        }
+      ]
+    }
+  },
+  "future_feature": {
+    "comment": "This field might be added in version 0.2.0 but should be ignored by 0.1.0 libraries"
+  }
+}

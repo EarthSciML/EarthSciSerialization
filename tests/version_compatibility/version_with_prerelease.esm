@@ -1,0 +1,22 @@
+{
+  "esm": "0.1.0-alpha.1",
+  "metadata": {
+    "name": "VersionWithPrerelease",
+    "description": "Test with prerelease version identifier - should fail current schema validation",
+    "authors": ["ESM Format Team"],
+    "created": "2024-01-01T00:00:00Z"
+  },
+  "models": {
+    "SimpleModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-6 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.01, "x"] }
+        }
+      ]
+    }
+  }
+}

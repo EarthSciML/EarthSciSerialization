@@ -1,0 +1,473 @@
+{
+  "meta": {
+    "name": "Conservation Laws Test Fixtures",
+    "version": "1.0.0",
+    "description": "Comprehensive conservation law verification test cases for Earth System Models",
+    "mathematical_type": "conservation_verification",
+    "tolerance": 1e-10,
+    "test_cases": 24
+  },
+  "reaction_systems": [
+    {
+      "name": "mass_conservation_simple",
+      "description": "Simple mass conservation: A + B → C",
+      "species": [
+        {"name": "A", "formula": "C2H4", "mass": 28.054, "charge": 0},
+        {"name": "B", "formula": "H2O", "mass": 18.015, "charge": 0},
+        {"name": "C", "formula": "C2H6O", "mass": 46.069, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "ethene_hydration",
+          "reactants": {"A": 1.0, "B": 1.0},
+          "products": {"C": 1.0},
+          "rate_constant": 1.5e-3,
+          "temperature_dependence": {"activation_energy": 50000, "pre_exponential": 1.2e8}
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "mass_conservation_error": 0.0,
+      "conservation_laws": 1,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "stoichiometric_rank": 1,
+        "null_space_dimension": 2
+      }
+    },
+    {
+      "name": "mass_conservation_combustion",
+      "description": "Methane combustion: CH4 + 2O2 → CO2 + 2H2O",
+      "species": [
+        {"name": "CH4", "formula": "CH4", "mass": 16.043, "charge": 0},
+        {"name": "O2", "formula": "O2", "mass": 31.998, "charge": 0},
+        {"name": "CO2", "formula": "CO2", "mass": 44.010, "charge": 0},
+        {"name": "H2O", "formula": "H2O", "mass": 18.015, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "methane_combustion",
+          "reactants": {"CH4": 1.0, "O2": 2.0},
+          "products": {"CO2": 1.0, "H2O": 2.0},
+          "rate_constant": 2.1e6,
+          "temperature_dependence": {"activation_energy": 55000, "pre_exponential": 6.2e10}
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "mass_conservation_error": 0.0,
+      "conservation_laws": 1,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-8,
+        "carbon_balance": {"input": 1, "output": 1},
+        "hydrogen_balance": {"input": 4, "output": 4},
+        "oxygen_balance": {"input": 4, "output": 4}
+      }
+    },
+    {
+      "name": "charge_conservation_ionic",
+      "description": "Ionic reaction: Ag⁺ + Cl⁻ → AgCl",
+      "species": [
+        {"name": "Ag_plus", "formula": "Ag+", "mass": 107.868, "charge": 1},
+        {"name": "Cl_minus", "formula": "Cl-", "mass": 35.453, "charge": -1},
+        {"name": "AgCl", "formula": "AgCl", "mass": 143.321, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "silver_chloride_precipitation",
+          "reactants": {"Ag_plus": 1.0, "Cl_minus": 1.0},
+          "products": {"AgCl": 1.0},
+          "rate_constant": 1.8e7,
+          "equilibrium_constant": 1.77e10
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "expected_charge_balance": 0.0,
+      "conservation_laws": 2,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "charge_balance_tolerance": 1e-15,
+        "electroneutrality": true
+      }
+    },
+    {
+      "name": "energy_conservation_thermodynamic",
+      "description": "Energy conservation in exothermic reaction: 2H2 + O2 → 2H2O",
+      "species": [
+        {"name": "H2", "formula": "H2", "mass": 2.016, "charge": 0, "enthalpy_formation": 0.0},
+        {"name": "O2", "formula": "O2", "mass": 31.998, "charge": 0, "enthalpy_formation": 0.0},
+        {"name": "H2O", "formula": "H2O", "mass": 18.015, "charge": 0, "enthalpy_formation": -285800.0}
+      ],
+      "reactions": [
+        {
+          "name": "water_formation",
+          "reactants": {"H2": 2.0, "O2": 1.0},
+          "products": {"H2O": 2.0},
+          "rate_constant": 4.5e8,
+          "enthalpy_change": -571600.0,
+          "entropy_change": -163.2
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "expected_energy_balance": 0.0,
+      "conservation_laws": 2,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "energy_balance_tolerance": 1e-6,
+        "enthalpy_verification": true
+      }
+    },
+    {
+      "name": "momentum_conservation_fluid",
+      "description": "Momentum conservation in fluid reaction system",
+      "species": [
+        {"name": "reactant_A", "formula": "A", "mass": 50.0, "charge": 0, "momentum": [1.0, 0.0, 0.0]},
+        {"name": "reactant_B", "formula": "B", "mass": 30.0, "charge": 0, "momentum": [-0.5, 1.0, 0.0]},
+        {"name": "product_C", "formula": "C", "mass": 80.0, "charge": 0, "momentum": [0.25, 0.625, 0.0]}
+      ],
+      "reactions": [
+        {
+          "name": "momentum_conserving_reaction",
+          "reactants": {"reactant_A": 1.0, "reactant_B": 1.0},
+          "products": {"product_C": 1.0},
+          "rate_constant": 1.2e5
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "expected_momentum_balance": [0.0, 0.0, 0.0],
+      "conservation_laws": 4,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "momentum_balance_tolerance": 1e-12,
+        "momentum_components": ["x", "y", "z"]
+      }
+    },
+    {
+      "name": "angular_momentum_conservation",
+      "description": "Angular momentum conservation in rotational reaction system",
+      "species": [
+        {"name": "molecule_A", "formula": "A", "mass": 25.0, "angular_momentum": 2.5},
+        {"name": "molecule_B", "formula": "B", "mass": 35.0, "angular_momentum": 1.8},
+        {"name": "product_AB", "formula": "AB", "mass": 60.0, "angular_momentum": 4.3}
+      ],
+      "reactions": [
+        {
+          "name": "angular_momentum_reaction",
+          "reactants": {"molecule_A": 1.0, "molecule_B": 1.0},
+          "products": {"product_AB": 1.0},
+          "rate_constant": 3.7e4
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "expected_angular_momentum_balance": 0.0,
+      "conservation_laws": 2,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "angular_momentum_tolerance": 1e-12
+      }
+    },
+    {
+      "name": "multi_step_conservation_chain",
+      "description": "Multi-step reaction chain: A → B → C → D",
+      "species": [
+        {"name": "A", "formula": "A", "mass": 100.0, "charge": 0},
+        {"name": "B", "formula": "B", "mass": 100.0, "charge": 0},
+        {"name": "C", "formula": "C", "mass": 100.0, "charge": 0},
+        {"name": "D", "formula": "D", "mass": 100.0, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "step_1",
+          "reactants": {"A": 1.0},
+          "products": {"B": 1.0},
+          "rate_constant": 1.5e-2
+        },
+        {
+          "name": "step_2",
+          "reactants": {"B": 1.0},
+          "products": {"C": 1.0},
+          "rate_constant": 2.3e-2
+        },
+        {
+          "name": "step_3",
+          "reactants": {"C": 1.0},
+          "products": {"D": 1.0},
+          "rate_constant": 1.8e-2
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "conservation_laws": 1,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "total_mass_conservation": true,
+        "stoichiometric_consistency": true
+      }
+    },
+    {
+      "name": "reversible_equilibrium_conservation",
+      "description": "Reversible reaction at equilibrium: A + B ⇌ C + D",
+      "species": [
+        {"name": "A", "formula": "A", "mass": 40.0, "charge": 0},
+        {"name": "B", "formula": "B", "mass": 60.0, "charge": 0},
+        {"name": "C", "formula": "C", "mass": 50.0, "charge": 0},
+        {"name": "D", "formula": "D", "mass": 50.0, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "forward_reaction",
+          "reactants": {"A": 1.0, "B": 1.0},
+          "products": {"C": 1.0, "D": 1.0},
+          "rate_constant": 4.2e-1
+        },
+        {
+          "name": "reverse_reaction",
+          "reactants": {"C": 1.0, "D": 1.0},
+          "products": {"A": 1.0, "B": 1.0},
+          "rate_constant": 1.8e-1
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "conservation_laws": 1,
+      "equilibrium_constant": 2.33,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "equilibrium_verification": true,
+        "detailed_balance": true
+      }
+    },
+    {
+      "name": "catalytic_cycle_conservation",
+      "description": "Catalytic cycle with catalyst conservation: S + E ⇌ ES → P + E",
+      "species": [
+        {"name": "S", "formula": "S", "mass": 180.0, "charge": 0},
+        {"name": "E", "formula": "E", "mass": 50000.0, "charge": 0},
+        {"name": "ES", "formula": "ES", "mass": 50180.0, "charge": 0},
+        {"name": "P", "formula": "P", "mass": 180.0, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "substrate_binding",
+          "reactants": {"S": 1.0, "E": 1.0},
+          "products": {"ES": 1.0},
+          "rate_constant": 1.0e6,
+          "reverse_rate_constant": 1.0e3
+        },
+        {
+          "name": "catalytic_conversion",
+          "reactants": {"ES": 1.0},
+          "products": {"P": 1.0, "E": 1.0},
+          "rate_constant": 1.0e2
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "catalyst_conservation": true,
+      "conservation_laws": 2,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "catalyst_conservation_tolerance": 1e-15,
+        "michaelis_menten_kinetics": true
+      }
+    },
+    {
+      "name": "complex_network_conservation",
+      "description": "Complex reaction network with multiple conservation laws",
+      "species": [
+        {"name": "X1", "formula": "X1", "mass": 25.0, "charge": 0},
+        {"name": "X2", "formula": "X2", "mass": 30.0, "charge": 0},
+        {"name": "X3", "formula": "X3", "mass": 35.0, "charge": 0},
+        {"name": "X4", "formula": "X4", "mass": 40.0, "charge": 0},
+        {"name": "X5", "formula": "X5", "mass": 45.0, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "R1",
+          "reactants": {"X1": 1.0, "X2": 1.0},
+          "products": {"X3": 1.0},
+          "rate_constant": 1.5e-1
+        },
+        {
+          "name": "R2",
+          "reactants": {"X3": 1.0, "X4": 1.0},
+          "products": {"X5": 1.0},
+          "rate_constant": 2.1e-1
+        },
+        {
+          "name": "R3",
+          "reactants": {"X5": 1.0},
+          "products": {"X1": 1.0, "X4": 1.0},
+          "rate_constant": 3.2e-2
+        },
+        {
+          "name": "R4",
+          "reactants": {"X2": 2.0},
+          "products": {"X4": 1.0},
+          "rate_constant": 1.8e-2
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "conservation_laws": 3,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "conservation_matrix_rank": 4,
+        "null_space_dimension": 1
+      }
+    },
+    {
+      "name": "phase_transition_conservation",
+      "description": "Phase transition with mass and energy conservation: H2O(l) ⇌ H2O(g)",
+      "species": [
+        {"name": "H2O_liquid", "formula": "H2O(l)", "mass": 18.015, "phase": "liquid", "enthalpy": -285830.0},
+        {"name": "H2O_vapor", "formula": "H2O(g)", "mass": 18.015, "phase": "gas", "enthalpy": -241820.0}
+      ],
+      "reactions": [
+        {
+          "name": "vaporization",
+          "reactants": {"H2O_liquid": 1.0},
+          "products": {"H2O_vapor": 1.0},
+          "rate_constant": 5.4e-3,
+          "enthalpy_change": 44010.0,
+          "entropy_change": 118.8
+        },
+        {
+          "name": "condensation",
+          "reactants": {"H2O_vapor": 1.0},
+          "products": {"H2O_liquid": 1.0},
+          "rate_constant": 2.1e-3,
+          "enthalpy_change": -44010.0,
+          "entropy_change": -118.8
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "expected_energy_balance": 0.0,
+      "conservation_laws": 2,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-15,
+        "energy_balance_tolerance": 1e-6,
+        "phase_equilibrium": true
+      }
+    },
+    {
+      "name": "electrochemical_conservation",
+      "description": "Electrochemical reaction with charge and mass conservation: Zn + Cu²⁺ → Zn²⁺ + Cu",
+      "species": [
+        {"name": "Zn", "formula": "Zn", "mass": 65.38, "charge": 0, "oxidation_state": 0},
+        {"name": "Cu_2plus", "formula": "Cu2+", "mass": 63.546, "charge": 2, "oxidation_state": 2},
+        {"name": "Zn_2plus", "formula": "Zn2+", "mass": 65.38, "charge": 2, "oxidation_state": 2},
+        {"name": "Cu", "formula": "Cu", "mass": 63.546, "charge": 0, "oxidation_state": 0}
+      ],
+      "reactions": [
+        {
+          "name": "redox_reaction",
+          "reactants": {"Zn": 1.0, "Cu_2plus": 1.0},
+          "products": {"Zn_2plus": 1.0, "Cu": 1.0},
+          "rate_constant": 3.8e4,
+          "standard_potential": 1.10,
+          "electron_transfer": 2
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "expected_charge_balance": 0.0,
+      "expected_electron_balance": 0.0,
+      "conservation_laws": 3,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "charge_balance_tolerance": 1e-15,
+        "electron_balance_tolerance": 1e-15,
+        "redox_balance": true
+      }
+    },
+    {
+      "name": "photochemical_conservation",
+      "description": "Photochemical reaction with photon energy conservation: O2 + hν → 2O",
+      "species": [
+        {"name": "O2", "formula": "O2", "mass": 31.998, "charge": 0},
+        {"name": "O_atom", "formula": "O", "mass": 15.999, "charge": 0},
+        {"name": "photon", "formula": "hν", "mass": 0.0, "energy": 3.28e-19}
+      ],
+      "reactions": [
+        {
+          "name": "oxygen_dissociation",
+          "reactants": {"O2": 1.0, "photon": 1.0},
+          "products": {"O_atom": 2.0},
+          "rate_constant": 2.5e-6,
+          "photon_wavelength": 242.0,
+          "quantum_yield": 1.0
+        }
+      ],
+      "expected_mass_balance": 0.0,
+      "expected_energy_balance": 0.0,
+      "conservation_laws": 2,
+      "test_criteria": {
+        "mass_balance_tolerance": 1e-10,
+        "energy_balance_tolerance": 1e-18,
+        "photon_conservation": true
+      }
+    },
+    {
+      "name": "nuclear_decay_conservation",
+      "description": "Nuclear decay with mass-energy conservation: ¹⁴C → ¹⁴N + e⁻ + ν̄ₑ",
+      "species": [
+        {"name": "C14", "formula": "14C", "mass": 14.003242, "charge": 0, "atomic_number": 6},
+        {"name": "N14", "formula": "14N", "mass": 14.003074, "charge": 0, "atomic_number": 7},
+        {"name": "electron", "formula": "e-", "mass": 0.000549, "charge": -1},
+        {"name": "neutrino", "formula": "νe", "mass": 0.0, "charge": 0}
+      ],
+      "reactions": [
+        {
+          "name": "beta_decay",
+          "reactants": {"C14": 1.0},
+          "products": {"N14": 1.0, "electron": 1.0, "neutrino": 1.0},
+          "rate_constant": 3.83e-12,
+          "half_life": 5730.0,
+          "q_value": 0.000156
+        }
+      ],
+      "expected_mass_energy_balance": 0.0,
+      "expected_charge_balance": 0.0,
+      "expected_lepton_number_balance": 0.0,
+      "conservation_laws": 4,
+      "test_criteria": {
+        "mass_energy_balance_tolerance": 1e-15,
+        "charge_balance_tolerance": 1e-15,
+        "lepton_number_tolerance": 1e-15,
+        "baryon_number_conservation": true
+      }
+    }
+  ],
+  "conservation_verification_algorithms": {
+    "mass_conservation": {
+      "method": "stoichiometric_matrix_analysis",
+      "tolerance": 1e-10,
+      "matrix_rank_analysis": true
+    },
+    "charge_conservation": {
+      "method": "charge_balance_matrix",
+      "tolerance": 1e-15,
+      "electroneutrality_check": true
+    },
+    "energy_conservation": {
+      "method": "enthalpy_balance",
+      "tolerance": 1e-6,
+      "temperature_dependence": true
+    },
+    "momentum_conservation": {
+      "method": "vector_sum_analysis",
+      "tolerance": 1e-12,
+      "coordinate_system": "cartesian"
+    },
+    "angular_momentum_conservation": {
+      "method": "angular_momentum_sum",
+      "tolerance": 1e-12,
+      "reference_point": "center_of_mass"
+    }
+  },
+  "performance_benchmarks": {
+    "stoichiometric_matrix_computation": {
+      "small_system": {"species": 10, "reactions": 5, "target_time_ms": 1.0},
+      "medium_system": {"species": 100, "reactions": 50, "target_time_ms": 50.0},
+      "large_system": {"species": 1000, "reactions": 500, "target_time_ms": 2000.0}
+    },
+    "conservation_analysis": {
+      "svd_decomposition": {"matrix_size": "100x100", "target_time_ms": 10.0},
+      "null_space_computation": {"matrix_size": "500x500", "target_time_ms": 100.0}
+    }
+  }
+}

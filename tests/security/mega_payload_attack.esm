@@ -1,0 +1,59 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MegaPayloadAttack",
+    "description": "Test handling of extremely large JSON payload designed to exhaust memory during parsing. This simulates an attack vector where malicious users submit massive ESM files to overwhelm the system.",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "MegaModel": {
+      "variables": {
+        "massive_string_var": {
+          "type": "parameter",
+          "units": "1",
+          "default": "A".repeat(1000000),
+          "description": "Variable with 1MB string to test memory limits"
+        },
+        "array_bomb": {
+          "type": "state",
+          "units": "mol/L",
+          "default": 0.0,
+          "expression": {
+            "op": "sum",
+            "args": Array.from({length: 50000}, (_, i) => ({
+              "op": "+",
+              "args": [i, i * 2]
+            }))
+          }
+        }
+      },
+      "equations": Array.from({length: 10000}, (_, i) => ({
+        "lhs": { "op": "D", "args": [`auto_var_${i}`], "wrt": "t" },
+        "rhs": { "op": "*", "args": [0.001, i] }
+      }))
+    }
+  },
+  "reaction_systems": {
+    "MassiveReactionSystem": {
+      "species": Object.fromEntries(
+        Array.from({length: 5000}, (_, i) => [
+          `species_${i.toString().padStart(4, '0')}`,
+          { "units": "mol/mol", "default": 1e-12, "description": `Auto-generated species ${i}` }
+        ])
+      ),
+      "parameters": Object.fromEntries(
+        Array.from({length: 2000}, (_, i) => [
+          `param_${i.toString().padStart(4, '0')}`,
+          { "units": "1/s", "default": Math.random() * 1e-6, "description": `Auto-generated parameter ${i}` }
+        ])
+      ),
+      "reactions": Array.from({length: 1000}, (_, i) => ({
+        "id": `R_${i.toString().padStart(4, '0')}`,
+        "name": `auto_reaction_${i}`,
+        "substrates": [{ "species": `species_${(i % 5000).toString().padStart(4, '0')}`, "stoichiometry": 1 }],
+        "products": [{ "species": `species_${((i + 1) % 5000).toString().padStart(4, '0')}`, "stoichiometry": 1 }],
+        "rate": { "op": "*", "args": [`param_${(i % 2000).toString().padStart(4, '0')}`, 1.0] }
+      }))
+    }
+  }
+}

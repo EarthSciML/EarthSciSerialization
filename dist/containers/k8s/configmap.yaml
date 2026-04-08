@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: esm-config
+  namespace: esm-format
+data:
+  ESM_TEST_TIMEOUT: "300"
+  JULIA_NUM_THREADS: "auto"
+  PYTHONUNBUFFERED: "1"
+  PYTHONOPTIMIZE: "2"
+  NODE_ENV: "production"
+  RUST_BACKTRACE: "0"

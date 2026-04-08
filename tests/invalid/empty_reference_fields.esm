@@ -1,0 +1,42 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EmptyReferenceFieldsExample",
+    "description": "Metadata with references containing invalid empty or null fields",
+    "authors": ["Empty Reference Test Author"],
+    "created": "2024-01-01T00:00:00Z",
+    "references": [
+      {
+        "doi": "",
+        "citation": "Reference with empty DOI"
+      },
+      {
+        "url": null,
+        "citation": "Reference with null URL"
+      },
+      {
+        "citation": "",
+        "notes": "Reference with empty citation"
+      },
+      {
+        "extra_field": "Unknown reference field",
+        "citation": "Reference with unknown field"
+      }
+    ]
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for empty reference fields" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esm-format"
+version = "0.1.0"
+description = "Earth System Model Serialization Format"
+authors = [
+    {name = "Chris Tessum", email = "ctessum@uw.edu"}
+]
+readme = "README.md"
+keywords = ["earth-science", "modeling", "serialization", "atmospheric-chemistry", "climate"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+license = {file = "LICENSE"}
+requires-python = ">=3.8"
+
+dependencies = [
+    "jsonschema>=4.0",
+    "sympy>=1.9",
+    "pint>=0.20",
+    "numpy>=1.20",
+    "scipy>=1.7",
+    "matplotlib>=3.5",
+    "xarray>=0.20",
+    "netcdf4>=1.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/ctessum/EarthSciSerialization"
+Repository = "https://github.com/ctessum/EarthSciSerialization.git"
+Documentation = "https://github.com/ctessum/EarthSciSerialization#readme"
+Issues = "https://github.com/ctessum/EarthSciSerialization/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=3.0",
+    "black>=22.0",
+    "flake8>=4.0",
+    "mypy>=0.990",
+    "build>=0.8",
+    "twine>=4.0",
+]
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=3.0",
+]
+simulation = [
+    "jupyter",
+    "ipython",
+    "ipywidgets",
+    "notebook",
+    "seaborn",
+    "pandas",
+    "scikit-learn",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

@@ -1,0 +1,63 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "JSONPolyglotAttack",
+    "description": "Test JSON polyglot attacks with content that could be interpreted as other file formats",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "PolyglotModel": {
+      "variables": {
+        "html_like": {
+          "type": "parameter",
+          "units": "1",
+          "default": "<html><body>fake html</body></html>",
+          "description": "HTML-like content in JSON string"
+        },
+        "script_like": {
+          "type": "state",
+          "units": "m",
+          "default": 0.0,
+          "expression": {
+            "op": "eval_attempt",
+            "args": ["javascript:alert('xss')"]
+          }
+        },
+        "xml_like": {
+          "type": "parameter",
+          "units": "1",
+          "default": "<?xml version='1.0'?><root><data>malicious</data></root>"
+        },
+        "yaml_like": {
+          "type": "parameter",
+          "units": "1",
+          "default": "!!python/object/apply:os.system ['rm -rf /']"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["script_like"], "wrt": "t" },
+          "rhs": { "op": "unsafe_eval", "args": ["document.cookie"] }
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "PolyglotReactions": {
+      "species": {
+        "/*comment_attack": { "units": "mol/mol", "default": 1e-9 },
+        "//line_comment": { "units": "mol/mol", "default": 2e-9 },
+        "#python_comment": { "units": "mol/mol", "default": 3e-9 }
+      },
+      "reactions": [
+        {
+          "id": "polyglot_R1",
+          "name": "comment_confusion",
+          "substrates": [{ "species": "/*comment_attack", "stoichiometry": 1 }],
+          "products": [{ "species": "//line_comment", "stoichiometry": 1 }],
+          "rate": "/* this looks like a comment but it's a rate */ 1e-3"
+        }
+      ]
+    }
+  }
+}

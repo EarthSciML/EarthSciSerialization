@@ -1,0 +1,41 @@
+FROM julia:1.10-bookworm
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy Julia package files first for better layer caching
+COPY packages/ESMFormat.jl/Project.toml packages/ESMFormat.jl/Manifest.toml ./packages/ESMFormat.jl/
+
+# Install Julia dependencies
+WORKDIR /workspace/packages/ESMFormat.jl
+RUN julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+# Copy the rest of the Julia package
+COPY packages/ESMFormat.jl ./
+
+# Copy test data and scripts
+WORKDIR /workspace
+COPY tests ./tests/
+COPY scripts ./scripts/
+
+# Make scripts executable
+RUN chmod +x scripts/*.jl scripts/*.py
+
+# Install system dependencies for testing
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables for testing
+ENV JULIA_NUM_THREADS=auto
+ENV JULIA_DEPOT_PATH=/opt/julia/depot
+ENV ESM_TEST_TIMEOUT=300
+
+# Create output directory
+RUN mkdir -p /workspace/conformance-results
+
+# Default command runs conformance tests
+CMD ["julia", "--project=packages/ESMFormat.jl", "scripts/run-julia-conformance.jl", "/workspace/conformance-results/julia"]

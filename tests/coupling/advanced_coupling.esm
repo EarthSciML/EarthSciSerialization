@@ -1,0 +1,218 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "AdvancedCouplingTests",
+    "description": "Test all coupling types: couple2, operator_apply, callback",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+
+  "models": {
+    "Chemistry": {
+      "coupletype": "ChemistryCoupler",
+      "variables": {
+        "O3": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "type": "state", "units": "mol/mol", "default": 0.1e-9, "description": "NO" },
+        "temperature": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" },
+        "deposition_flux": { "type": "observed", "units": "mol/m^2/s", "expression": {
+          "op": "*", "args": ["O3", 0.001]
+        }, "description": "Surface deposition flux" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "O3", "NO"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "O3", "NO"] }
+        }
+      ]
+    },
+
+    "Surface": {
+      "coupletype": "SurfaceCoupler",
+      "variables": {
+        "surface_resistance": { "type": "parameter", "units": "s/m", "default": 100.0, "description": "Surface resistance" },
+        "deposition_velocity": { "type": "observed", "units": "m/s", "expression": {
+          "op": "/", "args": [1.0, "surface_resistance"]
+        }, "description": "Deposition velocity" }
+      },
+      "equations": []
+    },
+
+    "Transport": {
+      "variables": {
+        "wind_speed": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Wind speed" },
+        "diffusivity": { "type": "parameter", "units": "m^2/s", "default": 10.0, "description": "Turbulent diffusivity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": [
+              { "op": "-", "args": ["wind_speed"] },
+              { "op": "grad", "args": ["_var"], "dim": "x" }
+            ]},
+            { "op": "*", "args": [
+              "diffusivity",
+              { "op": "laplacian", "args": ["_var"] }
+            ]}
+          ]}
+        }
+      ]
+    }
+  },
+
+  "operators": {
+    "DryDeposition": {
+      "operator_id": "FirstOrderDeposition",
+      "reference": {
+        "notes": "Surface deposition based on resistance model"
+      },
+      "config": {
+        "surface_type": "vegetation"
+      },
+      "needed_vars": ["O3", "temperature", "deposition_velocity"],
+      "modifies": ["O3"],
+      "description": "Apply dry deposition loss to O3"
+    },
+
+    "PhotolysisRates": {
+      "operator_id": "TUVPhotolysis",
+      "reference": {
+        "notes": "Photolysis rate calculation"
+      },
+      "config": {
+        "solar_zenith_angle": 45.0
+      },
+      "needed_vars": ["temperature"],
+      "modifies": [],
+      "description": "Compute photolysis rates based on solar conditions"
+    }
+  },
+
+  "data_loaders": {
+    "MeteoData": {
+      "type": "gridded_data",
+      "loader_id": "WRF",
+      "config": {
+        "file_pattern": "met_*.nc"
+      },
+      "provides": {
+        "temperature": { "units": "K", "description": "Air temperature" },
+        "wind_u": { "units": "m/s", "description": "Eastward wind" },
+        "wind_v": { "units": "m/s", "description": "Northward wind" }
+      },
+      "temporal_resolution": "PT1H",
+      "spatial_resolution": { "lon": 0.1, "lat": 0.1 },
+      "interpolation": "linear"
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "couple2",
+      "systems": ["Chemistry", "Surface"],
+      "coupletype_pair": ["ChemistryCoupler", "SurfaceCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "Chemistry.deposition_flux",
+            "to": "Chemistry.O3",
+            "transform": "additive",
+            "expression": {
+              "op": "*", "args": [
+                { "op": "-", "args": ["Surface.deposition_velocity"] },
+                "Chemistry.O3"
+              ]
+            }
+          },
+          {
+            "from": "Chemistry.O3",
+            "to": "Surface.surface_resistance",
+            "transform": "multiplicative",
+            "expression": {
+              "op": "+", "args": [
+                1.0,
+                { "op": "*", "args": [0.1, "Chemistry.O3"] }
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Bidirectional chemistry-surface coupling"
+    },
+
+    {
+      "type": "operator_compose",
+      "systems": ["Chemistry", "Transport"],
+      "translate": {
+        "Chemistry.O3": "Transport._var",
+        "Chemistry.NO": "Transport._var"
+      },
+      "description": "Add transport to chemistry species"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteoData.temperature",
+      "to": "Chemistry.temperature",
+      "transform": "param_to_var",
+      "description": "Use meteorological temperature"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteoData.wind_u",
+      "to": "Transport.wind_speed",
+      "transform": "conversion_factor",
+      "factor": 1.0,
+      "description": "Map wind speed (simplified)"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "DryDeposition",
+      "description": "Apply dry deposition operator"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "PhotolysisRates",
+      "description": "Apply photolysis rate calculation"
+    },
+
+    {
+      "type": "callback",
+      "callback_id": "DiagnosticOutput",
+      "config": {
+        "output_frequency": "PT10M",
+        "variables": ["Chemistry.O3", "Chemistry.NO", "Surface.deposition_velocity"],
+        "output_file": "diagnostics.nc"
+      },
+      "description": "Write diagnostic output every 10 minutes"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-06-01T00:00:00Z", "end": "2024-06-01T12:00:00Z" },
+    "spatial": {
+      "x": { "min": 0.0, "max": 100.0, "grid_spacing": 1.0, "units": "km" },
+      "y": { "min": 0.0, "max": 100.0, "grid_spacing": 1.0, "units": "km" }
+    },
+    "initial_conditions": { "type": "constant", "value": 1e-9 },
+    "boundary_conditions": [
+      { "type": "zero_gradient", "dimensions": ["x", "y"] }
+    ]
+  },
+
+  "solver": {
+    "strategy": "imex",
+    "config": {
+      "stiff_algorithm": "CVODE_BDF",
+      "nonstiff_algorithm": "Euler",
+      "timestep": 60.0
+    }
+  }
+}

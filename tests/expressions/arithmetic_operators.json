@@ -1,0 +1,102 @@
+[
+  {
+    "description": "Binary addition",
+    "operator": "+",
+    "arity": "n-ary",
+    "examples": [
+      {
+        "input": {"op": "+", "args": ["a", "b"]},
+        "meaning": "a + b"
+      },
+      {
+        "input": {"op": "+", "args": ["a", "b", "c"]},
+        "meaning": "a + b + c"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Unary and binary subtraction",
+    "operator": "-",
+    "arity": "unary or binary",
+    "examples": [
+      {
+        "input": {"op": "-", "args": ["a"]},
+        "meaning": "−a"
+      },
+      {
+        "input": {"op": "-", "args": ["a", "b"]},
+        "meaning": "a − b"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "N-ary multiplication",
+    "operator": "*",
+    "arity": "n-ary",
+    "examples": [
+      {
+        "input": {"op": "*", "args": ["k", "A"]},
+        "meaning": "k·A"
+      },
+      {
+        "input": {"op": "*", "args": ["k", "A", "B"]},
+        "meaning": "k·A·B"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Binary division",
+    "operator": "/",
+    "arity": "binary",
+    "examples": [
+      {
+        "input": {"op": "/", "args": ["a", "b"]},
+        "meaning": "a / b"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Binary exponentiation",
+    "operator": "^",
+    "arity": "binary",
+    "examples": [
+      {
+        "input": {"op": "^", "args": ["x", 2]},
+        "meaning": "x²"
+      },
+      {
+        "input": {"op": "^", "args": ["x", "n"]},
+        "meaning": "x^n"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Invalid: too few arguments for binary operator",
+    "operator": "/",
+    "invalid_example": {
+      "input": {"op": "/", "args": ["a"]},
+      "expected_error": "insufficient_arguments"
+    }
+  },
+  {
+    "description": "Invalid: too many arguments for binary operator",
+    "operator": "/",
+    "invalid_example": {
+      "input": {"op": "/", "args": ["a", "b", "c"]},
+      "expected_error": "excess_arguments"
+    }
+  },
+  {
+    "description": "Invalid: empty arguments for n-ary operator",
+    "operator": "+",
+    "invalid_example": {
+      "input": {"op": "+", "args": []},
+      "expected_error": "no_arguments"
+    }
+  }
+]

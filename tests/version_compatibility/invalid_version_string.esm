@@ -1,0 +1,27 @@
+{
+  "esm": "not.a.version",
+  "metadata": {
+    "name": "InvalidVersionString",
+    "description": "Test file with invalid version string - should fail schema validation",
+    "authors": ["ESM Format Team"],
+    "created": "2024-01-01T00:00:00Z"
+  },
+  "reaction_systems": {
+    "SimpleChemistry": {
+      "species": {
+        "A": { "units": "mol/mol", "default": 1e-6, "description": "Chemical species A" }
+      },
+      "parameters": {
+        "k1": { "units": "1/s", "default": 0.01, "description": "Rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [{ "species": "A", "stoichiometry": 1 }],
+          "products": [{ "species": "B", "stoichiometry": 1 }],
+          "rate": "k1"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "input": { "op": "+", "args": ["x", "y"] },
+    "bindings": { "x": 5 },
+    "expected": { "op": "+", "args": [5, "y"] }
+  },
+  {
+    "input": { "op": "*", "args": ["k", "T"] },
+    "bindings": { "T": 298.15 },
+    "expected": { "op": "*", "args": ["k", 298.15] }
+  },
+  {
+    "input": { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] },
+    "bindings": { "T": 298.15 },
+    "expected": { "op": "exp", "args": [{ "op": "/", "args": [-1370, 298.15] }] }
+  },
+  {
+    "input": { "op": "D", "args": ["_var"], "wrt": "t" },
+    "bindings": { "_var": "O3" },
+    "expected": { "op": "D", "args": ["O3"], "wrt": "t" }
+  },
+  {
+    "input": { "op": "+", "args": ["a", "b", "c"] },
+    "bindings": { "a": 1, "c": 3 },
+    "expected": { "op": "+", "args": [1, "b", 3] }
+  },
+  {
+    "input": { "op": "*", "args": ["x", { "op": "+", "args": ["x", 1] }] },
+    "bindings": { "x": 2 },
+    "expected": { "op": "*", "args": [2, { "op": "+", "args": [2, 1] }] }
+  },
+  {
+    "input": "SimpleVariable",
+    "bindings": { "SimpleVariable": 42 },
+    "expected": 42
+  },
+  {
+    "input": { "op": "ifelse", "args": [{ "op": ">", "args": ["x", 0] }, "x", 0] },
+    "bindings": { "x": 5 },
+    "expected": { "op": "ifelse", "args": [{ "op": ">", "args": [5, 0] }, 5, 0] }
+  }
+]

@@ -1,0 +1,338 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CrossSystemScopedReferences",
+    "description": "Test fixture for cross-system scoped references in coupling contexts, demonstrating variable resolution across different top-level systems",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["scoping", "cross-system", "coupling", "reference-resolution"]
+  },
+
+  "models": {
+    "AtmosphericModel": {
+      "variables": {
+        "surface_pressure": {"type": "parameter", "units": "Pa", "default": 101325.0, "description": "Surface pressure"},
+        "global_temperature": {"type": "state", "units": "K", "default": 288.0, "description": "Global mean temperature"}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["global_temperature"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [1e-6, {"op": "-", "args": [290.0, "global_temperature"]}]}
+        }
+      ],
+      "subsystems": {
+        "BoundaryLayer": {
+          "variables": {
+            "mixing_height": {"type": "parameter", "units": "m", "default": 1000.0, "description": "Boundary layer height"},
+            "potential_temperature": {"type": "state", "units": "K", "default": 295.0, "description": "Potential temperature"}
+          },
+          "equations": [],
+          "subsystems": {
+            "Chemistry": {
+              "variables": {
+                "CO": {"type": "state", "units": "mol/mol", "default": 100e-9, "description": "Carbon monoxide"},
+                "OH": {"type": "state", "units": "mol/mol", "default": 1e-12, "description": "Hydroxyl radical"},
+                "reaction_rate": {"type": "parameter", "units": "cm^3/molec/s", "default": 1.5e-13, "description": "CO+OH rate"}
+              },
+              "equations": [
+                {
+                  "lhs": {"op": "D", "args": ["CO"], "wrt": "t"},
+                  "rhs": {"op": "*", "args": [{"op": "-", "args": ["reaction_rate"]}, "CO", "OH"]}
+                },
+                {
+                  "lhs": {"op": "D", "args": ["OH"], "wrt": "t"},
+                  "rhs": {"op": "*", "args": [{"op": "-", "args": ["reaction_rate"]}, "CO", "OH"]}
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+
+    "OceanModel": {
+      "variables": {
+        "sea_surface_temp": {"type": "state", "units": "K", "default": 285.0, "description": "Sea surface temperature"},
+        "salinity": {"type": "parameter", "units": "psu", "default": 35.0, "description": "Surface salinity"}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["sea_surface_temp"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [2e-6, {"op": "-", "args": [287.0, "sea_surface_temp"]}]}
+        }
+      ],
+      "subsystems": {
+        "MixedLayer": {
+          "variables": {
+            "depth": {"type": "parameter", "units": "m", "default": 50.0, "description": "Mixed layer depth"},
+            "heat_content": {"type": "state", "units": "J/m^2", "default": 1e8, "description": "Heat content"}
+          },
+          "equations": [
+            {
+              "lhs": {"op": "D", "args": ["heat_content"], "wrt": "t"},
+              "rhs": {"op": "*", "args": [1000.0, "depth"]}
+            }
+          ]
+        }
+      }
+    },
+
+    "LandModel": {
+      "variables": {
+        "soil_temperature": {"type": "state", "units": "K", "default": 283.0, "description": "Soil temperature"},
+        "soil_moisture": {"type": "parameter", "units": "m^3/m^3", "default": 0.3, "description": "Soil moisture"}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["soil_temperature"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [5e-7, {"op": "-", "args": [285.0, "soil_temperature"]}]}
+        }
+      ],
+      "subsystems": {
+        "Vegetation": {
+          "variables": {
+            "leaf_area": {"type": "parameter", "units": "m^2/m^2", "default": 2.5, "description": "Leaf area index"},
+            "canopy_temp": {"type": "state", "units": "K", "default": 290.0, "description": "Canopy temperature"}
+          },
+          "equations": [],
+          "subsystems": {
+            "Photosynthesis": {
+              "variables": {
+                "gpp": {"type": "state", "units": "kg C/m^2/s", "default": 1e-8, "description": "Gross primary productivity"},
+                "quantum_efficiency": {"type": "parameter", "units": "mol/mol", "default": 0.08, "description": "Quantum efficiency"}
+              },
+              "equations": [
+                {
+                  "lhs": {"op": "D", "args": ["gpp"], "wrt": "t"},
+                  "rhs": {"op": "*", "args": ["quantum_efficiency", 1e-9]}
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "reaction_systems": {
+    "BiochemicalCycles": {
+      "species": [
+        {"name": "C", "charge": 0, "description": "Carbon"},
+        {"name": "N", "charge": 0, "description": "Nitrogen"},
+        {"name": "P", "charge": 0, "description": "Phosphorus"}
+      ],
+      "parameters": {
+        "k_respiration": {"value": 1e-9, "units": "1/s", "description": "Respiration rate constant"}
+      },
+      "reactions": [
+        {
+          "lhs": {"C": 1},
+          "rhs": {},
+          "rate": "k_respiration",
+          "description": "Carbon respiration"
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "Test 1: Single-level cross-system reference (System.variable)",
+      "type": "variable_map",
+      "from": "AtmosphericModel.surface_pressure",
+      "to": "OceanModel.salinity",
+      "transform": "multiplicative",
+      "factor": 1e-6,
+      "description": "Surface pressure affects ocean salinity through evaporation"
+    },
+
+    {
+      "_comment": "Test 2: Two-level cross-system reference (System.Subsystem.variable)",
+      "type": "variable_map",
+      "from": "AtmosphericModel.BoundaryLayer.mixing_height",
+      "to": "LandModel.soil_moisture",
+      "transform": "multiplicative",
+      "factor": 1e-4,
+      "description": "Boundary layer height affects soil moisture through turbulent transport"
+    },
+
+    {
+      "_comment": "Test 3: Three-level cross-system reference (System.Subsystem.Subsubsystem.variable)",
+      "type": "variable_map",
+      "from": "AtmosphericModel.BoundaryLayer.Chemistry.CO",
+      "to": "LandModel.Vegetation.canopy_temp",
+      "transform": "additive",
+      "factor": 1e6,
+      "description": "Atmospheric CO affects vegetation temperature through radiative forcing"
+    },
+
+    {
+      "_comment": "Test 4: Four-level cross-system reference",
+      "type": "variable_map",
+      "from": "LandModel.Vegetation.Photosynthesis.gpp",
+      "to": "AtmosphericModel.BoundaryLayer.Chemistry.reaction_rate",
+      "transform": "multiplicative",
+      "factor": 1e5,
+      "description": "Plant productivity affects atmospheric chemistry rates"
+    },
+
+    {
+      "_comment": "Test 5: Bidirectional coupling with nested scoped references",
+      "type": "variable_map",
+      "from": "OceanModel.MixedLayer.heat_content",
+      "to": "AtmosphericModel.global_temperature",
+      "transform": "additive",
+      "factor": 1e-10,
+      "description": "Ocean heat content affects atmospheric temperature"
+    },
+
+    {
+      "_comment": "Test 6: Multiple systems in operator_compose with nested references",
+      "type": "operator_compose",
+      "systems": [
+        "AtmosphericModel.BoundaryLayer.Chemistry",
+        "LandModel.Vegetation.Photosynthesis"
+      ],
+      "translate": {
+        "AtmosphericModel.BoundaryLayer.Chemistry.CO": "LandModel.Vegetation.Photosynthesis.gpp"
+      },
+      "description": "Compose atmospheric chemistry with vegetation processes"
+    },
+
+    {
+      "_comment": "Test 7: Event with cross-system nested scoped references in conditions",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "ocean_atmosphere_coupling",
+      "conditions": [
+        {
+          "op": ">",
+          "args": [
+            "OceanModel.MixedLayer.heat_content",
+            1.2e8
+          ]
+        },
+        {
+          "op": "<",
+          "args": [
+            "AtmosphericModel.BoundaryLayer.potential_temperature",
+            290.0
+          ]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "AtmosphericModel.global_temperature",
+          "rhs": {"op": "+", "args": [
+            {"op": "Pre", "args": ["AtmosphericModel.global_temperature"]},
+            {"op": "*", "args": [0.01, "OceanModel.sea_surface_temp"]}
+          ]}
+        }
+      ],
+      "description": "Ocean-atmosphere heat exchange using nested scoped references"
+    },
+
+    {
+      "_comment": "Test 8: couple2 with deeply nested cross-system references",
+      "type": "couple2",
+      "systems": [
+        "AtmosphericModel.BoundaryLayer.Chemistry",
+        "LandModel.Vegetation.Photosynthesis"
+      ],
+      "coupletype_pair": ["AtmosphericCoupler", "VegetationCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "LandModel.Vegetation.Photosynthesis.gpp",
+            "to": "AtmosphericModel.BoundaryLayer.Chemistry.OH",
+            "transform": "multiplicative",
+            "expression": {
+              "op": "*",
+              "args": [
+                1e3,
+                "LandModel.Vegetation.Photosynthesis.gpp",
+                "AtmosphericModel.BoundaryLayer.mixing_height"
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Vegetation-atmosphere coupling with four-level scoped references"
+    },
+
+    {
+      "_comment": "Test 9: Cross-system reference to reaction system",
+      "type": "variable_map",
+      "from": "BiochemicalCycles.k_respiration",
+      "to": "LandModel.Vegetation.Photosynthesis.quantum_efficiency",
+      "transform": "multiplicative",
+      "factor": 1e7,
+      "description": "Biochemical respiration rate affects photosynthesis efficiency"
+    },
+
+    {
+      "_comment": "Test 10: Chain of cross-system dependencies",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "cascade_coupling",
+      "conditions": [
+        {
+          "op": "&&",
+          "args": [
+            {"op": ">", "args": ["AtmosphericModel.global_temperature", 289.0]},
+            {"op": ">", "args": ["OceanModel.sea_surface_temp", 286.0]},
+            {"op": ">", "args": ["LandModel.soil_temperature", 284.0]}
+          ]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "AtmosphericModel.BoundaryLayer.Chemistry.reaction_rate",
+          "rhs": {"op": "*", "args": [
+            {"op": "Pre", "args": ["AtmosphericModel.BoundaryLayer.Chemistry.reaction_rate"]},
+            {"op": "+", "args": [1.0, {"op": "/", "args": [
+              "LandModel.Vegetation.Photosynthesis.gpp",
+              "OceanModel.MixedLayer.heat_content"
+            ]}]}
+          ]}
+        }
+      ],
+      "description": "Complex cascading coupling using multiple cross-system nested scoped references"
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-08-01T00:00:00Z",
+      "end": "2024-08-01T24:00:00Z"
+    },
+    "spatial": {
+      "x": {"min": 0.0, "max": 1000.0, "units": "km", "grid_spacing": 50.0},
+      "y": {"min": 0.0, "max": 1000.0, "units": "km", "grid_spacing": 50.0}
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "_comment": "All initial condition references must be fully scoped",
+        "AtmosphericModel.global_temperature": 288.0,
+        "AtmosphericModel.BoundaryLayer.potential_temperature": 295.0,
+        "AtmosphericModel.BoundaryLayer.Chemistry.CO": 100e-9,
+        "AtmosphericModel.BoundaryLayer.Chemistry.OH": 1e-12,
+        "OceanModel.sea_surface_temp": 285.0,
+        "OceanModel.MixedLayer.heat_content": 1e8,
+        "LandModel.soil_temperature": 283.0,
+        "LandModel.Vegetation.canopy_temp": 290.0,
+        "LandModel.Vegetation.Photosynthesis.gpp": 1e-8
+      }
+    }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "threads": 4,
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 1800.0
+    }
+  }
+}

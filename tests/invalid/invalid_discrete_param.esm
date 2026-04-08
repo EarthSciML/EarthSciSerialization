@@ -1,0 +1,49 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "InvalidDiscreteParamTest",
+    "description": "Test case: discrete event references undeclared parameter",
+    "authors": ["Test Suite"]
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 },
+        "valid_param": { "type": "parameter", "units": "1", "default": 0.5 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["valid_param", "x"] }
+        }
+      ],
+      "discrete_events": [
+        {
+          "name": "parameter_update",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": ">", "args": ["x", 2.0] }
+          },
+          "affects": [
+            {
+              "lhs": "undefined_param",
+              "rhs": 0.1
+            }
+          ],
+          "discrete_parameters": ["undefined_param"],
+          "description": "This should fail - undefined_param not declared"
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:01:00Z" }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": { "timestep": 1.0 }
+  }
+}

@@ -1,0 +1,123 @@
+[
+  {
+    "description": "SchemaError structure with required fields",
+    "expected_fields": ["path", "message", "keyword"],
+    "field_descriptions": {
+      "path": "JSON Pointer to the offending location (e.g., '/models/SuperFast/equations/0/rhs')",
+      "message": "Human-readable description (e.g., 'Required property op is missing')",
+      "keyword": "JSON Schema keyword that failed (e.g., 'required', 'enum', 'type')"
+    }
+  },
+  {
+    "description": "Missing required property",
+    "input_violation": {
+      "type": "missing_required_property",
+      "property": "esm",
+      "location": "/"
+    },
+    "expected_schema_error": {
+      "path": "/",
+      "message": "Required property 'esm' is missing",
+      "keyword": "required"
+    }
+  },
+  {
+    "description": "Wrong type",
+    "input_violation": {
+      "type": "wrong_type",
+      "property": "esm",
+      "location": "/esm",
+      "expected_type": "string",
+      "actual_type": "number"
+    },
+    "expected_schema_error": {
+      "path": "/esm",
+      "message": "Expected string but got number",
+      "keyword": "type"
+    }
+  },
+  {
+    "description": "Invalid enum value",
+    "input_violation": {
+      "type": "invalid_enum",
+      "property": "type",
+      "location": "/models/TestModel/variables/x/type",
+      "value": "unknown",
+      "allowed_values": ["state", "parameter", "observed"]
+    },
+    "expected_schema_error": {
+      "path": "/models/TestModel/variables/x/type",
+      "message": "Value 'unknown' is not one of: state, parameter, observed",
+      "keyword": "enum"
+    }
+  },
+  {
+    "description": "Missing required op field in ExprNode",
+    "input_violation": {
+      "type": "missing_required_property",
+      "property": "op",
+      "location": "/models/TestModel/equations/0/rhs"
+    },
+    "expected_schema_error": {
+      "path": "/models/TestModel/equations/0/rhs",
+      "message": "Required property 'op' is missing",
+      "keyword": "required"
+    }
+  },
+  {
+    "description": "Missing required args field in ExprNode",
+    "input_violation": {
+      "type": "missing_required_property",
+      "property": "args",
+      "location": "/models/TestModel/equations/0/rhs"
+    },
+    "expected_schema_error": {
+      "path": "/models/TestModel/equations/0/rhs",
+      "message": "Required property 'args' is missing",
+      "keyword": "required"
+    }
+  },
+  {
+    "description": "Invalid additional property",
+    "input_violation": {
+      "type": "additional_property",
+      "property": "invalid_field",
+      "location": "/metadata"
+    },
+    "expected_schema_error": {
+      "path": "/metadata",
+      "message": "Additional property 'invalid_field' is not allowed",
+      "keyword": "additionalProperties"
+    }
+  },
+  {
+    "description": "Array instead of object",
+    "input_violation": {
+      "type": "wrong_type",
+      "property": "metadata",
+      "location": "/metadata",
+      "expected_type": "object",
+      "actual_type": "array"
+    },
+    "expected_schema_error": {
+      "path": "/metadata",
+      "message": "Expected object but got array",
+      "keyword": "type"
+    }
+  },
+  {
+    "description": "String instead of number",
+    "input_violation": {
+      "type": "wrong_type",
+      "property": "stoichiometry",
+      "location": "/reaction_systems/TestRxns/reactions/0/substrates/0/stoichiometry",
+      "expected_type": "number",
+      "actual_type": "string"
+    },
+    "expected_schema_error": {
+      "path": "/reaction_systems/TestRxns/reactions/0/substrates/0/stoichiometry",
+      "message": "Expected number but got string",
+      "keyword": "type"
+    }
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedSpeciesTest",
+    "description": "Reaction references species not declared in species section",
+    "authors": ["Test Author"]
+  },
+  "reaction_systems": {
+    "TestRxns": {
+      "species": {
+        "O3": {"units": "mol/mol", "default": 40e-9, "description": "Ozone"},
+        "NO": {"units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide"}
+      },
+      "parameters": {
+        "k1": {"units": "1/s", "default": 1e-3, "description": "Rate constant"}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [
+            {"species": "O3", "stoichiometry": 1},
+            {"species": "UndefinedSpecies", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "NO2", "stoichiometry": 1}
+          ],
+          "rate": "k1"
+        }
+      ]
+    }
+  }
+}

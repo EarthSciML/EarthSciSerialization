@@ -1,0 +1,68 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MultipleErrorsCombined",
+    "description": "File with multiple different structural error types"
+  },
+  "models": {
+    "BadModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol", "default": 1.0 },
+        "y": { "type": "state", "units": "mol", "default": 2.0 },
+        "observed_without_expr": { "type": "observed", "units": "mol" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["undefined_rate", "x"] }
+        }
+      ],
+      "continuous_events": [
+        {
+          "name": "bad_event",
+          "condition": "undefined_condition_var",
+          "affects": [
+            {
+              "lhs": "nonexistent_var",
+              "rhs": 0
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "BadReactions": {
+      "species": {
+        "A": { "units": "mol/mol", "default": 1e-9 }
+      },
+      "parameters": {},
+      "reactions": [
+        {
+          "id": "bad_reaction",
+          "substrates": null,
+          "products": null,
+          "rate": "missing_rate_param"
+        },
+        {
+          "id": "undefined_species_reaction",
+          "substrates": { "A": 1 },
+          "products": { "UndefinedProduct": 1 },
+          "rate": "also_missing_param"
+        }
+      ]
+    }
+  },
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "NonExistentSystem.var",
+      "to": "BadModel.x",
+      "transform": "identity"
+    },
+    {
+      "type": "operator_apply",
+      "operator": "MissingOperator"
+    }
+  ]
+}

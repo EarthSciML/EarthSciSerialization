@@ -1,0 +1,29 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnresolvedScopedRef",
+    "description": "Coupling references nonexistent system or variable"
+  },
+  "models": {
+    "ModelA": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["k", "x"] }
+        }
+      ]
+    }
+  },
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "NonExistentSystem.T",
+      "to": "ModelA.k",
+      "transform": "param_to_var"
+    }
+  ]
+}

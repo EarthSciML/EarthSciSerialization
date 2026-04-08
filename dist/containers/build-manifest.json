@@ -1,0 +1,26 @@
+{
+  "build_info": {
+    "version": "0.1.0",
+    "build_time": "2026-02-17T16:26:44+00:00",
+    "git_hash": "c6b02aeabf652473a99e89a0fb182616aee25c4b",
+    "git_branch": "add-beads-and-worker-prompt",
+    "platforms": "linux/amd64,linux/arm64",
+    "optimization_profile": "production",
+    "registry": "docker.io",
+    "namespace": "ctessum",
+    "project": "esm-format"
+  },
+  "images": {},
+  "deployment_configs": [
+    "deployments/docker-compose.production.yml",
+    "deployments/docker-compose.development.yml"
+  ],
+  "k8s_manifests": [
+    "k8s/namespace.yaml",
+    "k8s/configmap.yaml",
+    "k8s/julia-deployment.yaml"
+  ],
+  "scripts": [
+    "registry-login.sh"
+  ]
+}

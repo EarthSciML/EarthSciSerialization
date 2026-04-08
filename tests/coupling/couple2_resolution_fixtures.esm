@@ -1,0 +1,234 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "Couple2ResolutionFixtures",
+    "description": "Test fixtures for couple2 coupling resolution algorithm (Section 4.7.2)",
+    "authors": ["Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "notes": [
+      "Tests the couple2 algorithm that provides bidirectional coupling via ConnectorSystem:",
+      "1. Read connector.equations array",
+      "2. Resolve 'from' and 'to' scoped references",
+      "3. Apply coupling based on transform type: additive, multiplicative, replacement",
+      "4. Create shared variables across systems"
+    ]
+  },
+
+  "models": {
+    "FluidDynamics": {
+      "description": "Fluid dynamics system with velocity and pressure",
+      "variables": {
+        "velocity": { "type": "state", "units": "m/s", "default": 1.0, "description": "Flow velocity" },
+        "pressure": { "type": "state", "units": "Pa", "default": 101325.0, "description": "Fluid pressure" },
+        "density": { "type": "parameter", "units": "kg/m^3", "default": 1000.0, "description": "Fluid density" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["velocity"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "/", "args": [{ "op": "grad", "args": ["pressure"], "dim": "x" }, "density"] },
+            { "op": "*", "args": [0.1, "velocity"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["pressure"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "density", { "op": "div", "args": ["velocity"] }] }
+        }
+      ]
+    },
+
+    "HeatTransfer": {
+      "description": "Heat transfer system with temperature",
+      "variables": {
+        "temperature": { "type": "state", "units": "K", "default": 300.0, "description": "Temperature" },
+        "heat_flux": { "type": "state", "units": "W/m^2", "default": 0.0, "description": "Heat flux" }
+      },
+      "parameters": {
+        "thermal_conductivity": { "units": "W/m/K", "default": 0.6, "description": "Thermal conductivity" },
+        "heat_capacity": { "units": "J/kg/K", "default": 4180.0, "description": "Heat capacity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "/", "args": ["thermal_conductivity", "heat_capacity"] },
+            { "op": "laplacian", "args": ["temperature"] }
+          ]}
+        },
+        {
+          "lhs": { "op": "D", "args": ["heat_flux"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "thermal_conductivity", { "op": "grad", "args": ["temperature"], "dim": "x" }] }
+        }
+      ]
+    },
+
+    "MassTransfer": {
+      "description": "Mass transfer system with concentration",
+      "variables": {
+        "concentration": { "type": "state", "units": "kg/m^3", "default": 1.0, "description": "Species concentration" },
+        "mass_flux": { "type": "state", "units": "kg/m^2/s", "default": 0.0, "description": "Mass flux" }
+      },
+      "parameters": {
+        "diffusivity": { "units": "m^2/s", "default": 1e-9, "description": "Mass diffusivity" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["concentration"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["diffusivity", { "op": "laplacian", "args": ["concentration"] }] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["mass_flux"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "diffusivity", { "op": "grad", "args": ["concentration"], "dim": "x" }] }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "couple2",
+      "systems": ["FluidDynamics", "HeatTransfer"],
+      "coupletype_pair": ["FluidThermalCoupler", "ThermalFluidCoupler"],
+      "connector": {
+        "description": "Bidirectional fluid-thermal coupling",
+        "equations": [
+          {
+            "from": "FluidDynamics.velocity",
+            "to": "HeatTransfer.temperature",
+            "transform": "additive",
+            "expression": { "op": "*", "args": [0.01, "velocity"] },
+            "description": "Velocity contributes to heat generation (viscous heating)"
+          },
+          {
+            "from": "HeatTransfer.temperature",
+            "to": "FluidDynamics.density",
+            "transform": "multiplicative",
+            "expression": { "op": "/", "args": [300.0, "temperature"] },
+            "description": "Temperature affects fluid density (thermal expansion)"
+          }
+        ]
+      },
+      "description": "TEST CASE 1: couple2 with additive and multiplicative transforms"
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["HeatTransfer", "MassTransfer"],
+      "coupletype_pair": ["ThermalMassCoupler", "MassThermalCoupler"],
+      "connector": {
+        "description": "Heat and mass transfer coupling with replacement constraint",
+        "equations": [
+          {
+            "from": "HeatTransfer.temperature",
+            "to": "MassTransfer.concentration",
+            "transform": "additive",
+            "expression": { "op": "*", "args": [0.001, { "op": "exp", "args": [
+              { "op": "/", "args": [{ "op": "-", "args": ["temperature", 300.0] }, 50.0] }
+            ]}]},
+            "description": "Temperature-dependent mass transfer rate"
+          },
+          {
+            "from": "MassTransfer.concentration",
+            "to": "HeatTransfer.heat_flux",
+            "transform": "replacement",
+            "expression": { "op": "*", "args": [1000.0, "concentration"] },
+            "description": "Concentration directly determines heat flux (chemical reaction)"
+          }
+        ]
+      },
+      "description": "TEST CASE 2: couple2 with additive and replacement transforms"
+    },
+
+    {
+      "type": "couple2",
+      "systems": ["FluidDynamics", "MassTransfer"],
+      "coupletype_pair": ["FluidMassCoupler", "MassFluidCoupler"],
+      "connector": {
+        "description": "Complex multi-directional coupling",
+        "equations": [
+          {
+            "from": "FluidDynamics.velocity",
+            "to": "MassTransfer.mass_flux",
+            "transform": "multiplicative",
+            "expression": "velocity",
+            "description": "Convective mass transport"
+          },
+          {
+            "from": "MassTransfer.concentration",
+            "to": "FluidDynamics.pressure",
+            "transform": "additive",
+            "expression": { "op": "*", "args": [8314.0, "concentration"] },
+            "description": "Concentration contributes to osmotic pressure"
+          },
+          {
+            "from": "FluidDynamics.pressure",
+            "to": "MassTransfer.concentration",
+            "transform": "multiplicative",
+            "expression": { "op": "+", "args": [1.0, { "op": "*", "args": [1e-6, "pressure"] }] },
+            "description": "Pressure affects mass transfer coefficient"
+          }
+        ]
+      },
+      "description": "TEST CASE 3: couple2 with complex multi-directional coupling and all transform types"
+    }
+  ],
+
+  "_test_verification": {
+    "test_case_1_expected": {
+      "description": "After couple2 of FluidDynamics + HeatTransfer",
+      "coupled_equations": {
+        "HeatTransfer.temperature": {
+          "original_rhs": "(thermal_conductivity / heat_capacity) * laplacian(temperature)",
+          "coupled_rhs": "((thermal_conductivity / heat_capacity) * laplacian(temperature)) + (0.01 * velocity)",
+          "transform_applied": "additive - velocity contribution added to temperature equation"
+        },
+        "FluidDynamics.density": {
+          "original_usage": "constant parameter = 1000.0",
+          "coupled_usage": "variable = density * (300.0 / temperature)",
+          "transform_applied": "multiplicative - density scaled by temperature ratio"
+        }
+      },
+      "shared_variables": ["velocity", "temperature", "density"],
+      "note": "Systems share variables through connector equations"
+    },
+
+    "test_case_2_expected": {
+      "description": "After couple2 of HeatTransfer + MassTransfer",
+      "coupled_equations": {
+        "MassTransfer.concentration": {
+          "original_rhs": "diffusivity * laplacian(concentration)",
+          "coupled_rhs": "(diffusivity * laplacian(concentration)) + (0.001 * exp((temperature - 300.0) / 50.0))",
+          "transform_applied": "additive - temperature-dependent term added"
+        },
+        "HeatTransfer.heat_flux": {
+          "original_rhs": "-thermal_conductivity * grad(temperature, x)",
+          "coupled_rhs": "1000.0 * concentration",
+          "transform_applied": "replacement - original RHS completely replaced"
+        }
+      },
+      "note": "Replacement transform completely overrides the original equation"
+    },
+
+    "test_case_3_expected": {
+      "description": "After couple2 of FluidDynamics + MassTransfer with multi-directional coupling",
+      "coupled_equations": {
+        "MassTransfer.mass_flux": {
+          "original_rhs": "-diffusivity * grad(concentration, x)",
+          "coupled_rhs": "(-diffusivity * grad(concentration, x)) * velocity",
+          "transform_applied": "multiplicative - entire RHS multiplied by velocity"
+        },
+        "FluidDynamics.pressure": {
+          "original_rhs": "-density * div(velocity)",
+          "coupled_rhs": "(-density * div(velocity)) + (8314.0 * concentration)",
+          "transform_applied": "additive - osmotic pressure term added"
+        },
+        "MassTransfer.concentration": {
+          "original_rhs": "diffusivity * laplacian(concentration)",
+          "coupled_rhs": "(diffusivity * laplacian(concentration)) * (1.0 + 1e-6 * pressure)",
+          "transform_applied": "multiplicative - diffusivity modified by pressure"
+        }
+      },
+      "coupling_graph": "FluidDynamics ⟷ MassTransfer (bidirectional with 3 connector equations)"
+    }
+  }
+}

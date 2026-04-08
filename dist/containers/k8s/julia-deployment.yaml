@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: esm-julia
+  namespace: esm-format
+  labels:
+    app: esm-julia
+    component: conformance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: esm-julia
+  template:
+    metadata:
+      labels:
+        app: esm-julia
+    spec:
+      containers:
+      - name: julia
+        image: docker.io/ctessum/esm-format-julia:0.1.0-production
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: esm-config
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+        livenessProbe:
+          exec:
+            command:
+            - julia
+            - --version
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - julia
+            - --version
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      nodeSelector:
+        kubernetes.io/arch: amd64
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: esm-julia-service
+  namespace: esm-format
+spec:
+  selector:
+    app: esm-julia
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP

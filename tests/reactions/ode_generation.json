@@ -1,0 +1,75 @@
+{
+  "description": "Test cases for ODE generation from reaction systems",
+  "test_cases": [
+    {
+      "name": "simple_decay",
+      "reaction_system": {
+        "species": {
+          "A": {"initial": 10.0, "units": "mol"}
+        },
+        "parameters": {
+          "k": {"value": 0.1, "units": "1/s"}
+        },
+        "reactions": [
+          {
+            "id": "decay",
+            "substrates": {"A": 1},
+            "products": null,
+            "rate": {"op": "mult", "args": ["k", "A"]}
+          }
+        ]
+      },
+      "expected_odes": [
+        {
+          "variable": "A",
+          "rhs": {"op": "neg", "args": [{"op": "mult", "args": ["k", "A"]}]}
+        }
+      ],
+      "description": "Simple decay reaction A -> 0 with rate k*A"
+    },
+    {
+      "name": "isomerization",
+      "reaction_system": {
+        "species": {
+          "A": {"initial": 5.0, "units": "mol"},
+          "B": {"initial": 0.0, "units": "mol"}
+        },
+        "parameters": {
+          "k1": {"value": 0.2, "units": "1/s"},
+          "k2": {"value": 0.1, "units": "1/s"}
+        },
+        "reactions": [
+          {
+            "id": "forward",
+            "substrates": {"A": 1},
+            "products": {"B": 1},
+            "rate": {"op": "mult", "args": ["k1", "A"]}
+          },
+          {
+            "id": "reverse",
+            "substrates": {"B": 1},
+            "products": {"A": 1},
+            "rate": {"op": "mult", "args": ["k2", "B"]}
+          }
+        ]
+      },
+      "expected_odes": [
+        {
+          "variable": "A",
+          "rhs": {"op": "sub", "args": [
+            {"op": "mult", "args": ["k2", "B"]},
+            {"op": "mult", "args": ["k1", "A"]}
+          ]}
+        },
+        {
+          "variable": "B",
+          "rhs": {"op": "sub", "args": [
+            {"op": "mult", "args": ["k1", "A"]},
+            {"op": "mult", "args": ["k2", "B"]}
+          ]}
+        }
+      ],
+      "description": "Reversible isomerization A <-> B"
+    }
+  ]
+}

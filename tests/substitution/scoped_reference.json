@@ -1,0 +1,98 @@
+[
+  {
+    "description": "Simple scoped reference substitution",
+    "input": { "op": "+", "args": ["ChemModel.O3", "PhysicsModel.temperature"] },
+    "bindings": {
+      "ChemModel.O3": { "op": "*", "args": [40e-9, "conversion_factor"] },
+      "PhysicsModel.temperature": 298.15
+    },
+    "expected": { "op": "+", "args": [{ "op": "*", "args": [40e-9, "conversion_factor"] }, 298.15] }
+  },
+  {
+    "description": "Placeholder variable substitution in operator_compose",
+    "input": { "op": "D", "args": ["_var"], "wrt": "t" },
+    "bindings": { "_var": "SuperFast.O3" },
+    "expected": { "op": "D", "args": ["SuperFast.O3"], "wrt": "t" }
+  },
+  {
+    "description": "Multiple scoped references in complex expression",
+    "input": { "op": "*", "args": [
+      "Atmosphere.Chemistry.FastChem.k_rate",
+      "Atmosphere.Chemistry.FastChem.O3",
+      "Atmosphere.Chemistry.FastChem.NO",
+      "Atmosphere.pressure"
+    ]},
+    "bindings": {
+      "Atmosphere.Chemistry.FastChem.k_rate": 1.8e-12,
+      "Atmosphere.Chemistry.FastChem.O3": "local_O3",
+      "Atmosphere.Chemistry.FastChem.NO": "local_NO",
+      "Atmosphere.pressure": 101325
+    },
+    "expected": { "op": "*", "args": [1.8e-12, "local_O3", "local_NO", 101325] }
+  },
+  {
+    "description": "Cross-system coupling variable substitution",
+    "input": { "op": "*", "args": [
+      { "op": "-", "args": ["Surface.deposition_velocity"] },
+      "Chemistry.O3_concentration"
+    ]},
+    "bindings": {
+      "Surface.deposition_velocity": { "op": "/", "args": [1.0, "resistance_total"] },
+      "Chemistry.O3_concentration": { "op": "*", "args": ["base_O3", "mixing_ratio"] }
+    },
+    "expected": { "op": "*", "args": [
+      { "op": "-", "args": [{ "op": "/", "args": [1.0, "resistance_total"] }] },
+      { "op": "*", "args": ["base_O3", "mixing_ratio"] }
+    ]}
+  },
+  {
+    "description": "Nested subsystem reference substitution",
+    "input": { "op": "exp", "args": [{ "op": "/", "args": [
+      { "op": "-", "args": ["Atmosphere.Chemistry.SlowChem.activation_energy"] },
+      { "op": "*", "args": ["gas_constant", "Atmosphere.Chemistry.temperature"] }
+    ]}]},
+    "bindings": {
+      "Atmosphere.Chemistry.SlowChem.activation_energy": 2500,
+      "Atmosphere.Chemistry.temperature": "ambient_T",
+      "gas_constant": 8.314
+    },
+    "expected": { "op": "exp", "args": [{ "op": "/", "args": [
+      { "op": "-", "args": [2500] },
+      { "op": "*", "args": [8.314, "ambient_T"] }
+    ]}]}
+  },
+  {
+    "description": "Variable map transformation substitution",
+    "input": { "op": "+", "args": [
+      "base_emission",
+      { "op": "*", "args": ["scaling_factor", "GEOSFP.emission_flux"] }
+    ]},
+    "bindings": {
+      "GEOSFP.emission_flux": { "op": "*", "args": ["gridded_data", "temporal_weight"] },
+      "scaling_factor": 1.2
+    },
+    "expected": { "op": "+", "args": [
+      "base_emission",
+      { "op": "*", "args": [1.2, { "op": "*", "args": ["gridded_data", "temporal_weight"] }] }
+    ]}
+  },
+  {
+    "description": "Event system scoped reference substitution",
+    "input": { "op": "ifelse", "args": [
+      { "op": ">", "args": ["Model_A.state_var", "Model_B.threshold_param"] },
+      { "op": "*", "args": [{ "op": "Pre", "args": ["Model_A.state_var"] }, "damping"] },
+      "Model_B.default_value"
+    ]},
+    "bindings": {
+      "Model_A.state_var": "system_A_variable",
+      "Model_B.threshold_param": 0.5,
+      "Model_B.default_value": 0.1,
+      "damping": 0.8
+    },
+    "expected": { "op": "ifelse", "args": [
+      { "op": ">", "args": ["system_A_variable", 0.5] },
+      { "op": "*", "args": [{ "op": "Pre", "args": ["system_A_variable"] }, 0.8] },
+      0.1
+    ]}
+  }
+]

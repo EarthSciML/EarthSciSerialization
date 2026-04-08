@@ -1,0 +1,157 @@
+[
+  {
+    "description": "Add equation to existing model",
+    "operation": "add_equation",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "First variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Second variable" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant 1" },
+        "k2": { "type": "parameter", "units": "1/s", "default": 0.02, "description": "Rate constant 2" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k1", "x"] } }
+      ]
+    },
+    "parameters": {
+      "equation": { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k2", "y"] } }
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "First variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Second variable" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant 1" },
+        "k2": { "type": "parameter", "units": "1/s", "default": 0.02, "description": "Rate constant 2" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k1", "x"] } },
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k2", "y"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove equation by index",
+    "operation": "remove_equation",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "First variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Second variable" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant 1" },
+        "k2": { "type": "parameter", "units": "1/s", "default": 0.02, "description": "Rate constant 2" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k1", "x"] } },
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k2", "y"] } }
+      ]
+    },
+    "parameters": {
+      "index": 0
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "First variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Second variable" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant 1" },
+        "k2": { "type": "parameter", "units": "1/s", "default": 0.02, "description": "Rate constant 2" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k2", "y"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove equation by LHS match",
+    "operation": "remove_equation",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "First variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Second variable" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant 1" },
+        "k2": { "type": "parameter", "units": "1/s", "default": 0.02, "description": "Rate constant 2" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k1", "x"] } },
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k2", "y"] } }
+      ]
+    },
+    "parameters": {
+      "lhs": { "op": "D", "args": ["x"], "wrt": "t" }
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "First variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Second variable" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant 1" },
+        "k2": { "type": "parameter", "units": "1/s", "default": 0.02, "description": "Rate constant 2" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k2", "y"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Substitute in equations - replace parameter with constant",
+    "operation": "substitute_in_equations",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Another state variable" },
+        "T": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", { "op": "exp", "args": [{ "op": "/", "args": [-1000, "T"] }] }, "x"] } },
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.02, "T", "y"] } }
+      ]
+    },
+    "parameters": {
+      "bindings": { "T": 300.0 }
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Another state variable" },
+        "T": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", { "op": "exp", "args": [{ "op": "/", "args": [-1000, 300.0] }] }, "x"] } },
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.02, 300.0, "y"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Substitute in equations - replace variable with expression",
+    "operation": "substitute_in_equations",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Another state variable" },
+        "total": { "type": "parameter", "units": "mol/mol", "default": 3e-9, "description": "Total concentration" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.1, { "op": "-", "args": ["total", "x"] }] } },
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.05, "total"] } }
+      ]
+    },
+    "parameters": {
+      "bindings": { "total": { "op": "+", "args": ["x", "y"] } }
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "Another state variable" },
+        "total": { "type": "parameter", "units": "mol/mol", "default": 3e-9, "description": "Total concentration" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.1, { "op": "-", "args": [{ "op": "+", "args": ["x", "y"] }, "x"] }] } },
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.05, { "op": "+", "args": ["x", "y"] }] } }
+      ]
+    },
+    "expected_warnings": []
+  }
+]

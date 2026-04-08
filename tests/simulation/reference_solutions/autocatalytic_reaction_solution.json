@@ -1,0 +1,88 @@
+{
+  "simulation_results": {
+    "metadata": {
+      "esm_file": "autocatalytic_reaction.esm",
+      "description": "Reference solution for autocatalytic chemical reaction network",
+      "solver": "CVODE_BDF",
+      "tolerance": 1e-9,
+      "total_steps": 1001
+    },
+    "initial_conditions": {
+      "ChemicalSystem.A": 100.0,
+      "ChemicalSystem.B": 1.0,
+      "ChemicalSystem.C": 0.0,
+      "total_mass": 101.0
+    },
+    "time_series": {
+      "description": "Key time points showing autocatalytic growth and eventual depletion",
+      "time": [0.0, 10.0, 20.0, 40.0, 60.0, 100.0],
+      "variables": {
+        "ChemicalSystem.A": [
+          100.0,
+          "verify_numerically_decreasing",
+          "verify_numerically_decreasing",
+          "verify_numerically_small",
+          "verify_numerically_very_small",
+          "verify_numerically_nearly_zero"
+        ],
+        "ChemicalSystem.B": [
+          1.0,
+          "verify_numerically_increasing",
+          "verify_numerically_peak_region",
+          "verify_numerically_declining",
+          "verify_numerically_small",
+          "verify_numerically_very_small"
+        ],
+        "ChemicalSystem.C": [
+          0.0,
+          "verify_numerically_small",
+          "verify_numerically_increasing",
+          "verify_numerically_large",
+          "verify_numerically_approaching_total",
+          "verify_numerically_near_101"
+        ]
+      }
+    },
+    "validation_metrics": {
+      "mass_conservation": {
+        "description": "Total mass A + B + C must remain constant at 101.0 mol",
+        "formula": "A(t) + B(t) + C(t)",
+        "expected_value": 101.0,
+        "tolerance": 1e-10,
+        "test": "abs(total_mass(t) - 101.0) < tolerance for all t"
+      },
+      "autocatalytic_behavior": {
+        "description": "Species B should show characteristic autocatalytic S-curve",
+        "growth_phase": {
+          "description": "B increases exponentially when A >> B",
+          "time_range": [0, 20],
+          "behavior": "exponential_like_growth"
+        },
+        "depletion_phase": {
+          "description": "B decreases as A becomes limiting",
+          "time_range": [40, 100],
+          "behavior": "exponential_decay"
+        }
+      },
+      "reaction_rates": {
+        "description": "Reaction rates should follow mass action kinetics",
+        "R1_initial_rate": 10.0,
+        "R2_initial_rate": 0.05,
+        "rate_consistency": "verify against mass action law"
+      }
+    },
+    "events": [],
+    "final_state": {
+      "description": "Final equilibrium: A ≈ 0, B ≈ 0, C ≈ 101",
+      "ChemicalSystem.A": "< 1e-6",
+      "ChemicalSystem.B": "< 1e-6",
+      "ChemicalSystem.C": "≈ 101.0",
+      "total_mass": 101.0
+    }
+  },
+  "numerical_accuracy_requirements": {
+    "relative_tolerance": 1e-3,
+    "mass_conservation_error": 1e-10,
+    "final_equilibrium_accuracy": 1e-6
+  }
+}
