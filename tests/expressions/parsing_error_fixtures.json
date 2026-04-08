@@ -1,0 +1,452 @@
+[
+  {
+    "name": "Schema validation errors",
+    "description": "Test cases that should fail JSON schema validation",
+    "tests": [
+      {
+        "description": "Missing required 'op' field",
+        "input": {
+          "args": ["x", "y"]
+        },
+        "expected_error": "SchemaError",
+        "error_path": "/",
+        "error_keyword": "required",
+        "error_message": "Missing required property 'op'"
+      },
+      {
+        "description": "Missing required 'args' field",
+        "input": {
+          "op": "+"
+        },
+        "expected_error": "SchemaError",
+        "error_path": "/",
+        "error_keyword": "required",
+        "error_message": "Missing required property 'args'"
+      },
+      {
+        "description": "Invalid 'op' type (non-string)",
+        "input": {
+          "op": 123,
+          "args": ["x", "y"]
+        },
+        "expected_error": "SchemaError",
+        "error_path": "/op",
+        "error_keyword": "type",
+        "error_message": "Expected string, got number"
+      },
+      {
+        "description": "Invalid 'args' type (non-array)",
+        "input": {
+          "op": "+",
+          "args": "not_an_array"
+        },
+        "expected_error": "SchemaError",
+        "error_path": "/args",
+        "error_keyword": "type",
+        "error_message": "Expected array, got string"
+      },
+      {
+        "description": "Invalid 'wrt' type (non-string)",
+        "input": {
+          "op": "D",
+          "args": ["x"],
+          "wrt": 123
+        },
+        "expected_error": "SchemaError",
+        "error_path": "/wrt",
+        "error_keyword": "type",
+        "error_message": "Expected string, got number"
+      },
+      {
+        "description": "Invalid 'dim' type (non-string)",
+        "input": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": true
+        },
+        "expected_error": "SchemaError",
+        "error_path": "/dim",
+        "error_keyword": "type",
+        "error_message": "Expected string, got boolean"
+      },
+      {
+        "description": "Unknown additional property",
+        "input": {
+          "op": "+",
+          "args": ["x", "y"],
+          "unknown_field": "should_not_be_here"
+        },
+        "expected_error": "SchemaError",
+        "error_path": "/unknown_field",
+        "error_keyword": "additionalProperties",
+        "error_message": "Additional property 'unknown_field' is not allowed"
+      }
+    ]
+  },
+  {
+    "name": "Structural validation errors",
+    "description": "Test cases that pass schema but fail structural validation",
+    "tests": [
+      {
+        "description": "Empty args array",
+        "input": {
+          "op": "+",
+          "args": []
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_operator_arity",
+        "error_message": "Operator '+' requires at least 2 arguments, got 0"
+      },
+      {
+        "description": "Insufficient args for binary operator",
+        "input": {
+          "op": "*",
+          "args": ["x"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_operator_arity",
+        "error_message": "Operator '*' requires at least 2 arguments, got 1"
+      },
+      {
+        "description": "Too many args for unary operator",
+        "input": {
+          "op": "sin",
+          "args": ["x", "y"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_operator_arity",
+        "error_message": "Operator 'sin' requires exactly 1 argument, got 2"
+      },
+      {
+        "description": "Wrong number of args for ternary operator",
+        "input": {
+          "op": "ifelse",
+          "args": ["condition", "true_case"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_operator_arity",
+        "error_message": "Operator 'ifelse' requires exactly 3 arguments, got 2"
+      },
+      {
+        "description": "Unknown operator",
+        "input": {
+          "op": "nonexistent_operator",
+          "args": ["x"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "undefined_operator",
+        "error_message": "Unknown operator 'nonexistent_operator'"
+      },
+      {
+        "description": "Derivative missing 'wrt' field",
+        "input": {
+          "op": "D",
+          "args": ["concentration"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "missing_required_field",
+        "error_message": "Derivative operator 'D' requires 'wrt' field"
+      },
+      {
+        "description": "Gradient missing 'dim' field",
+        "input": {
+          "op": "grad",
+          "args": ["Temperature"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "missing_required_field",
+        "error_message": "Gradient operator 'grad' requires 'dim' field"
+      },
+      {
+        "description": "Empty 'wrt' field",
+        "input": {
+          "op": "D",
+          "args": ["x"],
+          "wrt": ""
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_field_value",
+        "error_message": "Field 'wrt' cannot be empty"
+      },
+      {
+        "description": "Empty 'dim' field",
+        "input": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": ""
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_field_value",
+        "error_message": "Field 'dim' cannot be empty"
+      }
+    ]
+  },
+  {
+    "name": "Invalid argument content",
+    "description": "Test cases with invalid content within args arrays",
+    "tests": [
+      {
+        "description": "Null value in args array",
+        "input": {
+          "op": "+",
+          "args": ["x", null, "z"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Invalid expression: null values not allowed"
+      },
+      {
+        "description": "Undefined value in args array",
+        "input": {
+          "op": "*",
+          "args": ["a", "UNDEFINED_PLACEHOLDER", "c"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Invalid expression: undefined values not allowed"
+      },
+      {
+        "description": "Invalid expression type (boolean)",
+        "input": {
+          "op": "+",
+          "args": ["x", true]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Invalid expression type: boolean. Expected number, string, or object"
+      },
+      {
+        "description": "Invalid expression type (array)",
+        "input": {
+          "op": "*",
+          "args": ["x", [1, 2, 3]]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Invalid expression type: array. Expected number, string, or object"
+      },
+      {
+        "description": "Invalid nested expression structure",
+        "input": {
+          "op": "+",
+          "args": [
+            "x",
+            {
+              "invalid_structure": true
+            }
+          ]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Invalid expression object: missing required fields"
+      },
+      {
+        "description": "Empty variable name",
+        "input": {
+          "op": "+",
+          "args": ["x", ""]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Variable name cannot be empty"
+      },
+      {
+        "description": "Invalid number value (Infinity)",
+        "input": {
+          "op": "+",
+          "args": [1, "INFINITY_PLACEHOLDER"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Invalid numeric value: Infinity"
+      },
+      {
+        "description": "Invalid number value (NaN)",
+        "input": {
+          "op": "*",
+          "args": ["x", "NAN_PLACEHOLDER"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_expression",
+        "error_message": "Invalid numeric value: NaN"
+      }
+    ]
+  },
+  {
+    "name": "Complex nested error scenarios",
+    "description": "Test cases with errors buried deep in nested structures",
+    "tests": [
+      {
+        "description": "Error in deeply nested expression",
+        "input": {
+          "op": "ifelse",
+          "args": [
+            {"op": ">", "args": ["x", 0]},
+            {
+              "op": "+",
+              "args": [
+                "a",
+                {
+                  "op": "*",
+                  "args": [
+                    "b",
+                    {
+                      "op": "unknown_operator",
+                      "args": ["c"]
+                    }
+                  ]
+                }
+              ]
+            },
+            "fallback"
+          ]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "undefined_operator",
+        "error_message": "Unknown operator 'unknown_operator'",
+        "error_path": "/args/1/args/1/args/1/op"
+      },
+      {
+        "description": "Multiple errors in single expression",
+        "input": {
+          "op": "unknown_operator",
+          "args": [
+            {
+              "op": "sin",
+              "args": ["x", "y"]
+            },
+            null
+          ]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "multiple_errors",
+        "error_message": "Multiple validation errors found",
+        "error_details": [
+          {
+            "code": "undefined_operator",
+            "message": "Unknown operator 'unknown_operator'",
+            "path": "/op"
+          },
+          {
+            "code": "invalid_operator_arity",
+            "message": "Operator 'sin' requires exactly 1 argument, got 2",
+            "path": "/args/0"
+          },
+          {
+            "code": "invalid_expression",
+            "message": "Invalid expression: null values not allowed",
+            "path": "/args/1"
+          }
+        ]
+      },
+      {
+        "description": "Missing required field in nested derivative",
+        "input": {
+          "op": "+",
+          "args": [
+            "base_rate",
+            {
+              "op": "*",
+              "args": [
+                "amplitude",
+                {
+                  "op": "D",
+                  "args": [
+                    {
+                      "op": "sin",
+                      "args": [{"op": "*", "args": ["ω", "t"]}]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "missing_required_field",
+        "error_message": "Derivative operator 'D' requires 'wrt' field",
+        "error_path": "/args/1/args/1"
+      }
+    ]
+  },
+  {
+    "name": "Boundary condition tests",
+    "description": "Tests for implementation-specific limits and edge cases",
+    "tests": [
+      {
+        "description": "Maximum nesting depth exceeded",
+        "input": "DEEP_NESTING_GENERATOR_PLACEHOLDER",
+        "expected_error": "StructuralError",
+        "error_code": "max_depth_exceeded",
+        "error_message": "Expression nesting depth exceeds maximum allowed limit",
+        "notes": "Implementation should generate expression exceeding its depth limit"
+      },
+      {
+        "description": "Maximum expression size exceeded",
+        "input": "LARGE_EXPRESSION_GENERATOR_PLACEHOLDER",
+        "expected_error": "StructuralError",
+        "error_code": "max_size_exceeded",
+        "error_message": "Expression size exceeds maximum allowed limit",
+        "notes": "Implementation should generate expression exceeding its size limit"
+      },
+      {
+        "description": "Circular reference detection",
+        "input": "CIRCULAR_REFERENCE_GENERATOR_PLACEHOLDER",
+        "expected_error": "StructuralError",
+        "error_code": "circular_reference",
+        "error_message": "Circular reference detected in expression tree",
+        "notes": "Implementation should create a circular reference if possible"
+      },
+      {
+        "description": "Invalid Unicode in variable name",
+        "input": {
+          "op": "+",
+          "args": ["valid_name", "INVALID_UNICODE_PLACEHOLDER"]
+        },
+        "expected_error": "StructuralError",
+        "error_code": "invalid_character",
+        "error_message": "Invalid Unicode character in variable name",
+        "notes": "Implementation should test with malformed Unicode sequences"
+      }
+    ]
+  },
+  {
+    "name": "JSON parsing edge cases",
+    "description": "Test cases for JSON-level parsing issues",
+    "tests": [
+      {
+        "description": "Malformed JSON syntax",
+        "input_string": "{\"op\": \"+\", \"args\": [\"x\", \"y\"",
+        "expected_error": "JSONParseError",
+        "error_message": "Unexpected end of JSON input"
+      },
+      {
+        "description": "Invalid escape sequence",
+        "input_string": "{\"op\": \"+\", \"args\": [\"\\q\", \"y\"]}",
+        "expected_error": "JSONParseError",
+        "error_message": "Invalid escape sequence '\\q'"
+      },
+      {
+        "description": "Invalid UTF-8 sequence",
+        "input_string": "INVALID_UTF8_PLACEHOLDER",
+        "expected_error": "JSONParseError",
+        "error_message": "Invalid UTF-8 sequence in JSON",
+        "notes": "Implementation should test with invalid UTF-8 byte sequences"
+      },
+      {
+        "description": "Duplicate keys in JSON object",
+        "input_string": "{\"op\": \"+\", \"args\": [\"x\", \"y\"], \"op\": \"*\"}",
+        "expected_error": "JSONParseError",
+        "error_message": "Duplicate key 'op' in JSON object",
+        "notes": "Behavior may be implementation-dependent"
+      },
+      {
+        "description": "Number overflow in JSON",
+        "input_string": "{\"op\": \"+\", \"args\": [1e500, \"x\"]}",
+        "expected_error": "JSONParseError",
+        "error_message": "Number overflow in JSON parsing",
+        "notes": "Very large numbers that exceed language float limits"
+      }
+    ]
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DataLoaderProvidesMissingUnits",
+    "description": "Test case: data loader provides variable missing required units field",
+    "authors": ["Test Suite"]
+  },
+
+  "data_loaders": {
+    "BadProvides": {
+      "type": "gridded_data",
+      "loader_id": "TestLoader",
+      "provides": {
+        "T": {
+          "description": "Temperature"
+        }
+      }
+    }
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    }
+  }
+}

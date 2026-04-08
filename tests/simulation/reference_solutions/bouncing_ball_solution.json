@@ -1,0 +1,129 @@
+{
+  "simulation_results": {
+    "metadata": {
+      "esm_file": "bouncing_ball.esm",
+      "description": "Reference solution for bouncing ball with continuous event detection",
+      "solver": "Tsit5_with_events",
+      "tolerance": 1e-9,
+      "total_steps": "variable_due_to_events"
+    },
+    "initial_conditions": {
+      "BallDynamics.height": 10.0,
+      "BallDynamics.velocity": 0.0,
+      "initial_energy": 98.1
+    },
+    "analytical_predictions": {
+      "free_fall_time": {
+        "formula": "sqrt(2*h0/g)",
+        "value": 1.4278433256330216,
+        "description": "Time for initial fall from 10m"
+      },
+      "impact_velocity": {
+        "formula": "-sqrt(2*g*h0)",
+        "value": -14.006428591081645,
+        "description": "Velocity just before first bounce"
+      },
+      "bounce_heights": {
+        "formula": "h_n = h0 * restitution^(2n)",
+        "sequence": [10.0, 6.4, 4.096, 2.62144, 1.677721, 1.0737414],
+        "description": "Maximum height after each bounce"
+      }
+    },
+    "event_sequence": {
+      "description": "Predicted bounce times and velocities",
+      "bounces": [
+        {
+          "bounce_number": 1,
+          "time": 1.4278433256330216,
+          "pre_velocity": -14.006428591081645,
+          "post_velocity": 11.205142872865316,
+          "max_height_after": 6.4
+        },
+        {
+          "bounce_number": 2,
+          "time": 2.5720779658824823,
+          "pre_velocity": -11.205142872865316,
+          "post_velocity": 8.964114298292253,
+          "max_height_after": 4.096
+        },
+        {
+          "bounce_number": 3,
+          "time": 3.399264405632276,
+          "pre_velocity": -8.964114298292253,
+          "post_velocity": 7.171291438633802,
+          "max_height_after": 2.62144
+        }
+      ]
+    },
+    "validation_metrics": {
+      "event_timing_accuracy": {
+        "description": "Bounce times must match analytical predictions",
+        "tolerance": 1e-6,
+        "test": "abs(t_bounce_numerical - t_bounce_analytical) < tolerance"
+      },
+      "velocity_reversal": {
+        "description": "Velocity changes correctly at bounces",
+        "pre_bounce_velocity": "negative (falling)",
+        "post_bounce_velocity": "positive (rising)",
+        "restitution_check": "|v_after| = restitution * |v_before|"
+      },
+      "energy_dissipation": {
+        "description": "Energy decreases by factor of restitution^2 per bounce",
+        "initial_energy": 98.1,
+        "energy_after_bounce_1": 62.784,
+        "energy_after_bounce_2": 40.18176,
+        "energy_decay_factor": 0.64
+      },
+      "height_conservation": {
+        "description": "Ball should not go below ground level",
+        "test": "height >= 0 for all times",
+        "ground_contact_duration": "instantaneous"
+      }
+    },
+    "time_series": {
+      "description": "Key verification points between bounces",
+      "time": [0.0, 0.5, 1.0, 1.4278, 2.0, 2.5720, 5.0, 10.0],
+      "variables": {
+        "BallDynamics.height": [
+          10.0,
+          7.774375,
+          5.095,
+          0.0,
+          "verify_trajectory",
+          0.0,
+          "verify_small_bounces",
+          "verify_nearly_at_rest"
+        ],
+        "BallDynamics.velocity": [
+          0.0,
+          -4.905,
+          -9.81,
+          11.205142872865316,
+          "verify_trajectory",
+          8.964114298292253,
+          "verify_small_oscillations",
+          "verify_nearly_zero"
+        ]
+      }
+    },
+    "events": [
+      {
+        "type": "ground_collision",
+        "times": [1.4278433256330216, 2.5720779658824823, 3.399264405632276],
+        "description": "First few bounces with decreasing energy"
+      }
+    ],
+    "final_state": {
+      "description": "Ball eventually comes to rest on ground",
+      "BallDynamics.height": 0.0,
+      "BallDynamics.velocity": 0.0,
+      "total_bounces": "approximately 15-20 within 10 seconds"
+    }
+  },
+  "numerical_accuracy_requirements": {
+    "event_detection_tolerance": 1e-9,
+    "relative_tolerance": 1e-6,
+    "energy_tracking_accuracy": 1e-8,
+    "bounce_timing_accuracy": 1e-6
+  }
+}

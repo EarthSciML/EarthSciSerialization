@@ -1,0 +1,66 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "PeriodicDosingTest",
+    "description": "Pharmacokinetic model with periodic drug dosing - discrete event handling test",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["test", "events", "discrete", "pharmacokinetics"]
+  },
+  "models": {
+    "PharmacokineticModel": {
+      "reference": {
+        "notes": "First-order elimination with periodic dosing: dC/dt = -ke*C + dose_events"
+      },
+      "variables": {
+        "drug_amount": { "type": "state", "units": "mg", "default": 0.0, "description": "Amount of drug in system" },
+        "elimination_rate": { "type": "parameter", "units": "1/h", "default": 0.1, "description": "First-order elimination rate constant" },
+        "dose_amount": { "type": "parameter", "units": "mg", "default": 100.0, "description": "Dose amount per administration" },
+        "dosing_interval": { "type": "parameter", "units": "h", "default": 8.0, "description": "Time between doses" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["drug_amount"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "-", "args": ["elimination_rate"] },
+            "drug_amount"
+          ]}
+        }
+      ],
+      "events": [
+        {
+          "id": "periodic_dose",
+          "type": "discrete",
+          "trigger": {
+            "type": "periodic",
+            "interval": "dosing_interval",
+            "start_time": 0.0
+          },
+          "description": "Administer dose every 8 hours",
+          "actions": [
+            {
+              "type": "assignment",
+              "variable": "drug_amount",
+              "value": { "op": "+", "args": ["drug_amount", "dose_amount"] }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "domain": {
+    "temporal": { "start": 0.0, "end": 72.0, "step": 0.1 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "PharmacokineticModel.drug_amount": 0.0
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "algorithm": "Tsit5",
+      "rtol": 1e-6,
+      "atol": 1e-8,
+      "discrete_event_handling": true
+    }
+  }
+}

@@ -1,0 +1,1042 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "LandAtmosphereHydrology",
+    "description": "End-to-end test for coupled land-atmosphere water and energy cycles with vegetation dynamics",
+    "authors": ["ESM Test Suite"],
+    "license": "MIT",
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["end-to-end", "land-atmosphere", "hydrology", "vegetation", "energy-balance"],
+    "references": [
+      {
+        "citation": "Land-atmosphere coupling test fixture for hydrological and energy cycles",
+        "notes": "Tests surface energy balance, soil moisture, vegetation growth, and feedback mechanisms"
+      }
+    ]
+  },
+
+  "models": {
+    "AtmosphericBoundaryLayer": {
+      "coupletype": "AtmosphereCoupler",
+      "reference": {
+        "notes": "Atmospheric boundary layer model with temperature, humidity, and momentum exchange"
+      },
+      "variables": {
+        "air_temperature": {
+          "type": "state",
+          "units": "K",
+          "default": 295.15,
+          "description": "Air temperature at 2m height",
+          "bounds": {"min": 250.0, "max": 330.0}
+        },
+        "specific_humidity": {
+          "type": "state",
+          "units": "kg/kg",
+          "default": 0.008,
+          "description": "Specific humidity at 2m height",
+          "bounds": {"min": 0.0, "max": 0.03}
+        },
+        "wind_speed": {
+          "type": "state",
+          "units": "m/s",
+          "default": 3.0,
+          "description": "Wind speed at 10m height",
+          "bounds": {"min": 0.1, "max": 20.0}
+        },
+        "pressure": {
+          "type": "parameter",
+          "units": "Pa",
+          "default": 101325.0,
+          "description": "Surface atmospheric pressure"
+        },
+        "incoming_radiation": {
+          "type": "parameter",
+          "units": "W/m^2",
+          "default": 400.0,
+          "description": "Incoming solar radiation"
+        },
+        "longwave_radiation": {
+          "type": "parameter",
+          "units": "W/m^2",
+          "default": 350.0,
+          "description": "Incoming longwave radiation"
+        },
+        "precipitation": {
+          "type": "parameter",
+          "units": "kg/m^2/s",
+          "default": 3e-6,
+          "description": "Precipitation rate"
+        },
+        "relative_humidity": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {
+            "op": "/",
+            "args": [
+              "specific_humidity",
+              {"op": "*", "args": [0.622, {"op": "exp", "args": [{"op": "/", "args": [{"op": "*", "args": [17.67, {"op": "-", "args": ["air_temperature", 273.15]}]}, {"op": "+", "args": [{"op": "-", "args": ["air_temperature", 273.15]}, 243.5]}]}]}]}
+            ]
+          },
+          "description": "Relative humidity from temperature and specific humidity"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Air temperature change from surface heat fluxes",
+          "lhs": {"op": "D", "args": ["air_temperature"], "wrt": "t"},
+          "rhs": 0.0
+        },
+        {
+          "_comment": "Specific humidity change from surface water fluxes",
+          "lhs": {"op": "D", "args": ["specific_humidity"], "wrt": "t"},
+          "rhs": 0.0
+        },
+        {
+          "_comment": "Wind speed change from momentum fluxes",
+          "lhs": {"op": "D", "args": ["wind_speed"], "wrt": "t"},
+          "rhs": 0.0
+        }
+      ]
+    },
+
+    "SoilHydrologyThermal": {
+      "coupletype": "SoilCoupler",
+      "reference": {
+        "notes": "Multi-layer soil model with water and heat transport",
+        "citation": "Campbell & Norman, 1998. Environmental Biophysics"
+      },
+      "variables": {
+        "soil_moisture_layer1": {
+          "type": "state",
+          "units": "m^3/m^3",
+          "default": 0.25,
+          "description": "Volumetric soil moisture in layer 1 (0-10cm)",
+          "bounds": {"min": 0.05, "max": 0.50}
+        },
+        "soil_moisture_layer2": {
+          "type": "state",
+          "units": "m^3/m^3",
+          "default": 0.30,
+          "description": "Volumetric soil moisture in layer 2 (10-50cm)",
+          "bounds": {"min": 0.05, "max": 0.50}
+        },
+        "soil_moisture_layer3": {
+          "type": "state",
+          "units": "m^3/m^3",
+          "default": 0.35,
+          "description": "Volumetric soil moisture in layer 3 (50-150cm)",
+          "bounds": {"min": 0.05, "max": 0.50}
+        },
+        "soil_temperature_layer1": {
+          "type": "state",
+          "units": "K",
+          "default": 288.15,
+          "description": "Soil temperature in layer 1",
+          "bounds": {"min": 250.0, "max": 330.0}
+        },
+        "soil_temperature_layer2": {
+          "type": "state",
+          "units": "K",
+          "default": 288.15,
+          "description": "Soil temperature in layer 2",
+          "bounds": {"min": 250.0, "max": 330.0}
+        },
+        "soil_temperature_layer3": {
+          "type": "state",
+          "units": "K",
+          "default": 288.15,
+          "description": "Soil temperature in layer 3",
+          "bounds": {"min": 250.0, "max": 330.0}
+        },
+        "porosity": {
+          "type": "parameter",
+          "units": "m^3/m^3",
+          "default": 0.45,
+          "description": "Soil porosity"
+        },
+        "field_capacity": {
+          "type": "parameter",
+          "units": "m^3/m^3",
+          "default": 0.35,
+          "description": "Field capacity"
+        },
+        "wilting_point": {
+          "type": "parameter",
+          "units": "m^3/m^3",
+          "default": 0.15,
+          "description": "Permanent wilting point"
+        },
+        "hydraulic_conductivity": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 1e-6,
+          "description": "Saturated hydraulic conductivity"
+        },
+        "thermal_conductivity": {
+          "type": "parameter",
+          "units": "W/m/K",
+          "default": 1.5,
+          "description": "Soil thermal conductivity"
+        },
+        "heat_capacity": {
+          "type": "parameter",
+          "units": "J/m^3/K",
+          "default": 2.5e6,
+          "description": "Volumetric heat capacity"
+        },
+        "layer1_thickness": {
+          "type": "parameter",
+          "units": "m",
+          "default": 0.1,
+          "description": "Thickness of soil layer 1"
+        },
+        "layer2_thickness": {
+          "type": "parameter",
+          "units": "m",
+          "default": 0.4,
+          "description": "Thickness of soil layer 2"
+        },
+        "layer3_thickness": {
+          "type": "parameter",
+          "units": "m",
+          "default": 1.0,
+          "description": "Thickness of soil layer 3"
+        },
+        "root_zone_moisture": {
+          "type": "observed",
+          "units": "m^3/m^3",
+          "expression": {
+            "op": "/",
+            "args": [
+              {"op": "+", "args": [
+                {"op": "*", "args": ["soil_moisture_layer1", "layer1_thickness"]},
+                {"op": "*", "args": ["soil_moisture_layer2", "layer2_thickness", 0.8]},
+                {"op": "*", "args": ["soil_moisture_layer3", "layer3_thickness", 0.2]}
+              ]},
+              {"op": "+", "args": ["layer1_thickness", {"op": "*", "args": ["layer2_thickness", 0.8]}, {"op": "*", "args": ["layer3_thickness", 0.2]}]}
+            ]
+          },
+          "description": "Root-zone weighted soil moisture"
+        },
+        "water_stress_factor": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {
+            "op": "max",
+            "args": [
+              0.0,
+              {"op": "min", "args": [
+                1.0,
+                {"op": "/", "args": [
+                  {"op": "-", "args": ["root_zone_moisture", "wilting_point"]},
+                  {"op": "-", "args": ["field_capacity", "wilting_point"]}
+                ]}
+              ]}
+            ]
+          },
+          "description": "Water stress factor for vegetation (0=stressed, 1=unstressed)"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Soil moisture layer 1: infiltration, evaporation, drainage",
+          "lhs": {"op": "D", "args": ["soil_moisture_layer1"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [
+              {"op": "+", "args": [
+                0.0,
+                {"op": "*", "args": [{"op": "-", "args": [1e-7]}, {"op": "-", "args": ["soil_moisture_layer1", "soil_moisture_layer2"]}]}
+              ]},
+              "layer1_thickness"
+            ]
+          }
+        },
+        {
+          "_comment": "Soil moisture layer 2: drainage from layer 1, root uptake, drainage to layer 3",
+          "lhs": {"op": "D", "args": ["soil_moisture_layer2"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [
+              {"op": "+", "args": [
+                {"op": "*", "args": [1e-7, {"op": "-", "args": ["soil_moisture_layer1", "soil_moisture_layer2"]}]},
+                {"op": "*", "args": [{"op": "-", "args": [5e-8]}, {"op": "-", "args": ["soil_moisture_layer2", "soil_moisture_layer3"]}]}
+              ]},
+              "layer2_thickness"
+            ]
+          }
+        },
+        {
+          "_comment": "Soil moisture layer 3: drainage from layer 2, deep drainage",
+          "lhs": {"op": "D", "args": ["soil_moisture_layer3"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [
+              {"op": "+", "args": [
+                {"op": "*", "args": [5e-8, {"op": "-", "args": ["soil_moisture_layer2", "soil_moisture_layer3"]}]},
+                {"op": "*", "args": [{"op": "-", "args": [1e-8]}, "soil_moisture_layer3"]}
+              ]},
+              "layer3_thickness"
+            ]
+          }
+        },
+        {
+          "_comment": "Soil temperature layer 1: surface heat flux, conduction to layer 2",
+          "lhs": {"op": "D", "args": ["soil_temperature_layer1"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [
+              {"op": "*", "args": [
+                {"op": "/", "args": ["thermal_conductivity", "layer1_thickness"]},
+                {"op": "-", "args": ["soil_temperature_layer2", "soil_temperature_layer1"]}
+              ]},
+              "heat_capacity"
+            ]
+          }
+        },
+        {
+          "_comment": "Soil temperature layer 2: conduction from layers 1 and 3",
+          "lhs": {"op": "D", "args": ["soil_temperature_layer2"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [
+              {"op": "+", "args": [
+                {"op": "*", "args": [
+                  {"op": "/", "args": ["thermal_conductivity", "layer1_thickness"]},
+                  {"op": "-", "args": ["soil_temperature_layer1", "soil_temperature_layer2"]}
+                ]},
+                {"op": "*", "args": [
+                  {"op": "/", "args": ["thermal_conductivity", "layer2_thickness"]},
+                  {"op": "-", "args": ["soil_temperature_layer3", "soil_temperature_layer2"]}
+                ]}
+              ]},
+              "heat_capacity"
+            ]
+          }
+        },
+        {
+          "_comment": "Soil temperature layer 3: conduction from layer 2, deep boundary condition",
+          "lhs": {"op": "D", "args": ["soil_temperature_layer3"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [
+              {"op": "+", "args": [
+                {"op": "*", "args": [
+                  {"op": "/", "args": ["thermal_conductivity", "layer2_thickness"]},
+                  {"op": "-", "args": ["soil_temperature_layer2", "soil_temperature_layer3"]}
+                ]},
+                {"op": "*", "args": [
+                  {"op": "/", "args": ["thermal_conductivity", "layer3_thickness"]},
+                  {"op": "-", "args": [285.15, "soil_temperature_layer3"]}
+                ]}
+              ]},
+              "heat_capacity"
+            ]
+          }
+        }
+      ]
+    },
+
+    "VegetationDynamics": {
+      "reference": {
+        "notes": "Dynamic vegetation model with leaf area index, biomass, and phenology"
+      },
+      "variables": {
+        "leaf_area_index": {
+          "type": "state",
+          "units": "m^2/m^2",
+          "default": 3.0,
+          "description": "Leaf area index",
+          "bounds": {"min": 0.5, "max": 8.0}
+        },
+        "above_ground_biomass": {
+          "type": "state",
+          "units": "kg/m^2",
+          "default": 2.0,
+          "description": "Above-ground plant biomass",
+          "bounds": {"min": 0.1, "max": 20.0}
+        },
+        "below_ground_biomass": {
+          "type": "state",
+          "units": "kg/m^2",
+          "default": 1.5,
+          "description": "Below-ground (root) biomass",
+          "bounds": {"min": 0.1, "max": 15.0}
+        },
+        "max_photosynthesis_rate": {
+          "type": "parameter",
+          "units": "umol/m^2/s",
+          "default": 25.0,
+          "description": "Maximum photosynthetic rate at light saturation"
+        },
+        "light_saturation_point": {
+          "type": "parameter",
+          "units": "umol/m^2/s",
+          "default": 800.0,
+          "description": "Light saturation point for photosynthesis"
+        },
+        "growth_efficiency": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 0.5,
+          "description": "Growth efficiency (biomass per unit photosynthesis)"
+        },
+        "maintenance_respiration_rate": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 3e-7,
+          "description": "Maintenance respiration rate"
+        },
+        "allocation_to_roots": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 0.4,
+          "description": "Fraction of growth allocated to roots"
+        },
+        "specific_leaf_area": {
+          "type": "parameter",
+          "units": "m^2/kg",
+          "default": 20.0,
+          "description": "Specific leaf area (LAI per unit leaf biomass)"
+        },
+        "leaf_turnover_rate": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 6e-8,
+          "description": "Leaf turnover rate"
+        },
+        "root_turnover_rate": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 2e-8,
+          "description": "Root turnover rate"
+        },
+        "photosynthesis_rate": {
+          "type": "observed",
+          "units": "umol/m^2/s",
+          "expression": {
+            "op": "*",
+            "args": [
+              "max_photosynthesis_rate",
+              {"op": "/", "args": [
+                {"op": "*", "args": [{"op": "/", "args": ["incoming_radiation", 4.6]}, "leaf_area_index"]},
+                {"op": "+", "args": [{"op": "*", "args": [{"op": "/", "args": ["incoming_radiation", 4.6]}, "leaf_area_index"]}, "light_saturation_point"]}
+              ]},
+              "water_stress_factor"
+            ]
+          },
+          "description": "Actual photosynthesis rate with light and water limitations"
+        },
+        "net_primary_productivity": {
+          "type": "observed",
+          "units": "kg/m^2/s",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "*", "args": ["photosynthesis_rate", 12e-6, 3600]}, "growth_efficiency"]},
+              {"op": "*", "args": [{"op": "-", "args": ["maintenance_respiration_rate"]}, {"op": "+", "args": ["above_ground_biomass", "below_ground_biomass"]}]}
+            ]
+          },
+          "description": "Net primary productivity (growth - respiration)"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Above-ground biomass growth",
+          "lhs": {"op": "D", "args": ["above_ground_biomass"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": [1, "allocation_to_roots"]}, "net_primary_productivity"]},
+              {"op": "*", "args": [{"op": "-", "args": ["leaf_turnover_rate"]}, "above_ground_biomass"]}
+            ]
+          }
+        },
+        {
+          "_comment": "Below-ground biomass growth",
+          "lhs": {"op": "D", "args": ["below_ground_biomass"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["allocation_to_roots", "net_primary_productivity"]},
+              {"op": "*", "args": [{"op": "-", "args": ["root_turnover_rate"]}, "below_ground_biomass"]}
+            ]
+          }
+        },
+        {
+          "_comment": "Leaf area index follows above-ground biomass",
+          "lhs": {"op": "D", "args": ["leaf_area_index"], "wrt": "t"},
+          "rhs": {
+            "op": "*",
+            "args": [
+              "specific_leaf_area",
+              {"op": "D", "args": ["above_ground_biomass"], "wrt": "t"}
+            ]
+          }
+        }
+      ]
+    },
+
+    "SurfaceEnergyBalance": {
+      "reference": {
+        "notes": "Surface energy balance with sensible and latent heat fluxes",
+        "citation": "Monteith & Unsworth, 2013. Principles of Environmental Physics"
+      },
+      "variables": {
+        "surface_temperature": {
+          "type": "state",
+          "units": "K",
+          "default": 290.15,
+          "description": "Surface skin temperature",
+          "bounds": {"min": 250.0, "max": 330.0}
+        },
+        "albedo": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 0.15,
+          "description": "Surface albedo"
+        },
+        "emissivity": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 0.95,
+          "description": "Surface emissivity"
+        },
+        "stefan_boltzmann": {
+          "type": "parameter",
+          "units": "W/m^2/K^4",
+          "default": 5.67e-8,
+          "description": "Stefan-Boltzmann constant"
+        },
+        "aerodynamic_conductance": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 0.01,
+          "description": "Aerodynamic conductance for heat transfer"
+        },
+        "stomatal_conductance": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 0.005,
+          "description": "Canopy stomatal conductance"
+        },
+        "net_radiation": {
+          "type": "observed",
+          "units": "W/m^2",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": [1, "albedo"]}, "incoming_radiation"]},
+              "longwave_radiation",
+              {"op": "*", "args": [{"op": "-", "args": ["emissivity"]}, "stefan_boltzmann", {"op": "^", "args": ["surface_temperature", 4]}]}
+            ]
+          },
+          "description": "Net radiation at surface"
+        },
+        "sensible_heat_flux": {
+          "type": "observed",
+          "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": [
+              1200.0,
+              "aerodynamic_conductance",
+              {"op": "-", "args": ["surface_temperature", "air_temperature"]}
+            ]
+          },
+          "description": "Sensible heat flux to atmosphere"
+        },
+        "latent_heat_flux": {
+          "type": "observed",
+          "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": [
+              2.45e6,
+              {"op": "*", "args": [
+                "stomatal_conductance",
+                "water_stress_factor",
+                {"op": "*", "args": [
+                  0.622,
+                  {"op": "/", "args": [
+                    {"op": "+", "args": [
+                      {"op": "exp", "args": [{"op": "/", "args": [{"op": "*", "args": [17.67, {"op": "-", "args": ["surface_temperature", 273.15]}]}, {"op": "+", "args": [{"op": "-", "args": ["surface_temperature", 273.15]}, 243.5]}]}]},
+                      {"op": "*", "args": [{"op": "-", "args": [1]}, {"op": "exp", "args": [{"op": "/", "args": [{"op": "*", "args": [17.67, {"op": "-", "args": ["air_temperature", 273.15]}]}, {"op": "+", "args": [{"op": "-", "args": ["air_temperature", 273.15]}, 243.5]}]}]}]}
+                    ]},
+                    "pressure"
+                  ]}
+                ]}
+              ]}
+            ]
+          },
+          "description": "Latent heat flux (evapotranspiration)"
+        },
+        "ground_heat_flux": {
+          "type": "observed",
+          "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": [
+              {"op": "/", "args": ["thermal_conductivity", {"op": "*", "args": ["layer1_thickness", 0.5]}]},
+              {"op": "-", "args": ["surface_temperature", "soil_temperature_layer1"]}
+            ]
+          },
+          "description": "Ground heat flux into soil"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Surface temperature from energy balance",
+          "lhs": {"op": "D", "args": ["surface_temperature"], "wrt": "t"},
+          "rhs": {
+            "op": "/",
+            "args": [
+              {"op": "+", "args": [
+                "net_radiation",
+                {"op": "-", "args": ["sensible_heat_flux"]},
+                {"op": "-", "args": ["latent_heat_flux"]},
+                {"op": "-", "args": ["ground_heat_flux"]}
+              ]},
+              5e5
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "MeteorologicalForcing": {
+      "type": "gridded_data",
+      "loader_id": "ERA5_Hourly",
+      "config": {
+        "variables": ["2m_temperature", "2m_dewpoint", "surface_pressure", "10m_u", "10m_v", "total_precipitation", "surface_solar_radiation", "surface_thermal_radiation"],
+        "temporal_resolution": "hourly",
+        "spatial_resolution": "0.25_degree"
+      },
+      "provides": {
+        "air_temperature": {"units": "K", "description": "2m air temperature"},
+        "specific_humidity": {"units": "kg/kg", "description": "2m specific humidity from dewpoint"},
+        "pressure": {"units": "Pa", "description": "Surface pressure"},
+        "wind_speed": {"units": "m/s", "description": "10m wind speed magnitude"},
+        "precipitation": {"units": "kg/m^2/s", "description": "Precipitation rate"},
+        "incoming_radiation": {"units": "W/m^2", "description": "Surface solar radiation"},
+        "longwave_radiation": {"units": "W/m^2", "description": "Surface thermal radiation"}
+      }
+    },
+
+    "SoilProperties": {
+      "type": "static_data",
+      "loader_id": "SoilGrids250",
+      "config": {
+        "variables": ["clay", "sand", "silt", "bulk_density", "organic_carbon"],
+        "depths": ["0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm", "100-200cm"]
+      },
+      "provides": {
+        "porosity": {"units": "m^3/m^3", "description": "Soil porosity from bulk density"},
+        "field_capacity": {"units": "m^3/m^3", "description": "Field capacity from soil texture"},
+        "wilting_point": {"units": "m^3/m^3", "description": "Wilting point from soil texture"},
+        "hydraulic_conductivity": {"units": "m/s", "description": "Saturated hydraulic conductivity"},
+        "thermal_conductivity": {"units": "W/m/K", "description": "Soil thermal conductivity"}
+      }
+    }
+  },
+
+  "operators": {
+    "LandSurfaceAlbedo": {
+      "operator_id": "MODIS_BRDF",
+      "reference": {
+        "citation": "Schaaf et al., 2002. First operational BRDF, albedo nadir reflectance products from MODIS",
+        "doi": "10.1016/S0034-4257(02)00091-3"
+      },
+      "config": {
+        "bands": ["visible", "near_infrared"],
+        "angular_dependence": true,
+        "seasonal_variation": true
+      },
+      "needed_vars": ["leaf_area_index", "above_ground_biomass", "soil_moisture_layer1"],
+      "modifies": ["albedo"],
+      "description": "Vegetation and soil moisture dependent albedo"
+    },
+
+    "StomatalConductance": {
+      "operator_id": "Ball_Berry_Leuning",
+      "reference": {
+        "citation": "Leuning, 1995. A critical appraisal of a combined stomatal-photosynthesis model",
+        "doi": "10.1007/BF00386231"
+      },
+      "config": {
+        "model": "Leuning",
+        "CO2_compensation_point": 42.75,
+        "empirical_coefficient": 9.0
+      },
+      "needed_vars": ["photosynthesis_rate", "specific_humidity", "air_temperature", "incoming_radiation"],
+      "modifies": ["stomatal_conductance"],
+      "description": "Photosynthesis and environment dependent stomatal conductance"
+    },
+
+    "SoilHeatCapacity": {
+      "operator_id": "Campbell_Norman",
+      "reference": {
+        "citation": "Campbell & Norman, 1998. Environmental Biophysics",
+        "notes": "Soil thermal properties as functions of moisture and texture"
+      },
+      "config": {
+        "method": "texture_dependent",
+        "organic_matter_effects": true
+      },
+      "needed_vars": ["soil_moisture_layer1", "soil_moisture_layer2", "soil_moisture_layer3", "porosity"],
+      "modifies": ["thermal_conductivity", "heat_capacity"],
+      "description": "Soil moisture dependent thermal properties"
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "Type 2: couple2 - Atmosphere-soil heat and water exchange",
+      "type": "couple2",
+      "systems": ["AtmosphericBoundaryLayer", "SurfaceEnergyBalance"],
+      "connector": {
+        "equations": [
+          {
+            "_comment": "Sensible heat flux affects air temperature",
+            "from": "SurfaceEnergyBalance.sensible_heat_flux",
+            "to": "AtmosphericBoundaryLayer.air_temperature",
+            "transform": "additive",
+            "expression": {
+              "op": "/",
+              "args": [
+                "SurfaceEnergyBalance.sensible_heat_flux",
+                {"op": "*", "args": [1200.0, 1000.0]}
+              ]
+            }
+          },
+          {
+            "_comment": "Latent heat flux affects atmospheric humidity",
+            "from": "SurfaceEnergyBalance.latent_heat_flux",
+            "to": "AtmosphericBoundaryLayer.specific_humidity",
+            "transform": "additive",
+            "expression": {
+              "op": "/",
+              "args": [
+                {"op": "/", "args": ["SurfaceEnergyBalance.latent_heat_flux", 2.45e6]},
+                {"op": "*", "args": [1.2, 1000.0]}
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Bidirectional atmosphere-surface energy exchange"
+    },
+
+    {
+      "_comment": "Type 2: couple2 - Surface energy balance and soil thermal coupling",
+      "type": "couple2",
+      "systems": ["SurfaceEnergyBalance", "SoilHydrologyThermal"],
+      "connector": {
+        "equations": [
+          {
+            "_comment": "Ground heat flux affects soil layer 1 temperature",
+            "from": "SurfaceEnergyBalance.ground_heat_flux",
+            "to": "SoilHydrologyThermal.soil_temperature_layer1",
+            "transform": "additive",
+            "expression": {
+              "op": "/",
+              "args": [
+                "SurfaceEnergyBalance.ground_heat_flux",
+                {"op": "*", "args": ["SoilHydrologyThermal.heat_capacity", "SoilHydrologyThermal.layer1_thickness"]}
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Surface-soil heat exchange coupling"
+    },
+
+    {
+      "_comment": "Type 2: couple2 - Vegetation-soil water coupling",
+      "type": "couple2",
+      "systems": ["VegetationDynamics", "SoilHydrologyThermal"],
+      "connector": {
+        "equations": [
+          {
+            "_comment": "Root water uptake affects soil moisture layer 2",
+            "from": "VegetationDynamics.photosynthesis_rate",
+            "to": "SoilHydrologyThermal.soil_moisture_layer2",
+            "transform": "additive",
+            "expression": {
+              "op": "/",
+              "args": [
+                {"op": "*", "args": [
+                  {"op": "-", "args": [2e-9]},
+                  "VegetationDynamics.photosynthesis_rate",
+                  "VegetationDynamics.leaf_area_index"
+                ]},
+                "SoilHydrologyThermal.layer2_thickness"
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Plant root water uptake from soil"
+    },
+
+    {
+      "_comment": "Type 3: variable_map - Meteorological forcing",
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.air_temperature",
+      "to": "AtmosphericBoundaryLayer.air_temperature",
+      "transform": "param_to_var",
+      "description": "Use ERA5 air temperature"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.specific_humidity",
+      "to": "AtmosphericBoundaryLayer.specific_humidity",
+      "transform": "param_to_var",
+      "description": "Use ERA5 humidity"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.wind_speed",
+      "to": "AtmosphericBoundaryLayer.wind_speed",
+      "transform": "param_to_var",
+      "description": "Use ERA5 wind speed"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.precipitation",
+      "to": "AtmosphericBoundaryLayer.precipitation",
+      "transform": "param_to_var",
+      "description": "Use ERA5 precipitation"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.incoming_radiation",
+      "to": "AtmosphericBoundaryLayer.incoming_radiation",
+      "transform": "param_to_var",
+      "description": "Use ERA5 solar radiation"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalForcing.longwave_radiation",
+      "to": "AtmosphericBoundaryLayer.longwave_radiation",
+      "transform": "param_to_var",
+      "description": "Use ERA5 longwave radiation"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "SoilProperties.porosity",
+      "to": "SoilHydrologyThermal.porosity",
+      "transform": "param_to_var",
+      "description": "Use SoilGrids porosity"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "SoilProperties.field_capacity",
+      "to": "SoilHydrologyThermal.field_capacity",
+      "transform": "param_to_var",
+      "description": "Use SoilGrids field capacity"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "SoilProperties.wilting_point",
+      "to": "SoilHydrologyThermal.wilting_point",
+      "transform": "param_to_var",
+      "description": "Use SoilGrids wilting point"
+    },
+
+    {
+      "_comment": "Type 4: operator_apply - Land surface process operators",
+      "type": "operator_apply",
+      "operator": "LandSurfaceAlbedo",
+      "description": "Update surface albedo based on vegetation and soil moisture"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "StomatalConductance",
+      "description": "Calculate stomatal conductance from photosynthesis and environment"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "SoilHeatCapacity",
+      "description": "Update soil thermal properties based on moisture content"
+    },
+
+    {
+      "_comment": "Type 5: callback - Hydrological and phenological callbacks",
+      "type": "callback",
+      "callback_id": "PrecipitationInfiltration",
+      "config": {
+        "infiltration_capacity": "hydraulic_conductivity",
+        "surface_runoff_threshold": 0.9,
+        "update_frequency": 3600.0
+      },
+      "description": "Partition precipitation into infiltration and runoff"
+    },
+
+    {
+      "type": "callback",
+      "callback_id": "SeasonalPhenology",
+      "config": {
+        "growing_degree_days": 1000,
+        "base_temperature": 278.15,
+        "senescence_temperature": 268.15,
+        "latitude_dependence": true
+      },
+      "description": "Control seasonal vegetation phenology"
+    },
+
+    {
+      "_comment": "Type 6: event - Hydrological and ecological events",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "drought_stress_response",
+      "conditions": [
+        {"op": "-", "args": [0.2, "SoilHydrologyThermal.water_stress_factor"]}
+      ],
+      "affects": [
+        {
+          "lhs": "VegetationDynamics.max_photosynthesis_rate",
+          "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["VegetationDynamics.max_photosynthesis_rate"]}, 0.7]}
+        }
+      ],
+      "discrete_parameters": ["VegetationDynamics.max_photosynthesis_rate"],
+      "description": "Reduce photosynthetic capacity under severe drought stress"
+    },
+
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "name": "soil_moisture_saturation_runoff",
+      "conditions": [
+        {"op": "-", "args": ["SoilHydrologyThermal.soil_moisture_layer1", {"op": "*", "args": ["SoilHydrologyThermal.porosity", 0.95]}]}
+      ],
+      "affects": [
+        {
+          "lhs": "SoilHydrologyThermal.soil_moisture_layer1",
+          "rhs": {"op": "*", "args": ["SoilHydrologyThermal.porosity", 0.95]}
+        }
+      ],
+      "discrete_parameters": ["SoilHydrologyThermal.soil_moisture_layer1"],
+      "description": "Prevent soil moisture from exceeding 95% of porosity (saturation excess runoff)"
+    },
+
+    {
+      "type": "event",
+      "event_type": "discrete",
+      "name": "seasonal_leaf_senescence",
+      "trigger": {
+        "type": "condition",
+        "expression": {
+          "op": "&&",
+          "args": [
+            {"op": "<", "args": ["AtmosphericBoundaryLayer.air_temperature", 278.15]},
+            {"op": ">", "args": [{"op": "%", "args": ["t", 31536000]}, 24192000]}
+          ]
+        }
+      },
+      "affects": [
+        {
+          "lhs": "VegetationDynamics.leaf_turnover_rate",
+          "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["VegetationDynamics.leaf_turnover_rate"]}, 5.0]}
+        }
+      ],
+      "discrete_parameters": ["VegetationDynamics.leaf_turnover_rate"],
+      "description": "Accelerate leaf senescence in autumn when temperature drops below 5°C"
+    }
+  ],
+
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2023-01-01T00:00:00Z",
+      "end": "2024-01-01T00:00:00Z",
+      "reference_time": "2023-01-01T00:00:00Z"
+    },
+    "spatial": {
+      "x": {
+        "min": -180.0,
+        "max": 180.0,
+        "units": "degrees_east",
+        "grid_spacing": 0.5,
+        "coordinate_system": "longitude"
+      },
+      "y": {
+        "min": -90.0,
+        "max": 90.0,
+        "units": "degrees_north",
+        "grid_spacing": 0.5,
+        "coordinate_system": "latitude"
+      }
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "AtmosphericBoundaryLayer.air_temperature": 295.15,
+        "AtmosphericBoundaryLayer.specific_humidity": 0.008,
+        "AtmosphericBoundaryLayer.wind_speed": 3.0,
+        "SoilHydrologyThermal.soil_moisture_layer1": 0.25,
+        "SoilHydrologyThermal.soil_moisture_layer2": 0.30,
+        "SoilHydrologyThermal.soil_moisture_layer3": 0.35,
+        "SoilHydrologyThermal.soil_temperature_layer1": 288.15,
+        "SoilHydrologyThermal.soil_temperature_layer2": 288.15,
+        "SoilHydrologyThermal.soil_temperature_layer3": 288.15,
+        "VegetationDynamics.leaf_area_index": 3.0,
+        "VegetationDynamics.above_ground_biomass": 2.0,
+        "VegetationDynamics.below_ground_biomass": 1.5,
+        "SurfaceEnergyBalance.surface_temperature": 290.15
+      },
+      "spatial_variation": {
+        "type": "latitudinal_climatic_zones",
+        "gradient_variables": {
+          "AtmosphericBoundaryLayer.air_temperature": {"tropical": 305.0, "temperate": 295.0, "boreal": 280.0, "arctic": 265.0},
+          "VegetationDynamics.leaf_area_index": {"tropical": 6.0, "temperate": 4.0, "boreal": 2.0, "arctic": 0.5},
+          "SoilHydrologyThermal.soil_moisture_layer2": {"tropical": 0.20, "temperate": 0.30, "boreal": 0.40, "arctic": 0.35}
+        }
+      }
+    },
+    "boundary_conditions": [
+      {
+        "type": "periodic",
+        "boundaries": ["west", "east"]
+      },
+      {
+        "type": "zero_gradient",
+        "boundaries": ["south", "north"]
+      }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "operator_splitting",
+    "config": {
+      "energy_balance_timestep": 300.0,
+      "hydrology_timestep": 1800.0,
+      "vegetation_timestep": 3600.0,
+      "stiff_algorithm": "CVODE_BDF",
+      "nonstiff_algorithm": "Vern7",
+      "stiff_kwargs": {
+        "abstol": 1e-8,
+        "reltol": 1e-6,
+        "maxord": 5
+      }
+    },
+    "adaptive_timestepping": {
+      "enabled": true,
+      "min_timestep": 60.0,
+      "max_timestep": 7200.0
+    }
+  }
+}

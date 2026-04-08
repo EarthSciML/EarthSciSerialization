@@ -1,0 +1,52 @@
+{
+  "description": "Test cases for ExprNode missing required 'op' field",
+  "test_cases": [
+    {
+      "name": "has_args_no_op",
+      "ast": {
+        "args": [1, 2],
+        "metadata": "some_value"
+      },
+      "valid": false,
+      "expected_error": "ExprNode must have 'op' field",
+      "description": "Object with args but no op field"
+    },
+    {
+      "name": "empty_object",
+      "ast": {},
+      "valid": false,
+      "expected_error": "ExprNode must have 'op' field",
+      "description": "Empty object missing op field"
+    },
+    {
+      "name": "op_null",
+      "ast": {
+        "op": null,
+        "args": [1, 2]
+      },
+      "valid": false,
+      "expected_error": "ExprNode 'op' field cannot be null",
+      "description": "op field cannot be null"
+    },
+    {
+      "name": "op_empty_string",
+      "ast": {
+        "op": "",
+        "args": [1, 2]
+      },
+      "valid": false,
+      "expected_error": "ExprNode 'op' field cannot be empty string",
+      "description": "op field cannot be empty"
+    },
+    {
+      "name": "op_wrong_type",
+      "ast": {
+        "op": 123,
+        "args": [1, 2]
+      },
+      "valid": false,
+      "expected_error": "ExprNode 'op' field must be string",
+      "description": "op field must be string type"
+    }
+  ]
+}

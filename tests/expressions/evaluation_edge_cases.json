@@ -1,0 +1,514 @@
+[
+  {
+    "name": "Unbound Variable Errors",
+    "description": "Test cases for expressions that reference variables not provided in bindings",
+    "tests": [
+      {
+        "description": "Simple unbound variable reference",
+        "input": "x",
+        "expected_type": "VarExpr",
+        "expected_name": "x",
+        "serialized": "x",
+        "evaluation": {
+          "bindings": {},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable 'x' is not defined in bindings"
+        }
+      },
+      {
+        "description": "Unbound variable in arithmetic operation",
+        "input": {"op": "+", "args": [5, "unknown_var"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": [5.0, "unknown_var"]},
+        "evaluation": {
+          "bindings": {},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable 'unknown_var' is not defined in bindings"
+        }
+      },
+      {
+        "description": "Partially bound variables in expression",
+        "input": {"op": "*", "args": ["x", "y"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": ["x", "y"]},
+        "evaluation": {
+          "bindings": {"x": 3.0},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable 'y' is not defined in bindings"
+        }
+      },
+      {
+        "description": "Nested unbound variable in function call",
+        "input": {"op": "sin", "args": [{"op": "+", "args": ["theta", "pi"]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "sin", "args": [{"op": "+", "args": ["theta", "pi"]}]},
+        "evaluation": {
+          "bindings": {"pi": 3.14159},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable 'theta' is not defined in bindings"
+        }
+      },
+      {
+        "description": "Complex chemical species name unbound",
+        "input": {"op": "/", "args": ["[OH•]", "[HO₂]"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": ["[OH•]", "[HO₂]"]},
+        "evaluation": {
+          "bindings": {"[OH•]": 1e-12},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable '[HO₂]' is not defined in bindings"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Division by Zero Cases",
+    "description": "Comprehensive division by zero error scenarios",
+    "tests": [
+      {
+        "description": "Direct division by literal zero",
+        "input": {"op": "/", "args": [1.0, 0.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": [1.0, 0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "Inf",
+          "note": "Division by zero yields positive infinity"
+        }
+      },
+      {
+        "description": "Division by negative zero",
+        "input": {"op": "/", "args": [1.0, -0.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": [1.0, -0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "-Inf",
+          "note": "Division by negative zero yields negative infinity"
+        }
+      },
+      {
+        "description": "Division by expression that evaluates to zero",
+        "input": {"op": "/", "args": [10.0, {"op": "-", "args": ["x", "x"]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": [10.0, {"op": "-", "args": ["x", "x"]}]},
+        "evaluation": {
+          "bindings": {"x": 5.0},
+          "expected_result": "Inf",
+          "note": "Division by zero when expression (x - x) equals 0"
+        }
+      },
+      {
+        "description": "Zero divided by zero",
+        "input": {"op": "/", "args": [0.0, 0.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": [0.0, 0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Zero divided by zero is indeterminate (NaN)"
+        }
+      },
+      {
+        "description": "Negative number divided by zero",
+        "input": {"op": "/", "args": [-5.0, 0.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "/", "args": [-5.0, 0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "-Inf",
+          "note": "Negative number divided by zero yields negative infinity"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Mathematical Domain Errors",
+    "description": "Function calls with arguments outside their mathematical domain",
+    "tests": [
+      {
+        "description": "Square root of negative number",
+        "input": {"op": "sqrt", "args": [-4.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "sqrt", "args": [-4.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Square root of negative number is undefined in real numbers"
+        }
+      },
+      {
+        "description": "Logarithm of zero",
+        "input": {"op": "log", "args": [0.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "log", "args": [0.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "-Inf",
+          "note": "Natural logarithm of zero approaches negative infinity"
+        }
+      },
+      {
+        "description": "Logarithm of negative number",
+        "input": {"op": "log", "args": [-2.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "log", "args": [-2.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Logarithm of negative number is undefined in real numbers"
+        }
+      },
+      {
+        "description": "Base-10 logarithm of negative number",
+        "input": {"op": "log10", "args": [-10.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "log10", "args": [-10.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Base-10 logarithm of negative number is undefined"
+        }
+      },
+      {
+        "description": "Arcsine of value outside [-1, 1]",
+        "input": {"op": "asin", "args": [1.5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "asin", "args": [1.5]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Arcsine is only defined for values in [-1, 1]"
+        }
+      },
+      {
+        "description": "Arccosine of value outside [-1, 1]",
+        "input": {"op": "acos", "args": [-2.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "acos", "args": [-2.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Arccosine is only defined for values in [-1, 1]"
+        }
+      },
+      {
+        "description": "Power operation with negative base and fractional exponent",
+        "input": {"op": "^", "args": [-2.0, 0.5]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "^", "args": [-2.0, 0.5]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "Negative base with fractional exponent is complex, resulting in NaN in real arithmetic"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Numerical Overflow and Underflow",
+    "description": "Test cases that push numerical limits and cause overflow/underflow",
+    "tests": [
+      {
+        "description": "Very large number multiplication causing overflow",
+        "input": {"op": "*", "args": [1e308, 10.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": [1e308, 10.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "Inf",
+          "note": "Product exceeds floating-point maximum, results in infinity"
+        }
+      },
+      {
+        "description": "Large exponentiation causing overflow",
+        "input": {"op": "^", "args": [10.0, 400.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "^", "args": [10.0, 400.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "Inf",
+          "note": "10^400 exceeds floating-point range"
+        }
+      },
+      {
+        "description": "Exponential function with very large argument",
+        "input": {"op": "exp", "args": [1000.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "exp", "args": [1000.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "Inf",
+          "note": "e^1000 exceeds floating-point maximum"
+        }
+      },
+      {
+        "description": "Very small number causing underflow to zero",
+        "input": {"op": "*", "args": [1e-323, 1e-10]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": [1e-323, 1e-10]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 0.0,
+          "note": "Product underflows to zero due to floating-point precision limits"
+        }
+      },
+      {
+        "description": "Negative exponential with very large argument",
+        "input": {"op": "exp", "args": [-1000.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "exp", "args": [-1000.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_result": 0.0,
+          "note": "e^(-1000) underflows to zero"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Complex Nested Expressions with Errors",
+    "description": "Deeply nested expressions that contain various error conditions",
+    "tests": [
+      {
+        "description": "Nested division by zero in complex expression",
+        "input": {
+          "op": "+",
+          "args": [
+            {"op": "sin", "args": [{"op": "/", "args": [1.0, 0.0]}]},
+            {"op": "cos", "args": ["x"]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "+",
+          "args": [
+            {"op": "sin", "args": [{"op": "/", "args": [1.0, 0.0]}]},
+            {"op": "cos", "args": ["x"]}
+          ]
+        },
+        "evaluation": {
+          "bindings": {"x": 0.0},
+          "expected_result": "NaN",
+          "note": "sin(Inf) + cos(0) = NaN + 1 = NaN"
+        }
+      },
+      {
+        "description": "Multiple levels of domain errors",
+        "input": {
+          "op": "sqrt",
+          "args": [
+            {"op": "log", "args": [
+              {"op": "-", "args": [0.0, 5.0]}
+            ]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "sqrt",
+          "args": [
+            {"op": "log", "args": [
+              {"op": "-", "args": [0.0, 5.0]}
+            ]}
+          ]
+        },
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "NaN",
+          "note": "sqrt(log(-5)) = sqrt(NaN) = NaN due to log of negative number"
+        }
+      },
+      {
+        "description": "Unbound variable in deeply nested expression",
+        "input": {
+          "op": "^",
+          "args": [
+            {"op": "+", "args": [
+              {"op": "*", "args": [2.0, "a"]},
+              {"op": "sqrt", "args": [{"op": "-", "args": ["b", 4.0]}]}
+            ]},
+            3.0
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "^",
+          "args": [
+            {"op": "+", "args": [
+              {"op": "*", "args": [2.0, "a"]},
+              {"op": "sqrt", "args": [{"op": "-", "args": ["b", 4.0]}]}
+            ]},
+            3.0
+          ]
+        },
+        "evaluation": {
+          "bindings": {"a": 3.0},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable 'b' is not defined in bindings"
+        }
+      },
+      {
+        "description": "Mixed overflow and domain errors",
+        "input": {
+          "op": "log",
+          "args": [
+            {"op": "+", "args": [
+              {"op": "^", "args": [10.0, 400.0]},
+              {"op": "sqrt", "args": [-1.0]}
+            ]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "log",
+          "args": [
+            {"op": "+", "args": [
+              {"op": "^", "args": [10.0, 400.0]},
+              {"op": "sqrt", "args": [-1.0]}
+            ]}
+          ]
+        },
+        "evaluation": {
+          "bindings": {},
+          "expected_result": "Inf",
+          "note": "log(Inf + NaN) = log(NaN) = NaN, but overflow dominates to Inf"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Pre Operator Evaluation Edge Cases",
+    "description": "Edge cases for pre-increment and pre-decrement operators",
+    "tests": [
+      {
+        "description": "Pre-increment of unbound variable",
+        "input": {"op": "pre++", "args": ["x"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "pre++", "args": ["x"]},
+        "evaluation": {
+          "bindings": {},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable 'x' is not defined in bindings"
+        }
+      },
+      {
+        "description": "Pre-decrement of unbound variable",
+        "input": {"op": "pre--", "args": ["count"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "pre--", "args": ["count"]},
+        "evaluation": {
+          "bindings": {},
+          "expected_error": "UnboundVariableError",
+          "error_message": "Variable 'count' is not defined in bindings"
+        }
+      },
+      {
+        "description": "Pre-increment of numeric literal (invalid)",
+        "input": {"op": "pre++", "args": [5.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "pre++", "args": [5.0]},
+        "evaluation": {
+          "bindings": {},
+          "expected_error": "InvalidOperandError",
+          "error_message": "Pre-increment operator requires a variable, not a literal"
+        }
+      },
+      {
+        "description": "Pre-decrement of complex expression (invalid)",
+        "input": {"op": "pre--", "args": [{"op": "+", "args": ["x", 1.0]}]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "pre--", "args": [{"op": "+", "args": ["x", 1.0]}]},
+        "evaluation": {
+          "bindings": {"x": 10.0},
+          "expected_error": "InvalidOperandError",
+          "error_message": "Pre-decrement operator requires a simple variable reference"
+        }
+      },
+      {
+        "description": "Pre-increment causing overflow",
+        "input": {"op": "pre++", "args": ["max_val"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "pre++", "args": ["max_val"]},
+        "evaluation": {
+          "bindings": {"max_val": 1.7976931348623157e308},
+          "expected_result": "Inf",
+          "note": "Pre-increment of maximum float value causes overflow to infinity"
+        }
+      },
+      {
+        "description": "Nested pre-increment in expression",
+        "input": {
+          "op": "*",
+          "args": [
+            {"op": "pre++", "args": ["i"]},
+            2.0
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "*",
+          "args": [
+            {"op": "pre++", "args": ["i"]},
+            2.0
+          ]
+        },
+        "evaluation": {
+          "bindings": {"i": 5.0},
+          "expected_result": 12.0,
+          "note": "Pre-increment evaluates to i+1 = 6, then 6 * 2 = 12",
+          "side_effect": "Variable 'i' is incremented to 6.0"
+        }
+      }
+    ]
+  },
+  {
+    "name": "NaN and Infinity Propagation",
+    "description": "How NaN and Infinity values propagate through expressions",
+    "tests": [
+      {
+        "description": "NaN + finite number",
+        "input": {"op": "+", "args": ["nan_val", 10.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "+", "args": ["nan_val", 10.0]},
+        "evaluation": {
+          "bindings": {"nan_val": "NaN"},
+          "expected_result": "NaN",
+          "note": "Any operation with NaN results in NaN"
+        }
+      },
+      {
+        "description": "Infinity - Infinity",
+        "input": {"op": "-", "args": ["pos_inf", "pos_inf"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "-", "args": ["pos_inf", "pos_inf"]},
+        "evaluation": {
+          "bindings": {"pos_inf": "Inf"},
+          "expected_result": "NaN",
+          "note": "Infinity minus infinity is indeterminate"
+        }
+      },
+      {
+        "description": "Infinity * 0",
+        "input": {"op": "*", "args": ["inf_val", 0.0]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "*", "args": ["inf_val", 0.0]},
+        "evaluation": {
+          "bindings": {"inf_val": "Inf"},
+          "expected_result": "NaN",
+          "note": "Infinity times zero is indeterminate"
+        }
+      },
+      {
+        "description": "Sine of infinity",
+        "input": {"op": "sin", "args": ["inf_val"]},
+        "expected_type": "OpExpr",
+        "serialized": {"op": "sin", "args": ["inf_val"]},
+        "evaluation": {
+          "bindings": {"inf_val": "Inf"},
+          "expected_result": "NaN",
+          "note": "Trigonometric functions of infinity are undefined"
+        }
+      }
+    ]
+  }
+]

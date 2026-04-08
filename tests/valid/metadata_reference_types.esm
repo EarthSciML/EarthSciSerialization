@@ -1,0 +1,45 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ReferenceTypesExample",
+    "description": "Demonstrates various valid reference formatting types",
+    "authors": ["Reference Test Author"],
+    "created": "2024-02-01T12:00:00Z",
+    "references": [
+      {
+        "doi": "10.1038/s41586-021-04016-9",
+        "citation": "Example, A. et al. (2021). Climate impacts of atmospheric chemistry. Nature, 599, 123-129."
+      },
+      {
+        "url": "https://github.com/example/atmospheric-model",
+        "citation": "Atmospheric Model v2.1.0",
+        "notes": "Open source implementation"
+      },
+      {
+        "citation": "Internal Report XYZ-2024-001: Preliminary validation results",
+        "notes": "Unpublished validation study"
+      },
+      {
+        "doi": "10.5194/acp-20-1-2020",
+        "url": "https://acp.copernicus.org/articles/20/1/2020/",
+        "citation": "Smith, B. & Jones, C. (2020). Atmospheric chemistry fundamentals. ACP, 20, 1-25.",
+        "notes": "Both DOI and URL provided for completeness"
+      }
+    ]
+  },
+
+  "models": {
+    "ReferenceTestModel": {
+      "reference": { "notes": "Test model for reference types" },
+      "variables": {
+        "concentration": { "type": "state", "units": "mol/mol", "default": 1e-9 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["concentration"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [0.1, "concentration"] }
+        }
+      ]
+    }
+  }
+}

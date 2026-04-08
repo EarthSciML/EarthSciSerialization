@@ -1,0 +1,126 @@
+[
+  {
+    "description": "Constant arithmetic: 2 + 3",
+    "input": {
+      "op": "+",
+      "args": [2, 3]
+    },
+    "expected": 5,
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Constant arithmetic: 4 * 6",
+    "input": {
+      "op": "*",
+      "args": [4, 6]
+    },
+    "expected": 24,
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Identity: x * 1",
+    "input": {
+      "op": "*",
+      "args": ["x", 1]
+    },
+    "expected": "x",
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Identity: x + 0",
+    "input": {
+      "op": "+",
+      "args": ["x", 0]
+    },
+    "expected": "x",
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Zero multiplication: x * 0",
+    "input": {
+      "op": "*",
+      "args": ["x", 0]
+    },
+    "expected": 0,
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Nested constant folding: (2 + 3) * 4",
+    "input": {
+      "op": "*",
+      "args": [
+        {"op": "+", "args": [2, 3]},
+        4
+      ]
+    },
+    "expected": 20,
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Mixed constant and variable: x + (2 + 3)",
+    "input": {
+      "op": "+",
+      "args": ["x", {"op": "+", "args": [2, 3]}]
+    },
+    "expected": {
+      "op": "+",
+      "args": ["x", 5]
+    },
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Division identity: x / 1",
+    "input": {
+      "op": "/",
+      "args": ["x", 1]
+    },
+    "expected": "x",
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Power identity: x^1",
+    "input": {
+      "op": "^",
+      "args": ["x", 1]
+    },
+    "expected": "x",
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Power to zero: x^0",
+    "input": {
+      "op": "^",
+      "args": ["x", 0]
+    },
+    "expected": 1,
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "No simplification needed: x + y",
+    "input": {
+      "op": "+",
+      "args": ["x", "y"]
+    },
+    "expected": {
+      "op": "+",
+      "args": ["x", "y"]
+    },
+    "simplification_level": "constant_folding"
+  },
+  {
+    "description": "Complex expression with multiple constant areas",
+    "input": {
+      "op": "+",
+      "args": [
+        {"op": "*", "args": [2, 3]},
+        "x",
+        {"op": "/", "args": [10, 2]}
+      ]
+    },
+    "expected": {
+      "op": "+",
+      "args": [6, "x", 5]
+    },
+    "simplification_level": "constant_folding"
+  }
+]

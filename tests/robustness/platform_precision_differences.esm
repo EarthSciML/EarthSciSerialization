@@ -1,0 +1,50 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "PlatformPrecisionDifferences",
+    "description": "Test platform-specific floating-point precision differences and rounding",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "PrecisionModel": {
+      "variables": {
+        "high_precision": { "type": "parameter", "units": "1", "default": 1.23456789012345678901234567890 },
+        "epsilon_test": { "type": "parameter", "units": "1", "default": 2.220446049250313e-16 },
+        "denormal_test": { "type": "parameter", "units": "1", "default": 4.940656458412465e-324 },
+        "rounding_error": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "-", "args": [{ "op": "+", "args": [0.1, 0.2] }, 0.3] }
+        },
+        "associativity_test": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "-",
+            "args": [
+              { "op": "+", "args": [{ "op": "+", "args": [1e20, 1] }, -1e20] },
+              { "op": "+", "args": [1e20, { "op": "+", "args": [1, -1e20] }] }
+            ]
+          }
+        },
+        "catastrophic_cancellation": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "-",
+            "args": [
+              { "op": "sqrt", "args": [{ "op": "+", "args": [1e16, 1] }] },
+              { "op": "sqrt", "args": [1e16] }
+            ]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["high_precision"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["epsilon_test", "high_precision"] }
+        }
+      ]
+    }
+  }
+}

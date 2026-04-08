@@ -1,0 +1,241 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CallbackExamples",
+    "description": "Test fixtures for callback coupling with simulation callbacks",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "WeatherModel": {
+      "reference": { "notes": "Simple weather dynamics" },
+      "variables": {
+        "temperature": { "type": "state", "units": "K", "default": 288.15, "description": "Air temperature" },
+        "humidity": { "type": "state", "units": "%", "default": 50.0, "description": "Relative humidity" },
+        "wind_speed": { "type": "state", "units": "m/s", "default": 5.0, "description": "Wind speed" }
+      },
+      "parameters": {
+        "solar_heating": { "units": "K/h", "default": 2.0, "description": "Solar heating rate" },
+        "radiative_cooling": { "units": "K/h", "default": -1.0, "description": "Radiative cooling rate" },
+        "evaporation_rate": { "units": "%/h", "default": 5.0, "description": "Evaporation rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              "solar_heating",
+              "radiative_cooling",
+              { "callback_variable": "external_temperature_forcing" }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["humidity"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              "evaporation_rate",
+              { "op": "*", "args": [-2.0, { "op": "-", "args": ["humidity", 50] }] },
+              { "callback_variable": "humidity_adjustment" }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["wind_speed"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [-0.1, "wind_speed"] },
+              { "callback_variable": "wind_disturbance" }
+            ]
+          }
+        }
+      ]
+    },
+
+    "CropModel": {
+      "reference": { "notes": "Simplified crop growth model" },
+      "variables": {
+        "biomass": { "type": "state", "units": "kg/m^2", "default": 0.1, "description": "Crop biomass" },
+        "water_stress": { "type": "state", "units": "1", "default": 0.0, "description": "Water stress index" },
+        "growth_stage": { "type": "discrete", "units": "1", "default": 1, "description": "Growth stage (1-4)" }
+      },
+      "parameters": {
+        "max_growth_rate": { "units": "kg/(m^2·day)", "default": 0.05, "description": "Maximum growth rate" },
+        "water_requirement": { "units": "mm/day", "default": 5.0, "description": "Water requirement" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["biomass"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              "max_growth_rate",
+              { "op": "-", "args": [1, "water_stress"] },
+              { "callback_variable": "temperature_growth_factor" },
+              { "callback_variable": "stage_growth_multiplier" }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["water_stress"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "callback_variable": "water_availability_change" },
+              { "op": "*", "args": [-0.1, "water_stress"] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "callback",
+      "name": "WeatherFeedback",
+      "description": "Weather model receives external forcing",
+      "target_system": "WeatherModel",
+      "callback_variables": [
+        {
+          "name": "external_temperature_forcing",
+          "units": "K/h",
+          "callback_function": {
+            "type": "time_series",
+            "source": "external_weather_data",
+            "interpolation": "linear"
+          }
+        },
+        {
+          "name": "humidity_adjustment",
+          "units": "%/h",
+          "callback_function": {
+            "type": "conditional",
+            "condition": { "op": ">", "args": [{ "scoped_ref": "WeatherModel.temperature" }, 308.15] },
+            "true_value": -10.0,
+            "false_value": 0.0
+          }
+        },
+        {
+          "name": "wind_disturbance",
+          "units": "m/s^2",
+          "callback_function": {
+            "type": "random",
+            "distribution": "normal",
+            "parameters": { "mean": 0.0, "std": 1.0 }
+          }
+        }
+      ],
+      "trigger": {
+        "type": "periodic",
+        "interval": 3600.0
+      }
+    },
+
+    {
+      "type": "callback",
+      "name": "CropWeatherCoupling",
+      "description": "Crop model responds to weather conditions",
+      "target_system": "CropModel",
+      "callback_variables": [
+        {
+          "name": "temperature_growth_factor",
+          "units": "1",
+          "callback_function": {
+            "type": "lookup_table",
+            "input_variable": "WeatherModel.temperature",
+            "table": [
+              { "input": 273.15, "output": 0.0 },
+              { "input": 288.15, "output": 0.5 },
+              { "input": 298.15, "output": 1.0 },
+              { "input": 308.15, "output": 0.8 },
+              { "input": 318.15, "output": 0.2 }
+            ],
+            "interpolation": "cubic_spline"
+          }
+        },
+        {
+          "name": "water_availability_change",
+          "units": "1/day",
+          "callback_function": {
+            "type": "expression",
+            "expression": {
+              "op": "*", "args": [
+                0.01,
+                { "op": "-", "args": [{ "scoped_ref": "WeatherModel.humidity" }, 30] }
+              ]
+            }
+          }
+        },
+        {
+          "name": "stage_growth_multiplier",
+          "units": "1",
+          "callback_function": {
+            "type": "state_dependent",
+            "state_variable": "CropModel.growth_stage",
+            "mapping": {
+              "1": 0.2,
+              "2": 0.8,
+              "3": 1.0,
+              "4": 0.1
+            }
+          }
+        }
+      ],
+      "trigger": {
+        "type": "continuous",
+        "frequency": "every_timestep"
+      }
+    },
+
+    {
+      "type": "callback",
+      "name": "GrowthStageProgression",
+      "description": "Advance crop growth stages based on accumulated biomass",
+      "target_system": "CropModel",
+      "callback_variables": [],
+      "callback_function": {
+        "type": "state_update",
+        "conditions": [
+          {
+            "condition": { "op": ">", "args": [{ "scoped_ref": "CropModel.biomass" }, 0.5] },
+            "updates": [
+              { "variable": "growth_stage", "value": { "op": "max", "args": [2, { "scoped_ref": "CropModel.growth_stage" }] } }
+            ]
+          },
+          {
+            "condition": { "op": ">", "args": [{ "scoped_ref": "CropModel.biomass" }, 1.5] },
+            "updates": [
+              { "variable": "growth_stage", "value": { "op": "max", "args": [3, { "scoped_ref": "CropModel.growth_stage" }] } }
+            ]
+          },
+          {
+            "condition": { "op": ">", "args": [{ "scoped_ref": "CropModel.biomass" }, 3.0] },
+            "updates": [
+              { "variable": "growth_stage", "value": 4 }
+            ]
+          }
+        ]
+      },
+      "trigger": {
+        "type": "event_driven",
+        "events": ["biomass_threshold_crossed"]
+      }
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-04-01T00:00:00Z", "end": "2024-09-30T00:00:00Z" },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "Tsit5",
+      "adaptive": true,
+      "callback_handling": "precise_callbacks",
+      "callback_tolerance": 1e-8
+    }
+  }
+}

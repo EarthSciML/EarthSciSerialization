@@ -1,0 +1,27 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": 12345,
+    "description": ["Should", "be", "string"],
+    "authors": "Should be array not string",
+    "license": null,
+    "created": 1640995200,
+    "tags": "should-be-array",
+    "references": "should-be-array-of-objects"
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for invalid metadata types" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}

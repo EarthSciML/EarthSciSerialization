@@ -1,0 +1,817 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CoupledAtmosphericSystem",
+    "description": "Complete end-to-end test for fully coupled atmospheric chemistry with transport, deposition, emissions, and meteorology",
+    "authors": ["ESM Test Suite"],
+    "license": "MIT",
+    "created": "2026-02-14T00:00:00Z",
+    "modified": "2026-02-14T00:00:00Z",
+    "tags": ["end-to-end", "atmospheric-chemistry", "transport", "coupling"],
+    "references": [
+      {
+        "citation": "End-to-end test fixture for complete Earth system model workflow validation",
+        "notes": "Tests all coupling types, system assembly, cross-system variable flow, and operator composition"
+      }
+    ]
+  },
+
+  "models": {
+    "AtmosphericChemistry": {
+      "coupletype": "ChemistryCoupler",
+      "reference": {
+        "notes": "NOx-O3-VOC photochemistry with temperature-dependent kinetics",
+        "doi": "10.5194/acp-8-6365-2008"
+      },
+      "variables": {
+        "O3": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 40e-9,
+          "description": "Ozone mixing ratio",
+          "bounds": {"min": 0.0, "max": 200e-9}
+        },
+        "NO": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.5e-9,
+          "description": "Nitric oxide mixing ratio",
+          "bounds": {"min": 0.0, "max": 50e-9}
+        },
+        "NO2": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 2e-9,
+          "description": "Nitrogen dioxide mixing ratio",
+          "bounds": {"min": 0.0, "max": 100e-9}
+        },
+        "HCHO": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1e-9,
+          "description": "Formaldehyde mixing ratio",
+          "bounds": {"min": 0.0, "max": 20e-9}
+        },
+        "HO2": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1e-12,
+          "description": "Peroxy radical mixing ratio",
+          "bounds": {"min": 0.0, "max": 1e-9}
+        },
+        "temperature": {
+          "type": "parameter",
+          "units": "K",
+          "default": 298.15,
+          "description": "Air temperature"
+        },
+        "pressure": {
+          "type": "parameter",
+          "units": "Pa",
+          "default": 101325.0,
+          "description": "Air pressure"
+        },
+        "humidity": {
+          "type": "parameter",
+          "units": "mol/mol",
+          "default": 0.01,
+          "description": "Water vapor mixing ratio"
+        },
+        "k_NO_O3": {
+          "type": "parameter",
+          "units": "cm^3/molec/s",
+          "default": 1.8e-12,
+          "description": "Rate constant NO + O3 → NO2"
+        },
+        "jNO2": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 0.008,
+          "description": "NO2 photolysis rate coefficient"
+        },
+        "jHCHO": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 3e-5,
+          "description": "HCHO photolysis rate coefficient"
+        },
+        "k_HO2_NO": {
+          "type": "parameter",
+          "units": "cm^3/molec/s",
+          "default": 8.1e-12,
+          "description": "Rate constant HO2 + NO → OH + NO2"
+        },
+        "total_NOx": {
+          "type": "observed",
+          "units": "mol/mol",
+          "expression": {"op": "+", "args": ["NO", "NO2"]},
+          "description": "Total reactive nitrogen"
+        },
+        "ozone_production_rate": {
+          "type": "observed",
+          "units": "mol/mol/s",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["jNO2", "NO2"]},
+              {"op": "*", "args": ["k_HO2_NO", "HO2", "NO"]}
+            ]
+          },
+          "description": "Instantaneous ozone production rate"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["k_NO_O3"]}, "O3", "NO"]},
+              {"op": "*", "args": ["jNO2", "NO2"]},
+              {"op": "*", "args": ["k_HO2_NO", "HO2", "NO"]}
+            ]
+          }
+        },
+        {
+          "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["k_NO_O3"]}, "O3", "NO"]},
+              {"op": "*", "args": [{"op": "-", "args": ["k_HO2_NO"]}, "HO2", "NO"]},
+              {"op": "*", "args": ["jNO2", "NO2"]}
+            ]
+          }
+        },
+        {
+          "lhs": {"op": "D", "args": ["NO2"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["k_NO_O3", "O3", "NO"]},
+              {"op": "*", "args": ["k_HO2_NO", "HO2", "NO"]},
+              {"op": "*", "args": [{"op": "-", "args": ["jNO2"]}, "NO2"]}
+            ]
+          }
+        },
+        {
+          "lhs": {"op": "D", "args": ["HCHO"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["jHCHO"]}, "HCHO"]},
+              {"op": "*", "args": [0.3, "jNO2", "NO2"]}
+            ]
+          }
+        },
+        {
+          "lhs": {"op": "D", "args": ["HO2"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["k_HO2_NO"]}, "HO2", "NO"]},
+              {"op": "*", "args": [2.0, "jHCHO", "HCHO"]}
+            ]
+          }
+        }
+      ],
+      "continuous_events": [
+        {
+          "name": "ozone_exceedance_alert",
+          "conditions": [
+            {"op": "-", "args": ["O3", 70e-9]}
+          ],
+          "affects": [
+            {
+              "lhs": "jNO2",
+              "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["jNO2"]}, 1.2]}
+            }
+          ],
+          "discrete_parameters": ["jNO2"],
+          "description": "Increase photolysis when ozone exceeds 70 ppb (pollution episode)"
+        }
+      ]
+    },
+
+    "AtmosphericTransport": {
+      "reference": {
+        "notes": "Three-dimensional advection and turbulent diffusion using operator_compose coupling"
+      },
+      "variables": {
+        "u_wind": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 8.0,
+          "description": "Eastward wind velocity"
+        },
+        "v_wind": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 3.0,
+          "description": "Northward wind velocity"
+        },
+        "w_wind": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 0.0,
+          "description": "Vertical wind velocity"
+        },
+        "K_h": {
+          "type": "parameter",
+          "units": "m^2/s",
+          "default": 1000.0,
+          "description": "Horizontal diffusivity"
+        },
+        "K_z": {
+          "type": "parameter",
+          "units": "m^2/s",
+          "default": 10.0,
+          "description": "Vertical diffusivity"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "3D advection-diffusion for all chemical species via _var placeholder",
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["u_wind"]}, {"op": "grad", "args": ["_var"], "dim": "x"}]},
+              {"op": "*", "args": [{"op": "-", "args": ["v_wind"]}, {"op": "grad", "args": ["_var"], "dim": "y"}]},
+              {"op": "*", "args": [{"op": "-", "args": ["w_wind"]}, {"op": "grad", "args": ["_var"], "dim": "z"}]},
+              {"op": "*", "args": ["K_h", {"op": "laplacian", "args": ["_var"], "dims": ["x", "y"]}]},
+              {"op": "*", "args": ["K_z", {"op": "laplacian", "args": ["_var"], "dims": ["z"]}]}
+            ]
+          }
+        }
+      ]
+    },
+
+    "SurfaceExchange": {
+      "coupletype": "SurfaceExchangeCoupler",
+      "reference": {
+        "notes": "Bidirectional surface-atmosphere exchange via resistance model",
+        "citation": "Wesely, 1989. Parameterization of surface resistances to gaseous dry deposition"
+      },
+      "variables": {
+        "surface_resistance_O3": {
+          "type": "parameter",
+          "units": "s/m",
+          "default": 120.0,
+          "description": "Surface resistance for O3 deposition"
+        },
+        "surface_resistance_NO2": {
+          "type": "parameter",
+          "units": "s/m",
+          "default": 150.0,
+          "description": "Surface resistance for NO2 deposition"
+        },
+        "aerodynamic_resistance": {
+          "type": "parameter",
+          "units": "s/m",
+          "default": 25.0,
+          "description": "Aerodynamic resistance"
+        },
+        "boundary_layer_resistance": {
+          "type": "parameter",
+          "units": "s/m",
+          "default": 5.0,
+          "description": "Quasi-laminar boundary layer resistance"
+        },
+        "boundary_layer_height": {
+          "type": "parameter",
+          "units": "m",
+          "default": 800.0,
+          "description": "Mixed layer height"
+        },
+        "land_use_type": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 3.0,
+          "description": "Land use category (1=water, 3=crop, 5=forest)"
+        },
+        "deposition_velocity_O3": {
+          "type": "observed",
+          "units": "m/s",
+          "expression": {
+            "op": "/",
+            "args": [
+              1.0,
+              {"op": "+", "args": ["aerodynamic_resistance", "boundary_layer_resistance", "surface_resistance_O3"]}
+            ]
+          },
+          "description": "O3 dry deposition velocity"
+        },
+        "deposition_velocity_NO2": {
+          "type": "observed",
+          "units": "m/s",
+          "expression": {
+            "op": "/",
+            "args": [
+              1.0,
+              {"op": "+", "args": ["aerodynamic_resistance", "boundary_layer_resistance", "surface_resistance_NO2"]}
+            ]
+          },
+          "description": "NO2 dry deposition velocity"
+        }
+      },
+      "equations": []
+    },
+
+    "EmissionSources": {
+      "reference": {
+        "notes": "Time-varying anthropogenic and biogenic emissions with diurnal and seasonal cycles"
+      },
+      "variables": {
+        "NOx_emission_rate": {
+          "type": "parameter",
+          "units": "mol/mol/s",
+          "default": 2e-11,
+          "description": "Base NOx emission rate"
+        },
+        "VOC_emission_rate": {
+          "type": "parameter",
+          "units": "mol/mol/s",
+          "default": 5e-12,
+          "description": "Base VOC emission rate (as HCHO)"
+        },
+        "diurnal_factor": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 1.0,
+          "description": "Diurnal emission scaling"
+        },
+        "temperature_factor": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 1.0,
+          "description": "Temperature-dependent biogenic scaling"
+        },
+        "weekday_factor": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 1.0,
+          "description": "Weekday vs weekend scaling"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "NO emission with time-dependent factors",
+          "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
+          "rhs": {
+            "op": "*",
+            "args": ["NOx_emission_rate", "diurnal_factor", "weekday_factor"]
+          }
+        },
+        {
+          "_comment": "Temperature-dependent VOC emissions as HCHO",
+          "lhs": {"op": "D", "args": ["HCHO"], "wrt": "t"},
+          "rhs": {
+            "op": "*",
+            "args": ["VOC_emission_rate", "temperature_factor", "diurnal_factor"]
+          }
+        }
+      ],
+      "discrete_events": [
+        {
+          "name": "hourly_diurnal_update",
+          "trigger": {
+            "type": "periodic",
+            "interval": 3600.0
+          },
+          "affects": [
+            {
+              "lhs": "diurnal_factor",
+              "rhs": {
+                "op": "+",
+                "args": [
+                  1.0,
+                  {"op": "*", "args": [0.8, {"op": "sin", "args": [{"op": "/", "args": [{"op": "*", "args": [2, 3.14159, {"op": "-", "args": ["t", 21600]}]}, 86400]}]}]}
+                ]
+              }
+            }
+          ],
+          "discrete_parameters": ["diurnal_factor"],
+          "description": "Update diurnal pattern: peak at 15:00 local time"
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "MeteorologicalFields": {
+      "type": "gridded_data",
+      "loader_id": "WRF_Output",
+      "config": {
+        "domain": "d01",
+        "resolution": "12km",
+        "variables": ["T2", "PSFC", "U10", "V10", "PBLH", "Q2"],
+        "temporal_interpolation": "linear",
+        "spatial_interpolation": "bilinear"
+      },
+      "reference": {
+        "citation": "Weather Research and Forecasting (WRF) Model v4.3",
+        "url": "https://www.mmm.ucar.edu/weather-research-and-forecasting-model"
+      },
+      "provides": {
+        "temperature": {"units": "K", "description": "2m air temperature"},
+        "pressure": {"units": "Pa", "description": "Surface pressure"},
+        "u_wind": {"units": "m/s", "description": "10m eastward wind"},
+        "v_wind": {"units": "m/s", "description": "10m northward wind"},
+        "boundary_layer_height": {"units": "m", "description": "PBL height"},
+        "humidity": {"units": "kg/kg", "description": "2m specific humidity"}
+      },
+      "temporal_resolution": "PT1H",
+      "spatial_resolution": {"dx": 12000, "dy": 12000}
+    },
+
+    "EmissionInventories": {
+      "type": "emissions",
+      "loader_id": "NEI_2017",
+      "config": {
+        "base_year": 2017,
+        "sectors": ["onroad", "nonroad", "nonpoint", "point"],
+        "pollutants": ["NOX", "VOC"],
+        "temporal_profiles": true,
+        "speciation_profiles": true
+      },
+      "reference": {
+        "citation": "US EPA National Emissions Inventory 2017",
+        "url": "https://www.epa.gov/air-emissions-inventories/2017-national-emissions-inventory-nei-data"
+      },
+      "provides": {
+        "NOx_emission_rate": {"units": "mol/mol/s", "description": "NOx emission rate"},
+        "VOC_emission_rate": {"units": "mol/mol/s", "description": "VOC emission rate"}
+      }
+    }
+  },
+
+  "operators": {
+    "DryDepositionOperator": {
+      "operator_id": "ResistanceModel_v2",
+      "reference": {
+        "citation": "Zhang et al., 2003. A revised parameterization for gaseous dry deposition",
+        "doi": "10.5194/acp-3-2067-2003"
+      },
+      "config": {
+        "method": "big_leaf_resistance",
+        "species_list": ["O3", "NO2", "HCHO"],
+        "land_use_categories": 15,
+        "seasonal_dependence": true
+      },
+      "needed_vars": ["O3", "NO2", "HCHO", "temperature", "humidity", "u_wind", "land_use_type"],
+      "modifies": ["O3", "NO2", "HCHO"],
+      "description": "Advanced dry deposition using big-leaf resistance model"
+    },
+
+    "TurbulentMixingOperator": {
+      "operator_id": "YSU_PBL_Scheme",
+      "reference": {
+        "citation": "Hong et al., 2006. A new vertical diffusion package",
+        "doi": "10.1175/MWR3199.1"
+      },
+      "config": {
+        "scheme": "YSU",
+        "entrainment": true,
+        "counter_gradient": true
+      },
+      "needed_vars": ["boundary_layer_height", "u_wind", "v_wind", "temperature"],
+      "modifies": ["O3", "NO", "NO2", "HCHO", "HO2"],
+      "description": "Yonsei University PBL turbulent mixing scheme"
+    },
+
+    "PhotolysisOperator": {
+      "operator_id": "FAST_JX_v7",
+      "reference": {
+        "citation": "Bian & Prather, 2002. Fast-JX: Accurate simulation of in- and below-cloud photolysis",
+        "doi": "10.1029/2002JD002204"
+      },
+      "config": {
+        "wavelength_bins": 18,
+        "altitude_levels": 60,
+        "aerosol_effects": true,
+        "cloud_effects": true
+      },
+      "needed_vars": ["temperature", "pressure", "humidity"],
+      "modifies": ["jNO2", "jHCHO"],
+      "description": "Fast-JX photolysis rate calculations"
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "Type 1: operator_compose - Add transport to chemistry",
+      "type": "operator_compose",
+      "systems": ["AtmosphericChemistry", "AtmosphericTransport"],
+      "description": "Couple 3D transport with gas-phase chemistry"
+    },
+
+    {
+      "_comment": "Type 2: couple2 - Bidirectional surface-atmosphere exchange",
+      "type": "couple2",
+      "systems": ["AtmosphericChemistry", "SurfaceExchange"],
+      "coupletype_pair": ["ChemistryCoupler", "SurfaceExchangeCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "SurfaceExchange.deposition_velocity_O3",
+            "to": "AtmosphericChemistry.O3",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                {"op": "-", "args": ["SurfaceExchange.deposition_velocity_O3"]},
+                "AtmosphericChemistry.O3",
+                {"op": "/", "args": [1.0, "SurfaceExchange.boundary_layer_height"]}
+              ]
+            }
+          },
+          {
+            "from": "SurfaceExchange.deposition_velocity_NO2",
+            "to": "AtmosphericChemistry.NO2",
+            "transform": "additive",
+            "expression": {
+              "op": "*",
+              "args": [
+                {"op": "-", "args": ["SurfaceExchange.deposition_velocity_NO2"]},
+                "AtmosphericChemistry.NO2",
+                {"op": "/", "args": [1.0, "SurfaceExchange.boundary_layer_height"]}
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Couple dry deposition to atmospheric chemistry"
+    },
+
+    {
+      "_comment": "Type 3: variable_map - Replace parameters with meteorological data",
+      "type": "variable_map",
+      "from": "MeteorologicalFields.temperature",
+      "to": "AtmosphericChemistry.temperature",
+      "transform": "param_to_var",
+      "description": "Use WRF temperature field"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalFields.pressure",
+      "to": "AtmosphericChemistry.pressure",
+      "transform": "param_to_var",
+      "description": "Use WRF surface pressure"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalFields.humidity",
+      "to": "AtmosphericChemistry.humidity",
+      "transform": "param_to_var",
+      "description": "Use WRF humidity field"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalFields.u_wind",
+      "to": "AtmosphericTransport.u_wind",
+      "transform": "param_to_var",
+      "description": "Use WRF eastward wind"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalFields.v_wind",
+      "to": "AtmosphericTransport.v_wind",
+      "transform": "param_to_var",
+      "description": "Use WRF northward wind"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "MeteorologicalFields.boundary_layer_height",
+      "to": "SurfaceExchange.boundary_layer_height",
+      "transform": "param_to_var",
+      "description": "Use WRF PBL height"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "EmissionInventories.NOx_emission_rate",
+      "to": "EmissionSources.NOx_emission_rate",
+      "transform": "param_to_var",
+      "description": "Use NEI NOx emissions"
+    },
+
+    {
+      "type": "variable_map",
+      "from": "EmissionInventories.VOC_emission_rate",
+      "to": "EmissionSources.VOC_emission_rate",
+      "transform": "param_to_var",
+      "description": "Use NEI VOC emissions"
+    },
+
+    {
+      "_comment": "Type 4: operator_apply - Apply runtime operators",
+      "type": "operator_apply",
+      "operator": "DryDepositionOperator",
+      "description": "Apply advanced dry deposition to surface cells"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "TurbulentMixingOperator",
+      "description": "Apply YSU PBL mixing scheme"
+    },
+
+    {
+      "type": "operator_apply",
+      "operator": "PhotolysisOperator",
+      "description": "Update photolysis rates with Fast-JX"
+    },
+
+    {
+      "_comment": "Type 5: callback - Register simulation callbacks",
+      "type": "callback",
+      "callback_id": "BiogenicEmissionTemperatureScaling",
+      "config": {
+        "update_frequency": 3600.0,
+        "beta": 0.09,
+        "base_temperature": 303.15
+      },
+      "description": "Scale biogenic emissions with temperature"
+    },
+
+    {
+      "type": "callback",
+      "callback_id": "WeekdayWeekendScaling",
+      "config": {
+        "weekday_factor": 1.0,
+        "weekend_factor": 0.75,
+        "transition_hours": 2
+      },
+      "description": "Scale anthropogenic emissions by day of week"
+    },
+
+    {
+      "_comment": "Type 6: event - Cross-system events",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "high_ozone_emission_control",
+      "conditions": [
+        {"op": "-", "args": ["AtmosphericChemistry.O3", 80e-9]}
+      ],
+      "affects": [
+        {
+          "lhs": "EmissionSources.NOx_emission_rate",
+          "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["EmissionSources.NOx_emission_rate"]}, 0.6]}
+        }
+      ],
+      "discrete_parameters": ["EmissionSources.NOx_emission_rate"],
+      "description": "Reduce NOx emissions during high ozone episodes (>80 ppb)"
+    },
+
+    {
+      "type": "event",
+      "event_type": "discrete",
+      "name": "weekend_emission_reduction",
+      "trigger": {
+        "type": "condition",
+        "expression": {
+          "op": ">=",
+          "args": [
+            {"op": "%", "args": [{"op": "floor", "args": [{"op": "/", "args": ["t", 86400]}]}, 7]},
+            5
+          ]
+        }
+      },
+      "affects": [
+        {
+          "lhs": "EmissionSources.weekday_factor",
+          "rhs": 0.75
+        }
+      ],
+      "discrete_parameters": ["EmissionSources.weekday_factor"],
+      "description": "Reduce weekday emission factors on Saturday and Sunday"
+    },
+
+    {
+      "type": "event",
+      "event_type": "continuous",
+      "name": "boundary_layer_collapse_mixing_reduction",
+      "conditions": [
+        {"op": "-", "args": ["SurfaceExchange.boundary_layer_height", 100.0]}
+      ],
+      "affects": [
+        {
+          "lhs": "AtmosphericTransport.K_z",
+          "rhs": {"op": "*", "args": [{"op": "Pre", "args": ["AtmosphericTransport.K_z"]}, 0.1]}
+        }
+      ],
+      "discrete_parameters": ["AtmosphericTransport.K_z"],
+      "description": "Reduce vertical mixing when PBL height drops below 100m"
+    }
+  ],
+
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-07-15T00:00:00Z",
+      "end": "2024-07-17T00:00:00Z",
+      "reference_time": "2024-07-15T00:00:00Z"
+    },
+    "spatial": {
+      "x": {
+        "min": -1000000.0,
+        "max": 1000000.0,
+        "units": "meters",
+        "grid_spacing": 12000.0,
+        "coordinate_system": "lambert_conformal"
+      },
+      "y": {
+        "min": -1000000.0,
+        "max": 1000000.0,
+        "units": "meters",
+        "grid_spacing": 12000.0,
+        "coordinate_system": "lambert_conformal"
+      },
+      "z": {
+        "min": 0.0,
+        "max": 15000.0,
+        "units": "meters",
+        "grid_spacing": 100.0,
+        "coordinate_system": "height_above_sea_level"
+      }
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "AtmosphericChemistry.O3": 40e-9,
+        "AtmosphericChemistry.NO": 0.5e-9,
+        "AtmosphericChemistry.NO2": 2e-9,
+        "AtmosphericChemistry.HCHO": 1e-9,
+        "AtmosphericChemistry.HO2": 1e-12
+      },
+      "spatial_variation": {
+        "type": "gaussian_plume",
+        "center": [0.0, 0.0, 500.0],
+        "sigma": [50000.0, 50000.0, 200.0],
+        "amplitude_factors": {
+          "AtmosphericChemistry.NO": 5.0,
+          "AtmosphericChemistry.NO2": 3.0
+        }
+      }
+    },
+    "boundary_conditions": [
+      {
+        "type": "constant",
+        "boundaries": ["west", "east", "south", "north"],
+        "values": {
+          "AtmosphericChemistry.O3": 35e-9,
+          "AtmosphericChemistry.NO": 0.1e-9,
+          "AtmosphericChemistry.NO2": 0.5e-9,
+          "AtmosphericChemistry.HCHO": 0.8e-9,
+          "AtmosphericChemistry.HO2": 0.5e-12
+        }
+      },
+      {
+        "type": "zero_gradient",
+        "boundaries": ["top"]
+      },
+      {
+        "type": "surface_exchange",
+        "boundaries": ["bottom"],
+        "description": "Surface handled by SurfaceExchange model"
+      }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "threads": 8,
+      "stiff_algorithm": "QNDF",
+      "nonstiff_algorithm": "Vern7",
+      "timestep": 600.0,
+      "stiff_kwargs": {
+        "abstol": 1e-12,
+        "reltol": 1e-8,
+        "maxiters": 1000
+      },
+      "nonstiff_kwargs": {
+        "abstol": 1e-10,
+        "reltol": 1e-6
+      },
+      "operator_splitting": {
+        "chemistry_timestep": 60.0,
+        "transport_timestep": 600.0,
+        "emissions_timestep": 3600.0
+      }
+    },
+    "adaptive_timestepping": {
+      "enabled": true,
+      "min_timestep": 1.0,
+      "max_timestep": 3600.0,
+      "safety_factor": 0.9
+    }
+  }
+}

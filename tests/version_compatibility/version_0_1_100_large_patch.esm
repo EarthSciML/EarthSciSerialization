@@ -1,0 +1,23 @@
+{
+  "esm": "0.1.100",
+  "metadata": {
+    "name": "Version_0_1_100_LargePatch",
+    "description": "Test with large patch number to ensure proper version comparison",
+    "authors": ["ESM Format Team"],
+    "created": "2025-01-01T00:00:00Z"
+  },
+  "models": {
+    "SimpleModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-6 },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.01 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [{ "op": "-", "args": ["k"] }, "x"] }
+        }
+      ]
+    }
+  }
+}

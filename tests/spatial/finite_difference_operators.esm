@@ -1,0 +1,235 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SpatialOperatorDiscretization",
+    "description": "Test finite difference implementation of spatial operators on structured grids",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["spatial-operators", "finite-difference", "atmospheric-transport"]
+  },
+
+  "models": {
+    "AdvectionDiffusion": {
+      "reference": {
+        "notes": "Tests spatial operators for atmospheric transport: grad, div, laplacian on finite difference grids"
+      },
+      "variables": {
+        "tracer": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1e-9,
+          "description": "Test tracer concentration"
+        },
+        "u_wind": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 10.0,
+          "description": "Eastward wind velocity"
+        },
+        "v_wind": {
+          "type": "parameter",
+          "units": "m/s",
+          "default": 5.0,
+          "description": "Northward wind velocity"
+        },
+        "K_diff": {
+          "type": "parameter",
+          "units": "m^2/s",
+          "default": 100.0,
+          "description": "Horizontal diffusion coefficient"
+        },
+        "emission_rate": {
+          "type": "parameter",
+          "units": "mol/mol/s",
+          "default": 1e-12,
+          "description": "Constant emission rate"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Full advection-diffusion equation with all spatial operators",
+          "lhs": {"op": "D", "args": ["tracer"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "_comment": "Advection: -u * ∂tracer/∂x - v * ∂tracer/∂y",
+                "op": "+",
+                "args": [
+                  {"op": "*", "args": [{"op": "-", "args": ["u_wind"]}, {"op": "grad", "args": ["tracer"], "dim": "x"}]},
+                  {"op": "*", "args": [{"op": "-", "args": ["v_wind"]}, {"op": "grad", "args": ["tracer"], "dim": "y"}]}
+                ]
+              },
+              {
+                "_comment": "Diffusion: K * ∇²tracer",
+                "op": "*",
+                "args": ["K_diff", {"op": "laplacian", "args": ["tracer"]}]
+              },
+              {
+                "_comment": "Point source emission",
+                "op": "*",
+                "args": ["emission_rate", {"op": "ifelse", "args": [
+                  {"op": "and", "args": [
+                    {"op": "and", "args": [
+                      {"op": ">=", "args": ["x", 49000]},
+                      {"op": "<=", "args": ["x", 51000]}
+                    ]},
+                    {"op": "and", "args": [
+                      {"op": ">=", "args": ["y", 49000]},
+                      {"op": "<=", "args": ["y", 51000]}
+                    ]}
+                  ]},
+                  1.0,
+                  0.0
+                ]}]
+              }
+            ]
+          }
+        }
+      ]
+    },
+
+    "DivergenceTest": {
+      "reference": {
+        "notes": "Test divergence operator implementation: ∇ · (u*tracer) for mass flux conservation"
+      },
+      "variables": {
+        "tracer": {"type": "state", "units": "mol/mol", "default": 1e-9},
+        "u_field": {"type": "parameter", "units": "m/s", "default": 10.0},
+        "v_field": {"type": "parameter", "units": "m/s", "default": 5.0}
+      },
+      "equations": [
+        {
+          "_comment": "Flux-form advection using divergence: ∂tracer/∂t = -∇·(u⃗*tracer)",
+          "lhs": {"op": "D", "args": ["tracer"], "wrt": "t"},
+          "rhs": {
+            "op": "-",
+            "args": [
+              {"op": "div", "args": [
+                {"op": "*", "args": [
+                  "tracer",
+                  {"op": "+", "args": [
+                    {"op": "*", "args": ["u_field", {"op": "grad", "args": ["x"], "dim": "x"}]},
+                    {"op": "*", "args": ["v_field", {"op": "grad", "args": ["y"], "dim": "y"}]}
+                  ]}
+                ]}
+              ]}
+            ]
+          }
+        }
+      ]
+    },
+
+    "LaplacianAccuracy": {
+      "reference": {
+        "notes": "Test Laplacian operator accuracy for known analytical solution: ∇²(sin(πx)sin(πy)) = -2π²sin(πx)sin(πy)"
+      },
+      "variables": {
+        "analytical_field": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {
+            "op": "*",
+            "args": [
+              {"op": "sin", "args": [{"op": "*", "args": [3.14159, "x"]}]},
+              {"op": "sin", "args": [{"op": "*", "args": [3.14159, "y"]}]}
+            ]
+          },
+          "description": "sin(πx)sin(πy)"
+        },
+        "analytical_laplacian": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {
+            "op": "*",
+            "args": [
+              -19.739,
+              {"op": "*", "args": [
+                {"op": "sin", "args": [{"op": "*", "args": [3.14159, "x"]}]},
+                {"op": "sin", "args": [{"op": "*", "args": [3.14159, "y"]}]}
+              ]}
+            ]
+          },
+          "description": "-2π²sin(πx)sin(πy)"
+        },
+        "numerical_laplacian": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {"op": "laplacian", "args": ["analytical_field"]},
+          "description": "Finite difference ∇²(sin(πx)sin(πy))"
+        },
+        "discretization_error": {
+          "type": "observed",
+          "units": "dimensionless",
+          "expression": {
+            "op": "abs",
+            "args": [{"op": "-", "args": ["numerical_laplacian", "analytical_laplacian"]}]
+          },
+          "description": "Absolute error in finite difference Laplacian"
+        }
+      },
+      "equations": []
+    }
+  },
+
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T01:00:00Z"
+    },
+    "spatial": {
+      "x": {
+        "min": 0.0,
+        "max": 100000.0,
+        "units": "meters",
+        "grid_spacing": 1000.0,
+        "description": "East-west coordinate"
+      },
+      "y": {
+        "min": 0.0,
+        "max": 100000.0,
+        "units": "meters",
+        "grid_spacing": 1000.0,
+        "description": "North-south coordinate"
+      }
+    },
+    "coordinate_transforms": [
+      {
+        "id": "cartesian_meters",
+        "description": "Cartesian coordinates in meters for finite difference operators",
+        "dimensions": ["x", "y"]
+      }
+    ],
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "tracer": "1e-9"
+      }
+    },
+    "boundary_conditions": [
+      {
+        "type": "zero_gradient",
+        "dimensions": ["x", "y"],
+        "description": "Neumann boundaries: ∂tracer/∂n = 0"
+      }
+    ],
+    "element_type": "Float64",
+    "array_type": "Array"
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "threads": 4,
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 60.0,
+      "stiff_kwargs": {
+        "abstol": 1e-8,
+        "reltol": 1e-6
+      },
+      "spatial_discretization": "finite_difference",
+      "upwind_bias": 0.1
+    }
+  }
+}

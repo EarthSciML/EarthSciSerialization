@@ -1,0 +1,219 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "JuliaMTKIntegration",
+    "description": "Test Julia ModelingToolkit integration and simulation capability",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["julia", "mtk", "simulation", "integration-test"]
+  },
+
+  "models": {
+    "SimpleOscillator": {
+      "reference": {
+        "notes": "Harmonic oscillator with analytical solution for MTK conversion validation"
+      },
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "meters",
+          "default": 1.0,
+          "description": "Position"
+        },
+        "v": {
+          "type": "state",
+          "units": "m/s",
+          "default": 0.0,
+          "description": "Velocity"
+        },
+        "omega": {
+          "type": "parameter",
+          "units": "rad/s",
+          "default": 1.0,
+          "description": "Angular frequency"
+        },
+        "energy": {
+          "type": "observed",
+          "units": "J/kg",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "/", "args": [{"op": "^", "args": ["v", 2]}, 2]},
+              {"op": "/", "args": [{"op": "*", "args": [{"op": "^", "args": ["omega", 2]}, {"op": "^", "args": ["x", 2]}]}, 2]}
+            ]
+          },
+          "description": "Total energy (should be conserved)"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+          "rhs": "v"
+        },
+        {
+          "lhs": {"op": "D", "args": ["v"], "wrt": "t"},
+          "rhs": {
+            "op": "*",
+            "args": [
+              {"op": "-", "args": [{"op": "^", "args": ["omega", 2]}]},
+              "x"
+            ]
+          }
+        }
+      ]
+    },
+
+    "StiffChemistry": {
+      "reference": {
+        "notes": "Stiff chemical system to test MTK solver selection and event handling"
+      },
+      "variables": {
+        "A": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1e-6,
+          "description": "Fast-reacting species A"
+        },
+        "B": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.0,
+          "description": "Product species B"
+        },
+        "k_fast": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 1000.0,
+          "description": "Fast reaction rate"
+        },
+        "k_slow": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 0.1,
+          "description": "Slow reaction rate"
+        },
+        "total_species": {
+          "type": "observed",
+          "units": "mol/mol",
+          "expression": {"op": "+", "args": ["A", "B"]},
+          "description": "Total mass (conserved)"
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Fast consumption of A: dA/dt = -k_fast*A + k_slow*B",
+          "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["k_fast"]}, "A"]},
+              {"op": "*", "args": ["k_slow", "B"]}
+            ]
+          }
+        },
+        {
+          "_comment": "Production of B: dB/dt = k_fast*A - k_slow*B",
+          "lhs": {"op": "D", "args": ["B"], "wrt": "t"},
+          "rhs": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["k_fast", "A"]},
+              {"op": "*", "args": [{"op": "-", "args": ["k_slow"]}, "B"]}
+            ]
+          }
+        }
+      ],
+      "continuous_events": [
+        {
+          "name": "reset_when_depleted",
+          "conditions": [
+            {"op": "-", "args": ["A", 1e-12]}
+          ],
+          "affects": [
+            {
+              "lhs": "A",
+              "rhs": 1e-8
+            }
+          ],
+          "description": "Reset A concentration when nearly depleted"
+        }
+      ]
+    }
+  },
+
+  "reaction_systems": {
+    "TestMechanism": {
+      "reference": {
+        "notes": "Simple reaction system to test Catalyst.jl integration and ODE derivation"
+      },
+      "species": {
+        "O3": {"units": "mol/mol", "default": 40e-9, "description": "Ozone"},
+        "NO": {"units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide"},
+        "NO2": {"units": "mol/mol", "default": 1e-9, "description": "Nitrogen dioxide"}
+      },
+      "parameters": {
+        "k1": {"units": "cm^3/molec/s", "default": 1.8e-12, "description": "NO + O3 rate"},
+        "j1": {"units": "1/s", "default": 0.005, "description": "NO2 photolysis rate"},
+        "M": {"units": "molec/cm^3", "default": 2.46e19, "description": "Air density"}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3_reaction",
+          "substrates": [
+            {"species": "NO", "stoichiometry": 1},
+            {"species": "O3", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "NO2", "stoichiometry": 1}
+          ],
+          "rate": {"op": "*", "args": ["k1", "M"]}
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [
+            {"species": "NO2", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "NO", "stoichiometry": 1},
+            {"species": "O3", "stoichiometry": 1}
+          ],
+          "rate": "j1"
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T01:00:00Z",
+      "reference_time": "2024-01-01T00:00:00Z"
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "x": 1.0,
+        "v": 0.0,
+        "A": 1e-6,
+        "B": 0.0
+      }
+    },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 1.0,
+      "threads": 2,
+      "stiff_kwargs": {
+        "abstol": 1e-8,
+        "reltol": 1e-6
+      }
+    }
+  }
+}

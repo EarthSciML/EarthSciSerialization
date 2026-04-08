@@ -1,0 +1,100 @@
+{
+  "event_error_conditions.esm": {
+    "description": "Expected validation errors for invalid event system configurations",
+    "schema_errors": [
+      {
+        "path": "models.ErrorTestModel.discrete_events[0].trigger.type",
+        "code": "enum",
+        "message": "Value 'invalid_trigger_type' is not one of the allowed trigger types: ['condition', 'periodic', 'preset_times']"
+      },
+      {
+        "path": "models.ErrorTestModel.discrete_events[2].trigger",
+        "code": "required",
+        "message": "Periodic trigger is missing required field 'interval'"
+      },
+      {
+        "path": "models.ErrorTestModel.discrete_events[3].trigger.times",
+        "code": "minItems",
+        "message": "Preset times array must contain at least one time value"
+      },
+      {
+        "path": "models.ErrorTestModel.discrete_events[6]",
+        "code": "oneOf",
+        "message": "Event must have either 'affects' or 'functional_affect', but not both"
+      }
+    ],
+    "structural_errors": [
+      {
+        "code": "undefined_variable",
+        "path": "models.ErrorTestModel.continuous_events[0].conditions[0]",
+        "message": "Event condition references undefined variable 'undefined_variable'",
+        "context": "undefined_variable_in_condition"
+      },
+      {
+        "code": "undefined_variable",
+        "path": "models.ErrorTestModel.continuous_events[1].affects[0].lhs",
+        "message": "Event affect targets undefined variable 'undefined_target'",
+        "context": "undefined_variable_in_affect"
+      },
+      {
+        "code": "invalid_pre_usage",
+        "path": "models.ErrorTestModel.continuous_events[2].conditions[0]",
+        "message": "Pre() operator is not allowed in event conditions, only in affect equations",
+        "context": "invalid_pre_in_condition"
+      },
+      {
+        "code": "undeclared_discrete_parameter",
+        "path": "models.ErrorTestModel.continuous_events[3].affects[0]",
+        "message": "Event modifies parameter 'valid_param' but parameter is not listed in discrete_parameters",
+        "context": "parameter_not_declared_discrete"
+      },
+      {
+        "code": "undefined_discrete_parameter",
+        "path": "models.ErrorTestModel.discrete_events[0].discrete_parameters[1]",
+        "message": "discrete_parameters includes undefined parameter 'nonexistent_param'",
+        "context": "conflicting_discrete_parameters"
+      },
+      {
+        "code": "undefined_variable",
+        "path": "models.ErrorTestModel.discrete_events[4].functional_affect.read_vars[1]",
+        "message": "Functional affect read_vars includes undefined variable 'undefined_variable'",
+        "context": "functional_affect_errors"
+      },
+      {
+        "code": "undefined_parameter",
+        "path": "models.ErrorTestModel.discrete_events[4].functional_affect.modified_params[0]",
+        "message": "Functional affect modified_params includes undefined parameter 'another_undefined_param'",
+        "context": "functional_affect_errors"
+      },
+      {
+        "code": "undefined_system",
+        "path": "coupling[0].conditions[0]",
+        "message": "Cross-system event references nonexistent model 'NonexistentModel'",
+        "context": "cross_system_undefined_model"
+      },
+      {
+        "code": "undeclared_discrete_parameter",
+        "path": "coupling[1].affects[0]",
+        "message": "Cross-system event modifies parameter 'ErrorTestModel.valid_param' but missing discrete_parameters declaration",
+        "context": "cross_system_missing_discrete_params"
+      }
+    ],
+    "runtime_errors": [
+      {
+        "code": "event_ordering_conflict",
+        "message": "Multiple events with simultaneous conditions may produce non-deterministic ordering",
+        "context": "Implementation-dependent behavior when events fire simultaneously"
+      },
+      {
+        "code": "numerical_precision",
+        "message": "Event condition evaluation near machine epsilon may be unstable",
+        "context": "Events with conditions very close to zero may exhibit platform-dependent behavior"
+      },
+      {
+        "code": "infinite_event_loop",
+        "message": "Chained discrete parameter modifications may create infinite event loops",
+        "context": "Events that trigger other events through parameter changes require cycle detection"
+      }
+    ]
+  }
+}

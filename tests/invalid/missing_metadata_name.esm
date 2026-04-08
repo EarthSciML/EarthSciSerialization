@@ -1,0 +1,23 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "description": "Metadata missing required name field",
+    "authors": ["Test Author"],
+    "created": "2024-01-01T00:00:00Z"
+  },
+
+  "models": {
+    "TestModel": {
+      "reference": { "notes": "Test model for missing metadata name" },
+      "variables": {
+        "x": { "type": "state", "units": "dimensionless", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}

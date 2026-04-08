@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  julia-conformance:
+    image: docker.io/ctessum/esm-format-julia:0.1.0-production
+    container_name: esm-julia-production
+    restart: unless-stopped
+    volumes:
+      - conformance-results:/workspace/conformance-results
+    environment:
+      - JULIA_NUM_THREADS=auto
+      - ESM_TEST_TIMEOUT=300
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 4G
+      reservations:
+        cpus: '1.0'
+        memory: 2G
+    healthcheck:
+      test: ["CMD", "julia", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - esm-production
+
+  python-conformance:
+    image: docker.io/ctessum/esm-format-python:0.1.0-minimal
+    container_name: esm-python-production
+    restart: unless-stopped
+    volumes:
+      - conformance-results:/workspace/conformance-results
+    environment:
+      - ESM_TEST_TIMEOUT=300
+      - PYTHONUNBUFFERED=1
+      - PYTHONOPTIMIZE=2
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 4G
+      reservations:
+        cpus: '1.0'
+        memory: 2G
+    healthcheck:
+      test: ["CMD", "python3", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - esm-production
+
+  rust-conformance:
+    image: docker.io/ctessum/esm-format-rust:0.1.0-optimized
+    container_name: esm-rust-production
+    restart: unless-stopped
+    volumes:
+      - conformance-results:/workspace/conformance-results
+    environment:
+      - RUST_BACKTRACE=0
+      - ESM_TEST_TIMEOUT=300
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 2G
+      reservations:
+        cpus: '0.5'
+        memory: 1G
+    healthcheck:
+      test: ["CMD", "esm", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - esm-production
+
+  typescript-conformance:
+    image: docker.io/ctessum/esm-format-typescript:0.1.0
+    container_name: esm-typescript-production
+    restart: unless-stopped
+    volumes:
+      - conformance-results:/workspace/conformance-results
+    environment:
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - ESM_TEST_TIMEOUT=300
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 4G
+      reservations:
+        cpus: '1.0'
+        memory: 2G
+    healthcheck:
+      test: ["CMD", "node", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - esm-production
+
+volumes:
+  conformance-results:
+
+networks:
+  esm-production:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

@@ -1,0 +1,67 @@
+# Multi-stage Rust build for optimized production container
+FROM rust:1.70-bookworm as builder
+
+WORKDIR /workspace
+ARG CARGO_PROFILE_RELEASE_LTO=true
+ARG CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+ARG DEBUG_MODE=false
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Rust package files for dependency resolution
+COPY packages/esm-format-rust/Cargo.toml packages/esm-format-rust/Cargo.lock ./packages/esm-format-rust/
+
+# Pre-fetch dependencies
+WORKDIR /workspace/packages/esm-format-rust
+RUN mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# Copy source and build optimized binary
+COPY packages/esm-format-rust ./
+RUN cargo build --release --bin esm
+
+# Production stage with minimal base
+FROM debian:bookworm-slim as production
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd -r esm && useradd -r -g esm -d /workspace -s /bin/bash esm
+
+WORKDIR /workspace
+
+# Copy optimized binary from builder
+COPY --from=builder --chown=esm:esm /workspace/packages/esm-format-rust/target/release/esm /usr/local/bin/esm
+
+# Copy test data and scripts
+COPY --chown=esm:esm tests ./tests/
+COPY --chown=esm:esm scripts ./scripts/
+
+# Set permissions
+RUN chmod +x scripts/* /usr/local/bin/esm
+
+# Set environment variables
+ENV RUST_BACKTRACE=1
+ENV ESM_TEST_TIMEOUT=300
+
+# Create output directory
+RUN mkdir -p /workspace/conformance-results && chown -R esm:esm /workspace/conformance-results
+
+USER esm
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD esm --version || exit 1
+
+# Default command
+CMD ["esm", "--help"]

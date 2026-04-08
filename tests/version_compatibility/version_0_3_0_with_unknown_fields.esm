@@ -1,0 +1,90 @@
+{
+  "esm": "0.3.0",
+  "metadata": {
+    "name": "Version_0_3_0_WithUnknownFields",
+    "description": "Test forward compatibility with unknown fields that should be ignored",
+    "authors": ["ESM Format Team"],
+    "created": "2024-09-01T00:00:00Z",
+    "license": "MIT",
+    "tags": ["test", "compatibility", "future"]
+  },
+  "reaction_systems": {
+    "AdvancedChemistry": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+      },
+      "parameters": {
+        "T": { "units": "K", "default": 298.15, "description": "Temperature" },
+        "jNO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }] },
+          "uncertainty": 0.15,
+          "temperature_range": { "min": 200, "max": 400 }
+        },
+        {
+          "id": "R2",
+          "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": "jNO2"
+        }
+      ],
+      "reaction_network_analysis": {
+        "stoichiometric_matrix_rank": 2,
+        "conservation_laws": ["total_NOx"]
+      }
+    }
+  },
+  "models": {
+    "Transport": {
+      "variables": {
+        "u": { "type": "parameter", "units": "m/s", "default": 1.0 },
+        "v": { "type": "parameter", "units": "m/s", "default": 0.5 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
+            ]
+          }
+        }
+      ],
+      "numerical_methods": {
+        "spatial_discretization": "finite_difference",
+        "time_integration": "implicit_euler"
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["AdvancedChemistry", "Transport"],
+      "description": "Couple chemistry with transport"
+    }
+  ],
+  "performance_hints": {
+    "parallelization": "thread_safe",
+    "memory_optimization": "sparse_matrices"
+  },
+  "validation_metadata": {
+    "last_validated": "2024-09-01T12:00:00Z",
+    "validation_tools": ["esm-format-validator", "chemical-kinetics-checker"]
+  }
+}

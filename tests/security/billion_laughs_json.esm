@@ -1,0 +1,89 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BillionLaughsJSON",
+    "description": "Test billion laughs attack adapted for JSON with exponentially expanding references",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "ExpansionModel": {
+      "variables": {
+        "lol": {
+          "type": "parameter",
+          "units": "1",
+          "default": "lol"
+        },
+        "lol2": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol", "lol", "lol", "lol", "lol", "lol", "lol", "lol", "lol", "lol"]
+          }
+        },
+        "lol3": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol2", "lol2", "lol2", "lol2", "lol2", "lol2", "lol2", "lol2", "lol2", "lol2"]
+          }
+        },
+        "lol4": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol3", "lol3", "lol3", "lol3", "lol3", "lol3", "lol3", "lol3", "lol3", "lol3"]
+          }
+        },
+        "lol5": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol4", "lol4", "lol4", "lol4", "lol4", "lol4", "lol4", "lol4", "lol4", "lol4"]
+          }
+        },
+        "lol6": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol5", "lol5", "lol5", "lol5", "lol5", "lol5", "lol5", "lol5", "lol5", "lol5"]
+          }
+        },
+        "lol7": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol6", "lol6", "lol6", "lol6", "lol6", "lol6", "lol6", "lol6", "lol6", "lol6"]
+          }
+        },
+        "lol8": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol7", "lol7", "lol7", "lol7", "lol7", "lol7", "lol7", "lol7", "lol7", "lol7"]
+          }
+        },
+        "lol9": {
+          "type": "parameter",
+          "units": "1",
+          "expression": {
+            "op": "concat",
+            "args": ["lol8", "lol8", "lol8", "lol8", "lol8", "lol8", "lol8", "lol8", "lol8", "lol8"]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["lol9"], "wrt": "t" },
+          "rhs": { "op": "expand", "args": ["lol9"] }
+        }
+      ]
+    }
+  }
+}

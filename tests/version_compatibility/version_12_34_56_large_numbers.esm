@@ -1,0 +1,22 @@
+{
+  "esm": "12.34.56",
+  "metadata": {
+    "name": "Version_12_34_56_LargeNumbers",
+    "description": "Test with large version numbers - should be rejected by 0.x.x libraries",
+    "authors": ["ESM Format Team"],
+    "created": "2030-01-01T00:00:00Z"
+  },
+  "models": {
+    "FutureModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-6 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.01, "x"] }
+        }
+      ]
+    }
+  }
+}

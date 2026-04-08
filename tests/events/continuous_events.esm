@@ -1,0 +1,156 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ContinuousEventExamples",
+    "description": "Test fixtures for continuous event handling (root-finding)",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "BouncingBall": {
+      "reference": { "notes": "Ball bouncing off ground with energy loss" },
+      "variables": {
+        "y":  { "type": "state", "units": "m", "default": 10.0, "description": "Ball height" },
+        "v":  { "type": "state", "units": "m/s", "default": 0.0, "description": "Ball velocity" }
+      },
+      "parameters": {
+        "g":     { "units": "m/s^2", "default": 9.81, "description": "Gravity acceleration" },
+        "e":     { "units": "1", "default": 0.8, "description": "Coefficient of restitution" },
+        "ground": { "units": "m", "default": 0.0, "description": "Ground level" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["g"] }
+        }
+      ],
+      "events": [
+        {
+          "type": "continuous",
+          "condition": { "op": "-", "args": ["y", "ground"] },
+          "affect": [
+            {
+              "variable": "v",
+              "value": { "op": "*", "args": [{ "op": "-", "args": ["e"] }, "v"] }
+            }
+          ],
+          "affect_neg": true,
+          "root_finding": {
+            "method": "NewtonRaphson",
+            "tolerance": 1e-12
+          }
+        }
+      ]
+    },
+
+    "HysteresisSwitch": {
+      "reference": { "notes": "System with hysteresis switching behavior" },
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 0.0, "description": "System state" },
+        "mode": { "type": "discrete", "units": "1", "default": 1, "description": "Operating mode" }
+      },
+      "parameters": {
+        "upper_threshold": { "units": "1", "default": 5.0, "description": "Upper switch threshold" },
+        "lower_threshold": { "units": "1", "default": -5.0, "description": "Lower switch threshold" },
+        "k1": { "units": "1/s", "default": 1.0, "description": "Mode 1 rate constant" },
+        "k2": { "units": "1/s", "default": -0.5, "description": "Mode 2 rate constant" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": {
+            "op": "ifelse", "args": [
+              { "op": "=", "args": ["mode", 1] },
+              "k1",
+              "k2"
+            ]
+          }
+        }
+      ],
+      "events": [
+        {
+          "type": "continuous",
+          "condition": { "op": "-", "args": ["x", "upper_threshold"] },
+          "affect": [
+            { "variable": "mode", "value": 2 }
+          ],
+          "affect_neg": false,
+          "root_finding": {
+            "method": "Bisection",
+            "tolerance": 1e-10
+          }
+        },
+        {
+          "type": "continuous",
+          "condition": { "op": "-", "args": ["x", "lower_threshold"] },
+          "affect": [
+            { "variable": "mode", "value": 1 }
+          ],
+          "affect_neg": true,
+          "root_finding": {
+            "method": "Bisection",
+            "tolerance": 1e-10
+          }
+        }
+      ]
+    },
+
+    "PopulationGrowthWithCrash": {
+      "reference": { "notes": "Population growth with catastrophic collapse" },
+      "variables": {
+        "P": { "type": "state", "units": "individuals", "default": 10.0, "description": "Population size" }
+      },
+      "parameters": {
+        "r": { "units": "1/time", "default": 0.1, "description": "Growth rate" },
+        "K": { "units": "individuals", "default": 1000.0, "description": "Carrying capacity" },
+        "crash_threshold": { "units": "individuals", "default": 950.0, "description": "Population crash threshold" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["P"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              "r",
+              "P",
+              { "op": "-", "args": [1, { "op": "/", "args": ["P", "K"] }] }
+            ]
+          }
+        }
+      ],
+      "events": [
+        {
+          "type": "continuous",
+          "condition": { "op": "-", "args": ["P", "crash_threshold"] },
+          "affect": [
+            { "variable": "P", "value": { "op": "*", "args": [0.1, "P"] } }
+          ],
+          "affect_neg": false,
+          "root_finding": {
+            "method": "Illinois",
+            "tolerance": 1e-8
+          }
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T10:00:00Z" },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": {
+      "algorithm": "Tsit5",
+      "adaptive": true,
+      "event_handling": "precise_callbacks"
+    }
+  }
+}

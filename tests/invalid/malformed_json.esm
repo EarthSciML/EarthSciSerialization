@@ -1,0 +1,14 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MalformedJSON",
+    "description": "This file has malformed JSON syntax"
+    "authors": ["Test Suite"]  // Missing comma before this line
+  },
+  "models": {
+    "simple": {
+      "variables": {
+        "x": {"initial": 1.0, "rhs": {"op": "mult", "args": [2, "x"]}}
+      }
+    }
+}

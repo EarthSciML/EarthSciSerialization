@@ -1,0 +1,26 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MissingObservedExpr",
+    "description": "Observed variable missing required expression field"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 1.0 },
+        "total_rate": {
+          "type": "observed",
+          "units": "m/s",
+          "description": "Total rate of change"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["k", "x"] }
+        }
+      ]
+    }
+  }
+}

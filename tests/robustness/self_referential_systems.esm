@@ -1,0 +1,52 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SelfReferentialSystems",
+    "description": "Test handling of variables that reference themselves in complex ways",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "SelfRefModel": {
+      "variables": {
+        "direct_self_ref": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "+", "args": ["direct_self_ref", 1] }
+        },
+        "indirect_self_ref": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "*", "args": ["helper_var", 2] }
+        },
+        "helper_var": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "/", "args": ["indirect_self_ref", 3] }
+        },
+        "complex_self_ref": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "if",
+            "args": [
+              { "op": ">", "args": ["complex_self_ref", 0] },
+              { "op": "-", "args": ["complex_self_ref", 1] },
+              { "op": "+", "args": ["complex_self_ref", 1] }
+            ]
+          }
+        },
+        "fibonacci_like": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "+",
+            "args": [
+              { "op": "lag", "args": ["fibonacci_like", 1] },
+              { "op": "lag", "args": ["fibonacci_like", 2] }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

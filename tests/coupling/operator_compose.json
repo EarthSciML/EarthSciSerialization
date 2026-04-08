@@ -1,0 +1,169 @@
+[
+  {
+    "description": "Simple operator_compose: chemistry + advection",
+    "systems": {
+      "chemistry": {
+        "variables": {
+          "O3": {"type": "state", "units": "mol/mol", "default": 40e-9},
+          "NO": {"type": "state", "units": "mol/mol", "default": 0.1e-9}
+        },
+        "equations": [
+          {
+            "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+            "rhs": {"op": "*", "args": [-0.001, "O3", "NO"]}
+          },
+          {
+            "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
+            "rhs": {"op": "*", "args": [0.001, "O3", "NO"]}
+          }
+        ]
+      },
+      "advection": {
+        "variables": {
+          "u_wind": {"type": "parameter", "units": "m/s", "default": 5.0},
+          "v_wind": {"type": "parameter", "units": "m/s", "default": 0.0}
+        },
+        "equations": [
+          {
+            "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+            "rhs": {"op": "+", "args": [
+              {"op": "*", "args": [{"op": "-", "args": ["u_wind"]}, {"op": "grad", "args": ["_var"], "dim": "x"}]},
+              {"op": "*", "args": [{"op": "-", "args": ["v_wind"]}, {"op": "grad", "args": ["_var"], "dim": "y"}]}
+            ]}
+          }
+        ]
+      }
+    },
+    "expected_result": {
+      "variables": {
+        "O3": {"type": "state", "units": "mol/mol", "default": 40e-9},
+        "NO": {"type": "state", "units": "mol/mol", "default": 0.1e-9},
+        "u_wind": {"type": "parameter", "units": "m/s", "default": 5.0},
+        "v_wind": {"type": "parameter", "units": "m/s", "default": 0.0}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+          "rhs": {"op": "+", "args": [
+            {"op": "*", "args": [-0.001, "O3", "NO"]},
+            {"op": "*", "args": [{"op": "-", "args": ["u_wind"]}, {"op": "grad", "args": ["O3"], "dim": "x"}]},
+            {"op": "*", "args": [{"op": "-", "args": ["v_wind"]}, {"op": "grad", "args": ["O3"], "dim": "y"}]}
+          ]}
+        },
+        {
+          "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
+          "rhs": {"op": "+", "args": [
+            {"op": "*", "args": [0.001, "O3", "NO"]},
+            {"op": "*", "args": [{"op": "-", "args": ["u_wind"]}, {"op": "grad", "args": ["NO"], "dim": "x"}]},
+            {"op": "*", "args": [{"op": "-", "args": ["v_wind"]}, {"op": "grad", "args": ["NO"], "dim": "y"}]}
+          ]}
+        }
+      ]
+    },
+    "algorithm_steps": [
+      "1. Extract dependent variables from LHS: O3, NO from chemistry; _var from advection",
+      "2. Match equations: both O3 and NO match _var placeholder",
+      "3. Expand placeholder: create advection equation for each state variable",
+      "4. Combine RHS: chemistry_rhs + advection_rhs for each variable",
+      "5. Merge variable lists from both systems"
+    ]
+  },
+  {
+    "description": "Placeholder expansion with multiple state variables",
+    "target_system": {
+      "variables": {
+        "A": {"type": "state"},
+        "B": {"type": "state"},
+        "C": {"type": "parameter"}
+      },
+      "equations": [
+        {"lhs": {"op": "D", "args": ["A"], "wrt": "t"}, "rhs": {"op": "*", "args": ["k1", "A"]}},
+        {"lhs": {"op": "D", "args": ["B"], "wrt": "t"}, "rhs": {"op": "*", "args": ["k2", "B"]}}
+      ]
+    },
+    "operator_system": {
+      "variables": {
+        "decay_rate": {"type": "parameter", "default": 0.01}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["decay_rate"]}, "_var"]}
+        }
+      ]
+    },
+    "expected_expansion": {
+      "placeholder_matches": ["A", "B"],
+      "generated_equations": [
+        {
+          "lhs": {"op": "D", "args": ["A"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["decay_rate"]}, "A"]}
+        },
+        {
+          "lhs": {"op": "D", "args": ["B"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["decay_rate"]}, "B"]}
+        }
+      ]
+    }
+  },
+  {
+    "description": "Translation map with conversion factors",
+    "systems": {
+      "model_a": {
+        "variables": {
+          "ozone": {"type": "state", "units": "ppb"},
+          "temp": {"type": "parameter", "units": "K"}
+        },
+        "equations": [
+          {"lhs": {"op": "D", "args": ["ozone"], "wrt": "t"}, "rhs": {"op": "*", "args": ["temp", "ozone"]}}
+        ]
+      },
+      "model_b": {
+        "variables": {
+          "O3": {"type": "state", "units": "mol/mol"},
+          "T": {"type": "parameter", "units": "K"}
+        },
+        "equations": [
+          {"lhs": {"op": "D", "args": ["O3"], "wrt": "t"}, "rhs": {"op": "/", "args": ["O3", "T"]}}
+        ]
+      }
+    },
+    "translate_map": {
+      "ozone": {"var": "O3", "factor": 1e-9},
+      "temp": "T"
+    },
+    "expected_result": {
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+          "rhs": {"op": "+", "args": [
+            {"op": "/", "args": ["O3", "T"]},
+            {"op": "*", "args": [1e-9, "T", "O3"]}
+          ]}
+        }
+      ]
+    }
+  },
+  {
+    "description": "No matching equations - preserved unchanged",
+    "systems": {
+      "ode_system": {
+        "equations": [
+          {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": "k"}
+        ]
+      },
+      "algebraic_system": {
+        "equations": [
+          {"lhs": "y", "rhs": {"op": "*", "args": ["a", "x"]}}
+        ]
+      }
+    },
+    "expected_result": {
+      "equations": [
+        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": "k"},
+        {"lhs": "y", "rhs": {"op": "*", "args": ["a", "x"]}}
+      ]
+    },
+    "note": "No matching dependent variables, so equations are preserved as-is"
+  }
+]

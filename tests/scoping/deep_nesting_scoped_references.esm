@@ -1,0 +1,275 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DeepNestingScopedReferences",
+    "description": "Test fixture for deeply nested scoped references (5+ levels) to validate parser robustness with arbitrary nesting depth",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["scoping", "deep-nesting", "arbitrary-depth", "stress-test"]
+  },
+
+  "models": {
+    "EarthClimateSystem": {
+      "variables": {
+        "orbital_forcing": {"type": "parameter", "units": "W/m^2", "default": 1361.0, "description": "Orbital forcing"}
+      },
+      "equations": [],
+      "subsystems": {
+        "AtmosphereComponent": {
+          "variables": {
+            "total_column_ozone": {"type": "state", "units": "DU", "default": 300.0, "description": "Total column ozone"}
+          },
+          "equations": [],
+          "subsystems": {
+            "TroposphereSubsystem": {
+              "variables": {
+                "tropopause_height": {"type": "parameter", "units": "m", "default": 12000.0, "description": "Tropopause height"}
+              },
+              "equations": [],
+              "subsystems": {
+                "BoundaryLayerModule": {
+                  "variables": {
+                    "surface_layer_height": {"type": "parameter", "units": "m", "default": 50.0, "description": "Surface layer height"}
+                  },
+                  "equations": [],
+                  "subsystems": {
+                    "SurfaceChemistryProcess": {
+                      "variables": {
+                        "deposition_velocity": {"type": "parameter", "units": "m/s", "default": 0.01, "description": "Deposition velocity"}
+                      },
+                      "equations": [],
+                      "subsystems": {
+                        "PhotolysisRateCalculation": {
+                          "variables": {
+                            "J_NO2": {"type": "state", "units": "1/s", "default": 1e-3, "description": "NO2 photolysis rate"},
+                            "actinic_flux": {"type": "parameter", "units": "W/m^2", "default": 100.0, "description": "Actinic flux"},
+                            "absorption_cross_section": {"type": "parameter", "units": "cm^2", "default": 1e-19, "description": "Absorption cross section"}
+                          },
+                          "equations": [
+                            {
+                              "_comment": "6-level deep bare references - should resolve within current context",
+                              "lhs": {"op": "D", "args": ["J_NO2"], "wrt": "t"},
+                              "rhs": {"op": "*", "args": ["actinic_flux", "absorption_cross_section", 1e-4]}
+                            }
+                          ],
+                          "subsystems": {
+                            "WavelengthDependentCalculation": {
+                              "variables": {
+                                "quantum_yield": {"type": "parameter", "units": "dimensionless", "default": 0.8, "description": "Quantum yield"},
+                                "solar_spectrum_weight": {"type": "parameter", "units": "dimensionless", "default": 1.0, "description": "Solar spectrum weight"}
+                              },
+                              "equations": [
+                                {
+                                  "_comment": "7-level deep bare references",
+                                  "lhs": {"op": "=", "args": ["quantum_yield"], "wrt": "update"},
+                                  "rhs": {"op": "*", "args": ["solar_spectrum_weight", 0.8]}
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "OceanClimateSystem": {
+      "variables": {
+        "global_ocean_heat_content": {"type": "state", "units": "J", "default": 1e24, "description": "Global ocean heat content"}
+      },
+      "equations": [],
+      "subsystems": {
+        "SurfaceOceanLayer": {
+          "variables": {
+            "mixed_layer_temperature": {"type": "state", "units": "K", "default": 288.0, "description": "Mixed layer temperature"}
+          },
+          "equations": [],
+          "subsystems": {
+            "MicrobialLoop": {
+              "variables": {
+                "bacterial_production": {"type": "state", "units": "mg C/m^3/d", "default": 50.0, "description": "Bacterial production"}
+              },
+              "equations": [],
+              "subsystems": {
+                "NitrogenCycle": {
+                  "variables": {
+                    "nitrate_concentration": {"type": "state", "units": "umol/L", "default": 10.0, "description": "Nitrate concentration"}
+                  },
+                  "equations": [],
+                  "subsystems": {
+                    "Denitrification": {
+                      "variables": {
+                        "denitrification_rate": {"type": "parameter", "units": "umol/L/d", "default": 0.1, "description": "Denitrification rate"}
+                      },
+                      "equations": [],
+                      "subsystems": {
+                        "AnoxicMicroenvironment": {
+                          "variables": {
+                            "oxygen_threshold": {"type": "parameter", "units": "umol/L", "default": 2.0, "description": "Oxygen threshold for denitrification"},
+                            "enzyme_activity": {"type": "state", "units": "U/mg", "default": 0.5, "description": "Nitrate reductase activity"}
+                          },
+                          "equations": [
+                            {
+                              "_comment": "6-level deep bare reference resolution",
+                              "lhs": {"op": "D", "args": ["enzyme_activity"], "wrt": "t"},
+                              "rhs": {"op": "*", "args": ["oxygen_threshold", "denitrification_rate", 1e-3]}
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "Test 5-level scoped reference resolution",
+      "type": "variable_map",
+      "from": "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.deposition_velocity",
+      "to": "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.nitrate_concentration",
+      "transform": "multiplicative",
+      "factor": 1e6,
+      "description": "Atmospheric deposition affects ocean nitrogen via 5-level scoped reference"
+    },
+
+    {
+      "_comment": "Test 6-level scoped reference resolution",
+      "type": "variable_map",
+      "from": "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.J_NO2",
+      "to": "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.denitrification_rate",
+      "transform": "multiplicative",
+      "factor": 1e8,
+      "description": "Photolysis rate affects ocean denitrification via 6-level scoped reference"
+    },
+
+    {
+      "_comment": "Test 7-level scoped reference resolution",
+      "type": "variable_map",
+      "from": "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.WavelengthDependentCalculation.quantum_yield",
+      "to": "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment.enzyme_activity",
+      "transform": "additive",
+      "factor": 0.1,
+      "description": "Quantum yield affects enzyme activity via deepest 7-level scoped reference"
+    },
+
+    {
+      "_comment": "Test operator_compose with deeply nested systems",
+      "type": "operator_compose",
+      "systems": [
+        "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation",
+        "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification"
+      ],
+      "translate": {
+        "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.actinic_flux": "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.denitrification_rate"
+      },
+      "description": "Compose deeply nested systems using 6-level scoped references"
+    },
+
+    {
+      "_comment": "Test event with deeply nested conditions and affects",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "deep_nesting_cascade",
+      "conditions": [
+        {
+          "op": ">",
+          "args": [
+            "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.WavelengthDependentCalculation.quantum_yield",
+            0.9
+          ]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment.oxygen_threshold",
+          "rhs": {"op": "*", "args": [
+            {"op": "Pre", "args": ["OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment.oxygen_threshold"]},
+            1.2
+          ]}
+        }
+      ],
+      "description": "Event triggering with maximum depth (7-level) scoped references"
+    },
+
+    {
+      "_comment": "Test couple2 with maximum depth scoped references",
+      "type": "couple2",
+      "systems": [
+        "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.WavelengthDependentCalculation",
+        "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment"
+      ],
+      "coupletype_pair": ["AtmosphericCoupler", "OceanicCoupler"],
+      "connector": {
+        "equations": [
+          {
+            "from": "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.WavelengthDependentCalculation.solar_spectrum_weight",
+            "to": "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment.enzyme_activity",
+            "transform": "multiplicative",
+            "expression": {
+              "op": "*",
+              "args": [
+                0.001,
+                "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.WavelengthDependentCalculation.solar_spectrum_weight",
+                "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment.oxygen_threshold"
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Maximum depth couple2 using 7-level scoped references throughout"
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-09-01T00:00:00Z",
+      "end": "2024-09-01T06:00:00Z"
+    },
+    "spatial": {
+      "x": {"min": -180.0, "max": 180.0, "units": "degrees", "grid_spacing": 1.0},
+      "y": {"min": -90.0, "max": 90.0, "units": "degrees", "grid_spacing": 1.0},
+      "z": {"min": 0.0, "max": 15000.0, "units": "m", "grid_spacing": 100.0}
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "_comment": "Deep nesting in initial conditions using maximum depth scoped references",
+        "EarthClimateSystem.orbital_forcing": 1361.0,
+        "EarthClimateSystem.AtmosphereComponent.total_column_ozone": 300.0,
+        "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.J_NO2": 1e-3,
+        "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.WavelengthDependentCalculation.quantum_yield": 0.8,
+        "OceanClimateSystem.global_ocean_heat_content": 1e24,
+        "OceanClimateSystem.SurfaceOceanLayer.mixed_layer_temperature": 288.0,
+        "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.bacterial_production": 50.0,
+        "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.nitrate_concentration": 10.0,
+        "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment.enzyme_activity": 0.5
+      }
+    }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "threads": 8,
+      "stiff_algorithm": "Rodas5",
+      "timestep": 300.0,
+      "stiff_kwargs": {
+        "abstol": 1e-12,
+        "reltol": 1e-10
+      }
+    }
+  }
+}

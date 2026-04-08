@@ -1,0 +1,22 @@
+{
+  "esm": 1.0,
+  "metadata": {
+    "name": "MalformedVersionNumber",
+    "description": "Test with version as number instead of string - should fail validation",
+    "authors": ["ESM Format Team"],
+    "created": "2024-01-01T00:00:00Z"
+  },
+  "models": {
+    "SimpleModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-6 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.01, "x"] }
+        }
+      ]
+    }
+  }
+}

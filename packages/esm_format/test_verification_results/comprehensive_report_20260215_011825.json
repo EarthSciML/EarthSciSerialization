@@ -1,0 +1,185 @@
+{
+  "verification_summary": {
+    "python_verification": {
+      "total_scenarios": 6,
+      "passed_scenarios": 6,
+      "success_rate": 1.0,
+      "esm_roundtrip_success": true,
+      "numerical_stability": false
+    },
+    "julia_verification": {
+      "total_scenarios": 1,
+      "passed_scenarios": 0,
+      "success_rate": 0.0,
+      "available": true
+    },
+    "backend_comparison": {
+      "total_comparisons": 1,
+      "agreements": 0,
+      "agreement_rate": 0.0
+    }
+  },
+  "performance_summary": {
+    "performance_trends": {
+      "python_times": [
+        0.00854635238647461,
+        0.009294986724853516,
+        0.010406017303466797
+      ],
+      "julia_times": [],
+      "julia_faster": null
+    },
+    "best_julia_solver": {
+      "name": "Rosenbrock23",
+      "time": Infinity
+    }
+  },
+  "recommendations": [
+    "Numerical stability issues detected. Consider using stricter tolerances for production simulations.",
+    "For Julia simulations, Rosenbrock23 shows best performance for these problems."
+  ],
+  "detailed_results": {
+    "python_results": {
+      "scenarios": {
+        "ozone_nox_cycle": "VerificationResult(scenario_name='ozone_nox_cycle', success=True, simulation_result=SimulationResult(t=array([0.00000000e+00, 3.60000000e+00, 7.20000000e+00, 1.98129961e+01,\n       3.24259921e+01, 4.50389882e+01, 5.76919478e+01, 7.03449075e+01,\n       8.29978671e+01, 9.56820473e+01, 1.08366227e+02, 1.21050408e+02,\n       1.33740825e+02, 1.46431243e+02, 1.59121661e+02, 1.71813261e+02,\n       1.84504861e+02, 1.97196461e+02, 2.09888285e+02, 2.22580108e+02,\n       2.35271932e+02, 2.47963798e+02, 2.73347531e+02, 2.98731264e+02,\n       3.24114996e+02, 5.77952322e+02, 8.31789648e+02, 3.37016291e+03,\n       3.60000000e+03]), y=array([[8.00000000e-08, 7.99468270e-08, 7.99011743e-08, 7.97780499e-08,\n        7.97116392e-08, 7.96748591e-08, 7.96532584e-08, 7.96405715e-08,\n        7.96332792e-08, 7.96291162e-08, 7.96267321e-08, 7.96253579e-08,\n        7.96245661e-08, 7.96241116e-08, 7.96238508e-08, 7.96237010e-08,\n        7.96236149e-08, 7.96235654e-08, 7.96235370e-08, 7.96235207e-08,\n        7.96235113e-08, 7.96235059e-08, 7.96235002e-08, 7.96234984e-08,\n        7.96234982e-08, 7.96234986e-08, 7.96234987e-08, 7.96234987e-08,\n        7.96234987e-08],\n       [5.00000000e-09, 4.94682705e-09, 4.90117435e-09, 4.77804994e-09,\n        4.71163924e-09, 4.67485909e-09, 4.65325843e-09, 4.64057148e-09,\n        4.63327922e-09, 4.62911621e-09, 4.62673209e-09, 4.62535789e-09,\n        4.62456610e-09, 4.62411158e-09, 4.62385080e-09, 4.62370099e-09,\n        4.62361489e-09, 4.62356542e-09, 4.62353701e-09, 4.62352069e-09,\n        4.62351131e-09, 4.62350593e-09, 4.62350019e-09, 4.62349844e-09,\n        4.62349820e-09, 4.62349862e-09, 4.62349865e-09, 4.62349866e-09,\n        4.62349866e-09],\n       [2.00000000e-08, 2.00531730e-08, 2.00988257e-08, 2.02219501e-08,\n        2.02883608e-08, 2.03251409e-08, 2.03467416e-08, 2.03594285e-08,\n        2.03667208e-08, 2.03708838e-08, 2.03732679e-08, 2.03746421e-08,\n        2.03754339e-08, 2.03758884e-08, 2.03761492e-08, 2.03762990e-08,\n        2.03763851e-08, 2.03764346e-08, 2.03764630e-08, 2.03764793e-08,\n        2.03764887e-08, 2.03764941e-08, 2.03764998e-08, 2.03765016e-08,\n        2.03765018e-08, 2.03765014e-08, 2.03765013e-08, 2.03765013e-08,\n        2.03765013e-08],\n       [2.10000000e-01, 2.10000001e-01, 2.10000001e-01, 2.10000003e-01,\n        2.10000006e-01, 2.10000008e-01, 2.10000010e-01, 2.10000012e-01,\n        2.10000014e-01, 2.10000016e-01, 2.10000018e-01, 2.10000020e-01,\n        2.10000022e-01, 2.10000024e-01, 2.10000026e-01, 2.10000028e-01,\n        2.10000030e-01, 2.10000032e-01, 2.10000035e-01, 2.10000037e-01,\n        2.10000039e-01, 2.10000041e-01, 2.10000045e-01, 2.10000049e-01,\n        2.10000053e-01, 2.10000095e-01, 2.10000136e-01, 2.10000550e-01,\n        2.10000587e-01]]), success=True, message='The solver successfully reached the end of the integration interval.', nfev=66, njev=np.int32(4), nlu=np.int32(4), events=None), verification_tests={'mass_conservation': True, 'energy_conservation': True, 'photostationary_state': np.True_, 'analytical_accuracy': True}, error_metrics={'analytical_error': 1e-05}, mass_conservation_error=2.6469779601696886e-16, energy_conservation_error=0.0, message='Verification completed successfully', runtime=0.14800453186035156)",
+        "urban_chemistry": "VerificationResult(scenario_name='urban_chemistry', success=True, simulation_result=SimulationResult(t=array([0.00000000e+00, 4.31998349e+01, 8.63996698e+01, 1.58274670e+02,\n       2.30149670e+02, 3.02024670e+02, 3.73899670e+02, 4.45774670e+02,\n       5.17649670e+02, 5.89524670e+02, 6.61399670e+02, 7.33274670e+02,\n       8.05149670e+02, 8.77024670e+02, 9.48899670e+02, 1.02077467e+03,\n       1.09264967e+03, 1.16452467e+03, 1.23639967e+03, 1.30827467e+03,\n       1.38014967e+03, 1.45202467e+03, 2.17077467e+03, 2.88952467e+03,\n       3.60827467e+03, 1.07957747e+04, 1.79832747e+04, 4.32000000e+04]), y=array([[ 5.00000000e-08,  7.13950401e-08,  8.72045418e-08,\n         1.06876703e-07,  1.16788930e-07,  1.22213928e-07,\n         1.25481297e-07,  1.27424280e-07,  1.28530651e-07,\n         1.29154922e-07,  1.29512891e-07,  1.29720031e-07,\n         1.29839385e-07,  1.29907796e-07,  1.29947015e-07,\n         1.29969551e-07,  1.29982509e-07,  1.29989954e-07,\n         1.29994230e-07,  1.29996685e-07,  1.29998096e-07,\n         1.29998906e-07,  1.30001692e-07,  1.30000542e-07,\n         1.30000033e-07,  1.30000001e-07,  1.30000000e-07,\n         1.30000000e-07],\n       [ 8.00000000e-08,  5.86049599e-08,  4.27954582e-08,\n         2.31232967e-08,  1.32110697e-08,  7.78607166e-09,\n         4.51870295e-09,  2.57571994e-09,  1.46934874e-09,\n         8.45077630e-10,  4.87108565e-10,  2.79969423e-10,\n         1.60615141e-10,  9.22037154e-11,  5.29851193e-11,\n         3.04490860e-11,  1.74906501e-11,  1.00455020e-11,\n         5.77030505e-12,  3.31492773e-12,  1.90431046e-12,\n         1.09389788e-12, -1.69212767e-12, -5.42235015e-13,\n        -3.28836007e-14, -5.62122709e-16, -9.60910399e-18,\n        -4.74095194e-20],\n       [ 1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10,  1.00000000e-10,  1.00000000e-10,\n         1.00000000e-10],\n       [ 5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11,  5.00000000e-11,  5.00000000e-11,\n         5.00000000e-11],\n       [ 6.00000000e-08,  8.13950401e-08,  9.72045418e-08,\n         1.16876703e-07,  1.26788930e-07,  1.32213928e-07,\n         1.35481297e-07,  1.37424280e-07,  1.38530651e-07,\n         1.39154922e-07,  1.39512891e-07,  1.39720031e-07,\n         1.39839385e-07,  1.39907796e-07,  1.39947015e-07,\n         1.39969551e-07,  1.39982509e-07,  1.39989954e-07,\n         1.39994230e-07,  1.39996685e-07,  1.39998096e-07,\n         1.39998906e-07,  1.40001692e-07,  1.40000542e-07,\n         1.40000033e-07,  1.40000001e-07,  1.40000000e-07,\n         1.40000000e-07],\n       [ 1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12,  1.00000000e-12,  1.00000000e-12,\n         1.00000000e-12],\n       [ 1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11,  1.00000000e-11,  1.00000000e-11,\n         1.00000000e-11],\n       [ 2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11,  2.00000000e-11,  2.00000000e-11,\n         2.00000000e-11],\n       [ 1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06,  1.80000000e-06,  1.80000000e-06,\n         1.80000000e-06],\n       [ 1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06,  1.00000000e-06,  1.00000000e-06,\n         1.00000000e-06],\n       [ 2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09,  2.00000000e-09,  2.00000000e-09,\n         2.00000000e-09],\n       [ 5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09],\n       [ 1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09,  1.00000000e-09,  1.00000000e-09,\n         1.00000000e-09],\n       [ 5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09,  5.00000000e-09,  5.00000000e-09,\n         5.00000000e-09]]), success=True, message='The solver successfully reached the end of the integration interval.', nfev=91, njev=np.int32(3), nlu=np.int32(3), events=None), verification_tests={'mass_conservation': True, 'energy_conservation': True, 'ozone_production': np.True_, 'steady_state_radicals': True}, error_metrics={}, mass_conservation_error=5.875644750654136e-16, energy_conservation_error=0.0, message='Verification completed successfully', runtime=0.03499484062194824)",
+        "stratospheric_ozone": "VerificationResult(scenario_name='stratospheric_ozone', success=True, simulation_result=SimulationResult(t=array([0.00000000e+00, 8.63979144e+01, 1.72795829e+02, 1.94972629e+03,\n       3.72665675e+03, 5.50358721e+03, 8.70624232e+03, 1.19088974e+04,\n       1.51115525e+04, 1.83142076e+04, 2.35130837e+04, 2.87119597e+04,\n       3.39108358e+04, 3.91097118e+04, 4.43085879e+04, 4.95074639e+04,\n       5.47063400e+04, 6.04563400e+04, 6.62063400e+04, 7.19563400e+04,\n       7.77063400e+04, 8.34563400e+04, 8.64000000e+04]), y=array([[8.00000000e-06, 7.93147368e-06, 7.86353434e-06, 6.58033351e-06,\n        5.50669181e-06, 4.60830656e-06, 3.35147973e-06, 2.43360691e-06,\n        1.76611524e-06, 1.28240124e-06, 7.64224096e-07, 4.52280697e-07,\n        2.66636575e-07, 1.57808631e-07, 9.34074161e-08, 5.50939999e-08,\n        3.25219953e-08, 1.79036568e-08, 1.01292026e-08, 5.90247752e-09,\n        3.42818299e-09, 1.96403271e-09, 1.47304179e-09],\n       [2.10000000e-01, 2.10000068e-01, 2.10000136e-01, 2.10001416e-01,\n        2.10002485e-01, 2.10003380e-01, 2.10004630e-01, 2.10005541e-01,\n        2.10006202e-01, 2.10006679e-01, 2.10007186e-01, 2.10007487e-01,\n        2.10007662e-01, 2.10007760e-01, 2.10007814e-01, 2.10007841e-01,\n        2.10007853e-01, 2.10007855e-01, 2.10007851e-01, 2.10007843e-01,\n        2.10007833e-01, 2.10007823e-01, 2.10007817e-01],\n       [1.00000000e-09, 6.98891943e-08, 1.38191407e-07, 1.42885537e-06,\n        2.50996024e-06, 3.41580871e-06, 4.68608695e-06, 5.61741125e-06,\n        6.29835445e-06, 6.79552001e-06, 7.33553316e-06, 7.66931260e-06,\n        7.87679279e-06, 8.00745682e-06, 8.09369412e-06, 8.15384363e-06,\n        8.19825173e-06, 8.23702097e-06, 8.26894633e-06, 8.29732396e-06,\n        8.32394915e-06, 8.34956420e-06, 8.36241903e-06],\n       [1.00000000e-12, 1.00259192e-12, 1.00518381e-12, 1.05848606e-12,\n        1.11177885e-12, 1.16506217e-12, 1.26107358e-12, 1.35705425e-12,\n        1.45300419e-12, 1.54892340e-12, 1.70456384e-12, 1.86012339e-12,\n        2.01560208e-12, 2.17099997e-12, 2.32631708e-12, 2.48155347e-12,\n        2.63670918e-12, 2.80821876e-12, 2.97962975e-12, 3.15094221e-12,\n        3.32215620e-12, 3.49327176e-12, 3.58083474e-12],\n       [5.00000000e-13, 5.00000000e-13, 5.00000000e-13, 5.00000000e-13,\n        5.00000000e-13, 5.00000000e-13, 5.00000000e-13, 5.00000000e-13,\n        5.00000000e-13, 5.00000000e-13, 5.00000000e-13, 5.00000000e-13,\n        5.00000000e-13, 5.00000000e-13, 5.00000000e-13, 5.00000000e-13,\n        5.00000000e-13, 5.00000000e-13, 5.00000000e-13, 5.00000000e-13,\n        5.00000000e-13, 5.00000000e-13, 5.00000000e-13],\n       [0.00000000e+00, 3.45591658e-37, 6.91183315e-37, 7.79890516e-36,\n        1.49066270e-35, 2.20143488e-35, 3.48249693e-35, 4.76355897e-35,\n        6.04462101e-35, 7.32568306e-35, 9.40523347e-35, 1.14847839e-34,\n        1.35643343e-34, 1.56438847e-34, 1.77234352e-34, 1.98029856e-34,\n        2.18825360e-34, 2.41825360e-34, 2.64825360e-34, 2.87825360e-34,\n        3.10825360e-34, 3.33825360e-34, 3.45600000e-34],\n       [2.00000000e-09, 2.00000000e-09, 2.00000000e-09, 2.00000000e-09,\n        2.00000000e-09, 2.00000000e-09, 2.00000000e-09, 2.00000000e-09,\n        2.00000000e-09, 2.00000000e-09, 2.00000000e-09, 2.00000000e-09,\n        2.00000000e-09, 2.00000000e-09, 2.00000000e-09, 2.00000000e-09,\n        2.00000000e-09, 2.00000000e-09, 2.00000000e-09, 2.00000000e-09,\n        2.00000000e-09, 2.00000000e-09, 2.00000000e-09],\n       [1.00000000e-09, 1.00000000e-09, 1.00000000e-09, 1.00000000e-09,\n        1.00000000e-09, 1.00000000e-09, 1.00000000e-09, 1.00000000e-09,\n        1.00000000e-09, 1.00000000e-09, 1.00000000e-09, 1.00000000e-09,\n        1.00000000e-09, 1.00000000e-09, 1.00000000e-09, 1.00000000e-09,\n        1.00000000e-09, 1.00000000e-09, 1.00000000e-09, 1.00000000e-09,\n        1.00000000e-09, 1.00000000e-09, 1.00000000e-09],\n       [1.00000000e-13, 1.00000000e-13, 1.00000000e-13, 1.00000000e-13,\n        1.00000000e-13, 1.00000000e-13, 1.00000000e-13, 1.00000000e-13,\n        1.00000000e-13, 1.00000000e-13, 1.00000000e-13, 1.00000000e-13,\n        1.00000000e-13, 1.00000000e-13, 1.00000000e-13, 1.00000000e-13,\n        1.00000000e-13, 1.00000000e-13, 1.00000000e-13, 1.00000000e-13,\n        1.00000000e-13, 1.00000000e-13, 1.00000000e-13],\n       [5.00000000e-14, 5.00000000e-14, 5.00000000e-14, 5.00000000e-14,\n        5.00000000e-14, 5.00000000e-14, 5.00000000e-14, 5.00000000e-14,\n        5.00000000e-14, 5.00000000e-14, 5.00000000e-14, 5.00000000e-14,\n        5.00000000e-14, 5.00000000e-14, 5.00000000e-14, 5.00000000e-14,\n        5.00000000e-14, 5.00000000e-14, 5.00000000e-14, 5.00000000e-14,\n        5.00000000e-14, 5.00000000e-14, 5.00000000e-14],\n       [1.00000000e-10, 9.99991360e-11, 9.99982721e-11, 9.99805046e-11,\n        9.99627404e-11, 9.99449793e-11, 9.99129755e-11, 9.98809819e-11,\n        9.98489986e-11, 9.98170255e-11, 9.97651454e-11, 9.97132922e-11,\n        9.96614660e-11, 9.96096667e-11, 9.95578943e-11, 9.95061488e-11,\n        9.94544303e-11, 9.93972604e-11, 9.93401234e-11, 9.92830193e-11,\n        9.92259479e-11, 9.91689094e-11, 9.91397218e-11],\n       [2.00000000e-10, 2.00000000e-10, 2.00000000e-10, 2.00000000e-10,\n        2.00000000e-10, 2.00000000e-10, 2.00000000e-10, 2.00000000e-10,\n        2.00000000e-10, 2.00000000e-10, 2.00000000e-10, 2.00000000e-10,\n        2.00000000e-10, 2.00000000e-10, 2.00000000e-10, 2.00000000e-10,\n        2.00000000e-10, 2.00000000e-10, 2.00000000e-10, 2.00000000e-10,\n        2.00000000e-10, 2.00000000e-10, 2.00000000e-10]]), success=True, message='The solver successfully reached the end of the integration interval.', nfev=45, njev=np.int32(0), nlu=np.int32(0), events=None), verification_tests={'mass_conservation': True, 'energy_conservation': True, 'ozone_depletion': np.True_}, error_metrics={}, mass_conservation_error=0.0, energy_conservation_error=0.0, message='Verification completed successfully', runtime=0.030416488647460938)",
+        "voc_degradation": "VerificationResult(scenario_name='voc_degradation', success=True, simulation_result=SimulationResult(t=array([0.00e+00, 7.20e+00, 1.44e+01, 7.20e+03]), y=array([[5.00e-09, 5.00e-09, 5.00e-09, 5.00e-09],\n       [1.00e-12, 1.00e-12, 1.00e-12, 1.00e-12],\n       [0.00e+00, 3.06e-31, 6.12e-31, 3.06e-28],\n       [1.00e-06, 1.00e-06, 1.00e-06, 1.00e-06]]), success=True, message='The solver successfully reached the end of the integration interval.', nfev=4, njev=np.int32(0), nlu=np.int32(0), events=None), verification_tests={'mass_conservation': True, 'energy_conservation': True}, error_metrics={}, mass_conservation_error=0.0, energy_conservation_error=0.0, message='Verification completed successfully', runtime=0.0072176456451416016)",
+        "gas_aerosol_coupling": "VerificationResult(scenario_name='gas_aerosol_coupling', success=True, simulation_result=SimulationResult(t=array([0.0e+00, 3.6e+00, 7.2e+00, 3.6e+03]), y=array([[1.00e-08, 1.00e-08, 1.00e-08, 1.00e-08],\n       [1.00e-12, 1.00e-12, 1.00e-12, 1.00e-12],\n       [0.00e+00, 4.68e-32, 9.36e-32, 4.68e-29],\n       [5.00e-09, 5.00e-09, 5.00e-09, 5.00e-09]]), success=True, message='The solver successfully reached the end of the integration interval.', nfev=4, njev=np.int32(0), nlu=np.int32(0), events=None), verification_tests={'mass_conservation': True, 'energy_conservation': True}, error_metrics={}, mass_conservation_error=0.0, energy_conservation_error=0.0, message='Verification completed successfully', runtime=0.0048999786376953125)",
+        "climate_chemistry_feedback": "VerificationResult(scenario_name='climate_chemistry_feedback', success=True, simulation_result=SimulationResult(t=array([    0. ,    86.4,   172.8, 86400. ]), y=array([[1.8e-06, 1.8e-06, 1.8e-06, 1.8e-06],\n       [1.0e-12, 1.0e-12, 1.0e-12, 1.0e-12],\n       [1.0e-06, 1.0e-06, 1.0e-06, 1.0e-06],\n       [1.0e-02, 1.0e-02, 1.0e-02, 1.0e-02]]), success=True, message='The solver successfully reached the end of the integration interval.', nfev=4, njev=np.int32(0), nlu=np.int32(0), events=None), verification_tests={'mass_conservation': True, 'energy_conservation': True}, error_metrics={}, mass_conservation_error=0.0, energy_conservation_error=0.0, message='Verification completed successfully', runtime=0.004313230514526367)"
+      },
+      "esm_roundtrip": {
+        "success": true,
+        "original_species_count": 4,
+        "reconstructed_species_count": 4,
+        "original_reaction_count": 2,
+        "reconstructed_reaction_count": 2,
+        "file_size_bytes": 2006,
+        "test_file_path": "test_verification_results/test_roundtrip.esm"
+      },
+      "numerical_stability": {
+        "all_stable": false,
+        "tolerance_tests": {
+          "tol_1": {
+            "success": true,
+            "nfev": 48,
+            "final_time": 3600.0,
+            "tolerance": {
+              "rtol": 0.0001,
+              "atol": 1e-06
+            },
+            "stable": true
+          },
+          "tol_2": {
+            "success": true,
+            "nfev": 66,
+            "final_time": 3600.0,
+            "tolerance": {
+              "rtol": 1e-06,
+              "atol": 1e-08
+            },
+            "max_relative_difference": 17.37253034646382,
+            "stable": "False"
+          },
+          "tol_3": {
+            "success": true,
+            "nfev": 61,
+            "final_time": 3600.0,
+            "tolerance": {
+              "rtol": 1e-08,
+              "atol": 1e-10
+            },
+            "max_relative_difference": 17.37252971555939,
+            "stable": "False"
+          }
+        }
+      }
+    },
+    "julia_results": {
+      "scenarios": {
+        "ozone_nox_cycle": {
+          "success": false,
+          "error": "Julia execution failed: ERROR: LoadError: ArgumentError: Package ESMFormat not found in current path.\n- Run `import Pkg; Pkg.add(\"ESMFormat\")` to install the ESMFormat package.\nStacktrace:\n [1] macro expansion\n   @ ./loading.jl:2403 [inlined]\n [2] macro expansion\n   @ ./lock.jl:376 [inlined]\n [3] __require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2386\n [4] require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2362\n [5] include(mod::Module, _path::String)\n   @ Base ./Base.jl:306\n [6] exec_options(opts::Base.JLOptions)\n   @ Base ./client.jl:317\n [7] _start()\n   @ Base ./client.jl:550\nin expression starting at /tmp/tmp695v_hve.jl:2\n",
+          "error_type": "JuliaSimulationError"
+        }
+      },
+      "solver_benchmark": {
+        "solver_results": {
+          "Rosenbrock23": {
+            "total_time": Infinity,
+            "solve_time": Infinity,
+            "nfev": 0,
+            "memory_usage": 0.0
+          },
+          "Rodas5": {
+            "total_time": Infinity,
+            "solve_time": Infinity,
+            "nfev": 0,
+            "memory_usage": 0.0
+          },
+          "FBDF": {
+            "total_time": Infinity,
+            "solve_time": Infinity,
+            "nfev": 0,
+            "memory_usage": 0.0
+          },
+          "Tsit5": {
+            "total_time": Infinity,
+            "solve_time": Infinity,
+            "nfev": 0,
+            "memory_usage": 0.0
+          },
+          "Vern7": {
+            "total_time": Infinity,
+            "solve_time": Infinity,
+            "nfev": 0,
+            "memory_usage": 0.0
+          }
+        },
+        "best_solver": "Rosenbrock23",
+        "best_time": Infinity
+      }
+    },
+    "comparison_results": {
+      "ozone_nox_cycle": {
+        "error": "Julia execution failed: ERROR: LoadError: ArgumentError: Package ESMFormat not found in current path.\n- Run `import Pkg; Pkg.add(\"ESMFormat\")` to install the ESMFormat package.\nStacktrace:\n [1] macro expansion\n   @ ./loading.jl:2403 [inlined]\n [2] macro expansion\n   @ ./lock.jl:376 [inlined]\n [3] __require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2386\n [4] require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2362\n [5] include(mod::Module, _path::String)\n   @ Base ./Base.jl:306\n [6] exec_options(opts::Base.JLOptions)\n   @ Base ./client.jl:317\n [7] _start()\n   @ Base ./client.jl:550\nin expression starting at /tmp/tmpkeavup4p.jl:2\n",
+        "error_type": "JuliaSimulationError"
+      }
+    },
+    "performance_benchmarks": {
+      "small": {
+        "python": {
+          "success": true,
+          "runtime": 0.00854635238647461,
+          "nfev": 66,
+          "timepoints": 29
+        },
+        "julia": {
+          "error": "Julia execution failed: ERROR: LoadError: ArgumentError: Package ESMFormat not found in current path.\n- Run `import Pkg; Pkg.add(\"ESMFormat\")` to install the ESMFormat package.\nStacktrace:\n [1] macro expansion\n   @ ./loading.jl:2403 [inlined]\n [2] macro expansion\n   @ ./lock.jl:376 [inlined]\n [3] __require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2386\n [4] require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2362\n [5] include(mod::Module, _path::String)\n   @ Base ./Base.jl:306\n [6] exec_options(opts::Base.JLOptions)\n   @ Base ./client.jl:317\n [7] _start()\n   @ Base ./client.jl:550\nin expression starting at /tmp/tmpra0vhqav.jl:2\n"
+        }
+      },
+      "medium": {
+        "python": {
+          "success": true,
+          "runtime": 0.009294986724853516,
+          "nfev": 66,
+          "timepoints": 30
+        },
+        "julia": {
+          "error": "Julia execution failed: ERROR: LoadError: ArgumentError: Package ESMFormat not found in current path.\n- Run `import Pkg; Pkg.add(\"ESMFormat\")` to install the ESMFormat package.\nStacktrace:\n [1] macro expansion\n   @ ./loading.jl:2403 [inlined]\n [2] macro expansion\n   @ ./lock.jl:376 [inlined]\n [3] __require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2386\n [4] require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2362\n [5] include(mod::Module, _path::String)\n   @ Base ./Base.jl:306\n [6] exec_options(opts::Base.JLOptions)\n   @ Base ./client.jl:317\n [7] _start()\n   @ Base ./client.jl:550\nin expression starting at /tmp/tmpqsktc14_.jl:2\n"
+        }
+      },
+      "large": {
+        "python": {
+          "success": true,
+          "runtime": 0.010406017303466797,
+          "nfev": 74,
+          "timepoints": 31
+        },
+        "julia": {
+          "error": "Julia execution failed: ERROR: LoadError: ArgumentError: Package ESMFormat not found in current path.\n- Run `import Pkg; Pkg.add(\"ESMFormat\")` to install the ESMFormat package.\nStacktrace:\n [1] macro expansion\n   @ ./loading.jl:2403 [inlined]\n [2] macro expansion\n   @ ./lock.jl:376 [inlined]\n [3] __require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2386\n [4] require(into::Module, mod::Symbol)\n   @ Base ./loading.jl:2362\n [5] include(mod::Module, _path::String)\n   @ Base ./Base.jl:306\n [6] exec_options(opts::Base.JLOptions)\n   @ Base ./client.jl:317\n [7] _start()\n   @ Base ./client.jl:550\nin expression starting at /tmp/tmpo2506e4b.jl:2\n"
+        }
+      }
+    }
+  }
+}

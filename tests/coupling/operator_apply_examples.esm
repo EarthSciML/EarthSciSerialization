@@ -1,0 +1,173 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "OperatorApplyExamples",
+    "description": "Test fixtures for operator_apply coupling with runtime operators",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "operators": {
+    "SpatialAverage": {
+      "operator_id": "spatial_average_1d",
+      "description": "Compute spatial average over 1D domain",
+      "needed_vars": ["input_field"],
+      "provides": ["averaged_value"],
+      "implementation": {
+        "type": "builtin",
+        "method": "integrate_trapezoid"
+      }
+    },
+
+    "GaussianSmoothing": {
+      "operator_id": "gaussian_smooth",
+      "description": "Apply Gaussian smoothing filter",
+      "needed_vars": ["raw_field"],
+      "provides": ["smoothed_field"],
+      "parameters": {
+        "sigma": { "units": "m", "default": 0.1, "description": "Smoothing width" }
+      },
+      "implementation": {
+        "type": "convolution",
+        "kernel": "gaussian"
+      }
+    },
+
+    "DerivativeOperator": {
+      "operator_id": "central_difference",
+      "description": "Central difference derivative",
+      "needed_vars": ["field"],
+      "provides": ["field_derivative"],
+      "parameters": {
+        "order": { "units": "1", "default": 2, "description": "Finite difference order" }
+      },
+      "implementation": {
+        "type": "finite_difference",
+        "stencil": "central"
+      }
+    }
+  },
+
+  "models": {
+    "ConcentrationField": {
+      "reference": { "notes": "Scalar concentration field with local reactions" },
+      "variables": {
+        "concentration": { "type": "state", "units": "mol/m^3", "default": 1.0, "description": "Local concentration" },
+        "local_mean": { "type": "algebraic", "units": "mol/m^3", "description": "Spatially averaged concentration" },
+        "smooth_conc": { "type": "algebraic", "units": "mol/m^3", "description": "Smoothed concentration" }
+      },
+      "parameters": {
+        "reaction_rate": { "units": "1/s", "default": 0.1, "description": "Local reaction rate" },
+        "diffusion_coeff": { "units": "m^2/s", "default": 1e-5, "description": "Diffusion coefficient" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["concentration"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": ["diffusion_coeff", { "op": "laplacian", "args": ["concentration"] }] },
+              { "op": "*", "args": ["reaction_rate", { "op": "-", "args": ["local_mean", "concentration"] }] },
+              { "op": "*", "args": [0.05, { "op": "-", "args": ["smooth_conc", "concentration"] }] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "FlowField": {
+      "reference": { "notes": "Velocity field with feedback from concentration gradients" },
+      "variables": {
+        "velocity": { "type": "state", "units": "m/s", "default": 0.0, "description": "Flow velocity" },
+        "conc_gradient": { "type": "algebraic", "units": "mol/m^4", "description": "Concentration gradient" }
+      },
+      "parameters": {
+        "viscous_damping": { "units": "1/s", "default": 0.01, "description": "Viscous damping coefficient" },
+        "buoyancy_strength": { "units": "m^4/(mol·s)", "default": 1e-6, "description": "Buoyancy coupling strength" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["velocity"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["viscous_damping"] }, "velocity"] },
+              { "op": "*", "args": ["buoyancy_strength", "conc_gradient"] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_apply",
+      "operator": "SpatialAverage",
+      "input_mapping": {
+        "input_field": "ConcentrationField.concentration"
+      },
+      "output_mapping": {
+        "averaged_value": "ConcentrationField.local_mean"
+      }
+    },
+    {
+      "type": "operator_apply",
+      "operator": "GaussianSmoothing",
+      "input_mapping": {
+        "raw_field": "ConcentrationField.concentration"
+      },
+      "output_mapping": {
+        "smoothed_field": "ConcentrationField.smooth_conc"
+      },
+      "parameters": {
+        "sigma": 0.05
+      }
+    },
+    {
+      "type": "operator_apply",
+      "operator": "DerivativeOperator",
+      "input_mapping": {
+        "field": "ConcentrationField.concentration"
+      },
+      "output_mapping": {
+        "field_derivative": "FlowField.conc_gradient"
+      },
+      "parameters": {
+        "order": 4
+      }
+    },
+    {
+      "type": "operator_compose",
+      "systems": ["ConcentrationField", "FlowField"]
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T02:00:00Z" },
+    "spatial": {
+      "x": { "min": 0.0, "max": 10.0, "grid_spacing": 0.1, "units": "m" }
+    },
+    "initial_conditions": {
+      "type": "function",
+      "expression": {
+        "op": "*", "args": [
+          { "op": "exp", "args": [{ "op": "*", "args": [-0.5, { "op": "^", "args": [{ "op": "-", "args": ["x", 5] }, 2] }] }] },
+          1.0
+        ]
+      }
+    },
+    "boundary_conditions": [
+      { "type": "neumann", "variable": "concentration", "value": 0.0, "dimensions": ["x"] },
+      { "type": "dirichlet", "variable": "velocity", "value": 0.0, "location": "boundaries" }
+    ],
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "operator_splitting",
+    "config": {
+      "reaction_algorithm": "Rosenbrock23",
+      "transport_algorithm": "WENO5",
+      "operator_sequence": ["operators", "transport", "reaction"]
+    }
+  }
+}

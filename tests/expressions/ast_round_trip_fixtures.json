@@ -1,0 +1,920 @@
+[
+  {
+    "name": "Basic literals round-trip",
+    "description": "Simple literal values must round-trip perfectly",
+    "tests": [
+      {
+        "description": "Integer literal",
+        "input": 42,
+        "expected_type": "NumExpr",
+        "expected_value": 42.0,
+        "serialized": 42.0
+      },
+      {
+        "description": "Floating-point literal",
+        "input": 3.14159,
+        "expected_type": "NumExpr",
+        "expected_value": 3.14159,
+        "serialized": 3.14159
+      },
+      {
+        "description": "Scientific notation positive",
+        "input": 1.23e-4,
+        "expected_type": "NumExpr",
+        "expected_value": 0.000123,
+        "serialized": 0.000123
+      },
+      {
+        "description": "Scientific notation large",
+        "input": 6.022e23,
+        "expected_type": "NumExpr",
+        "expected_value": 6.022e23,
+        "serialized": 6.022e23
+      },
+      {
+        "description": "Negative number",
+        "input": -2.718281828,
+        "expected_type": "NumExpr",
+        "expected_value": -2.718281828,
+        "serialized": -2.718281828
+      },
+      {
+        "description": "Zero literal",
+        "input": 0,
+        "expected_type": "NumExpr",
+        "expected_value": 0.0,
+        "serialized": 0.0
+      },
+      {
+        "description": "Negative zero",
+        "input": -0.0,
+        "expected_type": "NumExpr",
+        "expected_value": 0.0,
+        "serialized": 0.0
+      }
+    ]
+  },
+  {
+    "name": "Number precision edge cases",
+    "description": "Test precision limits and boundary values",
+    "tests": [
+      {
+        "description": "Very small positive number",
+        "input": 1e-100,
+        "expected_type": "NumExpr",
+        "expected_value": 1e-100,
+        "serialized": 1e-100
+      },
+      {
+        "description": "Very large number",
+        "input": 1e100,
+        "expected_type": "NumExpr",
+        "expected_value": 1e100,
+        "serialized": 1e100
+      },
+      {
+        "description": "High precision decimal",
+        "input": 3.1415926535897932384626433832795,
+        "expected_type": "NumExpr",
+        "expected_value": 3.1415926535897932384626433832795,
+        "serialized": 3.1415926535897932384626433832795
+      },
+      {
+        "description": "Repeating decimal representation",
+        "input": 0.333333333333333333,
+        "expected_type": "NumExpr",
+        "expected_value": 0.333333333333333333,
+        "serialized": 0.333333333333333333
+      },
+      {
+        "description": "Machine epsilon scale",
+        "input": 2.220446049250313e-16,
+        "expected_type": "NumExpr",
+        "expected_value": 2.220446049250313e-16,
+        "serialized": 2.220446049250313e-16
+      }
+    ]
+  },
+  {
+    "name": "Variable names with special characters",
+    "description": "Complex variable names that must preserve exactly",
+    "tests": [
+      {
+        "description": "Simple variable name",
+        "input": "x",
+        "expected_type": "VarExpr",
+        "expected_name": "x",
+        "serialized": "x"
+      },
+      {
+        "description": "Chemical species with subscript",
+        "input": "CO2",
+        "expected_type": "VarExpr",
+        "expected_name": "CO2",
+        "serialized": "CO2"
+      },
+      {
+        "description": "Variable with underscores",
+        "input": "k_NO_O3",
+        "expected_type": "VarExpr",
+        "expected_name": "k_NO_O3",
+        "serialized": "k_NO_O3"
+      },
+      {
+        "description": "Greek letter variable",
+        "input": "α",
+        "expected_type": "VarExpr",
+        "expected_name": "α",
+        "serialized": "α"
+      },
+      {
+        "description": "Variable with numbers",
+        "input": "x1_prime",
+        "expected_type": "VarExpr",
+        "expected_name": "x1_prime",
+        "serialized": "x1_prime"
+      },
+      {
+        "description": "Unicode variable name",
+        "input": "θ₁",
+        "expected_type": "VarExpr",
+        "expected_name": "θ₁",
+        "serialized": "θ₁"
+      },
+      {
+        "description": "Complex chemical species",
+        "input": "CH2ClF",
+        "expected_type": "VarExpr",
+        "expected_name": "CH2ClF",
+        "serialized": "CH2ClF"
+      },
+      {
+        "description": "Scoped reference variable",
+        "input": "System1.Temperature",
+        "expected_type": "VarExpr",
+        "expected_name": "System1.Temperature",
+        "serialized": "System1.Temperature"
+      },
+      {
+        "description": "Variable with special symbols",
+        "input": "σ_total",
+        "expected_type": "VarExpr",
+        "expected_name": "σ_total",
+        "serialized": "σ_total"
+      }
+    ]
+  },
+  {
+    "name": "Complex nested arithmetic expressions",
+    "description": "Deeply nested expressions with all operators",
+    "tests": [
+      {
+        "description": "Nested addition and multiplication",
+        "input": {
+          "op": "+",
+          "args": [
+            {"op": "*", "args": [2, 3]},
+            {"op": "*", "args": [4, 5]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "+",
+          "args": [
+            {"op": "*", "args": [2.0, 3.0]},
+            {"op": "*", "args": [4.0, 5.0]}
+          ]
+        }
+      },
+      {
+        "description": "Deep nesting with mixed operations",
+        "input": {
+          "op": "^",
+          "args": [
+            {
+              "op": "+",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": ["x", "y"]}]},
+                    {"op": "sin", "args": ["θ"]}
+                  ]
+                },
+                {"op": "-", "args": [1, {"op": "cos", "args": ["φ"]}]}
+              ]
+            },
+            2
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "^",
+          "args": [
+            {
+              "op": "+",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": ["x", "y"]}]},
+                    {"op": "sin", "args": ["θ"]}
+                  ]
+                },
+                {"op": "-", "args": [1.0, {"op": "cos", "args": ["φ"]}]}
+              ]
+            },
+            2.0
+          ]
+        }
+      },
+      {
+        "description": "Complex chemical rate expression",
+        "input": {
+          "op": "*",
+          "args": [
+            1.8e-12,
+            {
+              "op": "exp",
+              "args": [
+                {
+                  "op": "/",
+                  "args": [-1370, "T"]
+                }
+              ]
+            },
+            "M",
+            "NO",
+            "O3"
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "*",
+          "args": [
+            1.8e-12,
+            {
+              "op": "exp",
+              "args": [
+                {
+                  "op": "/",
+                  "args": [-1370.0, "T"]
+                }
+              ]
+            },
+            "M",
+            "NO",
+            "O3"
+          ]
+        }
+      },
+      {
+        "description": "Derivative with complex expression",
+        "input": {
+          "op": "D",
+          "args": [
+            {
+              "op": "*",
+              "args": [
+                {"op": "sin", "args": [{"op": "*", "args": ["ω", "t"]}]},
+                {"op": "exp", "args": [{"op": "-", "args": [{"op": "*", "args": ["γ", "t"]}]}]}
+              ]
+            }
+          ],
+          "wrt": "t"
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "D",
+          "args": [
+            {
+              "op": "*",
+              "args": [
+                {"op": "sin", "args": [{"op": "*", "args": ["ω", "t"]}]},
+                {"op": "exp", "args": [{"op": "-", "args": [{"op": "*", "args": ["γ", "t"]}]}]}
+              ]
+            }
+          ],
+          "wrt": "t"
+        }
+      },
+      {
+        "description": "Complex conditional expression",
+        "input": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": ">",
+              "args": ["T", 273.15]
+            },
+            {
+              "op": "*",
+              "args": [
+                "k_warm",
+                {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["Ea"]}, {"op": "*", "args": ["R", "T"]}]}]}
+              ]
+            },
+            {
+              "op": "*",
+              "args": [
+                "k_cold",
+                {"op": "^", "args": ["T", -0.5]}
+              ]
+            }
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": ">",
+              "args": ["T", 273.15]
+            },
+            {
+              "op": "*",
+              "args": [
+                "k_warm",
+                {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["Ea"]}, {"op": "*", "args": ["R", "T"]}]}]}
+              ]
+            },
+            {
+              "op": "*",
+              "args": [
+                "k_cold",
+                {"op": "^", "args": ["T", -0.5]}
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Expression tree depth limits",
+    "description": "Test expressions at various nesting depths",
+    "tests": [
+      {
+        "description": "Moderate depth (5 levels)",
+        "input": {
+          "op": "+",
+          "args": [
+            {
+              "op": "*",
+              "args": [
+                {
+                  "op": "exp",
+                  "args": [
+                    {
+                      "op": "/",
+                      "args": [
+                        {"op": "-", "args": ["x"]},
+                        2
+                      ]
+                    }
+                  ]
+                },
+                "A"
+              ]
+            },
+            "B"
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "+",
+          "args": [
+            {
+              "op": "*",
+              "args": [
+                {
+                  "op": "exp",
+                  "args": [
+                    {
+                      "op": "/",
+                      "args": [
+                        {"op": "-", "args": ["x"]},
+                        2.0
+                      ]
+                    }
+                  ]
+                },
+                "A"
+              ]
+            },
+            "B"
+          ]
+        }
+      },
+      {
+        "description": "Deep nesting (8 levels)",
+        "input": {
+          "op": "+",
+          "args": [
+            {
+              "op": "*",
+              "args": [
+                {
+                  "op": "exp",
+                  "args": [
+                    {
+                      "op": "/",
+                      "args": [
+                        {
+                          "op": "-",
+                          "args": [
+                            {
+                              "op": "log",
+                              "args": [
+                                {
+                                  "op": "^",
+                                  "args": [
+                                    {"op": "sin", "args": ["x"]},
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "σ"
+                      ]
+                    }
+                  ]
+                },
+                "k"
+              ]
+            },
+            "c"
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "+",
+          "args": [
+            {
+              "op": "*",
+              "args": [
+                {
+                  "op": "exp",
+                  "args": [
+                    {
+                      "op": "/",
+                      "args": [
+                        {
+                          "op": "-",
+                          "args": [
+                            {
+                              "op": "log",
+                              "args": [
+                                {
+                                  "op": "^",
+                                  "args": [
+                                    {"op": "sin", "args": ["x"]},
+                                    2.0
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "σ"
+                      ]
+                    }
+                  ]
+                },
+                "k"
+              ]
+            },
+            "c"
+          ]
+        }
+      },
+      {
+        "description": "Wide expression (many arguments)",
+        "input": {
+          "op": "+",
+          "args": [
+            "a1", "a2", "a3", "a4", "a5",
+            {"op": "*", "args": ["k1", "x1"]},
+            {"op": "*", "args": ["k2", "x2"]},
+            {"op": "*", "args": ["k3", "x3"]},
+            {"op": "exp", "args": ["y1"]},
+            {"op": "exp", "args": ["y2"]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "+",
+          "args": [
+            "a1", "a2", "a3", "a4", "a5",
+            {"op": "*", "args": ["k1", "x1"]},
+            {"op": "*", "args": ["k2", "x2"]},
+            {"op": "*", "args": ["k3", "x3"]},
+            {"op": "exp", "args": ["y1"]},
+            {"op": "exp", "args": ["y2"]}
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "All operator types comprehensive",
+    "description": "Test every operator type for round-trip fidelity",
+    "tests": [
+      {
+        "description": "Arithmetic operators",
+        "input": {
+          "op": "+",
+          "args": [
+            {"op": "-", "args": [{"op": "*", "args": [2, 3]}, {"op": "/", "args": [4, 5]}]},
+            {"op": "^", "args": ["x", 2]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "+",
+          "args": [
+            {"op": "-", "args": [{"op": "*", "args": [2.0, 3.0]}, {"op": "/", "args": [4.0, 5.0]}]},
+            {"op": "^", "args": ["x", 2.0]}
+          ]
+        }
+      },
+      {
+        "description": "Transcendental functions",
+        "input": {
+          "op": "*",
+          "args": [
+            {"op": "sin", "args": ["x"]},
+            {"op": "cos", "args": ["y"]},
+            {"op": "tan", "args": ["z"]},
+            {"op": "exp", "args": ["a"]},
+            {"op": "log", "args": ["b"]},
+            {"op": "sqrt", "args": ["c"]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "*",
+          "args": [
+            {"op": "sin", "args": ["x"]},
+            {"op": "cos", "args": ["y"]},
+            {"op": "tan", "args": ["z"]},
+            {"op": "exp", "args": ["a"]},
+            {"op": "log", "args": ["b"]},
+            {"op": "sqrt", "args": ["c"]}
+          ]
+        }
+      },
+      {
+        "description": "Comparison operators",
+        "input": {
+          "op": "&&",
+          "args": [
+            {"op": ">", "args": ["x", 0]},
+            {"op": "<", "args": ["y", 10]},
+            {"op": ">=", "args": ["z", -5]},
+            {"op": "<=", "args": ["w", 100]},
+            {"op": "==", "args": ["a", "b"]},
+            {"op": "!=", "args": ["c", "d"]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "&&",
+          "args": [
+            {"op": ">", "args": ["x", 0.0]},
+            {"op": "<", "args": ["y", 10.0]},
+            {"op": ">=", "args": ["z", -5.0]},
+            {"op": "<=", "args": ["w", 100.0]},
+            {"op": "==", "args": ["a", "b"]},
+            {"op": "!=", "args": ["c", "d"]}
+          ]
+        }
+      },
+      {
+        "description": "Logical operators",
+        "input": {
+          "op": "||",
+          "args": [
+            {"op": "&&", "args": ["A", "B"]},
+            {"op": "!", "args": ["C"]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "||",
+          "args": [
+            {"op": "&&", "args": ["A", "B"]},
+            {"op": "!", "args": ["C"]}
+          ]
+        }
+      },
+      {
+        "description": "Derivative operator",
+        "input": {
+          "op": "D",
+          "args": [{"op": "*", "args": ["A", {"op": "sin", "args": [{"op": "*", "args": ["ω", "t"]}]}]}],
+          "wrt": "t"
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "D",
+          "args": [{"op": "*", "args": ["A", {"op": "sin", "args": [{"op": "*", "args": ["ω", "t"]}]}]}],
+          "wrt": "t"
+        }
+      },
+      {
+        "description": "Gradient operator",
+        "input": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "grad",
+          "args": ["Temperature"],
+          "dim": "x"
+        }
+      },
+      {
+        "description": "Pre operator",
+        "input": {
+          "op": "Pre",
+          "args": ["state_variable"]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "Pre",
+          "args": ["state_variable"]
+        }
+      },
+      {
+        "description": "Conditional ifelse operator",
+        "input": {
+          "op": "ifelse",
+          "args": [
+            {"op": ">", "args": ["temperature", 273.15]},
+            {"op": "*", "args": ["k_liquid", "concentration"]},
+            {"op": "*", "args": ["k_ice", {"op": "^", "args": ["concentration", 1.5]}]}
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "ifelse",
+          "args": [
+            {"op": ">", "args": ["temperature", 273.15]},
+            {"op": "*", "args": ["k_liquid", "concentration"]},
+            {"op": "*", "args": ["k_ice", {"op": "^", "args": ["concentration", 1.5]}]}
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Invalid expressions that should trigger parsing errors",
+    "description": "Test cases that should fail during parsing or validation",
+    "tests": [
+      {
+        "description": "Missing operator field",
+        "input": {
+          "args": ["x", "y"]
+        },
+        "expected_error": "SchemaError",
+        "error_message": "Missing required field 'op'"
+      },
+      {
+        "description": "Missing args field",
+        "input": {
+          "op": "+"
+        },
+        "expected_error": "SchemaError",
+        "error_message": "Missing required field 'args'"
+      },
+      {
+        "description": "Empty args array for binary operator",
+        "input": {
+          "op": "+",
+          "args": []
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Operator '+' requires at least 2 arguments"
+      },
+      {
+        "description": "Single argument for binary operator",
+        "input": {
+          "op": "+",
+          "args": ["x"]
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Operator '+' requires at least 2 arguments"
+      },
+      {
+        "description": "Too many arguments for unary operator",
+        "input": {
+          "op": "sin",
+          "args": ["x", "y"]
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Operator 'sin' requires exactly 1 argument"
+      },
+      {
+        "description": "Invalid operator name",
+        "input": {
+          "op": "invalid_operator",
+          "args": ["x"]
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Unknown operator 'invalid_operator'"
+      },
+      {
+        "description": "Derivative with missing wrt field",
+        "input": {
+          "op": "D",
+          "args": ["x"]
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Derivative operator 'D' requires 'wrt' field"
+      },
+      {
+        "description": "Gradient with missing dim field",
+        "input": {
+          "op": "grad",
+          "args": ["Temperature"]
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Gradient operator 'grad' requires 'dim' field"
+      },
+      {
+        "description": "ifelse with wrong number of arguments",
+        "input": {
+          "op": "ifelse",
+          "args": [{"op": ">", "args": ["x", 0]}, "positive_case"]
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Operator 'ifelse' requires exactly 3 arguments"
+      },
+      {
+        "description": "Null/undefined in args array",
+        "input": {
+          "op": "+",
+          "args": ["x", null, "z"]
+        },
+        "expected_error": "ValidationError",
+        "error_message": "Null or undefined expression in args array"
+      },
+      {
+        "description": "Non-string, non-number, non-object expression",
+        "input": {
+          "op": "+",
+          "args": ["x", true]
+        },
+        "expected_error": "SchemaError",
+        "error_message": "Invalid expression type: boolean"
+      },
+      {
+        "description": "Circular reference (implementation-dependent)",
+        "input": "CIRCULAR_REF_PLACEHOLDER",
+        "expected_error": "ValidationError",
+        "error_message": "Circular reference detected in expression tree",
+        "note": "This test requires special handling to create a circular reference"
+      },
+      {
+        "description": "Excessive nesting depth (if limits imposed)",
+        "input": "DEEP_NESTING_PLACEHOLDER",
+        "expected_error": "ValidationError",
+        "error_message": "Expression nesting depth exceeds maximum limit",
+        "note": "This test requires generating an expression that exceeds implementation-specific depth limits"
+      }
+    ]
+  },
+  {
+    "name": "Edge cases for mixed types",
+    "description": "Complex combinations that test edge cases",
+    "tests": [
+      {
+        "description": "Mixed number formats in single expression",
+        "input": {
+          "op": "+",
+          "args": [
+            42,
+            3.14159,
+            -2.5e-10,
+            1.23e+15,
+            0,
+            -0.0
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "+",
+          "args": [
+            42.0,
+            3.14159,
+            -2.5e-10,
+            1.23e+15,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "description": "Variables with all Unicode classes",
+        "input": {
+          "op": "*",
+          "args": [
+            "simple_name",
+            "GreekΑΒΓΔ",
+            "α_β_γ_δ",
+            "Subscript₁₂₃",
+            "Superscript¹²³",
+            "Mixed_123_αβγ_ΔΕΖ",
+            "Chinese变量",
+            "Arabic_متغير"
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "*",
+          "args": [
+            "simple_name",
+            "GreekΑΒΓΔ",
+            "α_β_γ_δ",
+            "Subscript₁₂₃",
+            "Superscript¹²³",
+            "Mixed_123_αβγ_ΔΕΖ",
+            "Chinese变量",
+            "Arabic_متغير"
+          ]
+        }
+      },
+      {
+        "description": "Complex nested structure with all element types",
+        "input": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": "&&",
+              "args": [
+                {"op": ">", "args": ["T_μK", 1e-6]},
+                {"op": "<", "args": [{"op": "abs", "args": ["Δp"]}, 1e5]}
+              ]
+            },
+            {
+              "op": "D",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["E_a"]}, {"op": "*", "args": ["k_B", "T_μK"]}]}]},
+                    "A_pre",
+                    {"op": "^", "args": ["pressure", 0.75]},
+                    {"op": "sqrt", "args": [{"op": "*", "args": [8, "k_B", "T_μK", {"op": "/", "args": [1, {"op": "*", "args": ["π", "m_reduced"]}]}]}]}
+                  ]
+                }
+              ],
+              "wrt": "t"
+            },
+            {
+              "op": "Pre",
+              "args": ["fallback_rate"]
+            }
+          ]
+        },
+        "expected_type": "OpExpr",
+        "serialized": {
+          "op": "ifelse",
+          "args": [
+            {
+              "op": "&&",
+              "args": [
+                {"op": ">", "args": ["T_μK", 1e-6]},
+                {"op": "<", "args": [{"op": "abs", "args": ["Δp"]}, 1e5]}
+              ]
+            },
+            {
+              "op": "D",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["E_a"]}, {"op": "*", "args": ["k_B", "T_μK"]}]}]},
+                    "A_pre",
+                    {"op": "^", "args": ["pressure", 0.75]},
+                    {"op": "sqrt", "args": [{"op": "*", "args": [8.0, "k_B", "T_μK", {"op": "/", "args": [1.0, {"op": "*", "args": ["π", "m_reduced"]}]}]}]}
+                  ]
+                }
+              ],
+              "wrt": "t"
+            },
+            {
+              "op": "Pre",
+              "args": ["fallback_rate"]
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

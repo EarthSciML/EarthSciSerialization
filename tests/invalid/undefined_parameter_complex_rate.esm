@@ -1,0 +1,45 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UndefinedParamComplexRate",
+    "description": "Undefined parameter in complex Arrhenius rate expression"
+  },
+  "reaction_systems": {
+    "ChemSystem": {
+      "species": {
+        "NO": { "units": "mol/mol", "default": 1e-9 },
+        "O3": { "units": "mol/mol", "default": 40e-9 },
+        "NO2": { "units": "mol/mol", "default": 1e-9 }
+      },
+      "parameters": {
+        "A": { "units": "cm^3/molec/s", "default": 1.8e-12 },
+        "T": { "units": "K", "default": 298.15 }
+      },
+      "reactions": [
+        {
+          "id": "arrhenius",
+          "substrates": { "NO": 1, "O3": 1 },
+          "products": { "NO2": 1 },
+          "rate": {
+            "op": "*",
+            "args": [
+              "A",
+              {
+                "op": "exp",
+                "args": [
+                  {
+                    "op": "/",
+                    "args": [
+                      { "op": "*", "args": [-1, "undefined_activation_energy"] },
+                      "T"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

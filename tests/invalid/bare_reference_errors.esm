@@ -1,0 +1,139 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BareReferenceErrors",
+    "description": "Test fixture for errors involving bare references in contexts where scoped references are required",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["scoping", "bare-references", "errors", "validation"]
+  },
+
+  "models": {
+    "SystemA": {
+      "variables": {
+        "temperature": {"type": "parameter", "units": "K", "default": 298.0, "description": "Temperature"},
+        "pressure": {"type": "parameter", "units": "Pa", "default": 101325.0, "description": "Pressure"}
+      },
+      "equations": []
+    },
+
+    "SystemB": {
+      "variables": {
+        "velocity": {"type": "state", "units": "m/s", "default": 5.0, "description": "Velocity"},
+        "density": {"type": "parameter", "units": "kg/m^3", "default": 1.0, "description": "Density"}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["velocity"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [0.1, "density"]}
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "_comment": "ERROR 1: Using bare reference in coupling context - should require fully scoped reference",
+      "type": "variable_map",
+      "from": "temperature",
+      "to": "SystemB.velocity",
+      "transform": "identity",
+      "description": "This should fail - 'temperature' should be 'SystemA.temperature' in coupling context"
+    },
+
+    {
+      "_comment": "ERROR 2: Using bare reference in coupling target",
+      "type": "variable_map",
+      "from": "SystemA.pressure",
+      "to": "density",
+      "transform": "identity",
+      "description": "This should fail - 'density' should be 'SystemB.density' in coupling context"
+    },
+
+    {
+      "_comment": "ERROR 3: Mixed scoped and bare references in operator_compose",
+      "type": "operator_compose",
+      "systems": ["SystemA", "SystemB"],
+      "translate": {
+        "temperature": "SystemB.velocity"
+      },
+      "description": "This should fail - 'temperature' should be 'SystemA.temperature' in translate"
+    },
+
+    {
+      "_comment": "ERROR 4: Bare reference in event condition within coupling context",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "invalid_bare_condition",
+      "conditions": [
+        {
+          "op": ">",
+          "args": ["temperature", 300.0]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "SystemB.velocity",
+          "rhs": 10.0
+        }
+      ],
+      "description": "This should fail - 'temperature' should be 'SystemA.temperature' in coupling event"
+    },
+
+    {
+      "_comment": "ERROR 5: Bare reference in event affects within coupling context",
+      "type": "event",
+      "event_type": "continuous",
+      "name": "invalid_bare_affects",
+      "conditions": [
+        {
+          "op": ">",
+          "args": ["SystemA.temperature", 300.0]
+        }
+      ],
+      "affects": [
+        {
+          "lhs": "velocity",
+          "rhs": {"op": "*", "args": [2.0, "SystemA.pressure"]}
+        }
+      ],
+      "description": "This should fail - 'velocity' should be 'SystemB.velocity' in coupling event"
+    },
+
+    {
+      "_comment": "ERROR 6: Bare reference in couple2 connector expression",
+      "type": "couple2",
+      "systems": ["SystemA", "SystemB"],
+      "coupletype_pair": ["TypeA", "TypeB"],
+      "connector": {
+        "equations": [
+          {
+            "from": "SystemA.temperature",
+            "to": "SystemB.velocity",
+            "transform": "multiplicative",
+            "expression": {
+              "op": "*",
+              "args": [0.01, "pressure"]
+            }
+          }
+        ]
+      },
+      "description": "This should fail - 'pressure' should be 'SystemA.pressure' in connector expression"
+    }
+  ],
+
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T01:00:00Z"
+    },
+    "initial_conditions": {
+      "type": "per_variable",
+      "values": {
+        "_comment": "ERROR 7: Bare reference in initial conditions - should be fully scoped",
+        "temperature": 298.0,
+        "SystemB.velocity": 5.0
+      }
+    }
+  }
+}

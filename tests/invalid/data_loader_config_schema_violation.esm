@@ -1,0 +1,33 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DataLoaderConfigSchemaViolation",
+    "description": "Test case: data loader config field contains invalid structure (should be flexible but may have implementation-specific validation)",
+    "authors": ["Test Suite"]
+  },
+
+  "data_loaders": {
+    "BadConfig": {
+      "type": "gridded_data",
+      "loader_id": "TestLoader",
+      "provides": {
+        "T": { "units": "K", "description": "Temperature" }
+      },
+      "config": "this_should_be_an_object_not_string"
+    }
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnitsDimensionalAnalysis",
+    "description": "Test fixtures for dimensional analysis in physics and chemistry equations",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-02-16T00:00:00Z",
+    "tags": ["units", "dimensional_analysis", "physics", "chemistry", "validation"]
+  },
+
+  "models": {
+    "NewtonianMechanics": {
+      "reference": { "notes": "Classical mechanics equations with proper dimensional analysis" },
+      "variables": {
+        "m": { "type": "parameter", "units": "kg", "default": 10.0, "description": "Mass" },
+        "v": { "type": "state", "units": "m/s", "default": 5.0, "description": "Velocity" },
+        "a": { "type": "parameter", "units": "m/s^2", "default": 9.81, "description": "Acceleration" },
+        "t": { "type": "parameter", "units": "s", "default": 1.0, "description": "Time" },
+        "x": { "type": "state", "units": "m", "default": 0.0, "description": "Position" },
+        "F": { "type": "observed", "units": "N", "description": "Force from Newton's second law",
+          "expression": { "op": "*", "args": ["m", "a"] }
+        },
+        "p": { "type": "observed", "units": "kg*m/s", "description": "Momentum",
+          "expression": { "op": "*", "args": ["m", "v"] }
+        },
+        "E_kinetic": { "type": "observed", "units": "J", "description": "Kinetic energy",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": [0.5, "m"] },
+            { "op": "^", "args": ["v", 2] }
+          ] }
+        },
+        "W": { "type": "observed", "units": "J", "description": "Work done",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": ["m", "a"] },
+            "x"
+          ] }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "v"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": "a"
+        }
+      ]
+    },
+
+    "Thermodynamics": {
+      "reference": { "notes": "Thermodynamic equations with dimensional consistency" },
+      "variables": {
+        "n": { "type": "parameter", "units": "mol", "default": 1.0, "description": "Amount of substance" },
+        "R": { "type": "parameter", "units": "J/(mol*K)", "default": 8.314, "description": "Gas constant" },
+        "T": { "type": "state", "units": "K", "default": 298.15, "description": "Temperature" },
+        "P": { "type": "state", "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "V": { "type": "state", "units": "m^3", "default": 0.0247, "description": "Volume" },
+        "Cv": { "type": "parameter", "units": "J/(mol*K)", "default": 20.8, "description": "Heat capacity at constant volume" },
+        "U": { "type": "observed", "units": "J", "description": "Internal energy",
+          "expression": { "op": "*", "args": [{ "op": "*", "args": ["n", "Cv"] }, "T"] }
+        },
+        "H": { "type": "observed", "units": "J", "description": "Enthalpy",
+          "expression": { "op": "+", "args": [
+            { "op": "*", "args": [{ "op": "*", "args": ["n", "Cv"] }, "T"] },
+            { "op": "*", "args": ["P", "V"] }
+          ] }
+        },
+        "S": { "type": "observed", "units": "J/K", "description": "Entropy (simplified)",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": ["n", "R"] },
+            { "op": "ln", "args": ["V"] }
+          ] }
+        },
+        "G": { "type": "observed", "units": "J", "description": "Gibbs free energy",
+          "expression": { "op": "-", "args": [
+            { "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "*", "args": ["n", "Cv"] }, "T"] },
+              { "op": "*", "args": ["P", "V"] }
+            ] },
+            { "op": "*", "args": [
+              "T",
+              { "op": "*", "args": [
+                { "op": "*", "args": ["n", "R"] },
+                { "op": "ln", "args": ["V"] }
+              ] }
+            ] }
+          ] }
+        }
+      },
+      "equations": [
+        {
+          "comment": "Ideal gas law: PV = nRT rearranged for dT/dt",
+          "lhs": { "op": "D", "args": ["T"], "wrt": "t" },
+          "rhs": { "op": "/", "args": [
+            { "op": "-", "args": [
+              { "op": "/", "args": [{ "op": "*", "args": ["P", "V"] }, { "op": "*", "args": ["n", "R"] }] },
+              "T"
+            ] },
+            1.0
+          ] }
+        }
+      ]
+    },
+
+    "ElectromagneticFields": {
+      "reference": { "notes": "Electromagnetic equations with proper unit analysis" },
+      "variables": {
+        "q": { "type": "parameter", "units": "C", "default": 1.6e-19, "description": "Electric charge" },
+        "E": { "type": "parameter", "units": "V/m", "default": 1000.0, "description": "Electric field strength" },
+        "B": { "type": "parameter", "units": "T", "default": 0.001, "description": "Magnetic field strength" },
+        "v": { "type": "parameter", "units": "m/s", "default": 1e5, "description": "Particle velocity" },
+        "m": { "type": "parameter", "units": "kg", "default": 9.11e-31, "description": "Particle mass" },
+        "epsilon0": { "type": "parameter", "units": "F/m", "default": 8.854e-12, "description": "Permittivity of free space" },
+        "c": { "type": "parameter", "units": "m/s", "default": 3e8, "description": "Speed of light" },
+        "F_electric": { "type": "observed", "units": "N", "description": "Electric force",
+          "expression": { "op": "*", "args": ["q", "E"] }
+        },
+        "F_magnetic": { "type": "observed", "units": "N", "description": "Magnetic force",
+          "expression": { "op": "*", "args": [{ "op": "*", "args": ["q", "v"] }, "B"] }
+        },
+        "energy_density": { "type": "observed", "units": "J/m^3", "description": "Electromagnetic energy density",
+          "expression": { "op": "+", "args": [
+            { "op": "*", "args": [
+              { "op": "*", "args": [0.5, "epsilon0"] },
+              { "op": "^", "args": ["E", 2] }
+            ] },
+            { "op": "*", "args": [
+              { "op": "/", "args": [0.5, { "op": "*", "args": [4e-7, 3.14159] }] },
+              { "op": "^", "args": ["B", 2] }
+            ] }
+          ] }
+        },
+        "cyclotron_freq": { "type": "observed", "units": "Hz", "description": "Cyclotron frequency",
+          "expression": { "op": "/", "args": [
+            { "op": "*", "args": ["q", "B"] },
+            { "op": "*", "args": [{ "op": "*", "args": [2.0, 3.14159] }, "m"] }
+          ] }
+        }
+      },
+      "equations": []
+    },
+
+    "FluidMechanics": {
+      "reference": { "notes": "Fluid mechanics equations with dimensional consistency" },
+      "variables": {
+        "rho": { "type": "parameter", "units": "kg/m^3", "default": 1000.0, "description": "Fluid density" },
+        "v": { "type": "state", "units": "m/s", "default": 2.0, "description": "Flow velocity" },
+        "P": { "type": "state", "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "h": { "type": "parameter", "units": "m", "default": 10.0, "description": "Height" },
+        "g": { "type": "parameter", "units": "m/s^2", "default": 9.81, "description": "Gravitational acceleration" },
+        "mu": { "type": "parameter", "units": "Pa*s", "default": 0.001, "description": "Dynamic viscosity" },
+        "L": { "type": "parameter", "units": "m", "default": 1.0, "description": "Characteristic length" },
+        "nu": { "type": "observed", "units": "m^2/s", "description": "Kinematic viscosity",
+          "expression": { "op": "/", "args": ["mu", "rho"] }
+        },
+        "Re": { "type": "observed", "units": "1", "description": "Reynolds number",
+          "expression": { "op": "/", "args": [
+            { "op": "*", "args": ["v", "L"] },
+            { "op": "/", "args": ["mu", "rho"] }
+          ] }
+        },
+        "dynamic_pressure": { "type": "observed", "units": "Pa", "description": "Dynamic pressure",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": [0.5, "rho"] },
+            { "op": "^", "args": ["v", 2] }
+          ] }
+        },
+        "hydrostatic_pressure": { "type": "observed", "units": "Pa", "description": "Hydrostatic pressure",
+          "expression": { "op": "*", "args": [{ "op": "*", "args": ["rho", "g"] }, "h"] }
+        },
+        "total_pressure": { "type": "observed", "units": "Pa", "description": "Total pressure (Bernoulli)",
+          "expression": { "op": "+", "args": [
+            "P",
+            { "op": "*", "args": [
+              { "op": "*", "args": [0.5, "rho"] },
+              { "op": "^", "args": ["v", 2] }
+            ] },
+            { "op": "*", "args": [{ "op": "*", "args": ["rho", "g"] }, "h"] }
+          ] }
+        }
+      },
+      "equations": [
+        {
+          "comment": "Simplified continuity equation",
+          "lhs": { "op": "D", "args": ["v"], "wrt": "t" },
+          "rhs": { "op": "/", "args": [
+            { "op": "-", "args": [{ "op": "grad", "args": ["P"], "dim": "x" }] },
+            "rho"
+          ] }
+        }
+      ]
+    },
+
+    "ChemicalKinetics": {
+      "reference": { "notes": "Chemical kinetics with proper unit analysis" },
+      "variables": {
+        "k_unimolecular": { "type": "parameter", "units": "1/s", "default": 0.01, "description": "Unimolecular rate constant" },
+        "k_bimolecular": { "type": "parameter", "units": "m^3/(mol*s)", "default": 1e-3, "description": "Bimolecular rate constant" },
+        "k_trimolecular": { "type": "parameter", "units": "m^6/(mol^2*s)", "default": 1e-6, "description": "Trimolecular rate constant" },
+        "A": { "type": "state", "units": "mol/m^3", "default": 1.0, "description": "Concentration of species A" },
+        "B": { "type": "state", "units": "mol/m^3", "default": 0.5, "description": "Concentration of species B" },
+        "C": { "type": "state", "units": "mol/m^3", "default": 0.1, "description": "Concentration of species C" },
+        "Ea": { "type": "parameter", "units": "J/mol", "default": 50000.0, "description": "Activation energy" },
+        "R": { "type": "parameter", "units": "J/(mol*K)", "default": 8.314, "description": "Gas constant" },
+        "T": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" },
+        "rate_unimol": { "type": "observed", "units": "mol/(m^3*s)", "description": "Unimolecular reaction rate",
+          "expression": { "op": "*", "args": ["k_unimolecular", "A"] }
+        },
+        "rate_bimol": { "type": "observed", "units": "mol/(m^3*s)", "description": "Bimolecular reaction rate",
+          "expression": { "op": "*", "args": [{ "op": "*", "args": ["k_bimolecular", "A"] }, "B"] }
+        },
+        "rate_trimol": { "type": "observed", "units": "mol/(m^3*s)", "description": "Trimolecular reaction rate",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": ["k_trimolecular", "A"] },
+            { "op": "*", "args": ["B", "C"] }
+          ] }
+        },
+        "arrhenius_rate": { "type": "observed", "units": "1/s", "description": "Arrhenius rate constant",
+          "expression": { "op": "*", "args": [
+            "k_unimolecular",
+            { "op": "exp", "args": [{ "op": "/", "args": [{ "op": "-", "args": ["Ea"] }, { "op": "*", "args": ["R", "T"] }] }] }
+          ] }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["A"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [{ "op": "*", "args": ["k_unimolecular", "A"] }] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["B"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [{ "op": "*", "args": [{ "op": "*", "args": ["k_bimolecular", "A"] }, "B"] }] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["C"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [{ "op": "*", "args": [{ "op": "*", "args": ["k_bimolecular", "A"] }, "B"] }] }
+        }
+      ]
+    }
+  }
+}

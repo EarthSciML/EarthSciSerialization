@@ -1,0 +1,82 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "FullModelSpecification",
+    "description": "Complete model specification with all equations, variables, and parameters fully defined",
+    "authors": ["Test Author"],
+    "license": "MIT",
+    "created": "2026-02-19T00:00:00Z",
+    "modified": "2026-02-19T00:00:00Z",
+    "tags": ["test", "complete-specification"],
+    "references": [
+      {
+        "citation": "Test reference for model completeness validation",
+        "notes": "Demonstrates fully specified model per BEHAV-06-01 requirement"
+      }
+    ]
+  },
+  "models": {
+    "CompleteModel": {
+      "coupletype": "TestCoupler",
+      "reference": {
+        "citation": "Complete model specification test case",
+        "notes": "All variables, parameters, and equations fully defined"
+      },
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 1.0e-6,
+          "description": "Primary state variable x with complete specification"
+        },
+        "y": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 2.0e-6,
+          "description": "Secondary state variable y with complete specification"
+        },
+        "k1": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 0.001,
+          "description": "Rate constant k1 for x dynamics"
+        },
+        "k2": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 0.002,
+          "description": "Rate constant k2 for y dynamics"
+        },
+        "total_rate": {
+          "type": "observed",
+          "units": "mol/mol/s",
+          "expression": {
+            "op": "+",
+            "args": [
+              {"op": "*", "args": ["k1", "x"]},
+              {"op": "*", "args": ["k2", "y"]}
+            ]
+          },
+          "description": "Total reaction rate (observed variable with expression)"
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["k1"]}, "x"]},
+          "_comment": "First-order decay of x"
+        },
+        {
+          "lhs": {"op": "D", "args": ["y"], "wrt": "t"},
+          "rhs": {"op": "+", "args": [
+            {"op": "*", "args": ["k1", "x"]},
+            {"op": "*", "args": [{"op": "-", "args": ["k2"]}, "y"]}
+          ]},
+          "_comment": "y production from x decay minus y decay"
+        }
+      ],
+      "discrete_events": [],
+      "continuous_events": []
+    }
+  }
+}

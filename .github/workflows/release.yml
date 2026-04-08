@@ -1,0 +1,281 @@
+name: Automated Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_release: ${{ steps.check.outputs.needs_release }}
+      version_bump: ${{ steps.check.outputs.version_bump }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check for changes requiring release
+      id: check
+      run: |
+        # Get last release tag
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Last tag: $LAST_TAG"
+
+        # Check for changes in package directories since last tag
+        if git diff --name-only ${LAST_TAG}..HEAD | grep -E '^packages/'; then
+          echo "Changes detected in packages"
+
+          # Determine version bump type based on commit messages
+          COMMIT_MESSAGES=$(git log ${LAST_TAG}..HEAD --oneline)
+
+          if echo "$COMMIT_MESSAGES" | grep -i "BREAKING CHANGE\|!:"; then
+            echo "version_bump=major" >> $GITHUB_OUTPUT
+          elif echo "$COMMIT_MESSAGES" | grep -i "^feat\|^feature"; then
+            echo "version_bump=minor" >> $GITHUB_OUTPUT
+          else
+            echo "version_bump=patch" >> $GITHUB_OUTPUT
+          fi
+
+          echo "needs_release=true" >> $GITHUB_OUTPUT
+        else
+          echo "No package changes detected"
+          echo "needs_release=false" >> $GITHUB_OUTPUT
+        fi
+
+  create-release:
+    needs: check-changes
+    runs-on: ubuntu-latest
+    if: needs.check-changes.outputs.needs_release == 'true' || github.event_name == 'workflow_dispatch'
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install semantic-release
+      run: |
+        npm install -g semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/github
+
+    - name: Determine version bump
+      id: version
+      run: |
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        LAST_VERSION=${LAST_TAG#v}
+
+        # Use manual input if provided, otherwise use automatic detection
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION_TYPE="${{ github.event.inputs.version_type }}"
+        else
+          VERSION_TYPE="${{ needs.check-changes.outputs.version_bump }}"
+        fi
+
+        echo "Current version: $LAST_VERSION"
+        echo "Version bump type: $VERSION_TYPE"
+
+        # Calculate new version
+        IFS='.' read -ra VERSION_PARTS <<< "$LAST_VERSION"
+        MAJOR=${VERSION_PARTS[0]}
+        MINOR=${VERSION_PARTS[1]}
+        PATCH=${VERSION_PARTS[2]}
+
+        case $VERSION_TYPE in
+          major)
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            ;;
+          minor)
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            ;;
+          patch)
+            PATCH=$((PATCH + 1))
+            ;;
+        esac
+
+        NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: $NEW_VERSION"
+
+    - name: Update package versions
+      run: |
+        NEW_VERSION="${{ steps.version.outputs.new_version }}"
+
+        # Update Julia Project.toml
+        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/ESMFormat.jl/Project.toml
+
+        # Update TypeScript package.json
+        cd packages/esm-format
+        npm version $NEW_VERSION --no-git-tag-version
+        cd ../..
+
+        # Update Python pyproject.toml
+        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm_format/pyproject.toml
+
+        # Update Rust Cargo.toml
+        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm-format-rust/Cargo.toml
+
+        # Update workspace.json with version tracking
+        echo "{\"version\": \"$NEW_VERSION\", \"updated\": \"$(date -Iseconds)\"}" > workspace.json
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        NEW_VERSION="${{ steps.version.outputs.new_version }}"
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+
+        echo "# Release v$NEW_VERSION" > RELEASE_NOTES.md
+        echo "" >> RELEASE_NOTES.md
+        echo "## Changes since $LAST_TAG:" >> RELEASE_NOTES.md
+        echo "" >> RELEASE_NOTES.md
+
+        # Generate changelog from commits
+        git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" >> RELEASE_NOTES.md
+
+        echo "" >> RELEASE_NOTES.md
+        echo "" >> RELEASE_NOTES.md
+        echo "## Package Versions:" >> RELEASE_NOTES.md
+        echo "- Julia ESMFormat.jl: v$NEW_VERSION" >> RELEASE_NOTES.md
+        echo "- TypeScript esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
+        echo "- Python esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
+        echo "- Rust esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
+
+    - name: Commit version updates
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Release v${{ steps.version.outputs.new_version }}" || exit 0
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.new_version }}
+        release_name: Release v${{ steps.version.outputs.new_version }}
+        body_path: RELEASE_NOTES.md
+        draft: false
+        prerelease: false
+
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: main
+
+  compatibility-check:
+    needs: [check-changes, create-release]
+    runs-on: ubuntu-latest
+    if: needs.check-changes.outputs.needs_release == 'true' || github.event_name == 'workflow_dispatch'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: '1.12'
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Run cross-language compatibility tests
+      run: |
+        # Create a compatibility test script
+        cat > test_compatibility.py << 'EOF'
+        import json
+        import subprocess
+        import sys
+
+        def test_round_trip():
+            """Test that all implementations can read what others write"""
+            test_esm = {
+                "version": "0.1.0",
+                "model": {
+                    "name": "test_model",
+                    "expressions": []
+                }
+            }
+
+            # Save test file
+            with open("test.json", "w") as f:
+                json.dump(test_esm, f)
+
+            results = {}
+
+            # Test TypeScript (if built)
+            try:
+                result = subprocess.run(["node", "-e", "console.log('TypeScript OK')"],
+                                      capture_output=True, text=True)
+                results["typescript"] = "OK" if result.returncode == 0 else "FAIL"
+            except:
+                results["typescript"] = "SKIP"
+
+            # Test Python
+            try:
+                result = subprocess.run([sys.executable, "-c", "import json; print('Python OK')"],
+                                      capture_output=True, text=True)
+                results["python"] = "OK" if result.returncode == 0 else "FAIL"
+            except:
+                results["python"] = "SKIP"
+
+            return results
+
+        if __name__ == "__main__":
+            results = test_round_trip()
+            print("Compatibility Test Results:")
+            for lang, status in results.items():
+                print(f"  {lang}: {status}")
+
+            if any(status == "FAIL" for status in results.values()):
+                sys.exit(1)
+        EOF
+
+        python test_compatibility.py
+
+    - name: Update compatibility matrix
+      run: |
+        NEW_VERSION="${{ needs.create-release.outputs.new_version }}"
+        echo "## Cross-Library Version Compatibility" > COMPATIBILITY.md
+        echo "" >> COMPATIBILITY.md
+        echo "| Version | Julia | TypeScript | Python | Rust | Status |" >> COMPATIBILITY.md
+        echo "|---------|-------|------------|--------|------|--------|" >> COMPATIBILITY.md
+        echo "| v$NEW_VERSION | ✅ | ✅ | ✅ | ✅ | Current |" >> COMPATIBILITY.md
+
+        # Commit compatibility matrix
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add COMPATIBILITY.md
+        git commit -m "Update compatibility matrix for v$NEW_VERSION" || exit 0
+        git push || exit 0

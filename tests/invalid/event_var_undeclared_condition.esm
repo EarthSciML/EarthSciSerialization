@@ -1,0 +1,38 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventVarUndeclaredCondition",
+    "description": "Continuous event with undefined variable in condition"
+  },
+  "models": {
+    "BallModel": {
+      "variables": {
+        "height": { "type": "state", "units": "m", "default": 10.0 },
+        "velocity": { "type": "state", "units": "m/s", "default": 0.0 },
+        "g": { "type": "parameter", "units": "m/s^2", "default": 9.81 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["height"], "wrt": "t" },
+          "rhs": "velocity"
+        },
+        {
+          "lhs": { "op": "D", "args": ["velocity"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "g"] }
+        }
+      ],
+      "continuous_events": [
+        {
+          "name": "ground_impact",
+          "condition": { "op": "-", "args": ["undefined_position"] },
+          "affects": [
+            {
+              "lhs": "velocity",
+              "rhs": { "op": "*", "args": [-0.8, "velocity"] }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
