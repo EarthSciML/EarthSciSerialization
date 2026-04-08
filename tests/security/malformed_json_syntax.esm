@@ -1,0 +1,20 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MalformedJSONSyntax",
+    "description": "Test malformed JSON with unclosed braces and quotes",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [1.0, { "op": "sin", "args": ["malformed_trailing_comma",] }] }
+        }
+      ]
+    }
+  }

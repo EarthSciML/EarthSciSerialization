@@ -1,0 +1,39 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "TagsAndLicenseExample",
+    "description": "Demonstrates proper tag categorization and license specification",
+    "authors": ["License Test Author"],
+    "license": "Apache-2.0",
+    "created": "2024-01-01T00:00:00Z",
+    "tags": [
+      "atmospheric-chemistry",
+      "aerosol-dynamics",
+      "cloud-microphysics",
+      "urban-air-quality",
+      "regional-modeling",
+      "box-model",
+      "sensitivity-analysis"
+    ]
+  },
+
+  "models": {
+    "TaggedModel": {
+      "reference": { "notes": "Model for testing tags and license" },
+      "variables": {
+        "aerosol_mass": { "type": "state", "units": "kg/m^3", "default": 1e-8 },
+        "droplet_number": { "type": "state", "units": "1/m^3", "default": 1e8 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["aerosol_mass"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [0.001, "droplet_number"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["droplet_number"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [0.1, "droplet_number"] }
+        }
+      ]
+    }
+  }
+}

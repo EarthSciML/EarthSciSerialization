@@ -1,0 +1,39 @@
+FROM python:3.11-bookworm
+
+# Set working directory
+WORKDIR /workspace
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    jq \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python package files first for better layer caching
+COPY packages/esm_format/pyproject.toml ./packages/esm_format/
+
+# Install Python dependencies
+WORKDIR /workspace/packages/esm_format
+COPY packages/esm_format ./
+RUN python -m pip install --upgrade pip && \
+    pip install -e .[dev,test]
+
+# Copy test data and scripts
+WORKDIR /workspace
+COPY tests ./tests/
+COPY scripts ./scripts/
+
+# Make scripts executable
+RUN chmod +x scripts/*.py
+
+# Set environment variables for testing
+ENV PYTHONPATH=/workspace/packages/esm_format/src
+ENV ESM_TEST_TIMEOUT=300
+ENV PYTHONUNBUFFERED=1
+
+# Create output directory
+RUN mkdir -p /workspace/conformance-results
+
+# Default command runs conformance tests
+CMD ["python3", "scripts/run-python-conformance.py", "/workspace/conformance-results/python"]

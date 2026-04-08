@@ -1,0 +1,93 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CoupledOscillatorsTest",
+    "description": "Coupled harmonic oscillators with energy conservation verification",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z",
+    "tags": ["test", "coupled", "energy_conservation"]
+  },
+  "models": {
+    "Oscillator1": {
+      "reference": {
+        "notes": "First harmonic oscillator: x1'' + k1*x1 = coupling_force"
+      },
+      "variables": {
+        "x1": { "type": "state", "units": "m", "default": 1.0, "description": "Position of oscillator 1" },
+        "v1": { "type": "state", "units": "m/s", "default": 0.0, "description": "Velocity of oscillator 1" },
+        "k1": { "type": "parameter", "units": "1/s^2", "default": 1.0, "description": "Spring constant 1" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x1"], "wrt": "t" },
+          "rhs": "v1"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v1"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": [
+              { "op": "-", "args": ["k1"] },
+              "x1"
+            ]},
+            "coupling_force"
+          ]}
+        }
+      ]
+    },
+    "Oscillator2": {
+      "reference": {
+        "notes": "Second harmonic oscillator: x2'' + k2*x2 = -coupling_force"
+      },
+      "variables": {
+        "x2": { "type": "state", "units": "m", "default": -0.5, "description": "Position of oscillator 2" },
+        "v2": { "type": "state", "units": "m/s", "default": 0.0, "description": "Velocity of oscillator 2" },
+        "k2": { "type": "parameter", "units": "1/s^2", "default": 1.5, "description": "Spring constant 2" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x2"], "wrt": "t" },
+          "rhs": "v2"
+        },
+        {
+          "lhs": { "op": "D", "args": ["v2"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": [
+              { "op": "-", "args": ["k2"] },
+              "x2"
+            ]},
+            { "op": "-", "args": ["coupling_force"] }
+          ]}
+        }
+      ]
+    }
+  },
+  "coupling": [
+    {
+      "type": "variable_map",
+      "mappings": {
+        "coupling_force": { "op": "*", "args": [
+          0.1,
+          { "op": "-", "args": ["Oscillator2.x2", "Oscillator1.x1"] }
+        ]}
+      }
+    }
+  ],
+  "domain": {
+    "temporal": { "start": 0.0, "end": 20.0, "step": 0.01 },
+    "initial_conditions": { "type": "per_variable", "values": {
+      "Oscillator1.x1": 1.0,
+      "Oscillator1.v1": 0.0,
+      "Oscillator2.x2": -0.5,
+      "Oscillator2.v2": 0.0
+    }}
+  },
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "nonstiff_algorithm": "Tsit5",
+      "timestep": 0.01,
+      "reltol": 1e-6,
+      "abstol": 1e-8
+    }
+  }
+}

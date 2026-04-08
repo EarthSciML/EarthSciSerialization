@@ -1,0 +1,147 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnitsConversions",
+    "description": "Test fixtures for unit conversion factors and scaling operations",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-02-16T00:00:00Z",
+    "tags": ["units", "conversion", "scaling", "dimensional_analysis"]
+  },
+
+  "models": {
+    "TemperatureConversions": {
+      "reference": { "notes": "Temperature unit conversions between K, C, and F" },
+      "variables": {
+        "T_kelvin": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature in Kelvin" },
+        "T_celsius": { "type": "observed", "units": "degC", "description": "Temperature in Celsius",
+          "expression": { "op": "+", "args": ["T_kelvin", -273.15] }
+        },
+        "T_fahrenheit": { "type": "observed", "units": "degF", "description": "Temperature in Fahrenheit",
+          "expression": { "op": "+", "args": [
+            { "op": "*", "args": [{ "op": "+", "args": ["T_kelvin", -273.15] }, 1.8] },
+            32.0
+          ] }
+        }
+      },
+      "equations": []
+    },
+
+    "LengthConversions": {
+      "reference": { "notes": "Length unit conversions between different scales" },
+      "variables": {
+        "distance_m": { "type": "parameter", "units": "m", "default": 1000.0, "description": "Distance in meters" },
+        "distance_km": { "type": "observed", "units": "km", "description": "Distance in kilometers",
+          "expression": { "op": "*", "args": ["distance_m", 0.001] }
+        },
+        "distance_cm": { "type": "observed", "units": "cm", "description": "Distance in centimeters",
+          "expression": { "op": "*", "args": ["distance_m", 100.0] }
+        },
+        "distance_mm": { "type": "observed", "units": "mm", "description": "Distance in millimeters",
+          "expression": { "op": "*", "args": ["distance_m", 1000.0] }
+        },
+        "distance_um": { "type": "observed", "units": "um", "description": "Distance in micrometers",
+          "expression": { "op": "*", "args": ["distance_m", 1e6] }
+        },
+        "distance_nm": { "type": "observed", "units": "nm", "description": "Distance in nanometers",
+          "expression": { "op": "*", "args": ["distance_m", 1e9] }
+        }
+      },
+      "equations": []
+    },
+
+    "PressureConversions": {
+      "reference": { "notes": "Pressure unit conversions between different systems" },
+      "variables": {
+        "P_pascal": { "type": "parameter", "units": "Pa", "default": 101325.0, "description": "Pressure in Pascal" },
+        "P_bar": { "type": "observed", "units": "bar", "description": "Pressure in bar",
+          "expression": { "op": "*", "args": ["P_pascal", 1e-5] }
+        },
+        "P_atm": { "type": "observed", "units": "atm", "description": "Pressure in atmospheres",
+          "expression": { "op": "/", "args": ["P_pascal", 101325.0] }
+        },
+        "P_torr": { "type": "observed", "units": "Torr", "description": "Pressure in Torr",
+          "expression": { "op": "/", "args": ["P_pascal", 133.322] }
+        },
+        "P_mmHg": { "type": "observed", "units": "mmHg", "description": "Pressure in mmHg",
+          "expression": { "op": "/", "args": ["P_pascal", 133.322] }
+        },
+        "P_psi": { "type": "observed", "units": "psi", "description": "Pressure in psi",
+          "expression": { "op": "/", "args": ["P_pascal", 6894.76] }
+        }
+      },
+      "equations": []
+    },
+
+    "EnergyConversions": {
+      "reference": { "notes": "Energy unit conversions between different systems" },
+      "variables": {
+        "E_joule": { "type": "parameter", "units": "J", "default": 4184.0, "description": "Energy in Joules" },
+        "E_calorie": { "type": "observed", "units": "cal", "description": "Energy in calories",
+          "expression": { "op": "/", "args": ["E_joule", 4.184] }
+        },
+        "E_kcal": { "type": "observed", "units": "kcal", "description": "Energy in kilocalories",
+          "expression": { "op": "/", "args": ["E_joule", 4184.0] }
+        },
+        "E_kwh": { "type": "observed", "units": "kWh", "description": "Energy in kilowatt-hours",
+          "expression": { "op": "/", "args": ["E_joule", 3.6e6] }
+        },
+        "E_btu": { "type": "observed", "units": "BTU", "description": "Energy in British Thermal Units",
+          "expression": { "op": "/", "args": ["E_joule", 1055.06] }
+        },
+        "E_erg": { "type": "observed", "units": "erg", "description": "Energy in ergs",
+          "expression": { "op": "*", "args": ["E_joule", 1e7] }
+        }
+      },
+      "equations": []
+    },
+
+    "ConcentrationConversions": {
+      "reference": { "notes": "Atmospheric chemistry concentration unit conversions" },
+      "variables": {
+        "T": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" },
+        "P": { "type": "parameter", "units": "Pa", "default": 101325.0, "description": "Pressure" },
+        "M": { "type": "parameter", "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density" },
+        "conc_molec_cm3": { "type": "parameter", "units": "molec/cm^3", "default": 1e12, "description": "Concentration in molecules/cm³" },
+        "conc_mol_mol": { "type": "observed", "units": "mol/mol", "description": "Mole fraction",
+          "expression": { "op": "/", "args": ["conc_molec_cm3", "M"] }
+        },
+        "conc_ppb": { "type": "observed", "units": "ppb", "description": "Parts per billion",
+          "expression": { "op": "*", "args": [{ "op": "/", "args": ["conc_molec_cm3", "M"] }, 1e9] }
+        },
+        "conc_ppm": { "type": "observed", "units": "ppm", "description": "Parts per million",
+          "expression": { "op": "*", "args": [{ "op": "/", "args": ["conc_molec_cm3", "M"] }, 1e6] }
+        },
+        "conc_ug_m3": { "type": "observed", "units": "ug/m^3", "description": "Micrograms per cubic meter (assuming MW=48)",
+          "expression": { "op": "*", "args": [
+            { "op": "*", "args": [
+              { "op": "/", "args": ["conc_molec_cm3", 6.022e23] },
+              48.0
+            ] },
+            1e12
+          ] }
+        }
+      },
+      "equations": []
+    },
+
+    "VolumeConversions": {
+      "reference": { "notes": "Volume unit conversions for scientific applications" },
+      "variables": {
+        "V_m3": { "type": "parameter", "units": "m^3", "default": 0.001, "description": "Volume in cubic meters" },
+        "V_L": { "type": "observed", "units": "L", "description": "Volume in liters",
+          "expression": { "op": "*", "args": ["V_m3", 1000.0] }
+        },
+        "V_mL": { "type": "observed", "units": "mL", "description": "Volume in milliliters",
+          "expression": { "op": "*", "args": ["V_m3", 1e6] }
+        },
+        "V_cm3": { "type": "observed", "units": "cm^3", "description": "Volume in cubic centimeters",
+          "expression": { "op": "*", "args": ["V_m3", 1e6] }
+        },
+        "V_dm3": { "type": "observed", "units": "dm^3", "description": "Volume in cubic decimeters",
+          "expression": { "op": "*", "args": ["V_m3", 1000.0] }
+        }
+      },
+      "equations": []
+    }
+  }
+}

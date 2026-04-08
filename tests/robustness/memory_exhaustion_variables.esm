@@ -1,0 +1,27 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MemoryExhaustionVariables",
+    "description": "Test memory exhaustion with excessive variable counts (>10^6 items)",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "MassiveVariableModel": {
+      "variables": Object.fromEntries(
+        Array.from({length: 100000}, (_, i) => [
+          `var_${i.toString().padStart(6, '0')}`,
+          {
+            "type": i % 3 === 0 ? "state" : i % 3 === 1 ? "parameter" : "algebraic",
+            "units": ["m", "kg", "s", "A", "K", "mol", "cd"][i % 7],
+            "default": Math.random() * 100,
+            "description": `Auto-generated variable ${i}`
+          }
+        ])
+      ),
+      "equations": Array.from({length: 50000}, (_, i) => ({
+        "lhs": { "op": "D", "args": [`var_${i.toString().padStart(6, '0')}`], "wrt": "t" },
+        "rhs": { "op": "*", "args": [0.001 * i, Math.sin(i * 0.1)] }
+      }))
+    }
+  }
+}

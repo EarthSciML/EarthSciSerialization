@@ -1,0 +1,41 @@
+# ESM Format Documentation Configuration
+
+# Site settings
+title: "ESM Format Documentation"
+description: "Complete documentation for the EarthSciML Serialization Format"
+baseurl: ""
+url: ""
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Navigation
+header_pages:
+  - getting-started/installation.md
+  - api/index.md
+  - examples/index.md
+  - troubleshooting/index.md
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Exclude from processing
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/
+
+# Code highlighting
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    line_numbers: true

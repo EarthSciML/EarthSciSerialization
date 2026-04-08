@@ -1,0 +1,46 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "LargeNumbersOverflow",
+    "description": "Test numerical overflow with very large numbers that may exceed floating-point limits",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.7976931348623157e+308 },
+        "y": { "type": "state", "units": "m", "default": -1.7976931348623157e+308 },
+        "z": { "type": "parameter", "units": "1", "default": 9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [1.7976931348623157e+308, 1.7976931348623157e+308] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "exp", "args": [1000000] }
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "TestReactions": {
+      "species": {
+        "A": { "units": "mol/mol", "default": 1.0e-9, "description": "Species A" }
+      },
+      "parameters": {
+        "huge_rate": { "units": "1/s", "default": 1.79769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0, "description": "Extremely large rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "R_overflow",
+          "name": "overflow_test",
+          "substrates": [ { "species": "A", "stoichiometry": 1 } ],
+          "products": [ { "species": "A", "stoichiometry": 2 } ],
+          "rate": { "op": "*", "args": ["huge_rate", { "op": "pow", "args": [10, 1000] }] }
+        }
+      ]
+    }
+  }
+}

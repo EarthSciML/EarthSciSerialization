@@ -1,0 +1,361 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DiscreteEventScenarios",
+    "description": "Comprehensive discrete event test cases with periodic, preset, and conditional triggers",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T00:00:00Z"
+  },
+
+  "models": {
+    "PeriodicEventsSystem": {
+      "description": "Test various periodic event configurations",
+      "variables": {
+        "accumulator": { "type": "state", "units": "1", "default": 0.0, "description": "Accumulating variable" },
+        "fast_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Fast periodic counter" },
+        "slow_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Slow periodic counter" },
+        "offset_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Offset periodic counter" },
+        "phase_shift": { "type": "parameter", "units": "1", "default": 0.0, "description": "Phase shift accumulator" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["accumulator"], "wrt": "t" },
+          "rhs": 1.0
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "fast_periodic",
+          "trigger": {
+            "type": "periodic",
+            "interval": 0.5
+          },
+          "affects": [
+            {
+              "lhs": "fast_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["fast_counter"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["fast_counter"],
+          "description": "Fast periodic event every 0.5 time units"
+        },
+        {
+          "name": "slow_periodic",
+          "trigger": {
+            "type": "periodic",
+            "interval": 3.0
+          },
+          "affects": [
+            {
+              "lhs": "slow_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["slow_counter"] }, 10] }
+            }
+          ],
+          "discrete_parameters": ["slow_counter"],
+          "description": "Slow periodic event every 3.0 time units"
+        },
+        {
+          "name": "offset_periodic",
+          "trigger": {
+            "type": "periodic",
+            "interval": 2.0,
+            "initial_offset": 1.5
+          },
+          "affects": [
+            {
+              "lhs": "offset_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["offset_counter"] }, 100] }
+            }
+          ],
+          "discrete_parameters": ["offset_counter"],
+          "description": "Periodic event with 1.5 time unit initial offset"
+        },
+        {
+          "name": "phase_accumulator",
+          "trigger": {
+            "type": "periodic",
+            "interval": 1.0
+          },
+          "affects": [
+            {
+              "lhs": "phase_shift",
+              "rhs": { "op": "+", "args": [
+                { "op": "Pre", "args": ["phase_shift"] },
+                { "op": "sin", "args": [{ "op": "*", "args": ["t", 0.5] }] }
+              ]}
+            }
+          ],
+          "discrete_parameters": ["phase_shift"],
+          "description": "Phase shift accumulation based on current time"
+        }
+      ]
+    },
+
+    "PresetTimeSystem": {
+      "description": "Test preset time events with complex scheduling",
+      "variables": {
+        "measurement_value": { "type": "state", "units": "1", "default": 1.0, "description": "Measured variable" },
+        "sample_count": { "type": "parameter", "units": "1", "default": 0, "description": "Number of samples taken" },
+        "irregular_flag": { "type": "parameter", "units": "1", "default": 0, "description": "Irregular schedule flag" },
+        "burst_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Burst measurement counter" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["measurement_value"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [
+            { "op": "sin", "args": [{ "op": "*", "args": ["t", 0.3] }] },
+            { "op": "exp", "args": [{ "op": "*", "args": [-0.05, "t"] }] }
+          ]}
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "regular_sampling",
+          "trigger": {
+            "type": "preset_times",
+            "times": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+          },
+          "affects": [
+            {
+              "lhs": "sample_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["sample_count"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["sample_count"],
+          "description": "Regular sampling at integer time points"
+        },
+        {
+          "name": "irregular_schedule",
+          "trigger": {
+            "type": "preset_times",
+            "times": [0.3, 1.7, 2.2, 4.8, 6.1, 7.9, 9.4]
+          },
+          "affects": [
+            {
+              "lhs": "irregular_flag",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["irregular_flag"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["irregular_flag"],
+          "description": "Irregular measurement schedule"
+        },
+        {
+          "name": "burst_measurements",
+          "trigger": {
+            "type": "preset_times",
+            "times": [5.0, 5.1, 5.2, 5.3, 5.4, 5.5]
+          },
+          "affects": [
+            {
+              "lhs": "burst_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["burst_counter"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["burst_counter"],
+          "description": "Burst of rapid measurements at t=5"
+        },
+        {
+          "name": "sparse_long_term",
+          "trigger": {
+            "type": "preset_times",
+            "times": [15.0, 25.0, 40.0, 60.0, 85.0]
+          },
+          "affects": [
+            {
+              "lhs": "sample_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["sample_count"] }, 100] }
+            }
+          ],
+          "discrete_parameters": ["sample_count"],
+          "description": "Sparse long-term measurement schedule"
+        }
+      ]
+    },
+
+    "ConditionalEventSystem": {
+      "description": "Test conditional discrete events with complex logic",
+      "variables": {
+        "sensor_value": { "type": "state", "units": "1", "default": 0.0, "description": "Sensor reading" },
+        "threshold_parameter": { "type": "parameter", "units": "1", "default": 5.0, "description": "Dynamic threshold" },
+        "alarm_state": { "type": "parameter", "units": "1", "default": 0, "description": "Alarm activation state" },
+        "hysteresis_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Hysteresis activation counter" },
+        "logic_gate_output": { "type": "parameter", "units": "1", "default": 0, "description": "Logic gate result" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["sensor_value"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [
+            { "op": "*", "args": [2.0, { "op": "sin", "args": [{ "op": "*", "args": ["t", 0.8] }] }] },
+            { "op": "*", "args": [0.5, { "op": "cos", "args": [{ "op": "*", "args": ["t", 2.1] }] }] }
+          ]}
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "threshold_alarm",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": ">", "args": ["sensor_value", "threshold_parameter"] }
+          },
+          "affects": [
+            {
+              "lhs": "alarm_state",
+              "rhs": 1
+            }
+          ],
+          "discrete_parameters": ["alarm_state"],
+          "description": "Activate alarm when sensor exceeds threshold"
+        },
+        {
+          "name": "alarm_reset",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "<", "args": ["sensor_value", { "op": "*", "args": ["threshold_parameter", 0.8] }] }
+          },
+          "affects": [
+            {
+              "lhs": "alarm_state",
+              "rhs": 0
+            }
+          ],
+          "discrete_parameters": ["alarm_state"],
+          "description": "Reset alarm with hysteresis (20% lower than activation)"
+        },
+        {
+          "name": "hysteresis_counter_increment",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "and", "args": [
+              { "op": ">", "args": ["sensor_value", 3.0] },
+              { "op": "<", "args": ["sensor_value", 4.0] },
+              { "op": "==", "args": ["alarm_state", 0] }
+            ]}
+          },
+          "affects": [
+            {
+              "lhs": "hysteresis_counter",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["hysteresis_counter"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["hysteresis_counter"],
+          "description": "Count times in hysteresis zone while alarm is off"
+        },
+        {
+          "name": "complex_logic_gate",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "or", "args": [
+              { "op": "and", "args": [
+                { "op": ">", "args": ["sensor_value", 1.0] },
+                { "op": "==", "args": ["alarm_state", 1] }
+              ]},
+              { "op": "and", "args": [
+                { "op": "<", "args": ["sensor_value", -1.0] },
+                { "op": ">", "args": ["hysteresis_counter", 5] }
+              ]}
+            ]}
+          },
+          "affects": [
+            {
+              "lhs": "logic_gate_output",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["logic_gate_output"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["logic_gate_output"],
+          "description": "Complex boolean logic with AND/OR combinations"
+        }
+      ]
+    },
+
+    "ParameterModificationSystem": {
+      "description": "Test discrete events that modify system parameters",
+      "variables": {
+        "dynamic_state": { "type": "state", "units": "1", "default": 1.0, "description": "State affected by parameter changes" },
+        "growth_rate": { "type": "parameter", "units": "1/s", "default": 0.1, "description": "Growth rate parameter" },
+        "damping_coefficient": { "type": "parameter", "units": "1", "default": 0.05, "description": "Damping parameter" },
+        "modification_count": { "type": "parameter", "units": "1", "default": 0, "description": "Parameter change counter" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["dynamic_state"], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "*", "args": ["growth_rate", "dynamic_state"] },
+            { "op": "*", "args": ["damping_coefficient", { "op": "^", "args": ["dynamic_state", 3] }] }
+          ]}
+        }
+      ],
+
+      "discrete_events": [
+        {
+          "name": "growth_rate_adjustment",
+          "trigger": {
+            "type": "periodic",
+            "interval": 2.5
+          },
+          "affects": [
+            {
+              "lhs": "growth_rate",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["growth_rate"] }, 0.9] }
+            },
+            {
+              "lhs": "modification_count",
+              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["modification_count"] }, 1] }
+            }
+          ],
+          "discrete_parameters": ["growth_rate", "modification_count"],
+          "reinitialize": true,
+          "description": "Gradually reduce growth rate"
+        },
+        {
+          "name": "adaptive_damping",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": ">", "args": ["dynamic_state", 10.0] }
+          },
+          "affects": [
+            {
+              "lhs": "damping_coefficient",
+              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["damping_coefficient"] }, 1.5] }
+            }
+          ],
+          "discrete_parameters": ["damping_coefficient"],
+          "reinitialize": true,
+          "description": "Increase damping when state becomes large"
+        },
+        {
+          "name": "parameter_reset",
+          "trigger": {
+            "type": "condition",
+            "expression": { "op": "<", "args": ["dynamic_state", 0.1] }
+          },
+          "affects": [
+            {
+              "lhs": "growth_rate",
+              "rhs": 0.2
+            },
+            {
+              "lhs": "damping_coefficient",
+              "rhs": 0.01
+            }
+          ],
+          "discrete_parameters": ["growth_rate", "damping_coefficient"],
+          "reinitialize": true,
+          "description": "Reset parameters when state becomes very small"
+        }
+      ]
+    }
+  },
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:20:00Z" },
+    "initial_conditions": { "type": "constant", "value": 0.0 }
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": { "stiff_algorithm": "Rosenbrock23", "timestep": 0.01 }
+  }
+}

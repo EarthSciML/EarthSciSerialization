@@ -1,0 +1,44 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BackwardCompatible",
+    "description": "ESM file that should remain compatible across minor versions",
+    "authors": ["Test Suite"],
+    "license": "MIT",
+    "created": "2026-02-19T00:00:00Z",
+    "modified": "2026-02-19T00:00:00Z"
+  },
+  "models": {
+    "stable_model": {
+      "variables": {
+        "concentration": {
+          "initial": 100.0,
+          "rhs": {"op": "mult", "args": [-0.1, "concentration"]},
+          "units": "mol/L"
+        },
+        "temperature": {
+          "initial": 298.15,
+          "rhs": {"op": "add", "args": [0.01, {"op": "mult", "args": [0.1, "concentration"]}]},
+          "units": "K"
+        }
+      },
+      "parameters": {
+        "decay_rate": {"value": 0.1, "units": "1/s"},
+        "heat_capacity": {"value": 4.18, "units": "J/(mol*K)"}
+      }
+    }
+  },
+  "domain": {
+    "temporal": {
+      "start": "2023-01-01T00:00:00Z",
+      "end": "2023-01-02T00:00:00Z",
+      "step": "PT1M"
+    }
+  },
+  "solver": {
+    "strategy": "explicit_euler",
+    "rtol": 1e-6,
+    "atol": 1e-8,
+    "max_steps": 1000
+  }
+}

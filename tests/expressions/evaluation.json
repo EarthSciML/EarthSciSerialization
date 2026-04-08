@@ -1,0 +1,92 @@
+[
+  {
+    "description": "Number literal evaluation",
+    "input": 3.14,
+    "bindings": {},
+    "expected": 3.14,
+    "should_succeed": true
+  },
+  {
+    "description": "Simple variable evaluation with binding",
+    "input": "x",
+    "bindings": {"x": 42.0},
+    "expected": 42.0,
+    "should_succeed": true
+  },
+  {
+    "description": "Variable without binding should fail",
+    "input": "x",
+    "bindings": {},
+    "expected_error": "unbound_variable",
+    "unbound_variables": ["x"],
+    "should_succeed": false
+  },
+  {
+    "description": "Simple addition with bindings",
+    "input": {
+      "op": "+",
+      "args": ["a", "b"]
+    },
+    "bindings": {"a": 1.0, "b": 2.0},
+    "expected": 3.0,
+    "should_succeed": true
+  },
+  {
+    "description": "Multiplication with constants and variables",
+    "input": {
+      "op": "*",
+      "args": [1.8e-12, "T", "M"]
+    },
+    "bindings": {"T": 298.15, "M": 2.46e19},
+    "expected": 1.323456e8,
+    "should_succeed": true,
+    "tolerance": 1e-6
+  },
+  {
+    "description": "Partial binding should fail",
+    "input": {
+      "op": "+",
+      "args": ["a", "b", "c"]
+    },
+    "bindings": {"a": 1.0, "b": 2.0},
+    "expected_error": "unbound_variable",
+    "unbound_variables": ["c"],
+    "should_succeed": false
+  },
+  {
+    "description": "Exponential function evaluation",
+    "input": {
+      "op": "exp",
+      "args": [{"op": "/", "args": [-1370, "T"]}]
+    },
+    "bindings": {"T": 298.15},
+    "expected": 0.0064285,
+    "should_succeed": true,
+    "tolerance": 1e-6
+  },
+  {
+    "description": "Division by zero should handle gracefully",
+    "input": {
+      "op": "/",
+      "args": [1.0, "x"]
+    },
+    "bindings": {"x": 0.0},
+    "expected": "inf",
+    "should_succeed": true
+  },
+  {
+    "description": "Complex expression with all variables bound",
+    "input": {
+      "op": "*",
+      "args": [
+        {"op": "*", "args": ["k", {"op": "exp", "args": [{"op": "/", "args": ["E", "RT"]}]}]},
+        "A",
+        "B"
+      ]
+    },
+    "bindings": {"k": 1.0e13, "E": -1370, "RT": 298.15, "A": 1e-9, "B": 2e-9},
+    "expected": 1.28570e-5,
+    "should_succeed": true,
+    "tolerance": 1e-10
+  }
+]

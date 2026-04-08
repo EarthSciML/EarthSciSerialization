@@ -1,0 +1,46 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CatastrophicCancellation",
+    "description": "Test numerical stability with catastrophic cancellation scenarios",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "NumericalStabilityModel": {
+      "variables": {
+        "nearly_equal_1": { "type": "parameter", "units": "1", "default": 1.0000000000000001 },
+        "nearly_equal_2": { "type": "parameter", "units": "1", "default": 1.0000000000000002 },
+        "large_num_1": { "type": "parameter", "units": "1", "default": 1e16 },
+        "large_num_2": { "type": "parameter", "units": "1", "default": 1e16 },
+        "small_diff": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": { "op": "-", "args": ["nearly_equal_1", "nearly_equal_2"] }
+        },
+        "quadratic_formula_unstable": {
+          "type": "algebraic",
+          "units": "1",
+          "expression": {
+            "op": "/",
+            "args": [
+              { "op": "-", "args": [
+                { "op": "-", "args": ["b"] },
+                { "op": "sqrt", "args": [{ "op": "-", "args": [{ "op": "pow", "args": ["b", 2] }, { "op": "*", "args": [4, "a", "c"] }] }] }
+              ]},
+              { "op": "*", "args": [2, "a"] }
+            ]
+          }
+        },
+        "a": { "type": "parameter", "units": "1", "default": 1e-10 },
+        "b": { "type": "parameter", "units": "1", "default": 1 },
+        "c": { "type": "parameter", "units": "1", "default": 1e-10 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["small_diff"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["quadratic_formula_unstable", 1e-6] }
+        }
+      ]
+    }
+  }
+}

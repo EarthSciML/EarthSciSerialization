@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  julia-dev:
+    image: docker.io/ctessum/esm-format-julia:0.1.0-development
+    container_name: esm-julia-dev
+    volumes:
+      - ./:/workspace:delegated
+      - julia-depot:/opt/julia/depot
+    environment:
+      - JULIA_NUM_THREADS=auto
+      - ESM_DEBUG=true
+    ports:
+      - "8000:8000"
+    networks:
+      - esm-development
+
+  python-dev:
+    image: docker.io/ctessum/esm-format-python:0.1.0-development
+    container_name: esm-python-dev
+    volumes:
+      - ./:/workspace:delegated
+      - pip-cache:/root/.cache/pip
+    environment:
+      - PYTHONPATH=/workspace/packages/esm_format/src
+      - ESM_DEBUG=true
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8001:8000"
+    networks:
+      - esm-development
+
+  rust-dev:
+    image: docker.io/ctessum/esm-format-rust:0.1.0-development
+    container_name: esm-rust-dev
+    volumes:
+      - ./:/workspace:delegated
+      - cargo-cache:/usr/local/cargo/registry
+    environment:
+      - RUST_BACKTRACE=full
+      - ESM_DEBUG=true
+    ports:
+      - "8002:8000"
+    networks:
+      - esm-development
+
+volumes:
+  julia-depot:
+  pip-cache:
+  cargo-cache:
+
+networks:
+  esm-development:
+    driver: bridge

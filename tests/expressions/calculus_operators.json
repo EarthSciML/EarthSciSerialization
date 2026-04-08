@@ -1,0 +1,98 @@
+[
+  {
+    "description": "Time derivative with wrt field",
+    "operator": "D",
+    "required_fields": ["wrt"],
+    "examples": [
+      {
+        "input": {"op": "D", "args": ["O3"], "wrt": "t"},
+        "meaning": "∂O₃/∂t",
+        "latex": "\\frac{\\partial O_3}{\\partial t}"
+      },
+      {
+        "input": {"op": "D", "args": ["concentration"], "wrt": "t"},
+        "meaning": "∂concentration/∂t",
+        "latex": "\\frac{\\partial \\mathrm{concentration}}{\\partial t}"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Spatial gradient with dim field",
+    "operator": "grad",
+    "required_fields": ["dim"],
+    "examples": [
+      {
+        "input": {"op": "grad", "args": ["T"], "dim": "x"},
+        "meaning": "∂T/∂x",
+        "latex": "\\frac{\\partial T}{\\partial x}"
+      },
+      {
+        "input": {"op": "grad", "args": ["pressure"], "dim": "y"},
+        "meaning": "∂pressure/∂y",
+        "latex": "\\frac{\\partial \\mathrm{pressure}}{\\partial y}"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Divergence operator",
+    "operator": "div",
+    "required_fields": [],
+    "examples": [
+      {
+        "input": {"op": "div", "args": ["velocity_field"]},
+        "meaning": "∇·velocity_field",
+        "latex": "\\nabla \\cdot \\mathrm{velocity\\_field}"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Laplacian operator",
+    "operator": "laplacian",
+    "required_fields": [],
+    "examples": [
+      {
+        "input": {"op": "laplacian", "args": ["T"]},
+        "meaning": "∇²T",
+        "latex": "\\nabla^2 T"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Invalid: D operator missing wrt field",
+    "operator": "D",
+    "invalid_example": {
+      "input": {"op": "D", "args": ["x"]},
+      "expected_error": "missing_required_field",
+      "missing_field": "wrt"
+    }
+  },
+  {
+    "description": "Invalid: grad operator missing dim field",
+    "operator": "grad",
+    "invalid_example": {
+      "input": {"op": "grad", "args": ["T"]},
+      "expected_error": "missing_required_field",
+      "missing_field": "dim"
+    }
+  },
+  {
+    "description": "Invalid: too many arguments for unary operator",
+    "operator": "div",
+    "invalid_example": {
+      "input": {"op": "div", "args": ["a", "b"]},
+      "expected_error": "excess_arguments"
+    }
+  },
+  {
+    "description": "Invalid: no arguments for calculus operator",
+    "operator": "D",
+    "invalid_example": {
+      "input": {"op": "D", "args": [], "wrt": "t"},
+      "expected_error": "no_arguments"
+    }
+  }
+]

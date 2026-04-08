@@ -1,0 +1,25 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "TooManyEquations",
+    "description": "More equations than state variables - variation 2"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.1 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-1, "k", "x"] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["k", "x"] }
+        }
+      ]
+    }
+  }
+}

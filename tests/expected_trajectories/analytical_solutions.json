@@ -1,0 +1,103 @@
+{
+  "mathematical_correctness_tests": {
+    "description": "Expected analytical solutions for mathematical correctness verification",
+
+    "mass_conservation": {
+      "description": "Total mass should remain constant at 2.0 mol throughout simulation",
+      "test": "sum(A + B + C + D) = 2.0 ± 1e-12 at all times",
+      "expected_values": {
+        "t=0": { "A": 1.0, "B": 1.0, "C": 0.0, "D": 0.0, "total": 2.0 },
+        "t=5": { "total": 2.0 },
+        "t=10": { "total": 2.0 }
+      }
+    },
+
+    "linear_chain": {
+      "description": "A -> B -> C chain with k1=0.5, k2=0.3 has analytical solution",
+      "analytical_solutions": {
+        "A(t)": "exp(-0.5*t)",
+        "B(t)": "0.5/(0.3-0.5) * (exp(-0.5*t) - exp(-0.3*t))",
+        "C(t)": "1 + 0.5/(0.5-0.3)*exp(-0.3*t) - 0.3/(0.5-0.3)*exp(-0.5*t)"
+      },
+      "expected_values": {
+        "t=0": { "A": 1.0, "B": 0.0, "C": 0.0 },
+        "t=2": {
+          "A": 0.3679,
+          "B": 0.3033,
+          "C": 0.3288
+        },
+        "t=10": {
+          "A": 0.0067,
+          "B": 0.0135,
+          "C": 0.9798
+        }
+      },
+      "tolerance": 1e-6
+    },
+
+    "stoichiometry_test": {
+      "description": "2A + 3B -> C + 4D should follow correct stoichiometric proportions",
+      "stoichiometric_matrix": [
+        [-2, -3, 1, 4]
+      ],
+      "conservation_laws": [
+        "2*C + D/2 = constant (element conservation)",
+        "3*C + 4*D/3 = constant (element conservation)"
+      ],
+      "test": "Verify stoichiometric matrix rank and conservation laws"
+    },
+
+    "harmonic_oscillator": {
+      "description": "Simple harmonic oscillator x'' + x = 0 with x(0)=1, v(0)=0",
+      "analytical_solutions": {
+        "x(t)": "cos(t)",
+        "v(t)": "-sin(t)",
+        "energy(t)": "0.5 (constant)"
+      },
+      "expected_values": {
+        "t=0": { "x": 1.0, "v": 0.0, "energy": 0.5 },
+        "t=1.5708": { "x": 0.0, "v": -1.0, "energy": 0.5 },
+        "t=3.1416": { "x": -1.0, "v": 0.0, "energy": 0.5 },
+        "t=6.2832": { "x": 1.0, "v": 0.0, "energy": 0.5 }
+      },
+      "tolerance": 1e-4,
+      "energy_conservation_tolerance": 1e-8
+    },
+
+    "stiff_system": {
+      "description": "Stiff system with fast (lambda=-1000) and slow (lambda=-1) modes",
+      "analytical_solutions": {
+        "y_fast(t)": "exp(-1000*t) (rapid decay)",
+        "y_slow(t)": "complex coupling - verify numerically"
+      },
+      "expected_behavior": {
+        "t=0.001": "y_fast should be ~0.368 (1/e decay)",
+        "t=0.01": "y_fast should be ~0 (< 1e-4)",
+        "t=1.0": "y_slow should dominate system behavior"
+      },
+      "numerical_requirements": {
+        "stiff_solver_required": true,
+        "max_timestep": 1e-4,
+        "min_accuracy": 1e-6
+      }
+    }
+  },
+
+  "validation_metrics": {
+    "mass_conservation": {
+      "metric": "relative_error",
+      "formula": "abs(total_mass - 2.0) / 2.0",
+      "threshold": 1e-10
+    },
+    "energy_conservation": {
+      "metric": "relative_error",
+      "formula": "abs(energy(t) - energy(0)) / energy(0)",
+      "threshold": 1e-8
+    },
+    "analytical_accuracy": {
+      "metric": "l2_norm",
+      "formula": "sqrt(sum((numerical - analytical)^2) / N)",
+      "threshold": 1e-6
+    }
+  }
+}

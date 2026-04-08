@@ -1,0 +1,24 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CircularExpressionRefs",
+    "description": "Test circular reference detection in expressions within the same system",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 1.0 },
+        "y": { "type": "observed", "units": "m", "expression": { "op": "+", "args": ["z", 1.0] } },
+        "z": { "type": "observed", "units": "m", "expression": { "op": "*", "args": ["w", 2.0] } },
+        "w": { "type": "observed", "units": "m", "expression": { "op": "-", "args": ["y", 0.5] } }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "+", "args": ["y", "z", "w"] }
+        }
+      ]
+    }
+  }
+}

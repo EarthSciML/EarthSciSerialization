@@ -1,0 +1,68 @@
+[
+  {
+    "description": "Substitution inside nested function calls",
+    "input": { "op": "exp", "args": [{ "op": "/", "args": [{ "op": "*", "args": [-1370, "T"] }, "R"] }] },
+    "bindings": { "T": 298.15, "R": 8.314 },
+    "expected": { "op": "exp", "args": [{ "op": "/", "args": [{ "op": "*", "args": [-1370, 298.15] }, 8.314] }] }
+  },
+  {
+    "description": "Multiple levels of nesting with repeated variables",
+    "input": { "op": "+", "args": [
+      { "op": "*", "args": ["A", { "op": "sin", "args": [{ "op": "*", "args": ["omega", "t"] }] }] },
+      { "op": "*", "args": ["A", { "op": "cos", "args": [{ "op": "*", "args": ["omega", "t"] }] }] }
+    ]},
+    "bindings": { "A": 2.5, "omega": 1.5 },
+    "expected": { "op": "+", "args": [
+      { "op": "*", "args": [2.5, { "op": "sin", "args": [{ "op": "*", "args": [1.5, "t"] }] }] },
+      { "op": "*", "args": [2.5, { "op": "cos", "args": [{ "op": "*", "args": [1.5, "t"] }] }] }
+    ]}
+  },
+  {
+    "description": "Substitution in derivative expressions",
+    "input": { "op": "D", "args": [{ "op": "*", "args": ["k", "concentration"] }], "wrt": "t" },
+    "bindings": { "k": 0.1, "concentration": "C_species" },
+    "expected": { "op": "D", "args": [{ "op": "*", "args": [0.1, "C_species"] }], "wrt": "t" }
+  },
+  {
+    "description": "Conditional expressions with nested substitution",
+    "input": { "op": "ifelse", "args": [
+      { "op": ">", "args": [{ "op": "*", "args": ["x", "scale"] }, "threshold"] },
+      { "op": "*", "args": ["x", "amplification"] },
+      { "op": "/", "args": ["x", "damping"] }
+    ]},
+    "bindings": { "scale": 2.0, "threshold": 10.0, "amplification": 1.5, "damping": 0.8 },
+    "expected": { "op": "ifelse", "args": [
+      { "op": ">", "args": [{ "op": "*", "args": ["x", 2.0] }, 10.0] },
+      { "op": "*", "args": ["x", 1.5] },
+      { "op": "/", "args": ["x", 0.8] }
+    ]}
+  },
+  {
+    "description": "Power expressions with substitution in both base and exponent",
+    "input": { "op": "^", "args": [{ "op": "*", "args": ["base_var", "coefficient"] }, { "op": "+", "args": ["exp_var", "offset"] }] },
+    "bindings": { "base_var": "x", "coefficient": 2.0, "exp_var": "n", "offset": 1 },
+    "expected": { "op": "^", "args": [{ "op": "*", "args": ["x", 2.0] }, { "op": "+", "args": ["n", 1] }] }
+  },
+  {
+    "description": "Complex reaction rate expression",
+    "input": { "op": "*", "args": [
+      "k_forward",
+      { "op": "exp", "args": [{ "op": "/", "args": [{ "op": "-", "args": ["E_activation"] }, { "op": "*", "args": ["R_gas", "Temperature"] }] }] },
+      "concentration_A",
+      { "op": "^", "args": ["concentration_B", "reaction_order"] }
+    ]},
+    "bindings": {
+      "k_forward": 1.8e-12,
+      "E_activation": 1370,
+      "R_gas": 8.314,
+      "Temperature": 298.15,
+      "reaction_order": 2
+    },
+    "expected": { "op": "*", "args": [
+      1.8e-12,
+      { "op": "exp", "args": [{ "op": "/", "args": [{ "op": "-", "args": [1370] }, { "op": "*", "args": [8.314, 298.15] }] }] },
+      "concentration_A",
+      { "op": "^", "args": ["concentration_B", 2] }
+    ]}
+  }
+]

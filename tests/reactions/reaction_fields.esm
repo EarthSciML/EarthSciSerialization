@@ -1,0 +1,54 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ReactionFieldsTest",
+    "description": "Reactions with required id, substrates, products, and rate fields",
+    "authors": ["Test Author"]
+  },
+  "reaction_systems": {
+    "ReactionFieldsSystem": {
+      "species": {
+        "A": {"units": "mol/mol", "default": 1.0e-6, "description": "Species A"},
+        "B": {"units": "mol/mol", "default": 2.0e-6, "description": "Species B"},
+        "C": {"units": "mol/mol", "default": 0.0, "description": "Species C"}
+      },
+      "parameters": {
+        "k_forward": {"units": "1/s", "default": 1.0e-3, "description": "Forward rate constant"},
+        "production_rate": {"units": "mol/mol/s", "default": 1.0e-8, "description": "Production rate"}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "bimolecular_reaction",
+          "substrates": [
+            {"species": "A", "stoichiometry": 1},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "C", "stoichiometry": 1}
+          ],
+          "rate": "k_forward",
+          "reference": {"notes": "Test reaction with all required fields"}
+        },
+        {
+          "id": "R2",
+          "name": "source_reaction",
+          "substrates": null,
+          "products": [
+            {"species": "A", "stoichiometry": 1}
+          ],
+          "rate": "production_rate"
+        },
+        {
+          "id": "R3",
+          "name": "sink_reaction",
+          "substrates": [
+            {"species": "C", "stoichiometry": 1}
+          ],
+          "products": null,
+          "rate": {"op": "*", "args": [0.01, "C"]}
+        }
+      ]
+    }
+  }
+}

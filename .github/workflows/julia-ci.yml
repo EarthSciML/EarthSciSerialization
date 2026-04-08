@@ -1,0 +1,93 @@
+name: Julia CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        julia-version: ['1.9', '1.10', '1.11', '1.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: ${{ matrix.julia-version }}
+
+    - name: Cache Julia packages
+      uses: julia-actions/cache@v2
+
+    - name: Build package
+      working-directory: packages/ESMFormat.jl
+      run: |
+        julia --project=. -e '
+          using Pkg
+          Pkg.develop(PackageSpec(path="."))
+          Pkg.instantiate()
+          Pkg.precompile()
+        '
+
+    - name: Run tests
+      working-directory: packages/ESMFormat.jl
+      run: julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
+
+    - name: Process coverage
+      working-directory: packages/ESMFormat.jl
+      uses: julia-actions/julia-processcoverage@v1
+      if: matrix.julia-version == '1.12'
+
+    - name: Upload coverage
+      working-directory: packages/ESMFormat.jl
+      uses: codecov/codecov-action@v4
+      if: matrix.julia-version == '1.12'
+      with:
+        files: lcov.info
+        flags: julia
+
+  register-release:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: '1.12'
+
+    - name: Update version in Project.toml
+      working-directory: packages/ESMFormat.jl
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        sed -i "s/version = \"[^\"]*\"/version = \"$VERSION\"/" Project.toml
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add Project.toml
+        git commit -m "Update version to $VERSION" || true
+
+    - name: Register with General Registry
+      uses: julia-actions/RegisterAction@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        registry: General
+        package_dir: packages/ESMFormat.jl
+
+    - name: Tag Julia package
+      working-directory: packages/ESMFormat.jl
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        git tag -a "ESMFormat-v$VERSION" -m "ESMFormat v$VERSION"
+        git push origin "ESMFormat-v$VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

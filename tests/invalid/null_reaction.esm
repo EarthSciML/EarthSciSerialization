@@ -1,0 +1,25 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "NullReaction",
+    "description": "Reaction with both null substrates and null products"
+  },
+  "reaction_systems": {
+    "TestReactions": {
+      "species": {
+        "O3": { "units": "mol/mol", "default": 1e-8, "description": "Ozone" }
+      },
+      "parameters": {
+        "k1": { "units": "1/s", "default": 1.0, "description": "Rate constant" }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": null,
+          "products": null,
+          "rate": "k1"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+[
+  {
+    "description": "Number literal construction",
+    "input_type": "number",
+    "input": 3.14,
+    "expected_free_vars": [],
+    "expected_type": "number"
+  },
+  {
+    "description": "Variable reference construction",
+    "input_type": "string",
+    "input": "O3",
+    "expected_free_vars": ["O3"],
+    "expected_type": "string"
+  },
+  {
+    "description": "Simple addition operator",
+    "input_type": "expr_node",
+    "input": {
+      "op": "+",
+      "args": ["a", "b"]
+    },
+    "expected_free_vars": ["a", "b"],
+    "expected_type": "expr_node"
+  },
+  {
+    "description": "Nested multiplication and addition",
+    "input_type": "expr_node",
+    "input": {
+      "op": "+",
+      "args": [
+        {"op": "*", "args": ["k", "A"]},
+        "c"
+      ]
+    },
+    "expected_free_vars": ["k", "A", "c"],
+    "expected_type": "expr_node"
+  },
+  {
+    "description": "Time derivative with wrt field",
+    "input_type": "expr_node",
+    "input": {
+      "op": "D",
+      "args": ["O3"],
+      "wrt": "t"
+    },
+    "expected_free_vars": ["O3"],
+    "expected_type": "expr_node",
+    "expected_fields": ["wrt"]
+  },
+  {
+    "description": "Spatial gradient with dim field",
+    "input_type": "expr_node",
+    "input": {
+      "op": "grad",
+      "args": ["T"],
+      "dim": "x"
+    },
+    "expected_free_vars": ["T"],
+    "expected_type": "expr_node",
+    "expected_fields": ["dim"]
+  }
+]

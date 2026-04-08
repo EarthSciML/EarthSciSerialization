@@ -1,0 +1,393 @@
+/**
+ * Enhanced ModelEditor CSS Styles
+ *
+ * Additional styles for export functionality, performance monitoring,
+ * and enhanced validation features.
+ */
+
+/* Enhanced Header */
+.esm-model-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.esm-export-btn {
+  padding: 8px 16px;
+  background: rgb(59, 130, 246);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.esm-export-btn:hover {
+  background: rgb(37, 99, 235);
+  transform: translateY(-1px);
+}
+
+.esm-performance-info {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  font-family: monospace;
+  color: rgb(75, 85, 99);
+}
+
+/* Export Panel */
+.esm-export-panel {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.esm-export-controls {
+  margin-bottom: 24px;
+}
+
+.esm-export-options {
+  margin: 16px 0;
+  padding: 16px;
+  background: rgb(249, 250, 251);
+  border-radius: 8px;
+  border: 1px solid rgb(229, 231, 235);
+}
+
+.esm-export-options h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgb(31, 41, 55);
+}
+
+.esm-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+  color: rgb(55, 65, 81);
+  cursor: pointer;
+}
+
+.esm-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.esm-export-execute-btn {
+  padding: 12px 24px;
+  background: rgb(34, 197, 94);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.esm-export-execute-btn:hover {
+  background: rgb(21, 128, 61);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.esm-export-preview {
+  margin-top: 24px;
+  border-top: 1px solid rgb(229, 231, 235);
+  padding-top: 24px;
+}
+
+.esm-export-preview h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgb(31, 41, 55);
+}
+
+.esm-export-preview-content {
+  background: rgb(17, 24, 39);
+  color: rgb(229, 231, 235);
+  padding: 16px;
+  border-radius: 8px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* Enhanced Validation Panel */
+.esm-validation-panel {
+  background: linear-gradient(135deg, rgb(254, 243, 199) 0%, rgb(253, 230, 138) 100%);
+  border: 1px solid rgb(251, 191, 36);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 20px;
+}
+
+.esm-validation-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgb(146, 64, 14);
+}
+
+.esm-error-icon {
+  font-size: 18px;
+}
+
+.esm-validation-errors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.esm-validation-error {
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.esm-validation-error.error {
+  background: rgb(254, 226, 226);
+  border-left: 4px solid rgb(239, 68, 68);
+  color: rgb(127, 29, 29);
+}
+
+.esm-validation-error.warning {
+  background: rgb(255, 251, 235);
+  border-left: 4px solid rgb(245, 158, 11);
+  color: rgb(146, 64, 14);
+}
+
+/* Modal Styles */
+.esm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.esm-modal-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 500px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+.esm-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgb(229, 231, 235);
+}
+
+.esm-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: rgb(31, 41, 55);
+}
+
+.esm-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: rgb(107, 114, 128);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.esm-modal-close:hover {
+  background: rgb(243, 244, 246);
+  color: rgb(31, 41, 55);
+}
+
+.esm-modal-body {
+  padding: 24px;
+}
+
+.esm-export-format-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.esm-export-format-btn {
+  padding: 12px 16px;
+  background: white;
+  border: 2px solid rgb(229, 231, 235);
+  border-radius: 8px;
+  color: rgb(55, 65, 81);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.esm-export-format-btn:hover {
+  border-color: rgb(59, 130, 246);
+  color: rgb(59, 130, 246);
+  background: rgb(239, 246, 255);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+/* Field Styles */
+.esm-field-group {
+  margin-bottom: 16px;
+}
+
+.esm-field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgb(55, 65, 81);
+}
+
+.esm-field-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgb(209, 213, 219);
+  border-radius: 6px;
+  font-size: 14px;
+  color: rgb(31, 41, 55);
+  background: white;
+  transition: all 0.15s ease;
+}
+
+.esm-field-input:focus {
+  outline: none;
+  border-color: rgb(59, 130, 246);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.esm-field-input:hover:not(:focus) {
+  border-color: rgb(156, 163, 175);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .esm-model-title-row {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .esm-export-format-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .esm-modal-content {
+    width: 95vw;
+    margin: 20px;
+  }
+
+  .esm-export-options {
+    padding: 12px;
+  }
+
+  .esm-performance-info {
+    font-size: 11px;
+  }
+}
+
+/* Animation for export button success */
+@keyframes export-success {
+  0% {
+    background: rgb(34, 197, 94);
+  }
+  50% {
+    background: rgb(21, 128, 61);
+    transform: scale(1.05);
+  }
+  100% {
+    background: rgb(34, 197, 94);
+    transform: scale(1);
+  }
+}
+
+.esm-export-execute-btn.success {
+  animation: export-success 0.6s ease;
+}
+
+/* Loading states */
+.esm-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.esm-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(59, 130, 246, 0.2);
+  border-top: 2px solid rgb(59, 130, 246);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Enhanced tooltips */
+[title] {
+  position: relative;
+}
+
+[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgb(31, 41, 55);
+  color: white;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 100;
+  pointer-events: none;
+}

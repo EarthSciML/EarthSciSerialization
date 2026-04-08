@@ -1,0 +1,68 @@
+# Minimal Python container for microservices
+FROM python:3.11-slim-bookworm as builder
+
+WORKDIR /workspace
+ARG PYTHONOPTIMIZE=2
+ARG DEBUG_MODE=false
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python package files
+COPY packages/esm_format/pyproject.toml packages/esm_format/setup.cfg ./packages/esm_format/
+
+# Install Python dependencies
+WORKDIR /workspace/packages/esm_format
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir build wheel
+
+# Copy source and build
+COPY packages/esm_format ./
+RUN python -m build --wheel
+
+# Production stage
+FROM python:3.11-slim-bookworm as production
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd -r esm && useradd -r -g esm -d /workspace -s /bin/bash esm
+
+WORKDIR /workspace
+
+# Copy wheel from builder and install
+COPY --from=builder /workspace/packages/esm_format/dist/*.whl ./
+RUN pip install --no-cache-dir *.whl && rm *.whl
+
+# Copy test data and scripts
+COPY --chown=esm:esm tests ./tests/
+COPY --chown=esm:esm scripts ./scripts/
+
+# Set permissions
+RUN chmod +x scripts/*.py
+
+# Set environment variables
+ENV PYTHONPATH=/workspace/packages/esm_format/src
+ENV ESM_TEST_TIMEOUT=300
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONOPTIMIZE=2
+
+# Create output directory
+RUN mkdir -p /workspace/conformance-results && chown -R esm:esm /workspace/conformance-results
+
+USER esm
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD python3 --version || exit 1
+
+# Default command
+CMD ["python3", "scripts/run-python-conformance.py", "/workspace/conformance-results/python"]

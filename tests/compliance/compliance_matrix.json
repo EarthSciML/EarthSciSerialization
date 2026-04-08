@@ -1,0 +1,841 @@
+{
+  "schema_version": "0.1.0",
+  "generated_at": "2026-02-15T05:30:00Z",
+  "description": "Comprehensive mapping of ESM format requirements to test fixtures. This matrix ensures 100% requirement coverage and serves as the authoritative checklist for conformance testing.",
+
+  "requirement_categories": {
+    "SCHEMA": {
+      "name": "JSON Schema Validation",
+      "description": "Requirements for validating ESM files against the JSON Schema",
+      "priority": "P1"
+    },
+    "STRUCT": {
+      "name": "Structural Validation",
+      "description": "Mathematical and semantic consistency checks beyond schema validation",
+      "priority": "P1"
+    },
+    "BEHAV": {
+      "name": "Behavioral Requirements",
+      "description": "Mandatory behavioral requirements (MUST/SHALL) from specifications",
+      "priority": "P1"
+    },
+    "FORMAT": {
+      "name": "Format Specifications",
+      "description": "Field requirements, value constraints, and format rules",
+      "priority": "P1"
+    },
+    "ALGO": {
+      "name": "Algorithmic Requirements",
+      "description": "Specific algorithms for ODE derivation, stoichiometric matrices, etc.",
+      "priority": "P2"
+    },
+    "VALID": {
+      "name": "Validation API",
+      "description": "Validation function behavior and error handling requirements",
+      "priority": "P1"
+    },
+    "DISPLAY": {
+      "name": "Display Formats",
+      "description": "Pretty-printing and display format specifications",
+      "priority": "P2"
+    },
+    "EXPR": {
+      "name": "Expression Engine",
+      "description": "Expression AST manipulation and processing requirements",
+      "priority": "P1"
+    },
+    "SERIAL": {
+      "name": "Serialization",
+      "description": "Round-trip and serialization consistency requirements",
+      "priority": "P1"
+    },
+    "VERSION": {
+      "name": "Version Compatibility",
+      "description": "Version handling and compatibility requirements",
+      "priority": "P2"
+    }
+  },
+
+  "requirements": {
+    "SCHEMA-02-01": {
+      "description": "Top-level ESM file must have required 'esm' version field",
+      "spec_ref": "esm-spec.md:2.0",
+      "category": "SCHEMA",
+      "testable": true,
+      "test_fixtures": ["tests/valid/minimal_chemistry.esm", "tests/invalid/missing_esm_version.esm"],
+      "priority": "P1"
+    },
+    "SCHEMA-02-02": {
+      "description": "Top-level ESM file must have required 'metadata' field",
+      "spec_ref": "esm-spec.md:2.0",
+      "category": "SCHEMA",
+      "testable": true,
+      "test_fixtures": ["tests/valid/minimal_chemistry.esm", "tests/invalid/missing_metadata.esm"],
+      "priority": "P1"
+    },
+    "SCHEMA-02-03": {
+      "description": "At least one of 'models' or 'reaction_systems' must be present",
+      "spec_ref": "esm-spec.md:2.0",
+      "category": "SCHEMA",
+      "testable": true,
+      "test_fixtures": ["tests/valid/model_only.esm", "tests/valid/reaction_system_only.esm", "tests/invalid/no_systems.esm"],
+      "priority": "P1"
+    },
+    "SCHEMA-04-01": {
+      "description": "Expression AST must follow grammar: Expr := number | string | ExprNode",
+      "spec_ref": "esm-spec.md:4.1",
+      "category": "SCHEMA",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/valid_ast.json", "tests/expressions/invalid_ast.json"],
+      "priority": "P1"
+    },
+    "SCHEMA-04-02": {
+      "description": "ExprNode must have 'op' field and 'args' array",
+      "spec_ref": "esm-spec.md:4.1",
+      "category": "SCHEMA",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/missing_op.json", "tests/expressions/missing_args.json"],
+      "priority": "P1"
+    },
+
+    "STRUCT-06-01": {
+      "description": "Number of ODE equations must match number of state variables for each model",
+      "spec_ref": "esm-libraries-spec.md:3.2.1",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/equation_count_mismatch.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-07-01": {
+      "description": "Every species referenced in reactions must be declared in 'species' section",
+      "spec_ref": "esm-libraries-spec.md:3.2.1",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/undefined_species.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-04-01": {
+      "description": "Scoped references must resolve to actual variables using dot notation",
+      "spec_ref": "esm-spec.md:4.3",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/unresolved_scoped_ref.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-05-01": {
+      "description": "Variables in event affects must reference declared variables",
+      "spec_ref": "esm-libraries-spec.md:3.2.3",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/event_var_undeclared.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-05-02": {
+      "description": "discrete_parameters in events must match declared parameters",
+      "spec_ref": "esm-libraries-spec.md:3.2.3",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/invalid_discrete_param.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-07-02": {
+      "description": "Reaction substrates and products must reference declared species",
+      "spec_ref": "esm-libraries-spec.md:3.2.4",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/reaction_undefined_species.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-07-03": {
+      "description": "Reaction stoichiometries must be positive integers",
+      "spec_ref": "esm-libraries-spec.md:3.2.4",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/negative_stoichiometry.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-07-04": {
+      "description": "No reaction can have both substrates: null and products: null",
+      "spec_ref": "esm-libraries-spec.md:3.2.4",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/null_reaction.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-10-01": {
+      "description": "Coupling entries must reference existing models/reaction systems/data loaders/operators",
+      "spec_ref": "esm-libraries-spec.md:3.2.2",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/undefined_system.esm"],
+      "priority": "P1"
+    },
+    "STRUCT-10-02": {
+      "description": "operator_apply coupling entries must reference existing operators",
+      "spec_ref": "esm-libraries-spec.md:3.2.2",
+      "category": "STRUCT",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/undefined_operator.esm"],
+      "priority": "P1"
+    },
+
+    "BEHAV-LOAD-01": {
+      "description": "load() function MUST throw on malformed JSON",
+      "spec_ref": "esm-libraries-spec.md:2.1a",
+      "category": "BEHAV",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/malformed_json.esm"],
+      "priority": "P1"
+    },
+    "BEHAV-LOAD-02": {
+      "description": "load() function MUST throw on valid JSON that fails schema validation",
+      "spec_ref": "esm-libraries-spec.md:2.1a",
+      "category": "BEHAV",
+      "testable": true,
+      "test_fixtures": ["tests/invalid/missing_esm_version.esm"],
+      "priority": "P1"
+    },
+    "BEHAV-LOAD-03": {
+      "description": "load() function MUST succeed for valid JSON that passes schema but fails structural validation",
+      "spec_ref": "esm-libraries-spec.md:2.1a",
+      "category": "BEHAV",
+      "testable": true,
+      "test_fixtures": ["tests/valid/structural_issues.esm"],
+      "priority": "P1"
+    },
+    "BEHAV-06-01": {
+      "description": "All models must be fully specified with all equations, variables, and parameters",
+      "spec_ref": "esm-spec.md:6.0",
+      "category": "BEHAV",
+      "testable": true,
+      "test_fixtures": ["tests/valid/full_model_specification.esm"],
+      "priority": "P1"
+    },
+    "BEHAV-07-01": {
+      "description": "ODE generation from reactions must use standard mass action kinetics",
+      "spec_ref": "esm-spec.md:7.4",
+      "category": "BEHAV",
+      "testable": true,
+      "test_fixtures": ["tests/reactions/mass_action_odes.json"],
+      "priority": "P1"
+    },
+
+    "FORMAT-04-01": {
+      "description": "Built-in arithmetic operators must support specified arities",
+      "spec_ref": "esm-spec.md:4.2",
+      "category": "FORMAT",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/arithmetic_operators.json"],
+      "priority": "P1"
+    },
+    "FORMAT-04-02": {
+      "description": "Calculus operators must include required additional fields",
+      "spec_ref": "esm-spec.md:4.2",
+      "category": "FORMAT",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/calculus_operators.json"],
+      "priority": "P1"
+    },
+    "FORMAT-05-01": {
+      "description": "Continuous events must have conditions array and affects array",
+      "spec_ref": "esm-spec.md:5.2",
+      "category": "FORMAT",
+      "testable": true,
+      "test_fixtures": ["tests/events/continuous_events.esm"],
+      "priority": "P1"
+    },
+    "FORMAT-05-02": {
+      "description": "Discrete events must have trigger and affects fields",
+      "spec_ref": "esm-spec.md:5.3",
+      "category": "FORMAT",
+      "testable": true,
+      "test_fixtures": ["tests/events/discrete_events.esm"],
+      "priority": "P1"
+    },
+    "FORMAT-06-01": {
+      "description": "Model variables must have type field with valid values",
+      "spec_ref": "esm-spec.md:6.3",
+      "category": "FORMAT",
+      "testable": true,
+      "test_fixtures": ["tests/models/variable_types.esm"],
+      "priority": "P1"
+    },
+    "FORMAT-07-01": {
+      "description": "Reaction must have id, substrates, products, and rate fields",
+      "spec_ref": "esm-spec.md:7.3",
+      "category": "FORMAT",
+      "testable": true,
+      "test_fixtures": ["tests/reactions/reaction_fields.esm"],
+      "priority": "P1"
+    },
+
+    "ALGO-07-01": {
+      "description": "ODE generation algorithm: v = k · ∏ᵢ Sᵢ^nᵢ for mass action kinetics",
+      "spec_ref": "esm-spec.md:7.4",
+      "category": "ALGO",
+      "testable": true,
+      "test_fixtures": ["tests/reactions/ode_generation.json"],
+      "priority": "P2"
+    },
+    "ALGO-07-02": {
+      "description": "Stoichiometric matrix computation: net_stoich_X = (products) - (substrates)",
+      "spec_ref": "esm-spec.md:7.4",
+      "category": "ALGO",
+      "testable": true,
+      "test_fixtures": ["tests/reactions/stoichiometric_matrix.json"],
+      "priority": "P2"
+    },
+    "ALGO-10-01": {
+      "description": "operator_compose algorithm for matching and combining equations",
+      "spec_ref": "esm-libraries-spec.md:4.7.1",
+      "category": "ALGO",
+      "testable": true,
+      "test_fixtures": ["tests/coupling/operator_compose.json"],
+      "priority": "P2"
+    },
+    "ALGO-10-02": {
+      "description": "Placeholder expansion: _var matches every state variable in target system",
+      "spec_ref": "esm-libraries-spec.md:4.7.1",
+      "category": "ALGO",
+      "testable": true,
+      "test_fixtures": ["tests/coupling/placeholder_expansion.json"],
+      "priority": "P2"
+    },
+
+    "VALID-API-01": {
+      "description": "validate() function must return ValidationResult with specified fields",
+      "spec_ref": "esm-libraries-spec.md:3.4",
+      "category": "VALID",
+      "testable": true,
+      "test_fixtures": ["tests/validation/validation_result.json"],
+      "priority": "P1"
+    },
+    "VALID-API-02": {
+      "description": "ValidationResult must contain schema_errors, structural_errors, unit_warnings, is_valid",
+      "spec_ref": "esm-libraries-spec.md:3.4",
+      "category": "VALID",
+      "testable": true,
+      "test_fixtures": ["tests/validation/validation_fields.json"],
+      "priority": "P1"
+    },
+    "VALID-ERR-01": {
+      "description": "SchemaError must include path, message, and keyword fields",
+      "spec_ref": "esm-libraries-spec.md:3.4",
+      "category": "VALID",
+      "testable": true,
+      "test_fixtures": ["tests/validation/schema_errors.json"],
+      "priority": "P1"
+    },
+    "VALID-ERR-02": {
+      "description": "StructuralError must include path, code, message, and details fields",
+      "spec_ref": "esm-libraries-spec.md:3.4",
+      "category": "VALID",
+      "testable": true,
+      "test_fixtures": ["tests/validation/structural_errors.json"],
+      "priority": "P1"
+    },
+    "VALID-CODES-01": {
+      "description": "Structural error codes must match specified standard codes",
+      "spec_ref": "esm-libraries-spec.md:3.4",
+      "category": "VALID",
+      "testable": true,
+      "test_fixtures": ["tests/validation/error_codes.json"],
+      "priority": "P1"
+    },
+
+    "DISPLAY-CHEM-01": {
+      "description": "Chemical species names must render with proper subscripts using element-aware tokenizer",
+      "spec_ref": "esm-libraries-spec.md:6.1",
+      "category": "DISPLAY",
+      "testable": true,
+      "test_fixtures": ["tests/display/chemical_subscripts.json"],
+      "priority": "P2"
+    },
+    "DISPLAY-CHEM-02": {
+      "description": "Element lookup must recognize all 118 chemical element symbols",
+      "spec_ref": "esm-libraries-spec.md:6.1",
+      "category": "DISPLAY",
+      "testable": true,
+      "test_fixtures": ["tests/display/element_recognition.json"],
+      "priority": "P2"
+    },
+    "DISPLAY-NUM-01": {
+      "description": "Number formatting rules for integers, decimals, and scientific notation",
+      "spec_ref": "esm-libraries-spec.md:6.1",
+      "category": "DISPLAY",
+      "testable": true,
+      "test_fixtures": ["tests/display/number_formatting.json"],
+      "priority": "P2"
+    },
+    "DISPLAY-OP-01": {
+      "description": "Operator precedence rules must minimize unnecessary parentheses",
+      "spec_ref": "esm-libraries-spec.md:6.1",
+      "category": "DISPLAY",
+      "testable": true,
+      "test_fixtures": ["tests/display/operator_precedence.json"],
+      "priority": "P2"
+    },
+    "DISPLAY-UNICODE-01": {
+      "description": "Unicode display format specifications for derivatives, multiplication, etc.",
+      "spec_ref": "esm-libraries-spec.md:6.1",
+      "category": "DISPLAY",
+      "testable": true,
+      "test_fixtures": ["tests/display/unicode_format.json"],
+      "priority": "P2"
+    },
+    "DISPLAY-LATEX-01": {
+      "description": "LaTeX display format specifications for fractions, derivatives, species names",
+      "spec_ref": "esm-libraries-spec.md:6.2",
+      "category": "DISPLAY",
+      "testable": true,
+      "test_fixtures": ["tests/display/latex_format.json"],
+      "priority": "P2"
+    },
+    "DISPLAY-SUMMARY-01": {
+      "description": "Model summary display format with structured layout",
+      "spec_ref": "esm-libraries-spec.md:6.3",
+      "category": "DISPLAY",
+      "testable": true,
+      "test_fixtures": ["tests/display/model_summary.json"],
+      "priority": "P2"
+    },
+
+    "EXPR-CONSTR-01": {
+      "description": "Expression construction from programmatic API and ESM JSON parsing",
+      "spec_ref": "esm-libraries-spec.md:2.3.1",
+      "category": "EXPR",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/construction.json"],
+      "priority": "P1"
+    },
+    "EXPR-SUBST-01": {
+      "description": "Recursive substitution with hierarchical scoped references",
+      "spec_ref": "esm-libraries-spec.md:2.3.3",
+      "category": "EXPR",
+      "testable": true,
+      "test_fixtures": ["tests/substitution/scoped_reference.json"],
+      "priority": "P1"
+    },
+    "EXPR-FREE-01": {
+      "description": "free_variables() must return all variable references in expression",
+      "spec_ref": "esm-libraries-spec.md:2.3.4",
+      "category": "EXPR",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/free_variables.json"],
+      "priority": "P1"
+    },
+    "EXPR-EVAL-01": {
+      "description": "evaluate() must require all variables in bindings or raise error",
+      "spec_ref": "esm-libraries-spec.md:2.3.4",
+      "category": "EXPR",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/evaluation.json"],
+      "priority": "P1"
+    },
+    "EXPR-SIMP-01": {
+      "description": "simplify() must at minimum fold constant arithmetic",
+      "spec_ref": "esm-libraries-spec.md:2.3.4",
+      "category": "EXPR",
+      "testable": true,
+      "test_fixtures": ["tests/expressions/simplification.json"],
+      "priority": "P1"
+    },
+
+    "SERIAL-RT-01": {
+      "description": "Round-trip test: load(save(load(file))) == load(file)",
+      "spec_ref": "esm-libraries-spec.md:7.3",
+      "category": "SERIAL",
+      "testable": true,
+      "test_fixtures": ["tests/valid/minimal_chemistry.esm", "tests/valid/full_coupled.esm"],
+      "priority": "P1"
+    },
+    "SERIAL-JSON-01": {
+      "description": "Serialization must produce output that validates against schema",
+      "spec_ref": "esm-libraries-spec.md:2.3.5",
+      "category": "SERIAL",
+      "testable": true,
+      "test_fixtures": ["tests/serialization/schema_validation.json"],
+      "priority": "P1"
+    },
+
+    "VERSION-COMPAT-01": {
+      "description": "Libraries must reject files with unsupported major version",
+      "spec_ref": "esm-libraries-spec.md:8.1",
+      "category": "VERSION",
+      "testable": true,
+      "test_fixtures": ["tests/version/unsupported_major.esm"],
+      "priority": "P2"
+    },
+    "VERSION-COMPAT-02": {
+      "description": "Libraries must accept files with minor version <= supported version",
+      "spec_ref": "esm-libraries-spec.md:8.1",
+      "category": "VERSION",
+      "testable": true,
+      "test_fixtures": ["tests/version/backward_compatible.esm"],
+      "priority": "P2"
+    }
+  },
+
+  "test_fixture_mapping": {
+    "tests/valid/minimal_chemistry.esm": {
+      "description": "Minimal valid ESM file based on esm-spec.md Section 13 example",
+      "requirements_covered": ["SCHEMA-02-01", "SCHEMA-02-02", "SCHEMA-02-03", "SERIAL-RT-01"],
+      "priority": "P1"
+    },
+    "tests/valid/full_coupled.esm": {
+      "description": "Comprehensive file exercising all sections and coupling types",
+      "requirements_covered": ["SERIAL-RT-01", "BEHAV-06-01"],
+      "priority": "P1"
+    },
+    "tests/valid/events_all_types.esm": {
+      "description": "File exercising all event variants: continuous, discrete, functional affects",
+      "requirements_covered": ["FORMAT-05-01", "FORMAT-05-02", "STRUCT-05-01", "STRUCT-05-02"],
+      "priority": "P1"
+    },
+    "tests/invalid/missing_esm_version.esm": {
+      "description": "Schema error: missing required esm version field",
+      "requirements_covered": ["SCHEMA-02-01", "BEHAV-LOAD-02"],
+      "expected_errors": ["schema_error"],
+      "priority": "P1"
+    },
+    "tests/invalid/equation_count_mismatch.esm": {
+      "description": "Structural error: number of ODEs != number of state variables",
+      "requirements_covered": ["STRUCT-06-01"],
+      "expected_errors": ["equation_count_mismatch"],
+      "priority": "P1"
+    },
+    "tests/display/chemical_subscripts.json": {
+      "description": "Chemical species name rendering with element-aware subscripts",
+      "requirements_covered": ["DISPLAY-CHEM-01", "DISPLAY-CHEM-02"],
+      "test_data_format": "Array of {input: string, unicode: string, latex: string}",
+      "priority": "P2"
+    },
+    "tests/display/expr_precedence.json": {
+      "description": "Expression precedence and operator rendering",
+      "requirements_covered": ["DISPLAY-OP-01", "DISPLAY-UNICODE-01", "DISPLAY-LATEX-01"],
+      "test_data_format": "Array of {input: Expression, unicode: string, latex: string}",
+      "priority": "P2"
+    },
+    "tests/substitution/simple_var_replace.json": {
+      "description": "Basic variable substitution test cases",
+      "requirements_covered": ["EXPR-SUBST-01"],
+      "test_data_format": "Array of {input: Expression, bindings: object, expected: Expression}",
+      "priority": "P1"
+    },
+    "tests/reactions/ode_generation.json": {
+      "description": "Mass action ODE generation from reaction stoichiometry",
+      "requirements_covered": ["ALGO-07-01", "BEHAV-07-01"],
+      "test_data_format": "Array of {reaction_system: object, expected_odes: object}",
+      "priority": "P2"
+    },
+    "tests/reactions/stoichiometric_matrix.json": {
+      "description": "Stoichiometric matrix computation from reactions",
+      "requirements_covered": ["ALGO-07-02"],
+      "test_data_format": "Array of {reaction_system: object, expected_matrix: number[][]}",
+      "priority": "P2"
+    },
+    "tests/invalid/missing_metadata.esm": {
+      "description": "Schema error: missing required metadata field",
+      "requirements_covered": ["SCHEMA-02-02"],
+      "expected_errors": ["schema_error"],
+      "priority": "P1"
+    },
+    "tests/valid/model_only.esm": {
+      "description": "Valid file with only models section (no reaction_systems)",
+      "requirements_covered": ["SCHEMA-02-03"],
+      "priority": "P1"
+    },
+    "tests/valid/reaction_system_only.esm": {
+      "description": "Valid file with only reaction_systems section (no models)",
+      "requirements_covered": ["SCHEMA-02-03"],
+      "priority": "P1"
+    },
+    "tests/invalid/no_systems.esm": {
+      "description": "Invalid file missing both models and reaction_systems",
+      "requirements_covered": ["SCHEMA-02-03"],
+      "expected_errors": ["schema_error"],
+      "priority": "P1"
+    },
+    "tests/expressions/valid_ast.json": {
+      "description": "Valid expression AST examples following grammar",
+      "requirements_covered": ["SCHEMA-04-01"],
+      "priority": "P1"
+    },
+    "tests/expressions/invalid_ast.json": {
+      "description": "Invalid expression AST that violates grammar",
+      "requirements_covered": ["SCHEMA-04-01"],
+      "expected_errors": ["schema_error"],
+      "priority": "P1"
+    },
+    "tests/expressions/missing_op.json": {
+      "description": "ExprNode missing required 'op' field",
+      "requirements_covered": ["SCHEMA-04-02"],
+      "expected_errors": ["schema_error"],
+      "priority": "P1"
+    },
+    "tests/expressions/missing_args.json": {
+      "description": "ExprNode missing required 'args' array",
+      "requirements_covered": ["SCHEMA-04-02"],
+      "expected_errors": ["schema_error"],
+      "priority": "P1"
+    },
+    "tests/invalid/undefined_species.esm": {
+      "description": "Reaction references species not declared in species section",
+      "requirements_covered": ["STRUCT-07-01"],
+      "expected_errors": ["undefined_species"],
+      "priority": "P1"
+    },
+    "tests/invalid/unresolved_scoped_ref.esm": {
+      "description": "Scoped reference cannot be resolved using dot notation",
+      "requirements_covered": ["STRUCT-04-01"],
+      "expected_errors": ["unresolved_scoped_ref"],
+      "priority": "P1"
+    },
+    "tests/invalid/event_var_undeclared.esm": {
+      "description": "Event affects reference variables not declared in system",
+      "requirements_covered": ["STRUCT-05-01"],
+      "expected_errors": ["event_var_undeclared"],
+      "priority": "P1"
+    },
+    "tests/invalid/invalid_discrete_param.esm": {
+      "description": "discrete_parameters entry does not match declared parameter",
+      "requirements_covered": ["STRUCT-05-02"],
+      "expected_errors": ["invalid_discrete_param"],
+      "priority": "P1"
+    },
+    "tests/invalid/reaction_undefined_species.esm": {
+      "description": "Reaction substrates/products reference undeclared species",
+      "requirements_covered": ["STRUCT-07-02"],
+      "expected_errors": ["undefined_species"],
+      "priority": "P1"
+    },
+    "tests/invalid/negative_stoichiometry.esm": {
+      "description": "Reaction with negative or zero stoichiometry values",
+      "requirements_covered": ["STRUCT-07-03"],
+      "expected_errors": ["invalid_stoichiometry"],
+      "priority": "P1"
+    },
+    "tests/invalid/null_reaction.esm": {
+      "description": "Reaction with both substrates: null and products: null",
+      "requirements_covered": ["STRUCT-07-04"],
+      "expected_errors": ["null_reaction"],
+      "priority": "P1"
+    },
+    "tests/invalid/undefined_system.esm": {
+      "description": "Coupling entry references nonexistent model/reaction system/data loader/operator",
+      "requirements_covered": ["STRUCT-10-01"],
+      "expected_errors": ["undefined_system"],
+      "priority": "P1"
+    },
+    "tests/invalid/undefined_operator.esm": {
+      "description": "operator_apply coupling references nonexistent operator",
+      "requirements_covered": ["STRUCT-10-02"],
+      "expected_errors": ["undefined_operator"],
+      "priority": "P1"
+    },
+    "tests/invalid/malformed_json.esm": {
+      "description": "File with malformed JSON syntax",
+      "requirements_covered": ["BEHAV-LOAD-01"],
+      "expected_errors": ["parse_error"],
+      "priority": "P1"
+    },
+    "tests/valid/structural_issues.esm": {
+      "description": "Valid JSON/schema but with structural validation issues",
+      "requirements_covered": ["BEHAV-LOAD-03"],
+      "priority": "P1"
+    },
+    "tests/valid/full_model_specification.esm": {
+      "description": "Model with complete specification of equations, variables, parameters",
+      "requirements_covered": ["BEHAV-06-01"],
+      "priority": "P1"
+    },
+    "tests/reactions/mass_action_odes.json": {
+      "description": "Standard mass action kinetics ODE generation examples",
+      "requirements_covered": ["BEHAV-07-01"],
+      "priority": "P1"
+    },
+    "tests/expressions/arithmetic_operators.json": {
+      "description": "Built-in arithmetic operators with specified arities",
+      "requirements_covered": ["FORMAT-04-01"],
+      "priority": "P1"
+    },
+    "tests/expressions/calculus_operators.json": {
+      "description": "Calculus operators with required additional fields",
+      "requirements_covered": ["FORMAT-04-02"],
+      "priority": "P1"
+    },
+    "tests/events/continuous_events.esm": {
+      "description": "Continuous events with conditions and affects arrays",
+      "requirements_covered": ["FORMAT-05-01"],
+      "priority": "P1"
+    },
+    "tests/events/discrete_events.esm": {
+      "description": "Discrete events with trigger and affects fields",
+      "requirements_covered": ["FORMAT-05-02"],
+      "priority": "P1"
+    },
+    "tests/models/variable_types.esm": {
+      "description": "Model variables with valid type field values",
+      "requirements_covered": ["FORMAT-06-01"],
+      "priority": "P1"
+    },
+    "tests/reactions/reaction_fields.esm": {
+      "description": "Reactions with required id, substrates, products, rate fields",
+      "requirements_covered": ["FORMAT-07-01"],
+      "priority": "P1"
+    },
+    "tests/coupling/operator_compose.json": {
+      "description": "operator_compose algorithm for equation matching and combining",
+      "requirements_covered": ["ALGO-10-01"],
+      "priority": "P2"
+    },
+    "tests/coupling/placeholder_expansion.json": {
+      "description": "Placeholder expansion where _var matches every state variable",
+      "requirements_covered": ["ALGO-10-02"],
+      "priority": "P2"
+    },
+    "tests/validation/validation_result.json": {
+      "description": "validate() function return ValidationResult structure",
+      "requirements_covered": ["VALID-API-01"],
+      "priority": "P1"
+    },
+    "tests/validation/validation_fields.json": {
+      "description": "ValidationResult with required error collections",
+      "requirements_covered": ["VALID-API-02"],
+      "priority": "P1"
+    },
+    "tests/validation/schema_errors.json": {
+      "description": "SchemaError structure with path, message, keyword fields",
+      "requirements_covered": ["VALID-ERR-01"],
+      "priority": "P1"
+    },
+    "tests/validation/structural_errors.json": {
+      "description": "StructuralError with path, code, message, details fields",
+      "requirements_covered": ["VALID-ERR-02"],
+      "priority": "P1"
+    },
+    "tests/validation/error_codes.json": {
+      "description": "Structural error codes matching specification standards",
+      "requirements_covered": ["VALID-CODES-01"],
+      "priority": "P1"
+    },
+    "tests/display/element_recognition.json": {
+      "description": "Element lookup recognizing all 118 chemical element symbols",
+      "requirements_covered": ["DISPLAY-CHEM-02"],
+      "priority": "P2"
+    },
+    "tests/display/number_formatting.json": {
+      "description": "Number formatting for integers, decimals, scientific notation",
+      "requirements_covered": ["DISPLAY-NUM-01"],
+      "priority": "P2"
+    },
+    "tests/display/operator_precedence.json": {
+      "description": "Operator precedence minimizing unnecessary parentheses",
+      "requirements_covered": ["DISPLAY-OP-01"],
+      "priority": "P2"
+    },
+    "tests/display/unicode_format.json": {
+      "description": "Unicode display format specifications",
+      "requirements_covered": ["DISPLAY-UNICODE-01"],
+      "priority": "P2"
+    },
+    "tests/display/latex_format.json": {
+      "description": "LaTeX display format specifications",
+      "requirements_covered": ["DISPLAY-LATEX-01"],
+      "priority": "P2"
+    },
+    "tests/display/model_summary.json": {
+      "description": "Model summary display with structured layout",
+      "requirements_covered": ["DISPLAY-SUMMARY-01"],
+      "priority": "P2"
+    },
+    "tests/expressions/construction.json": {
+      "description": "Expression construction from API and JSON parsing",
+      "requirements_covered": ["EXPR-CONSTR-01"],
+      "priority": "P1"
+    },
+    "tests/substitution/scoped_reference.json": {
+      "description": "Recursive substitution with hierarchical scoped references",
+      "requirements_covered": ["EXPR-SUBST-01"],
+      "priority": "P1"
+    },
+    "tests/expressions/free_variables.json": {
+      "description": "free_variables() returning all variable references",
+      "requirements_covered": ["EXPR-FREE-01"],
+      "priority": "P1"
+    },
+    "tests/expressions/evaluation.json": {
+      "description": "evaluate() requiring all variables in bindings or raising error",
+      "requirements_covered": ["EXPR-EVAL-01"],
+      "priority": "P1"
+    },
+    "tests/expressions/simplification.json": {
+      "description": "simplify() folding constant arithmetic at minimum",
+      "requirements_covered": ["EXPR-SIMP-01"],
+      "priority": "P1"
+    },
+    "tests/serialization/schema_validation.json": {
+      "description": "Serialization producing schema-valid output",
+      "requirements_covered": ["SERIAL-JSON-01"],
+      "priority": "P1"
+    },
+    "tests/version/unsupported_major.esm": {
+      "description": "File with unsupported major version should be rejected",
+      "requirements_covered": ["VERSION-COMPAT-01"],
+      "expected_errors": ["unsupported_version"],
+      "priority": "P2"
+    },
+    "tests/version/backward_compatible.esm": {
+      "description": "File with minor version <= supported version should be accepted",
+      "requirements_covered": ["VERSION-COMPAT-02"],
+      "priority": "P2"
+    }
+  },
+
+  "coverage_statistics": {
+    "total_requirements": 51,
+    "requirements_by_category": {
+      "SCHEMA": 5,
+      "STRUCT": 10,
+      "BEHAV": 5,
+      "FORMAT": 6,
+      "ALGO": 4,
+      "VALID": 5,
+      "DISPLAY": 7,
+      "EXPR": 5,
+      "SERIAL": 2,
+      "VERSION": 2
+    },
+    "requirements_by_priority": {
+      "P1": 38,
+      "P2": 13
+    },
+    "test_fixtures_planned": 25,
+    "test_coverage_percentage": 100
+  },
+
+  "implementation_phases": {
+    "Phase 1 - Foundation": {
+      "description": "Core parsing, validation, and expression handling",
+      "requirements": ["SCHEMA-*", "STRUCT-*", "BEHAV-LOAD-*", "EXPR-*", "SERIAL-*", "VALID-API-*"],
+      "test_fixtures": ["tests/valid/minimal_chemistry.esm", "tests/invalid/missing_esm_version.esm", "tests/substitution/simple_var_replace.json"]
+    },
+    "Phase 2 - Analysis": {
+      "description": "Advanced validation, algorithms, and display formats",
+      "requirements": ["ALGO-*", "DISPLAY-*", "VALID-ERR-*"],
+      "test_fixtures": ["tests/display/chemical_subscripts.json", "tests/reactions/ode_generation.json", "tests/reactions/stoichiometric_matrix.json"]
+    },
+    "Phase 3 - Advanced": {
+      "description": "Version compatibility and full feature completeness",
+      "requirements": ["VERSION-*", "FORMAT-*"],
+      "test_fixtures": ["tests/version/backward_compatible.esm", "tests/events/continuous_events.esm"]
+    }
+  },
+
+  "validation_notes": {
+    "automated_tooling": "This matrix enables automated verification of requirement coverage by checking that each requirement ID maps to at least one test fixture",
+    "ci_integration": "Test fixtures should be executed in CI to prevent regressions and ensure consistent behavior across language implementations",
+    "cross_language": "The same test fixtures must produce identical results across Julia, TypeScript, Python, Rust, and Go implementations",
+    "maintenance": "When specifications are updated, this matrix must be updated to reflect new or modified requirements"
+  }
+}

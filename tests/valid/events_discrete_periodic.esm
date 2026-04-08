@@ -1,0 +1,282 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EventsDiscretePeriodicInterventions",
+    "description": "Test fixture for discrete periodic events - Regular time-based interventions and parameter updates",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-17T00:00:00Z",
+    "tags": ["events", "discrete", "periodic", "interventions", "regular_dosing"]
+  },
+
+  "models": {
+    "PharmacokineticModel": {
+      "reference": {
+        "notes": "Two-compartment pharmacokinetic model with regular dosing schedule",
+        "doi": "10.1016/example-pk-modeling"
+      },
+      "variables": {
+        "C_central": { "type": "state", "units": "mg/L", "default": 0.0, "description": "Drug concentration in central compartment" },
+        "C_peripheral": { "type": "state", "units": "mg/L", "default": 0.0, "description": "Drug concentration in peripheral compartment" }
+      },
+      "parameters": {
+        "dose_amount": { "units": "mg", "default": 100.0, "description": "Dose amount per administration" },
+        "V_c": { "units": "L", "default": 70.0, "description": "Volume of central compartment" },
+        "V_p": { "units": "L", "default": 40.0, "description": "Volume of peripheral compartment" },
+        "CL": { "units": "L/h", "default": 5.0, "description": "Clearance from central compartment" },
+        "Q": { "units": "L/h", "default": 2.0, "description": "Inter-compartmental clearance" },
+        "dosing_interval": { "units": "h", "default": 8.0, "description": "Time between doses" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["C_central"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              { "op": "/", "args": [{ "op": "*", "args": ["Q", "C_peripheral"] }, "V_c"] },
+              { "op": "+", "args": [
+                { "op": "/", "args": [{ "op": "*", "args": ["CL", "C_central"] }, "V_c"] },
+                { "op": "/", "args": [{ "op": "*", "args": ["Q", "C_central"] }, "V_c"] }
+              ]}
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["C_peripheral"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              { "op": "/", "args": [{ "op": "*", "args": ["Q", "C_central"] }, "V_p"] },
+              { "op": "/", "args": [{ "op": "*", "args": ["Q", "C_peripheral"] }, "V_p"] }
+            ]
+          }
+        }
+      ],
+      "events": {
+        "discrete": [
+          {
+            "name": "regular_dosing",
+            "trigger": {
+              "type": "periodic",
+              "interval": "dosing_interval",
+              "offset": 0.0
+            },
+            "affects": [
+              {
+                "lhs": "C_central",
+                "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["C_central"] }, { "op": "/", "args": ["dose_amount", "V_c"] }] }
+              }
+            ],
+            "discrete_parameters": [],
+            "reinitialize": false,
+            "description": "Regular drug administration every dosing interval"
+          }
+        ]
+      }
+    },
+
+    "EnvironmentalMonitoring": {
+      "reference": {
+        "notes": "Environmental system with periodic sampling and maintenance events"
+      },
+      "variables": {
+        "pollutant_level": { "type": "state", "units": "ppm", "default": 0.1, "description": "Pollutant concentration" },
+        "sensor_drift": { "type": "state", "units": "ppm", "default": 0.0, "description": "Cumulative sensor drift" },
+        "sample_count": { "type": "discrete", "units": "dimensionless", "default": 0, "description": "Number of samples taken" }
+      },
+      "parameters": {
+        "emission_rate": { "units": "ppm/h", "default": 0.05, "description": "Pollutant emission rate" },
+        "decay_rate": { "units": "1/h", "default": 0.02, "description": "Pollutant decay rate" },
+        "drift_rate": { "units": "ppm/h", "default": 0.001, "description": "Sensor drift rate" },
+        "sampling_interval": { "units": "h", "default": 2.0, "description": "Sampling frequency" },
+        "maintenance_interval": { "units": "h", "default": 24.0, "description": "Maintenance frequency" },
+        "calibration_correction": { "units": "dimensionless", "default": 0.95, "description": "Drift correction factor" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["pollutant_level"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              "emission_rate",
+              { "op": "*", "args": ["decay_rate", "pollutant_level"] }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["sensor_drift"], "wrt": "t" },
+          "rhs": "drift_rate"
+        }
+      ],
+      "events": {
+        "discrete": [
+          {
+            "name": "periodic_sampling",
+            "trigger": {
+              "type": "periodic",
+              "interval": "sampling_interval",
+              "offset": 0.5
+            },
+            "affects": [
+              {
+                "lhs": "sample_count",
+                "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["sample_count"] }, 1] }
+              }
+            ],
+            "discrete_parameters": [],
+            "reinitialize": false,
+            "description": "Regular environmental sampling"
+          },
+          {
+            "name": "maintenance_calibration",
+            "trigger": {
+              "type": "periodic",
+              "interval": "maintenance_interval",
+              "offset": 12.0
+            },
+            "affects": [
+              {
+                "lhs": "sensor_drift",
+                "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["sensor_drift"] }, "calibration_correction"] }
+              }
+            ],
+            "discrete_parameters": [],
+            "reinitialize": false,
+            "description": "Periodic sensor calibration and maintenance"
+          }
+        ]
+      }
+    },
+
+    "SeasonalEcosystem": {
+      "reference": {
+        "notes": "Ecosystem model with seasonal parameter variations via periodic events"
+      },
+      "variables": {
+        "biomass": { "type": "state", "units": "kg/m^2", "default": 1.0, "description": "Total biomass density" },
+        "nutrients": { "type": "state", "units": "g/m^2", "default": 10.0, "description": "Available nutrients" }
+      },
+      "parameters": {
+        "base_growth_rate": { "units": "1/day", "default": 0.1, "description": "Base growth rate" },
+        "seasonal_growth_modifier": { "units": "dimensionless", "default": 1.0, "description": "Seasonal growth modifier" },
+        "nutrient_uptake_rate": { "units": "g/(kg*day)", "default": 0.5, "description": "Nutrient uptake per unit biomass" },
+        "nutrient_decay_rate": { "units": "1/day", "default": 0.02, "description": "Nutrient decay rate" },
+        "season_length": { "units": "day", "default": 90.0, "description": "Length of each season" },
+        "spring_modifier": { "units": "dimensionless", "default": 1.5, "description": "Spring growth boost" },
+        "summer_modifier": { "units": "dimensionless", "default": 1.2, "description": "Summer growth factor" },
+        "autumn_modifier": { "units": "dimensionless", "default": 0.8, "description": "Autumn growth reduction" },
+        "winter_modifier": { "units": "dimensionless", "default": 0.3, "description": "Winter dormancy factor" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["biomass"], "wrt": "t" },
+          "rhs": {
+            "op": "*", "args": [
+              "base_growth_rate",
+              "seasonal_growth_modifier",
+              "biomass",
+              { "op": "/", "args": ["nutrients", { "op": "+", "args": ["nutrients", 5.0] }] }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["nutrients"], "wrt": "t" },
+          "rhs": {
+            "op": "-", "args": [
+              { "op": "*", "args": ["nutrient_decay_rate", "nutrients"] },
+              { "op": "*", "args": ["nutrient_uptake_rate", "biomass", "nutrients"] }
+            ]
+          }
+        }
+      ],
+      "events": {
+        "discrete": [
+          {
+            "name": "spring_transition",
+            "trigger": {
+              "type": "periodic",
+              "interval": { "op": "*", "args": [4, "season_length"] },
+              "offset": 0.0
+            },
+            "affects": [
+              {
+                "lhs": "seasonal_growth_modifier",
+                "rhs": "spring_modifier"
+              }
+            ],
+            "discrete_parameters": ["seasonal_growth_modifier"],
+            "reinitialize": true,
+            "description": "Transition to spring growing season"
+          },
+          {
+            "name": "summer_transition",
+            "trigger": {
+              "type": "periodic",
+              "interval": { "op": "*", "args": [4, "season_length"] },
+              "offset": "season_length"
+            },
+            "affects": [
+              {
+                "lhs": "seasonal_growth_modifier",
+                "rhs": "summer_modifier"
+              }
+            ],
+            "discrete_parameters": ["seasonal_growth_modifier"],
+            "reinitialize": true,
+            "description": "Transition to summer season"
+          },
+          {
+            "name": "autumn_transition",
+            "trigger": {
+              "type": "periodic",
+              "interval": { "op": "*", "args": [4, "season_length"] },
+              "offset": { "op": "*", "args": [2, "season_length"] }
+            },
+            "affects": [
+              {
+                "lhs": "seasonal_growth_modifier",
+                "rhs": "autumn_modifier"
+              }
+            ],
+            "discrete_parameters": ["seasonal_growth_modifier"],
+            "reinitialize": true,
+            "description": "Transition to autumn season"
+          },
+          {
+            "name": "winter_transition",
+            "trigger": {
+              "type": "periodic",
+              "interval": { "op": "*", "args": [4, "season_length"] },
+              "offset": { "op": "*", "args": [3, "season_length"] }
+            },
+            "affects": [
+              {
+                "lhs": "seasonal_growth_modifier",
+                "rhs": "winter_modifier"
+              }
+            ],
+            "discrete_parameters": ["seasonal_growth_modifier"],
+            "reinitialize": true,
+            "description": "Transition to winter dormancy"
+          }
+        ]
+      }
+    }
+  },
+
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-15T00:00:00Z",
+      "timestep": 0.1
+    },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "base_algorithm": "Tsit5",
+      "event_detection": "precise_callbacks",
+      "adaptive": true,
+      "timestep_adjustment": true
+    }
+  }
+}

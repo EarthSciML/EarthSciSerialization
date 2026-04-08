@@ -1,0 +1,29 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "OperatorMissingOperatorId",
+    "description": "Test case: operator missing required 'operator_id' field",
+    "authors": ["Test Suite"]
+  },
+
+  "operators": {
+    "BadOperator": {
+      "needed_vars": ["x"],
+      "description": "This operator is missing the required operator_id field"
+    }
+  },
+
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [-0.1, "x"] }
+        }
+      ]
+    }
+  }
+}

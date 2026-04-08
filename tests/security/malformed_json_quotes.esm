@@ -1,0 +1,21 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "MalformedJSONQuotes",
+    "description": Test malformed JSON with unescaped quotes and control characters",
+    "authors": ["Security Test"]
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": { "type": "state", "units": "m", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": 1.0
+        }
+      ]
+    }
+  }
+}

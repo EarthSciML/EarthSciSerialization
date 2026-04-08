@@ -1,0 +1,27 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "NullByteInjectionTest",
+    "description": "Test null byte injection\u0000and other control characters\u0001\u0002\u0003",
+    "authors": ["Security\u0000Test"]
+  },
+  "models": {
+    "TestModel\u0000": {
+      "variables": {
+        "x\u0000": { "type": "state", "units": "m\u0000", "default": 0.0 },
+        "control_chars": {
+          "type": "parameter",
+          "units": "1",
+          "default": 1.0,
+          "description": "Test\u0007\u0008\u0009\u000A\u000B\u000C\u000D\u000Evarious control characters"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x\u0000"], "wrt": "t" },
+          "rhs": { "op": "+", "args": [1.0, "control_chars"] }
+        }
+      ]
+    }
+  }
+}

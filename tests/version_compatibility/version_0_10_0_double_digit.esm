@@ -1,0 +1,23 @@
+{
+  "esm": "0.10.0",
+  "metadata": {
+    "name": "Version_0_10_0_DoubleDigit",
+    "description": "Test with double-digit minor version to ensure proper semver parsing",
+    "authors": ["ESM Format Team"],
+    "created": "2025-01-01T00:00:00Z"
+  },
+  "models": {
+    "SimpleModel": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-6 },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.01 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [{ "op": "-", "args": ["k"] }, "x"] }
+        }
+      ]
+    }
+  }
+}

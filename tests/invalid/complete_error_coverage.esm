@@ -1,0 +1,123 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "Complete Error Coverage Test",
+    "description": "Comprehensive test case covering all 11 required error codes from ESM Libraries Specification Section 3.4",
+    "authors": ["Test Suite"],
+    "created": "2026-02-14T18:00:00Z",
+    "license": "CC0-1.0"
+  },
+  "models": {
+    "BadModel": {
+      "type": "ode",
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "kg",
+          "description": "State variable x",
+          "default": 1.0
+        },
+        "y": {
+          "type": "state",
+          "units": "kg",
+          "description": "State variable y",
+          "default": 0.0
+        },
+        "observed_without_expr": {
+          "type": "observed",
+          "units": "kg",
+          "description": "Observed variable missing expression"
+        }
+      },
+      "equations": [
+        "dx/dt = undefined_rate + undefined_var"
+      ],
+      "continuous_events": [
+        {
+          "name": "bad_event",
+          "condition": "undefined_condition_var > 0",
+          "affects": [
+            {
+              "lhs": "nonexistent_var",
+              "rhs": "0.0"
+            }
+          ]
+        }
+      ],
+      "discrete_events": [
+        {
+          "name": "bad_discrete_event",
+          "trigger": "t > 5.0",
+          "discrete_parameters": ["undefined_discrete_param"],
+          "affects": [
+            {
+              "lhs": "x",
+              "rhs": "1.0"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "BadReactions": {
+      "species": {
+        "A": {
+          "units": "mol",
+          "description": "Species A"
+        }
+      },
+      "parameters": {},
+      "reactions": [
+        {
+          "id": "bad_reaction",
+          "substrates": null,
+          "products": null,
+          "rate": "missing_rate_param * A"
+        },
+        {
+          "id": "undefined_species_reaction",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": [{"species": "UndefinedProduct", "stoichiometry": 1}],
+          "rate": "also_missing_param"
+        }
+      ]
+    }
+  },
+  "data_loaders": {
+    "TestDataLoader": {
+      "type": "static",
+      "loader_id": "test_loader",
+      "provides": {
+        "temperature": {
+          "units": "K",
+          "description": "Temperature data"
+        }
+      }
+    }
+  },
+  "operators": {
+    "TestOperator": {
+      "operator_id": "test_op",
+      "needed_vars": ["nonexistent_needed_var"],
+      "modifies": ["another_nonexistent_var"]
+    }
+  },
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "NonExistentSystem.var",
+      "to": "BadModel.x"
+    },
+    {
+      "type": "operator_apply",
+      "operator": "MissingOperator",
+      "systems": ["BadModel"]
+    },
+    {
+      "type": "operator_apply",
+      "operator": "TestOperator",
+      "systems": ["BadModel"]
+    }
+  ]
+}

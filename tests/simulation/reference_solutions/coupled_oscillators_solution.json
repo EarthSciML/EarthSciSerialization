@@ -1,0 +1,61 @@
+{
+  "simulation_results": {
+    "metadata": {
+      "esm_file": "coupled_oscillators.esm",
+      "description": "Numerical reference solution for weakly coupled harmonic oscillators",
+      "solver": "Tsit5",
+      "tolerance": 1e-8,
+      "total_steps": 2001
+    },
+    "initial_conditions": {
+      "Oscillator1.x1": 1.0,
+      "Oscillator1.v1": 0.0,
+      "Oscillator2.x2": -0.5,
+      "Oscillator2.v2": 0.0,
+      "total_energy": 1.6875
+    },
+    "time_series": {
+      "description": "Selected time points for verification (weak coupling creates beating patterns)",
+      "time": [0.0, 5.0, 10.0, 15.0, 20.0],
+      "variables": {
+        "Oscillator1.x1": [1.0, "verify_numerically", "verify_numerically", "verify_numerically", "verify_numerically"],
+        "Oscillator1.v1": [0.0, "verify_numerically", "verify_numerically", "verify_numerically", "verify_numerically"],
+        "Oscillator2.x2": [-0.5, "verify_numerically", "verify_numerically", "verify_numerically", "verify_numerically"],
+        "Oscillator2.v2": [0.0, "verify_numerically", "verify_numerically", "verify_numerically", "verify_numerically"]
+      }
+    },
+    "validation_metrics": {
+      "energy_conservation": {
+        "description": "Total energy must remain constant within numerical precision",
+        "initial_energy": 1.6875,
+        "formula": "0.5*(v1^2 + k1*x1^2 + v2^2 + k2*x2^2) + 0.05*(x2-x1)^2",
+        "tolerance": 1e-6,
+        "test": "abs(energy(t) - energy(0)) / energy(0) < tolerance"
+      },
+      "coupling_verification": {
+        "description": "Coupling should create energy transfer between oscillators",
+        "beating_frequency": {
+          "expected": 0.05,
+          "tolerance": 0.01,
+          "description": "Weak coupling creates beating at frequency proportional to coupling strength"
+        }
+      },
+      "normal_mode_analysis": {
+        "description": "System has two normal modes with frequencies omega1 and omega2",
+        "omega1_squared": "approx 0.95 (slow mode)",
+        "omega2_squared": "approx 1.55 (fast mode)",
+        "tolerance": 0.1
+      }
+    },
+    "events": [],
+    "final_state": {
+      "description": "Positions and velocities after 20 seconds (verify energy conservation)",
+      "energy_deviation": "< 1e-6 relative error"
+    }
+  },
+  "numerical_accuracy_requirements": {
+    "relative_tolerance": 1e-3,
+    "energy_conservation_error": 1e-6,
+    "coupling_force_consistency": 1e-8
+  }
+}

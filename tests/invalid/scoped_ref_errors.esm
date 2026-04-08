@@ -1,0 +1,117 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ScopedReferenceErrors",
+    "description": "Invalid scoped reference patterns that should cause validation errors",
+    "authors": ["Claude Sonnet 4"],
+    "created": "2026-02-16T00:00:00Z"
+  },
+
+  "models": {
+    "TestSystem": {
+      "reference": { "notes": "System with various scoped reference errors" },
+      "variables": {
+        "valid_var": { "type": "state", "units": "units", "default": 1.0, "description": "Valid variable" }
+      },
+      "subsystems": {
+        "ValidSubsystem": {
+          "variables": {
+            "subsystem_var": { "type": "state", "units": "units", "default": 2.0, "description": "Valid subsystem variable" }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["subsystem_var"], "wrt": "t" },
+              "rhs": "subsystem_var"
+            }
+          ]
+        }
+      },
+      "equations": [
+        {
+          "comment": "ERROR: Reference to non-existent system",
+          "lhs": { "op": "D", "args": ["valid_var"], "wrt": "t" },
+          "rhs": { "scoped_ref": "NonExistentSystem.some_var" }
+        },
+        {
+          "comment": "ERROR: Reference to non-existent variable in valid system",
+          "lhs": { "op": "D", "args": ["valid_var"], "wrt": "t" },
+          "rhs": { "scoped_ref": "TestSystem.ValidSubsystem.non_existent_var" }
+        },
+        {
+          "comment": "ERROR: Reference to non-existent subsystem",
+          "lhs": { "op": "D", "args": ["valid_var"], "wrt": "t" },
+          "rhs": { "scoped_ref": "TestSystem.NonExistentSubsystem.some_var" }
+        },
+        {
+          "comment": "ERROR: Malformed scoped reference (too many dots)",
+          "lhs": { "op": "D", "args": ["valid_var"], "wrt": "t" },
+          "rhs": { "scoped_ref": "TestSystem.ValidSubsystem.subsystem_var.extra_level" }
+        },
+        {
+          "comment": "ERROR: Empty component in scoped reference",
+          "lhs": { "op": "D", "args": ["valid_var"], "wrt": "t" },
+          "rhs": { "scoped_ref": "TestSystem..ValidSubsystem.subsystem_var" }
+        },
+        {
+          "comment": "ERROR: Circular reference",
+          "lhs": { "op": "D", "args": ["valid_var"], "wrt": "t" },
+          "rhs": { "scoped_ref": "TestSystem.valid_var" }
+        }
+      ]
+    },
+
+    "CircularSystem1": {
+      "reference": { "notes": "System that creates circular dependency" },
+      "variables": {
+        "var1": { "type": "state", "units": "units", "default": 1.0, "description": "Variable 1" }
+      },
+      "equations": [
+        {
+          "comment": "ERROR: Circular dependency with CircularSystem2",
+          "lhs": { "op": "D", "args": ["var1"], "wrt": "t" },
+          "rhs": { "scoped_ref": "CircularSystem2.var2" }
+        }
+      ]
+    },
+
+    "CircularSystem2": {
+      "reference": { "notes": "System that creates circular dependency" },
+      "variables": {
+        "var2": { "type": "state", "units": "units", "default": 2.0, "description": "Variable 2" }
+      },
+      "equations": [
+        {
+          "comment": "ERROR: Circular dependency with CircularSystem1",
+          "lhs": { "op": "D", "args": ["var2"], "wrt": "t" },
+          "rhs": { "scoped_ref": "CircularSystem1.var1" }
+        }
+      ]
+    }
+  },
+
+  "coupling": [
+    {
+      "comment": "ERROR: Coupling reference to non-existent variable",
+      "type": "variable_map",
+      "from": "TestSystem.ValidSubsystem.non_existent_source",
+      "to": "TestSystem.valid_var"
+    },
+    {
+      "comment": "ERROR: Coupling reference to non-existent system",
+      "type": "variable_map",
+      "from": "NonExistentSystem.some_var",
+      "to": "TestSystem.valid_var"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T01:00:00Z" },
+    "initial_conditions": { "type": "default" },
+    "element_type": "Float64"
+  },
+
+  "solver": {
+    "strategy": "adaptive_ode",
+    "config": { "algorithm": "Tsit5" }
+  }
+}

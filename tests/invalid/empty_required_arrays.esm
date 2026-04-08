@@ -1,0 +1,21 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "EmptyRequiredArraysTest",
+    "description": "Test file with empty required arrays",
+    "authors": [],
+    "created": "2026-02-14T00:00:00Z"
+  },
+  "models": {
+    "TestModel": {
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.0
+        }
+      },
+      "equations": []
+    }
+  }
+}

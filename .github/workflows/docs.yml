@@ -1,0 +1,60 @@
+name: Generate Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'packages/**'
+      - 'docs/**'
+      - 'scripts/generate_docs.py'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'packages/**'
+      - 'docs/**'
+      - 'scripts/generate_docs.py'
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v1
+      with:
+        version: '1.9'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Generate documentation
+      run: |
+        python scripts/generate_docs.py --output docs/generated
+
+    - name: Check documentation changes
+      run: |
+        git diff --exit-code docs/ || echo "Documentation updated"
+
+    - name: Commit documentation updates
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add docs/
+        git diff --staged --quiet || git commit -m "Auto-update generated documentation"
+        git push

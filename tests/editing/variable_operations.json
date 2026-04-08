@@ -1,0 +1,200 @@
+[
+  {
+    "description": "Add state variable to existing model",
+    "operation": "add_variable",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "Existing variable" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.1, "x"] } }
+      ]
+    },
+    "parameters": {
+      "name": "y",
+      "variable": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "New state variable" }
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "Existing variable" },
+        "y": { "type": "state", "units": "mol/mol", "default": 2e-9, "description": "New state variable" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.1, "x"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Add parameter variable to existing model",
+    "operation": "add_variable",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", "x"] } }
+      ]
+    },
+    "parameters": {
+      "name": "k",
+      "variable": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" }
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", "x"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Add observed variable to existing model",
+    "operation": "add_variable",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", "x"] } }
+      ]
+    },
+    "parameters": {
+      "name": "x_rate",
+      "variable": { "type": "observed", "units": "mol/mol/s", "expression": { "op": "*", "args": ["k", "x"] }, "description": "Rate of change of x" }
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" },
+        "x_rate": { "type": "observed", "units": "mol/mol/s", "expression": { "op": "*", "args": ["k", "x"] }, "description": "Rate of change of x" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", "x"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove unused variable",
+    "operation": "remove_variable",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "Used variable" },
+        "y": { "type": "parameter", "units": "1/s", "default": 0.1, "description": "Unused variable" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.05, "x"] } }
+      ]
+    },
+    "parameters": {
+      "name": "y"
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "Used variable" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.05, "x"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Remove referenced variable (should warn)",
+    "operation": "remove_variable",
+    "input_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Used parameter" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", "x"] } }
+      ]
+    },
+    "parameters": {
+      "name": "k"
+    },
+    "expected_model": {
+      "variables": {
+        "x": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "State variable" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k", "x"] } }
+      ]
+    },
+    "expected_warnings": ["Variable 'k' is referenced in equations but being removed"]
+  },
+  {
+    "description": "Rename variable with reference updates",
+    "operation": "rename_variable",
+    "input_model": {
+      "variables": {
+        "conc": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "Concentration" },
+        "rate_const": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["conc"], "wrt": "t" }, "rhs": { "op": "*", "args": ["rate_const", "conc"] } }
+      ]
+    },
+    "parameters": {
+      "old_name": "conc",
+      "new_name": "concentration"
+    },
+    "expected_model": {
+      "variables": {
+        "concentration": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "Concentration" },
+        "rate_const": { "type": "parameter", "units": "1/s", "default": 0.05, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["concentration"], "wrt": "t" }, "rhs": { "op": "*", "args": ["rate_const", "concentration"] } }
+      ]
+    },
+    "expected_warnings": []
+  },
+  {
+    "description": "Rename variable in coupling references",
+    "operation": "rename_variable",
+    "input_model": {
+      "variables": {
+        "O3": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.001, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["O3"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k1", "O3"] } }
+      ],
+      "events": [
+        {
+          "name": "O3_reset",
+          "condition": { "op": "<", "args": ["O3", 1e-12] },
+          "affects": { "O3": 40e-9 }
+        }
+      ]
+    },
+    "parameters": {
+      "old_name": "O3",
+      "new_name": "ozone"
+    },
+    "expected_model": {
+      "variables": {
+        "ozone": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
+        "k1": { "type": "parameter", "units": "1/s", "default": 0.001, "description": "Rate constant" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["ozone"], "wrt": "t" }, "rhs": { "op": "*", "args": ["k1", "ozone"] } }
+      ],
+      "events": [
+        {
+          "name": "O3_reset",
+          "condition": { "op": "<", "args": ["ozone", 1e-12] },
+          "affects": { "ozone": 40e-9 }
+        }
+      ]
+    },
+    "expected_warnings": []
+  }
+]

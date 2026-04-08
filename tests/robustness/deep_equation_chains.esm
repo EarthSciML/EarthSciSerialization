@@ -1,0 +1,30 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "DeepEquationChains",
+    "description": "Test robustness with very long equation dependency chains",
+    "authors": ["Robustness Test"]
+  },
+  "models": {
+    "ChainModel": {
+      "variables": Object.fromEntries(
+        Array.from({length: 5000}, (_, i) => [
+          `chain_var_${i.toString().padStart(4, '0')}`,
+          {
+            "type": i === 0 ? "parameter" : "algebraic",
+            "units": "mol/L",
+            "default": i === 0 ? 1.0 : undefined,
+            "expression": i === 0 ? undefined : {
+              "op": "+",
+              "args": [`chain_var_${(i-1).toString().padStart(4, '0')}`, 0.001 * i]
+            }
+          }
+        ])
+      ),
+      "equations": Array.from({length: 1000}, (_, i) => ({
+        "lhs": { "op": "D", "args": [`chain_var_${(i * 5).toString().padStart(4, '0')}`], "wrt": "t" },
+        "rhs": { "op": "*", "args": [`chain_var_${(i * 5 + 1).toString().padStart(4, '0')}`, 0.1] }
+      }))
+    }
+  }
+}

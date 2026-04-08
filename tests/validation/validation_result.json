@@ -1,0 +1,67 @@
+{
+  "description": "Test cases for ValidationResult structure and behavior",
+  "test_cases": [
+    {
+      "name": "valid_file_result",
+      "input_file": "tests/valid/minimal_chemistry.esm",
+      "expected_result": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "summary": {
+          "total_errors": 0,
+          "total_warnings": 0,
+          "schema_errors": 0,
+          "structural_errors": 0
+        }
+      },
+      "description": "Valid ESM file should return valid=true with no errors"
+    },
+    {
+      "name": "invalid_schema_result",
+      "input_file": "tests/invalid/missing_esm_version.esm",
+      "expected_result": {
+        "valid": false,
+        "errors": [
+          {
+            "code": "schema_validation_failed",
+            "message": "Required field 'esm' is missing",
+            "path": ".",
+            "severity": "error"
+          }
+        ],
+        "warnings": [],
+        "summary": {
+          "total_errors": 1,
+          "total_warnings": 0,
+          "schema_errors": 1,
+          "structural_errors": 0
+        }
+      },
+      "description": "Schema validation failure should return valid=false with error details"
+    },
+    {
+      "name": "structural_error_result",
+      "input_file": "tests/invalid/equation_count_mismatch.esm",
+      "expected_result": {
+        "valid": false,
+        "errors": [
+          {
+            "code": "equation_count_mismatch",
+            "message": "Number of equations (1) does not match number of variables (2)",
+            "path": "models.test",
+            "severity": "error"
+          }
+        ],
+        "warnings": [],
+        "summary": {
+          "total_errors": 1,
+          "total_warnings": 0,
+          "schema_errors": 0,
+          "structural_errors": 1
+        }
+      },
+      "description": "Structural validation failure should categorize errors correctly"
+    }
+  ]
+}

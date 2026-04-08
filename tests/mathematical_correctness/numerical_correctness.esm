@@ -1,0 +1,487 @@
+{
+  "meta": {
+    "name": "Numerical Correctness Test Fixtures",
+    "version": "1.0.0",
+    "description": "Comprehensive numerical accuracy and stability verification test cases",
+    "mathematical_type": "numerical_verification",
+    "tolerance": 1e-15,
+    "test_cases": 28
+  },
+  "floating_point_precision_tests": [
+    {
+      "name": "machine_epsilon_verification",
+      "description": "Verify floating-point precision limits",
+      "test_values": {
+        "float32_epsilon": 1.192092896e-07,
+        "float64_epsilon": 2.220446049250313e-16,
+        "extended_precision_epsilon": 1.084202172485504434e-19
+      },
+      "verification_method": "next_representable_number",
+      "expected_results": {
+        "epsilon_addition": true,
+        "epsilon_half_addition": false,
+        "relative_accuracy": 1e-15
+      }
+    },
+    {
+      "name": "catastrophic_cancellation",
+      "description": "Test numerical stability in subtraction of nearly equal numbers",
+      "test_cases": [
+        {
+          "expression": "(1 + x) - 1",
+          "x_values": [1e-10, 1e-15, 1e-20],
+          "stable_form": "x",
+          "expected_relative_error": [1e-6, 1e-1, 1e5]
+        },
+        {
+          "expression": "sqrt(x + 1) - sqrt(x)",
+          "x_values": [1e6, 1e12, 1e18],
+          "stable_form": "1 / (sqrt(x + 1) + sqrt(x))",
+          "expected_relative_error": [1e-15, 1e-15, 1e-15]
+        },
+        {
+          "expression": "cos(x + 3.14159265359) + cos(x)",
+          "x_values": [0.1, 1.0, 10.0],
+          "stable_form": "-2 * cos(x) * cos(3.14159265359)",
+          "expected_relative_error": [1e-15, 1e-15, 1e-10]
+        }
+      ]
+    },
+    {
+      "name": "iterative_convergence_verification",
+      "description": "Test convergence properties of iterative methods",
+      "methods": [
+        {
+          "name": "newton_raphson",
+          "function": "f(x) = x^2 - 2",
+          "derivative": "f'(x) = 2*x",
+          "initial_guess": 1.0,
+          "exact_solution": 1.4142135623730951,
+          "convergence_rate": "quadratic",
+          "max_iterations": 10,
+          "tolerance": 1e-15,
+          "expected_iterations": 5
+        },
+        {
+          "name": "bisection_method",
+          "function": "f(x) = x^3 - x - 1",
+          "interval": [1.0, 2.0],
+          "exact_solution": 1.3247179572447460,
+          "convergence_rate": "linear",
+          "max_iterations": 60,
+          "tolerance": 1e-15,
+          "expected_iterations": 52
+        },
+        {
+          "name": "fixed_point_iteration",
+          "function": "g(x) = (x + 2/x) / 2",
+          "initial_guess": 2.0,
+          "exact_solution": 1.4142135623730951,
+          "convergence_rate": "linear",
+          "max_iterations": 100,
+          "tolerance": 1e-15,
+          "expected_iterations": 15
+        }
+      ]
+    },
+    {
+      "name": "stiff_system_stability",
+      "description": "Test numerical stability for stiff differential equations",
+      "systems": [
+        {
+          "name": "fast_slow_system",
+          "equations": [
+            "dy1/dt = -1000*y1 + y2",
+            "dy2/dt = y1 - y2"
+          ],
+          "initial_conditions": [1.0, 0.0],
+          "time_span": [0.0, 0.01],
+          "stiffness_ratio": 1000,
+          "methods": {
+            "explicit_euler": {
+              "stable_step_size": 1e-6,
+              "unstable_step_size": 1e-3,
+              "expected_stability": false
+            },
+            "implicit_euler": {
+              "stable_step_size": 1e-3,
+              "unstable_step_size": 1e-1,
+              "expected_stability": true
+            },
+            "runge_kutta_4": {
+              "stable_step_size": 1e-6,
+              "unstable_step_size": 1e-3,
+              "expected_stability": false
+            }
+          }
+        },
+        {
+          "name": "van_der_pol_oscillator",
+          "equations": [
+            "dx/dt = y",
+            "dy/dt = μ*(1-x^2)*y - x"
+          ],
+          "parameters": {"μ": 1000},
+          "initial_conditions": [2.0, 0.0],
+          "time_span": [0.0, 2.0],
+          "stiffness_ratio": 1000,
+          "characteristic_frequencies": ["fast", "slow"]
+        }
+      ]
+    },
+    {
+      "name": "round_off_error_accumulation",
+      "description": "Test accumulated numerical errors in long computations",
+      "test_cases": [
+        {
+          "name": "harmonic_series_partial_sum",
+          "formula": "sum(1/k, k=1 to n)",
+          "n_values": [1000, 10000, 100000],
+          "forward_sum_error": "increasing",
+          "backward_sum_error": "decreasing",
+          "kahan_summation_error": "minimal"
+        },
+        {
+          "name": "matrix_multiplication_chain",
+          "matrices": ["A", "B", "C", "D"],
+          "dimensions": [[100, 50], [50, 75], [75, 60], [60, 80]],
+          "optimal_parenthesization": "((A*B)*(C*D))",
+          "operations_count": 255000,
+          "error_accumulation_rate": "O(sqrt(n))"
+        },
+        {
+          "name": "recursive_factorial_computation",
+          "formula": "n! = n * (n-1)!",
+          "n_values": [10, 20, 50, 100],
+          "iterative_error": "minimal",
+          "recursive_error": "accumulating",
+          "stirling_approximation_error": "bounded"
+        }
+      ]
+    },
+    {
+      "name": "ill_conditioned_system_analysis",
+      "description": "Test behavior with ill-conditioned matrices and systems",
+      "matrices": [
+        {
+          "name": "hilbert_matrix",
+          "size": 10,
+          "element_formula": "H[i,j] = 1/(i+j-1)",
+          "condition_number": 3.5e13,
+          "exact_solution": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          "computed_solution_error": "large",
+          "regularization_required": true
+        },
+        {
+          "name": "vandermonde_matrix",
+          "nodes": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+          "condition_number": 2.8e12,
+          "polynomial_interpolation": true,
+          "runge_phenomenon": true
+        },
+        {
+          "name": "nearly_singular_matrix",
+          "matrix": [[1.0, 1.0], [1.0, 1.00000001]],
+          "condition_number": 4e8,
+          "perturbation_sensitivity": "extreme",
+          "solution_accuracy": "poor"
+        }
+      ]
+    },
+    {
+      "name": "special_function_accuracy",
+      "description": "Test accuracy of special mathematical functions",
+      "functions": [
+        {
+          "name": "exponential_function",
+          "test_points": [-50, -10, -1, 0, 1, 10, 50],
+          "accuracy_requirements": 1e-15,
+          "problematic_regions": ["large_negative_arguments"],
+          "taylor_series_accuracy": "excellent_near_zero"
+        },
+        {
+          "name": "logarithm_function",
+          "test_points": [1e-10, 0.1, 0.5, 1.0, 2.0, 10.0, 1e10],
+          "accuracy_requirements": 1e-15,
+          "problematic_regions": ["near_zero", "very_large_arguments"],
+          "relative_error": "constant"
+        },
+        {
+          "name": "trigonometric_functions",
+          "test_points": [0, 0.5236, 0.7854, 1.0472, 1.5708, 3.1416, 6.2832, 314.159],
+          "accuracy_requirements": 1e-15,
+          "problematic_regions": ["large_arguments", "near_poles"],
+          "argument_reduction": "required_for_large_x"
+        },
+        {
+          "name": "gamma_function",
+          "test_points": [0.5, 1.0, 1.5, 2.0, 10.0, 50.0],
+          "known_values": {
+            "0.5": 1.7724538509055159,
+            "1.0": 1.0,
+            "1.5": 0.8862269254527580,
+            "2.0": 1.0,
+            "10.0": 362880.0
+          },
+          "accuracy_requirements": 1e-14,
+          "stirling_approximation_valid": "large_arguments"
+        }
+      ]
+    },
+    {
+      "name": "integration_accuracy_verification",
+      "description": "Test numerical integration accuracy with known analytical solutions",
+      "test_integrals": [
+        {
+          "name": "polynomial_integration",
+          "integrand": "x^4",
+          "limits": [0, 2],
+          "exact_value": 6.4,
+          "methods": {
+            "trapezoidal": {"n": 1000, "expected_error": 1e-8},
+            "simpson": {"n": 100, "expected_error": 1e-14},
+            "gauss_legendre": {"n": 5, "expected_error": 1e-15}
+          }
+        },
+        {
+          "name": "oscillatory_integral",
+          "integrand": "sin(100*x)",
+          "limits": [0, 3.14159265359],
+          "exact_value": 0.02,
+          "methods": {
+            "trapezoidal": {"n": 10000, "expected_error": 1e-4},
+            "simpson": {"n": 1000, "expected_error": 1e-8},
+            "adaptive_quadrature": {"tolerance": 1e-12, "expected_error": 1e-12}
+          }
+        },
+        {
+          "name": "singular_integral",
+          "integrand": "1/sqrt(x)",
+          "limits": [0, 1],
+          "exact_value": 2.0,
+          "methods": {
+            "trapezoidal": {"n": 10000, "expected_error": 1e-1},
+            "gauss_kronrod": {"n": 21, "expected_error": 1e-12},
+            "tanh_sinh": {"n": 100, "expected_error": 1e-15}
+          }
+        }
+      ]
+    }
+  ],
+  "ode_solver_verification": [
+    {
+      "name": "exponential_decay",
+      "equation": "dy/dt = -λ*y",
+      "analytical_solution": "y(t) = y0 * exp(-λ*t)",
+      "parameters": {"λ": 1.0, "y0": 1.0},
+      "time_span": [0, 5],
+      "solvers": {
+        "euler": {"step_size": 0.01, "expected_error": 1e-2},
+        "rk2": {"step_size": 0.1, "expected_error": 1e-4},
+        "rk4": {"step_size": 0.1, "expected_error": 1e-8},
+        "adaptive_rk45": {"tolerance": 1e-10, "expected_error": 1e-10}
+      }
+    },
+    {
+      "name": "harmonic_oscillator",
+      "equations": ["dx/dt = v", "dv/dt = -ω²*x"],
+      "analytical_solution": ["x(t) = A*cos(ω*t + φ)", "v(t) = -A*ω*sin(ω*t + φ)"],
+      "parameters": {"ω": 1.0, "A": 1.0, "φ": 0.0},
+      "time_span": [0, 31.4159],
+      "conservation_laws": ["energy", "phase_space_area"],
+      "solvers": {
+        "euler": {"energy_drift": "linear", "accuracy": "poor"},
+        "verlet": {"energy_drift": "bounded", "accuracy": "good"},
+        "rk4": {"energy_drift": "quadratic", "accuracy": "excellent"},
+        "symplectic": {"energy_drift": "bounded", "accuracy": "excellent"}
+      }
+    },
+    {
+      "name": "lorenz_system",
+      "equations": [
+        "dx/dt = σ*(y - x)",
+        "dy/dt = x*(ρ - z) - y",
+        "dz/dt = x*y - β*z"
+      ],
+      "parameters": {"σ": 10.0, "ρ": 28.0, "β": 2.6667},
+      "initial_conditions": [1.0, 1.0, 1.0],
+      "time_span": [0, 20],
+      "chaotic_behavior": true,
+      "lyapunov_exponent": 0.9056,
+      "sensitivity_to_initial_conditions": "exponential"
+    }
+  ],
+  "linear_algebra_accuracy_tests": [
+    {
+      "name": "matrix_inversion_accuracy",
+      "test_matrices": [
+        {
+          "name": "diagonal_matrix",
+          "elements": [1, 2, 3, 4, 5],
+          "condition_number": 5.0,
+          "inversion_accuracy": "machine_precision"
+        },
+        {
+          "name": "random_well_conditioned",
+          "size": 10,
+          "condition_number_target": 1e3,
+          "inversion_accuracy": "near_machine_precision"
+        },
+        {
+          "name": "hilbert_matrix_5x5",
+          "size": 5,
+          "condition_number": 476607,
+          "inversion_accuracy": "poor",
+          "digits_lost": 6
+        }
+      ]
+    },
+    {
+      "name": "eigenvalue_computation_accuracy",
+      "test_matrices": [
+        {
+          "name": "symmetric_tridiagonal",
+          "diagonal": [2, 2, 2, 2, 2],
+          "off_diagonal": [1, 1, 1, 1],
+          "exact_eigenvalues": "analytical_formula_available",
+          "expected_accuracy": 1e-14
+        },
+        {
+          "name": "companion_matrix",
+          "polynomial_coefficients": [1, -6, 11, -6],
+          "exact_eigenvalues": [1, 2, 3],
+          "expected_accuracy": 1e-13
+        }
+      ]
+    },
+    {
+      "name": "linear_system_solving_accuracy",
+      "test_systems": [
+        {
+          "name": "diagonally_dominant",
+          "matrix_property": "well_conditioned",
+          "solution_method": ["lu_decomposition", "iterative"],
+          "expected_accuracy": 1e-14
+        },
+        {
+          "name": "symmetric_positive_definite",
+          "matrix_property": "cholesky_decomposable",
+          "solution_method": ["cholesky", "conjugate_gradient"],
+          "expected_accuracy": 1e-14
+        },
+        {
+          "name": "sparse_system",
+          "sparsity_pattern": "banded",
+          "solution_method": ["sparse_lu", "gmres"],
+          "expected_accuracy": 1e-12
+        }
+      ]
+    }
+  ],
+  "optimization_algorithm_verification": [
+    {
+      "name": "unconstrained_optimization",
+      "test_functions": [
+        {
+          "name": "rosenbrock_2d",
+          "formula": "f(x,y) = (a-x)² + b*(y-x²)²",
+          "parameters": {"a": 1, "b": 100},
+          "global_minimum": [1, 1],
+          "minimum_value": 0,
+          "condition_number": 1e4,
+          "convergence_rate": "linear_near_minimum"
+        },
+        {
+          "name": "rastrigin_function",
+          "formula": "f(x) = A*n + Σ[x_i² - A*cos(23.14159265359*x_i)]",
+          "parameters": {"A": 10, "n": 2},
+          "global_minimum": [0, 0],
+          "minimum_value": 0,
+          "multiple_local_minima": true,
+          "difficulty": "high"
+        }
+      ]
+    },
+    {
+      "name": "constrained_optimization",
+      "test_problems": [
+        {
+          "name": "circle_constraint",
+          "objective": "f(x,y) = x² + y²",
+          "constraint": "g(x,y) = x + y - 1 = 0",
+          "method": "lagrange_multipliers",
+          "exact_solution": [0.5, 0.5],
+          "lagrange_multiplier": 1.0
+        }
+      ]
+    }
+  ],
+  "statistical_computation_accuracy": [
+    {
+      "name": "random_number_generation",
+      "generators": [
+        {
+          "name": "linear_congruential",
+          "period": 2147483647,
+          "statistical_tests": ["chi_square", "kolmogorov_smirnov"],
+          "expected_uniformity": "good"
+        },
+        {
+          "name": "mersenne_twister",
+          "period": "2^19937-1",
+          "statistical_tests": ["diehard", "testu01"],
+          "expected_uniformity": "excellent"
+        }
+      ]
+    },
+    {
+      "name": "probability_distribution_sampling",
+      "distributions": [
+        {
+          "name": "normal_distribution",
+          "parameters": {"μ": 0, "σ": 1},
+          "sampling_method": "box_muller",
+          "sample_size": 1000000,
+          "expected_mean_error": 1e-3,
+          "expected_std_error": 1e-3
+        },
+        {
+          "name": "exponential_distribution",
+          "parameters": {"λ": 1},
+          "sampling_method": "inverse_transform",
+          "sample_size": 1000000,
+          "expected_rate_error": 1e-3
+        }
+      ]
+    }
+  ],
+  "verification_algorithms": {
+    "floating_point_analysis": {
+      "method": "ulp_error_analysis",
+      "machine_epsilon_detection": true,
+      "catastrophic_cancellation_detection": true
+    },
+    "convergence_testing": {
+      "method": "richardson_extrapolation",
+      "convergence_rate_estimation": true,
+      "error_bound_computation": true
+    },
+    "stability_analysis": {
+      "method": "eigenvalue_analysis",
+      "stiffness_detection": true,
+      "step_size_optimization": true
+    }
+  },
+  "performance_benchmarks": {
+    "numerical_precision": {
+      "basic_arithmetic": {"operations": 1000000, "target_time_ms": 10},
+      "special_functions": {"evaluations": 100000, "target_time_ms": 100},
+      "matrix_operations": {"size": "1000x1000", "target_time_ms": 1000}
+    },
+    "algorithm_performance": {
+      "ode_solver": {"time_steps": 10000, "target_time_ms": 500},
+      "optimization": {"function_evaluations": 1000, "target_time_ms": 100},
+      "linear_algebra": {"matrix_size": 500, "target_time_ms": 200}
+    }
+  }
+}

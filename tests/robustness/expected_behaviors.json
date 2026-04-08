@@ -1,0 +1,237 @@
+{
+  "memory_exhaustion_variables.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "performance_requirements": {
+      "max_memory_usage_mb": 2048,
+      "max_parse_time_seconds": 30,
+      "max_validation_time_seconds": 60
+    },
+    "robustness_notes": "Should handle 100,000+ variables efficiently with streaming or chunked processing"
+  },
+
+  "circular_coupling_dependencies.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling",
+        "code": "circular_coupling",
+        "message": "Circular coupling dependency detected: ModelA → ModelB → ModelC → ModelA",
+        "details": {
+          "cycle": ["ModelA", "ModelB", "ModelC", "ModelA"]
+        }
+      }
+    ],
+    "is_valid": false,
+    "robustness_notes": "Should detect circular coupling dependencies and provide clear error messages"
+  },
+
+  "infinite_recursion_expressions.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/RecursiveModel/variables/factorial_bomb/expression/op",
+        "message": "'factorial' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [
+      {
+        "path": "/models/RecursiveModel/variables/a",
+        "code": "circular_dependency",
+        "message": "Circular reference detected in expression: a → b → c → a"
+      }
+    ],
+    "is_valid": false,
+    "robustness_notes": "Should detect infinite recursion and circular references with depth limits"
+  },
+
+  "stack_overflow_substitutions.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/DeepSubstitutionModel/variables/level_1/expression/op",
+        "message": "'substitute' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "robustness_notes": "Should limit substitution chain depth to prevent stack overflow"
+  },
+
+  "numerical_edge_cases.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "performance_requirements": {
+      "numerical_stability": "required",
+      "nan_handling": "graceful",
+      "infinity_handling": "graceful"
+    },
+    "robustness_notes": "Should handle NaN, Infinity, and numerical edge cases without crashing"
+  },
+
+  "platform_precision_differences.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "robustness_notes": "Should produce consistent results across different platforms and architectures"
+  },
+
+  "catastrophic_cancellation.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "robustness_notes": "Should handle numerical cancellation scenarios with appropriate precision warnings"
+  },
+
+  "self_referential_systems.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/SelfRefModel/variables/fibonacci_like/expression/op",
+        "message": "'lag' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [
+      {
+        "path": "/models/SelfRefModel/variables/direct_self_ref",
+        "code": "self_reference",
+        "message": "Variable directly references itself in expression"
+      }
+    ],
+    "is_valid": false,
+    "robustness_notes": "Should detect self-referential definitions and provide resolution strategies"
+  },
+
+  "mega_reaction_system.esm": {
+    "schema_errors": [
+      {
+        "path": "/reaction_systems/MegaAtmosphericChemistry/reactions/0/rate/args/1/op",
+        "message": "'arrhenius' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "performance_requirements": {
+      "max_memory_usage_mb": 4096,
+      "max_parse_time_seconds": 45,
+      "streaming_required": true
+    },
+    "robustness_notes": "Should handle extremely large reaction systems with 50,000+ species efficiently"
+  },
+
+  "deep_equation_chains.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "performance_requirements": {
+      "max_dependency_depth": 5000,
+      "resolution_strategy": "topological_sort"
+    },
+    "robustness_notes": "Should resolve long dependency chains without stack overflow"
+  },
+
+  "parser_performance_stress.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "performance_requirements": {
+      "max_memory_usage_mb": 3072,
+      "max_parse_time_seconds": 60,
+      "incremental_parsing": "recommended"
+    },
+    "robustness_notes": "Large file parsing stress test with complex nested structures"
+  },
+
+  "expression_evaluation_stress.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/ComplexExpressionModel/variables/taylor_series/expression/op",
+        "message": "'taylor_expand' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "robustness_notes": "Should handle complex mathematical expressions with appropriate evaluation limits"
+  },
+
+  "memory_fragmentation_test.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "performance_requirements": {
+      "memory_fragmentation_tolerance": "high",
+      "gc_efficiency": "required"
+    },
+    "robustness_notes": "Should manage memory efficiently despite fragmented allocation patterns"
+  },
+
+  "concurrent_access_simulation.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "robustness_notes": "Thread-safety test for concurrent access to shared variables"
+  },
+
+  "partial_corruption_recovery.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "robustness_notes": "Should recover gracefully from partially corrupted data with fallback mechanisms"
+  },
+
+  "schema_evolution_stress.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "robustness_notes": "Should handle mixed schema versions with backward compatibility"
+  },
+
+  "malformed_expression_recovery.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/ErrorProneModel/variables/syntax_error/expression/op",
+        "message": "'invalid_op' is not a valid operator",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "robustness_notes": "Should recover from expression errors and provide helpful error messages"
+  },
+
+  "missing_dependency_handling.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BrokenModel/variables/broken_ref",
+        "code": "undefined_reference",
+        "message": "Referenced variable 'nonexistent_var' not found in scope"
+      }
+    ],
+    "is_valid": false,
+    "robustness_notes": "Should handle missing dependencies with clear error reporting and recovery options"
+  },
+
+  "denormal_number_handling.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "robustness_notes": "Should handle denormal and subnormal numbers correctly across platforms"
+  },
+
+  "massive_coupling_graph.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "performance_requirements": {
+      "max_memory_usage_mb": 8192,
+      "max_parse_time_seconds": 120,
+      "graph_analysis_required": true
+    },
+    "robustness_notes": "Should efficiently handle complex coupling graphs with thousands of connections"
+  }
+}
