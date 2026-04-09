@@ -133,7 +133,7 @@ jobs:
         sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm_format/pyproject.toml
 
         # Update Rust Cargo.toml
-        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm-format-rust/Cargo.toml
+        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/earthsci-toolkit/Cargo.toml
 
         # Update workspace.json with version tracking
         echo "{\"version\": \"$NEW_VERSION\", \"updated\": \"$(date -Iseconds)\"}" > workspace.json

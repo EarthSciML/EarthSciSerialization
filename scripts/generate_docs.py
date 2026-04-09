@@ -493,7 +493,7 @@ class DocumentationExtractor:
 
     def _extract_rust_docs(self) -> Dict[str, Any]:
         """Extract documentation from Rust package."""
-        rust_dir = self.packages_dir / "esm-format-rust"
+        rust_dir = self.packages_dir / "earthsci-toolkit"
 
         functions = []
         types = []

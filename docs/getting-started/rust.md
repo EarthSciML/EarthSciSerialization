@@ -1,4 +1,4 @@
-# Getting Started with ESM Format in Rust
+# Getting Started with EarthSci Toolkit in Rust
 
 The Rust implementation provides high-performance parsing, validation, and CLI tools with WebAssembly support for web deployment. It's ideal for production tools, system integration, and performance-critical applications.
 
@@ -8,13 +8,13 @@ The Rust implementation provides high-performance parsing, validation, and CLI t
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-esm-format = "0.1.0"
+earthsci-toolkit = "0.1.0"
 ```
 
 ### CLI Tool from Source
 ```bash
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/esm-format-rust
+cd EarthSciSerialization/packages/earthsci-toolkit
 cargo install --path . --features cli
 ```
 
@@ -24,7 +24,7 @@ cargo install --path . --features cli
 cargo install wasm-pack
 
 # Build WASM package
-cd packages/esm-format-rust
+cd packages/earthsci-toolkit
 wasm-pack build --target web --features wasm
 ```
 
@@ -44,7 +44,7 @@ The Rust implementation provides **Core + CLI** tier capabilities:
 ### Loading and Validating ESM Files
 
 ```rust
-use esm_format::{load, save, validate, EsmFile};
+use earthsci_toolkit::{load, save, validate, EsmFile};
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Working with Expressions
 
 ```rust
-use esm_format::{Expression, parse_expression, to_unicode, to_latex, substitute, free_variables};
+use earthsci_toolkit::{Expression, parse_expression, to_unicode, to_latex, substitute, free_variables};
 use std::collections::HashMap;
 
 fn expression_example() -> Result<(), Box<dyn std::error::Error>> {
@@ -186,7 +186,7 @@ esm schema --version
 ### Error Handling
 
 ```rust
-use esm_format::{EsmError, ValidationError, load, validate};
+use earthsci_toolkit::{EsmError, ValidationError, load, validate};
 
 fn robust_loading(filename: &str) -> Result<(), EsmError> {
     let content = std::fs::read_to_string(filename)
@@ -225,7 +225,7 @@ fn robust_loading(filename: &str) -> Result<(), EsmError> {
 ### Performance Optimization
 
 ```rust
-use esm_format::{EsmFile, load_streaming, validate_streaming};
+use earthsci_toolkit::{EsmFile, load_streaming, validate_streaming};
 use std::fs::File;
 use std::io::BufReader;
 
@@ -248,7 +248,7 @@ fn handle_large_file(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 // Zero-copy parsing for read-only access
 fn zero_copy_analysis(content: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let esm_file = esm_format::parse_borrowed(content)?;
+    let esm_file = earthsci_toolkit::parse_borrowed(content)?;
 
     // Work with borrowed data (no allocations for string data)
     println!("Model name: {}", esm_file.metadata.name);
@@ -262,7 +262,7 @@ fn zero_copy_analysis(content: &str) -> Result<(), Box<dyn std::error::Error>> {
 ### Custom Validation Rules
 
 ```rust
-use esm_format::{EsmFile, ValidationResult, ValidationError, Validator};
+use earthsci_toolkit::{EsmFile, ValidationResult, ValidationError, Validator};
 
 struct CustomValidator;
 
@@ -340,7 +340,7 @@ wasm-pack build --target bundler --features wasm
 ### Using in JavaScript/TypeScript
 
 ```javascript
-import init, { load, validate, to_unicode } from './pkg/esm_format.js';
+import init, { load, validate, to_unicode } from './pkg/earthsci_toolkit.js';
 
 async function main() {
     // Initialize the WASM module
@@ -394,7 +394,7 @@ main();
     <div id="errors"></div>
 
     <script type="module">
-        import init, { load, validate, to_unicode } from './pkg/esm_format.js';
+        import init, { load, validate, to_unicode } from './pkg/earthsci_toolkit.js';
 
         await init();
 
@@ -588,7 +588,7 @@ mod tests {
 
 ```rust
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use esm_format::{load, validate};
+use earthsci_toolkit::{load, validate};
 
 fn bench_load_large_file(c: &mut Criterion) {
     let large_esm = generate_large_test_file(1000); // 1000 models
@@ -687,7 +687,7 @@ fn run_external_validator(filename: &str) -> Result<bool, Box<dyn std::error::Er
 ### Builder Pattern for Model Construction
 
 ```rust
-use esm_format::{EsmFile, Model, ModelVariable, ModelEquation, Metadata};
+use earthsci_toolkit::{EsmFile, Model, ModelVariable, ModelEquation, Metadata};
 
 pub struct EsmBuilder {
     file: EsmFile,
