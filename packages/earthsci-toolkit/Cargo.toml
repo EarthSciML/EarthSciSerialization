@@ -1,0 +1,66 @@
+[package]
+name = "earthsci-toolkit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+authors = ["Chris Tessum with Claude <noreply@anthropic.com>"]
+description = "Rust implementation of EarthSciML Serialization Format"
+license = "MIT"
+repository = "https://github.com/ctessum/EarthSciSerialization"
+documentation = "https://docs.rs/earthsci-toolkit"
+keywords = ["earth-science", "modeling", "serialization", "json"]
+categories = ["science", "parsing", "simulation"]
+readme = "README.md"
+
+# Support both library and CLI binary
+[[bin]]
+name = "esm"
+path = "src/bin/esm.rs"
+
+[lib]
+name = "earthsci_toolkit"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonschema = "0.19"
+thiserror = "2.0"
+clap = { version = "4.0", features = ["derive"], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true }
+# Performance dependencies
+rayon = { version = "1.8", optional = true }
+simd-json = { version = "0.13", optional = true }
+smallvec = { version = "1.11", features = ["serde"] }
+bumpalo = { version = "3.14", optional = true }
+wide = { version = "0.7", optional = true }
+bytemuck = { version = "1.14", optional = true }
+criterion = { version = "0.5", optional = true }
+
+[dev-dependencies]
+serde_test = "1.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.4"
+
+[[bench]]
+name = "benchmarks"
+harness = false
+required-features = ["benchmarks"]
+
+[features]
+default = ["cli"]
+cli = ["clap"]
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "web-sys"]
+# Performance features
+parallel = ["rayon"]
+simd = ["wide", "bytemuck"]
+zero_copy = ["simd-json"]
+custom_alloc = ["bumpalo"]
+benchmarks = ["criterion"]
+performance = ["parallel", "simd", "zero_copy", "custom_alloc"]
+
+# WASM target configuration
+[package.metadata.wasm-pack.profile.release]

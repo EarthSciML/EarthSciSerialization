@@ -544,7 +544,7 @@ class PackageVerifier:
             'esm_format': 'python',
             'esm-format': 'npm',
             'esm-editor': 'npm',
-            'esm-format-rust': 'rust'
+            'earthsci-toolkit': 'rust'
         }
 
         for package_name, package_type in package_mapping.items():
