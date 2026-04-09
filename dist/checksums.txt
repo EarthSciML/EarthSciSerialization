@@ -1,2 +1,0 @@
-# Checksums for EarthSciSerialization v0.1.0
-6f775259f3103fdc6af715e767ce82d537b8c691064c18001f9173ce9dcad21f  esm-cli-0.1.0-linux-x64.tar.gz
