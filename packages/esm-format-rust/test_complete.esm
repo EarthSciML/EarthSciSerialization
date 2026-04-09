@@ -6,24 +6,23 @@
   },
   "models": {
     "chemistry": {
-      "name": "Atmospheric Chemistry",
-      "variables": [
-        {
-          "name": "O3",
+      "variables": {
+        "O3": {
           "type": "state",
           "units": "concentration"
         },
-        {
-          "name": "NO",
+        "NO": {
           "type": "state",
           "units": "concentration"
         }
-      ],
+      },
       "equations": [
         {
           "lhs": {
-            "op": "derivative",
-            "args": ["O3"],
+            "op": "D",
+            "args": [
+              "O3"
+            ],
             "wrt": "t"
           },
           "rhs": {
@@ -32,7 +31,10 @@
               "k_O3_formation",
               {
                 "op": "*",
-                "args": ["NO", "O2"]
+                "args": [
+                  "NO",
+                  "O2"
+                ]
               }
             ]
           }
@@ -40,71 +42,66 @@
       ]
     },
     "transport": {
-      "name": "Transport Model",
-      "variables": [
-        {
-          "name": "wind_speed",
+      "variables": {
+        "wind_speed": {
           "type": "parameter",
           "units": "m/s"
         }
-      ],
+      },
       "equations": []
     }
   },
   "reaction_systems": {
     "simple_ozone": {
-      "name": "Simple Ozone Chemistry",
-      "species": [
-        {
-          "name": "O3",
+      "species": {
+        "O3": {
           "units": "mol/L"
         },
-        {
-          "name": "NO",
+        "NO": {
           "units": "mol/L"
         },
-        {
-          "name": "NO2",
+        "NO2": {
           "units": "mol/L"
         }
-      ],
+      },
       "reactions": [
         {
           "substrates": [
             {
               "species": "NO",
-              "coefficient": 1.0
+              "stoichiometry": 1
             },
             {
               "species": "O3",
-              "coefficient": 1.0
+              "stoichiometry": 1
             }
           ],
           "products": [
             {
               "species": "NO2",
-              "coefficient": 1.0
+              "stoichiometry": 1
             }
           ],
           "rate": {
             "op": "*",
-            "args": ["k1", "NO", "O3"]
-          }
+            "args": [
+              "k1",
+              "NO",
+              "O3"
+            ]
+          },
+          "id": "R1"
         }
-      ]
+      ],
+      "parameters": {}
     }
   },
   "coupling": [
     {
       "type": "variable_map",
-      "source": "chemistry",
-      "target": "transport",
-      "mappings": [
-        {
-          "source_var": "O3",
-          "target_var": "transported_O3"
-        }
-      ]
+      "from": "chemistry",
+      "to": "transport",
+      "transform": "param_to_var"
     }
   ]
 }

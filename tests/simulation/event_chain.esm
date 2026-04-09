@@ -3,9 +3,17 @@
   "metadata": {
     "name": "EventChainTest",
     "description": "Complex event system test with interconnected events and parameter modifications",
-    "authors": ["Test Suite"],
+    "authors": [
+      "Test Suite"
+    ],
     "created": "2026-02-16T00:00:00Z",
-    "tags": ["test", "events", "discrete", "chain", "parameter-modification"]
+    "tags": [
+      "test",
+      "events",
+      "discrete",
+      "chain",
+      "parameter-modification"
+    ]
   },
   "models": {
     "EventSystem": {
@@ -13,143 +21,196 @@
         "notes": "Multi-stage system with temperature-dependent reactions and discrete dosing events"
       },
       "variables": {
-        "concentration": { "type": "state", "units": "mol/L", "default": 0.1, "description": "Reactant concentration" },
-        "temperature": { "type": "state", "units": "K", "default": 298.15, "description": "System temperature" },
-        "product": { "type": "state", "units": "mol/L", "default": 0.0, "description": "Product concentration" },
-        "heating_rate": { "type": "parameter", "units": "K/s", "default": 0.1, "description": "Heating rate" },
-        "reaction_rate": { "type": "parameter", "units": "L/(mol*s)", "default": 0.01, "description": "Base reaction rate constant" },
-        "activation_energy": { "type": "parameter", "units": "J/mol", "default": 50000.0, "description": "Activation energy" },
-        "R": { "type": "parameter", "units": "J/(mol*K)", "default": 8.314, "description": "Gas constant" },
-        "dose_amount": { "type": "parameter", "units": "mol/L", "default": 0.05, "description": "Discrete dose amount" },
-        "dose_counter": { "type": "discrete", "units": "1", "default": 0, "description": "Number of doses administered" },
-        "heating_active": { "type": "discrete", "units": "1", "default": 1, "description": "Heating system status (0=off, 1=on)" },
-        "k_eff": { "type": "algebraic", "units": "L/(mol*s)", "description": "Effective rate constant" }
+        "concentration": {
+          "type": "state",
+          "units": "mol/L",
+          "default": 0.1,
+          "description": "Reactant concentration"
+        },
+        "temperature": {
+          "type": "state",
+          "units": "K",
+          "default": 298.15,
+          "description": "System temperature"
+        },
+        "product": {
+          "type": "state",
+          "units": "mol/L",
+          "default": 0.0,
+          "description": "Product concentration"
+        },
+        "heating_rate": {
+          "type": "parameter",
+          "units": "K/s",
+          "default": 0.1,
+          "description": "Heating rate"
+        },
+        "reaction_rate": {
+          "type": "parameter",
+          "units": "L/(mol*s)",
+          "default": 0.01,
+          "description": "Base reaction rate constant"
+        },
+        "activation_energy": {
+          "type": "parameter",
+          "units": "J/mol",
+          "default": 50000.0,
+          "description": "Activation energy"
+        },
+        "R": {
+          "type": "parameter",
+          "units": "J/(mol*K)",
+          "default": 8.314,
+          "description": "Gas constant"
+        },
+        "dose_amount": {
+          "type": "parameter",
+          "units": "mol/L",
+          "default": 0.05,
+          "description": "Discrete dose amount"
+        },
+        "dose_counter": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Number of doses administered"
+        },
+        "heating_active": {
+          "type": "parameter",
+          "units": "1",
+          "default": 1,
+          "description": "Heating system status (0=off, 1=on)"
+        },
+        "k_eff": {
+          "type": "observed",
+          "units": "L/(mol*s)",
+          "description": "Effective rate constant",
+          "expression": 0.0
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
-          "rhs": { "op": "*", "args": ["heating_rate", "heating_active"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "temperature"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "heating_rate",
+              "heating_active"
+            ]
+          }
         },
         {
           "lhs": "k_eff",
-          "rhs": { "op": "*", "args": [
-            "reaction_rate",
-            { "op": "exp", "args": [
-              { "op": "/", "args": [
-                { "op": "-", "args": ["activation_energy"] },
-                { "op": "*", "args": ["R", "temperature"] }
-              ]}
-            ]}
-          ]}
+          "rhs": {
+            "op": "*",
+            "args": [
+              "reaction_rate",
+              {
+                "op": "exp",
+                "args": [
+                  {
+                    "op": "/",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "activation_energy"
+                        ]
+                      },
+                      {
+                        "op": "*",
+                        "args": [
+                          "R",
+                          "temperature"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         },
         {
-          "lhs": { "op": "D", "args": ["concentration"], "wrt": "t" },
-          "rhs": { "op": "-", "args": [
-            { "op": "*", "args": ["k_eff", { "op": "^", "args": ["concentration", 2] }] }
-          ]}
+          "lhs": {
+            "op": "D",
+            "args": [
+              "concentration"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "-",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  "k_eff",
+                  {
+                    "op": "^",
+                    "args": [
+                      "concentration",
+                      2
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         },
         {
-          "lhs": { "op": "D", "args": ["product"], "wrt": "t" },
-          "rhs": { "op": "*", "args": ["k_eff", { "op": "^", "args": ["concentration", 2] }] }
-        }
-      ],
-      "events": [
-        {
-          "id": "first_dose_timer",
-          "type": "discrete",
-          "condition": { "op": ">=", "args": ["t", 100.0] },
-          "description": "First discrete dose at t=100s",
-          "actions": [
-            {
-              "type": "assignment",
-              "variable": "concentration",
-              "value": { "op": "+", "args": ["concentration", "dose_amount"] }
-            },
-            {
-              "type": "assignment",
-              "variable": "dose_counter",
-              "value": { "op": "+", "args": ["dose_counter", 1] }
-            }
-          ]
-        },
-        {
-          "id": "temperature_threshold",
-          "type": "continuous",
-          "condition": { "op": "-", "args": ["temperature", 320.0] },
-          "direction": "positive",
-          "description": "Stop heating when temperature reaches 320K",
-          "actions": [
-            {
-              "type": "assignment",
-              "variable": "heating_active",
-              "value": 0
-            }
-          ]
-        },
-        {
-          "id": "second_dose_dependent",
-          "type": "discrete",
-          "condition": { "op": "&&", "args": [
-            { "op": ">=", "args": ["t", 200.0] },
-            { "op": ">=", "args": ["dose_counter", 1] },
-            { "op": "<=", "args": ["concentration", 0.08] }
-          ]},
-          "description": "Second dose only after first dose and when concentration is low",
-          "actions": [
-            {
-              "type": "assignment",
-              "variable": "concentration",
-              "value": { "op": "+", "args": ["concentration", { "op": "*", "args": ["dose_amount", 1.5] }] }
-            },
-            {
-              "type": "assignment",
-              "variable": "dose_counter",
-              "value": { "op": "+", "args": ["dose_counter", 1] }
-            }
-          ]
-        },
-        {
-          "id": "cooling_restart",
-          "type": "discrete",
-          "condition": { "op": "&&", "args": [
-            { "op": ">=", "args": ["t", 300.0] },
-            { "op": "==", "args": ["heating_active", 0] },
-            { "op": ">=", "args": ["dose_counter", 2] }
-          ]},
-          "description": "Restart heating after both doses are given and some time has passed",
-          "actions": [
-            {
-              "type": "assignment",
-              "variable": "heating_active",
-              "value": 1
-            },
-            {
-              "type": "assignment",
-              "variable": "heating_rate",
-              "value": 0.05
-            }
-          ]
+          "lhs": {
+            "op": "D",
+            "args": [
+              "product"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "k_eff",
+              {
+                "op": "^",
+                "args": [
+                  "concentration",
+                  2
+                ]
+              }
+            ]
+          }
         }
       ]
     }
-  },
-  "domain": {
-    "temporal": { "start": 0.0, "end": 500.0, "step": 1.0 },
-    "initial_conditions": { "type": "per_variable", "values": {
-      "EventSystem.concentration": 0.1,
-      "EventSystem.temperature": 298.15,
-      "EventSystem.product": 0.0,
-      "EventSystem.dose_counter": 0,
-      "EventSystem.heating_active": 1
-    }}
   },
   "solver": {
     "strategy": "strang_threads",
     "config": {
       "algorithm": "Tsit5",
-      "rtol": 1e-6,
-      "atol": 1e-8,
-      "event_tolerance": 1e-9
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "event_tolerance": 1e-09
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {},
+      "initial_conditions": {
+        "type": "per_variable",
+        "values": {
+          "EventSystem.concentration": 0.1,
+          "EventSystem.temperature": 298.15,
+          "EventSystem.product": 0.0,
+          "EventSystem.dose_counter": 0,
+          "EventSystem.heating_active": 1
+        }
+      }
     }
   }
 }

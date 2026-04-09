@@ -3,11 +3,16 @@
   "metadata": {
     "name": "FullModelSpecification",
     "description": "Complete model specification with all equations, variables, and parameters fully defined",
-    "authors": ["Test Author"],
+    "authors": [
+      "Test Author"
+    ],
     "license": "MIT",
     "created": "2026-02-19T00:00:00Z",
     "modified": "2026-02-19T00:00:00Z",
-    "tags": ["test", "complete-specification"],
+    "tags": [
+      "test",
+      "complete-specification"
+    ],
     "references": [
       {
         "citation": "Test reference for model completeness validation",
@@ -26,13 +31,13 @@
         "x": {
           "type": "state",
           "units": "mol/mol",
-          "default": 1.0e-6,
+          "default": 1e-06,
           "description": "Primary state variable x with complete specification"
         },
         "y": {
           "type": "state",
           "units": "mol/mol",
-          "default": 2.0e-6,
+          "default": 2e-06,
           "description": "Secondary state variable y with complete specification"
         },
         "k1": {
@@ -53,8 +58,20 @@
           "expression": {
             "op": "+",
             "args": [
-              {"op": "*", "args": ["k1", "x"]},
-              {"op": "*", "args": ["k2", "y"]}
+              {
+                "op": "*",
+                "args": [
+                  "k1",
+                  "x"
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  "k2",
+                  "y"
+                ]
+              }
             ]
           },
           "description": "Total reaction rate (observed variable with expression)"
@@ -62,17 +79,58 @@
       },
       "equations": [
         {
-          "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
-          "rhs": {"op": "*", "args": [{"op": "-", "args": ["k1"]}, "x"]},
-          "_comment": "First-order decay of x"
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              {
+                "op": "-",
+                "args": [
+                  "k1"
+                ]
+              },
+              "x"
+            ]
+          }
         },
         {
-          "lhs": {"op": "D", "args": ["y"], "wrt": "t"},
-          "rhs": {"op": "+", "args": [
-            {"op": "*", "args": ["k1", "x"]},
-            {"op": "*", "args": [{"op": "-", "args": ["k2"]}, "y"]}
-          ]},
-          "_comment": "y production from x decay minus y decay"
+          "lhs": {
+            "op": "D",
+            "args": [
+              "y"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  "k1",
+                  "x"
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "-",
+                    "args": [
+                      "k2"
+                    ]
+                  },
+                  "y"
+                ]
+              }
+            ]
+          }
         }
       ],
       "discrete_events": [],

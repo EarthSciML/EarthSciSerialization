@@ -3,9 +3,15 @@
   "metadata": {
     "name": "SpatialGridDefinitions",
     "description": "Test various spatial grid definitions including 1D, 2D, and 3D grids with different coordinate systems and grid spacing",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-17T00:00:00Z",
-    "tags": ["spatial-grid", "coordinate-systems", "grid-discretization"],
+    "tags": [
+      "spatial-grid",
+      "coordinate-systems",
+      "grid-discretization"
+    ],
     "references": [
       {
         "citation": "Comprehensive spatial grid test fixture for atmospheric and earth system modeling",
@@ -13,10 +19,11 @@
       }
     ]
   },
-
   "models": {
     "DiffusionModel": {
-      "reference": { "notes": "Multi-dimensional diffusion for spatial grid testing" },
+      "reference": {
+        "notes": "Multi-dimensional diffusion for spatial grid testing"
+      },
       "variables": {
         "scalar_field": {
           "type": "state",
@@ -45,8 +52,13 @@
       },
       "equations": [
         {
-          "_comment": "Anisotropic 3D diffusion equation",
-          "lhs": {"op": "D", "args": ["scalar_field"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "scalar_field"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "+",
             "args": [
@@ -54,21 +66,57 @@
                 "op": "*",
                 "args": [
                   "diffusivity_x",
-                  {"op": "D", "args": [{"op": "grad", "args": ["scalar_field"], "dim": "x"}], "wrt": "x"}
+                  {
+                    "op": "D",
+                    "args": [
+                      {
+                        "op": "grad",
+                        "args": [
+                          "scalar_field"
+                        ],
+                        "dim": "x"
+                      }
+                    ],
+                    "wrt": "x"
+                  }
                 ]
               },
               {
                 "op": "*",
                 "args": [
                   "diffusivity_y",
-                  {"op": "D", "args": [{"op": "grad", "args": ["scalar_field"], "dim": "y"}], "wrt": "y"}
+                  {
+                    "op": "D",
+                    "args": [
+                      {
+                        "op": "grad",
+                        "args": [
+                          "scalar_field"
+                        ],
+                        "dim": "y"
+                      }
+                    ],
+                    "wrt": "y"
+                  }
                 ]
               },
               {
                 "op": "*",
                 "args": [
                   "diffusivity_z",
-                  {"op": "D", "args": [{"op": "grad", "args": ["scalar_field"], "dim": "z"}], "wrt": "z"}
+                  {
+                    "op": "D",
+                    "args": [
+                      {
+                        "op": "grad",
+                        "args": [
+                          "scalar_field"
+                        ],
+                        "dim": "z"
+                      }
+                    ],
+                    "wrt": "z"
+                  }
                 ]
               }
             ]
@@ -77,159 +125,126 @@
       ]
     }
   },
-
-  "domain": {
-    "independent_variable": "t",
-    "temporal": {
-      "start": "2024-01-01T00:00:00Z",
-      "end": "2024-01-01T12:00:00Z",
-      "_comment": "12-hour simulation for spatial grid testing"
-    },
-    "spatial": {
-      "x": {
-        "min": 0.0,
-        "max": 100000.0,
-        "units": "meters",
-        "grid_spacing": 1000.0,
-        "_comment": "100 km domain with 1 km resolution (101 grid points)"
-      },
-      "y": {
-        "min": -50000.0,
-        "max": 50000.0,
-        "units": "meters",
-        "grid_spacing": 2500.0,
-        "_comment": "100 km domain centered at origin with 2.5 km resolution (41 grid points)"
-      },
-      "z": {
-        "min": 0.0,
-        "max": 5000.0,
-        "units": "meters",
-        "grid_spacing": 100.0,
-        "_comment": "5 km vertical domain with 100 m resolution (51 grid points)"
-      },
-      "lon": {
-        "min": -125.0,
-        "max": -115.0,
-        "units": "degrees",
-        "grid_spacing": 0.1,
-        "_comment": "10° longitude span with 0.1° resolution (101 points), Pacific Northwest"
-      },
-      "lat": {
-        "min": 40.0,
-        "max": 50.0,
-        "units": "degrees",
-        "grid_spacing": 0.1,
-        "_comment": "10° latitude span with 0.1° resolution (101 points)"
-      },
-      "lev": {
-        "min": 1000.0,
-        "max": 100.0,
-        "units": "hPa",
-        "grid_spacing": 50.0,
-        "_comment": "Pressure levels from surface to ~16 km altitude (19 levels)"
-      }
-    },
-    "coordinate_transforms": [
-      {
-        "id": "cartesian_to_geographic",
-        "description": "Transform Cartesian x,y,z to lon,lat,lev",
-        "dimensions": ["x", "y", "z"]
-      },
-      {
-        "id": "pressure_to_height",
-        "description": "Convert pressure levels to geometric height",
-        "dimensions": ["lev"]
-      },
-      {
-        "id": "lonlat_to_cartesian_projection",
-        "description": "Project lon,lat to Cartesian for numerical methods",
-        "dimensions": ["lon", "lat"]
-      }
-    ],
-    "spatial_ref": "WGS84",
-    "initial_conditions": {
-      "type": "per_variable",
-      "values": {
-        "scalar_field": 1.0
-      },
-      "_comment": "Uniform initial field to test grid discretization"
-    },
-    "boundary_conditions": [
-      {
-        "type": "zero_gradient",
-        "dimensions": ["x", "y", "z"],
-        "_comment": "Neumann boundaries on all Cartesian directions"
-      },
-      {
-        "type": "periodic",
-        "dimensions": ["lon"],
-        "_comment": "Periodic boundary in longitude (global domain simulation)"
-      },
-      {
-        "type": "constant",
-        "dimensions": ["lat"],
-        "value": 0.5,
-        "_comment": "Fixed values at north/south latitude boundaries"
-      },
-      {
-        "type": "zero_gradient",
-        "dimensions": ["lev"],
-        "_comment": "No flux through top and bottom pressure levels"
-      }
-    ],
-    "element_type": "Float64",
-    "array_type": "Array"
-  },
-
   "solver": {
     "strategy": "strang_serial",
     "config": {
       "stiff_algorithm": "Rodas4",
       "timestep": 600.0,
       "stiff_kwargs": {
-        "abstol": 1e-8,
-        "reltol": 1e-5
-      },
-      "_comment": "10-minute timesteps appropriate for diffusion timescales"
+        "abstol": 1e-08,
+        "reltol": 1e-05
+      }
     }
   },
-
-  "_test_expectations": {
-    "grid_dimensions": {
-      "cartesian": {
-        "x_points": 101,
-        "y_points": 41,
-        "z_points": 51,
-        "total_cartesian_points": 210651
+  "domains": {
+    "default": {
+      "independent_variable": "t",
+      "temporal": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-01-01T12:00:00Z"
       },
-      "geographic": {
-        "lon_points": 101,
-        "lat_points": 101,
-        "lev_points": 19,
-        "total_geographic_points": 193919
-      }
-    },
-    "coordinate_systems": {
-      "cartesian_range_x": [0.0, 100000.0],
-      "cartesian_range_y": [-50000.0, 50000.0],
-      "cartesian_range_z": [0.0, 5000.0],
-      "geographic_range_lon": [-125.0, -115.0],
-      "geographic_range_lat": [40.0, 50.0],
-      "pressure_range_lev": [100.0, 1000.0]
-    },
-    "grid_spacing_validation": {
-      "uniform_x": true,
-      "uniform_y": true,
-      "uniform_z": true,
-      "uniform_lon": true,
-      "uniform_lat": true,
-      "uniform_lev": true
-    },
-    "boundary_condition_types": {
-      "cartesian_bc": "zero_gradient",
-      "longitude_bc": "periodic",
-      "latitude_bc": "constant",
-      "pressure_bc": "zero_gradient"
+      "spatial": {
+        "x": {
+          "min": 0.0,
+          "max": 100000.0,
+          "units": "meters",
+          "grid_spacing": 1000.0
+        },
+        "y": {
+          "min": -50000.0,
+          "max": 50000.0,
+          "units": "meters",
+          "grid_spacing": 2500.0
+        },
+        "z": {
+          "min": 0.0,
+          "max": 5000.0,
+          "units": "meters",
+          "grid_spacing": 100.0
+        },
+        "lon": {
+          "min": -125.0,
+          "max": -115.0,
+          "units": "degrees",
+          "grid_spacing": 0.1
+        },
+        "lat": {
+          "min": 40.0,
+          "max": 50.0,
+          "units": "degrees",
+          "grid_spacing": 0.1
+        },
+        "lev": {
+          "min": 1000.0,
+          "max": 100.0,
+          "units": "hPa",
+          "grid_spacing": 50.0
+        }
+      },
+      "coordinate_transforms": [
+        {
+          "id": "cartesian_to_geographic",
+          "description": "Transform Cartesian x,y,z to lon,lat,lev",
+          "dimensions": [
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        {
+          "id": "pressure_to_height",
+          "description": "Convert pressure levels to geometric height",
+          "dimensions": [
+            "lev"
+          ]
+        },
+        {
+          "id": "lonlat_to_cartesian_projection",
+          "description": "Project lon,lat to Cartesian for numerical methods",
+          "dimensions": [
+            "lon",
+            "lat"
+          ]
+        }
+      ],
+      "spatial_ref": "WGS84",
+      "initial_conditions": {
+        "type": "per_variable",
+        "values": {
+          "scalar_field": 1.0
+        }
+      },
+      "boundary_conditions": [
+        {
+          "type": "zero_gradient",
+          "dimensions": [
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        {
+          "type": "periodic",
+          "dimensions": [
+            "lon"
+          ]
+        },
+        {
+          "type": "constant",
+          "dimensions": [
+            "lat"
+          ],
+          "value": 0.5
+        },
+        {
+          "type": "zero_gradient",
+          "dimensions": [
+            "lev"
+          ]
+        }
+      ],
+      "element_type": "Float64",
+      "array_type": "Array"
     }
   }
 }

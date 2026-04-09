@@ -3,71 +3,190 @@
   "metadata": {
     "name": "NestedSubsystemTests",
     "description": "Test hierarchical subsystem nesting and scoped reference resolution",
-    "authors": ["Test Suite"],
+    "authors": [
+      "Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z"
   },
-
   "models": {
     "Atmosphere": {
       "variables": {
-        "pressure": { "type": "parameter", "units": "Pa", "default": 101325, "description": "Surface pressure" }
+        "pressure": {
+          "type": "parameter",
+          "units": "Pa",
+          "default": 101325,
+          "description": "Surface pressure"
+        }
       },
       "equations": [],
       "subsystems": {
         "Chemistry": {
           "variables": {
-            "temperature": { "type": "parameter", "units": "K", "default": 298.15, "description": "Temperature" }
+            "temperature": {
+              "type": "parameter",
+              "units": "K",
+              "default": 298.15,
+              "description": "Temperature"
+            }
           },
           "equations": [],
           "subsystems": {
             "FastChem": {
               "variables": {
-                "O3": { "type": "state", "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
-                "NO": { "type": "state", "units": "mol/mol", "default": 0.1e-9, "description": "NO" },
-                "NO2": { "type": "state", "units": "mol/mol", "default": 1e-9, "description": "NO2" },
-                "k_rate": { "type": "parameter", "units": "cm^3/s", "default": 1.8e-12, "description": "Rate constant" }
+                "O3": {
+                  "type": "state",
+                  "units": "mol/mol",
+                  "default": 4e-08,
+                  "description": "Ozone"
+                },
+                "NO": {
+                  "type": "state",
+                  "units": "mol/mol",
+                  "default": 1e-10,
+                  "description": "NO"
+                },
+                "NO2": {
+                  "type": "state",
+                  "units": "mol/mol",
+                  "default": 1e-09,
+                  "description": "NO2"
+                },
+                "k_rate": {
+                  "type": "parameter",
+                  "units": "cm^3/s",
+                  "default": 1.8e-12,
+                  "description": "Rate constant"
+                }
               },
               "equations": [
                 {
-                  "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
-                  "rhs": { "op": "*", "args": [
-                    { "op": "-", "args": ["k_rate"] },
-                    "O3", "NO"
-                  ]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "O3"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "k_rate"
+                        ]
+                      },
+                      "O3",
+                      "NO"
+                    ]
+                  }
                 },
                 {
-                  "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
-                  "rhs": { "op": "*", "args": [
-                    { "op": "-", "args": ["k_rate"] },
-                    "O3", "NO"
-                  ]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "NO"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "k_rate"
+                        ]
+                      },
+                      "O3",
+                      "NO"
+                    ]
+                  }
                 },
                 {
-                  "lhs": { "op": "D", "args": ["NO2"], "wrt": "t" },
-                  "rhs": { "op": "*", "args": ["k_rate", "O3", "NO"] }
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "NO2"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      "k_rate",
+                      "O3",
+                      "NO"
+                    ]
+                  }
                 }
               ]
             },
             "SlowChem": {
               "variables": {
-                "CH4": { "type": "state", "units": "mol/mol", "default": 1.8e-6, "description": "Methane" },
-                "OH": { "type": "state", "units": "mol/mol", "default": 1e-12, "description": "OH radical" },
-                "k_CH4_OH": { "type": "parameter", "units": "cm^3/s", "default": 6.4e-15, "description": "CH4+OH rate" }
+                "CH4": {
+                  "type": "state",
+                  "units": "mol/mol",
+                  "default": 1.8e-06,
+                  "description": "Methane"
+                },
+                "OH": {
+                  "type": "state",
+                  "units": "mol/mol",
+                  "default": 1e-12,
+                  "description": "OH radical"
+                },
+                "k_CH4_OH": {
+                  "type": "parameter",
+                  "units": "cm^3/s",
+                  "default": 6.4e-15,
+                  "description": "CH4+OH rate"
+                }
               },
               "equations": [
                 {
-                  "lhs": { "op": "D", "args": ["CH4"], "wrt": "t" },
-                  "rhs": { "op": "*", "args": [
-                    { "op": "-", "args": ["k_CH4_OH"] },
-                    "CH4", "OH"
-                  ]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "CH4"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "k_CH4_OH"
+                        ]
+                      },
+                      "CH4",
+                      "OH"
+                    ]
+                  }
                 },
                 {
-                  "lhs": { "op": "D", "args": ["OH"], "wrt": "t" },
-                  "rhs": { "op": "*", "args": [
-                    { "op": "-", "args": ["k_CH4_OH"] },
-                    "CH4", "OH"
-                  ]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "OH"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "k_CH4_OH"
+                        ]
+                      },
+                      "CH4",
+                      "OH"
+                    ]
+                  }
                 }
               ]
             }
@@ -75,21 +194,45 @@
         },
         "Physics": {
           "variables": {
-            "mixing_height": { "type": "parameter", "units": "m", "default": 1000, "description": "PBL height" }
+            "mixing_height": {
+              "type": "parameter",
+              "units": "m",
+              "default": 1000,
+              "description": "PBL height"
+            }
           },
           "equations": [],
           "subsystems": {
             "Turbulence": {
               "variables": {
-                "eddy_diffusivity": { "type": "parameter", "units": "m^2/s", "default": 100, "description": "Kz" }
+                "eddy_diffusivity": {
+                  "type": "parameter",
+                  "units": "m^2/s",
+                  "default": 100,
+                  "description": "Kz"
+                }
               },
               "equations": [
                 {
-                  "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
-                  "rhs": { "op": "*", "args": [
-                    "eddy_diffusivity",
-                    { "op": "laplacian", "args": ["_var"] }
-                  ]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "u"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      "eddy_diffusivity",
+                      {
+                        "op": "laplacian",
+                        "args": [
+                          "u"
+                        ]
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -97,40 +240,72 @@
         }
       }
     },
-
     "Ocean": {
       "variables": {
-        "sea_surface_temp": { "type": "state", "units": "K", "default": 288, "description": "SST" }
+        "sea_surface_temp": {
+          "type": "state",
+          "units": "K",
+          "default": 288,
+          "description": "SST"
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["sea_surface_temp"], "wrt": "t" },
-          "rhs": { "op": "*", "args": [0.001, { "op": "-", "args": [290, "sea_surface_temp"] }] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "sea_surface_temp"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              0.001,
+              {
+                "op": "-",
+                "args": [
+                  290,
+                  "sea_surface_temp"
+                ]
+              }
+            ]
+          }
         }
       ]
     }
   },
-
   "data_loaders": {
     "Emissions": {
       "type": "emissions",
       "loader_id": "EDGAR",
       "provides": {
-        "NO_flux": { "units": "mol/m^2/s", "description": "NO emission flux" },
-        "CH4_flux": { "units": "mol/m^2/s", "description": "CH4 emission flux" }
+        "NO_flux": {
+          "units": "mol/m^2/s",
+          "description": "NO emission flux"
+        },
+        "CH4_flux": {
+          "units": "mol/m^2/s",
+          "description": "CH4 emission flux"
+        }
       }
     }
   },
-
   "coupling": [
     {
       "type": "operator_compose",
-      "systems": ["Atmosphere.Chemistry.FastChem", "Atmosphere.Physics.Turbulence"],
+      "systems": [
+        "Atmosphere.Chemistry.FastChem",
+        "Atmosphere.Physics.Turbulence"
+      ],
       "description": "Add turbulent mixing to fast chemistry"
     },
     {
       "type": "operator_compose",
-      "systems": ["Atmosphere.Chemistry.SlowChem", "Atmosphere.Physics.Turbulence"],
+      "systems": [
+        "Atmosphere.Chemistry.SlowChem",
+        "Atmosphere.Physics.Turbulence"
+      ],
       "description": "Add turbulent mixing to slow chemistry"
     },
     {
@@ -156,8 +331,14 @@
     },
     {
       "type": "couple2",
-      "systems": ["Atmosphere.Chemistry.FastChem", "Atmosphere.Chemistry.SlowChem"],
-      "coupletype_pair": ["FastChemCoupler", "SlowChemCoupler"],
+      "systems": [
+        "Atmosphere.Chemistry.FastChem",
+        "Atmosphere.Chemistry.SlowChem"
+      ],
+      "coupletype_pair": [
+        "FastChemCoupler",
+        "SlowChemCoupler"
+      ],
       "connector": {
         "equations": [
           {
@@ -165,7 +346,11 @@
             "to": "Atmosphere.Chemistry.SlowChem.OH",
             "transform": "additive",
             "expression": {
-              "op": "*", "args": [0.01, "Atmosphere.Chemistry.FastChem.NO2"]
+              "op": "*",
+              "args": [
+                0.01,
+                "Atmosphere.Chemistry.FastChem.NO2"
+              ]
             }
           }
         ]
@@ -173,30 +358,46 @@
       "description": "Cross-chemistry coupling: NO2 affects OH production"
     }
   ],
-
-  "domain": {
-    "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-15T06:00:00Z" },
-    "spatial": {
-      "z": { "min": 0.0, "max": 10000.0, "grid_spacing": 100.0, "units": "m" }
-    },
-    "initial_conditions": { "type": "per_variable", "values": {
-      "Atmosphere.Chemistry.FastChem.O3": 40e-9,
-      "Atmosphere.Chemistry.FastChem.NO": 0.1e-9,
-      "Atmosphere.Chemistry.FastChem.NO2": 1e-9,
-      "Atmosphere.Chemistry.SlowChem.CH4": 1.8e-6,
-      "Atmosphere.Chemistry.SlowChem.OH": 1e-12,
-      "Ocean.sea_surface_temp": 288.0
-    }},
-    "boundary_conditions": [
-      { "type": "zero_gradient", "dimensions": ["z"] }
-    ]
-  },
-
   "solver": {
     "strategy": "strang_serial",
     "config": {
       "stiff_algorithm": "Rodas5",
       "timestep": 30.0
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {
+        "start": "2024-07-15T00:00:00Z",
+        "end": "2024-07-15T06:00:00Z"
+      },
+      "spatial": {
+        "z": {
+          "min": 0.0,
+          "max": 10000.0,
+          "grid_spacing": 100.0,
+          "units": "m"
+        }
+      },
+      "initial_conditions": {
+        "type": "per_variable",
+        "values": {
+          "Atmosphere.Chemistry.FastChem.O3": 4e-08,
+          "Atmosphere.Chemistry.FastChem.NO": 1e-10,
+          "Atmosphere.Chemistry.FastChem.NO2": 1e-09,
+          "Atmosphere.Chemistry.SlowChem.CH4": 1.8e-06,
+          "Atmosphere.Chemistry.SlowChem.OH": 1e-12,
+          "Ocean.sea_surface_temp": 288.0
+        }
+      },
+      "boundary_conditions": [
+        {
+          "type": "zero_gradient",
+          "dimensions": [
+            "z"
+          ]
+        }
+      ]
     }
   }
 }

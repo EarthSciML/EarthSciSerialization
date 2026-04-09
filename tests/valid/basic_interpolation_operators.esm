@@ -3,11 +3,17 @@
   "metadata": {
     "name": "BasicInterpolationOperators",
     "description": "Basic interpolation operators: linear, cubic, and spline for data fusion and regridding",
-    "authors": ["ESM Format Team"],
+    "authors": [
+      "ESM Format Team"
+    ],
     "created": "2026-02-19T00:00:00Z",
-    "tags": ["interpolation", "linear", "cubic", "spline"]
+    "tags": [
+      "interpolation",
+      "linear",
+      "cubic",
+      "spline"
+    ]
   },
-
   "operators": {
     "LinearInterpolationOperator": {
       "operator_id": "linear_interp_1d",
@@ -20,11 +26,16 @@
         "extrapolation_mode": "constant",
         "bounds_error": false
       },
-      "needed_vars": ["x_coords", "y_values", "x_new"],
-      "modifies": ["y_interp"],
+      "needed_vars": [
+        "x_coords",
+        "y_values",
+        "x_new"
+      ],
+      "modifies": [
+        "y_interp"
+      ],
       "description": "Linear interpolation for 1D data with constant extrapolation"
     },
-
     "CubicInterpolationOperator": {
       "operator_id": "cubic_interp_1d",
       "reference": {
@@ -36,11 +47,16 @@
         "boundary_condition": "natural",
         "extrapolation_mode": "linear"
       },
-      "needed_vars": ["x_coords", "y_values", "x_new"],
-      "modifies": ["y_interp"],
+      "needed_vars": [
+        "x_coords",
+        "y_values",
+        "x_new"
+      ],
+      "modifies": [
+        "y_interp"
+      ],
       "description": "Cubic polynomial interpolation with natural boundary conditions"
     },
-
     "SplineInterpolationOperator": {
       "operator_id": "spline_interp_1d",
       "reference": {
@@ -54,12 +70,18 @@
         "boundary_condition": "natural",
         "knot_selection": "uniform"
       },
-      "needed_vars": ["x_coords", "y_values", "x_new"],
-      "modifies": ["y_interp", "y_deriv"],
+      "needed_vars": [
+        "x_coords",
+        "y_values",
+        "x_new"
+      ],
+      "modifies": [
+        "y_interp",
+        "y_deriv"
+      ],
       "description": "B-spline interpolation with configurable order and smoothing"
     }
   },
-
   "models": {
     "SimpleDataModel": {
       "variables": {
@@ -78,13 +100,23 @@
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["data_value"], "wrt": "t" },
-          "rhs": { "op": "sin", "args": ["coordinate"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "data_value"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "sin",
+            "args": [
+              "coordinate"
+            ]
+          }
         }
       ]
     }
   },
-
   "coupling": [
     {
       "type": "operator_apply",
@@ -92,21 +124,25 @@
       "description": "Apply linear interpolation for basic data regridding"
     }
   ],
-
-  "domain": {
-    "temporal": {
-      "start": "2024-01-01T00:00:00Z",
-      "end": "2024-01-01T01:00:00Z"
-    },
-    "spatial": {
-      "x": { "min": 0.0, "max": 10.0, "units": "m" }
-    }
-  },
-
   "solver": {
     "strategy": "strang_serial",
     "config": {
       "timestep": 10.0
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-01-01T01:00:00Z"
+      },
+      "spatial": {
+        "x": {
+          "min": 0.0,
+          "max": 10.0,
+          "units": "m"
+        }
+      }
     }
   }
 }

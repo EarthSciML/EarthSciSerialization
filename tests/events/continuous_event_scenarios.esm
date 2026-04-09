@@ -3,273 +3,671 @@
   "metadata": {
     "name": "ContinuousEventScenarios",
     "description": "Comprehensive continuous event detection and handling test cases",
-    "authors": ["Test Suite"],
+    "authors": [
+      "Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z"
   },
-
   "models": {
     "RootFindingSystem": {
-      "description": "Test root-finding event detection with various zero-crossing scenarios",
       "variables": {
-        "x": { "type": "state", "units": "m", "default": 1.0, "description": "Oscillating variable" },
-        "y": { "type": "state", "units": "m", "default": 0.5, "description": "Growing variable" },
-        "z": { "type": "state", "units": "m", "default": -0.2, "description": "Decaying variable" },
-        "event_log": { "type": "parameter", "units": "1", "default": 0, "description": "Event occurrence log" },
-        "zero_cross_count": { "type": "parameter", "units": "1", "default": 0, "description": "Zero crossing counter" }
+        "x": {
+          "type": "state",
+          "units": "m",
+          "default": 1.0,
+          "description": "Oscillating variable"
+        },
+        "y": {
+          "type": "state",
+          "units": "m",
+          "default": 0.5,
+          "description": "Growing variable"
+        },
+        "z": {
+          "type": "state",
+          "units": "m",
+          "default": -0.2,
+          "description": "Decaying variable"
+        },
+        "event_log": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Event occurrence log"
+        },
+        "zero_cross_count": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Zero crossing counter"
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
-          "rhs": { "op": "*", "args": [{ "op": "sin", "args": ["t"] }, 2.0] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              {
+                "op": "sin",
+                "args": [
+                  "t"
+                ]
+              },
+              2.0
+            ]
+          }
         },
         {
-          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
-          "rhs": { "op": "*", "args": ["y", 0.1] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "y"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "y",
+              0.1
+            ]
+          }
         },
         {
-          "lhs": { "op": "D", "args": ["z"], "wrt": "t" },
-          "rhs": { "op": "*", "args": ["z", -0.5] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "z"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "z",
+              -0.5
+            ]
+          }
         }
       ],
-
       "continuous_events": [
         {
           "name": "simple_zero_crossing",
           "conditions": [
-            { "op": "-", "args": ["x", 0] }
+            {
+              "op": "-",
+              "args": [
+                "x",
+                0
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "zero_cross_count",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["zero_cross_count"] }, 1] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "zero_cross_count"
+                    ]
+                  },
+                  1
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["zero_cross_count"],
           "root_find": "all",
           "description": "Count all zero crossings of oscillating variable"
         },
         {
           "name": "positive_direction_only",
           "conditions": [
-            { "op": "-", "args": ["x", 0.5] }
+            {
+              "op": "-",
+              "args": [
+                "x",
+                0.5
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "event_log",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["event_log"] }, 100] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "event_log"
+                    ]
+                  },
+                  100
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["event_log"],
           "root_find": "right",
           "description": "Only trigger on upward crossing of x = 0.5"
         },
         {
           "name": "negative_direction_only",
           "conditions": [
-            { "op": "-", "args": ["x", -0.5] }
+            {
+              "op": "-",
+              "args": [
+                "x",
+                -0.5
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "event_log",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["event_log"] }, 200] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "event_log"
+                    ]
+                  },
+                  200
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["event_log"],
           "root_find": "left",
           "description": "Only trigger on downward crossing of x = -0.5"
         },
         {
           "name": "compound_condition_and",
           "conditions": [
-            { "op": "and", "args": [
-              { "op": "-", "args": ["x", 0.8] },
-              { "op": "-", "args": ["y", 1.0] }
-            ]}
+            {
+              "op": "and",
+              "args": [
+                {
+                  "op": "-",
+                  "args": [
+                    "x",
+                    0.8
+                  ]
+                },
+                {
+                  "op": "-",
+                  "args": [
+                    "y",
+                    1.0
+                  ]
+                }
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "event_log",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["event_log"] }, 1000] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "event_log"
+                    ]
+                  },
+                  1000
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["event_log"],
           "description": "Event triggered when both x > 0.8 AND y > 1.0"
         },
         {
           "name": "compound_condition_or",
           "conditions": [
-            { "op": "or", "args": [
-              { "op": "-", "args": ["z", -0.05] },
-              { "op": "-", "args": ["y", 2.0] }
-            ]}
+            {
+              "op": "or",
+              "args": [
+                {
+                  "op": "-",
+                  "args": [
+                    "z",
+                    -0.05
+                  ]
+                },
+                {
+                  "op": "-",
+                  "args": [
+                    "y",
+                    2.0
+                  ]
+                }
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "event_log",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["event_log"] }, 10000] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "event_log"
+                    ]
+                  },
+                  10000
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["event_log"],
           "description": "Event triggered when z > -0.05 OR y > 2.0"
         }
       ]
     },
-
     "MultipleEventsSystem": {
-      "description": "Test handling of multiple simultaneous events with priority resolution",
       "variables": {
-        "state_var": { "type": "state", "units": "1", "default": 0.0, "description": "Main state variable" },
-        "priority_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Priority event counter" },
-        "normal_counter": { "type": "parameter", "units": "1", "default": 0, "description": "Normal event counter" }
+        "state_var": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "Main state variable"
+        },
+        "priority_counter": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Priority event counter"
+        },
+        "normal_counter": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Normal event counter"
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["state_var"], "wrt": "t" },
-          "rhs": { "op": "*", "args": ["t", 0.5] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "state_var"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "t",
+              0.5
+            ]
+          }
         }
       ],
-
       "continuous_events": [
         {
           "name": "high_priority_event",
-          "priority": 1,
           "conditions": [
-            { "op": "-", "args": ["state_var", 1.0] }
+            {
+              "op": "-",
+              "args": [
+                "state_var",
+                1.0
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "priority_counter",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["priority_counter"] }, 1] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "priority_counter"
+                    ]
+                  },
+                  1
+                ]
+              }
             },
             {
               "lhs": "state_var",
-              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["state_var"] }, 0.8] }
+              "rhs": {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "state_var"
+                    ]
+                  },
+                  0.8
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["priority_counter"],
           "reinitialize": true,
           "description": "High priority event with state modification"
         },
         {
           "name": "normal_priority_event",
-          "priority": 5,
           "conditions": [
-            { "op": "-", "args": ["state_var", 1.0] }
+            {
+              "op": "-",
+              "args": [
+                "state_var",
+                1.0
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "normal_counter",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["normal_counter"] }, 1] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "normal_counter"
+                    ]
+                  },
+                  1
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["normal_counter"],
           "description": "Lower priority event (should not fire if high priority fires)"
         },
         {
           "name": "simultaneous_event_1",
           "conditions": [
-            { "op": "-", "args": ["state_var", 2.5] }
+            {
+              "op": "-",
+              "args": [
+                "state_var",
+                2.5
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "priority_counter",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["priority_counter"] }, 10] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "priority_counter"
+                    ]
+                  },
+                  10
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["priority_counter"],
           "description": "First simultaneous event at t=2.5"
         },
         {
           "name": "simultaneous_event_2",
           "conditions": [
-            { "op": "-", "args": ["state_var", 2.5] }
+            {
+              "op": "-",
+              "args": [
+                "state_var",
+                2.5
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "normal_counter",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["normal_counter"] }, 10] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "normal_counter"
+                    ]
+                  },
+                  10
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["normal_counter"],
           "description": "Second simultaneous event at t=2.5"
         }
       ]
     },
-
     "AffectNegSystem": {
-      "description": "Test affect_neg behavior for different crossing directions",
       "variables": {
-        "oscillator": { "type": "state", "units": "1", "default": 1.0, "description": "Oscillating state" },
-        "positive_hits": { "type": "parameter", "units": "1", "default": 0, "description": "Positive crossing count" },
-        "negative_hits": { "type": "parameter", "units": "1", "default": 0, "description": "Negative crossing count" },
-        "coefficient": { "type": "parameter", "units": "1", "default": 1.0, "description": "Damping coefficient" }
+        "oscillator": {
+          "type": "state",
+          "units": "1",
+          "default": 1.0,
+          "description": "Oscillating state"
+        },
+        "positive_hits": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Positive crossing count"
+        },
+        "negative_hits": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Negative crossing count"
+        },
+        "coefficient": {
+          "type": "parameter",
+          "units": "1",
+          "default": 1.0,
+          "description": "Damping coefficient"
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["oscillator"], "wrt": "t" },
-          "rhs": { "op": "*", "args": [
-            { "op": "sin", "args": [{ "op": "*", "args": [3.0, "t"] }] },
-            { "op": "exp", "args": [{ "op": "*", "args": [-0.1, "t"] }] }
-          ]}
+          "lhs": {
+            "op": "D",
+            "args": [
+              "oscillator"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              {
+                "op": "sin",
+                "args": [
+                  {
+                    "op": "*",
+                    "args": [
+                      3.0,
+                      "t"
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "exp",
+                "args": [
+                  {
+                    "op": "*",
+                    "args": [
+                      -0.1,
+                      "t"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         }
       ],
-
       "continuous_events": [
         {
           "name": "threshold_crossing",
           "conditions": [
-            { "op": "-", "args": ["oscillator", 0.5] }
+            {
+              "op": "-",
+              "args": [
+                "oscillator",
+                0.5
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "positive_hits",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["positive_hits"] }, 1] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "positive_hits"
+                    ]
+                  },
+                  1
+                ]
+              }
             },
             {
               "lhs": "coefficient",
-              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["coefficient"] }, 0.95] }
+              "rhs": {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "coefficient"
+                    ]
+                  },
+                  0.95
+                ]
+              }
             }
           ],
           "affect_neg": [
             {
               "lhs": "negative_hits",
-              "rhs": { "op": "+", "args": [{ "op": "Pre", "args": ["negative_hits"] }, 1] }
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "negative_hits"
+                    ]
+                  },
+                  1
+                ]
+              }
             },
             {
               "lhs": "coefficient",
-              "rhs": { "op": "*", "args": [{ "op": "Pre", "args": ["coefficient"] }, 1.05] }
+              "rhs": {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "Pre",
+                    "args": [
+                      "coefficient"
+                    ]
+                  },
+                  1.05
+                ]
+              }
             }
           ],
-          "discrete_parameters": ["positive_hits", "negative_hits", "coefficient"],
           "description": "Different actions for positive vs negative crossings"
         }
       ]
     },
-
     "NestedEventChain": {
-      "description": "Test cascading event chains and nested event detection",
       "variables": {
-        "primary": { "type": "state", "units": "1", "default": 0.0, "description": "Primary trigger variable" },
-        "secondary": { "type": "state", "units": "1", "default": 0.0, "description": "Secondary cascade variable" },
-        "tertiary": { "type": "parameter", "units": "1", "default": 0.0, "description": "Final cascade variable" },
-        "chain_depth": { "type": "parameter", "units": "1", "default": 0, "description": "Chain depth counter" }
+        "primary": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "Primary trigger variable"
+        },
+        "secondary": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "Secondary cascade variable"
+        },
+        "tertiary": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0.0,
+          "description": "Final cascade variable"
+        },
+        "chain_depth": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0,
+          "description": "Chain depth counter"
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["primary"], "wrt": "t" },
+          "lhs": {
+            "op": "D",
+            "args": [
+              "primary"
+            ],
+            "wrt": "t"
+          },
           "rhs": 1.0
         },
         {
-          "lhs": { "op": "D", "args": ["secondary"], "wrt": "t" },
-          "rhs": { "op": "*", "args": ["tertiary", 0.5] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "secondary"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "tertiary",
+              0.5
+            ]
+          }
         }
       ],
-
       "continuous_events": [
         {
           "name": "cascade_level_1",
           "conditions": [
-            { "op": "-", "args": ["primary", 1.0] }
+            {
+              "op": "-",
+              "args": [
+                "primary",
+                1.0
+              ]
+            }
           ],
           "affects": [
             {
@@ -281,14 +679,19 @@
               "rhs": 5.0
             }
           ],
-          "discrete_parameters": ["chain_depth"],
           "reinitialize": true,
           "description": "First level of event cascade"
         },
         {
           "name": "cascade_level_2",
           "conditions": [
-            { "op": "-", "args": ["secondary", 3.0] }
+            {
+              "op": "-",
+              "args": [
+                "secondary",
+                3.0
+              ]
+            }
           ],
           "affects": [
             {
@@ -300,14 +703,19 @@
               "rhs": 10.0
             }
           ],
-          "discrete_parameters": ["chain_depth", "tertiary"],
           "reinitialize": true,
           "description": "Second level triggered by first level"
         },
         {
           "name": "cascade_level_3",
           "conditions": [
-            { "op": "-", "args": ["tertiary", 8.0] }
+            {
+              "op": "-",
+              "args": [
+                "tertiary",
+                8.0
+              ]
+            }
           ],
           "affects": [
             {
@@ -319,21 +727,29 @@
               "rhs": 0.0
             }
           ],
-          "discrete_parameters": ["chain_depth"],
           "reinitialize": true,
           "description": "Third level creates feedback loop"
         }
       ]
     }
   },
-
-  "domain": {
-    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:10:00Z" },
-    "initial_conditions": { "type": "constant", "value": 0.0 }
-  },
-
   "solver": {
     "strategy": "strang_threads",
-    "config": { "stiff_algorithm": "Rosenbrock23", "timestep": 0.01 }
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 0.01
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-01-01T00:10:00Z"
+      },
+      "initial_conditions": {
+        "type": "constant",
+        "value": 0.0
+      }
+    }
   }
 }

@@ -3,11 +3,16 @@
   "metadata": {
     "name": "OperatorsComprehensive",
     "description": "Comprehensive test fixtures for operator types, validation, and configuration",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z",
-    "tags": ["operators", "validation", "comprehensive"]
+    "tags": [
+      "operators",
+      "validation",
+      "comprehensive"
+    ]
   },
-
   "operators": {
     "DryDepGrid": {
       "operator_id": "WesleyDryDep",
@@ -22,15 +27,29 @@
         "land_use_categories": 11,
         "surface_roughness": 0.1,
         "deposition_velocity_min": 0.001,
-        "deposition_velocity_max": 10.0
+        "deposition_velocity_max": 10.0,
+        "temporal_resolution": "PT1H",
+        "spatial_resolution": {
+          "lon": 0.25,
+          "lat": 0.25
+        }
       },
-      "needed_vars": ["O3", "NO2", "SO2", "T", "u_star", "LAI", "surface_pressure"],
-      "modifies": ["O3", "NO2", "SO2"],
-      "description": "First-order dry deposition loss based on surface resistance parameterization",
-      "temporal_resolution": "PT1H",
-      "spatial_resolution": { "lon": 0.25, "lat": 0.25 }
+      "needed_vars": [
+        "O3",
+        "NO2",
+        "SO2",
+        "T",
+        "u_star",
+        "LAI",
+        "surface_pressure"
+      ],
+      "modifies": [
+        "O3",
+        "NO2",
+        "SO2"
+      ],
+      "description": "First-order dry deposition loss based on surface resistance parameterization"
     },
-
     "WetScavenging": {
       "operator_id": "BelowCloudScav",
       "reference": {
@@ -41,14 +60,24 @@
       "config": {
         "scavenging_efficiency": 0.8,
         "rain_threshold": 0.1,
-        "temperature_dependence": true
+        "temperature_dependence": true,
+        "temporal_resolution": "PT30M"
       },
-      "needed_vars": ["precip_rate", "cloud_fraction", "T", "P"],
-      "modifies": ["H2O2", "CH2O", "HNO3", "SO2", "NH3"],
-      "description": "Below-cloud washout of soluble species",
-      "temporal_resolution": "PT30M"
+      "needed_vars": [
+        "precip_rate",
+        "cloud_fraction",
+        "T",
+        "P"
+      ],
+      "modifies": [
+        "H2O2",
+        "CH2O",
+        "HNO3",
+        "SO2",
+        "NH3"
+      ],
+      "description": "Below-cloud washout of soluble species"
     },
-
     "AdvectionOperator": {
       "operator_id": "MPDATA_3rdOrder",
       "reference": {
@@ -60,15 +89,30 @@
         "order": 3,
         "flux_corrected_transport": true,
         "boundary_conditions": "periodic",
-        "courant_limit": 0.8
+        "courant_limit": 0.8,
+        "temporal_resolution": "PT5M",
+        "spatial_resolution": {
+          "lon": 0.1,
+          "lat": 0.1,
+          "lev": 500.0
+        }
       },
-      "needed_vars": ["u", "v", "w", "air_density"],
-      "modifies": ["O3", "NO", "NO2", "CO", "CH4", "SO2"],
-      "description": "3D advection transport using MPDATA scheme",
-      "temporal_resolution": "PT5M",
-      "spatial_resolution": { "lon": 0.1, "lat": 0.1, "lev": 500.0 }
+      "needed_vars": [
+        "u",
+        "v",
+        "w",
+        "air_density"
+      ],
+      "modifies": [
+        "O3",
+        "NO",
+        "NO2",
+        "CO",
+        "CH4",
+        "SO2"
+      ],
+      "description": "3D advection transport using MPDATA scheme"
     },
-
     "DiffusionOperator": {
       "operator_id": "TurbulentMixing",
       "reference": {
@@ -80,14 +124,28 @@
         "vertical_diffusivity_min": 1.0,
         "vertical_diffusivity_max": 1000.0,
         "richardson_number_critical": 0.25,
-        "stability_correction": true
+        "stability_correction": true,
+        "temporal_resolution": "PT1M"
       },
-      "needed_vars": ["u", "v", "T", "P", "surface_roughness", "mixing_height"],
-      "modifies": ["O3", "NO", "NO2", "CO", "u", "v", "T"],
-      "description": "Turbulent mixing in horizontal and vertical directions",
-      "temporal_resolution": "PT1M"
+      "needed_vars": [
+        "u",
+        "v",
+        "T",
+        "P",
+        "surface_roughness",
+        "mixing_height"
+      ],
+      "modifies": [
+        "O3",
+        "NO",
+        "NO2",
+        "CO",
+        "u",
+        "v",
+        "T"
+      ],
+      "description": "Turbulent mixing in horizontal and vertical directions"
     },
-
     "PhotolysisRates": {
       "operator_id": "TUV_Photolysis",
       "reference": {
@@ -100,14 +158,24 @@
         "altitude_layers": 80,
         "ozone_column": 300.0,
         "aerosol_optical_depth": 0.2,
-        "surface_albedo": 0.1
+        "surface_albedo": 0.1,
+        "temporal_resolution": "PT15M"
       },
-      "needed_vars": ["solar_zenith_angle", "O3_column", "cloud_optical_depth", "T", "P"],
-      "modifies": ["j_NO2", "j_O3", "j_HCHO", "j_H2O2"],
-      "description": "Photolysis rate calculations using TUV radiative transfer model",
-      "temporal_resolution": "PT15M"
+      "needed_vars": [
+        "solar_zenith_angle",
+        "O3_column",
+        "cloud_optical_depth",
+        "T",
+        "P"
+      ],
+      "modifies": [
+        "j_NO2",
+        "j_O3",
+        "j_HCHO",
+        "j_H2O2"
+      ],
+      "description": "Photolysis rate calculations using TUV radiative transfer model"
     },
-
     "EmissionProcessor": {
       "operator_id": "EmissionInjection",
       "reference": {
@@ -118,34 +186,44 @@
         "injection_height": "mixed_layer",
         "temporal_profile": "diurnal",
         "weekday_weekend_scaling": true,
-        "holiday_scaling": true
+        "holiday_scaling": true,
+        "temporal_resolution": "PT1H"
       },
-      "needed_vars": ["mixing_height", "surface_pressure", "hour_of_day", "day_of_week"],
-      "modifies": ["NO", "CO", "SO2", "NH3", "VOC_emissions"],
-      "description": "Emission injection with temporal and vertical allocation",
-      "temporal_resolution": "PT1H"
+      "needed_vars": [
+        "mixing_height",
+        "surface_pressure",
+        "hour_of_day",
+        "day_of_week"
+      ],
+      "modifies": [
+        "NO",
+        "CO",
+        "SO2",
+        "NH3",
+        "VOC_emissions"
+      ],
+      "description": "Emission injection with temporal and vertical allocation"
     }
   },
-
   "models": {
     "AtmosphericChemistry": {
       "variables": {
         "O3": {
           "type": "state",
           "units": "mol/mol",
-          "default": 50e-9,
+          "default": 5e-08,
           "description": "Ozone concentration"
         },
         "NO": {
           "type": "state",
           "units": "mol/mol",
-          "default": 10e-9,
+          "default": 1e-08,
           "description": "NO concentration"
         },
         "NO2": {
           "type": "state",
           "units": "mol/mol",
-          "default": 20e-9,
+          "default": 2e-08,
           "description": "NO2 concentration"
         },
         "T": {
@@ -169,17 +247,40 @@
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
-          "rhs": { "op": "*", "args": [-1e-5, "O3"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "O3"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              -1e-05,
+              "O3"
+            ]
+          }
         },
         {
-          "lhs": { "op": "D", "args": ["NO"], "wrt": "t" },
-          "rhs": { "op": "*", "args": [1e-6, "NO2"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "NO"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              1e-06,
+              "NO2"
+            ]
+          }
         }
       ]
     }
   },
-
   "coupling": [
     {
       "type": "operator_apply",
@@ -198,29 +299,41 @@
     },
     {
       "type": "operator_compose",
-      "systems": ["AtmosphericChemistry", "DiffusionOperator"],
+      "systems": [
+        "AtmosphericChemistry",
+        "DiffusionOperator"
+      ],
       "description": "Compose chemistry with turbulent mixing"
     }
   ],
-
-  "domain": {
-    "temporal": {
-      "start": "2024-07-01T00:00:00Z",
-      "end": "2024-07-01T06:00:00Z"
-    },
-    "spatial": {
-      "lon": [-125.0, -66.0],
-      "lat": [20.0, 50.0],
-      "lev": [0, 20000]
-    }
-  },
-
   "solver": {
     "strategy": "strang_threads",
     "config": {
       "timestep": 60.0,
-      "rtol": 1e-6,
-      "atol": 1e-8
+      "rtol": 1e-06,
+      "atol": 1e-08
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {
+        "start": "2024-07-01T00:00:00Z",
+        "end": "2024-07-01T06:00:00Z"
+      },
+      "spatial": {
+        "lon": {
+          "min": -125.0,
+          "max": -66.0
+        },
+        "lat": {
+          "min": 20.0,
+          "max": 50.0
+        },
+        "lev": {
+          "min": 0,
+          "max": 20000
+        }
+      }
     }
   }
 }
