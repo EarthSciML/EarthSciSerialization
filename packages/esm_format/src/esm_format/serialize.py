@@ -533,9 +533,11 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for rs_name, rs in esm_file.reaction_systems.items()
         }
 
-    # Serialize domain
-    if esm_file.domain:
-        result["domain"] = _serialize_domain(esm_file.domain)
+    # Serialize domains
+    if esm_file.domains:
+        result["domains"] = {
+            name: _serialize_domain(d) for name, d in esm_file.domains.items()
+        }
 
     # Serialize data loaders
     if esm_file.data_loaders:

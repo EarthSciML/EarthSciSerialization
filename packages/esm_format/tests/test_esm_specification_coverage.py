@@ -104,7 +104,7 @@ class TestSection02TopLevelStructure:
             "data_loaders": {"test_loader": {"type": "gridded_data", "loader_id": "test", "provides": {}}},
             "operators": {"test_op": {"operator_id": "test", "needed_vars": []}},
             "coupling": [],
-            "domain": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}},
+            "domains": {"default": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}}},
             "solver": {"strategy": "strang_threads"}
         }
         jsonschema.validate(complete_data, schema)  # Should not raise
@@ -1283,12 +1283,12 @@ class TestSection11Domain:
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
-            "domain": {
+            "domains": {"default": {
                 "temporal": {
                     "start": "2024-05-01T00:00:00Z",
                     "end": "2024-05-03T00:00:00Z"
                 }
-            }
+            }}
         }
         jsonschema.validate(valid_data, schema)
 
@@ -1300,7 +1300,7 @@ class TestSection11Domain:
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
-            "domain": {
+            "domains": {"default": {
                 "independent_variable": "t",
                 "temporal": {
                     "start": "2024-05-01T00:00:00Z",
@@ -1325,7 +1325,7 @@ class TestSection11Domain:
                 ],
                 "element_type": "Float32",
                 "array_type": "Array"
-            }
+            }}
         }
         jsonschema.validate(valid_data, schema)
 
@@ -1344,10 +1344,10 @@ class TestSection11Domain:
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
-                "domain": {
+                "domains": {"default": {
                     "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
                     "initial_conditions": ic
-                }
+                }}
             }
             jsonschema.validate(valid_data, schema)
 
@@ -1366,10 +1366,10 @@ class TestSection11Domain:
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
-                "domain": {
+                "domains": {"default": {
                     "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
                     "boundary_conditions": [bc]
-                }
+                }}
             }
             jsonschema.validate(valid_data, schema)
 
@@ -1383,9 +1383,9 @@ class TestSection11Domain:
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
-                "domain": {
+                "domains": {"default": {
                     "spatial": {"x": {"max": 10.0}}
-                }
+                }}
             }, schema)
 
 
@@ -1531,7 +1531,7 @@ class TestSection13CompleteExamples:
                 {"type": "variable_map", "from": "GEOSFP.u", "to": "Advection.u_wind", "transform": "param_to_var"},
                 {"type": "variable_map", "from": "GEOSFP.v", "to": "Advection.v_wind", "transform": "param_to_var"}
             ],
-            "domain": {
+            "domains": {"default": {
                 "temporal": {"start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z"},
                 "spatial": {
                     "lon": {"min": -130.0, "max": -100.0, "grid_spacing": 0.3125, "units": "degrees"}
@@ -1542,7 +1542,7 @@ class TestSection13CompleteExamples:
                 "initial_conditions": {"type": "constant", "value": 1.0e-9},
                 "boundary_conditions": [{"type": "zero_gradient", "dimensions": ["lon"]}],
                 "element_type": "Float32"
-            },
+            }},
             "solver": {
                 "strategy": "strang_threads",
                 "config": {"stiff_algorithm": "Rosenbrock23", "timestep": 1.0}
@@ -1615,11 +1615,11 @@ class TestSection13CompleteExamples:
                 {"type": "operator_compose", "systems": ["FullChemistry", "VerticalMixing"]},
                 {"type": "operator_apply", "operator": "Deposition"}
             ],
-            "domain": {
+            "domains": {"default": {
                 "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
                 "spatial": {"z": {"min": 0, "max": 1000, "units": "m"}},
                 "initial_conditions": {"type": "constant", "value": 1e-9}
-            },
+            }},
             "solver": {"strategy": "strang_threads"}
         }
 
@@ -1957,11 +1957,11 @@ class TestCrossSectionValidation:
                 {"type": "variable_map", "from": "MetData.wind_field", "to": "Transport.wind", "transform": "param_to_var"},
                 {"type": "operator_apply", "operator": "Emissions"}
             ],
-            "domain": {
+            "domains": {"default": {
                 "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-01T01:00:00Z"},
                 "spatial": {"x": {"min": 0, "max": 100, "units": "m"}},
                 "initial_conditions": {"type": "constant", "value": 1e-9}
-            },
+            }},
             "solver": {"strategy": "strang_threads", "config": {"timestep": 60}}
         }
 
