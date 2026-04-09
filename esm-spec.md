@@ -31,7 +31,8 @@ The two exceptions to full specification are **data loaders** and **registered o
   "data_loaders": { ... },
   "operators": { ... },
   "coupling": [ ... ],
-  "domain": { ... },
+  "domains": { ... },
+  "interfaces": { ... },
   "solver": { ... }
 }
 ```
@@ -45,7 +46,8 @@ The two exceptions to full specification are **data loaders** and **registered o
 | `data_loaders` | | External data source registrations (by reference) |
 | `operators` | | Registered runtime operators (by reference) |
 | `coupling` | | Composition and coupling rules |
-| `domain` | | Spatial/temporal domain specification |
+| `domains` | | Named spatial/temporal domain specifications (see Section 11) |
+| `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
 | `solver` | | Solver strategy and configuration |
 
 At least one of `models` or `reaction_systems` must be present.
@@ -558,6 +560,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 
 | Field | Required | Description |
 |---|---|---|
+| `domain` | | Name of a domain from the `domains` section that this model is defined on. Omit or set to `null` for 0D (non-spatial) models — ODE or algebraic systems with no spatial dimensions. |
 | `coupletype` | | Coupling type name (maps to EarthSciML `:coupletype` metadata). Used by `couple2` dispatch. |
 | `reference` | | Academic citation: `doi`, `citation`, `url`, `notes` |
 | `variables` | ✓ | All variables, keyed by name |
@@ -857,6 +860,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 
 | Field | Required | Description |
 |---|---|---|
+| `domain` | | Name of a domain from the `domains` section that this reaction system is defined on. Omit or set to `null` for 0D (non-spatial) systems. |
 | `coupletype` | | Coupling type name for `couple2` dispatch |
 | `reference` | | Academic citation |
 | `species` | ✓ | Named reactive species with units, defaults, descriptions |
@@ -1146,78 +1150,236 @@ For `variable_map` coupling entries, `transform` specifies how the source variab
 | `multiplicative` | Multiply the target by the source variable |
 | `conversion_factor` | Apply a unit conversion factor (specified in the `factor` field) |
 
----
+### 10.5 Cross-Domain Coupling
 
-## 11. Domain
+When two coupled systems live on different domains, the coupling entry must specify how to handle the dimension mismatch. There are two mechanisms: **interface-mediated** coupling (for spatial domains that share a geometric boundary) and **lifting** (for coupling between 0D and spatial systems).
 
-The domain section corresponds to `EarthSciMLBase.DomainInfo`. It specifies the spatiotemporal extent, discretization, coordinate system, and boundary/initial conditions.
+#### The `interface` Field
+
+For coupling between spatial domains of different dimensionality, reference a named interface from the `interfaces` section (see Section 12). The interface defines the geometric relationship — which dimensions are shared, how non-shared dimensions are constrained, and what regridding strategy to use.
 
 ```json
 {
-  "domain": {
-    "independent_variable": "t",
+  "type": "variable_map",
+  "from": "AtmosphericDynamics.wind_u",
+  "to": "WildfirePropagation.wind_u",
+  "transform": "param_to_var",
+  "interface": "ground_surface",
+  "description": "Ground-level eastward wind drives wildfire spread"
+}
+```
 
-    "temporal": {
-      "start": "2024-05-01T00:00:00Z",
-      "end": "2024-05-03T00:00:00Z",
-      "reference_time": "2024-05-01T00:00:00Z"
+The interface handles both dimension reduction (e.g., extracting a 2D slice from a 3D field) and regridding (when shared dimensions have different resolutions across domains). The coupling entry only needs to name the interface — the dimensional details are defined once in the interface specification.
+
+For `operator_compose` and `couple2`, the `interface` field works similarly:
+
+```json
+{
+  "type": "operator_compose",
+  "systems": ["AtmosphericDynamics", "WildfireHeatSource"],
+  "interface": "ground_surface",
+  "description": "Inject wildfire heat release into lowest atmospheric layer"
+}
+```
+
+#### The `lifting` Field
+
+For coupling between a 0D (non-spatial) system and a spatially-resolved system, the `lifting` field specifies how the 0D system's inputs and outputs map to the spatial grid. The lifting is relative to the **target system's domain** — i.e., the spatial grid on which the operation is evaluated.
+
+```json
+{
+  "type": "variable_map",
+  "from": "FireSpreadCalculator.spread_rate",
+  "to": "WildfirePropagation.spread_rate",
+  "transform": "param_to_var",
+  "lifting": "pointwise",
+  "description": "Wind-computed spread rate feeds wildfire PDE at each grid point"
+}
+```
+
+| Lifting | Description |
+|---|---|
+| `pointwise` | **(Default.)** The 0D system is evaluated independently at each grid point. Inputs are pointwise values extracted from spatial fields; outputs are pointwise values applied to the spatial grid. This is how column physics parameterizations work in climate models. |
+| `broadcast` | A single scalar output from the 0D system is applied uniformly to all grid points. Use when the 0D system computes a domain-wide quantity (e.g., a global scaling factor). |
+| `mean` | Inputs to the 0D system are the spatial mean of the source fields. Output is scalar (combine with `broadcast` on the output side if needed). |
+| `integral` | Inputs to the 0D system are the spatial integral of the source fields. Output is scalar. |
+
+When `lifting` is omitted and the source or target system has `"domain": null`, pointwise lifting is assumed.
+
+#### Combining `interface` and `lifting`
+
+A coupling chain may require both an interface (for dimension reduction between spatial domains) and lifting (for 0D intermediaries). This is expressed as separate coupling entries. For example, extracting ground-level winds from a 3D atmosphere, passing them through a 0D algebraic fire-spread calculator, and feeding the result into a 2D wildfire model:
+
+```json
+[
+  {
+    "type": "variable_map",
+    "from": "AtmosphericDynamics.wind_u",
+    "to": "FireSpreadCalculator.wind_u",
+    "transform": "param_to_var",
+    "interface": "ground_surface",
+    "lifting": "pointwise",
+    "description": "Ground-level u-wind to fire spread calculator"
+  },
+  {
+    "type": "variable_map",
+    "from": "FireSpreadCalculator.spread_rate",
+    "to": "WildfirePropagation.R_spread",
+    "transform": "param_to_var",
+    "lifting": "pointwise",
+    "description": "Calculated spread rate drives wildfire propagation"
+  }
+]
+```
+
+In the first entry, `interface` reduces 3D→2D (extracting at the ground surface) and `lifting: "pointwise"` maps the resulting 2D field into the 0D system at each grid point. In the second entry, `lifting: "pointwise"` maps the 0D output to the 2D wildfire grid.
+
+### 10.6 Cross-Domain Coupling Rules
+
+1. **Same-domain coupling** requires no `interface` or `lifting` field and works as described in Sections 10.1–10.4.
+
+2. **Cross-domain spatial coupling** (between domains that share a geometric boundary) **must** reference a named `interface`. The interface defines dimension mapping and regridding. It is an error to couple systems on different spatial domains without an interface.
+
+3. **0D ↔ spatial coupling** **must** specify a `lifting` strategy (or accept the default `pointwise`). A 0D system coupled to a spatial system is evaluated on the spatial system's grid according to the lifting strategy.
+
+4. **0D ↔ 0D coupling** requires neither `interface` nor `lifting` — it is standard scalar coupling.
+
+5. **Cross-domain with 0D intermediary**: When a 0D system mediates between two spatial domains (e.g., atmosphere → 0D calculator → wildfire), each leg of the coupling is a separate entry. The first entry uses `interface` + `lifting`, the second uses `lifting` alone.
+
+6. **Interface-mediated `operator_compose`**: When `operator_compose` crosses an interface, the operator's equations are evaluated on the *lower-dimensional* domain's grid. The interface handles projection/injection automatically — the operator adds terms to the target system's equations after the interface has mapped the fields.
+
+7. **Bidirectional interfaces**: An interface can be traversed in either direction. Coupling from a 3D domain to a 2D domain through an interface performs restriction (slicing + regridding). Coupling from a 2D domain to a 3D domain through the same interface performs prolongation (injection into the constrained dimension level + regridding).
+
+8. **Multiple interfaces between the same domain pair**: Different interfaces between the same two domains are permitted (e.g., `ground_surface` at `lev=min` and `tropopause` at a specific pressure level). Each coupling entry references the specific interface it uses.
+
+---
+
+## 11. Domains
+
+The `domains` section is a dictionary of named spatiotemporal domains. Each domain corresponds to an `EarthSciMLBase.DomainInfo` and specifies the extent, discretization, coordinate system, and boundary/initial conditions for one spatial region. Models and reaction systems reference domains by name via their `domain` field.
+
+Multi-domain configurations enable coupling between systems of different dimensionality — for example, a 3D atmospheric dynamics PDE coupled to a 2D wildfire propagation PDE, or a 3D ocean coupled to the atmosphere at the sea surface.
+
+### 11.1 Schema
+
+```json
+{
+  "domains": {
+    "atmosphere": {
+      "independent_variable": "t",
+
+      "temporal": {
+        "start": "2024-07-15T00:00:00Z",
+        "end": "2024-07-16T00:00:00Z",
+        "reference_time": "2024-07-15T00:00:00Z"
+      },
+
+      "spatial": {
+        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.1 },
+        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.1 },
+        "lev": { "min": 0.0, "max": 20000.0, "units": "m", "grid_spacing": 500.0 }
+      },
+
+      "coordinate_transforms": [
+        { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }
+      ],
+      "spatial_ref": "WGS84",
+
+      "initial_conditions": { "type": "constant", "value": 0.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] },
+        { "type": "zero_gradient", "dimensions": ["lev"] }
+      ],
+      "element_type": "Float64",
+      "array_type": "Array"
     },
 
-    "spatial": {
-      "lon": {
-        "min": -130.0,
-        "max": -60.0,
-        "units": "degrees",
-        "grid_spacing": 0.3125
+    "wildfire_surface": {
+      "independent_variable": "t",
+
+      "temporal": {
+        "start": "2024-07-15T00:00:00Z",
+        "end": "2024-07-16T00:00:00Z"
       },
-      "lat": {
-        "min": 20.0,
-        "max": 55.0,
-        "units": "degrees",
-        "grid_spacing": 0.25
+
+      "spatial": {
+        "lon": { "min": -119.0, "max": -117.0, "units": "degrees", "grid_spacing": 0.01 },
+        "lat": { "min": 34.0, "max": 35.0, "units": "degrees", "grid_spacing": 0.01 }
       },
-      "lev": {
-        "min": 1,
-        "max": 72,
-        "units": "level",
-        "grid_spacing": 1
-      }
+
+      "coordinate_transforms": [
+        { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }
+      ],
+      "spatial_ref": "WGS84",
+
+      "initial_conditions": { "type": "constant", "value": 0.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] }
+      ],
+      "element_type": "Float64"
     },
 
-    "coordinate_transforms": [
-      {
-        "id": "lonlat_to_meters",
-        "description": "Convert lon/lat degrees to x/y meters assuming spherical Earth",
-        "dimensions": ["lon", "lat"]
-      }
-    ],
+    "ocean": {
+      "independent_variable": "t",
 
-    "spatial_ref": "WGS84",
-
-    "initial_conditions": {
-      "type": "constant",
-      "value": 0.0
-    },
-
-    "boundary_conditions": [
-      {
-        "type": "zero_gradient",
-        "dimensions": ["lon", "lat"]
+      "temporal": {
+        "start": "2024-07-15T00:00:00Z",
+        "end": "2024-07-16T00:00:00Z"
       },
-      {
-        "type": "constant",
-        "dimensions": ["lev"],
-        "value": 0.0
-      }
-    ],
 
-    "element_type": "Float32",
-    "array_type": "Array"
+      "spatial": {
+        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.25 },
+        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.25 },
+        "depth": { "min": 0.0, "max": 5000.0, "units": "m", "grid_spacing": 50.0 }
+      },
+
+      "coordinate_transforms": [
+        { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }
+      ],
+      "spatial_ref": "WGS84",
+
+      "initial_conditions": { "type": "constant", "value": 0.0 },
+      "boundary_conditions": [
+        { "type": "periodic", "dimensions": ["lon"] },
+        { "type": "zero_gradient", "dimensions": ["lat"] },
+        { "type": "zero_gradient", "dimensions": ["depth"] }
+      ],
+      "element_type": "Float64"
+    }
   }
 }
 ```
 
-### 11.1 Initial Condition Types
+### 11.2 Domain Dimensionality
+
+Domains are categorized by their spatial dimensionality:
+
+| Dimensionality | `spatial` field | Example use cases |
+|---|---|---|
+| **0D** | Omitted or `{}` | Box models, point-source chemistry, algebraic parameterizations |
+| **1D** | 1 spatial dimension | Column models, vertical profiles, transect models |
+| **2D** | 2 spatial dimensions | Surface fire spread, sea-ice extent, land surface models |
+| **3D** | 3 spatial dimensions | Atmospheric dynamics, ocean circulation, subsurface flow |
+
+Models with `"domain": null` are 0D regardless of whether a 0D domain exists. A 0D model has no spatial grid — when coupled to a spatial system, the lifting strategy (Section 10.5) determines how it maps to the spatial grid.
+
+### 11.3 Domain Fields
+
+Each named domain supports the following fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `independent_variable` | | Name of the time variable (default: `"t"`) |
+| `temporal` | | Temporal extent: `start`, `end`, `reference_time` (ISO 8601) |
+| `spatial` | | Dictionary of named spatial dimensions, each with `min`, `max`, `units`, `grid_spacing` |
+| `coordinate_transforms` | | Array of coordinate transform specifications |
+| `spatial_ref` | | Spatial reference system (e.g., `"WGS84"`) |
+| `initial_conditions` | | Initial condition specification (see Section 11.4) |
+| `boundary_conditions` | | Array of boundary condition specifications (see Section 11.5) |
+| `element_type` | | Numeric element type (e.g., `"Float32"`, `"Float64"`) |
+| `array_type` | | Array implementation type (e.g., `"Array"`) |
+
+### 11.4 Initial Condition Types
 
 | Type | Fields | Description |
 |---|---|---|
@@ -1225,7 +1387,7 @@ The domain section corresponds to `EarthSciMLBase.DomainInfo`. It specifies the 
 | `per_variable` | `values: {var: value}` | Per-variable initial values |
 | `from_file` | `path`, `format` | Load from external file |
 
-### 11.2 Boundary Condition Types
+### 11.5 Boundary Condition Types
 
 | Type | Description |
 |---|---|
@@ -1246,13 +1408,206 @@ The domain section corresponds to `EarthSciMLBase.DomainInfo`. It specifies the 
 | `robin_beta` | number | Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ |
 | `robin_gamma` | number | Robin BC RHS value γ in αu + β∂u/∂n = γ |
 
-**Note:** `dirichlet` and `neumann` are alternative names for `constant` and `zero_gradient` respectively, following standard PDE nomenclature. The Robin boundary condition provides a general mixed formulation where appropriate coefficients can recover Dirichlet (α=1, β=0) or Neumann (α=0, β=1) conditions as special cases.
+**Note:** `dirichlet` and `neumann` are alternative names for `constant` and `zero_gradient` respectively. The Robin boundary condition provides a general mixed formulation where appropriate coefficients can recover Dirichlet (α=1, β=0) or Neumann (α=0, β=1) conditions as special cases.
+
+### 11.6 Shared Temporal Domain
+
+All domains in a coupled system must have compatible temporal extents. The solver (Section 13) advances the entire coupled system in time; individual domains may use different spatial discretizations but share the same simulation time window. If temporal extents differ, the solver uses the intersection of all domain temporal ranges.
 
 ---
 
-## 12. Solver
+## 12. Interfaces
 
-The solver section specifies the `SolverStrategy` for time integration.
+Interfaces define the geometric relationship between two domains of potentially different dimensionality. They specify which spatial dimensions are shared, how non-shared dimensions are constrained at the interface, and what regridding strategy is used when shared dimensions have different resolutions.
+
+### 12.1 Schema
+
+```json
+{
+  "interfaces": {
+    "ground_surface": {
+      "description": "Ground-level interface between atmosphere and land surface / wildfire domain",
+      "domains": ["atmosphere", "wildfire_surface"],
+      "dimension_mapping": {
+        "shared": {
+          "atmosphere.lon": "wildfire_surface.lon",
+          "atmosphere.lat": "wildfire_surface.lat"
+        },
+        "constraints": {
+          "atmosphere.lev": {
+            "value": "min",
+            "description": "Ground level (lowest atmospheric layer)"
+          }
+        }
+      },
+      "regridding": {
+        "method": "bilinear"
+      }
+    },
+
+    "sea_surface": {
+      "description": "Air-sea interface between atmosphere and ocean",
+      "domains": ["atmosphere", "ocean"],
+      "dimension_mapping": {
+        "shared": {
+          "atmosphere.lon": "ocean.lon",
+          "atmosphere.lat": "ocean.lat"
+        },
+        "constraints": {
+          "atmosphere.lev": {
+            "value": "min",
+            "description": "Lowest atmospheric level"
+          },
+          "ocean.depth": {
+            "value": "min",
+            "description": "Ocean surface layer"
+          }
+        }
+      },
+      "regridding": {
+        "method": "conservative",
+        "description": "Flux-conserving interpolation for energy and mass exchange"
+      }
+    }
+  }
+}
+```
+
+### 12.2 Interface Fields
+
+| Field | Required | Description |
+|---|---|---|
+| `description` | | Human-readable description of the interface |
+| `domains` | ✓ | Two-element array naming the domains connected by this interface |
+| `dimension_mapping` | ✓ | Specifies shared dimensions and constraints (see below) |
+| `regridding` | | Regridding strategy when shared dimensions differ in resolution |
+
+### 12.3 Dimension Mapping
+
+The `dimension_mapping` object has two sub-fields:
+
+**`shared`**: A dictionary mapping dimensions that correspond across the two domains. Keys and values use `"domain.dimension"` notation. Shared dimensions define the geometric surface where the two domains meet. If the shared dimensions have different extents, the interface surface is their intersection.
+
+```json
+"shared": {
+  "atmosphere.lon": "wildfire_surface.lon",
+  "atmosphere.lat": "wildfire_surface.lat"
+}
+```
+
+**`constraints`**: A dictionary specifying how non-shared dimensions are fixed at the interface. Each key is a `"domain.dimension"` reference; the value specifies where that dimension is constrained.
+
+| Constraint value | Description |
+|---|---|
+| `"min"` | The minimum value of the dimension's range |
+| `"max"` | The maximum value of the dimension's range |
+| *(number)* | A specific coordinate value within the dimension's range |
+| `"boundary"` | The domain boundary (equivalent to `"min"` or `"max"` depending on orientation) |
+
+```json
+"constraints": {
+  "atmosphere.lev": { "value": "min", "description": "Ground level" },
+  "ocean.depth": { "value": 0.0, "description": "Sea surface" }
+}
+```
+
+**Constraint semantics**: When a variable is transferred **from** a domain with a constrained dimension, the field is *sliced* (restricted) at that coordinate — reducing dimensionality by one per constraint. When a variable is transferred **to** a domain with a constrained dimension, the lower-dimensional field is *injected* (prolongated) at that coordinate — embedded into the higher-dimensional grid at the specified level.
+
+### 12.4 Regridding
+
+When shared dimensions have different resolutions or extents across the two domains, regridding interpolates fields between the grids. The `regridding` field specifies the interpolation strategy.
+
+| Method | Description |
+|---|---|
+| `bilinear` | Bilinear interpolation. Suitable for smooth fields (temperature, pressure, winds). |
+| `conservative` | Flux-conserving remapping. Preserves integrated quantities (mass, energy). Required for budget-critical exchanges. |
+| `nearest` | Nearest-neighbor assignment. Suitable for categorical or discontinuous fields (land use type, fire/no-fire mask). |
+| `patch` | Higher-order patch recovery interpolation. Smooth and accurate but more expensive. |
+
+If `regridding` is omitted and the shared dimensions have identical grids (same min, max, and grid_spacing), no regridding is needed. If grids differ and `regridding` is omitted, it is an error.
+
+### 12.5 Interface Examples
+
+#### 3D Atmosphere ↔ 2D Wildfire Surface
+
+The atmosphere has 3 spatial dimensions (lon, lat, lev). The wildfire model has 2 (lon, lat). They share the horizontal dimensions; the vertical dimension is constrained at ground level.
+
+```json
+{
+  "ground_surface": {
+    "description": "Ground-level interface: atmosphere ↔ wildfire",
+    "domains": ["atmosphere", "wildfire_surface"],
+    "dimension_mapping": {
+      "shared": {
+        "atmosphere.lon": "wildfire_surface.lon",
+        "atmosphere.lat": "wildfire_surface.lat"
+      },
+      "constraints": {
+        "atmosphere.lev": { "value": "min" }
+      }
+    },
+    "regridding": { "method": "bilinear" }
+  }
+}
+```
+
+Transferring `atmosphere.wind_u` through this interface: the 3D field is sliced at `lev=min` to produce a 2D field on the atmosphere's horizontal grid, then regridded to the wildfire grid via bilinear interpolation.
+
+Transferring `wildfire.heat_flux` through this interface in reverse: the 2D field on the wildfire grid is regridded to the atmosphere's horizontal grid, then injected into the 3D atmospheric grid at `lev=min`.
+
+#### 3D Atmosphere ↔ 3D Ocean
+
+Both domains are 3D, but they share only the horizontal dimensions. The vertical dimensions are independent (atmospheric levels vs. ocean depth), and both are constrained at their interface values.
+
+```json
+{
+  "sea_surface": {
+    "description": "Air-sea interface: atmosphere ↔ ocean",
+    "domains": ["atmosphere", "ocean"],
+    "dimension_mapping": {
+      "shared": {
+        "atmosphere.lon": "ocean.lon",
+        "atmosphere.lat": "ocean.lat"
+      },
+      "constraints": {
+        "atmosphere.lev": { "value": "min" },
+        "ocean.depth": { "value": "min" }
+      }
+    },
+    "regridding": { "method": "conservative" }
+  }
+}
+```
+
+Transferring `atmosphere.surface_stress` through this interface: the 3D atmospheric field is sliced at `lev=min` to produce a 2D field, regridded from the atmosphere's horizontal grid to the ocean's horizontal grid (conservative), then injected into the ocean at `depth=min`.
+
+#### 1D Column ↔ 3D Atmosphere
+
+A 1D column model (e.g., vertical turbulence parameterization) coupled to a 3D atmosphere. The column model has one spatial dimension (height); the interface constrains the atmospheric horizontal coordinates to a specific column.
+
+```json
+{
+  "observation_column": {
+    "description": "Single column extracted from 3D atmosphere",
+    "domains": ["atmosphere", "column_model"],
+    "dimension_mapping": {
+      "shared": {
+        "atmosphere.lev": "column_model.z"
+      },
+      "constraints": {
+        "atmosphere.lon": { "value": -118.0 },
+        "atmosphere.lat": { "value": 34.0 }
+      }
+    }
+  }
+}
+```
+
+---
+
+## 13. Solver
+
+The solver section specifies the `SolverStrategy` for time integration. In multi-domain configurations, the solver advances the entire coupled system; operator splitting (Strang or IMEX) handles the interaction between domains at each time step.
 
 ```json
 {
@@ -1273,7 +1628,7 @@ The solver section specifies the `SolverStrategy` for time integration.
 }
 ```
 
-### 12.1 Solver Strategies
+### 13.1 Solver Strategies
 
 | Strategy | EarthSciML Type | Description |
 |---|---|---|
@@ -1283,7 +1638,9 @@ The solver section specifies the `SolverStrategy` for time integration.
 
 ---
 
-## 13. Complete Example
+## 14. Complete Examples
+
+### 14.1 Single-Domain: Atmospheric Chemistry with Advection
 
 A minimal but complete `.esm` file representing atmospheric chemistry with advection:
 
@@ -1379,19 +1736,21 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
     { "type": "variable_map", "from": "GEOSFP.v", "to": "Advection.v_wind", "transform": "param_to_var" }
   ],
 
-  "domain": {
-    "temporal": { "start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z" },
-    "spatial": {
-      "lon": { "min": -130.0, "max": -100.0, "grid_spacing": 0.3125, "units": "degrees" }
-    },
-    "coordinate_transforms": [
-      { "id": "lonlat_to_meters", "dimensions": ["lon"] }
-    ],
-    "initial_conditions": { "type": "constant", "value": 1.0e-9 },
-    "boundary_conditions": [
-      { "type": "zero_gradient", "dimensions": ["lon"] }
-    ],
-    "element_type": "Float32"
+  "domains": {
+    "default": {
+      "temporal": { "start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -130.0, "max": -100.0, "grid_spacing": 0.3125, "units": "degrees" }
+      },
+      "coordinate_transforms": [
+        { "id": "lonlat_to_meters", "dimensions": ["lon"] }
+      ],
+      "initial_conditions": { "type": "constant", "value": 1.0e-9 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon"] }
+      ],
+      "element_type": "Float32"
+    }
   },
 
   "solver": {
@@ -1401,9 +1760,345 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
 }
 ```
 
+**Note:** When all models share a single domain, `"domain"` fields on individual models may be omitted — all models default to the sole domain.
+
+### 14.2 Multi-Domain: Wildfire–Atmosphere–Ocean Coupling
+
+A coupled system with a 3D atmospheric dynamics PDE, a 2D wildfire propagation PDE, a 3D ocean dynamics PDE, and 0D algebraic intermediaries. This example demonstrates mixed-dimension coupling through interfaces and pointwise lifting of 0D systems.
+
+```json
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "WildfireAtmosphereOcean",
+    "description": "Coupled wildfire-atmosphere-ocean system with 0D parameterizations",
+    "authors": ["EarthSciML"],
+    "created": "2026-04-08T00:00:00Z"
+  },
+
+  "models": {
+    "AtmosphericDynamics": {
+      "domain": "atmosphere",
+      "reference": { "notes": "Simplified 3D atmospheric dynamics" },
+      "variables": {
+        "T": { "type": "state", "units": "K", "default": 288.0, "description": "Temperature" },
+        "wind_u": { "type": "state", "units": "m/s", "default": 0.0, "description": "Eastward wind" },
+        "wind_v": { "type": "state", "units": "m/s", "default": 0.0, "description": "Northward wind" },
+        "q_heat": { "type": "parameter", "units": "K/s", "default": 0.0, "description": "External heating rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["T"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["wind_u"] }, { "op": "grad", "args": ["T"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["wind_v"] }, { "op": "grad", "args": ["T"], "dim": "y" }] },
+              "q_heat"
+            ]
+          }
+        }
+      ]
+    },
+
+    "WildfirePropagation": {
+      "domain": "wildfire_surface",
+      "reference": { "notes": "Level-set wildfire spread model" },
+      "variables": {
+        "phi": { "type": "state", "units": "1", "default": 1.0, "description": "Level-set function (phi<0 = burned)" },
+        "R_spread": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Fire spread rate" },
+        "fuel": { "type": "state", "units": "kg/m^2", "default": 10.0, "description": "Fuel load" },
+        "heat_release": {
+          "type": "observed", "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": [
+              "R_spread", "fuel",
+              { "op": "ifelse", "args": [
+                { "op": "<", "args": ["phi", 0] }, 18000.0, 0.0
+              ]}
+            ]
+          },
+          "description": "Heat release rate at fire front"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["phi"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              { "op": "-", "args": ["R_spread"] },
+              { "op": "sqrt", "args": [
+                { "op": "+", "args": [
+                  { "op": "^", "args": [{ "op": "grad", "args": ["phi"], "dim": "x" }, 2] },
+                  { "op": "^", "args": [{ "op": "grad", "args": ["phi"], "dim": "y" }, 2] }
+                ]}
+              ]}
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["fuel"], "wrt": "t" },
+          "rhs": {
+            "op": "ifelse",
+            "args": [
+              { "op": "<", "args": ["phi", 0] },
+              { "op": "*", "args": [-0.01, "fuel"] },
+              0.0
+            ]
+          }
+        }
+      ]
+    },
+
+    "FireSpreadCalculator": {
+      "domain": null,
+      "reference": { "notes": "Rothermel-style wind-driven spread rate (algebraic)" },
+      "variables": {
+        "wind_u": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Eastward wind at ground level" },
+        "wind_v": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Northward wind at ground level" },
+        "R_base": { "type": "parameter", "units": "m/s", "default": 0.05, "description": "Base spread rate (no wind)" },
+        "wind_factor": { "type": "parameter", "units": "1", "default": 0.3, "description": "Wind enhancement coefficient" },
+        "wind_speed": {
+          "type": "observed", "units": "m/s",
+          "expression": {
+            "op": "sqrt",
+            "args": [{ "op": "+", "args": [
+              { "op": "^", "args": ["wind_u", 2] },
+              { "op": "^", "args": ["wind_v", 2] }
+            ]}]
+          },
+          "description": "Wind speed magnitude"
+        },
+        "spread_rate": {
+          "type": "observed", "units": "m/s",
+          "expression": {
+            "op": "*",
+            "args": [
+              "R_base",
+              { "op": "+", "args": [1.0, { "op": "*", "args": ["wind_factor", "wind_speed"] }] }
+            ]
+          },
+          "description": "Wind-enhanced fire spread rate"
+        }
+      },
+      "equations": []
+    },
+
+    "OceanDynamics": {
+      "domain": "ocean",
+      "reference": { "notes": "Simplified 3D ocean dynamics" },
+      "variables": {
+        "SST": { "type": "state", "units": "K", "default": 290.0, "description": "Sea surface temperature" },
+        "u_ocean": { "type": "state", "units": "m/s", "default": 0.0, "description": "Eastward ocean current" },
+        "surface_heat_flux": { "type": "parameter", "units": "W/m^2", "default": 0.0, "description": "Net heat flux from atmosphere" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["SST"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u_ocean"] }, { "op": "grad", "args": ["SST"], "dim": "x" }] },
+              { "op": "/", "args": ["surface_heat_flux", 4.18e6] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "AirSeaFluxCalculator": {
+      "domain": null,
+      "reference": { "notes": "Bulk formula for air-sea heat exchange (algebraic)" },
+      "variables": {
+        "T_atm": { "type": "parameter", "units": "K", "default": 288.0, "description": "Atmospheric temperature at surface" },
+        "SST": { "type": "parameter", "units": "K", "default": 290.0, "description": "Sea surface temperature" },
+        "wind_speed": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Surface wind speed" },
+        "C_H": { "type": "parameter", "units": "1", "default": 1.2e-3, "description": "Heat transfer coefficient" },
+        "rho_air": { "type": "parameter", "units": "kg/m^3", "default": 1.225, "description": "Air density" },
+        "c_p": { "type": "parameter", "units": "J/(kg*K)", "default": 1005.0, "description": "Specific heat of air" },
+        "sensible_heat_flux": {
+          "type": "observed", "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": ["rho_air", "c_p", "C_H", "wind_speed",
+              { "op": "-", "args": ["T_atm", "SST"] }
+            ]
+          },
+          "description": "Sensible heat flux (positive = ocean to atmosphere)"
+        }
+      },
+      "equations": []
+    }
+  },
+
+  "domains": {
+    "atmosphere": {
+      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.1 },
+        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.1 },
+        "lev": { "min": 0.0, "max": 20000.0, "units": "m", "grid_spacing": 500.0 }
+      },
+      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 0.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] },
+        { "type": "zero_gradient", "dimensions": ["lev"] }
+      ],
+      "element_type": "Float64"
+    },
+    "wildfire_surface": {
+      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -119.0, "max": -117.0, "units": "degrees", "grid_spacing": 0.01 },
+        "lat": { "min": 34.0, "max": 35.0, "units": "degrees", "grid_spacing": 0.01 }
+      },
+      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 1.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] }
+      ],
+      "element_type": "Float64"
+    },
+    "ocean": {
+      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.25 },
+        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.25 },
+        "depth": { "min": 0.0, "max": 5000.0, "units": "m", "grid_spacing": 50.0 }
+      },
+      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 290.0 },
+      "boundary_conditions": [
+        { "type": "periodic", "dimensions": ["lon"] },
+        { "type": "zero_gradient", "dimensions": ["lat", "depth"] }
+      ],
+      "element_type": "Float64"
+    }
+  },
+
+  "interfaces": {
+    "ground_surface": {
+      "description": "Ground-level interface: atmosphere ↔ wildfire",
+      "domains": ["atmosphere", "wildfire_surface"],
+      "dimension_mapping": {
+        "shared": {
+          "atmosphere.lon": "wildfire_surface.lon",
+          "atmosphere.lat": "wildfire_surface.lat"
+        },
+        "constraints": {
+          "atmosphere.lev": { "value": "min" }
+        }
+      },
+      "regridding": { "method": "bilinear" }
+    },
+    "sea_surface": {
+      "description": "Air-sea interface: atmosphere ↔ ocean",
+      "domains": ["atmosphere", "ocean"],
+      "dimension_mapping": {
+        "shared": {
+          "atmosphere.lon": "ocean.lon",
+          "atmosphere.lat": "ocean.lat"
+        },
+        "constraints": {
+          "atmosphere.lev": { "value": "min" },
+          "ocean.depth": { "value": "min" }
+        }
+      },
+      "regridding": { "method": "conservative" }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "AtmosphericDynamics.wind_u",
+      "to": "FireSpreadCalculator.wind_u",
+      "transform": "param_to_var",
+      "interface": "ground_surface",
+      "lifting": "pointwise",
+      "description": "Ground-level u-wind to fire spread calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "AtmosphericDynamics.wind_v",
+      "to": "FireSpreadCalculator.wind_v",
+      "transform": "param_to_var",
+      "interface": "ground_surface",
+      "lifting": "pointwise",
+      "description": "Ground-level v-wind to fire spread calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "FireSpreadCalculator.spread_rate",
+      "to": "WildfirePropagation.R_spread",
+      "transform": "param_to_var",
+      "lifting": "pointwise",
+      "description": "Calculated spread rate drives wildfire propagation"
+    },
+    {
+      "type": "variable_map",
+      "from": "WildfirePropagation.heat_release",
+      "to": "AtmosphericDynamics.q_heat",
+      "transform": "param_to_var",
+      "interface": "ground_surface",
+      "factor": 2.4e-7,
+      "description": "Wildfire heat injection into lowest atmospheric layer (W/m^2 → K/s)"
+    },
+    {
+      "type": "variable_map",
+      "from": "AtmosphericDynamics.T",
+      "to": "AirSeaFluxCalculator.T_atm",
+      "transform": "param_to_var",
+      "interface": "sea_surface",
+      "lifting": "pointwise",
+      "description": "Surface air temperature to air-sea flux calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "OceanDynamics.SST",
+      "to": "AirSeaFluxCalculator.SST",
+      "transform": "param_to_var",
+      "interface": "sea_surface",
+      "lifting": "pointwise",
+      "description": "Sea surface temperature to air-sea flux calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "AirSeaFluxCalculator.sensible_heat_flux",
+      "to": "OceanDynamics.surface_heat_flux",
+      "transform": "param_to_var",
+      "lifting": "pointwise",
+      "description": "Calculated heat flux drives ocean surface temperature"
+    }
+  ],
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 60.0,
+      "nonstiff_algorithm": "Euler"
+    }
+  }
+}
+```
+
+This example demonstrates:
+- **3D → 2D coupling** via the `ground_surface` interface (atmospheric winds → fire spread)
+- **2D → 3D coupling** via the same interface in reverse (wildfire heat → atmosphere)
+- **3D → 3D coupling** via the `sea_surface` interface (atmosphere ↔ ocean, both constrained to surface)
+- **0D intermediaries** with `"lifting": "pointwise"` (`FireSpreadCalculator`, `AirSeaFluxCalculator`)
+- **Cross-domain 0D algebraic systems** that take inputs from one domain and produce outputs for another
+
 ---
 
-## 14. Design Principles
+## 15. Design Principles
 
 ### Full specification is mandatory for models and reactions
 
@@ -1435,9 +2130,21 @@ Reaction networks are a higher-level, more constrained representation. Keeping t
 
 The composition rules are arguably more important than the individual models, since they capture the scientific decisions about how processes interact. Making coupling explicit and inspectable is essential for understanding and reproducing complex Earth system models.
 
+### Interfaces separate geometry from physics
+
+Cross-domain coupling requires two distinct concerns: the *geometric relationship* between domains (shared dimensions, constraints, regridding) and the *physical coupling* (which variables connect, how they transform). Interfaces capture the geometry once; coupling entries reference interfaces and specify the physics. This separation means:
+
+- The same interface can be reused by many coupling entries (e.g., dozens of variables exchanged at the sea surface)
+- Geometric details don't clutter individual coupling rules
+- Changes to grid resolution or regridding strategy propagate automatically to all couplings that use the interface
+
+### 0D systems are first-class coupling intermediaries
+
+Many physical parameterizations are algebraic or ODE systems with no intrinsic spatial dimensions — they compute pointwise relationships (e.g., wind speed → fire spread rate, bulk surface fluxes). Rather than embedding these calculations in the spatial model's equations, they are declared as separate 0D models with explicit coupling. This preserves modularity: the same 0D parameterization can be swapped, tested independently, or coupled to different spatial domains.
+
 ---
 
-## 15. Future Considerations
+## 16. Future Considerations
 
 - **Formal JSON Schema** — A `.json` schema file for automated validation
 - **Binary variant** — MessagePack or CBOR for large mechanisms (hundreds of species/reactions)
