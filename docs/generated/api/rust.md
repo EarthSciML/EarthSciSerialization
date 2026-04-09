@@ -396,22 +396,6 @@ Check if a component exists in the ESM file
 
 ### component_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:261`
-
-**Signature:**
-```rust
-pub fn component_graph(json_str: &str) -> Result<JsValue, JsValue> {
-```
-
-**Available in other languages:**
-- [Julia](julia.md#component_graph)
-- [Julia](julia.md#component_graph)
-- [Typescript](typescript.md#component_graph)
-
----
-
-### component_graph
-
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:60`
 
 **Signature:**
@@ -429,6 +413,22 @@ Build a component graph from an ESM file
 # Returns
 
 * Component graph showing structure and coupling
+
+**Available in other languages:**
+- [Julia](julia.md#component_graph)
+- [Julia](julia.md#component_graph)
+- [Typescript](typescript.md#component_graph)
+
+---
+
+### component_graph
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:261`
+
+**Signature:**
+```rust
+pub fn component_graph(json_str: &str) -> Result<JsValue, JsValue> {
+```
 
 **Available in other languages:**
 - [Julia](julia.md#component_graph)
@@ -1039,41 +1039,6 @@ Check if this unit is dimensionless
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:32`
-
-**Signature:**
-```rust
-pub fn load(json_str: &str) -> Result<JsValue, JsValue> {
-```
-
-**Available in other languages:**
-- [Julia](julia.md#load)
-- [Julia](julia.md#load)
-- [Julia](julia.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Typescript](typescript.md#load)
-
----
-
-### load
-
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/parse.rs:81`
 
 **Signature:**
@@ -1118,6 +1083,41 @@ let json = r#"
 
 let esm_file = load(json).expect("Failed to load ESM file");
 assert_eq!(esm_file.esm, "0.1.0");
+```
+
+**Available in other languages:**
+- [Julia](julia.md#load)
+- [Julia](julia.md#load)
+- [Julia](julia.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Python](python.md#load)
+- [Typescript](typescript.md#load)
+
+---
+
+### load
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:32`
+
+**Signature:**
+```rust
+pub fn load(json_str: &str) -> Result<JsValue, JsValue> {
 ```
 
 **Available in other languages:**
@@ -1965,24 +1965,6 @@ pub fn stoichiometric_matrix_parallel(
 
 ### substitute
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:160`
-
-**Signature:**
-```rust
-pub fn substitute(json_str: &str, bindings_str: &str) -> Result<String, JsValue> {
-```
-
-**Available in other languages:**
-- [Julia](julia.md#substitute)
-- [Julia](julia.md#substitute)
-- [Python](python.md#substitute)
-- [Python](python.md#substitute)
-- [Typescript](typescript.md#substitute)
-
----
-
-### substitute
-
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:20`
 
 **Signature:**
@@ -2001,6 +1983,24 @@ Substitute variables in an expression
 # Returns
 
 * New expression with substitutions applied
+
+**Available in other languages:**
+- [Julia](julia.md#substitute)
+- [Julia](julia.md#substitute)
+- [Python](python.md#substitute)
+- [Python](python.md#substitute)
+- [Typescript](typescript.md#substitute)
+
+---
+
+### substitute
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:160`
+
+**Signature:**
+```rust
+pub fn substitute(json_str: &str, bindings_str: &str) -> Result<String, JsValue> {
+```
 
 **Available in other languages:**
 - [Julia](julia.md#substitute)
@@ -2342,21 +2342,6 @@ Substitute variables in an expression with scoped reference resolution
 
 ### to_ascii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:131`
-
-**Signature:**
-```rust
-pub fn to_ascii(json_str: &str) -> Result<String, JsValue> {
-```
-
-**Available in other languages:**
-- [Julia](julia.md#to_ascii)
-- [Julia](julia.md#to_ascii)
-
----
-
-### to_ascii
-
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:1502`
 
 **Signature:**
@@ -2366,6 +2351,21 @@ pub fn to_ascii(expr: &Expr) -> String {
 
 **Description:**
 Convert an expression to ASCII representation
+
+**Available in other languages:**
+- [Julia](julia.md#to_ascii)
+- [Julia](julia.md#to_ascii)
+
+---
+
+### to_ascii
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:131`
+
+**Signature:**
+```rust
+pub fn to_ascii(json_str: &str) -> Result<String, JsValue> {
+```
 
 **Available in other languages:**
 - [Julia](julia.md#to_ascii)
@@ -2457,17 +2457,6 @@ Export graph to JSON format
 
 ### to_latex
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:102`
-
-**Signature:**
-```rust
-pub fn to_latex(json_str: &str) -> Result<String, JsValue> {
-```
-
----
-
-### to_latex
-
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:894`
 
 **Signature:**
@@ -2477,6 +2466,17 @@ pub fn to_latex(expr: &Expr) -> String {
 
 **Description:**
 Convert an expression to LaTeX notation
+
+---
+
+### to_latex
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:102`
+
+**Signature:**
+```rust
+pub fn to_latex(json_str: &str) -> Result<String, JsValue> {
+```
 
 ---
 
@@ -2526,17 +2526,6 @@ Export graph to Mermaid format
 
 ### to_unicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:73`
-
-**Signature:**
-```rust
-pub fn to_unicode(json_str: &str) -> Result<String, JsValue> {
-```
-
----
-
-### to_unicode
-
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:225`
 
 **Signature:**
@@ -2563,6 +2552,17 @@ Convert an expression to Unicode mathematical notation
 
 ---
 
+### to_unicode
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:73`
+
+**Signature:**
+```rust
+pub fn to_unicode(json_str: &str) -> Result<String, JsValue> {
+```
+
+---
+
 ### update_model_metadata
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:358`
@@ -2584,37 +2584,6 @@ Update model metadata
 # Returns
 
 * `EditResult<Model>` - New model with updated metadata
-
----
-
-### validate
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:58`
-
-**Signature:**
-```rust
-pub fn validate(json_str: &str) -> Result<JsValue, JsValue> {
-```
-
-**Available in other languages:**
-- [Julia](julia.md#validate)
-- [Julia](julia.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Typescript](typescript.md#validate)
 
 ---
 
@@ -2670,6 +2639,37 @@ let esm_file = load(json_str).unwrap();
 let result = validate(&esm_file);
 assert!(result.is_valid);
 assert!(result.schema_errors.is_empty()); // Always empty for this function
+```
+
+**Available in other languages:**
+- [Julia](julia.md#validate)
+- [Julia](julia.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Python](python.md#validate)
+- [Typescript](typescript.md#validate)
+
+---
+
+### validate
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:58`
+
+**Signature:**
+```rust
+pub fn validate(json_str: &str) -> Result<JsValue, JsValue> {
 ```
 
 **Available in other languages:**
