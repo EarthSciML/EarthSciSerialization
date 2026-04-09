@@ -14,7 +14,8 @@
     "esm": {
       "type": "string",
       "description": "Format version string (semver).",
-      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "const": "0.1.0"
     },
     "metadata": { "$ref": "#/$defs/Metadata" },
     "models": {
@@ -42,7 +43,16 @@
       "description": "Composition and coupling rules.",
       "items": { "$ref": "#/$defs/CouplingEntry" }
     },
-    "domain": { "$ref": "#/$defs/Domain" },
+    "domains": {
+      "type": "object",
+      "description": "Named spatial/temporal domain specifications.",
+      "additionalProperties": { "$ref": "#/$defs/Domain" }
+    },
+    "interfaces": {
+      "type": "object",
+      "description": "Geometric connections between domains of different dimensionality.",
+      "additionalProperties": { "$ref": "#/$defs/Interface" }
+    },
     "solver": { "$ref": "#/$defs/Solver" }
   },
 
@@ -372,6 +382,13 @@
       "required": ["variables", "equations"],
       "additionalProperties": false,
       "properties": {
+        "domain": {
+          "description": "Name of a domain from the domains section. Omit or set to null for 0D (non-spatial) models.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
         "coupletype": {
           "description": "Coupling type name for couple2 dispatch.",
           "oneOf": [
@@ -489,6 +506,13 @@
       "required": ["species", "parameters", "reactions"],
       "additionalProperties": false,
       "properties": {
+        "domain": {
+          "description": "Name of a domain from the domains section. Omit or set to null for 0D (non-spatial) systems.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
         "coupletype": {
           "description": "Coupling type name for couple2 dispatch.",
           "oneOf": [
@@ -690,6 +714,15 @@
           "description": "Variable mappings when LHS variables don't have matching names.",
           "additionalProperties": { "$ref": "#/$defs/TranslateTarget" }
         },
+        "interface": {
+          "type": "string",
+          "description": "Name of an interface from the interfaces section for cross-domain coupling."
+        },
+        "lifting": {
+          "type": "string",
+          "enum": ["pointwise", "broadcast", "mean", "integral"],
+          "description": "Strategy for mapping between 0D and spatial systems."
+        },
         "description": { "type": "string" }
       }
     },
@@ -726,6 +759,15 @@
             }
           }
         },
+        "interface": {
+          "type": "string",
+          "description": "Name of an interface from the interfaces section for cross-domain coupling."
+        },
+        "lifting": {
+          "type": "string",
+          "enum": ["pointwise", "broadcast", "mean", "integral"],
+          "description": "Strategy for mapping between 0D and spatial systems."
+        },
         "description": { "type": "string" }
       }
     },
@@ -753,6 +795,15 @@
         "factor": {
           "type": "number",
           "description": "Conversion factor (for conversion_factor transform)."
+        },
+        "interface": {
+          "type": "string",
+          "description": "Name of an interface from the interfaces section for cross-domain coupling."
+        },
+        "lifting": {
+          "type": "string",
+          "enum": ["pointwise", "broadcast", "mean", "integral"],
+          "description": "Strategy for mapping between 0D and spatial systems."
         },
         "description": { "type": "string" }
       }
@@ -1019,6 +1070,70 @@
           "type": "string",
           "description": "Array backend (e.g., \"Array\", \"CuArray\").",
           "default": "Array"
+        }
+      }
+    },
+
+    "InterfaceConstraint": {
+      "type": "object",
+      "description": "Constraint on a non-shared dimension at the interface.",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "Where the dimension is constrained: 'min', 'max', 'boundary', or a numeric coordinate.",
+          "oneOf": [
+            { "type": "string", "enum": ["min", "max", "boundary"] },
+            { "type": "number" }
+          ]
+        },
+        "description": { "type": "string" }
+      }
+    },
+
+    "Interface": {
+      "type": "object",
+      "description": "Geometric connection between two domains of potentially different dimensionality.",
+      "required": ["domains", "dimension_mapping"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "domains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "The two domains connected by this interface."
+        },
+        "dimension_mapping": {
+          "type": "object",
+          "description": "Specifies shared dimensions and constraints.",
+          "additionalProperties": false,
+          "properties": {
+            "shared": {
+              "type": "object",
+              "description": "Mapping of corresponding dimensions across domains, keyed by 'domain.dimension'.",
+              "additionalProperties": { "type": "string" }
+            },
+            "constraints": {
+              "type": "object",
+              "description": "Non-shared dimensions fixed at the interface, keyed by 'domain.dimension'.",
+              "additionalProperties": { "$ref": "#/$defs/InterfaceConstraint" }
+            }
+          }
+        },
+        "regridding": {
+          "type": "object",
+          "description": "Regridding strategy when shared dimensions differ in resolution.",
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["bilinear", "conservative", "nearest", "patch"],
+              "description": "Interpolation method for regridding."
+            },
+            "description": { "type": "string" }
+          }
         }
       }
     },

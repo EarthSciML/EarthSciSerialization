@@ -238,18 +238,19 @@ struct Model
     discrete_events::Vector{DiscreteEvent}
     continuous_events::Vector{ContinuousEvent}
     subsystems::Dict{String,Model}
+    domain::Union{String,Nothing}
 
     # Primary constructor with separate event arrays
     Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
-          subsystems::Dict{String,Model}) =
-        new(variables, equations, discrete_events, continuous_events, subsystems)
+          subsystems::Dict{String,Model}; domain=nothing) =
+        new(variables, equations, discrete_events, continuous_events, subsystems, domain)
 
     # Convenience constructor with optional events and subsystems
     Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation};
           discrete_events=DiscreteEvent[], continuous_events=ContinuousEvent[],
-          subsystems=Dict{String,Model}()) =
-        new(variables, equations, discrete_events, continuous_events, subsystems)
+          subsystems=Dict{String,Model}(), domain=nothing) =
+        new(variables, equations, discrete_events, continuous_events, subsystems, domain)
 end
 
 """
@@ -348,9 +349,11 @@ struct CouplingOperatorCompose <: CouplingEntry
     systems::Vector{String}
     translate::Union{Dict{String,Any},Nothing}
     description::Union{String,Nothing}
+    interface::Union{String,Nothing}
+    lifting::Union{String,Nothing}
 
-    CouplingOperatorCompose(systems::Vector{String}; translate=nothing, description=nothing) =
-        new(systems, translate, description)
+    CouplingOperatorCompose(systems::Vector{String}; translate=nothing, description=nothing, interface=nothing, lifting=nothing) =
+        new(systems, translate, description, interface, lifting)
 end
 
 """
@@ -363,9 +366,11 @@ struct CouplingCouple2 <: CouplingEntry
     coupletype_pair::Vector{String}
     connector::Dict{String,Any}
     description::Union{String,Nothing}
+    interface::Union{String,Nothing}
+    lifting::Union{String,Nothing}
 
-    CouplingCouple2(systems::Vector{String}, coupletype_pair::Vector{String}, connector::Dict{String,Any}; description=nothing) =
-        new(systems, coupletype_pair, connector, description)
+    CouplingCouple2(systems::Vector{String}, coupletype_pair::Vector{String}, connector::Dict{String,Any}; description=nothing, interface=nothing, lifting=nothing) =
+        new(systems, coupletype_pair, connector, description, interface, lifting)
 end
 
 """
@@ -379,9 +384,11 @@ struct CouplingVariableMap <: CouplingEntry
     transform::String
     factor::Union{Float64,Nothing}
     description::Union{String,Nothing}
+    interface::Union{String,Nothing}
+    lifting::Union{String,Nothing}
 
-    CouplingVariableMap(from::String, to::String, transform::String; factor=nothing, description=nothing) =
-        new(from, to, transform, factor, description)
+    CouplingVariableMap(from::String, to::String, transform::String; factor=nothing, description=nothing, interface=nothing, lifting=nothing) =
+        new(from, to, transform, factor, description, interface, lifting)
 end
 
 """
@@ -497,6 +504,25 @@ struct Domain
 
     # Constructor with optional parameters
     Domain(; spatial=nothing, temporal=nothing) = new(spatial, temporal)
+end
+
+"""
+    Interface
+
+Defines the geometric relationship between two domains of potentially different
+dimensionality. Specifies shared dimensions, constraints on non-shared dimensions,
+and regridding strategy.
+"""
+struct Interface
+    description::Union{String,Nothing}
+    domains::Vector{String}
+    dimension_mapping::Dict{String,Any}
+    regridding::Union{Dict{String,Any},Nothing}
+
+    # Constructor with optional parameters
+    Interface(domains::Vector{String}, dimension_mapping::Dict{String,Any};
+              description=nothing, regridding=nothing) =
+        new(description, domains, dimension_mapping, regridding)
 end
 
 """
@@ -820,11 +846,12 @@ struct ReactionSystem
     reactions::Vector{Reaction}
     parameters::Vector{Parameter}
     subsystems::Dict{String,ReactionSystem}
+    domain::Union{String,Nothing}
 
     # Constructor with optional parameters and subsystems
     ReactionSystem(species::Vector{Species}, reactions::Vector{Reaction};
-                   parameters=Parameter[], subsystems=Dict{String,ReactionSystem}()) =
-        new(species, reactions, parameters, subsystems)
+                   parameters=Parameter[], subsystems=Dict{String,ReactionSystem}(), domain=nothing) =
+        new(species, reactions, parameters, subsystems, domain)
 end
 
 """
@@ -867,7 +894,8 @@ struct EsmFile
     data_loaders::Union{Dict{String,DataLoader},Nothing}
     operators::Union{Dict{String,Operator},Nothing}
     coupling::Vector{CouplingEntry}
-    domain::Union{Domain,Nothing}
+    domains::Union{Dict{String,Domain},Nothing}
+    interfaces::Union{Dict{String,Interface},Nothing}
     solver::Union{Solver,Nothing}
 
     # Constructor with optional parameters
@@ -877,9 +905,10 @@ struct EsmFile
             data_loaders=nothing,
             operators=nothing,
             coupling=CouplingEntry[],
-            domain=nothing,
+            domains=nothing,
+            interfaces=nothing,
             solver=nothing) =
-        new(esm, metadata, models, reaction_systems, data_loaders, operators, coupling, domain, solver)
+        new(esm, metadata, models, reaction_systems, data_loaders, operators, coupling, domains, interfaces, solver)
 end
 
 # ========================================
