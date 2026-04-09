@@ -514,7 +514,24 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const version = "${{ needs.release-analysis.outputs.new_version }}";
-          const releaseId = "${{ needs.create-release.outputs.release_id }}";
+          let releaseId = "${{ needs.create-release.outputs.release_id }}";
+
+          // If create-release was skipped, try to find the release by tag
+          if (!releaseId) {
+            const tag = `v${version}`;
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tag,
+              });
+              releaseId = String(release.id);
+              core.info(`Found existing release ${releaseId} for tag ${tag}`);
+            } catch (e) {
+              core.warning(`No release found for tag ${tag} and create-release was skipped. Skipping release notes update.`);
+              return;
+            }
+          }
 
           // Build status summary
           const statusEmoji = {
