@@ -329,7 +329,7 @@ jobs:
           mkdir -p docker-images
           docker save esm-format-julia:latest | gzip > docker-images/julia.tar.gz
           docker save esm-format-typescript:latest | gzip > docker-images/typescript.tar.gz
-          docker save esm-format-python:latest | gzip > docker-images/python.tar.gz
+          docker save earthsci-toolkit-python:latest | gzip > docker-images/python.tar.gz
           docker save earthsci-toolkit:latest | gzip > docker-images/rust.tar.gz
 
       - name: Upload Docker images for debugging

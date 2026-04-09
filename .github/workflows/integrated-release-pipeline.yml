@@ -187,7 +187,7 @@ jobs:
         \`\`\`bash
         # Pull language-specific containers
         docker pull ghcr.io/$NAMESPACE/esm-format-julia:v$NEW_VERSION
-        docker pull ghcr.io/$NAMESPACE/esm-format-python:v$NEW_VERSION
+        docker pull ghcr.io/$NAMESPACE/earthsci-toolkit-python:v$NEW_VERSION
         docker pull ghcr.io/$NAMESPACE/esm-format-typescript:v$NEW_VERSION
         docker pull ghcr.io/$NAMESPACE/earthsci-toolkit:v$NEW_VERSION
         \`\`\`
