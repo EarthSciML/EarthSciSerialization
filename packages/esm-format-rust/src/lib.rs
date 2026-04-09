@@ -59,20 +59,20 @@ pub mod performance;
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};
 pub use graph::{
-    component_exists, component_graph, expression_graph, get_component_type, ComponentGraph,
-    ComponentNode, ComponentType, CouplingEdge, DependencyEdge, DependencyRelationship,
-    ExpressionGraph, ExpressionGraphInput, VariableKind, VariableNode,
+    ComponentGraph, ComponentNode, ComponentType, CouplingEdge, DependencyEdge,
+    DependencyRelationship, ExpressionGraph, ExpressionGraphInput, VariableKind, VariableNode,
+    component_exists, component_graph, expression_graph, get_component_type,
 };
-pub use parse::{load, ParseError, SchemaValidationError};
+pub use parse::{ParseError, SchemaValidationError, load};
 pub use reactions::{
-    derive_odes, detect_conservation_violations, stoichiometric_matrix, ConservationAnalysis,
-    ConservationLawType, ConservationViolation, DeriveError, LinearInvariant,
+    ConservationAnalysis, ConservationLawType, ConservationViolation, DeriveError, LinearInvariant,
+    derive_odes, detect_conservation_violations, stoichiometric_matrix,
 };
 pub use serialize::{save, save_compact};
 pub use substitute::{
-    substitute, substitute_in_model, substitute_in_model_with_context,
+    ScopedContext, substitute, substitute_in_model, substitute_in_model_with_context,
     substitute_in_reaction_system, substitute_in_reaction_system_with_context,
-    substitute_with_context, ScopedContext,
+    substitute_with_context,
 };
 pub use types::{
     AffectEquation, ContinuousEvent, CouplingEntry, DataLoader, DiscreteEvent,
@@ -81,25 +81,25 @@ pub use types::{
     StoichiometricEntry, VariableType,
 };
 pub use validate::{
-    validate, validate_complete, SchemaError, StructuralError, StructuralErrorCode,
-    ValidationResult,
+    SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,
+    validate_complete,
 };
 
 pub use edit::{
-    add_coupling, add_equation, add_model, add_reaction, add_reaction_system, add_species,
-    add_variable, remove_coupling, remove_equation, remove_model, remove_reaction, remove_species,
-    remove_variable, replace_coupling, replace_equation, substitute_in_expression,
-    update_model_metadata, EditError,
+    EditError, add_coupling, add_equation, add_model, add_reaction, add_reaction_system,
+    add_species, add_variable, remove_coupling, remove_equation, remove_model, remove_reaction,
+    remove_species, remove_variable, replace_coupling, replace_equation, substitute_in_expression,
+    update_model_metadata,
 };
 pub use error::EsmError;
-pub use migration::{can_migrate, get_supported_migration_targets, migrate, MigrationError};
+pub use migration::{MigrationError, can_migrate, get_supported_migration_targets, migrate};
 pub use performance::{CompactExpr, PerformanceError};
 #[cfg(feature = "simd")]
 pub use reactions::compute_conservation_weights_simd;
 #[cfg(feature = "parallel")]
 pub use reactions::stoichiometric_matrix_parallel;
 pub use units::{
-    check_dimensional_consistency, convert_units, parse_unit, Dimension, Unit, UnitError,
+    Dimension, Unit, UnitError, check_dimensional_consistency, convert_units, parse_unit,
 };
 
 #[cfg(feature = "parallel")]

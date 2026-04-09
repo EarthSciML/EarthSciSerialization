@@ -4,11 +4,12 @@
 
 #[cfg(feature = "wasm")]
 use crate::{
+    EsmFile,
     graph::component_graph as rust_component_graph,
     load as rust_load,
     performance::{CompactExpr, PerformanceError},
     save as rust_save, stoichiometric_matrix, substitute_in_model, substitute_in_reaction_system,
-    validate as rust_validate, EsmFile,
+    validate as rust_validate,
 };
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;

@@ -1175,8 +1175,12 @@ fn format_operator_latex(
         }
         "ifelse" => {
             if args.len() == 3 {
-                format!("\\begin{{cases}} {} & \\text{{if }} {} \\\\\\\\ {} & \\text{{otherwise}} \\end{{cases}}",
-                    to_latex(&args[1]), to_latex(&args[0]), to_latex(&args[2]))
+                format!(
+                    "\\begin{{cases}} {} & \\text{{if }} {} \\\\\\\\ {} & \\text{{otherwise}} \\end{{cases}}",
+                    to_latex(&args[1]),
+                    to_latex(&args[0]),
+                    to_latex(&args[2])
+                )
             } else {
                 format!(
                     "\\mathrm{{ifelse}}({})",
