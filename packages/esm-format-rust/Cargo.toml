@@ -2,6 +2,7 @@
 name = "esm-format"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.83.0"
 authors = ["Chris Tessum with Claude <noreply@anthropic.com>"]
 description = "Rust implementation of EarthSciML Serialization Format"
 license = "MIT"
