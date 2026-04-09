@@ -1,70 +1,18 @@
 {
-  "name": "EarthSciSerialization",
-  "version": "0.1.0",
-  "updated": "2026-02-15T18:00:00Z",
-  "workspaces": {
-    "packages": [
-      "packages/*"
-    ]
+  "version": "",
+  "updated": "2026-04-09T02:54:41+00:00",
+  "packages": {
+    "julia": "v",
+    "typescript": "v",
+    "python": "v",
+    "rust": "v"
   },
-  "release": {
-    "strategy": "semantic",
-    "auto_publish": {
-      "julia": true,
-      "typescript": true,
-      "python": true,
-      "rust": true,
-      "go": true
-    },
-    "compatibility_check": true,
-    "generate_notes": true
-  },
-  "dependencies": {
-    "esm-format-ts": {
-      "path": "./packages/esm-format",
-      "version": "0.1.0",
-      "type": "typescript",
-      "npm_name": "esm-format",
-      "registry": "https://registry.npmjs.org"
-    },
-    "esm-format-py": {
-      "path": "./packages/esm_format",
-      "version": "0.1.0",
-      "type": "python",
-      "pypi_name": "esm-format",
-      "registry": "https://pypi.org"
-    },
-    "esm-format-jl": {
-      "path": "./packages/ESMFormat.jl",
-      "version": "0.1.0",
-      "type": "julia",
-      "julia_name": "ESMFormat",
-      "registry": "General"
-    },
-    "esm-format-rs": {
-      "path": "./packages/esm-format-rust",
-      "version": "0.1.0",
-      "type": "rust",
-      "crate_name": "esm-format",
-      "registry": "https://crates.io"
-    },
-    "esm-format-go": {
-      "path": "./packages/esm-format-go",
-      "version": "0.1.0",
-      "type": "go",
-      "module_path": "github.com/ctessum/EarthSciSerialization/packages/esm-format-go",
-      "registry": "https://proxy.golang.org"
-    }
-  },
-  "compatibility_matrix": {
-    "0.1.0": {
-      "julia": "0.1.0",
-      "typescript": "0.1.0",
-      "python": "0.1.0",
-      "rust": "0.1.0",
-      "go": "0.1.0",
-      "status": "compatible",
-      "tested": "2026-02-15T18:00:00Z"
-    }
+  "release_coordination": {
+    "status": "partial",
+    "completed": "2026-04-09T02:54:41+00:00",
+    "workflow_run_id": "24169837307",
+    "binaries_status": "skipped",
+    "containers_status": "skipped",
+    "conformance_status": "skipped"
   }
 }
