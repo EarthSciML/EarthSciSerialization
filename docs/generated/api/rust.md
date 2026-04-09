@@ -322,7 +322,7 @@ Create a unit with a single dimension
 
 ### benchmark_parsing
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:295`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:296`
 
 **Signature:**
 ```rust
@@ -423,7 +423,7 @@ Build a component graph from an ESM file
 
 ### component_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:261`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:262`
 
 **Signature:**
 ```rust
@@ -461,7 +461,7 @@ pub fn compute_conservation_weights_simd(
 
 ### compute_stoichiometric_matrix
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:246`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:247`
 
 **Signature:**
 ```rust
@@ -585,7 +585,7 @@ Convert between compatible units
 
 ### create_compact_expression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:230`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:231`
 
 **Signature:**
 ```rust
@@ -960,7 +960,7 @@ Get the type of a component
 
 ### get_performance_info
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:276`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:277`
 
 **Signature:**
 ```rust
@@ -1113,7 +1113,7 @@ assert_eq!(esm_file.esm, "0.1.0");
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:32`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:33`
 
 **Signature:**
 ```rust
@@ -1148,7 +1148,7 @@ pub fn load(json_str: &str) -> Result<JsValue, JsValue> {
 
 ### main
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:311`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:312`
 
 **Signature:**
 ```rust
@@ -1751,7 +1751,7 @@ Handles hierarchical resolution according to ESM Spec Section 2.3.3
 
 ### save
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:46`
 
 **Signature:**
 ```rust
@@ -1995,7 +1995,7 @@ Substitute variables in an expression
 
 ### substitute
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:160`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:161`
 
 **Signature:**
 ```rust
@@ -2342,7 +2342,7 @@ Substitute variables in an expression with scoped reference resolution
 
 ### to_ascii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:1502`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:1506`
 
 **Signature:**
 ```rust
@@ -2360,7 +2360,7 @@ Convert an expression to ASCII representation
 
 ### to_ascii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:131`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:132`
 
 **Signature:**
 ```rust
@@ -2471,7 +2471,7 @@ Convert an expression to LaTeX notation
 
 ### to_latex
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:102`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:103`
 
 **Signature:**
 ```rust
@@ -2554,7 +2554,7 @@ Convert an expression to Unicode mathematical notation
 
 ### to_unicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:73`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:74`
 
 **Signature:**
 ```rust
@@ -2665,7 +2665,7 @@ assert!(result.schema_errors.is_empty()); // Always empty for this function
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:58`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:59`
 
 **Signature:**
 ```rust
