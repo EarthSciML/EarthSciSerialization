@@ -1,12 +1,12 @@
 /**
  * ESM Format TypeScript Package
  *
- * Entry point for the esm-format package, providing complete TypeScript
+ * Entry point for the earthsci-toolkit package, providing complete TypeScript
  * type definitions for the EarthSciML Serialization Format.
  *
  * @example
  * ```typescript
- * import { EsmFile, Model, Expr } from 'esm-format';
+ * import { EsmFile, Model, Expr } from 'earthsci-toolkit';
  *
  * const myModel: Model = {
  *   name: "atmospheric_chemistry",

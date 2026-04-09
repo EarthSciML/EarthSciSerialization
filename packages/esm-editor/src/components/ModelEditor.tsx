@@ -11,7 +11,7 @@
  */
 
 import { Component, createSignal, createMemo, For, Show, JSX } from 'solid-js';
-import type { Model, ModelVariable, Equation, ContinuousEvent, DiscreteEvent } from 'esm-format';
+import type { Model, ModelVariable, Equation, ContinuousEvent, DiscreteEvent } from 'earthsci-toolkit';
 import { EquationEditor } from './EquationEditor';
 import { ExpressionPalette } from './ExpressionPalette';
 

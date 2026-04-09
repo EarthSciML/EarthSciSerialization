@@ -1,6 +1,6 @@
-# ESM Format - TypeScript Package
+# EarthSci Toolkit - TypeScript Package
 
-[![npm version](https://badge.fury.io/js/esm-format.svg)](https://badge.fury.io/js/esm-format)
+[![npm version](https://badge.fury.io/js/earthsci-toolkit.svg)](https://badge.fury.io/js/earthsci-toolkit)
 [![Build Status](https://github.com/user/EarthSciSerialization/workflows/CI/badge.svg)](https://github.com/user/EarthSciSerialization/actions)
 
 TypeScript types and utilities for the **EarthSciML Serialization Format**, providing complete type definitions, parsing, validation, and manipulation tools for scientific modeling data structures.
@@ -8,7 +8,7 @@ TypeScript types and utilities for the **EarthSciML Serialization Format**, prov
 ## Installation
 
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ## Usage
@@ -16,7 +16,7 @@ npm install esm-format
 ### Basic Usage
 
 ```typescript
-import { EsmFile, Model, load, save, validate } from 'esm-format';
+import { EsmFile, Model, load, save, validate } from 'earthsci-toolkit';
 
 // Parse ESM file from JSON
 const esmFile = load('{"version": "0.1.0", "models": [...]}');
@@ -43,7 +43,7 @@ const jsonString = save(esmFile);
 ### Working with Expressions
 
 ```typescript
-import { toUnicode, toLatex, substitute, freeVariables } from 'esm-format';
+import { toUnicode, toLatex, substitute, freeVariables } from 'earthsci-toolkit';
 
 // Pretty-print mathematical expressions
 const expr = { op: "+", args: ["x", { op: "^", args: ["y", "2"] }] };
@@ -61,7 +61,7 @@ const substituted = substitute(expr, { x: "2", y: "t" });
 ### Graph Analysis
 
 ```typescript
-import { component_graph, componentExists } from 'esm-format';
+import { component_graph, componentExists } from 'earthsci-toolkit';
 
 // Analyze component dependencies
 const graph = component_graph(esmFile);
@@ -80,12 +80,12 @@ This package supports both ESM and CommonJS environments:
 
 ### ESM (ECMAScript Modules)
 ```typescript
-import { load, save, validate } from 'esm-format';
+import { load, save, validate } from 'earthsci-toolkit';
 ```
 
 ### CommonJS
 ```javascript
-const { load, save, validate } = require('esm-format');
+const { load, save, validate } = require('earthsci-toolkit');
 ```
 
 ## API Reference

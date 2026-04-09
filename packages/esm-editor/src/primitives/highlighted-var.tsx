@@ -7,7 +7,7 @@
  */
 
 import { createContext, useContext, createSignal, createMemo, Accessor, Setter } from 'solid-js';
-import type { EsmFile, CouplingEntry } from 'esm-format';
+import type { EsmFile, CouplingEntry } from 'earthsci-toolkit';
 
 // Types for the highlighting context
 export interface HighlightContextValue {

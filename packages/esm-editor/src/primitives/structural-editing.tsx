@@ -10,7 +10,7 @@
  */
 
 import { createSignal, Accessor, Setter, createContext, useContext, JSX } from 'solid-js';
-import type { Expression, ExpressionNode as ExprNode } from 'esm-format';
+import type { Expression, ExpressionNode as ExprNode } from 'earthsci-toolkit';
 
 // Common operators available for wrapping
 export const WRAP_OPERATORS = [

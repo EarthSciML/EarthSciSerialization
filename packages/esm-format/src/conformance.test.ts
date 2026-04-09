@@ -1,5 +1,5 @@
 /**
- * Comprehensive conformance test suite for esm-format
+ * Comprehensive conformance test suite for earthsci-toolkit
  *
  * This test suite implements:
  * 1. Round-trip tests for all valid ESM fixtures

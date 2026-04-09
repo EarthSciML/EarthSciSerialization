@@ -6,18 +6,18 @@ The TypeScript implementation provides excellent web integration, interactive ed
 
 ### NPM
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ### Yarn
 ```bash
-yarn add esm-format
+yarn add earthsci-toolkit
 ```
 
 ### CDN (Browser)
 ```html
 <script type="module">
-  import { load, validate, toUnicode } from 'https://unpkg.com/esm-format/dist/esm/index.js';
+  import { load, validate, toUnicode } from 'https://unpkg.com/earthsci-toolkit/dist/esm/index.js';
 </script>
 ```
 
@@ -37,7 +37,7 @@ The TypeScript implementation provides **Interactive** tier capabilities:
 ### Loading and Parsing ESM Files
 
 ```typescript
-import { load, save, validate, type EsmFile } from 'esm-format';
+import { load, save, validate, type EsmFile } from 'earthsci-toolkit';
 import fs from 'fs';
 
 // Load from file (Node.js)
@@ -71,7 +71,7 @@ const jsonOutput = save(esmFile);
 ### Working with Expressions
 
 ```typescript
-import { toUnicode, toLatex, toAscii, substitute, freeVariables, type Expression } from 'esm-format';
+import { toUnicode, toLatex, toAscii, substitute, freeVariables, type Expression } from 'earthsci-toolkit';
 
 // Define mathematical expression
 const expr: Expression = {
@@ -109,7 +109,7 @@ import type {
   Expression,
   CouplingEntry,
   ValidationResult
-} from 'esm-format';
+} from 'earthsci-toolkit';
 
 // Type-safe model construction
 const model: Model = {
@@ -152,7 +152,7 @@ const esmFile: EsmFile = {
 ### React Integration
 ```tsx
 import React, { useState, useEffect } from 'react';
-import { load, validate, toUnicode } from 'esm-format';
+import { load, validate, toUnicode } from 'earthsci-toolkit';
 
 const ModelViewer: React.FC<{ esmData: string }> = ({ esmData }) => {
   const [esmFile, setEsmFile] = useState(null);
@@ -230,7 +230,7 @@ const ModelViewer: React.FC<{ esmData: string }> = ({ esmData }) => {
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { load, validate, toUnicode, type EsmFile } from 'esm-format';
+import { load, validate, toUnicode, type EsmFile } from 'earthsci-toolkit';
 
 const props = defineProps<{ esmData: string }>();
 
@@ -264,7 +264,7 @@ watch(() => props.esmData, loadModel, { immediate: true });
 The package includes interactive editing components built with SolidJS:
 
 ```typescript
-import { ExpressionEditor, ModelEditor } from 'esm-format/interactive';
+import { ExpressionEditor, ModelEditor } from 'earthsci-toolkit/interactive';
 
 // Use as SolidJS components
 function App() {
@@ -294,7 +294,7 @@ function App() {
 Export as standard HTML custom elements for use in any framework:
 
 ```typescript
-import 'esm-format/web-components';
+import 'earthsci-toolkit/web-components';
 
 // Use in HTML
 // <esm-expression-editor value='{"op": "+", "args": ["x", "y"]}'></esm-expression-editor>
@@ -306,7 +306,7 @@ import 'esm-format/web-components';
 <!DOCTYPE html>
 <html>
 <head>
-  <script type="module" src="esm-format/web-components.js"></script>
+  <script type="module" src="earthsci-toolkit/web-components.js"></script>
 </head>
 <body>
   <esm-expression-editor
@@ -335,7 +335,7 @@ import 'esm-format/web-components';
 ### Express.js API
 ```typescript
 import express from 'express';
-import { load, validate, save } from 'esm-format';
+import { load, validate, save } from 'earthsci-toolkit';
 
 const app = express();
 app.use(express.json());
@@ -380,7 +380,7 @@ app.listen(3000, () => {
 ```typescript
 // pages/api/models/[id].ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { load, validate, save } from 'esm-format';
+import { load, validate, save } from 'earthsci-toolkit';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
@@ -411,7 +411,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 ### Lazy Loading
 ```typescript
 // Dynamically import heavy components
-const ModelEditor = lazy(() => import('esm-format/interactive').then(m => ({ default: m.ModelEditor })));
+const ModelEditor = lazy(() => import('earthsci-toolkit/interactive').then(m => ({ default: m.ModelEditor })));
 
 // Use in React with Suspense
 <Suspense fallback={<div>Loading model editor...</div>}>
@@ -422,7 +422,7 @@ const ModelEditor = lazy(() => import('esm-format/interactive').then(m => ({ def
 ### Web Workers
 ```typescript
 // worker.ts
-import { validate, load } from 'esm-format';
+import { validate, load } from 'earthsci-toolkit';
 
 self.onmessage = (e) => {
   const { type, data } = e.data;
@@ -452,7 +452,7 @@ worker.onmessage = (e) => {
 
 ### Jest Testing
 ```typescript
-import { load, validate, toUnicode } from 'esm-format';
+import { load, validate, toUnicode } from 'earthsci-toolkit';
 
 describe('ESM Format', () => {
   test('loads valid ESM file', () => {

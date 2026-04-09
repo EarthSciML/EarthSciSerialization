@@ -21,9 +21,9 @@ Thank you for your interest in contributing to EarthSciSerialization! This guide
 EarthSciSerialization is a language-agnostic JSON-based format for earth science model components with implementations across multiple programming languages:
 
 - **Julia** (EarthSciSerialization.jl) - Complete MTK/Catalyst integration
-- **TypeScript** (esm-format) - Web/Node.js types and utilities
+- **TypeScript** (earthsci-toolkit) - Web/Node.js types and utilities
 - **Python** (earthsci_toolkit) - Scientific Python integration
-- **Rust** (esm-format-rust) - High-performance implementation
+- **Rust** (earthsci-toolkit) - High-performance implementation
 - **Go** (esm-format-go) - Lightweight Go implementation
 - **SolidJS** (esm-editor) - Interactive web-based editor
 
@@ -89,7 +89,7 @@ EarthSciSerialization/
 │   ├── EarthSciSerialization.jl/        # Julia implementation
 │   ├── esm-format/          # TypeScript implementation
 │   ├── earthsci_toolkit/          # Python implementation
-│   ├── esm-format-rust/     # Rust implementation
+│   ├── earthsci-toolkit/     # Rust implementation
 │   ├── esm-format-go/       # Go implementation
 │   └── esm-editor/          # SolidJS web editor
 ├── tests/                   # Cross-language conformance tests
@@ -155,7 +155,7 @@ All code contributions must:
 julia --project=. -e 'using Pkg; Pkg.test()'                    # Julia
 cd packages/esm-format && npm test                              # TypeScript
 cd packages/earthsci_toolkit && python -m pytest                     # Python
-cd packages/esm-format-rust && cargo test                      # Rust
+cd packages/earthsci-toolkit && cargo test                      # Rust
 cd packages/esm-format-go && go test ./...                     # Go
 ```
 
@@ -275,7 +275,7 @@ cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.activate("."); Pkg.test()'
 ```
 
-### TypeScript (esm-format)
+### TypeScript (earthsci-toolkit)
 
 - **Standards**: Strict TypeScript, ESLint + Prettier
 - **Testing**: Jest for unit tests, cross-browser compatibility
@@ -307,7 +307,7 @@ python -m mypy earthsci_toolkit/
 python -m black earthsci_toolkit/
 ```
 
-### Rust (esm-format-rust)
+### Rust (earthsci-toolkit)
 
 - **Standards**: rustfmt, clippy, comprehensive error handling
 - **Testing**: Standard Rust testing with cargo test
@@ -316,7 +316,7 @@ python -m black earthsci_toolkit/
 
 ```bash
 # Rust development workflow
-cd packages/esm-format-rust
+cd packages/earthsci-toolkit
 cargo fmt
 cargo clippy -- -D warnings
 cargo test

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerWebComponents } from './web-components';
-import type { EsmFile, Expression, Model, ReactionSystem } from 'esm-format';
+import type { EsmFile, Expression, Model, ReactionSystem } from 'earthsci-toolkit';
 
 describe('Web Components', () => {
   beforeEach(() => {

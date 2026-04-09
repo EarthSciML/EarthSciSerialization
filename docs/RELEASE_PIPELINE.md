@@ -132,7 +132,7 @@ using Pkg; Pkg.add("EarthSciSerialization")
 
 **Installation**:
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ### Python (earthsci_toolkit)

@@ -458,7 +458,7 @@ class PackageSignatureVerifier:
         package_mapping = {
             'EarthSciSerialization.jl': 'julia',
             'earthsci_toolkit': 'python',
-            'esm-format': 'npm',
+            'earthsci-toolkit': 'npm',
             'esm-editor': 'npm',
             'earthsci-toolkit': 'rust'
         }
@@ -543,7 +543,7 @@ def main():
                 package_mapping = {
                     'EarthSciSerialization.jl': 'julia',
                     'earthsci_toolkit': 'python',
-                    'esm-format': 'npm',
+                    'earthsci-toolkit': 'npm',
                     'esm-editor': 'npm',
                     'earthsci-toolkit': 'rust'
                 }

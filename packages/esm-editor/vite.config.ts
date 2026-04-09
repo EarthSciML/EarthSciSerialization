@@ -13,12 +13,12 @@ export default defineConfig({
       formats: ['es']
     },
     rollupOptions: {
-      external: ['solid-js', 'solid-element', 'esm-format', 'd3-force'],
+      external: ['solid-js', 'solid-element', 'earthsci-toolkit', 'd3-force'],
       output: {
         globals: {
           'solid-js': 'SolidJS',
           'solid-element': 'SolidElement',
-          'esm-format': 'ESMFormat',
+          'earthsci-toolkit': 'ESMFormat',
           'd3-force': 'D3Force'
         }
       }

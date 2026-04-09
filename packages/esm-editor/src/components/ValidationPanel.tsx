@@ -8,8 +8,8 @@
  */
 
 import { Component, createMemo, For, Show } from 'solid-js';
-import type { EsmFile } from 'esm-format';
-import { validate, type ValidationError, type ValidationResult } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
+import { validate, type ValidationError, type ValidationResult } from 'earthsci-toolkit';
 
 export interface ValidationPanelProps {
   /** The ESM file to validate */

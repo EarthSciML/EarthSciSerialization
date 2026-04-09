@@ -407,7 +407,7 @@ export const WebComponentsDemo: Component = () => {
 
           <div class="usage-example">
             <h4>React Usage:</h4>
-            <pre><code>{`import 'esm-format/web-components';
+            <pre><code>{`import 'earthsci-toolkit/web-components';
 
 function MyApp() {
   return (
@@ -437,7 +437,7 @@ function MyApp() {
 </template>
 
 <script>
-import 'esm-format/web-components';
+import 'earthsci-toolkit/web-components';
 
 export default {
   methods: {

@@ -11,7 +11,7 @@ import {
   stringToPath,
   type NodeDetails
 } from './selection';
-import type { Expression, EsmFile } from 'esm-format';
+import type { Expression, EsmFile } from 'earthsci-toolkit';
 
 describe('Selection primitives', () => {
   describe('Helper functions', () => {
