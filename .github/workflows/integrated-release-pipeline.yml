@@ -49,6 +49,9 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Lowercase registry namespace
+      run: echo "NAMESPACE=${NAMESPACE,,}" >> $GITHUB_ENV
+
     - name: Release analysis
       id: analysis
       run: |
@@ -183,10 +186,10 @@ jobs:
         ### Container Images
         \`\`\`bash
         # Pull language-specific containers
-        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-julia:v$NEW_VERSION
-        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-python:v$NEW_VERSION
-        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-typescript:v$NEW_VERSION
-        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-rust:v$NEW_VERSION
+        docker pull ghcr.io/$NAMESPACE/esm-format-julia:v$NEW_VERSION
+        docker pull ghcr.io/$NAMESPACE/esm-format-python:v$NEW_VERSION
+        docker pull ghcr.io/$NAMESPACE/esm-format-typescript:v$NEW_VERSION
+        docker pull ghcr.io/$NAMESPACE/esm-format-rust:v$NEW_VERSION
         \`\`\`
         EOF
 
