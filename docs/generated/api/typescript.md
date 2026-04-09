@@ -2412,13 +2412,13 @@ export interface ESMError {
 
 ---
 
-### EarthSciSerialization2
+### ESMFormat2
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:185`
 
 **Definition:**
 ```typescript
-export interface EarthSciSerialization2 {
+export interface ESMFormat2 {
 ```
 
 ---
