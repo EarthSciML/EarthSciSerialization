@@ -1,0 +1,320 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "WildfireAtmosphereOcean",
+    "description": "Coupled wildfire-atmosphere-ocean system with 0D parameterizations",
+    "authors": ["EarthSciML"],
+    "created": "2026-04-08T00:00:00Z"
+  },
+
+  "models": {
+    "AtmosphericDynamics": {
+      "domain": "atmosphere",
+      "reference": { "notes": "Simplified 3D atmospheric dynamics" },
+      "variables": {
+        "T": { "type": "state", "units": "K", "default": 288.0, "description": "Temperature" },
+        "wind_u": { "type": "state", "units": "m/s", "default": 0.0, "description": "Eastward wind" },
+        "wind_v": { "type": "state", "units": "m/s", "default": 0.0, "description": "Northward wind" },
+        "q_heat": { "type": "parameter", "units": "K/s", "default": 0.0, "description": "External heating rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["T"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["wind_u"] }, { "op": "grad", "args": ["T"], "dim": "x" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["wind_v"] }, { "op": "grad", "args": ["T"], "dim": "y" }] },
+              "q_heat"
+            ]
+          }
+        }
+      ]
+    },
+
+    "WildfirePropagation": {
+      "domain": "wildfire_surface",
+      "reference": { "notes": "Level-set wildfire spread model" },
+      "variables": {
+        "phi": { "type": "state", "units": "1", "default": 1.0, "description": "Level-set function (phi<0 = burned)" },
+        "R_spread": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Fire spread rate" },
+        "fuel": { "type": "state", "units": "kg/m^2", "default": 10.0, "description": "Fuel load" },
+        "heat_release": {
+          "type": "observed", "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": [
+              "R_spread", "fuel",
+              { "op": "ifelse", "args": [
+                { "op": "<", "args": ["phi", 0] }, 18000.0, 0.0
+              ]}
+            ]
+          },
+          "description": "Heat release rate at fire front"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["phi"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              { "op": "-", "args": ["R_spread"] },
+              { "op": "sqrt", "args": [
+                { "op": "+", "args": [
+                  { "op": "^", "args": [{ "op": "grad", "args": ["phi"], "dim": "x" }, 2] },
+                  { "op": "^", "args": [{ "op": "grad", "args": ["phi"], "dim": "y" }, 2] }
+                ]}
+              ]}
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["fuel"], "wrt": "t" },
+          "rhs": {
+            "op": "ifelse",
+            "args": [
+              { "op": "<", "args": ["phi", 0] },
+              { "op": "*", "args": [-0.01, "fuel"] },
+              0.0
+            ]
+          }
+        }
+      ]
+    },
+
+    "FireSpreadCalculator": {
+      "domain": null,
+      "reference": { "notes": "Rothermel-style wind-driven spread rate (algebraic)" },
+      "variables": {
+        "wind_u": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Eastward wind at ground level" },
+        "wind_v": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Northward wind at ground level" },
+        "R_base": { "type": "parameter", "units": "m/s", "default": 0.05, "description": "Base spread rate (no wind)" },
+        "wind_factor": { "type": "parameter", "units": "1", "default": 0.3, "description": "Wind enhancement coefficient" },
+        "wind_speed": {
+          "type": "observed", "units": "m/s",
+          "expression": {
+            "op": "sqrt",
+            "args": [{ "op": "+", "args": [
+              { "op": "^", "args": ["wind_u", 2] },
+              { "op": "^", "args": ["wind_v", 2] }
+            ]}]
+          },
+          "description": "Wind speed magnitude"
+        },
+        "spread_rate": {
+          "type": "observed", "units": "m/s",
+          "expression": {
+            "op": "*",
+            "args": [
+              "R_base",
+              { "op": "+", "args": [1.0, { "op": "*", "args": ["wind_factor", "wind_speed"] }] }
+            ]
+          },
+          "description": "Wind-enhanced fire spread rate"
+        }
+      },
+      "equations": []
+    },
+
+    "OceanDynamics": {
+      "domain": "ocean",
+      "reference": { "notes": "Simplified 3D ocean dynamics" },
+      "variables": {
+        "SST": { "type": "state", "units": "K", "default": 290.0, "description": "Sea surface temperature" },
+        "u_ocean": { "type": "state", "units": "m/s", "default": 0.0, "description": "Eastward ocean current" },
+        "surface_heat_flux": { "type": "parameter", "units": "W/m^2", "default": 0.0, "description": "Net heat flux from atmosphere" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["SST"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u_ocean"] }, { "op": "grad", "args": ["SST"], "dim": "x" }] },
+              { "op": "/", "args": ["surface_heat_flux", 4.18e6] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "AirSeaFluxCalculator": {
+      "domain": null,
+      "reference": { "notes": "Bulk formula for air-sea heat exchange (algebraic)" },
+      "variables": {
+        "T_atm": { "type": "parameter", "units": "K", "default": 288.0, "description": "Atmospheric temperature at surface" },
+        "SST": { "type": "parameter", "units": "K", "default": 290.0, "description": "Sea surface temperature" },
+        "wind_speed": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Surface wind speed" },
+        "C_H": { "type": "parameter", "units": "1", "default": 1.2e-3, "description": "Heat transfer coefficient" },
+        "rho_air": { "type": "parameter", "units": "kg/m^3", "default": 1.225, "description": "Air density" },
+        "c_p": { "type": "parameter", "units": "J/(kg*K)", "default": 1005.0, "description": "Specific heat of air" },
+        "sensible_heat_flux": {
+          "type": "observed", "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": ["rho_air", "c_p", "C_H", "wind_speed",
+              { "op": "-", "args": ["T_atm", "SST"] }
+            ]
+          },
+          "description": "Sensible heat flux (positive = ocean to atmosphere)"
+        }
+      },
+      "equations": []
+    }
+  },
+
+  "domains": {
+    "atmosphere": {
+      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.1 },
+        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.1 },
+        "lev": { "min": 0.0, "max": 20000.0, "units": "m", "grid_spacing": 500.0 }
+      },
+      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 0.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] },
+        { "type": "zero_gradient", "dimensions": ["lev"] }
+      ],
+      "element_type": "Float64"
+    },
+    "wildfire_surface": {
+      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -119.0, "max": -117.0, "units": "degrees", "grid_spacing": 0.01 },
+        "lat": { "min": 34.0, "max": 35.0, "units": "degrees", "grid_spacing": 0.01 }
+      },
+      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 1.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] }
+      ],
+      "element_type": "Float64"
+    },
+    "ocean": {
+      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.25 },
+        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.25 },
+        "depth": { "min": 0.0, "max": 5000.0, "units": "m", "grid_spacing": 50.0 }
+      },
+      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 290.0 },
+      "boundary_conditions": [
+        { "type": "periodic", "dimensions": ["lon"] },
+        { "type": "zero_gradient", "dimensions": ["lat", "depth"] }
+      ],
+      "element_type": "Float64"
+    }
+  },
+
+  "interfaces": {
+    "ground_surface": {
+      "description": "Ground-level interface: atmosphere <-> wildfire",
+      "domains": ["atmosphere", "wildfire_surface"],
+      "dimension_mapping": {
+        "shared": {
+          "atmosphere.lon": "wildfire_surface.lon",
+          "atmosphere.lat": "wildfire_surface.lat"
+        },
+        "constraints": {
+          "atmosphere.lev": { "value": "min" }
+        }
+      },
+      "regridding": { "method": "bilinear" }
+    },
+    "sea_surface": {
+      "description": "Air-sea interface: atmosphere <-> ocean",
+      "domains": ["atmosphere", "ocean"],
+      "dimension_mapping": {
+        "shared": {
+          "atmosphere.lon": "ocean.lon",
+          "atmosphere.lat": "ocean.lat"
+        },
+        "constraints": {
+          "atmosphere.lev": { "value": "min" },
+          "ocean.depth": { "value": "min" }
+        }
+      },
+      "regridding": { "method": "conservative" }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "AtmosphericDynamics.wind_u",
+      "to": "FireSpreadCalculator.wind_u",
+      "transform": "param_to_var",
+      "interface": "ground_surface",
+      "lifting": "pointwise",
+      "description": "Ground-level u-wind to fire spread calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "AtmosphericDynamics.wind_v",
+      "to": "FireSpreadCalculator.wind_v",
+      "transform": "param_to_var",
+      "interface": "ground_surface",
+      "lifting": "pointwise",
+      "description": "Ground-level v-wind to fire spread calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "FireSpreadCalculator.spread_rate",
+      "to": "WildfirePropagation.R_spread",
+      "transform": "param_to_var",
+      "lifting": "pointwise",
+      "description": "Calculated spread rate drives wildfire propagation"
+    },
+    {
+      "type": "variable_map",
+      "from": "WildfirePropagation.heat_release",
+      "to": "AtmosphericDynamics.q_heat",
+      "transform": "param_to_var",
+      "interface": "ground_surface",
+      "factor": 2.4e-7,
+      "description": "Wildfire heat injection into lowest atmospheric layer (W/m^2 -> K/s)"
+    },
+    {
+      "type": "variable_map",
+      "from": "AtmosphericDynamics.T",
+      "to": "AirSeaFluxCalculator.T_atm",
+      "transform": "param_to_var",
+      "interface": "sea_surface",
+      "lifting": "pointwise",
+      "description": "Surface air temperature to air-sea flux calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "OceanDynamics.SST",
+      "to": "AirSeaFluxCalculator.SST",
+      "transform": "param_to_var",
+      "interface": "sea_surface",
+      "lifting": "pointwise",
+      "description": "Sea surface temperature to air-sea flux calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "AirSeaFluxCalculator.sensible_heat_flux",
+      "to": "OceanDynamics.surface_heat_flux",
+      "transform": "param_to_var",
+      "lifting": "pointwise",
+      "description": "Calculated heat flux drives ocean surface temperature"
+    }
+  ],
+
+  "solver": {
+    "strategy": "strang_threads",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 60.0,
+      "nonstiff_algorithm": "Euler"
+    }
+  }
+}

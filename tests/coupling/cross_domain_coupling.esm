@@ -1,0 +1,174 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CrossDomainCoupling",
+    "description": "Test fixture for coupling entries with interface and lifting fields across domains of different dimensionality",
+    "authors": ["EarthSciML"],
+    "created": "2026-04-09T00:00:00Z",
+    "tags": ["cross-domain", "coupling", "interface", "lifting"]
+  },
+
+  "models": {
+    "Ocean3D": {
+      "domain": "ocean",
+      "variables": {
+        "SST": { "type": "state", "units": "K", "default": 290.0, "description": "Sea surface temperature" },
+        "salinity": { "type": "state", "units": "psu", "default": 35.0, "description": "Salinity" },
+        "heat_flux": { "type": "parameter", "units": "W/m^2", "default": 0.0, "description": "Surface heat flux" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["SST"], "wrt": "t" },
+          "rhs": { "op": "/", "args": ["heat_flux", 4.18e6] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["salinity"], "wrt": "t" },
+          "rhs": 0.0
+        }
+      ]
+    },
+
+    "Atmosphere2D": {
+      "domain": "atmos_surface",
+      "variables": {
+        "T_air": { "type": "state", "units": "K", "default": 288.0, "description": "Near-surface air temperature" },
+        "wind_speed": { "type": "state", "units": "m/s", "default": 5.0, "description": "Surface wind speed" },
+        "evap_rate": { "type": "parameter", "units": "kg/(m^2*s)", "default": 0.0, "description": "Evaporation rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["T_air"], "wrt": "t" },
+          "rhs": 0.0
+        },
+        {
+          "lhs": { "op": "D", "args": ["wind_speed"], "wrt": "t" },
+          "rhs": 0.0
+        }
+      ]
+    },
+
+    "BulkFluxCalculator": {
+      "domain": null,
+      "variables": {
+        "T_air_in": { "type": "parameter", "units": "K", "default": 288.0 },
+        "SST_in": { "type": "parameter", "units": "K", "default": 290.0 },
+        "wind_in": { "type": "parameter", "units": "m/s", "default": 5.0 },
+        "C_D": { "type": "parameter", "units": "1", "default": 1.5e-3, "description": "Drag coefficient" },
+        "rho": { "type": "parameter", "units": "kg/m^3", "default": 1.225 },
+        "c_p": { "type": "parameter", "units": "J/(kg*K)", "default": 1005.0 },
+        "sensible_flux": {
+          "type": "observed", "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": ["rho", "c_p", "C_D", "wind_in",
+              { "op": "-", "args": ["T_air_in", "SST_in"] }
+            ]
+          },
+          "description": "Sensible heat flux"
+        },
+        "latent_flux": {
+          "type": "observed", "units": "W/m^2",
+          "expression": {
+            "op": "*",
+            "args": ["rho", 2.5e6, "C_D", "wind_in", 0.001]
+          },
+          "description": "Latent heat flux (simplified)"
+        }
+      },
+      "equations": []
+    }
+  },
+
+  "domains": {
+    "ocean": {
+      "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -80.0, "max": -60.0, "units": "degrees", "grid_spacing": 0.5 },
+        "lat": { "min": 20.0, "max": 40.0, "units": "degrees", "grid_spacing": 0.5 },
+        "depth": { "min": 0.0, "max": 1000.0, "units": "m", "grid_spacing": 10.0 }
+      },
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 290.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] },
+        { "type": "zero_gradient", "dimensions": ["depth"] }
+      ],
+      "element_type": "Float64"
+    },
+    "atmos_surface": {
+      "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -80.0, "max": -60.0, "units": "degrees", "grid_spacing": 1.0 },
+        "lat": { "min": 20.0, "max": 40.0, "units": "degrees", "grid_spacing": 1.0 }
+      },
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 288.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["lon", "lat"] }
+      ],
+      "element_type": "Float64"
+    }
+  },
+
+  "interfaces": {
+    "air_sea": {
+      "description": "Air-sea interface coupling atmosphere and ocean surface",
+      "domains": ["atmos_surface", "ocean"],
+      "dimension_mapping": {
+        "shared": {
+          "atmos_surface.lon": "ocean.lon",
+          "atmos_surface.lat": "ocean.lat"
+        },
+        "constraints": {
+          "ocean.depth": { "value": "min" }
+        }
+      },
+      "regridding": { "method": "conservative" }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "Atmosphere2D.T_air",
+      "to": "BulkFluxCalculator.T_air_in",
+      "transform": "param_to_var",
+      "lifting": "pointwise",
+      "description": "Air temperature to bulk flux calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "Atmosphere2D.wind_speed",
+      "to": "BulkFluxCalculator.wind_in",
+      "transform": "param_to_var",
+      "lifting": "pointwise",
+      "description": "Wind speed to bulk flux calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "Ocean3D.SST",
+      "to": "BulkFluxCalculator.SST_in",
+      "transform": "param_to_var",
+      "interface": "air_sea",
+      "lifting": "pointwise",
+      "description": "SST from ocean surface to bulk flux calculator"
+    },
+    {
+      "type": "variable_map",
+      "from": "BulkFluxCalculator.sensible_flux",
+      "to": "Ocean3D.heat_flux",
+      "transform": "param_to_var",
+      "interface": "air_sea",
+      "lifting": "pointwise",
+      "description": "Sensible heat flux drives ocean surface temperature"
+    }
+  ],
+
+  "solver": {
+    "strategy": "strang_serial",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 600.0
+    }
+  }
+}
