@@ -56,6 +56,16 @@ jobs:
         LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
         echo "Last tag: $LAST_TAG"
 
+        # Determine a valid git ref for diff/log commands
+        # When no tags exist, LAST_TAG is "v0.0.0" which isn't a real ref
+        if git rev-parse "$LAST_TAG" >/dev/null 2>&1; then
+          LAST_REF="$LAST_TAG"
+        else
+          # Use the repo's initial commit so diffs cover the full history
+          LAST_REF=$(git rev-list --max-parents=0 HEAD | head -1)
+          echo "No existing tag found, using initial commit: $LAST_REF"
+        fi
+
         # Check for changes in package directories since last tag
         CHANGED_PACKAGES='[]'
         NEEDS_RELEASE="false"
@@ -63,12 +73,12 @@ jobs:
         if [ "${{ github.event.inputs.force_release }}" = "true" ]; then
           NEEDS_RELEASE="true"
           CHANGED_PACKAGES='["ESMFormat.jl", "esm-format", "esm_format", "esm-format-rust"]'
-        elif git diff --name-only ${LAST_TAG}..HEAD | grep -E '^packages/'; then
+        elif git diff --name-only ${LAST_REF}..HEAD | grep -E '^packages/'; then
           echo "Changes detected in packages"
           NEEDS_RELEASE="true"
 
           # Detect which specific packages changed
-          CHANGED_PACKAGES=$(git diff --name-only ${LAST_TAG}..HEAD | \
+          CHANGED_PACKAGES=$(git diff --name-only ${LAST_REF}..HEAD | \
             grep -E '^packages/' | \
             cut -d'/' -f2 | \
             sort -u | \
@@ -83,7 +93,7 @@ jobs:
           VERSION_BUMP="${{ github.event.inputs.version_type }}"
         else
           # Auto-detect from commit messages
-          COMMIT_MESSAGES=$(git log ${LAST_TAG}..HEAD --oneline)
+          COMMIT_MESSAGES=$(git log ${LAST_REF}..HEAD --oneline)
           if echo "$COMMIT_MESSAGES" | grep -i "BREAKING CHANGE\|!:"; then
             VERSION_BUMP="major"
           elif echo "$COMMIT_MESSAGES" | grep -i "^feat\|^feature"; then
@@ -136,7 +146,7 @@ jobs:
 
         ## Changes since $LAST_TAG:
 
-        $(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+        $(git log ${LAST_REF}..HEAD --pretty=format:"- %s (%h)" --no-merges)
 
         ## Changed Packages:
 
