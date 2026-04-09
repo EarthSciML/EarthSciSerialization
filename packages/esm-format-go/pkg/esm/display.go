@@ -714,40 +714,42 @@ func ModelSummary(esm *EsmFile) string {
 		result.WriteString("\n")
 	}
 
-	// Domain
-	if esm.Domain != nil {
-		result.WriteString("  Domain: ")
-		parts := make([]string, 0)
+	// Domains
+	if len(esm.Domains) > 0 {
+		for domainName, domain := range esm.Domains {
+			result.WriteString(fmt.Sprintf("  Domain %s: ", domainName))
+			parts := make([]string, 0)
 
-		// Spatial dimensions
-		if len(esm.Domain.Spatial) > 0 {
-			for dimName, dim := range esm.Domain.Spatial {
-				// Use minus signs for negative numbers and degree symbol for degrees
-				minStr := formatNumber(dim.Min, "unicode")
-				maxStr := formatNumber(dim.Max, "unicode")
-				spacingStr := formatNumber(dim.GridSpacing, "unicode")
+			// Spatial dimensions
+			if len(domain.Spatial) > 0 {
+				for dimName, dim := range domain.Spatial {
+					// Use minus signs for negative numbers and degree symbol for degrees
+					minStr := formatNumber(dim.Min, "unicode")
+					maxStr := formatNumber(dim.Max, "unicode")
+					spacingStr := formatNumber(dim.GridSpacing, "unicode")
 
-				unitStr := dim.Units
-				if unitStr == "degrees" {
-					unitStr = "°"
+					unitStr := dim.Units
+					if unitStr == "degrees" {
+						unitStr = "°"
+					}
+
+					parts = append(parts, fmt.Sprintf("%s [%s, %s] (Δ%s%s)",
+						dimName, minStr, maxStr, spacingStr, unitStr))
 				}
-
-				parts = append(parts, fmt.Sprintf("%s [%s, %s] (Δ%s%s)",
-					dimName, minStr, maxStr, spacingStr, unitStr))
 			}
-		}
 
-		// Temporal domain
-		if esm.Domain.Temporal != nil {
-			temporal := esm.Domain.Temporal
-			// Extract just the date parts for brevity
-			start := strings.Split(temporal.Start, "T")[0]
-			end := strings.Split(temporal.End, "T")[0]
-			parts = append(parts, fmt.Sprintf("%s to %s", start, end))
-		}
+			// Temporal domain
+			if domain.Temporal != nil {
+				temporal := domain.Temporal
+				// Extract just the date parts for brevity
+				start := strings.Split(temporal.Start, "T")[0]
+				end := strings.Split(temporal.End, "T")[0]
+				parts = append(parts, fmt.Sprintf("%s to %s", start, end))
+			}
 
-		result.WriteString(strings.Join(parts, ", "))
-		result.WriteString("\n")
+			result.WriteString(strings.Join(parts, ", "))
+			result.WriteString("\n")
+		}
 	}
 
 	// Solver
