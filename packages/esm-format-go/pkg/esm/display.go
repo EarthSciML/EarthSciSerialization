@@ -287,52 +287,6 @@ func formatSuperscript(num int) string {
 	return result.String()
 }
 
-// Operator precedence levels (higher number = higher precedence)
-func getOperatorPrecedence(op string) int {
-	switch op {
-	case "or":
-		return 1
-	case "and":
-		return 2
-	case "==", "!=", "<", ">", "<=", ">=":
-		return 3
-	case "+", "-":
-		return 4
-	case "*", "/":
-		return 5
-	case "^":
-		return 6
-	case "exp", "log", "log10", "sqrt", "abs", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sign":
-		return 7
-	case "D", "grad", "div", "laplacian":
-		return 8
-	default:
-		return 9 // Functions and other operators
-	}
-}
-
-// needsParentheses determines if an expression needs parentheses based on operator precedence
-func needsParentheses(childOp string, parentOp string, isRightChild bool) bool {
-	childPrec := getOperatorPrecedence(childOp)
-	parentPrec := getOperatorPrecedence(parentOp)
-
-	if childPrec < parentPrec {
-		return true
-	}
-
-	// Right-associative operators (like ^) need special handling
-	if childPrec == parentPrec && isRightChild && (parentOp == "^" || parentOp == "/") {
-		return false
-	}
-
-	// Same precedence on the right side of non-associative operators needs parentheses
-	if childPrec == parentPrec && isRightChild && (parentOp == "-" || parentOp == "/") {
-		return true
-	}
-
-	return false
-}
-
 // formatExprNode formats an expression node with proper precedence and parentheses
 func formatExprNode(node ExprNode, format string, parentPrecedence int) string {
 	op := node.Op
@@ -461,28 +415,6 @@ func formatExprNode(node ExprNode, format string, parentPrecedence int) string {
 
 	// Fallback
 	return op + "(...)"
-}
-
-// Helper functions for specific formatting cases
-
-func formatBinaryOp(op string, args []interface{}, format string, unicodeOp, latexOp, asciiOp string) string {
-	if len(args) < 2 {
-		return op + "(...)"
-	}
-
-	parts := make([]string, len(args))
-	for i, arg := range args {
-		parts[i] = formatExpression(arg, format)
-	}
-
-	switch format {
-	case "unicode":
-		return strings.Join(parts, " " + unicodeOp + " ")
-	case "latex":
-		return strings.Join(parts, latexOp)
-	default:
-		return strings.Join(parts, asciiOp)
-	}
 }
 
 func formatMultiplication(args []interface{}, format string) string {
