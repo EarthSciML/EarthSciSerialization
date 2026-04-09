@@ -132,8 +132,14 @@ function coerce_esm_file(data::Any)::EsmFile
         CouplingEntry[]
     end
 
-    domain = if haskey(data, :domain) && data.domain !== nothing
-        coerce_domain(data.domain)
+    domains = if haskey(data, :domains) && data.domains !== nothing
+        Dict{String,Domain}(string(k) => coerce_domain(v) for (k, v) in pairs(data.domains))
+    else
+        nothing
+    end
+
+    interfaces = if haskey(data, :interfaces) && data.interfaces !== nothing
+        Dict{String,Interface}(string(k) => coerce_interface(v) for (k, v) in pairs(data.interfaces))
     else
         nothing
     end
@@ -150,7 +156,8 @@ function coerce_esm_file(data::Any)::EsmFile
                   data_loaders=data_loaders,
                   operators=operators,
                   coupling=coupling,
-                  domain=domain,
+                  domains=domains,
+                  interfaces=interfaces,
                   solver=solver)
 end
 
@@ -224,8 +231,10 @@ function coerce_model(data::Any)::Model
         return create_model_with_mixed_events(variables, equations, mixed_events)
     end
 
+    domain = haskey(data, :domain) && data.domain !== nothing ? string(data.domain) : nothing
+
     return Model(variables, equations, discrete_events=discrete_events,
-                continuous_events=continuous_events)
+                continuous_events=continuous_events, domain=domain)
 end
 
 """
@@ -347,7 +356,9 @@ function coerce_reaction_system(data::Any)::ReactionSystem
     # Convert parameters dict to vector - parameters are now keyed by name
     parameters = haskey(data, :parameters) ? [coerce_parameter(string(k), v) for (k, v) in pairs(data.parameters)] : Parameter[]
 
-    return ReactionSystem(species, reactions, parameters=parameters)
+    domain = haskey(data, :domain) && data.domain !== nothing ? string(data.domain) : nothing
+
+    return ReactionSystem(species, reactions, parameters=parameters, domain=domain)
 end
 
 """
@@ -497,8 +508,16 @@ function coerce_operator_compose(data::AbstractDict)::CouplingOperatorCompose
     systems = Vector{String}(data["systems"])
     translate = get(data, "translate", nothing)
     description = get(data, "description", nothing)
+    interface = get(data, "interface", nothing)
+    if interface !== nothing
+        interface = String(interface)
+    end
+    lifting = get(data, "lifting", nothing)
+    if lifting !== nothing
+        lifting = String(lifting)
+    end
 
-    return CouplingOperatorCompose(systems; translate=translate, description=description)
+    return CouplingOperatorCompose(systems; translate=translate, description=description, interface=interface, lifting=lifting)
 end
 
 """
@@ -518,8 +537,16 @@ function coerce_couple2(data::AbstractDict)::CouplingCouple2
     coupletype_pair = Vector{String}(data["coupletype_pair"])
     connector = Dict{String,Any}(data["connector"])
     description = get(data, "description", nothing)
+    interface = get(data, "interface", nothing)
+    if interface !== nothing
+        interface = String(interface)
+    end
+    lifting = get(data, "lifting", nothing)
+    if lifting !== nothing
+        lifting = String(lifting)
+    end
 
-    return CouplingCouple2(systems, coupletype_pair, connector; description=description)
+    return CouplingCouple2(systems, coupletype_pair, connector; description=description, interface=interface, lifting=lifting)
 end
 
 """
@@ -543,8 +570,16 @@ function coerce_variable_map(data::AbstractDict)::CouplingVariableMap
         factor = Float64(factor)
     end
     description = get(data, "description", nothing)
+    interface = get(data, "interface", nothing)
+    if interface !== nothing
+        interface = String(interface)
+    end
+    lifting = get(data, "lifting", nothing)
+    if lifting !== nothing
+        lifting = String(lifting)
+    end
 
-    return CouplingVariableMap(from, to, transform; factor=factor, description=description)
+    return CouplingVariableMap(from, to, transform; factor=factor, description=description, interface=interface, lifting=lifting)
 end
 
 """
@@ -652,6 +687,20 @@ function coerce_domain(data::Any)::Domain
     temporal = haskey(data, :temporal) && data.temporal !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.temporal)) : nothing
 
     return Domain(spatial=spatial, temporal=temporal)
+end
+
+"""
+    coerce_interface(data::Any) -> Interface
+
+Coerce JSON data into Interface type.
+"""
+function coerce_interface(data::Any)::Interface
+    domains = [string(d) for d in data.domains]
+    dimension_mapping = Dict{String,Any}(string(k) => v for (k, v) in pairs(data.dimension_mapping))
+    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    regridding = haskey(data, :regridding) && data.regridding !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.regridding)) : nothing
+
+    return Interface(domains, dimension_mapping; description=description, regridding=regridding)
 end
 
 """
