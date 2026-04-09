@@ -28,6 +28,8 @@ import {
 } from './index.js';
 import type { EsmFile, Expr } from './types.js';
 
+const testsDir = join(__dirname, '../../../tests');
+
 /**
  * Helper to recursively find all .esm files in a directory
  */
@@ -89,7 +91,7 @@ function findJsonFiles(dir: string): string[] {
 describe('Conformance Test Suite', () => {
 
   describe('Round-trip tests', () => {
-    const validFiles = findEsmFiles('/home/ctessum/EarthSciSerialization/tests/valid');
+    const validFiles = findEsmFiles(join(testsDir, 'valid'));
 
     it.each(validFiles)('should round-trip %s', (filePath) => {
       // Load original file
@@ -110,7 +112,7 @@ describe('Conformance Test Suite', () => {
   });
 
   describe('Schema validation tests', () => {
-    const invalidFiles = findEsmFiles('/home/ctessum/EarthSciSerialization/tests/invalid');
+    const invalidFiles = findEsmFiles(join(testsDir, 'invalid'));
 
     it.each(invalidFiles)('should detect schema errors in %s', (filePath) => {
       const content = readFileSync(filePath, 'utf-8');
@@ -134,19 +136,19 @@ describe('Conformance Test Suite', () => {
     // Test files that should have specific structural errors
     const structuralErrorCases = [
       {
-        file: '/home/ctessum/EarthSciSerialization/tests/invalid/equation_count_mismatch.esm',
+        file: join(testsDir, 'invalid/equation_count_mismatch.esm'),
         expectedCode: 'equation_count_mismatch'
       },
       {
-        file: '/home/ctessum/EarthSciSerialization/tests/invalid/undefined_species.esm',
+        file: join(testsDir, 'invalid/undefined_species.esm'),
         expectedCode: 'undefined_species'
       },
       {
-        file: '/home/ctessum/EarthSciSerialization/tests/invalid/undefined_parameter.esm',
+        file: join(testsDir, 'invalid/undefined_parameter.esm'),
         expectedCode: 'undefined_parameter'
       },
       {
-        file: '/home/ctessum/EarthSciSerialization/tests/invalid/unknown_variable_ref.esm',
+        file: join(testsDir, 'invalid/unknown_variable_ref.esm'),
         expectedCode: 'undefined_variable'
       }
     ];
@@ -180,7 +182,7 @@ describe('Conformance Test Suite', () => {
   });
 
   describe('Pretty-print conformance tests', () => {
-    const displayFiles = findJsonFiles('/home/ctessum/EarthSciSerialization/tests/display');
+    const displayFiles = findJsonFiles(join(testsDir, 'display'));
 
     it.each(displayFiles)('should match display fixtures from %s', (filePath) => {
       const fixtures = loadJsonFixture<any>(filePath);
@@ -223,7 +225,7 @@ describe('Conformance Test Suite', () => {
   });
 
   describe('Substitution conformance tests', () => {
-    const substitutionFiles = findJsonFiles('/home/ctessum/EarthSciSerialization/tests/substitution');
+    const substitutionFiles = findJsonFiles(join(testsDir, 'substitution'));
 
     it.each(substitutionFiles)('should handle substitutions from %s', (filePath) => {
       const fixtures = loadJsonFixture<any[]>(filePath);
@@ -309,7 +311,7 @@ describe('Conformance Test Suite', () => {
 
   describe('Integration test with MinimalChemAdvection', () => {
     it('should complete full workflow with MinimalChemAdvection', () => {
-      const filePath = '/home/ctessum/EarthSciSerialization/tests/valid/minimal_chemistry.esm';
+      const filePath = join(testsDir, 'valid/minimal_chemistry.esm');
 
       // 1. Load MinimalChemAdvection
       const content = readFileSync(filePath, 'utf-8');
@@ -372,7 +374,7 @@ describe('Conformance Test Suite', () => {
   });
 
   describe('Version compatibility round-trip tests', () => {
-    const versionFiles = findEsmFiles('/home/ctessum/EarthSciSerialization/tests/version_compatibility').filter(
+    const versionFiles = findEsmFiles(join(testsDir, 'version_compatibility')).filter(
       file => !file.includes('invalid') && !file.includes('major_rejection')
     );
 
@@ -396,7 +398,7 @@ describe('Conformance Test Suite', () => {
   });
 
   describe('End-to-end system tests', () => {
-    const endToEndFiles = findEsmFiles('/home/ctessum/EarthSciSerialization/tests/end_to_end');
+    const endToEndFiles = findEsmFiles(join(testsDir, 'end_to_end'));
 
     it.each(endToEndFiles)('should validate complex system %s', (filePath) => {
       const content = readFileSync(filePath, 'utf-8');
