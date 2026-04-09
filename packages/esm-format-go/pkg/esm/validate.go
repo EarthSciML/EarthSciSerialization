@@ -593,37 +593,45 @@ func validateCouplingReferences(file *EsmFile, result *DetailedValidationResult)
 			}
 
 		case VariableMapCoupling:
-			// For variable_map coupling, validate from/to system references
-			if !allSystems[c.From] {
+			// For variable_map coupling, from/to are scoped references (e.g. "System.var")
+			// Extract the system name from the scoped reference for validation
+			fromSystem := extractSystemFromScoped(c.From)
+			if !allSystems[fromSystem] {
 				result.Valid = false
 				result.Messages = append(result.Messages, ValidationMessage{
 					Level:   "error",
-					Message: fmt.Sprintf("Unknown system '%s' in coupling", c.From),
+					Message: fmt.Sprintf("Unknown system '%s' in coupling (from '%s')", fromSystem, c.From),
 					Path:    fmt.Sprintf("%s.from", basePath),
 				})
 			}
-			if !allSystems[c.To] {
+			toSystem := extractSystemFromScoped(c.To)
+			if !allSystems[toSystem] {
 				result.Valid = false
 				result.Messages = append(result.Messages, ValidationMessage{
 					Level:   "error",
-					Message: fmt.Sprintf("Unknown system '%s' in coupling", c.To),
+					Message: fmt.Sprintf("Unknown system '%s' in coupling (from '%s')", toSystem, c.To),
 					Path:    fmt.Sprintf("%s.to", basePath),
 				})
 			}
 
 		case OperatorApplyCoupling:
-			// For operator_apply coupling, we would need to validate operator references
-			// but that would require checking if the operator exists in the operators section
-			// For now, we'll skip this validation
+			// Validate operator exists if operators section is present
+			if file.Operators != nil {
+				if _, exists := file.Operators[c.Operator]; !exists {
+					result.Valid = false
+					result.Messages = append(result.Messages, ValidationMessage{
+						Level:   "error",
+						Message: fmt.Sprintf("Unknown operator '%s' in coupling", c.Operator),
+						Path:    fmt.Sprintf("%s.operator", basePath),
+					})
+				}
+			}
 
-		default:
-			// Handle the case where coupling is still a map[string]interface{} (shouldn't happen with proper deserialization)
-			result.Valid = false
-			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "warning",
-				Message: fmt.Sprintf("Coupling entry has unknown type: %T", coupling),
-				Path:    basePath,
-			})
+		case CallbackCoupling:
+			// Callback coupling validated by schema; no additional structural checks needed
+
+		case EventCoupling:
+			// Event coupling validated by schema; no additional structural checks needed
 		}
 	}
 }
@@ -1018,31 +1026,36 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 			}
 
 		case VariableMapCoupling:
-			if !allSystems[c.From] {
+			// from/to are scoped references (e.g. "System.var") — extract system name
+			fromSystem := extractSystemFromScoped(c.From)
+			if !allSystems[fromSystem] {
 				result.Valid = false
 				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
 					Path:    fmt.Sprintf("%s.from", basePath),
 					Code:    ErrorUndefinedSystem,
-					Message: fmt.Sprintf("Undefined system '%s' in coupling", c.From),
+					Message: fmt.Sprintf("Undefined system '%s' in coupling (from '%s')", fromSystem, c.From),
 					Details: map[string]interface{}{
-						"system":        c.From,
-						"coupling_type": "variable_map",
+						"system":         fromSystem,
+						"scoped_ref":     c.From,
+						"coupling_type":  "variable_map",
 						"coupling_index": i,
-						"direction":     "from",
+						"direction":      "from",
 					},
 				})
 			}
-			if !allSystems[c.To] {
+			toSystem := extractSystemFromScoped(c.To)
+			if !allSystems[toSystem] {
 				result.Valid = false
 				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
 					Path:    fmt.Sprintf("%s.to", basePath),
 					Code:    ErrorUndefinedSystem,
-					Message: fmt.Sprintf("Undefined system '%s' in coupling", c.To),
+					Message: fmt.Sprintf("Undefined system '%s' in coupling (from '%s')", toSystem, c.To),
 					Details: map[string]interface{}{
-						"system":        c.To,
-						"coupling_type": "variable_map",
+						"system":         toSystem,
+						"scoped_ref":     c.To,
+						"coupling_type":  "variable_map",
 						"coupling_index": i,
-						"direction":     "to",
+						"direction":      "to",
 					},
 				})
 			}
@@ -1064,6 +1077,12 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 					})
 				}
 			}
+
+		case CallbackCoupling:
+			// Callback coupling validated by schema; no additional structural checks needed
+
+		case EventCoupling:
+			// Event coupling validated by schema; no additional structural checks needed
 		}
 	}
 }
