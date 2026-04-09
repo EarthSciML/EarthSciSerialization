@@ -395,8 +395,8 @@ class ESMEditor:
             # Other fields from file_b take precedence
             if hasattr(file_b, 'metadata') and file_b.metadata:
                 merged_file.metadata = file_b.metadata
-            if hasattr(file_b, 'domain') and file_b.domain:
-                merged_file.domain = file_b.domain
+            if hasattr(file_b, 'domains') and file_b.domains:
+                merged_file.domains = file_b.domains
             if hasattr(file_b, 'solver') and file_b.solver:
                 merged_file.solver = file_b.solver
 

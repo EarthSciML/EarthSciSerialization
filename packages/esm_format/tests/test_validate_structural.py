@@ -137,14 +137,14 @@ class TestStructuralValidation:
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
-            "domain": {
+            "domains": {"default": {
                 "spatial": {"x": {"min": 0, "max": 10}},
                 "boundary_conditions": [{
                     "type": "constant",
                     "dimensions": ["y"],  # Reference to non-existent dimension
                     "value": 0
                 }]
-            }
+            }}
         }
 
         result = validate(json.dumps(invalid_esm))
