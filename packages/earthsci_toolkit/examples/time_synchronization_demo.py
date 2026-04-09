@@ -11,7 +11,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from esm_format.time_synchronization import (
+from earthsci_toolkit.time_synchronization import (
     TimeSynchronizer,
     TimeStep,
     TimeInterpolationMethod,
@@ -19,7 +19,7 @@ from esm_format.time_synchronization import (
     synchronize_coupled_system,
     create_subcycling_synchronizer
 )
-from esm_format.types import CouplingEntry, CouplingType
+from earthsci_toolkit.types import CouplingEntry, CouplingType
 
 
 def demo_basic_synchronization():

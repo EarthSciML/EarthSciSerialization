@@ -135,7 +135,7 @@ jobs:
               jq -R -s 'split("\n") | map(select(length > 0))' || echo '[]')
           else
             # For push to main, build all packages
-            CHANGED_PACKAGES='["EarthSciSerialization.jl", "esm-format", "esm_format", "earthsci-toolkit"]'
+            CHANGED_PACKAGES='["EarthSciSerialization.jl", "esm-format", "earthsci_toolkit", "esm-format-rust"]'
           fi
 
           echo "changed_packages=$CHANGED_PACKAGES" >> $GITHUB_OUTPUT
@@ -197,8 +197,8 @@ jobs:
           case "$LANGUAGE" in
             "julia") PACKAGE_NAME="EarthSciSerialization.jl" ;;
             "typescript") PACKAGE_NAME="esm-format" ;;
-            "python") PACKAGE_NAME="esm_format" ;;
-            "rust") PACKAGE_NAME="earthsci-toolkit" ;;
+            "python") PACKAGE_NAME="earthsci_toolkit" ;;
+            "rust") PACKAGE_NAME="esm-format-rust" ;;
             *) PACKAGE_NAME="$LANGUAGE" ;;
           esac
 

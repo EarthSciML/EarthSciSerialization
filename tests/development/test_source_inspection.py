@@ -6,7 +6,7 @@ Direct source code inspection to verify unit validation fix.
 def test_by_reading_source():
     """Test the fix by reading the source file directly."""
 
-    validation_file = "packages/esm_format/src/esm_format/validation.py"
+    validation_file = "packages/earthsci_toolkit/src/earthsci_toolkit/validation.py"
 
     print("Reading validation.py source...")
 

@@ -3,8 +3,8 @@
 import json
 import pytest
 
-from esm_format import load, save
-from esm_format.esm_types import (
+from earthsci_toolkit import load, save
+from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, Model, ModelVariable, Equation, ExprNode,
     ReactionSystem, Species, Parameter, Reaction
 )

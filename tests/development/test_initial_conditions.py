@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 # Add the package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages/esm_format/src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages/earthsci_toolkit/src'))
 
 # Define essential types for fallback if imports fail
 class InitialConditionType(Enum):
@@ -49,9 +49,9 @@ class ModelVariable:
     description: str = None
 
 def test_with_direct_imports():
-    """Test using direct imports from the esm_format package."""
+    """Test using direct imports from the earthsci_toolkit package."""
     try:
-        from esm_format import (
+        from earthsci_toolkit import (
             InitialCondition,
             InitialConditionType,
             ModelVariable,
@@ -59,7 +59,7 @@ def test_with_direct_imports():
             setup_initial_conditions,
             create_atmospheric_constraints
         )
-        print("✓ Successfully imported from esm_format package")
+        print("✓ Successfully imported from earthsci_toolkit package")
         return run_core_tests_direct(
             InitialCondition, InitialConditionType, ModelVariable,
             InitialConditionProcessor, setup_initial_conditions,
@@ -72,12 +72,12 @@ def test_with_direct_imports():
 def test_with_submodule_imports():
     """Test using submodule imports."""
     try:
-        from esm_format.types import (
+        from earthsci_toolkit.types import (
             InitialCondition,
             InitialConditionType,
             ModelVariable
         )
-        from esm_format.initial_conditions_setup import (
+        from earthsci_toolkit.initial_conditions_setup import (
             InitialConditionProcessor,
             InitialConditionConfig,
             FieldConstraint,
@@ -85,7 +85,7 @@ def test_with_submodule_imports():
             setup_initial_conditions,
             create_atmospheric_constraints
         )
-        print("✓ Successfully imported from esm_format submodules")
+        print("✓ Successfully imported from earthsci_toolkit submodules")
         return run_core_tests_submodule(
             InitialCondition, InitialConditionType, ModelVariable,
             InitialConditionProcessor, FieldConstraint, ConstraintOperator,
@@ -103,7 +103,7 @@ def test_with_inline_definitions():
         ic = InitialCondition(type=InitialConditionType.CONSTANT, value=2e-9)
 
         # Try to load module directly
-        module_path = 'packages/esm_format/src/esm_format/initial_conditions_setup.py'
+        module_path = 'packages/earthsci_toolkit/src/earthsci_toolkit/initial_conditions_setup.py'
 
         if not os.path.exists(module_path):
             print(f"⚠ Module not found: {module_path}")

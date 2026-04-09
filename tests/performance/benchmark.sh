@@ -97,7 +97,7 @@ add_benchmark_result() {
 run_python_benchmarks() {
     log_info "Running Python benchmarks..."
 
-    local python_dir="$PROJECT_ROOT/packages/esm_format"
+    local python_dir="$PROJECT_ROOT/packages/earthsci_toolkit"
     if [[ ! -d "$python_dir" ]]; then
         log_error "Python package directory not found: $python_dir"
         return 1

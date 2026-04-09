@@ -4,7 +4,7 @@ Code generation for the ESM format
 This module provides functions to generate self-contained scripts
 from ESM files in multiple target languages:
 - Julia: compatible with ModelingToolkit, Catalyst, EarthSciMLBase, and OrdinaryDiffEq
-- Python: compatible with SymPy, esm_format, and SciPy
+- Python: compatible with SymPy, earthsci_toolkit, and SciPy
 """
 
 """
@@ -114,7 +114,7 @@ function to_python_code(file::EsmFile)
     # Import statements
     push!(lines, "# Package imports")
     push!(lines, "import sympy as sp")
-    push!(lines, "import esm_format as esm")
+    push!(lines, "import earthsci_toolkit as esm")
     push!(lines, "import scipy")
     push!(lines, "from sympy import Function")
     push!(lines, "")

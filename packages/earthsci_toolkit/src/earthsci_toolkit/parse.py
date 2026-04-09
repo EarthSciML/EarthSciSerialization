@@ -94,7 +94,7 @@ def _get_schema() -> Dict[str, Any]:
     if _RESOURCES_AVAILABLE:
         try:
             # Use importlib.resources to locate the schema file within the package
-            schema_files = files("esm_format") / "data"
+            schema_files = files("earthsci_toolkit") / "data"
             schema_path = schema_files / "esm-schema.json"
 
             # Read the schema content using the modern resource API

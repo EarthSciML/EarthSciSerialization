@@ -182,8 +182,8 @@ The verification uses the classic O3-NO-NO2 photochemical cycle, fundamental to 
 ### Key Components
 
 #### Python Simulation Infrastructure
-- **Parser Integration:** Uses `esm_format.parse.load()` for ESM file loading
-- **Simulation Engine:** Uses `esm_format.simulation.simulate()` with SciPy backend
+- **Parser Integration:** Uses `earthsci_toolkit.parse.load()` for ESM file loading
+- **Simulation Engine:** Uses `earthsci_toolkit.simulation.simulate()` with SciPy backend
 - **Expression Handling:** Converts ESM expressions to SymPy for symbolic manipulation
 - **Solver Configuration:** LSODA with appropriate tolerances for atmospheric chemistry
 - **Verification Framework:** Multi-tier validation (conservation, bounds, behavior, stability)
@@ -211,9 +211,9 @@ The verification uses the classic O3-NO-NO2 photochemical cycle, fundamental to 
 
 ### Existing Files Used
 - `tests/valid/minimal_chemistry.esm` - Test case ESM file
-- `packages/esm_format/src/esm_format/parse.py` - ESM parsing
-- `packages/esm_format/src/esm_format/simulation.py` - Simulation engine
-- `packages/esm_format/src/esm_format/types.py` - Type definitions
+- `packages/earthsci_toolkit/src/earthsci_toolkit/parse.py` - ESM parsing
+- `packages/earthsci_toolkit/src/earthsci_toolkit/simulation.py` - Simulation engine
+- `packages/earthsci_toolkit/src/earthsci_toolkit/types.py` - Type definitions
 
 ## Conclusions
 

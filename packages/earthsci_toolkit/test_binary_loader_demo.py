@@ -6,7 +6,7 @@ Demo script showing BinaryLoader functionality for legacy scientific data format
 import tempfile
 import struct
 from pathlib import Path
-from esm_format import DataLoader, DataLoaderType, BinaryLoader
+from earthsci_toolkit import DataLoader, DataLoaderType, BinaryLoader
 
 
 def create_sample_weather_data():

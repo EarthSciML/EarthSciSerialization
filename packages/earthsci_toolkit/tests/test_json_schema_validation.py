@@ -22,8 +22,8 @@ import pytest
 import jsonschema
 from jsonschema import ValidationError
 
-from esm_format import load
-from esm_format.parse import _get_schema
+from earthsci_toolkit import load
+from earthsci_toolkit.parse import _get_schema
 
 
 class TestRequiredFieldValidation:
@@ -832,7 +832,7 @@ class TestVersionConstraintValidation:
             jsonschema.validate(invalid_data, schema)
 
         # Incompatible major version - rejected by library
-        from esm_format.parse import UnsupportedVersionError, load
+        from earthsci_toolkit.parse import UnsupportedVersionError, load
         invalid_data = {
             "esm": "1.0.0",
             "metadata": {"name": "Test"},
@@ -954,7 +954,7 @@ class TestIntegrationValidationScenarios:
 
     def test_load_function_with_schema_violations(self):
         """Test the load function with various schema violations."""
-        from esm_format.parse import SchemaValidationError
+        from earthsci_toolkit.parse import SchemaValidationError
 
         # Invalid JSON structure
         with pytest.raises(SchemaValidationError):

@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any
 
-from esm_format import (
+from earthsci_toolkit import (
     DataLoader,
     DataLoaderType,
     get_registry,

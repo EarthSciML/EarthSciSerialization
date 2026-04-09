@@ -13,7 +13,7 @@ sys.path.insert(0, 'src')
 def test_gridded_loader_import():
     """Test that gridded loader can be imported."""
     try:
-        from esm_format import GriddedDataLoader, DataLoader, DataLoaderType, GriddedValidationError
+        from earthsci_toolkit import GriddedDataLoader, DataLoader, DataLoaderType, GriddedValidationError
         print("✓ Gridded loader imports successful")
         return True
     except ImportError as e:
@@ -23,7 +23,7 @@ def test_gridded_loader_import():
 def test_gridded_loader_validation():
     """Test gridded loader validation."""
     try:
-        from esm_format import GriddedDataLoader, DataLoader, DataLoaderType
+        from earthsci_toolkit import GriddedDataLoader, DataLoader, DataLoaderType
 
         # Test wrong data type validation
         wrong_loader = DataLoader(
@@ -63,7 +63,7 @@ def test_gridded_loader_validation():
 def test_binary_gridded_data():
     """Test loading binary gridded data."""
     try:
-        from esm_format import GriddedDataLoader, DataLoader, DataLoaderType
+        from earthsci_toolkit import GriddedDataLoader, DataLoader, DataLoaderType
 
         # Create test binary data
         test_data = np.random.random((10, 20)).astype(np.float32)
@@ -109,7 +109,7 @@ def test_binary_gridded_data():
 def test_text_gridded_data():
     """Test loading text-based gridded data."""
     try:
-        from esm_format import GriddedDataLoader, DataLoader, DataLoaderType
+        from earthsci_toolkit import GriddedDataLoader, DataLoader, DataLoaderType
 
         # Create test text data
         text_content = """# Test grid data
@@ -164,7 +164,7 @@ def test_text_gridded_data():
 def test_convenience_function():
     """Test the convenience function."""
     try:
-        from esm_format import load_gridded_data, DataLoader, DataLoaderType
+        from earthsci_toolkit import load_gridded_data, DataLoader, DataLoaderType
 
         # Create test binary data
         test_data = np.random.random((5, 5)).astype(np.float64)

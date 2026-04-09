@@ -57,7 +57,7 @@ EXAMPLES:
     $0 scan --fail-on-warnings
 
     # Scan specific package
-    $0 package --package packages/esm_format --type python
+    $0 package --package packages/earthsci_toolkit --type python
 
     # Run comprehensive analysis
     $0 full

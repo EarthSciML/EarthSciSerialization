@@ -11,7 +11,7 @@ sys.path.insert(0, 'src')
 
 def test_csv_loader():
     """Test basic CSV loading functionality."""
-    from esm_format import CSVLoader, DataLoader, DataLoaderType, CSVValidationError, load_csv_data
+    from earthsci_toolkit import CSVLoader, DataLoader, DataLoaderType, CSVValidationError, load_csv_data
 
     # Test with the sample data file
     sample_csv = Path("test_sample_data.csv")
@@ -49,7 +49,7 @@ def test_csv_loader():
 
 def test_csv_validation():
     """Test CSV validation features."""
-    from esm_format import CSVLoader, DataLoader, DataLoaderType, CSVValidationError
+    from earthsci_toolkit import CSVLoader, DataLoader, DataLoaderType, CSVValidationError
 
     sample_csv = Path("test_sample_data.csv")
 
@@ -89,7 +89,7 @@ def test_csv_validation():
 
 def test_csv_missing_values():
     """Test missing value handling."""
-    from esm_format import CSVLoader, DataLoader, DataLoaderType
+    from earthsci_toolkit import CSVLoader, DataLoader, DataLoaderType
 
     # Create a CSV with missing values
     csv_content = """time,temperature,humidity,pressure
@@ -126,7 +126,7 @@ def test_csv_missing_values():
 
 def test_wrong_data_loader_type():
     """Test error handling for wrong DataLoader type."""
-    from esm_format import CSVLoader, DataLoader, DataLoaderType
+    from earthsci_toolkit import CSVLoader, DataLoader, DataLoaderType
 
     # Try to create CSV loader with wrong type
     wrong_loader = DataLoader(

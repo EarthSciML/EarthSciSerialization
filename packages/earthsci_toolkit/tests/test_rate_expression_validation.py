@@ -7,10 +7,10 @@ they only reference declared parameters and species in reaction systems.
 """
 
 import pytest
-from esm_format.esm_types import (
+from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, ReactionSystem, Species, Parameter, Reaction, ExprNode
 )
-from esm_format.validation import validate
+from earthsci_toolkit.validation import validate
 
 
 class TestRateExpressionValidation:

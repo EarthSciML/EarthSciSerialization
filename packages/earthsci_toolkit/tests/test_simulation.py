@@ -11,8 +11,8 @@ This module tests the core simulation functionality including:
 
 import pytest
 import numpy as np
-from esm_format.simulation import simulate_reaction_system as simulate, SimulationResult, SimulationError, _expr_to_sympy
-from esm_format.esm_types import (
+from earthsci_toolkit.simulation import simulate_reaction_system as simulate, SimulationResult, SimulationError, _expr_to_sympy
+from earthsci_toolkit.esm_types import (
     ReactionSystem, Species, Parameter, Reaction,
     ContinuousEvent, ExprNode
 )

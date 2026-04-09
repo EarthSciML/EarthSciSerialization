@@ -13,8 +13,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from esm_format import load, save
-from esm_format.types import (
+from earthsci_toolkit import load, save
+from earthsci_toolkit.types import (
     EsmFile, Metadata, Model, ModelVariable, Equation, ExprNode,
     ReactionSystem, Species, Parameter, Reaction
 )

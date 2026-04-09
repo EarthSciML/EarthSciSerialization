@@ -1,4 +1,4 @@
-# Makefile for esm-format Python package
+# Makefile for earthsci-toolkit Python package
 
 .PHONY: help build clean install install-dev test lint format check upload upload-test all
 

@@ -7,8 +7,8 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from esm_format.expression import to_sympy, from_sympy, symbolic_jacobian
-from esm_format.types import ExprNode, Model, ModelVariable, Equation
+from earthsci_toolkit.expression import to_sympy, from_sympy, symbolic_jacobian
+from earthsci_toolkit.types import ExprNode, Model, ModelVariable, Equation
 import sympy as sp
 
 

@@ -8,7 +8,7 @@ import os
 def test_simulation_supports_multiple_systems():
     """Test that simulation.py has been modified to support multiple systems."""
 
-    simulation_file = "packages/esm_format/src/esm_format/simulation.py"
+    simulation_file = "packages/earthsci_toolkit/src/earthsci_toolkit/simulation.py"
 
     # Read the simulation file
     with open(simulation_file, 'r') as f:
@@ -32,7 +32,7 @@ def test_simulation_supports_multiple_systems():
         return False
 
     # Check if Species class has name field
-    types_file = "packages/esm_format/src/esm_format/esm_types.py"
+    types_file = "packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py"
     with open(types_file, 'r') as f:
         types_content = f.read()
 
@@ -57,7 +57,7 @@ def test_simulation_supports_multiple_systems():
 def test_coupling_logic():
     """Test the basic logic of the coupling resolution."""
 
-    simulation_file = "packages/esm_format/src/esm_format/simulation.py"
+    simulation_file = "packages/earthsci_toolkit/src/earthsci_toolkit/simulation.py"
     with open(simulation_file, 'r') as f:
         content = f.read()
 

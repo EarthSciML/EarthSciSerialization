@@ -10,11 +10,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 import numpy as np
 
 # Import required types and functions
-from esm_format.types import (
+from earthsci_toolkit.types import (
     EsmFile, Metadata, ReactionSystem, Species, Reaction,
     Parameter
 )
-from esm_format.simulation import simulate
+from earthsci_toolkit.simulation import simulate
 
 def test_esm_file_simulation():
     """Test the new simulate function with EsmFile."""

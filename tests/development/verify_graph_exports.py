@@ -14,9 +14,9 @@ from pathlib import Path
 
 def setup_python_path():
     """Add required paths to Python path."""
-    esm_format_src = '/home/ctessum/EarthSciSerialization/packages/esm_format/src'
-    if esm_format_src not in sys.path:
-        sys.path.insert(0, esm_format_src)
+    earthsci_toolkit_src = '/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src'
+    if earthsci_toolkit_src not in sys.path:
+        sys.path.insert(0, earthsci_toolkit_src)
 
 
 def test_standalone_functionality():
@@ -193,7 +193,7 @@ def test_method_fix():
     print("\n=== Testing Method Name Fix ===")
 
     try:
-        test_file = '/home/ctessum/EarthSciSerialization/packages/esm_format/test_new_features.py'
+        test_file = '/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/test_new_features.py'
         with open(test_file, 'r') as f:
             content = f.read()
 
@@ -230,15 +230,15 @@ Integration test for graph exports that avoids pandas dependency.
 import sys
 import os
 
-# Add the esm_format source directory to path
-sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/esm_format/src')
+# Add the earthsci_toolkit source directory to path
+sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src')
 
 # Mock problematic imports to avoid pandas dependency
 sys.modules['pandas'] = type('MockPandas', (), {})()
 
 try:
     # This might still fail due to other dependencies
-    from esm_format.graph import Graph, GraphNode, GraphEdge
+    from earthsci_toolkit.graph import Graph, GraphNode, GraphEdge
     print("✓ Successfully imported graph modules")
     integration_success = True
 except ImportError as e:

@@ -9,7 +9,7 @@ This document describes the security measures implemented for the EarthSciSerial
 The EarthSciSerialization project implements comprehensive security scanning and package verification for all distributed packages:
 
 - **Julia**: EarthSciSerialization.jl
-- **Python**: esm_format
+- **Python**: earthsci_toolkit
 - **TypeScript/JavaScript**: esm-format, esm-editor
 - **Rust**: earthsci-toolkit
 
@@ -40,7 +40,7 @@ A comprehensive security scanner that performs:
 python3 scripts/package-security-scanner.py
 
 # Scan specific package
-python3 scripts/package-security-scanner.py --package packages/esm_format --package-type python
+python3 scripts/package-security-scanner.py --package packages/earthsci_toolkit --package-type python
 
 # Use custom configuration
 python3 scripts/package-security-scanner.py --config .security-config.json
@@ -68,7 +68,7 @@ python3 scripts/package-signature-verifier.py
 python3 scripts/package-signature-verifier.py --create-signatures --key-id YOUR_GPG_KEY
 
 # Verify specific package
-python3 scripts/package-signature-verifier.py --package packages/esm_format --package-type python
+python3 scripts/package-signature-verifier.py --package packages/earthsci_toolkit --package-type python
 ```
 
 ## Security Configuration

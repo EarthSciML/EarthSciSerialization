@@ -13,7 +13,7 @@ sys.path.insert(0, 'src')
 def test_data_loader_integration():
     """Test that all data loaders can be used together."""
     try:
-        from esm_format import (
+        from earthsci_toolkit import (
             DataLoader, DataLoaderType,
             # Try to import all available loaders
         )
@@ -23,21 +23,21 @@ def test_data_loader_integration():
 
         # Test CSV loader availability
         try:
-            from esm_format import CSVLoader, load_csv_data
+            from earthsci_toolkit import CSVLoader, load_csv_data
             available_loaders.append('CSV')
         except ImportError:
             print("⚠ CSV loader not available (pandas issues)")
 
         # Test Gridded loader availability
         try:
-            from esm_format import GriddedDataLoader, load_gridded_data
+            from earthsci_toolkit import GriddedDataLoader, load_gridded_data
             available_loaders.append('Gridded')
         except ImportError:
             print("⚠ Gridded loader not available")
 
         # Test Callback loader availability
         try:
-            from esm_format import CallbackLoader, load_callback_data, CallbackDataSource
+            from earthsci_toolkit import CallbackLoader, load_callback_data, CallbackDataSource
             available_loaders.append('Callback')
         except ImportError:
             print("⚠ Callback loader not available")
@@ -56,7 +56,7 @@ def test_data_loader_integration():
 def test_gridded_and_callback_combination():
     """Test using gridded and callback loaders in combination."""
     try:
-        from esm_format import (
+        from earthsci_toolkit import (
             DataLoader, DataLoaderType,
             GriddedDataLoader, CallbackLoader, CallbackDataSource,
             load_gridded_data, load_callback_data
@@ -199,7 +199,7 @@ def test_gridded_and_callback_combination():
 def test_error_handling_consistency():
     """Test that error handling is consistent across loaders."""
     try:
-        from esm_format import (
+        from earthsci_toolkit import (
             DataLoader, DataLoaderType,
             GriddedDataLoader, CallbackLoader,
             GriddedValidationError, CallbackValidationError

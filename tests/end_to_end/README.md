@@ -156,20 +156,20 @@ validate_simulation_results(sol, "coupled_atmospheric_system_results.json")
 
 ### Python Example
 ```python
-import esm_format
+import earthsci_toolkit
 
 # Load and parse the ESM file
-esm = esm_format.load_esm("ocean_atmosphere_biogeochemistry.esm")
+esm = earthsci_toolkit.load_esm("ocean_atmosphere_biogeochemistry.esm")
 
 # Convert to callable function
-rhs_func, jacobian = esm_format.to_scipy_function(esm)
+rhs_func, jacobian = earthsci_toolkit.to_scipy_function(esm)
 
 # Solve with BDF method
 from scipy.integrate import solve_ivp
 sol = solve_ivp(rhs_func, t_span, y0, method='BDF', jac=jacobian)
 
 # Validate results
-esm_format.validate_results(sol, "ocean_atmosphere_biogeochemistry_results.json")
+earthsci_toolkit.validate_results(sol, "ocean_atmosphere_biogeochemistry_results.json")
 ```
 
 ## Contributing

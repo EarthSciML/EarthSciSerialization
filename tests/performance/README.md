@@ -204,7 +204,7 @@ GitHub Actions workflow for automated performance testing.
 
 **Python:**
 ```bash
-cd packages/esm_format
+cd packages/earthsci_toolkit
 pip install -e .[test]
 pip install psutil pytest-benchmark memory-profiler
 ```
@@ -263,7 +263,7 @@ jq --version
 2. **Scalability Testing**:
    ```bash
    # Test with existing Python fixtures
-   cd packages/esm_format
+   cd packages/earthsci_toolkit
    python3 -m pytest tests/test_performance_scalability_fixtures.py -v
    ```
 
@@ -347,7 +347,7 @@ The CI system will fail if:
 ### Common Issues
 
 1. **"ESM format not available"**:
-   - Install the Python package: `pip install -e packages/esm_format[test]`
+   - Install the Python package: `pip install -e packages/earthsci_toolkit[test]`
    - Or run from the package directory
 
 2. **"pytest not found"**:
@@ -417,7 +417,7 @@ The CI system will fail if:
 - [Performance Baselines Configuration](performance_baselines.json)
 - [Detailed Scalability Analysis](SCALABILITY_LIMITS.md)
 - [CI/CD Workflow Configuration](ci_benchmark.yml)
-- [Python Implementation Tests](../packages/esm_format/tests/test_performance_scalability_fixtures.py)
+- [Python Implementation Tests](../packages/earthsci_toolkit/tests/test_performance_scalability_fixtures.py)
 - [Project Performance Benchmarks](PERFORMANCE_BENCHMARKS.md)
 
 ---

@@ -27,7 +27,7 @@ def sample_callback_function(variables=None, **kwargs):
 def test_callback_loader_import():
     """Test that callback loader can be imported."""
     try:
-        from esm_format import CallbackLoader, DataLoader, DataLoaderType, CallbackValidationError, CallbackDataSource
+        from earthsci_toolkit import CallbackLoader, DataLoader, DataLoaderType, CallbackValidationError, CallbackDataSource
         print("✓ Callback loader imports successful")
         return True
     except ImportError as e:
@@ -37,7 +37,7 @@ def test_callback_loader_import():
 def test_callback_loader_validation():
     """Test callback loader validation."""
     try:
-        from esm_format import CallbackLoader, DataLoader, DataLoaderType
+        from earthsci_toolkit import CallbackLoader, DataLoader, DataLoaderType
 
         # Test wrong data type validation
         wrong_loader = DataLoader(
@@ -63,7 +63,7 @@ def test_callback_loader_validation():
 def test_callable_source():
     """Test loading data from callable source."""
     try:
-        from esm_format import CallbackLoader, DataLoader, DataLoaderType
+        from earthsci_toolkit import CallbackLoader, DataLoader, DataLoaderType
 
         # Create loader with callable source
         data_loader = DataLoader(
@@ -95,7 +95,7 @@ def test_callable_source():
 def test_callback_with_args():
     """Test callback with custom arguments."""
     try:
-        from esm_format import CallbackLoader, DataLoader, DataLoaderType
+        from earthsci_toolkit import CallbackLoader, DataLoader, DataLoaderType
 
         def custom_callback(multiplier=1, offset=0, variables=None, **kwargs):
             """Custom callback that accepts arguments."""
@@ -138,7 +138,7 @@ def test_callback_with_args():
 def test_callback_data_source_helpers():
     """Test CallbackDataSource helper methods."""
     try:
-        from esm_format import CallbackLoader, CallbackDataSource, DataLoader, DataLoaderType
+        from earthsci_toolkit import CallbackLoader, CallbackDataSource, DataLoader, DataLoaderType
 
         # Test constant data source
         constant_callback = CallbackDataSource.create_constant_data({'value': 42})
@@ -206,7 +206,7 @@ def test_callback_data_source_helpers():
 def test_string_callback_resolution():
     """Test resolving callbacks from strings."""
     try:
-        from esm_format import CallbackLoader, DataLoader, DataLoaderType
+        from earthsci_toolkit import CallbackLoader, DataLoader, DataLoaderType
 
         # Test resolving builtin function
         data_loader = DataLoader(
@@ -235,7 +235,7 @@ def test_string_callback_resolution():
 def test_convenience_function():
     """Test the convenience function."""
     try:
-        from esm_format import load_callback_data, DataLoader, DataLoaderType
+        from earthsci_toolkit import load_callback_data, DataLoader, DataLoaderType
 
         # Create simple callback
         def simple_callback(**kwargs):

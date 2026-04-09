@@ -1,5 +1,5 @@
 Metadata-Version: 2.4
-Name: esm-format
+Name: earthsci-toolkit
 Version: 0.1.0
 Summary: Earth System Model Serialization Format
 Author-email: Chris Tessum <ctessum@uw.edu>
@@ -97,7 +97,7 @@ pip install -e .
 ## Usage
 
 ```python
-from esm_format import Expr, Model, Species, Reaction
+from earthsci_toolkit import Expr, Model, Species, Reaction
 
 # Create mathematical expressions
 expr = ExprNode(op="+", args=[1, 2])

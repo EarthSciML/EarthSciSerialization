@@ -19,7 +19,7 @@ The `DynamicScopeResolver` extends the existing `HierarchicalScopeResolver` to s
 The main class that provides dynamic scope resolution capabilities.
 
 ```python
-from esm_format import DynamicScopeResolver, EsmFile
+from earthsci_toolkit import DynamicScopeResolver, EsmFile
 
 resolver = DynamicScopeResolver(esm_file)
 ```

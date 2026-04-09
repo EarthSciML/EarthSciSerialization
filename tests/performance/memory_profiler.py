@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 # Add the src directory to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "esm_format" / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "earthsci_toolkit" / "src"))
 
 try:
     import psutil
@@ -28,11 +28,11 @@ except ImportError:
     psutil = None
 
 try:
-    from esm_format import load, save
-    from esm_format.types import EsmFile, Metadata, Model, ModelVariable, Equation, ExprNode
+    from earthsci_toolkit import load, save
+    from earthsci_toolkit.types import EsmFile, Metadata, Model, ModelVariable, Equation, ExprNode
     ESM_FORMAT_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: esm_format not available: {e}")
+    print(f"Warning: earthsci_toolkit not available: {e}")
     ESM_FORMAT_AVAILABLE = False
 
 
@@ -508,7 +508,7 @@ def main():
             'size_category': args.size,
             'iterations': args.iterations,
             'tracemalloc_enabled': args.enable_tracemalloc,
-            'esm_format_available': ESM_FORMAT_AVAILABLE
+            'earthsci_toolkit_available': ESM_FORMAT_AVAILABLE
         },
         'tests': {}
     }

@@ -10,12 +10,12 @@ import os
 import sys
 from pathlib import Path
 
-# Add the esm_format package to the Python path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages/esm_format/src"))
+# Add the earthsci_toolkit package to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages/earthsci_toolkit/src"))
 
 try:
-    from esm_format.parse import load
-    from esm_format.validation import validate
+    from earthsci_toolkit.parse import load
+    from earthsci_toolkit.validation import validate
 except ImportError as e:
     print(f"Error: Could not import ESM format modules: {e}")
     print("Make sure the Python package is installed correctly.")

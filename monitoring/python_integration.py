@@ -271,7 +271,7 @@ if __name__ == "__main__":
     import time
 
     # Initialize analytics
-    ESMAnalytics.initialize("esm-format", "0.1.0")
+    ESMAnalytics.initialize("earthsci-toolkit", "0.1.0")
 
     # Example functions with decorators
     @track_performance("parse_esm_file", track_file_size=True)

@@ -9,8 +9,8 @@ import pytest
 import json
 from pathlib import Path
 
-from esm_format import load
-from esm_format.validation import validate, SchemaValidationError
+from earthsci_toolkit import load
+from earthsci_toolkit.validation import validate, SchemaValidationError
 
 
 class TestStructuralValidation:

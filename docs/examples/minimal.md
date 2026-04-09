@@ -152,7 +152,7 @@ console.log('Equation:', `d${equation.lhs}/dt =`, toUnicode(equation.rhs));
 
 ### Python
 ```python
-from esm_format import load_esm, validate, to_unicode
+from earthsci_toolkit import load_esm, validate, to_unicode
 import numpy as np
 from scipy.integrate import odeint
 import matplotlib.pyplot as plt

@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 # Import ESM Format components
-from esm_format import DataLoader, DataLoaderType, NetCDFLoader, create_data_loader
+from earthsci_toolkit import DataLoader, DataLoaderType, NetCDFLoader, create_data_loader
 
 # Try to import xarray for creating example data
 try:

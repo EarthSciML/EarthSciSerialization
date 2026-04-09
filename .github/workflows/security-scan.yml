@@ -350,9 +350,9 @@ jobs:
         mkdir -p sbom-reports
 
         # Python SBOM
-        if [ -d "packages/esm_format" ]; then
-          cd packages/esm_format
-          cyclonedx-py -o ../../sbom-reports/esm_format-sbom.json
+        if [ -d "packages/earthsci_toolkit" ]; then
+          cd packages/earthsci_toolkit
+          cyclonedx-py -o ../../sbom-reports/earthsci_toolkit-sbom.json
           cd ../..
         fi
 
@@ -375,8 +375,8 @@ jobs:
         semgrep --config=auto --json --output=semgrep-results.json packages/ || true
 
         echo "Running Bandit for Python packages..."
-        if [ -d "packages/esm_format" ]; then
-          bandit -r packages/esm_format -f json -o bandit-results.json || true
+        if [ -d "packages/earthsci_toolkit" ]; then
+          bandit -r packages/earthsci_toolkit -f json -o bandit-results.json || true
         fi
 
     - name: Upload analysis results

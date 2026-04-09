@@ -9,12 +9,12 @@ import pytest
 import json
 from pathlib import Path
 
-from esm_format import (
+from earthsci_toolkit import (
     load, save, validate, substitute, explore
 )
-from esm_format.display import to_unicode, to_latex
-from esm_format.parse import SchemaValidationError
-from esm_format.validation import ValidationError
+from earthsci_toolkit.display import to_unicode, to_latex
+from earthsci_toolkit.parse import SchemaValidationError
+from earthsci_toolkit.validation import ValidationError
 
 
 class TestFullWorkflowIntegration:

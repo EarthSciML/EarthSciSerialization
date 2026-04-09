@@ -198,7 +198,7 @@ class DocumentationMaintainer:
         functions = []
         types = []
 
-        python_dir = self.packages_dir / "esm_format"
+        python_dir = self.packages_dir / "earthsci_toolkit"
         if not python_dir.exists():
             return functions, types
 

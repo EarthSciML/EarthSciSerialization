@@ -9,8 +9,8 @@ src_path = os.path.join(os.path.dirname(__file__), 'src')
 sys.path.insert(0, src_path)
 
 # Now import with a different alias to avoid name collision
-from esm_format import types as esm_types
-from esm_format import display
+from earthsci_toolkit import types as esm_types
+from earthsci_toolkit import display
 
 def test_simple():
     """Test simple display functionality."""
