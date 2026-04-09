@@ -510,6 +510,8 @@ jobs:
 
     - name: Update release notes with final status
       uses: actions/github-script@v7
+      env:
+        RELEASE_NOTES: ${{ needs.release-analysis.outputs.release_notes }}
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
@@ -545,7 +547,7 @@ jobs:
           const containersStatus = statusEmoji['${{ needs.build-containers.result }}'] || '❓';
           const conformanceStatus = statusEmoji['${{ needs.run-conformance-tests.result }}'] || '❓';
 
-          const originalBody = `${{ needs.release-analysis.outputs.release_notes }}`;
+          const originalBody = process.env.RELEASE_NOTES || '';
 
           const statusSection = `
 
