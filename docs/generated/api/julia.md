@@ -2160,7 +2160,7 @@ checking(...)
 
 ### coerce_affect_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:320`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:329`
 
 **Signature:**
 ```julia
@@ -2176,7 +2176,7 @@ Coerce JSON data into AffectEquation type.
 
 ### coerce_callback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:571`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:606`
 
 **Signature:**
 ```julia
@@ -2192,7 +2192,7 @@ Parse callback coupling entry.
 
 ### coerce_continuous_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:304`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:313`
 
 **Signature:**
 ```julia
@@ -2208,7 +2208,7 @@ Coerce JSON data specifically into ContinuousEvent.
 
 ### coerce_couple2
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:509`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:528`
 
 **Signature:**
 ```julia
@@ -2235,7 +2235,7 @@ coerce_coupling_entry(...)
 
 ### coerce_coupling_entry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:463`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:474`
 
 **Signature:**
 ```julia
@@ -2251,7 +2251,7 @@ Coerce JSON data into concrete CouplingEntry subtype based on the 'type' field.
 
 ### coerce_data_loader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:418`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:429`
 
 **Signature:**
 ```julia
@@ -2267,7 +2267,7 @@ Coerce JSON data into DataLoader type.
 
 ### coerce_discrete_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:288`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:297`
 
 **Signature:**
 ```julia
@@ -2283,7 +2283,7 @@ Coerce JSON data specifically into DiscreteEvent.
 
 ### coerce_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:650`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:685`
 
 **Signature:**
 ```julia
@@ -2299,7 +2299,7 @@ Coerce JSON data into Domain type.
 
 ### coerce_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:253`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:262`
 
 **Signature:**
 ```julia
@@ -2331,7 +2331,7 @@ Coerce raw JSON data into properly typed EsmFile with custom union type handling
 
 ### coerce_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:265`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:274`
 
 **Signature:**
 ```julia
@@ -2347,7 +2347,7 @@ Coerce JSON data into EventType (ContinuousEvent or DiscreteEvent).
 
 ### coerce_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:591`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:626`
 
 **Signature:**
 ```julia
@@ -2363,7 +2363,7 @@ Parse event coupling entry.
 
 ### coerce_functional_affect
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:331`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:340`
 
 **Signature:**
 ```julia
@@ -2377,9 +2377,25 @@ Coerce JSON data into FunctionalAffect type.
 
 ---
 
+### coerce_interface
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:697`
+
+**Signature:**
+```julia
+function coerce_interface(data::Any)::Interface
+```
+
+**Description:**
+coerce_interface(data::Any) -> Interface
+
+Coerce JSON data into Interface type.
+
+---
+
 ### coerce_metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:162`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:169`
 
 **Signature:**
 ```julia
@@ -2395,7 +2411,7 @@ Coerce JSON data into Metadata type.
 
 ### coerce_model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:201`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:208`
 
 **Signature:**
 ```julia
@@ -2411,7 +2427,7 @@ Coerce JSON data into Model type.
 
 ### coerce_model_variable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:236`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:245`
 
 **Signature:**
 ```julia
@@ -2427,7 +2443,7 @@ Coerce JSON data into ModelVariable type.
 
 ### coerce_operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:442`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:453`
 
 **Signature:**
 ```julia
@@ -2443,7 +2459,7 @@ Coerce JSON data into Operator type.
 
 ### coerce_operator_apply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:555`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:590`
 
 **Signature:**
 ```julia
@@ -2459,7 +2475,7 @@ Parse operator_apply coupling entry.
 
 ### coerce_operator_compose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:492`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:503`
 
 **Signature:**
 ```julia
@@ -2475,7 +2491,7 @@ Parse operator_compose coupling entry.
 
 ### coerce_parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:405`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:416`
 
 **Signature:**
 ```julia
@@ -2491,7 +2507,7 @@ Coerce JSON data into Parameter type with explicit name.
 
 ### coerce_reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:371`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:382`
 
 **Signature:**
 ```julia
@@ -2507,7 +2523,7 @@ Coerce JSON data into Reaction type.
 
 ### coerce_reaction_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:343`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:352`
 
 **Signature:**
 ```julia
@@ -2523,7 +2539,7 @@ Coerce JSON data into ReactionSystem type.
 
 ### coerce_reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:187`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:194`
 
 **Signature:**
 ```julia
@@ -2550,7 +2566,7 @@ coerce_solver(...)
 
 ### coerce_solver
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:663`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:712`
 
 **Signature:**
 ```julia
@@ -2578,7 +2594,7 @@ coerce_solver_configuration(...)
 
 ### coerce_solver_configuration
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:724`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:773`
 
 **Signature:**
 ```julia
@@ -2594,7 +2610,7 @@ Coerce JSON data into SolverConfiguration type.
 
 ### coerce_species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:358`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:369`
 
 **Signature:**
 ```julia
@@ -2610,7 +2626,7 @@ Coerce JSON data into Species type with explicit name.
 
 ### coerce_variable_map
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:530`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:557`
 
 **Signature:**
 ```julia
@@ -4535,7 +4551,7 @@ load(...)
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:786`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:835`
 
 **Signature:**
 ```julia
@@ -4574,7 +4590,7 @@ Load and parse an ESM file from a file path.
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:797`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/parse.jl:846`
 
 **Signature:**
 ```julia
@@ -4769,6 +4785,8 @@ migrate(...)
 ```
 
 **Available in other languages:**
+- [Python](python.md#migrate)
+- [Typescript](typescript.md#migrate)
 - [Rust](rust.md#migrate)
 
 ---
