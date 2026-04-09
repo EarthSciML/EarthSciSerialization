@@ -21,7 +21,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Language implementation directories
-JULIA_DIR="$PROJECT_ROOT/packages/ESMFormat.jl"
+JULIA_DIR="$PROJECT_ROOT/packages/EarthSciSerialization.jl"
 TYPESCRIPT_DIR="$PROJECT_ROOT/packages/esm-format"
 PYTHON_DIR="$PROJECT_ROOT/packages/esm_format"
 RUST_DIR="$PROJECT_ROOT/packages/esm-format-rust"

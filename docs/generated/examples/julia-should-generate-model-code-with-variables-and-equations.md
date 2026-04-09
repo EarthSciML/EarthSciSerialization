@@ -1,6 +1,6 @@
 # should generate model code with variables and equations (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/test_codegen.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/test_codegen.jl`
 
 ```julia
 file = EsmFile(
@@ -21,8 +21,8 @@ file = EsmFile(
                         ),
                         [
                             Equation(
-                                OpExpr("D", ESMFormat.Expr[VarExpr("O3")]),
-                                OpExpr("*", ESMFormat.Expr[VarExpr("k1"), VarExpr("O3")])
+                                OpExpr("D", EarthSciSerialization.Expr[VarExpr("O3")]),
+                                OpExpr("*", EarthSciSerialization.Expr[VarExpr("k1"), VarExpr("O3")])
                             )
                         ]
                     )

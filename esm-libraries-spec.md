@@ -560,7 +560,7 @@ Libraries should also support serializing graphs to common interchange formats (
 
 ## 5. Language-Specific Libraries
 
-### 5.1 Julia — `ESMFormat.jl`
+### 5.1 Julia — `EarthSciSerialization.jl`
 
 **Tier: Full**
 
@@ -578,11 +578,11 @@ Julia is the primary language for EarthSciML and has the richest integration sto
 #### 5.1.2 Core API
 
 ```julia
-using ESMFormat
+using EarthSciSerialization
 
 # Load and save
-file = ESMFormat.load("model.esm")
-ESMFormat.save(file, "model_v2.esm")
+file = EarthSciSerialization.load("model.esm")
+EarthSciSerialization.save(file, "model_v2.esm")
 
 # Pretty-print a model
 display(file.models["SuperFast"])
@@ -591,7 +591,7 @@ display(file.models["SuperFast"])
 #   ∂NO₂/∂t = k_NO_O₃·O₃·NO·M − jNO₂·NO₂
 
 # LaTeX
-ESMFormat.to_latex(file.models["SuperFast"])
+EarthSciSerialization.to_latex(file.models["SuperFast"])
 
 # Print entire file summary
 show(file)
@@ -604,7 +604,7 @@ show(file)
 #   Domain: lon [-130, -100], 2024-05-01 to 2024-05-03
 
 # Validation
-result = ESMFormat.validate(file)
+result = EarthSciSerialization.validate(file)
 result.is_valid          # true
 result.structural_errors # []
 result.unit_warnings     # [UnitWarning("k_NO_O3 units cm^3/molec/s may be inconsistent...")]

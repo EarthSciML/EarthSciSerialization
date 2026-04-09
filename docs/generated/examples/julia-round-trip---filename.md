@@ -1,19 +1,19 @@
 # Round-trip: $filename (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/runtests.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/runtests.jl`
 
 ```julia
 try
                             # Load original
-                            original = ESMFormat.load(filepath)
+                            original = EarthSciSerialization.load(filepath)
 
                             # Create temp file for round-trip test
                             temp_file = tempname() * ".esm"
 
                             try
                                 # Save and reload
-                                ESMFormat.save(temp_file, original)
-                                reloaded = ESMFormat.load(temp_file)
+                                EarthSciSerialization.save(temp_file, original)
+                                reloaded = EarthSciSerialization.load(temp_file)
 
                                 # Compare key fields
                                 @test original.esm == reloaded.esm

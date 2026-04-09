@@ -3,7 +3,7 @@
 """
 Julia conformance test runner for ESM Format cross-language testing.
 
-This script runs the Julia ESMFormat.jl implementation against test fixtures
+This script runs the Julia EarthSciSerialization.jl implementation against test fixtures
 and generates standardized outputs for comparison with other language implementations.
 """
 
@@ -11,11 +11,11 @@ using Pkg
 
 # Ensure we're in the right environment
 project_dir = dirname(dirname(@__FILE__))
-julia_package = joinpath(project_dir, "packages", "ESMFormat.jl")
+julia_package = joinpath(project_dir, "packages", "EarthSciSerialization.jl")
 cd(julia_package)
 Pkg.activate(".")
 
-using ESMFormat
+using EarthSciSerialization
 using JSON3
 using Printf
 
@@ -52,8 +52,8 @@ function run_validation_tests(tests_dir::String)
         for filename in filter(f -> endswith(f, ".esm"), readdir(valid_dir))
             filepath = joinpath(valid_dir, filename)
             try
-                esm_data = ESMFormat.load(filepath)
-                result = ESMFormat.validate(esm_data)
+                esm_data = EarthSciSerialization.load(filepath)
+                result = EarthSciSerialization.validate(esm_data)
 
                 valid_results[filename] = Dict(
                     "is_valid" => result.is_valid,
@@ -79,8 +79,8 @@ function run_validation_tests(tests_dir::String)
         for filename in filter(f -> endswith(f, ".esm"), readdir(invalid_dir))
             filepath = joinpath(invalid_dir, filename)
             try
-                esm_data = ESMFormat.load(filepath)
-                result = ESMFormat.validate(esm_data)
+                esm_data = EarthSciSerialization.load(filepath)
+                result = EarthSciSerialization.validate(esm_data)
 
                 invalid_results[filename] = Dict(
                     "is_valid" => result.is_valid,
@@ -122,7 +122,7 @@ function run_display_tests(tests_dir::String)
                         if haskey(formula_test, "input")
                             input_formula = formula_test["input"]
                             try
-                                unicode_result = ESMFormat.render_chemical_formula(input_formula)
+                                unicode_result = EarthSciSerialization.render_chemical_formula(input_formula)
 
                                 push!(formula_results, Dict(
                                     "input" => input_formula,
@@ -150,10 +150,10 @@ function run_display_tests(tests_dir::String)
                         if haskey(expr_test, "input")
                             input_expr = expr_test["input"]
                             try
-                                expr = ESMFormat.parse_expression(input_expr)
-                                unicode_result = ESMFormat.pretty_print(expr, format="unicode")
-                                latex_result = ESMFormat.pretty_print(expr, format="latex")
-                                ascii_result = ESMFormat.pretty_print(expr, format="ascii")
+                                expr = EarthSciSerialization.parse_expression(input_expr)
+                                unicode_result = EarthSciSerialization.pretty_print(expr, format="unicode")
+                                latex_result = EarthSciSerialization.pretty_print(expr, format="latex")
+                                ascii_result = EarthSciSerialization.pretty_print(expr, format="ascii")
 
                                 push!(expression_results, Dict(
                                     "input" => input_expr,
@@ -204,14 +204,14 @@ function run_substitution_tests(tests_dir::String)
                     for test_case in test_data["tests"]
                         if haskey(test_case, "expression") && haskey(test_case, "substitutions")
                             try
-                                expr = ESMFormat.parse_expression(test_case["expression"])
+                                expr = EarthSciSerialization.parse_expression(test_case["expression"])
                                 substitutions = Dict(
-                                    k => ESMFormat.parse_expression(v)
+                                    k => EarthSciSerialization.parse_expression(v)
                                     for (k, v) in test_case["substitutions"]
                                 )
 
-                                result_expr = ESMFormat.substitute(expr, substitutions)
-                                result_str = ESMFormat.pretty_print(result_expr)
+                                result_expr = EarthSciSerialization.substitute(expr, substitutions)
+                                result_str = EarthSciSerialization.pretty_print(result_expr)
 
                                 push!(test_results, Dict(
                                     "input" => test_case["expression"],
@@ -259,14 +259,14 @@ function run_graph_tests(tests_dir::String)
                     esm_file_path = joinpath(dirname(filepath), test_data["esm_file"])
                     if isfile(esm_file_path)
                         try
-                            esm_data = ESMFormat.load(esm_file_path)
+                            esm_data = EarthSciSerialization.load(esm_file_path)
 
                             # Generate system graph
-                            system_graph = ESMFormat.generate_system_graph(esm_data)
+                            system_graph = EarthSciSerialization.generate_system_graph(esm_data)
 
                             # Export in different formats
-                            dot_output = ESMFormat.export_dot(system_graph)
-                            json_output = ESMFormat.export_json(system_graph)
+                            dot_output = EarthSciSerialization.export_dot(system_graph)
+                            json_output = EarthSciSerialization.export_json(system_graph)
 
                             graph_results[filename] = Dict(
                                 "esm_file" => esm_file_path,

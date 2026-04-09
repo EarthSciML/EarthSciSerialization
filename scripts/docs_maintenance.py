@@ -103,7 +103,7 @@ class DocumentationMaintainer:
         functions = []
         types = []
 
-        julia_dir = self.packages_dir / "ESMFormat.jl" / "src"
+        julia_dir = self.packages_dir / "EarthSciSerialization.jl" / "src"
         if not julia_dir.exists():
             return functions, types
 

@@ -466,7 +466,7 @@ esm validate model.esm --watch
 
 ```julia
 # In Julia REPL
-using ESMFormat
+using EarthSciSerialization
 esm_file = load_esm("model.esm")
 result = validate(esm_file)
 @show result.errors
@@ -535,7 +535,7 @@ esm validate model.esm --schema schema.json
 
 ### Julia
 ```julia
-using ESMFormat
+using EarthSciSerialization
 
 esm_file = load_esm("model.esm")
 result = validate(esm_file)

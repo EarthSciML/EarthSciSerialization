@@ -1,6 +1,6 @@
 # Integration with load function (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/validate_test.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/validate_test.jl`
 
 ```julia
 # Test that load function throws SchemaValidationError on invalid schema
@@ -10,8 +10,8 @@
         }
         """
 
-        @test_throws ESMFormat.SchemaValidationError begin
+        @test_throws EarthSciSerialization.SchemaValidationError begin
             io = IOBuffer(invalid_json)
-            ESMFormat.load(io)
+            EarthSciSerialization.load(io)
 ```
 

@@ -1,6 +1,6 @@
 # to_python_code (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/test_codegen.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/test_codegen.jl`
 
 ```julia
 @testset "should generate basic Python script structure" begin

@@ -82,16 +82,16 @@ expect(warnings).toContain('File version 0.2.0 is newer');
 
 ### Julia
 ```julia
-using ESMFormat
+using EarthSciSerialization
 
 # Should load successfully
-file1 = ESMFormat.load("version_0_1_0_baseline.esm")
+file1 = EarthSciSerialization.load("version_0_1_0_baseline.esm")
 
 # Should reject with error
-@test_throws VersionError ESMFormat.load("version_1_0_0_major_upgrade.esm")
+@test_throws VersionError EarthSciSerialization.load("version_1_0_0_major_upgrade.esm")
 
 # Should warn but load
-file3 = ESMFormat.load("version_0_2_0_minor_upgrade.esm")
+file3 = EarthSciSerialization.load("version_0_2_0_minor_upgrade.esm")
 @test length(warnings()) > 0
 ```
 

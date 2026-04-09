@@ -245,7 +245,7 @@ cargo --version
 
 ```bash
 # Julia
-cd packages/ESMFormat.jl
+cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.test()'
 
 # TypeScript

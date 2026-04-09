@@ -1,19 +1,19 @@
 # Valid model - no errors (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/structural_validation_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/structural_validation_test.jl`
 
 ```julia
 variables = Dict(
-                "x" => ESMFormat.ModelVariable(ESMFormat.StateVariable, default=1.0),
-                "k" => ESMFormat.ModelVariable(ESMFormat.ParameterVariable, default=0.5)
+                "x" => EarthSciSerialization.ModelVariable(EarthSciSerialization.StateVariable, default=1.0),
+                "k" => EarthSciSerialization.ModelVariable(EarthSciSerialization.ParameterVariable, default=0.5)
             )
             equations = [
-                ESMFormat.Equation(ESMFormat.OpExpr("D", ESMFormat.Expr[ESMFormat.VarExpr("x")], wrt="t"), ESMFormat.VarExpr("k"))
+                EarthSciSerialization.Equation(EarthSciSerialization.OpExpr("D", EarthSciSerialization.Expr[EarthSciSerialization.VarExpr("x")], wrt="t"), EarthSciSerialization.VarExpr("k"))
             ]
-            model = ESMFormat.Model(variables, equations)
-            esm_file = ESMFormat.EsmFile("0.1.0", metadata, models=Dict("test_model" => model))
+            model = EarthSciSerialization.Model(variables, equations)
+            esm_file = EarthSciSerialization.EsmFile("0.1.0", metadata, models=Dict("test_model" => model))
 
-            errors = ESMFormat.validate_structural(esm_file)
+            errors = EarthSciSerialization.validate_structural(esm_file)
             @test isempty(errors)
 ```
 

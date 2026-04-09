@@ -1,6 +1,6 @@
 # Reference Resolution - Simple Cases (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/reference_resolution_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/reference_resolution_test.jl`
 
 ```julia
 # Create test ESM file with simple model

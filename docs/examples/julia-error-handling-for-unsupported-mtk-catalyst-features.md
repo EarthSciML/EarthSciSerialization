@@ -1,6 +1,6 @@
 # Error handling for unsupported MTK/Catalyst features (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/mtk_catalyst_test.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/mtk_catalyst_test.jl`
 
 ```julia
 # Test graceful handling of edge cases
@@ -12,12 +12,12 @@
 
         @test_nowarn to_mtk_system(empty_model, "EmptyModel")
         empty_sys = to_mtk_system(empty_model, "EmptyModel")
-        @test empty_sys isa ESMFormat.MockMTKSystem
+        @test empty_sys isa EarthSciSerialization.MockMTKSystem
 
         # Model with only observed variables
         obs_only_vars = Dict{String,ModelVariable}(
             "computed" => ModelVariable(ObservedVariable;
-                expression=OpExpr("+", ESMFormat.Expr[NumExpr(1.0), NumExpr(2.0)]))
+                expression=OpExpr("+", EarthSciSerialization.Expr[NumExpr(1.0), NumExpr(2.0)]))
         )
         obs_only_model = Model(obs_only_vars, Equation[])
         @test_nowarn to_mtk_system(obs_only_model, "ObservedOnly")
@@ -29,7 +29,7 @@
 
         @test_nowarn to_catalyst_system(empty_rsys, "EmptyReactions")
         empty_cat_sys = to_catalyst_system(empty_rsys, "EmptyReactions")
-        @test empty_cat_sys isa ESMFormat.MockCatalystSystem
+        @test empty_cat_sys isa EarthSciSerialization.MockCatalystSystem
 
         # Test error handling for incorrect types
         @test_throws ErrorException from_mtk_system("not a mock system", "TestError")

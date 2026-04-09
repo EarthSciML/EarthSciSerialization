@@ -160,14 +160,14 @@ ARG JULIA_CPU_TARGET=generic
 ARG DEBUG_MODE=false
 
 # Copy Julia package files for dependency resolution
-COPY packages/ESMFormat.jl/Project.toml packages/ESMFormat.jl/Manifest.toml ./packages/ESMFormat.jl/
+COPY packages/EarthSciSerialization.jl/Project.toml packages/EarthSciSerialization.jl/Manifest.toml ./packages/EarthSciSerialization.jl/
 
 # Pre-install dependencies in builder stage
-WORKDIR /workspace/packages/ESMFormat.jl
+WORKDIR /workspace/packages/EarthSciSerialization.jl
 RUN julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
 # Copy source and precompile
-COPY packages/ESMFormat.jl ./
+COPY packages/EarthSciSerialization.jl ./
 RUN julia --project=. -e 'using Pkg; Pkg.precompile()'
 
 # Production stage
@@ -187,7 +187,7 @@ RUN groupadd -r esm && useradd -r -g esm -d /workspace -s /bin/bash esm
 WORKDIR /workspace
 
 # Copy compiled Julia environment from builder
-COPY --from=builder --chown=esm:esm /workspace/packages/ESMFormat.jl ./packages/ESMFormat.jl/
+COPY --from=builder --chown=esm:esm /workspace/packages/EarthSciSerialization.jl ./packages/EarthSciSerialization.jl/
 COPY --from=builder --chown=esm:esm /opt/julia /opt/julia
 
 # Copy test data and scripts
@@ -213,7 +213,7 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD julia --version || exit 1
 
 # Default command
-CMD ["julia", "--project=packages/ESMFormat.jl", "scripts/run-julia-conformance.jl", "/workspace/conformance-results/julia"]
+CMD ["julia", "--project=packages/EarthSciSerialization.jl", "scripts/run-julia-conformance.jl", "/workspace/conformance-results/julia"]
 EOF
 
     # Minimal Python Dockerfile

@@ -1742,12 +1742,12 @@ export interface ESMError {
 
 ---
 
-### ESMFormat2
+### EarthSciSerialization2
 
 **File:** `packages/esm-format/src/generated.ts:170`
 
 ```typescript
-export interface ESMFormat2 {
+export interface EarthSciSerialization2 {
 ```
 
 ---

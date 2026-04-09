@@ -1,6 +1,6 @@
 # Subsystem Handling (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/reactions_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/reactions_test.jl`
 
 ```julia
 # Create a main system with subsystem

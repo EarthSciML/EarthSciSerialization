@@ -106,7 +106,7 @@ Save this as `minimal.esm`:
 
 ### Julia
 ```julia
-using ESMFormat, ModelingToolkit, DifferentialEquations
+using EarthSciSerialization, ModelingToolkit, DifferentialEquations
 
 # Load the minimal example
 esm_file = load_esm("minimal.esm")

@@ -27,7 +27,7 @@ jobs:
       uses: julia-actions/cache@v2
 
     - name: Build package
-      working-directory: packages/ESMFormat.jl
+      working-directory: packages/EarthSciSerialization.jl
       run: |
         julia --project=. -e '
           using Pkg
@@ -36,14 +36,14 @@ jobs:
         '
 
     - name: Run tests
-      working-directory: packages/ESMFormat.jl
+      working-directory: packages/EarthSciSerialization.jl
       run: julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
 
     - name: Process coverage
       uses: julia-actions/julia-processcoverage@v1
       if: matrix.julia-version == '1.12'
       with:
-        directories: packages/ESMFormat.jl/src
+        directories: packages/EarthSciSerialization.jl/src
 
     - name: Upload coverage
       uses: codecov/codecov-action@v4
@@ -66,7 +66,7 @@ jobs:
         version: '1.12'
 
     - name: Update version in Project.toml
-      working-directory: packages/ESMFormat.jl
+      working-directory: packages/EarthSciSerialization.jl
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
         sed -i "s/version = \"[^\"]*\"/version = \"$VERSION\"/" Project.toml
@@ -80,13 +80,13 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         registry: General
-        package_dir: packages/ESMFormat.jl
+        package_dir: packages/EarthSciSerialization.jl
 
     - name: Tag Julia package
-      working-directory: packages/ESMFormat.jl
+      working-directory: packages/EarthSciSerialization.jl
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
-        git tag -a "ESMFormat-v$VERSION" -m "ESMFormat v$VERSION"
-        git push origin "ESMFormat-v$VERSION"
+        git tag -a "EarthSciSerialization-v$VERSION" -m "EarthSciSerialization v$VERSION"
+        git push origin "EarthSciSerialization-v$VERSION"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -20,7 +20,7 @@ Thank you for your interest in contributing to EarthSciSerialization! This guide
 
 EarthSciSerialization is a language-agnostic JSON-based format for earth science model components with implementations across multiple programming languages:
 
-- **Julia** (ESMFormat.jl) - Complete MTK/Catalyst integration
+- **Julia** (EarthSciSerialization.jl) - Complete MTK/Catalyst integration
 - **TypeScript** (esm-format) - Web/Node.js types and utilities
 - **Python** (esm_format) - Scientific Python integration
 - **Rust** (esm-format-rust) - High-performance implementation
@@ -86,7 +86,7 @@ The project includes environment management scripts:
 ```
 EarthSciSerialization/
 ├── packages/                 # Language-specific implementations
-│   ├── ESMFormat.jl/        # Julia implementation
+│   ├── EarthSciSerialization.jl/        # Julia implementation
 │   ├── esm-format/          # TypeScript implementation
 │   ├── esm_format/          # Python implementation
 │   ├── esm-format-rust/     # Rust implementation
@@ -261,7 +261,7 @@ test(conformance): add mathematical correctness fixtures
 
 ## Language-Specific Guidelines
 
-### Julia (ESMFormat.jl)
+### Julia (EarthSciSerialization.jl)
 
 - **Primary Implementation**: Julia is the reference implementation
 - **Testing**: All changes must pass Julia test suite
@@ -271,7 +271,7 @@ test(conformance): add mathematical correctness fixtures
 
 ```bash
 # Julia development workflow
-cd packages/ESMFormat.jl
+cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.activate("."); Pkg.test()'
 ```
 

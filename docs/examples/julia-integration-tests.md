@@ -1,17 +1,17 @@
 # Integration tests (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/expression_test.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/expression_test.jl`
 
 ```julia
 # Test substitute + simplify
-        expr = OpExpr("*", ESMFormat.Expr[OpExpr("+", ESMFormat.Expr[VarExpr("x"), NumExpr(0.0)]), VarExpr("y")])
-        bindings = Dict{String,ESMFormat.Expr}("y" => NumExpr(1.0))
+        expr = OpExpr("*", EarthSciSerialization.Expr[OpExpr("+", EarthSciSerialization.Expr[VarExpr("x"), NumExpr(0.0)]), VarExpr("y")])
+        bindings = Dict{String,EarthSciSerialization.Expr}("y" => NumExpr(1.0))
         substituted = substitute(expr, bindings)
         simplified = simplify(substituted)
         @test simplified === VarExpr("x")
 
         # Test free_variables + evaluate
-        expr = OpExpr("+", ESMFormat.Expr[OpExpr("*", ESMFormat.Expr[VarExpr("x"), VarExpr("y")]), NumExpr(1.0)])
+        expr = OpExpr("+", EarthSciSerialization.Expr[OpExpr("*", EarthSciSerialization.Expr[VarExpr("x"), VarExpr("y")]), NumExpr(1.0)])
         vars = free_variables(expr)
         @test vars == Set(["x", "y"])
 

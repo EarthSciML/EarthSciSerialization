@@ -4,7 +4,7 @@
 
 The EarthSciSerialization project uses an automated release system that manages publishing across five language implementations:
 
-- **Julia**: ESMFormat.jl (Julia General Registry)
+- **Julia**: EarthSciSerialization.jl (Julia General Registry)
 - **TypeScript/JavaScript**: esm-format (npm)
 - **Python**: esm-format (PyPI)
 - **Rust**: esm-format (crates.io)
@@ -148,7 +148,7 @@ Each language implementation follows consistent structure:
 
 ```
 packages/
-├── ESMFormat.jl/          # Julia package
+├── EarthSciSerialization.jl/          # Julia package
 │   ├── Project.toml       # Julia dependencies
 │   └── src/
 ├── esm-format/            # TypeScript package
@@ -234,7 +234,7 @@ cargo package --list           # Rust
 npm install esm-format          # npm
 pip install esm-format          # PyPI
 cargo add esm-format            # crates.io
-julia> ] add ESMFormat          # Julia
+julia> ] add EarthSciSerialization          # Julia
 go get github.com/ctessum/EarthSciSerialization/packages/esm-format-go # Go
 ```
 

@@ -272,7 +272,7 @@ for test_name, data in results.items():
 run_julia_benchmarks() {
     log_info "Running Julia benchmarks..."
 
-    local julia_dir="$PROJECT_ROOT/packages/ESMFormat.jl"
+    local julia_dir="$PROJECT_ROOT/packages/EarthSciSerialization.jl"
     if [[ ! -d "$julia_dir" ]]; then
         log_error "Julia package directory not found: $julia_dir"
         return 1
@@ -282,7 +282,7 @@ run_julia_benchmarks() {
 
     # Create Julia benchmark script
     cat > benchmark_runner.jl << 'EOF'
-using ESMFormat
+using EarthSciSerialization
 using JSON3
 using BenchmarkTools
 using Dates

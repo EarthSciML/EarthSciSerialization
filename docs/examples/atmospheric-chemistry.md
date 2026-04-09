@@ -329,7 +329,7 @@ This is captured in the `temperature_dependence` field for parameters.
 ### Julia Implementation
 
 ```julia
-using ESMFormat, ModelingToolkit, DifferentialEquations, Plots
+using EarthSciSerialization, ModelingToolkit, DifferentialEquations, Plots
 
 # Load the atmospheric chemistry model
 esm_file = load_esm("atmospheric_chemistry.esm")

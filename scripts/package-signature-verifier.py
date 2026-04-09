@@ -456,7 +456,7 @@ class PackageSignatureVerifier:
             raise SignatureVerificationError(f"Packages directory not found: {packages_dir}")
 
         package_mapping = {
-            'ESMFormat.jl': 'julia',
+            'EarthSciSerialization.jl': 'julia',
             'esm_format': 'python',
             'esm-format': 'npm',
             'esm-editor': 'npm',
@@ -541,7 +541,7 @@ def main():
                 print("Creating signatures for all packages...")
                 # Implementation for creating signatures for all packages
                 package_mapping = {
-                    'ESMFormat.jl': 'julia',
+                    'EarthSciSerialization.jl': 'julia',
                     'esm_format': 'python',
                     'esm-format': 'npm',
                     'esm-editor': 'npm',

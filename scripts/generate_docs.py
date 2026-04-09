@@ -91,7 +91,7 @@ class DocumentationExtractor:
 
     def _extract_julia_docs(self) -> Dict[str, Any]:
         """Extract documentation from Julia package."""
-        julia_dir = self.packages_dir / "ESMFormat.jl"
+        julia_dir = self.packages_dir / "EarthSciSerialization.jl"
         src_dir = julia_dir / "src"
 
         functions = []
@@ -102,7 +102,7 @@ class DocumentationExtractor:
             return {"functions": functions, "types": types, "examples": examples}
 
         # Extract from main module file
-        main_file = src_dir / "ESMFormat.jl"
+        main_file = src_dir / "EarthSciSerialization.jl"
         if main_file.exists():
             functions.extend(self._parse_julia_exports(main_file))
 

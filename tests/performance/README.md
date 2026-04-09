@@ -211,7 +211,7 @@ pip install psutil pytest-benchmark memory-profiler
 
 **Julia:**
 ```bash
-cd packages/ESMFormat.jl
+cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 julia --project=. -e 'using Pkg; Pkg.add(["BenchmarkTools", "JSON3"])'
 ```

@@ -72,7 +72,7 @@ jobs:
 
         if [ "${{ github.event.inputs.force_release }}" = "true" ]; then
           NEEDS_RELEASE="true"
-          CHANGED_PACKAGES='["ESMFormat.jl", "esm-format", "esm_format", "esm-format-rust"]'
+          CHANGED_PACKAGES='["EarthSciSerialization.jl", "esm-format", "esm_format", "esm-format-rust"]'
         elif git diff --name-only ${LAST_REF}..HEAD | grep -E '^packages/'; then
           echo "Changes detected in packages"
           NEEDS_RELEASE="true"
@@ -153,7 +153,7 @@ jobs:
         $(echo "$CHANGED_PACKAGES" | jq -r '.[]' | sed 's/^/- /')
 
         ## Package Versions:
-        - Julia ESMFormat.jl: v$NEW_VERSION
+        - Julia EarthSciSerialization.jl: v$NEW_VERSION
         - TypeScript esm-format: v$NEW_VERSION
         - Python esm_format: v$NEW_VERSION
         - Rust esm-format: v$NEW_VERSION
@@ -168,7 +168,7 @@ jobs:
         ### Package Managers
         \`\`\`bash
         # Julia
-        using Pkg; Pkg.add("ESMFormat")
+        using Pkg; Pkg.add("EarthSciSerialization")
 
         # TypeScript/JavaScript
         npm install esm-format
@@ -288,8 +288,8 @@ jobs:
         NEW_VERSION="${{ needs.release-analysis.outputs.new_version }}"
 
         # Update Julia Project.toml
-        if [ -f "packages/ESMFormat.jl/Project.toml" ]; then
-          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/ESMFormat.jl/Project.toml
+        if [ -f "packages/EarthSciSerialization.jl/Project.toml" ]; then
+          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/EarthSciSerialization.jl/Project.toml
         fi
 
         # Update TypeScript package.json
@@ -363,7 +363,7 @@ jobs:
       fail-fast: false
       matrix:
         workflow: [
-          { name: 'julia-ci.yml', package: 'ESMFormat.jl' },
+          { name: 'julia-ci.yml', package: 'EarthSciSerialization.jl' },
           { name: 'npm-publish.yml', package: 'esm-format' },
           { name: 'python-package.yml', package: 'esm_format' },
           { name: 'rust-ci.yml', package: 'esm-format-rust' }

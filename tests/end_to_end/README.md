@@ -138,7 +138,7 @@ These end-to-end fixtures should be integrated into the language-specific test s
 
 ### Julia Example
 ```julia
-using ESMFormat
+using EarthSciSerialization
 
 # Load and parse the ESM file
 esm = load_esm("coupled_atmospheric_system.esm")
