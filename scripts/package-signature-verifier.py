@@ -460,7 +460,7 @@ class PackageSignatureVerifier:
             'esm_format': 'python',
             'esm-format': 'npm',
             'esm-editor': 'npm',
-            'esm-format-rust': 'rust'
+            'earthsci-toolkit': 'rust'
         }
 
         results = {
@@ -545,7 +545,7 @@ def main():
                     'esm_format': 'python',
                     'esm-format': 'npm',
                     'esm-editor': 'npm',
-                    'esm-format-rust': 'rust'
+                    'earthsci-toolkit': 'rust'
                 }
 
                 for package_name in package_mapping:

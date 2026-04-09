@@ -48,7 +48,7 @@ build_rust_binary() {
 
     echo "Building Rust binary for $platform ($rust_target)..."
 
-    cd "${PROJECT_ROOT}/packages/esm-format-rust"
+    cd "${PROJECT_ROOT}/packages/earthsci-toolkit"
 
     # Install target if needed
     rustup target add "$rust_target" || true

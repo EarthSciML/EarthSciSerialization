@@ -60,7 +60,7 @@ cd packages/esm_format
 python3 -m pytest tests/ -v
 
 # Rust
-cd packages/esm-format-rust
+cd packages/earthsci-toolkit
 cargo test
 ```
 

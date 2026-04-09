@@ -12,16 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Rust package files for dependency resolution
-COPY packages/esm-format-rust/Cargo.toml packages/esm-format-rust/Cargo.lock ./packages/esm-format-rust/
+COPY packages/earthsci-toolkit/Cargo.toml packages/earthsci-toolkit/Cargo.lock ./packages/earthsci-toolkit/
 
 # Pre-fetch dependencies
-WORKDIR /workspace/packages/esm-format-rust
+WORKDIR /workspace/packages/earthsci-toolkit
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
     rm -rf src
 
 # Copy source and build optimized binary
-COPY packages/esm-format-rust ./
+COPY packages/earthsci-toolkit ./
 RUN cargo build --release --bin esm
 
 # Production stage with minimal base
@@ -41,7 +41,7 @@ RUN groupadd -r esm && useradd -r -g esm -d /workspace -s /bin/bash esm
 WORKDIR /workspace
 
 # Copy optimized binary from builder
-COPY --from=builder --chown=esm:esm /workspace/packages/esm-format-rust/target/release/esm /usr/local/bin/esm
+COPY --from=builder --chown=esm:esm /workspace/packages/earthsci-toolkit/target/release/esm /usr/local/bin/esm
 
 # Copy test data and scripts
 COPY --chown=esm:esm tests ./tests/
