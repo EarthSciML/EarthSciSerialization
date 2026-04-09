@@ -59,6 +59,10 @@ Cargo.lock
 esm-format-go
 esm-go
 
+# Claude Code local files
+CLAUDE.local.md
+.runtime/
+
 # Editor files
 .vscode/
 .idea/
