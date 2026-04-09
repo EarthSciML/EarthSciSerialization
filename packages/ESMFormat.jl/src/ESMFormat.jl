@@ -62,7 +62,7 @@ export
     # Coupled system
     MockCoupledSystem,
     # System types
-    Domain, Solver, Reference, Metadata, EsmFile,
+    Domain, Interface, Solver, Reference, Metadata, EsmFile,
     # Solver types and enums
     SolverStrategy, StrangThreads, StrangSerial, IMEX,
     NumericalMethod, FiniteDifferenceMethod, FiniteElementMethod, FiniteVolumeMethod,
