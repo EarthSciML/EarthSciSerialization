@@ -7,7 +7,7 @@ and analytics into Python ESM format packages.
 
 import functools
 import os
-from typing import Callable, Any, Optional, Dict
+from typing import Callable, Any, Optional, Dict, Tuple
 from pathlib import Path
 
 # Import from the analytics module
@@ -164,7 +164,7 @@ def _extract_file_size(args: tuple, kwargs: dict) -> Optional[int]:
     return None
 
 
-def _extract_file_info(args: tuple, kwargs: dict) -> tuple[Optional[str], Optional[int]]:
+def _extract_file_info(args: tuple, kwargs: dict) -> Tuple[Optional[str], Optional[int]]:
     """Extract file type and size from function arguments."""
     file_type = None
     file_size = None
