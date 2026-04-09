@@ -6,10 +6,10 @@ import sys
 import os
 
 # Add the package to path
-sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/esm_format/src')
+sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src')
 
 try:
-    from esm_format import ContinuousEvent, AffectEquation
+    from earthsci_toolkit import ContinuousEvent, AffectEquation
 
     # Test creating a ContinuousEvent with new fields
     affect = AffectEquation(lhs="x", rhs="0.5")
@@ -35,8 +35,8 @@ try:
     print(f"  Description: {event.description}")
 
     # Test serialization
-    from esm_format import save
-    from esm_format import EsmFile, Metadata
+    from earthsci_toolkit import save
+    from earthsci_toolkit import EsmFile, Metadata
 
     esm_file = EsmFile(
         version="0.1.0",
@@ -49,7 +49,7 @@ try:
     print("✓ Serialization successful")
 
     # Test loading back
-    from esm_format import load
+    from earthsci_toolkit import load
     loaded_esm = load("/tmp/test_continuous_event.json")
 
     loaded_event = loaded_esm.events[0]

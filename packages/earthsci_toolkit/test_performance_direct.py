@@ -18,8 +18,8 @@ print("Testing direct import of performance optimization modules...")
 
 try:
     # First test if we can import the base classes we need
-    from esm_format.coupling_graph import CouplingGraph, CouplingNode, NodeType
-    from esm_format.coupling_iteration import ConvergenceConfig, ConvergenceMethod, CouplingResult, IterationState
+    from earthsci_toolkit.coupling_graph import CouplingGraph, CouplingNode, NodeType
+    from earthsci_toolkit.coupling_iteration import ConvergenceConfig, ConvergenceMethod, CouplingResult, IterationState
     print("✓ Base coupling modules imported successfully")
 except Exception as e:
     print(f"Base modules import failed: {e}")

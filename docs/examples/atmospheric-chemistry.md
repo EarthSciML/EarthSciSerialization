@@ -375,7 +375,7 @@ plot!(time_hours, steady_state_ratio, label="PSS Ratio", linestyle=:dash)
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
-from esm_format import load_esm, to_unicode
+from earthsci_toolkit import load_esm, to_unicode
 
 # Load model
 esm_file = load_esm('atmospheric_chemistry.esm')

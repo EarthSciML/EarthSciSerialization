@@ -4,7 +4,7 @@
  * This module provides functions to generate self-contained scripts
  * from ESM files in multiple target languages:
  * - Julia: compatible with ModelingToolkit, Catalyst, EarthSciMLBase, and OrdinaryDiffEq
- * - Python: compatible with SymPy, esm_format, and SciPy
+ * - Python: compatible with SymPy, earthsci_toolkit, and SciPy
  */
 
 import type { EsmFile, Model, ReactionSystem, Expression, ExpressionNode, Equation, ModelVariable, Species, Reaction, ContinuousEvent, DiscreteEvent, CouplingEntry, Domain, Solver, DataLoader } from './types.js'
@@ -122,7 +122,7 @@ export function toPythonCode(file: EsmFile): string {
   // Import statements
   lines.push('# Package imports')
   lines.push('import sympy as sp')
-  lines.push('import esm_format as esm')
+  lines.push('import earthsci_toolkit as esm')
   lines.push('import scipy')
   lines.push('from sympy import Function')
   lines.push('')

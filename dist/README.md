@@ -174,7 +174,7 @@ Future releases will include GPG signatures for enhanced security.
 
 While this distribution focuses on native executables, EarthSciSerialization is also available as libraries:
 
-- **Python**: `pip install esm-format`
+- **Python**: `pip install earthsci-toolkit`
 - **TypeScript/JavaScript**: `npm install esm-format`
 - **Julia**: `using Pkg; Pkg.add("EarthSciSerialization")`
 - **Rust**: Add `esm-format = "VERSION"` to Cargo.toml

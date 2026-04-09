@@ -17,9 +17,9 @@ from pathlib import Path
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from esm_format.types import DataLoader, DataLoaderType
-from esm_format.data_loaders import RemoteLoader
-from esm_format.data_loader_registry import create_data_loader, detect_loader_type
+from earthsci_toolkit.types import DataLoader, DataLoaderType
+from earthsci_toolkit.data_loaders import RemoteLoader
+from earthsci_toolkit.data_loader_registry import create_data_loader, detect_loader_type
 
 
 def progress_callback(progress, downloaded, total):

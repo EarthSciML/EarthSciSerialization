@@ -1,6 +1,6 @@
 # Mathematical Correctness Verification Module
 
-The `esm_format.verification` module provides comprehensive mathematical correctness verification for Earth System Model serialization and computational validation.
+The `earthsci_toolkit.verification` module provides comprehensive mathematical correctness verification for Earth System Model serialization and computational validation.
 
 ## Overview
 
@@ -20,7 +20,7 @@ This module implements algorithms and verification methods essential for ensurin
 The main verification class providing comprehensive mathematical correctness checking.
 
 ```python
-from esm_format.verification import MathematicalVerifier
+from earthsci_toolkit.verification import MathematicalVerifier
 
 verifier = MathematicalVerifier(tolerance=1e-10)
 report = verifier.verify_reaction_system(reaction_system)
@@ -144,8 +144,8 @@ dim_results = verifier.verify_dimensional_consistency(equations)
 ### Basic Reaction System Verification
 
 ```python
-from esm_format.types import Species, Reaction, ReactionSystem
-from esm_format.verification import verify_reaction_system
+from earthsci_toolkit.types import Species, Reaction, ReactionSystem
+from earthsci_toolkit.verification import verify_reaction_system
 
 # Define species with masses
 species = [
@@ -179,8 +179,8 @@ else:
 ### Model Verification
 
 ```python
-from esm_format.types import Model, ModelVariable, Equation
-from esm_format.verification import verify_model
+from earthsci_toolkit.types import Model, ModelVariable, Equation
+from earthsci_toolkit.verification import verify_model
 
 # Define model variables
 variables = {
@@ -207,7 +207,7 @@ print(f"Status: {report.summary}")
 ### Advanced Conservation Analysis
 
 ```python
-from esm_format.verification import MathematicalVerifier
+from earthsci_toolkit.verification import MathematicalVerifier
 import numpy as np
 
 verifier = MathematicalVerifier()
@@ -266,7 +266,7 @@ verifier = MathematicalVerifier(tolerance=1e-2)
 The verification module integrates seamlessly with the ESM format type system:
 
 ```python
-from esm_format import load, verify_reaction_system
+from earthsci_toolkit import load, verify_reaction_system
 
 # Load ESM file
 esm_data = load("model.json")

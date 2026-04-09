@@ -5,7 +5,7 @@ This script shows how to use the new precedence and dependency features
 in the ESM Format operator registry.
 """
 
-from esm_format.operator_registry import (
+from earthsci_toolkit.operator_registry import (
     OperatorRegistry,
     Associativity,
     register_operator,

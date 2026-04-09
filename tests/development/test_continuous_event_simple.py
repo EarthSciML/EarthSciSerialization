@@ -6,13 +6,13 @@ import sys
 import os
 
 # Add the package to path
-sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/esm_format/src')
+sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src')
 
 try:
     # Import directly from esm_types to avoid other dependencies
-    from esm_format.esm_types import ContinuousEvent, AffectEquation
-    from esm_format.serialize import _serialize_continuous_event
-    from esm_format.parse import _parse_continuous_event
+    from earthsci_toolkit.esm_types import ContinuousEvent, AffectEquation
+    from earthsci_toolkit.serialize import _serialize_continuous_event
+    from earthsci_toolkit.parse import _parse_continuous_event
 
     # Test creating a ContinuousEvent with new fields
     affect = AffectEquation(lhs="x", rhs="0.5")

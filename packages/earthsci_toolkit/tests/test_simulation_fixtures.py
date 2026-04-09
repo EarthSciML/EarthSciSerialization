@@ -25,12 +25,12 @@ from unittest.mock import patch
 from contextlib import contextmanager
 
 # Core imports
-from esm_format.esm_types import (
+from earthsci_toolkit.esm_types import (
     Model, ModelVariable, Equation, ExprNode, EsmFile, Metadata,
     ReactionSystem, Species, Parameter, Reaction
 )
-from esm_format.parse import load
-from esm_format.serialize import save
+from earthsci_toolkit.parse import load
+from earthsci_toolkit.serialize import save
 
 # Scientific computing imports with fallbacks for optional dependencies
 try:

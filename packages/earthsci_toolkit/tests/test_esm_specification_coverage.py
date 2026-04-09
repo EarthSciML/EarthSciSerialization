@@ -28,8 +28,8 @@ import pytest
 import jsonschema
 from jsonschema import ValidationError
 
-from esm_format import load
-from esm_format.parse import _get_schema
+from earthsci_toolkit import load
+from earthsci_toolkit.parse import _get_schema
 
 
 class TestSection01Overview:
@@ -71,7 +71,7 @@ class TestSection01Overview:
                 jsonschema.validate(invalid_data, schema)
 
         # Incompatible major versions should fail at library level
-        from esm_format.parse import UnsupportedVersionError, load
+        from earthsci_toolkit.parse import UnsupportedVersionError, load
         for version in ["1.0.0", "2.0.0"]:
             invalid_data = {
                 "esm": version,

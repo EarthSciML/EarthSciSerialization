@@ -8,8 +8,8 @@ dot-notation references like 'AtmosphereModel.Chemistry.FastReactions.k1'
 through nested subsystem hierarchies.
 """
 
-from esm_format.coupling_graph import ScopedReferenceResolver, resolve_coupling_dependencies
-from esm_format.types import EsmFile, Metadata
+from earthsci_toolkit.coupling_graph import ScopedReferenceResolver, resolve_coupling_dependencies
+from earthsci_toolkit.types import EsmFile, Metadata
 
 
 def create_demo_esm_file():

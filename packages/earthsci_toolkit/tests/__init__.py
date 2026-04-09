@@ -1,1 +1,1 @@
-"""Tests for esm_format package."""
+"""Tests for earthsci_toolkit package."""

@@ -9,8 +9,8 @@ import pytest
 import json
 from pathlib import Path
 
-from esm_format import substitute, substitute_in_model, substitute_in_reaction_system
-from esm_format.parse import load
+from earthsci_toolkit import substitute, substitute_in_model, substitute_in_reaction_system
+from earthsci_toolkit.parse import load
 
 
 class TestSubstitutionFixtures:

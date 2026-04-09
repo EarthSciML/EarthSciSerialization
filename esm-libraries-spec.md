@@ -1154,7 +1154,7 @@ const julia: string = toJuliaCode(file);
 // Generate a self-contained Python script
 const python: string = toPythonCode(file);
 // Output:
-//   import esm_format as esm
+//   import earthsci_toolkit as esm
 //   file = esm.load_string('''...''')
 //   solution = esm.simulate(file, tspan=(0, 86400), ...)
 ```
@@ -1174,7 +1174,7 @@ const python: string = toPythonCode(file);
 
 ---
 
-### 5.3 Python — `esm_format`
+### 5.3 Python — `earthsci_toolkit`
 
 **Tier: Core + Analysis + Simulation**
 
@@ -1191,7 +1191,7 @@ Python provides simulation capability via SymPy for symbolic manipulation and Sc
 #### 5.3.2 Package Structure
 
 ```
-esm_format/
+earthsci_toolkit/
 ├── __init__.py
 ├── types.py          # Dataclass definitions for ESM types
 ├── parse.py          # JSON → dataclasses
@@ -1209,7 +1209,7 @@ esm_format/
 #### 5.3.3 Core API
 
 ```python
-import esm_format as esm
+import earthsci_toolkit as esm
 
 # Load and save
 file = esm.load("model.esm")

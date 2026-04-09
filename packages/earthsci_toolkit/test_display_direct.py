@@ -6,7 +6,7 @@ import sys
 import os
 
 # Add the source directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'esm_format'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'earthsci_toolkit'))
 
 # Import modules directly
 from types import ExprNode

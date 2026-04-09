@@ -7,8 +7,8 @@ in reactions must be positive integers, not arbitrary floating point values.
 """
 
 import pytest
-from esm_format.esm_types import EsmFile, Metadata, ReactionSystem, Species, Parameter, Reaction
-from esm_format.validation import validate
+from earthsci_toolkit.esm_types import EsmFile, Metadata, ReactionSystem, Species, Parameter, Reaction
+from earthsci_toolkit.validation import validate
 
 
 class TestStoichiometryIntegerValidation:

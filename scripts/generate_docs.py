@@ -264,7 +264,7 @@ class DocumentationExtractor:
 
     def _extract_python_docs(self) -> Dict[str, Any]:
         """Extract documentation from Python package."""
-        python_dir = self.packages_dir / "esm_format"
+        python_dir = self.packages_dir / "earthsci_toolkit"
 
         functions = []
         types = []

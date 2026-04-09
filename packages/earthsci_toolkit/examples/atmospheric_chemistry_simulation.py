@@ -9,8 +9,8 @@ system to showcase the simulation capabilities.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from esm_format.simulation import simulate
-from esm_format.types import ReactionSystem, Species, Reaction
+from earthsci_toolkit.simulation import simulate
+from earthsci_toolkit.types import ReactionSystem, Species, Reaction
 
 
 def create_atmospheric_chemistry_system():

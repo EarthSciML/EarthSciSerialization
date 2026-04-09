@@ -81,7 +81,7 @@ using EarthSciSerialization
             code = to_python_code(file)
 
             @test occursin("import sympy as sp", code)
-            @test occursin("import esm_format as esm", code)
+            @test occursin("import earthsci_toolkit as esm", code)
             @test occursin("import scipy", code)
             @test occursin("# Title: Test Model", code)
             @test occursin("# Description: A test model for Python code generation", code)

@@ -7,11 +7,11 @@ import sys
 import os
 
 # Add the Python package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages/esm_format/src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages/earthsci_toolkit/src'))
 
 try:
-    from esm_format import migrate, can_migrate, get_supported_migration_targets, MigrationError
-    from esm_format.esm_types import EsmFile, Metadata, Species, ReactionSystem
+    from earthsci_toolkit import migrate, can_migrate, get_supported_migration_targets, MigrationError
+    from earthsci_toolkit.esm_types import EsmFile, Metadata, Species, ReactionSystem
 
     print("Testing migration functionality...\n")
 

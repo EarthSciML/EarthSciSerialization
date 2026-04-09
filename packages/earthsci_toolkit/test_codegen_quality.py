@@ -22,7 +22,7 @@ from typing import Dict, Any
 
 import pytest
 
-from esm_format.codegen import to_julia_code, to_python_code
+from earthsci_toolkit.codegen import to_julia_code, to_python_code
 
 
 def create_test_esm_file(name: str = "test") -> Dict[str, Any]:
@@ -169,7 +169,7 @@ class TestPythonCodeGeneration:
 
         # Test required imports
         assert "import sympy as sp" in code
-        assert "import esm_format as esm" in code
+        assert "import earthsci_toolkit as esm" in code
         assert "import scipy" in code
 
         # Test header comments

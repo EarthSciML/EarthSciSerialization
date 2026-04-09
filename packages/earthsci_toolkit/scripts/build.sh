@@ -1,9 +1,9 @@
 #!/bin/bash
-# Build script for esm-format Python package
+# Build script for earthsci-toolkit Python package
 
 set -e  # Exit on any error
 
-echo "🔨 Building esm-format Python package"
+echo "🔨 Building earthsci-toolkit Python package"
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

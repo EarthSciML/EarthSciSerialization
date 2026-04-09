@@ -4,10 +4,10 @@ import json
 import pytest
 import jsonschema
 
-from esm_format import load
-from esm_format.parse import _parse_expression, SchemaValidationError
-from esm_format.serialize import _serialize_expression
-from esm_format.esm_types import ExprNode, EsmFile
+from earthsci_toolkit import load
+from earthsci_toolkit.parse import _parse_expression, SchemaValidationError
+from earthsci_toolkit.serialize import _serialize_expression
+from earthsci_toolkit.esm_types import ExprNode, EsmFile
 
 
 def test_load_invalid_json():

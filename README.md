@@ -36,8 +36,8 @@ const result = validate(esmFile);
 
 **Python:**
 ```python
-import esm_format
-esm_file = esm_format.load("model.esm")
+import earthsci_toolkit
+esm_file = earthsci_toolkit.load("model.esm")
 print(f"Model has {len(esm_file.models)} components")
 ```
 
@@ -49,8 +49,8 @@ This repository contains multiple language implementations of the ESM format:
 |---------|----------|-------------|-----------|
 | **EarthSciSerialization.jl** | Julia | Complete MTK/Catalyst integration | [`packages/EarthSciSerialization.jl/`](packages/EarthSciSerialization.jl/) |
 | **esm-format** | TypeScript | Web/Node.js types and utilities | [`packages/esm-format/`](packages/esm-format/) |
-| **esm_format** | Python | Scientific Python integration | [`packages/esm_format/`](packages/esm_format/) |
-| **earthsci-toolkit** | Rust | High-performance implementation | [`packages/earthsci-toolkit/`](packages/earthsci-toolkit/) |
+| **earthsci_toolkit** | Python | Scientific Python integration | [`packages/earthsci_toolkit/`](packages/earthsci_toolkit/) |
+| **esm-format-rust** | Rust | High-performance implementation | [`packages/esm-format-rust/`](packages/esm-format-rust/) |
 | **esm-format-go** | Go | Lightweight Go implementation | [`packages/esm-format-go/`](packages/esm-format-go/) |
 | **esm-editor** | SolidJS | Interactive web-based editor | [`packages/esm-editor/`](packages/esm-editor/) |
 
@@ -69,13 +69,13 @@ npm install esm-format
 
 ### Python
 ```bash
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 ### Rust
 ```toml
 [dependencies]
-earthsci-toolkit = "0.1.0"
+esm-format = "0.1.0"
 ```
 
 ### Go

@@ -2,11 +2,11 @@
 
 import pytest
 import sympy as sp
-from esm_format.expression import (
+from earthsci_toolkit.expression import (
     free_variables, free_parameters, contains, evaluate, simplify,
     to_sympy, from_sympy, symbolic_jacobian
 )
-from esm_format.esm_types import ExprNode, Model, ModelVariable, Equation
+from earthsci_toolkit.esm_types import ExprNode, Model, ModelVariable, Equation
 
 
 class TestBasicExpressionFunctions:

@@ -4,11 +4,11 @@ import sys
 import os
 
 # Add the source directory to the path
-src_path = os.path.join(os.path.dirname(__file__), 'packages/esm_format/src')
+src_path = os.path.join(os.path.dirname(__file__), 'packages/earthsci_toolkit/src')
 sys.path.insert(0, src_path)
 
 # Import modules directly without going through __init__.py
-sys.path.insert(0, os.path.join(src_path, 'esm_format'))
+sys.path.insert(0, os.path.join(src_path, 'earthsci_toolkit'))
 
 from esm_types import (
     Metadata, Species, Reaction, ReactionSystem, CouplingEntry,

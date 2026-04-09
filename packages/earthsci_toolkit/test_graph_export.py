@@ -13,12 +13,12 @@ import os
 # Add src directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from esm_format.graph import (
+from earthsci_toolkit.graph import (
     component_graph, expression_graph, Graph, GraphNode, GraphEdge,
     ComponentNode, VariableNode, CouplingEdge, DependencyEdge,
     to_dot, to_mermaid, to_json_graph
 )
-from esm_format.esm_types import (
+from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, Model, ModelVariable, Equation, ExprNode,
     ReactionSystem, Species, Parameter, Reaction
 )

@@ -253,7 +253,7 @@ cd packages/esm-format
 npm test -- --run
 
 # Python
-cd packages/esm_format
+cd packages/earthsci_toolkit
 python -m pytest tests/ -v
 
 # Rust

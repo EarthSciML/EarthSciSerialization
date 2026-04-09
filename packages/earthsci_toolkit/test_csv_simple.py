@@ -6,7 +6,7 @@ sys.path.insert(0, 'src')
 
 print("Testing step 1: Direct import of CSV module")
 try:
-    from esm_format.csv_loader import CSVLoader, load_csv_data, CSVValidationError
+    from earthsci_toolkit.csv_loader import CSVLoader, load_csv_data, CSVValidationError
     print("✓ Direct CSV import successful")
 except Exception as e:
     print(f"❌ Direct CSV import failed: {e}")
@@ -14,7 +14,7 @@ except Exception as e:
 
 print("\nTesting step 2: Import esm_types")
 try:
-    from esm_format.esm_types import DataLoader, DataLoaderType
+    from earthsci_toolkit.esm_types import DataLoader, DataLoaderType
     print("✓ esm_types import successful")
 except Exception as e:
     print(f"❌ esm_types import failed: {e}")
@@ -47,15 +47,15 @@ except Exception as e:
     traceback.print_exc()
     sys.exit(1)
 
-print("\nTesting step 4: Full esm_format import")
+print("\nTesting step 4: Full earthsci_toolkit import")
 try:
-    from esm_format import CSVLoader, CSVValidationError, load_csv_data
-    print("✓ Full esm_format CSV import successful")
+    from earthsci_toolkit import CSVLoader, CSVValidationError, load_csv_data
+    print("✓ Full earthsci_toolkit CSV import successful")
 except ImportError as e:
-    print(f"❌ Full esm_format CSV import failed: {e}")
+    print(f"❌ Full earthsci_toolkit CSV import failed: {e}")
     print("This indicates the CSV components are not properly exported from the main package")
 except Exception as e:
-    print(f"❌ Full esm_format CSV import failed with other error: {e}")
+    print(f"❌ Full earthsci_toolkit CSV import failed with other error: {e}")
     import traceback
     traceback.print_exc()
 

@@ -22,7 +22,7 @@ services:
       - ./:/workspace:delegated
       - pip-cache:/root/.cache/pip
     environment:
-      - PYTHONPATH=/workspace/packages/esm_format/src
+      - PYTHONPATH=/workspace/packages/earthsci_toolkit/src
       - ESM_DEBUG=true
       - PYTHONUNBUFFERED=1
     ports:

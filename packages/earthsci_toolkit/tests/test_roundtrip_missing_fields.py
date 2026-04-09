@@ -3,11 +3,11 @@
 import json
 import pytest
 
-from esm_format.esm_types import (
+from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, DataLoader, DataLoaderType, Operator,
     VariableMapCoupling, CouplingType, Solver, SolverType, ContinuousEvent, AffectEquation
 )
-from esm_format.serialize import save
+from earthsci_toolkit.serialize import save
 
 
 def test_roundtrip_preserves_data_loaders():

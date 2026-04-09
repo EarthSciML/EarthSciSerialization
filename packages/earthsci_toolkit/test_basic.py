@@ -25,7 +25,7 @@ def run_tests():
 
     # Test imports
     def test_imports():
-        from esm_format.types import (
+        from earthsci_toolkit.types import (
             ExprNode, Expr, Equation, AffectEquation, ModelVariable, Model,
             Species, Parameter, Reaction, ReactionSystem,
             ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
@@ -35,10 +35,10 @@ def run_tests():
         )
 
         # Test basic imports from __init__.py
-        from esm_format import ExprNode, Model, EsmFile
+        from earthsci_toolkit import ExprNode, Model, EsmFile
 
     def test_expr_node():
-        from esm_format.types import ExprNode
+        from earthsci_toolkit.types import ExprNode
         node = ExprNode(op="+", args=[1, 2])
         assert node.op == "+"
         assert node.args == [1, 2]
@@ -46,7 +46,7 @@ def run_tests():
         assert node.dim is None
 
     def test_model_variable():
-        from esm_format.types import ModelVariable
+        from earthsci_toolkit.types import ModelVariable
         var = ModelVariable(
             type="state",
             units="kg/m^3",
@@ -58,14 +58,14 @@ def run_tests():
         assert var.default == 0.0
 
     def test_model():
-        from esm_format.types import Model
+        from earthsci_toolkit.types import Model
         model = Model(name="TestModel")
         assert model.name == "TestModel"
         assert len(model.variables) == 0
         assert len(model.equations) == 0
 
     def test_species():
-        from esm_format.types import Species
+        from earthsci_toolkit.types import Species
         species = Species(name="CO2", formula="CO2", units="gram/mole", default=44.01)
         assert species.name == "CO2"
         assert species.formula == "CO2"
@@ -73,14 +73,14 @@ def run_tests():
         assert species.default == 44.01
 
     def test_esm_file():
-        from esm_format.types import EsmFile, Metadata
+        from earthsci_toolkit.types import EsmFile, Metadata
         metadata = Metadata(title="Test Model", version="1.0")
         esm_file = EsmFile(version="1.0", metadata=metadata)
         assert esm_file.version == "1.0"
         assert esm_file.metadata.title == "Test Model"
 
     def test_complex_expression():
-        from esm_format.types import ExprNode
+        from earthsci_toolkit.types import ExprNode
         # Create expression: (x + y) * 2
         add_expr = ExprNode(op="+", args=["x", "y"])
         mult_expr = ExprNode(op="*", args=[add_expr, 2])

@@ -9,8 +9,8 @@ and TCP connections.
 
 import time
 import json
-from esm_format.types import DataLoader, DataLoaderType
-from esm_format.data_loaders import StreamingLoader
+from earthsci_toolkit.types import DataLoader, DataLoaderType
+from earthsci_toolkit.data_loaders import StreamingLoader
 
 
 def example_websocket_streaming():

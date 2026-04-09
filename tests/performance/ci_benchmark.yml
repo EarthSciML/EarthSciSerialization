@@ -156,7 +156,7 @@ jobs:
       - name: Install Python dependencies
         if: matrix.language == 'python'
         run: |
-          cd packages/esm_format
+          cd packages/earthsci_toolkit
           pip install -e .[test]
           pip install psutil pytest-benchmark memory-profiler
 

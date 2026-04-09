@@ -14,8 +14,8 @@ import tempfile
 from pathlib import Path
 
 # Import the ESM format modules
-from esm_format.data_loaders import create_data_loader, JSONLoader
-from esm_format.types import DataLoader, DataLoaderType
+from earthsci_toolkit.data_loaders import create_data_loader, JSONLoader
+from earthsci_toolkit.types import DataLoader, DataLoaderType
 
 
 def main():

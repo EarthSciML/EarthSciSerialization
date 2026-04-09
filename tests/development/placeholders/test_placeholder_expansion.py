@@ -5,9 +5,9 @@ Test script for _var placeholder expansion in operator_compose couplings.
 
 import json
 import sys
-sys.path.append('packages/esm_format/src')
+sys.path.append('packages/earthsci_toolkit/src')
 
-from esm_format import (
+from earthsci_toolkit import (
     load, process_operator_compose_placeholders, has_var_placeholder,
     get_state_variables, expand_model_placeholders
 )
