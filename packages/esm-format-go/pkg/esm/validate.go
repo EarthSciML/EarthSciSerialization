@@ -105,29 +105,6 @@ func ValidateFile(file *EsmFile, jsonStr string) *ValidationResult {
 	return result
 }
 
-// getErrorCodeFromMessage attempts to infer error code from message text
-// This is a temporary solution until we refactor the structural validation to use codes directly
-func getErrorCodeFromMessage(message string) string {
-	if strings.Contains(message, "Unknown variable") {
-		return ErrorUndefinedVariable
-	}
-	if strings.Contains(message, "Unknown species") {
-		return ErrorUndefinedSpecies
-	}
-	if strings.Contains(message, "Unknown parameter") {
-		return ErrorUndefinedParameter
-	}
-	if strings.Contains(message, "Unknown system") {
-		return ErrorUndefinedSystem
-	}
-	if strings.Contains(message, "Equation-unknown balance") {
-		return ErrorEquationCountMismatch
-	}
-	if strings.Contains(message, "Observed variable must have an expression") {
-		return ErrorMissingObservedExpr
-	}
-	return "unknown_error"
-}
 
 // Validate is the backward compatibility function that returns DetailedValidationResult
 // For the new spec-compliant validation, use ValidateFile
@@ -403,11 +380,6 @@ func validateReaction(reaction *Reaction, system *ReactionSystem, path string, r
 		}
 		productSpecies[product.Species] = i
 	}
-}
-
-// validateExpressionVariables checks that all variables in an expression exist
-func validateExpressionVariables(expr Expression, allVars map[string]bool, path string, result *DetailedValidationResult) {
-	validateExpressionVariablesWithScoped(expr, allVars, path, result, nil, "")
 }
 
 // validateExpressionVariablesWithScoped checks that all variables in an expression exist
