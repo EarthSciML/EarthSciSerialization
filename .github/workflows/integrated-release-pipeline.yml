@@ -82,7 +82,7 @@ jobs:
             grep -E '^packages/' | \
             cut -d'/' -f2 | \
             sort -u | \
-            jq -R -s 'split("\n") | map(select(length > 0))')
+            jq -R -s -c 'split("\n") | map(select(length > 0))')
         fi
 
         echo "needs_release=$NEEDS_RELEASE" >> $GITHUB_OUTPUT
