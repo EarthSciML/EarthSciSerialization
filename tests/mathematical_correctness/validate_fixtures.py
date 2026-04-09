@@ -10,9 +10,9 @@ import json
 import sys
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Tuple
 
-def validate_json_file(filepath: Path) -> tuple[bool, List[str]]:
+def validate_json_file(filepath: Path) -> Tuple[bool, List[str]]:
     """Validate a JSON file and return success status and error messages."""
     errors = []
 

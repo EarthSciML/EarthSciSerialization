@@ -4,7 +4,7 @@ This provides only the essential scoped reference resolution required by validat
 """
 
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 from .esm_types import EsmFile, Model, ReactionSystem
 
 
@@ -143,7 +143,7 @@ class HierarchicalScopeResolver:
 
         return False
 
-    def _resolve_variable_in_hierarchy(self, system_path: List[str], var_name: str) -> tuple[bool, str]:
+    def _resolve_variable_in_hierarchy(self, system_path: List[str], var_name: str) -> Tuple[bool, str]:
         """
         Resolve a variable in a hierarchical system path.
 
