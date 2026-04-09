@@ -136,6 +136,9 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
         end
     end
 
+    # 5. Validate multi-domain consistency
+    append!(errors, validate_multi_domain(file))
+
     return errors
 end
 
@@ -695,6 +698,254 @@ function validate_single_event_consistency(model::Model, event::EventType, event
                 end
             end
         end
+
+    return errors
+end
+
+# ============================================================================
+# Multi-Domain Validation
+# ============================================================================
+
+"""
+    validate_multi_domain(file::EsmFile) -> Vector{StructuralError}
+
+Validate multi-domain consistency:
+1. Model/ReactionSystem `domain` must reference a key in `domains`
+2. Interface `domains` must reference valid domain names
+3. Interface dimension_mapping.shared/constraints must reference valid dimensions
+4. Coupling `interface` must reference a key in `interfaces`
+5. `lifting` only valid when source or target is 0D (domain is null)
+"""
+function validate_multi_domain(file::EsmFile)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    domain_names = file.domains !== nothing ? Set(keys(file.domains)) : Set{String}()
+    interface_names = file.interfaces !== nothing ? Set(keys(file.interfaces)) : Set{String}()
+
+    # 1. Validate model domain references
+    if file.models !== nothing
+        for (model_name, model) in file.models
+            if model.domain !== nothing && !isempty(domain_names)
+                if model.domain ∉ domain_names
+                    push!(errors, StructuralError(
+                        "models.$model_name.domain",
+                        "Domain '$(model.domain)' not found in domains",
+                        "undefined_domain"
+                    ))
+                end
+            elseif model.domain !== nothing && isempty(domain_names)
+                push!(errors, StructuralError(
+                    "models.$model_name.domain",
+                    "Domain '$(model.domain)' referenced but no domains defined",
+                    "undefined_domain"
+                ))
+            end
+        end
+    end
+
+    # 1b. Validate reaction system domain references
+    if file.reaction_systems !== nothing
+        for (rs_name, rs) in file.reaction_systems
+            if rs.domain !== nothing && !isempty(domain_names)
+                if rs.domain ∉ domain_names
+                    push!(errors, StructuralError(
+                        "reaction_systems.$rs_name.domain",
+                        "Domain '$(rs.domain)' not found in domains",
+                        "undefined_domain"
+                    ))
+                end
+            elseif rs.domain !== nothing && isempty(domain_names)
+                push!(errors, StructuralError(
+                    "reaction_systems.$rs_name.domain",
+                    "Domain '$(rs.domain)' referenced but no domains defined",
+                    "undefined_domain"
+                ))
+            end
+        end
+    end
+
+    # 2. Validate interface domain references
+    if file.interfaces !== nothing
+        for (iface_name, iface) in file.interfaces
+            for (i, dom_name) in enumerate(iface.domains)
+                if dom_name ∉ domain_names
+                    push!(errors, StructuralError(
+                        "interfaces.$iface_name.domains[$i]",
+                        "Domain '$dom_name' not found in domains",
+                        "undefined_domain"
+                    ))
+                end
+            end
+
+            # 3. Validate dimension_mapping references
+            append!(errors, validate_interface_dimensions(file, iface, iface_name))
+        end
+    end
+
+    # 4 & 5. Validate coupling interface/lifting references
+    for (i, coupling_entry) in enumerate(file.coupling)
+        append!(errors, validate_coupling_multi_domain(file, coupling_entry, "coupling[$i]"))
+    end
+
+    return errors
+end
+
+"""
+    validate_interface_dimensions(file::EsmFile, iface::Interface, iface_name::String) -> Vector{StructuralError}
+
+Validate that dimension_mapping.shared and dimension_mapping.constraints reference
+valid dimensions from the domains they belong to.
+"""
+function validate_interface_dimensions(file::EsmFile, iface::Interface, iface_name::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    dm = iface.dimension_mapping
+
+    # Build set of valid "domain.dimension" references from the interface's domains
+    valid_dim_refs = Set{String}()
+    if file.domains !== nothing
+        for dom_name in iface.domains
+            if haskey(file.domains, dom_name)
+                domain = file.domains[dom_name]
+                if domain.spatial !== nothing
+                    for dim_name in keys(domain.spatial)
+                        push!(valid_dim_refs, "$dom_name.$dim_name")
+                    end
+                end
+            end
+        end
+    end
+
+    # Validate shared dimension keys (format: "domain.dimension")
+    if haskey(dm, "shared") && dm["shared"] !== nothing
+        shared = dm["shared"]
+        if isa(shared, AbstractDict)
+            for (key, value) in shared
+                if !isempty(valid_dim_refs) && key ∉ valid_dim_refs
+                    push!(errors, StructuralError(
+                        "interfaces.$iface_name.dimension_mapping.shared",
+                        "Dimension reference '$key' does not match any dimension in the interface's domains",
+                        "invalid_dimension_reference"
+                    ))
+                end
+                if isa(value, String) && !isempty(valid_dim_refs) && value ∉ valid_dim_refs
+                    push!(errors, StructuralError(
+                        "interfaces.$iface_name.dimension_mapping.shared",
+                        "Dimension reference '$value' does not match any dimension in the interface's domains",
+                        "invalid_dimension_reference"
+                    ))
+                end
+            end
+        end
+    end
+
+    # Validate constraints dimension keys (format: "domain.dimension")
+    if haskey(dm, "constraints") && dm["constraints"] !== nothing
+        constraints = dm["constraints"]
+        if isa(constraints, AbstractDict)
+            for (key, _) in constraints
+                if !isempty(valid_dim_refs) && key ∉ valid_dim_refs
+                    push!(errors, StructuralError(
+                        "interfaces.$iface_name.dimension_mapping.constraints",
+                        "Dimension reference '$key' does not match any dimension in the interface's domains",
+                        "invalid_dimension_reference"
+                    ))
+                end
+            end
+        end
+    end
+
+    return errors
+end
+
+"""
+    get_system_domain(file::EsmFile, system_name::String) -> Union{String,Nothing,Missing}
+
+Get the domain of a system by name. Returns:
+- String: the domain name
+- nothing: system is 0D (no domain)
+- missing: system not found
+"""
+function get_system_domain(file::EsmFile, system_name::String)
+    if file.models !== nothing && haskey(file.models, system_name)
+        return file.models[system_name].domain
+    end
+    if file.reaction_systems !== nothing && haskey(file.reaction_systems, system_name)
+        return file.reaction_systems[system_name].domain
+    end
+    return missing
+end
+
+"""
+    validate_coupling_multi_domain(file::EsmFile, coupling_entry::CouplingEntry, path::String) -> Vector{StructuralError}
+
+Validate coupling interface and lifting fields:
+- `interface` must reference a key in `interfaces`
+- `lifting` is only valid when source or target is 0D (domain is null)
+"""
+function validate_coupling_multi_domain(file::EsmFile, coupling_entry::CouplingEntry, path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    interface_names = file.interfaces !== nothing ? Set(keys(file.interfaces)) : Set{String}()
+
+    # Extract interface, lifting, and systems from coupling types that support them
+    iface_field = nothing
+    lifting_field = nothing
+    system_names = String[]
+
+    if isa(coupling_entry, CouplingOperatorCompose)
+        iface_field = coupling_entry.interface
+        lifting_field = coupling_entry.lifting
+        system_names = coupling_entry.systems
+    elseif isa(coupling_entry, CouplingCouple2)
+        iface_field = coupling_entry.interface
+        lifting_field = coupling_entry.lifting
+        system_names = coupling_entry.systems
+    elseif isa(coupling_entry, CouplingVariableMap)
+        iface_field = coupling_entry.interface
+        lifting_field = coupling_entry.lifting
+        # Extract system names from qualified references (first segment before '.')
+        from_parts = split(coupling_entry.from, ".")
+        to_parts = split(coupling_entry.to, ".")
+        if length(from_parts) >= 2
+            push!(system_names, String(from_parts[1]))
+        end
+        if length(to_parts) >= 2
+            push!(system_names, String(to_parts[1]))
+        end
+    else
+        return errors  # Other coupling types don't have interface/lifting
+    end
+
+    # 4. Validate interface reference
+    if iface_field !== nothing
+        if iface_field ∉ interface_names
+            push!(errors, StructuralError(
+                "$path.interface",
+                "Interface '$(iface_field)' not found in interfaces",
+                "undefined_interface"
+            ))
+        end
+    end
+
+    # 5. Validate lifting: only valid when source or target is 0D
+    if lifting_field !== nothing && !isempty(system_names)
+        has_0d_system = false
+        for sys_name in system_names
+            domain = get_system_domain(file, sys_name)
+            if domain === nothing  # 0D system (no domain)
+                has_0d_system = true
+                break
+            end
+        end
+        if !has_0d_system
+            push!(errors, StructuralError(
+                "$path.lifting",
+                "Lifting '$(lifting_field)' is only valid when source or target is 0D (domain is null), but all systems have domains",
+                "invalid_lifting"
+            ))
+        end
+    end
 
     return errors
 end
