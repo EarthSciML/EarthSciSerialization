@@ -235,7 +235,7 @@ func TestFunctionalAffectJSONSchemaCompliance(t *testing.T) {
 		t.Errorf("Expected empty ModifiedParams, got %v", deserialized.ModifiedParams)
 	}
 
-	if deserialized.Config != nil && len(deserialized.Config) != 0 {
+	if len(deserialized.Config) != 0 {
 		t.Errorf("Expected empty/nil Config, got %v", deserialized.Config)
 	}
 }
