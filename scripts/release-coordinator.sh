@@ -47,7 +47,7 @@ declare -A PACKAGES=(
     ["julia"]="packages/ESMFormat.jl"
     ["typescript"]="packages/esm-format"
     ["python"]="packages/esm_format"
-    ["rust"]="packages/esm-format-rust"
+    ["rust"]="packages/earthsci-toolkit"
 )
 
 usage() {

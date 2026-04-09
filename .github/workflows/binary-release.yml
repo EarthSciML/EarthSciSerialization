@@ -150,7 +150,7 @@ jobs:
     - name: Setup Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        workspaces: packages/esm-format-rust
+        workspaces: packages/earthsci-toolkit
 
     - name: Setup Node.js (for TypeScript build)
       uses: actions/setup-node@v4
@@ -172,7 +172,7 @@ jobs:
 
     - name: Build Rust binary
       shell: bash
-      working-directory: packages/esm-format-rust
+      working-directory: packages/earthsci-toolkit
       run: |
         cargo build --release --target ${{ matrix.config.rust_target }} --bin esm
 
@@ -189,7 +189,7 @@ jobs:
         mkdir -p "$DIST_DIR"
 
         # Copy binary
-        cp "packages/esm-format-rust/target/${RUST_TARGET}/release/${BINARY_NAME}" "$DIST_DIR/"
+        cp "packages/earthsci-toolkit/target/${RUST_TARGET}/release/${BINARY_NAME}" "$DIST_DIR/"
 
         # Copy documentation
         cp README.md "$DIST_DIR/" 2>/dev/null || echo "No README found"
@@ -489,7 +489,7 @@ jobs:
           - **Python**: \`pip install esm-format\`
           - **TypeScript/JavaScript**: \`npm install esm-format\`
           - **Julia**: \`using Pkg; Pkg.add("ESMFormat")\`
-          - **Rust**: Add \`esm-format = "${version}"\` to Cargo.toml
+          - **Rust**: Add \`earthsci-toolkit = "${version}"\` to Cargo.toml
 
           ## ✅ Verification
           All packages include SHA256 checksums for integrity verification.

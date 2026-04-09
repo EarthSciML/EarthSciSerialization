@@ -147,7 +147,7 @@ npm install esm-format
 pip install esm-format
 ```
 
-### Rust (esm-format-rust)
+### Rust (earthsci-toolkit)
 
 - Cross-compilation for multiple targets
 - CLI binary distribution
@@ -204,7 +204,7 @@ Multi-architecture container images for each language runtime:
 - `ghcr.io/ctessum/esm-format-julia:latest`
 - `ghcr.io/ctessum/esm-format-typescript:latest`
 - `ghcr.io/ctessum/esm-format-python:latest`
-- `ghcr.io/ctessum/esm-format-rust:latest`
+- `ghcr.io/ctessum/earthsci-toolkit:latest`
 
 ### Architecture Support
 

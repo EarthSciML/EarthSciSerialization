@@ -23,7 +23,7 @@ EarthSciSerialization is a language-agnostic JSON-based format for earth science
 - **Julia** (ESMFormat.jl) - Complete MTK/Catalyst integration
 - **TypeScript** (esm-format) - Web/Node.js types and utilities
 - **Python** (esm_format) - Scientific Python integration
-- **Rust** (esm-format-rust) - High-performance implementation
+- **Rust** (earthsci-toolkit) - High-performance implementation
 - **Go** (esm-format-go) - Lightweight Go implementation
 - **SolidJS** (esm-editor) - Interactive web-based editor
 
@@ -89,7 +89,7 @@ EarthSciSerialization/
 │   ├── ESMFormat.jl/        # Julia implementation
 │   ├── esm-format/          # TypeScript implementation
 │   ├── esm_format/          # Python implementation
-│   ├── esm-format-rust/     # Rust implementation
+│   ├── earthsci-toolkit/     # Rust implementation
 │   ├── esm-format-go/       # Go implementation
 │   └── esm-editor/          # SolidJS web editor
 ├── tests/                   # Cross-language conformance tests
@@ -155,7 +155,7 @@ All code contributions must:
 julia --project=. -e 'using Pkg; Pkg.test()'                    # Julia
 cd packages/esm-format && npm test                              # TypeScript
 cd packages/esm_format && python -m pytest                     # Python
-cd packages/esm-format-rust && cargo test                      # Rust
+cd packages/earthsci-toolkit && cargo test                      # Rust
 cd packages/esm-format-go && go test ./...                     # Go
 ```
 
@@ -307,7 +307,7 @@ python -m mypy esm_format/
 python -m black esm_format/
 ```
 
-### Rust (esm-format-rust)
+### Rust (earthsci-toolkit)
 
 - **Standards**: rustfmt, clippy, comprehensive error handling
 - **Testing**: Standard Rust testing with cargo test
@@ -316,7 +316,7 @@ python -m black esm_format/
 
 ```bash
 # Rust development workflow
-cd packages/esm-format-rust
+cd packages/earthsci-toolkit
 cargo fmt
 cargo clippy -- -D warnings
 cargo test

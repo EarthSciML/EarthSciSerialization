@@ -134,7 +134,7 @@ jobs:
     continue-on-error: true
     defaults:
       run:
-        working-directory: packages/esm-format-rust
+        working-directory: packages/earthsci-toolkit
     steps:
       - uses: actions/checkout@v4
 
@@ -149,8 +149,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/esm-format-rust/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/esm-format-rust/Cargo.lock') }}
+            packages/earthsci-toolkit/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/earthsci-toolkit/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -198,7 +198,7 @@ jobs:
             ~/.cache/pip
             ~/.cargo/registry
             ~/.cargo/git
-            packages/esm-format-rust/target
+            packages/earthsci-toolkit/target
             packages/esm-format/node_modules
           key: ${{ runner.os }}-conformance-${{ hashFiles('packages/*/Project.toml', 'packages/*/package*.json', 'packages/*/pyproject.toml', 'packages/*/Cargo.lock') }}
           restore-keys: |
@@ -226,7 +226,7 @@ jobs:
         continue-on-error: true
 
       - name: Build Rust package
-        working-directory: packages/esm-format-rust
+        working-directory: packages/earthsci-toolkit
         run: |
           cargo build --release
         continue-on-error: true
@@ -330,7 +330,7 @@ jobs:
           docker save esm-format-julia:latest | gzip > docker-images/julia.tar.gz
           docker save esm-format-typescript:latest | gzip > docker-images/typescript.tar.gz
           docker save esm-format-python:latest | gzip > docker-images/python.tar.gz
-          docker save esm-format-rust:latest | gzip > docker-images/rust.tar.gz
+          docker save earthsci-toolkit:latest | gzip > docker-images/rust.tar.gz
 
       - name: Upload Docker images for debugging
         uses: actions/upload-artifact@v4

@@ -1325,7 +1325,7 @@ esm.explore(file)  # widget showing models, reactions, coupling graph
 
 ---
 
-### 5.4 Rust — `esm-format`
+### 5.4 Rust — `earthsci-toolkit`
 
 **Tier: Core + Analysis**
 
@@ -1340,7 +1340,7 @@ Rust provides a high-performance, memory-safe implementation suitable for CLI to
 #### 5.4.2 Crate Structure
 
 ```
-esm-format/
+earthsci-toolkit/
 ├── src/
 │   ├── lib.rs
 │   ├── types.rs        # Struct definitions with serde derives
@@ -1398,7 +1398,7 @@ The Rust library can be compiled to WASM and used by the TypeScript library for 
 
 ```typescript
 import { validate } from 'esm-format';
-import { validate as validateWasm } from 'esm-format-wasm'; // optional fast path
+import { validate as validateWasm } from 'earthsci-toolkit-wasm'; // optional fast path
 ```
 
 #### 5.4.5 CLI Tool

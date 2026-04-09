@@ -133,7 +133,7 @@ jobs:
         sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm_format/pyproject.toml
 
         # Update Rust Cargo.toml
-        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm-format-rust/Cargo.toml
+        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/earthsci-toolkit/Cargo.toml
 
         # Update workspace.json with version tracking
         echo "{\"version\": \"$NEW_VERSION\", \"updated\": \"$(date -Iseconds)\"}" > workspace.json
@@ -158,7 +158,7 @@ jobs:
         echo "- Julia ESMFormat.jl: v$NEW_VERSION" >> RELEASE_NOTES.md
         echo "- TypeScript esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
         echo "- Python esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
-        echo "- Rust esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
+        echo "- Rust earthsci-toolkit: v$NEW_VERSION" >> RELEASE_NOTES.md
 
     - name: Commit version updates
       run: |

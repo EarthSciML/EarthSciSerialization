@@ -72,7 +72,7 @@ jobs:
 
         if [ "${{ github.event.inputs.force_release }}" = "true" ]; then
           NEEDS_RELEASE="true"
-          CHANGED_PACKAGES='["ESMFormat.jl", "esm-format", "esm_format", "esm-format-rust"]'
+          CHANGED_PACKAGES='["ESMFormat.jl", "esm-format", "esm_format", "earthsci-toolkit"]'
         elif git diff --name-only ${LAST_REF}..HEAD | grep -E '^packages/'; then
           echo "Changes detected in packages"
           NEEDS_RELEASE="true"
@@ -156,7 +156,7 @@ jobs:
         - Julia ESMFormat.jl: v$NEW_VERSION
         - TypeScript esm-format: v$NEW_VERSION
         - Python esm_format: v$NEW_VERSION
-        - Rust esm-format: v$NEW_VERSION
+        - Rust earthsci-toolkit: v$NEW_VERSION
 
         ## Installation:
 
@@ -177,7 +177,7 @@ jobs:
         pip install esm-format
 
         # Rust
-        cargo add esm-format
+        cargo add earthsci-toolkit
         \`\`\`
 
         ### Container Images
@@ -186,7 +186,7 @@ jobs:
         docker pull ghcr.io/${{ github.repository_owner }}/esm-format-julia:v$NEW_VERSION
         docker pull ghcr.io/${{ github.repository_owner }}/esm-format-python:v$NEW_VERSION
         docker pull ghcr.io/${{ github.repository_owner }}/esm-format-typescript:v$NEW_VERSION
-        docker pull ghcr.io/${{ github.repository_owner }}/esm-format-rust:v$NEW_VERSION
+        docker pull ghcr.io/${{ github.repository_owner }}/earthsci-toolkit:v$NEW_VERSION
         \`\`\`
         EOF
 
@@ -305,8 +305,8 @@ jobs:
         fi
 
         # Update Rust Cargo.toml
-        if [ -f "packages/esm-format-rust/Cargo.toml" ]; then
-          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/esm-format-rust/Cargo.toml
+        if [ -f "packages/earthsci-toolkit/Cargo.toml" ]; then
+          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/earthsci-toolkit/Cargo.toml
         fi
 
         # Update workspace.json with coordinated release info
@@ -366,7 +366,7 @@ jobs:
           { name: 'julia-ci.yml', package: 'ESMFormat.jl' },
           { name: 'npm-publish.yml', package: 'esm-format' },
           { name: 'python-package.yml', package: 'esm_format' },
-          { name: 'rust-ci.yml', package: 'esm-format-rust' }
+          { name: 'rust-ci.yml', package: 'earthsci-toolkit' }
         ]
     steps:
     - name: Check if package changed

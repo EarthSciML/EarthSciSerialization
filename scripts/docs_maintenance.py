@@ -401,7 +401,7 @@ class DocumentationMaintainer:
         functions = []
         types = []
 
-        rust_dir = self.packages_dir / "esm-format-rust" / "src"
+        rust_dir = self.packages_dir / "earthsci-toolkit" / "src"
         if not rust_dir.exists():
             return functions, types
 

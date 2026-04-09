@@ -6,7 +6,7 @@ Complete API reference for the ESM Format Rust library.
 
 ### add_continuous_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:475`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:475`
 
 **Signature:**
 ```rust
@@ -33,7 +33,7 @@ Add a continuous event to a model
 
 ### add_coupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:527`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:527`
 
 **Signature:**
 ```rust
@@ -60,7 +60,7 @@ Add a coupling entry to an ESM file
 
 ### add_discrete_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:423`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:423`
 
 **Signature:**
 ```rust
@@ -87,7 +87,7 @@ Add a discrete event to a model
 
 ### add_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:167`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:167`
 
 **Signature:**
 ```rust
@@ -114,7 +114,7 @@ Add an equation to a model
 
 ### add_model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:65`
 
 **Signature:**
 ```rust
@@ -138,7 +138,7 @@ Add a new model to an ESM file
 
 ### add_reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:318`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:318`
 
 **Signature:**
 ```rust
@@ -165,7 +165,7 @@ Add a reaction to a reaction system
 
 ### add_reaction_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:225`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:225`
 
 **Signature:**
 ```rust
@@ -189,7 +189,7 @@ Add a reaction system to an ESM file
 
 ### add_species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:270`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:270`
 
 **Signature:**
 ```rust
@@ -216,7 +216,7 @@ Add a species to a reaction system
 
 ### add_variable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:126`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:126`
 
 **Signature:**
 ```rust
@@ -244,7 +244,7 @@ Add a variable to a model
 
 ### add_vectors_simd
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:163`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:163`
 
 **Signature:**
 ```rust
@@ -258,7 +258,7 @@ SIMD-optimized vector addition
 
 ### alloc_slice
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:277`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:277`
 
 **Signature:**
 ```rust
@@ -272,7 +272,7 @@ Allocate a slice for storing intermediate results
 
 ### allocated_bytes
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:290`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:290`
 
 **Signature:**
 ```rust
@@ -286,7 +286,7 @@ Get current allocated bytes
 
 ### analyze_conservation_violation_simd
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:870`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:870`
 
 **Signature:**
 ```rust
@@ -297,7 +297,7 @@ pub fn analyze_conservation_violation_simd(
 
 ### base
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:57`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:57`
 
 **Signature:**
 ```rust
@@ -322,7 +322,7 @@ Create a unit with a single dimension
 
 ### benchmark_parsing
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:295`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:295`
 
 **Signature:**
 ```rust
@@ -333,7 +333,7 @@ pub fn benchmark_parsing(json_str: &str, iterations: u32) -> Result<f64, JsValue
 
 ### can_migrate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/migration.rs:210`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.rs:210`
 
 **Signature:**
 ```rust
@@ -350,7 +350,7 @@ Check if migration is supported between two versions
 
 ### check_dimensional_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:269`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:269`
 
 **Signature:**
 ```rust
@@ -373,7 +373,7 @@ Check dimensional consistency of an equation
 
 ### component_exists
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:211`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:211`
 
 **Signature:**
 ```rust
@@ -396,7 +396,7 @@ Check if a component exists in the ESM file
 
 ### component_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:60`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:60`
 
 **Signature:**
 ```rust
@@ -423,7 +423,7 @@ Build a component graph from an ESM file
 
 ### component_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:261`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:261`
 
 **Signature:**
 ```rust
@@ -439,7 +439,7 @@ pub fn component_graph(json_str: &str) -> Result<JsValue, JsValue> {
 
 ### compute_batch_conservation_weights_simd
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:841`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:841`
 
 **Signature:**
 ```rust
@@ -450,7 +450,7 @@ pub fn compute_batch_conservation_weights_simd(
 
 ### compute_conservation_weights_simd
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:809`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:809`
 
 **Signature:**
 ```rust
@@ -461,7 +461,7 @@ pub fn compute_conservation_weights_simd(
 
 ### compute_stoichiometric_matrix
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:246`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:246`
 
 **Signature:**
 ```rust
@@ -472,7 +472,7 @@ pub fn compute_stoichiometric_matrix(reaction_system_str: &str) -> Result<JsValu
 
 ### compute_stoichiometric_matrix_parallel
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:95`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:95`
 
 **Signature:**
 ```rust
@@ -486,7 +486,7 @@ Parallel stoichiometric matrix computation
 
 ### contains
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/expression.rs:47`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.rs:47`
 
 **Signature:**
 ```rust
@@ -557,7 +557,7 @@ Check if an expression contains a specific variable
 
 ### convert_units
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:290`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:290`
 
 **Signature:**
 ```rust
@@ -585,7 +585,7 @@ Convert between compatible units
 
 ### create_compact_expression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:230`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:230`
 
 **Signature:**
 ```rust
@@ -596,7 +596,7 @@ pub fn create_compact_expression(expr_str: &str) -> Result<JsValue, JsValue> {
 
 ### derive_odes
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:51`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:51`
 
 **Signature:**
 ```rust
@@ -632,7 +632,7 @@ Returns `DeriveError` for invalid stoichiometry, missing rate laws, or unit conv
 
 ### detect_conservation_violations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:479`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:479`
 
 **Signature:**
 ```rust
@@ -656,7 +656,7 @@ including mass balance within reactions and system-wide linear invariants.
 # Examples
 
 ```rust
-use esm_format::{ReactionSystem, detect_conservation_violations};
+use earthsci_toolkit::{ReactionSystem, detect_conservation_violations};
 
 // Create a simple reaction system
 let system = ReactionSystem {
@@ -675,7 +675,7 @@ println!("Found {} violations", analysis.violations.len());
 
 ### dimensionless
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:49`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:49`
 
 **Signature:**
 ```rust
@@ -689,7 +689,7 @@ Create a dimensionless unit
 
 ### divide
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:94`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:94`
 
 **Signature:**
 ```rust
@@ -707,7 +707,7 @@ Divide two units
 
 ### dot_product_simd
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:227`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:227`
 
 **Signature:**
 ```rust
@@ -721,7 +721,7 @@ SIMD-optimized dot product
 
 ### errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:30`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:30`
 
 **Signature:**
 ```rust
@@ -738,7 +738,7 @@ Get all errors as a combined vector (for compatibility with old API)
 
 ### evaluate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/expression.rs:66`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.rs:66`
 
 **Signature:**
 ```rust
@@ -778,7 +778,7 @@ Evaluate an expression with given variable values
 
 ### evaluate_batch
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:78`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:78`
 
 **Signature:**
 ```rust
@@ -792,7 +792,7 @@ Evaluate multiple expressions in parallel
 
 ### evaluate_fast
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:353`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:353`
 
 **Signature:**
 ```rust
@@ -803,7 +803,7 @@ pub fn evaluate_fast(&self, variables: &HashMap<String, f64>) -> Result<f64, Per
 
 ### expression_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:363`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:363`
 
 **Signature:**
 ```rust
@@ -829,7 +829,7 @@ Build an expression graph from various ESM components
 
 ### fast_parse
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:41`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:41`
 
 **Signature:**
 ```rust
@@ -840,7 +840,7 @@ pub fn fast_parse(json_bytes: &mut [u8]) -> Result<EsmFile, PerformanceError> {
 
 ### fast_parse
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:49`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:49`
 
 **Signature:**
 ```rust
@@ -851,7 +851,7 @@ pub fn fast_parse(json_str: &str) -> Result<EsmFile, PerformanceError> {
 
 ### free_parameters
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/expression.rs:33`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.rs:33`
 
 **Signature:**
 ```rust
@@ -876,7 +876,7 @@ parameters from variables at the expression level.
 
 ### free_variables
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/expression.rs:15`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.rs:15`
 
 **Signature:**
 ```rust
@@ -902,7 +902,7 @@ Extract all free variables from an expression
 
 ### from_esm_file
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:266`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:266`
 
 **Signature:**
 ```rust
@@ -916,7 +916,7 @@ Create a new scoped context from an ESM file
 
 ### from_expr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:317`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:317`
 
 **Signature:**
 ```rust
@@ -936,7 +936,7 @@ Create a compact expression from a standard expression
 
 ### get_component_type
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:254`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:254`
 
 **Signature:**
 ```rust
@@ -960,7 +960,7 @@ Get the type of a component
 
 ### get_performance_info
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:276`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:276`
 
 **Signature:**
 ```rust
@@ -971,7 +971,7 @@ pub fn get_performance_info() -> JsValue {
 
 ### get_supported_migration_targets
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/migration.rs:228`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.rs:228`
 
 **Signature:**
 ```rust
@@ -988,7 +988,7 @@ Get supported migration paths from a given version
 
 ### has_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:25`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:25`
 
 **Signature:**
 ```rust
@@ -1002,7 +1002,7 @@ Check if there are any errors (schema or structural)
 
 ### is_compatible
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:66`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:66`
 
 **Signature:**
 ```rust
@@ -1022,7 +1022,7 @@ Check if two units have compatible dimensions
 
 ### is_dimensionless
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:71`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:71`
 
 **Signature:**
 ```rust
@@ -1039,7 +1039,7 @@ Check if this unit is dimensionless
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/parse.rs:81`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.rs:81`
 
 **Signature:**
 ```rust
@@ -1064,7 +1064,7 @@ It will throw an error for malformed JSON or schema violations.
 # Examples
 
 ```rust
-use esm_format::load;
+use earthsci_toolkit::load;
 
 let json = r#"
 {
@@ -1113,7 +1113,7 @@ assert_eq!(esm_file.esm, "0.1.0");
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:32`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:32`
 
 **Signature:**
 ```rust
@@ -1148,7 +1148,7 @@ pub fn load(json_str: &str) -> Result<JsValue, JsValue> {
 
 ### main
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:311`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:311`
 
 **Signature:**
 ```rust
@@ -1244,7 +1244,7 @@ pub fn main() {
 
 ### migrate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/migration.rs:158`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.rs:158`
 
 **Signature:**
 ```rust
@@ -1263,7 +1263,7 @@ Migrate an ESM file to a target version
 
 ### multiply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:76`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:76`
 
 **Signature:**
 ```rust
@@ -1289,7 +1289,7 @@ Multiply two units
 
 ### multiply_vectors_simd
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:195`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:195`
 
 **Signature:**
 ```rust
@@ -1303,7 +1303,7 @@ SIMD-optimized element-wise multiplication
 
 ### new
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:62`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:62`
 
 **Signature:**
 ```rust
@@ -1347,7 +1347,7 @@ Create a new parallel evaluator with specified number of threads
 
 ### new
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:265`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:265`
 
 **Signature:**
 ```rust
@@ -1391,7 +1391,7 @@ Create a new model allocator with specified capacity
 
 ### parse_unit
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:142`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:142`
 
 **Signature:**
 ```rust
@@ -1419,7 +1419,7 @@ Supports common unit notations like:
 
 ### power
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:112`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:112`
 
 **Signature:**
 ```rust
@@ -1442,7 +1442,7 @@ Raise unit to a power
 
 ### remove_continuous_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:497`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:497`
 
 **Signature:**
 ```rust
@@ -1465,7 +1465,7 @@ Remove a continuous event from a model by index
 
 ### remove_coupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:549`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:549`
 
 **Signature:**
 ```rust
@@ -1492,7 +1492,7 @@ Remove a coupling entry from an ESM file by index
 
 ### remove_discrete_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:445`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:445`
 
 **Signature:**
 ```rust
@@ -1515,7 +1515,7 @@ Remove a discrete event from a model by index
 
 ### remove_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:183`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:183`
 
 **Signature:**
 ```rust
@@ -1542,7 +1542,7 @@ Remove an equation from a model by index
 
 ### remove_model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:101`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:101`
 
 **Signature:**
 ```rust
@@ -1565,7 +1565,7 @@ Remove a model from an ESM file
 
 ### remove_reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:334`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:334`
 
 **Signature:**
 ```rust
@@ -1592,7 +1592,7 @@ Remove a reaction from a reaction system by index
 
 ### remove_species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:295`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:295`
 
 **Signature:**
 ```rust
@@ -1619,7 +1619,7 @@ Remove a species from a reaction system
 
 ### remove_variable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:147`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:147`
 
 **Signature:**
 ```rust
@@ -1646,7 +1646,7 @@ Remove a variable from a model
 
 ### replace_coupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:580`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:580`
 
 **Signature:**
 ```rust
@@ -1670,7 +1670,7 @@ Replace a coupling entry in an ESM file
 
 ### replace_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:204`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:204`
 
 **Signature:**
 ```rust
@@ -1694,7 +1694,7 @@ Replace an equation in a model
 
 ### reset
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:285`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:285`
 
 **Signature:**
 ```rust
@@ -1736,7 +1736,7 @@ Reset the allocator for reuse
 
 ### resolve_scoped_reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:285`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:285`
 
 **Signature:**
 ```rust
@@ -1751,7 +1751,7 @@ Handles hierarchical resolution according to ESM Spec Section 2.3.3
 
 ### save
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:45`
 
 **Signature:**
 ```rust
@@ -1784,7 +1784,7 @@ pub fn save(esm_file_js: &JsValue) -> Result<String, JsValue> {
 
 ### save
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/serialize.rs:48`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/serialize.rs:48`
 
 **Signature:**
 ```rust
@@ -1809,7 +1809,7 @@ The output will be pretty-printed for human readability.
 # Examples
 
 ```rust
-use esm_format::{EsmFile, Metadata, save};
+use earthsci_toolkit::{EsmFile, Metadata, save};
 
 let esm_file = EsmFile {
 esm: "0.1.0".to_string(),
@@ -1862,7 +1862,7 @@ assert!(json.contains("\"esm\": \"0.1.0\""));
 
 ### save_compact
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/serialize.rs:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/serialize.rs:65`
 
 **Signature:**
 ```rust
@@ -1888,7 +1888,7 @@ extra whitespace, suitable for storage or transmission.
 
 ### simplify
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/expression.rs:108`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.rs:108`
 
 **Signature:**
 ```rust
@@ -1925,7 +1925,7 @@ Simplify an expression (basic symbolic simplification)
 
 ### stoichiometric_matrix
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:316`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:316`
 
 **Signature:**
 ```rust
@@ -1954,7 +1954,7 @@ Negative values indicate reactants, positive values indicate products.
 
 ### stoichiometric_matrix_parallel
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:390`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:390`
 
 **Signature:**
 ```rust
@@ -1965,7 +1965,7 @@ pub fn stoichiometric_matrix_parallel(
 
 ### substitute
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:20`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:20`
 
 **Signature:**
 ```rust
@@ -1995,7 +1995,7 @@ Substitute variables in an expression
 
 ### substitute
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:160`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:160`
 
 **Signature:**
 ```rust
@@ -2013,7 +2013,7 @@ pub fn substitute(json_str: &str, bindings_str: &str) -> Result<String, JsValue>
 
 ### substitute_in_affect_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:94`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:94`
 
 **Signature:**
 ```rust
@@ -2036,7 +2036,7 @@ Substitute variables in an affect equation
 
 ### substitute_in_affect_equation_with_context
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:554`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:554`
 
 **Signature:**
 ```rust
@@ -2060,7 +2060,7 @@ Substitute variables in an affect equation using scoped reference resolution
 
 ### substitute_in_continuous_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:144`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:144`
 
 **Signature:**
 ```rust
@@ -2083,7 +2083,7 @@ Substitute variables in a continuous event
 
 ### substitute_in_continuous_event_with_context
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:614`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:614`
 
 **Signature:**
 ```rust
@@ -2107,7 +2107,7 @@ Substitute variables in a continuous event using scoped reference resolution
 
 ### substitute_in_discrete_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:114`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:114`
 
 **Signature:**
 ```rust
@@ -2130,7 +2130,7 @@ Substitute variables in a discrete event
 
 ### substitute_in_discrete_event_trigger
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:57`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:57`
 
 **Signature:**
 ```rust
@@ -2153,7 +2153,7 @@ Substitute variables in a discrete event trigger
 
 ### substitute_in_discrete_event_trigger_with_context
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:515`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:515`
 
 **Signature:**
 ```rust
@@ -2177,7 +2177,7 @@ Substitute variables in a discrete event trigger using scoped reference resoluti
 
 ### substitute_in_discrete_event_with_context
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:576`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:576`
 
 **Signature:**
 ```rust
@@ -2201,7 +2201,7 @@ Substitute variables in a discrete event using scoped reference resolution
 
 ### substitute_in_expression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:386`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:386`
 
 **Signature:**
 ```rust
@@ -2224,7 +2224,7 @@ Create a copy of an expression with variable substitution
 
 ### substitute_in_model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:184`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:184`
 
 **Signature:**
 ```rust
@@ -2247,7 +2247,7 @@ Substitute variables in all expressions within a model
 
 ### substitute_in_model_with_context
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:465`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:465`
 
 **Signature:**
 ```rust
@@ -2271,7 +2271,7 @@ Substitute variables in all expressions within a model using scoped reference re
 
 ### substitute_in_reaction_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:228`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:228`
 
 **Signature:**
 ```rust
@@ -2294,7 +2294,7 @@ Substitute variables in all expressions within a reaction system
 
 ### substitute_in_reaction_system_with_context
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:660`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:660`
 
 **Signature:**
 ```rust
@@ -2318,7 +2318,7 @@ Substitute variables in all expressions within a reaction system using scoped re
 
 ### substitute_with_context
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:412`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:412`
 
 **Signature:**
 ```rust
@@ -2342,7 +2342,7 @@ Substitute variables in an expression with scoped reference resolution
 
 ### to_ascii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:1502`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/display.rs:1502`
 
 **Signature:**
 ```rust
@@ -2360,7 +2360,7 @@ Convert an expression to ASCII representation
 
 ### to_ascii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:131`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:131`
 
 **Signature:**
 ```rust
@@ -2375,7 +2375,7 @@ pub fn to_ascii(json_str: &str) -> Result<String, JsValue> {
 
 ### to_dot
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:760`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:760`
 
 **Signature:**
 ```rust
@@ -2398,7 +2398,7 @@ Export graph to DOT format for Graphviz
 
 ### to_dot
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:843`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:843`
 
 **Signature:**
 ```rust
@@ -2421,7 +2421,7 @@ Export graph to DOT format for Graphviz
 
 ### to_json_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:832`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:832`
 
 **Signature:**
 ```rust
@@ -2439,7 +2439,7 @@ Export graph to JSON format
 
 ### to_json_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:919`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:919`
 
 **Signature:**
 ```rust
@@ -2457,7 +2457,7 @@ Export graph to JSON format
 
 ### to_latex
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:894`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/display.rs:894`
 
 **Signature:**
 ```rust
@@ -2471,7 +2471,7 @@ Convert an expression to LaTeX notation
 
 ### to_latex
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:102`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:102`
 
 **Signature:**
 ```rust
@@ -2482,7 +2482,7 @@ pub fn to_latex(json_str: &str) -> Result<String, JsValue> {
 
 ### to_mermaid
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:800`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:800`
 
 **Signature:**
 ```rust
@@ -2504,7 +2504,7 @@ Export graph to Mermaid format
 
 ### to_mermaid
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:888`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:888`
 
 **Signature:**
 ```rust
@@ -2526,7 +2526,7 @@ Export graph to Mermaid format
 
 ### to_unicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:225`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/display.rs:225`
 
 **Signature:**
 ```rust
@@ -2540,7 +2540,7 @@ Convert expression to Unicode mathematical notation
 
 ### to_unicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/display.rs:889`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/display.rs:889`
 
 **Signature:**
 ```rust
@@ -2554,7 +2554,7 @@ Convert an expression to Unicode mathematical notation
 
 ### to_unicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:73`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:73`
 
 **Signature:**
 ```rust
@@ -2565,7 +2565,7 @@ pub fn to_unicode(json_str: &str) -> Result<String, JsValue> {
 
 ### update_model_metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/edit.rs:358`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.rs:358`
 
 **Signature:**
 ```rust
@@ -2589,7 +2589,7 @@ Update model metadata
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:157`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:157`
 
 **Signature:**
 ```rust
@@ -2622,7 +2622,7 @@ This function checks:
 # Examples
 
 ```rust
-use esm_format::{validate, load, EsmFile, Metadata};
+use earthsci_toolkit::{validate, load, EsmFile, Metadata};
 
 let json_str = r#"
 {
@@ -2665,7 +2665,7 @@ assert!(result.schema_errors.is_empty()); // Always empty for this function
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/wasm.rs:58`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/wasm.rs:58`
 
 **Signature:**
 ```rust
@@ -2696,7 +2696,7 @@ pub fn validate(json_str: &str) -> Result<JsValue, JsValue> {
 
 ### validate_complete
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:225`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:225`
 
 **Signature:**
 ```rust
@@ -2721,7 +2721,7 @@ Most users should use this function instead of the lower-level `validate()`.
 
 ### validate_schema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/parse.rs:107`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.rs:107`
 
 **Signature:**
 ```rust
@@ -2750,7 +2750,7 @@ This performs schema validation only. The JSON is assumed to be valid.
 
 ### validate_with_schema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:252`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:252`
 
 **Signature:**
 ```rust
@@ -2767,7 +2767,7 @@ Note: Consider using `validate_complete()` instead for a simpler API.
 
 ### with_capacity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:270`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:270`
 
 **Signature:**
 ```rust
@@ -2781,7 +2781,7 @@ Create allocator with pre-allocated capacity
 
 ### with_scope
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:278`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:278`
 
 **Signature:**
 ```rust
@@ -2797,7 +2797,7 @@ Create a scoped context with specific current scope
 
 ### AffectEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:264`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:264`
 
 **Definition:**
 ```rust
@@ -2813,7 +2813,7 @@ pub struct AffectEquation {
 
 ### CompactExpr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:308`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:308`
 
 **Definition:**
 ```rust
@@ -2824,7 +2824,7 @@ pub struct CompactExpr {
 
 ### ComponentGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:7`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:7`
 
 **Definition:**
 ```rust
@@ -2838,7 +2838,7 @@ pub struct ComponentGraph {
 
 ### ComponentNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:16`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:16`
 
 **Definition:**
 ```rust
@@ -2854,7 +2854,7 @@ pub struct ComponentNode {
 
 ### ConservationAnalysis
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:427`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:427`
 
 **Definition:**
 ```rust
@@ -2865,7 +2865,7 @@ pub struct ConservationAnalysis {
 
 ### ConservationViolation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:401`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:401`
 
 **Definition:**
 ```rust
@@ -2876,7 +2876,7 @@ pub struct ConservationViolation {
 
 ### ContinuousEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:274`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:274`
 
 **Definition:**
 ```rust
@@ -2892,7 +2892,7 @@ pub struct ContinuousEvent {
 
 ### CouplingEdge
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:40`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:40`
 
 **Definition:**
 ```rust
@@ -2909,7 +2909,7 @@ pub struct CouplingEdge {
 
 ### DataLoader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:433`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:433`
 
 **Definition:**
 ```rust
@@ -2925,7 +2925,7 @@ pub struct DataLoader {
 
 ### DependencyEdge
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:325`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:325`
 
 **Definition:**
 ```rust
@@ -2941,7 +2941,7 @@ pub struct DependencyEdge {
 
 ### DiscreteEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:212`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:212`
 
 **Definition:**
 ```rust
@@ -2956,7 +2956,7 @@ pub struct DiscreteEvent {
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:585`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:585`
 
 **Definition:**
 ```rust
@@ -2974,7 +2974,7 @@ pub struct Domain {
 
 ### Equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:202`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:202`
 
 **Definition:**
 ```rust
@@ -2991,7 +2991,7 @@ pub struct Equation {
 
 ### EsmFile
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:10`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:10`
 
 **Definition:**
 ```rust
@@ -3006,7 +3006,7 @@ pub struct EsmFile {
 
 ### ExpressionGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:288`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:288`
 
 **Definition:**
 ```rust
@@ -3017,7 +3017,7 @@ pub struct ExpressionGraph {
 
 ### ExpressionNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:118`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:118`
 
 **Definition:**
 ```rust
@@ -3031,7 +3031,7 @@ pub struct ExpressionNode {
 
 ### FunctionalAffect
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:312`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:312`
 
 **Definition:**
 ```rust
@@ -3047,7 +3047,7 @@ pub struct FunctionalAffect {
 
 ### LinearInvariant
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/reactions.rs:440`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.rs:440`
 
 **Definition:**
 ```rust
@@ -3058,7 +3058,7 @@ pub struct LinearInvariant {
 
 ### Metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:68`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:68`
 
 **Definition:**
 ```rust
@@ -3076,7 +3076,7 @@ pub struct Metadata {
 
 ### MigrationError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/migration.rs:12`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.rs:12`
 
 **Definition:**
 ```rust
@@ -3090,7 +3090,7 @@ pub struct MigrationError {
 
 ### Model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:136`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:136`
 
 **Definition:**
 ```rust
@@ -3107,7 +3107,7 @@ pub struct Model {
 
 ### ModelAllocator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:258`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:258`
 
 **Definition:**
 ```rust
@@ -3118,7 +3118,7 @@ pub struct ModelAllocator {
 
 ### ModelVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:166`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:166`
 
 **Definition:**
 ```rust
@@ -3134,7 +3134,7 @@ pub struct ModelVariable {
 
 ### Operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:449`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:449`
 
 **Definition:**
 ```rust
@@ -3152,7 +3152,7 @@ pub struct Operator {
 
 ### ParallelEvaluator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/performance.rs:55`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/performance.rs:55`
 
 **Definition:**
 ```rust
@@ -3163,7 +3163,7 @@ pub struct ParallelEvaluator {
 
 ### Parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:385`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:385`
 
 **Definition:**
 ```rust
@@ -3179,7 +3179,7 @@ pub struct Parameter {
 
 ### ParseError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/parse.rs:12`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.rs:12`
 
 **Definition:**
 ```rust
@@ -3195,7 +3195,7 @@ pub struct ParseError {
 
 ### Reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:401`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:401`
 
 **Definition:**
 ```rust
@@ -3211,7 +3211,7 @@ pub struct Reaction {
 
 ### ReactionSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:345`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:345`
 
 **Definition:**
 ```rust
@@ -3227,7 +3227,7 @@ pub struct ReactionSystem {
 
 ### Reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:48`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:48`
 
 **Definition:**
 ```rust
@@ -3244,7 +3244,7 @@ pub struct Reference {
 
 ### SchemaError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:37`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:37`
 
 **Definition:**
 ```rust
@@ -3260,7 +3260,7 @@ pub struct SchemaError {
 
 ### SchemaValidationError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/parse.rs:27`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.rs:27`
 
 **Definition:**
 ```rust
@@ -3275,7 +3275,7 @@ pub struct SchemaValidationError {
 
 ### ScopedContext
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/substitute.rs:255`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.rs:255`
 
 **Definition:**
 ```rust
@@ -3286,7 +3286,7 @@ pub struct ScopedContext {
 
 ### Solver
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:597`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:597`
 
 **Definition:**
 ```rust
@@ -3302,7 +3302,7 @@ pub struct Solver {
 
 ### Species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:366`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:366`
 
 **Definition:**
 ```rust
@@ -3318,7 +3318,7 @@ pub struct Species {
 
 ### StoichiometricEntry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:422`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:422`
 
 **Definition:**
 ```rust
@@ -3329,7 +3329,7 @@ pub struct StoichiometricEntry {
 
 ### StructuralError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:48`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:48`
 
 **Definition:**
 ```rust
@@ -3344,7 +3344,7 @@ pub struct StructuralError {
 
 ### Unit
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/units.rs:8`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.rs:8`
 
 **Definition:**
 ```rust
@@ -3358,7 +3358,7 @@ pub struct Unit {
 
 ### ValidationResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/validate.rs:12`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.rs:12`
 
 **Definition:**
 ```rust
@@ -3374,7 +3374,7 @@ pub struct ValidationResult {
 
 ### VariableMapping
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/types.rs:573`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:573`
 
 **Definition:**
 ```rust
@@ -3385,7 +3385,7 @@ pub struct VariableMapping {
 
 ### VariableNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/graph.rs:297`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:297`
 
 **Definition:**
 ```rust
@@ -3401,7 +3401,7 @@ pub struct VariableNode {
 
 ### VersionInfo
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format-rust/src/migration.rs:32`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.rs:32`
 
 **Definition:**
 ```rust

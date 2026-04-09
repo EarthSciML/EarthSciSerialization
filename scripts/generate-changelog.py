@@ -150,11 +150,11 @@ class ChangelogGenerator:
                 for file in files:
                     if file.startswith('packages/ESMFormat.jl/'):
                         affected_packages.add('julia')
-                    elif file.startswith('packages/esm-format/') and not file.startswith('packages/esm-format-rust/'):
+                    elif file.startswith('packages/esm-format/') and not file.startswith('packages/earthsci-toolkit/'):
                         affected_packages.add('typescript')
                     elif file.startswith('packages/esm_format/'):
                         affected_packages.add('python')
-                    elif file.startswith('packages/esm-format-rust/'):
+                    elif file.startswith('packages/earthsci-toolkit/'):
                         affected_packages.add('rust')
                     elif not file.startswith('packages/'):
                         affected_packages.add('core')

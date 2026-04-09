@@ -113,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/esm-format-rust
+        working-directory: packages/earthsci-toolkit
     steps:
       - uses: actions/checkout@v4
 
@@ -128,8 +128,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/esm-format-rust/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/esm-format-rust/Cargo.lock') }}
+            packages/earthsci-toolkit/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/earthsci-toolkit/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -176,7 +176,7 @@ jobs:
             ~/.cache/pip
             ~/.cargo/registry
             ~/.cargo/git
-            packages/esm-format-rust/target
+            packages/earthsci-toolkit/target
             packages/esm-format/node_modules
           key: ${{ runner.os }}-conformance-${{ hashFiles('packages/*/Project.toml', 'packages/*/package*.json', 'packages/*/pyproject.toml', 'packages/*/Cargo.lock') }}
           restore-keys: |
@@ -201,7 +201,7 @@ jobs:
           pip install -e .[dev,test]
 
       - name: Build Rust package
-        working-directory: packages/esm-format-rust
+        working-directory: packages/earthsci-toolkit
         run: |
           cargo build --release
 

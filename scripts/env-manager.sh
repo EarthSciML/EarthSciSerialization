@@ -415,7 +415,7 @@ esm-julia() {
 }
 
 esm-rust() {
-    cd "$WORKSPACE_ROOT/packages/esm-format-rust"
+    cd "$WORKSPACE_ROOT/packages/earthsci-toolkit"
     cargo "\$@"
 }
 

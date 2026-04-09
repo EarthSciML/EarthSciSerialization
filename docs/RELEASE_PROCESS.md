@@ -157,7 +157,7 @@ packages/
 ├── esm_format/            # Python package
 │   ├── pyproject.toml     # Python packaging
 │   └── src/
-├── esm-format-rust/       # Rust crate
+├── earthsci-toolkit/       # Rust crate
 │   ├── Cargo.toml         # Rust dependencies
 │   └── src/
 └── esm-format-go/         # Go module

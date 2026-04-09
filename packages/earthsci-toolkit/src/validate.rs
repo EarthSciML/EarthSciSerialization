@@ -1,0 +1,2526 @@
+//! Structural validation for ESM files
+
+use crate::parse::{load, validate_schema};
+use crate::units::{check_dimensional_consistency, parse_unit, Unit, UnitError};
+use crate::EsmFile;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+
+/// Result of structural validation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationResult {
+    /// Schema validation errors
+    pub schema_errors: Vec<SchemaError>,
+    /// Structural validation errors
+    pub structural_errors: Vec<StructuralError>,
+    /// Unit validation warnings (non-fatal issues)
+    pub unit_warnings: Vec<String>,
+    /// Whether validation passed (no schema or structural errors)
+    pub is_valid: bool,
+}
+
+impl ValidationResult {
+    /// Check if there are any errors (schema or structural)
+    pub fn has_errors(&self) -> bool {
+        !self.schema_errors.is_empty() || !self.structural_errors.is_empty()
+    }
+
+    /// Get all errors as a combined vector (for compatibility with old API)
+    pub fn errors(&self) -> Vec<StructuralError> {
+        self.structural_errors.clone()
+    }
+}
+
+/// A schema validation error
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemaError {
+    /// Path to the problematic element
+    pub path: String,
+    /// Error message
+    pub message: String,
+    /// Keyword that failed (e.g., "required", "type", "enum")
+    pub keyword: String,
+}
+
+/// A structural validation error
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StructuralError {
+    /// Path to the problematic element
+    pub path: String,
+    /// Error code (matching spec codes)
+    pub code: StructuralErrorCode,
+    /// Error message
+    pub message: String,
+    /// Additional error details
+    pub details: serde_json::Value,
+}
+
+/// Error codes for structural validation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum StructuralErrorCode {
+    /// Undefined variable reference
+    UndefinedVariable,
+    /// Number of equations doesn't match state variables
+    EquationCountMismatch,
+    /// Undefined species in reactions
+    UndefinedSpecies,
+    /// Undefined parameter in expressions
+    UndefinedParameter,
+    /// Reaction with both substrates and products null
+    NullReaction,
+    /// Observed variable missing expression
+    MissingObservedExpr,
+    /// Scoped reference cannot be resolved
+    UnresolvedScopedRef,
+    /// Variable in event is not declared
+    EventVarUndeclared,
+    /// Operator referenced but not declared
+    UndefinedOperator,
+    /// Discrete parameter not properly declared
+    InvalidDiscreteParam,
+    /// System referenced but not declared
+    UndefinedSystem,
+    /// Data loader variable not provided
+    DataLoaderVariableMissing,
+    /// Operator variable not available
+    OperatorVariableMissing,
+    /// Circular dependency detected
+    CircularDependency,
+}
+
+impl std::fmt::Display for StructuralErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::UndefinedVariable => "undefined_variable",
+            Self::EquationCountMismatch => "equation_count_mismatch",
+            Self::UndefinedSpecies => "undefined_species",
+            Self::UndefinedParameter => "undefined_parameter",
+            Self::NullReaction => "null_reaction",
+            Self::MissingObservedExpr => "missing_observed_expr",
+            Self::UnresolvedScopedRef => "unresolved_scoped_ref",
+            Self::EventVarUndeclared => "event_var_undeclared",
+            Self::UndefinedOperator => "undefined_operator",
+            Self::InvalidDiscreteParam => "invalid_discrete_param",
+            Self::UndefinedSystem => "undefined_system",
+            Self::DataLoaderVariableMissing => "data_loader_variable_missing",
+            Self::OperatorVariableMissing => "operator_variable_missing",
+            Self::CircularDependency => "circular_dependency",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+/// Perform structural validation on an ESM file
+///
+/// **Note**: This function performs ONLY structural validation, not schema validation.
+/// For comprehensive validation (both schema and structural), use `validate_complete()` instead.
+///
+/// This function checks:
+/// - All variable references are defined
+/// - Unit consistency in equations
+/// - Mathematical validity of expressions
+/// - Equation-unknown balance
+/// - Reference integrity (scoped ref resolution via subsystem hierarchy)
+/// - Reaction consistency
+/// - Event consistency
+///
+/// # Arguments
+///
+/// * `esm_file` - The ESM file to validate (already parsed and schema-validated)
+///
+/// # Returns
+///
+/// * `ValidationResult` - Structural validation results (schema_errors will always be empty)
+///
+/// # Examples
+///
+/// ```rust
+/// use earthsci_toolkit::{validate, load, EsmFile, Metadata};
+///
+/// let json_str = r#"
+/// {
+///   "esm": "0.1.0",
+///   "metadata": {"name": "test"},
+///   "models": {"simple": {"variables": {}, "equations": []}}
+/// }
+/// "#;
+///
+/// // First load and parse (includes schema validation)
+/// let esm_file = load(json_str).unwrap();
+///
+/// // Then do structural validation
+/// let result = validate(&esm_file);
+/// assert!(result.is_valid);
+/// assert!(result.schema_errors.is_empty()); // Always empty for this function
+/// ```
+pub fn validate(esm_file: &EsmFile) -> ValidationResult {
+    let schema_errors = Vec::new();
+    let mut structural_errors = Vec::new();
+    let mut unit_warnings = Vec::new();
+
+    // First validate schema if we have access to JSON
+    // Note: In practice, this would be called with the original JSON string
+    // For now, we focus on structural validation
+
+    // Build system reference map for scoped reference validation
+    let system_refs = build_system_reference_map(esm_file);
+
+    // Validate models
+    if let Some(ref models) = esm_file.models {
+        for (model_name, model) in models {
+            validate_model(
+                model_name,
+                model,
+                &system_refs,
+                &mut structural_errors,
+                &mut unit_warnings,
+            );
+        }
+
+        // Check for circular dependencies between models
+        check_circular_dependencies_in_models(models, &mut structural_errors);
+    }
+
+    // Validate reaction systems
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (rs_name, rs) in reaction_systems {
+            validate_reaction_system(
+                rs_name,
+                rs,
+                &system_refs,
+                &mut structural_errors,
+                &mut unit_warnings,
+            );
+        }
+    }
+
+    // Validate coupling
+    if let Some(ref coupling) = esm_file.coupling {
+        validate_coupling(coupling, &system_refs, esm_file, &mut structural_errors);
+    }
+
+    let is_valid = schema_errors.is_empty() && structural_errors.is_empty();
+
+    ValidationResult {
+        schema_errors,
+        structural_errors,
+        unit_warnings,
+        is_valid,
+    }
+}
+
+/// Validate an ESM file completely (schema + structural validation)
+///
+/// This is the main validation function that performs both schema and structural validation.
+/// Most users should use this function instead of the lower-level `validate()`.
+///
+/// # Arguments
+///
+/// * `json_str` - The original JSON string to validate
+///
+/// # Returns
+///
+/// * `ValidationResult` - Comprehensive validation results with both schema and structural errors
+pub fn validate_complete(json_str: &str) -> ValidationResult {
+    // First try to parse the JSON and ESM file
+    match load(json_str) {
+        Ok(esm_file) => {
+            // If parsing/schema validation succeeded, do structural validation
+            validate_with_schema(json_str, &esm_file)
+        }
+        Err(e) => {
+            // If parsing failed, return the error as a schema error
+            ValidationResult {
+                schema_errors: vec![SchemaError {
+                    path: "".to_string(),
+                    message: format!("Failed to load ESM file: {}", e),
+                    keyword: "parse".to_string(),
+                }],
+                structural_errors: vec![],
+                unit_warnings: vec![],
+                is_valid: false,
+            }
+        }
+    }
+}
+
+/// Validate an ESM file including schema validation
+///
+/// This function combines schema and structural validation.
+/// Note: Consider using `validate_complete()` instead for a simpler API.
+pub fn validate_with_schema(json_str: &str, esm_file: &EsmFile) -> ValidationResult {
+    let mut schema_errors = Vec::new();
+    let mut structural_errors = Vec::new();
+    let mut unit_warnings = Vec::new();
+
+    // Schema validation
+    if let Err(e) = serde_json::from_str::<Value>(json_str) {
+        schema_errors.push(SchemaError {
+            path: "".to_string(),
+            message: format!("Invalid JSON: {}", e),
+            keyword: "format".to_string(),
+        });
+    } else {
+        let json_value: Value = serde_json::from_str(json_str).unwrap();
+        if let Err(e) = validate_schema(&json_value) {
+            schema_errors.push(SchemaError {
+                path: "".to_string(),
+                message: e.to_string(),
+                keyword: "schema".to_string(),
+            });
+        }
+    }
+
+    // Continue with structural validation even if schema fails
+    let result = validate(esm_file);
+    structural_errors.extend(result.structural_errors);
+    unit_warnings.extend(result.unit_warnings);
+
+    let is_valid = schema_errors.is_empty() && structural_errors.is_empty();
+
+    ValidationResult {
+        schema_errors,
+        structural_errors,
+        unit_warnings,
+        is_valid,
+    }
+}
+
+/// Build a map of all system references for scoped reference resolution
+fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo> {
+    let mut systems = HashMap::new();
+
+    // Add models
+    if let Some(ref models) = esm_file.models {
+        for (name, model) in models {
+            let mut variables = HashSet::new();
+            for var_name in model.variables.keys() {
+                variables.insert(var_name.clone());
+            }
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::Model,
+                    variables,
+                    species: HashSet::new(),
+                    parameters: HashSet::new(),
+                },
+            );
+        }
+    }
+
+    // Add reaction systems
+    if let Some(ref reaction_systems) = esm_file.reaction_systems {
+        for (name, rs) in reaction_systems {
+            let mut species = HashSet::new();
+            for spec in &rs.species {
+                species.insert(spec.name.clone());
+            }
+
+            // Note: parameters field would be added here when ReactionSystem supports it
+            let parameters = HashSet::new();
+
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::ReactionSystem,
+                    variables: HashSet::new(),
+                    species,
+                    parameters,
+                },
+            );
+        }
+    }
+
+    // Add data loaders (note: current type doesn't have provides field)
+    if let Some(ref data_loaders) = esm_file.data_loaders {
+        for (name, _dl) in data_loaders {
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::DataLoader,
+                    variables: HashSet::new(), // Would be populated from provides field when available
+                    species: HashSet::new(),
+                    parameters: HashSet::new(),
+                },
+            );
+        }
+    }
+
+    // Add operators
+    if let Some(ref operators) = esm_file.operators {
+        for (name, _op) in operators {
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::Operator,
+                    variables: HashSet::new(),
+                    species: HashSet::new(),
+                    parameters: HashSet::new(),
+                },
+            );
+        }
+    }
+
+    systems
+}
+
+#[derive(Debug, Clone)]
+struct SystemInfo {
+    _system_type: SystemType,
+    variables: HashSet<String>,
+    species: HashSet<String>,
+    parameters: HashSet<String>,
+}
+
+#[derive(Debug, Clone)]
+enum SystemType {
+    Model,
+    ReactionSystem,
+    DataLoader,
+    Operator,
+}
+
+fn validate_model(
+    model_name: &str,
+    model: &crate::Model,
+    system_refs: &HashMap<String, SystemInfo>,
+    errors: &mut Vec<StructuralError>,
+    warnings: &mut Vec<String>,
+) {
+    let model_path = format!("/models/{}", model_name);
+
+    // Create a map of defined variables by type
+    let mut state_vars = Vec::new();
+    let mut defined_vars = HashSet::new();
+
+    for (var_name, var) in &model.variables {
+        defined_vars.insert(var_name.clone());
+
+        if matches!(var.var_type, crate::VariableType::State) {
+            state_vars.push(var_name.clone());
+        }
+
+        // Note: The current type system doesn't have expressions on ModelVariable yet
+        // This validation would be added once the types are updated to match the spec
+    }
+
+    // Check equation-unknown balance
+    let ode_equations = count_ode_equations(&model.equations);
+    if ode_equations != state_vars.len() {
+        let (extra_equations_for, missing_equations_for) =
+            analyze_equation_mismatch(&model.equations, &state_vars);
+
+        let mut details = serde_json::json!({
+            "state_variables": state_vars,
+            "ode_equations": ode_equations
+        });
+
+        if !missing_equations_for.is_empty() {
+            details["missing_equations_for"] = serde_json::json!(missing_equations_for);
+        }
+        if !extra_equations_for.is_empty() {
+            details["extra_equations_for"] = serde_json::json!(extra_equations_for);
+        }
+
+        errors.push(StructuralError {
+            path: model_path.clone(),
+            code: StructuralErrorCode::EquationCountMismatch,
+            message: format!(
+                "Number of ODE equations ({}) does not match number of state variables ({})",
+                ode_equations,
+                state_vars.len()
+            ),
+            details,
+        });
+    }
+
+    // Check that all equation references are defined and validate dimensional consistency
+    for (eq_idx, equation) in model.equations.iter().enumerate() {
+        let eq_path = format!("{}/equations/{}", model_path, eq_idx);
+        validate_expression_references_with_systems(
+            &equation.lhs,
+            &defined_vars,
+            system_refs,
+            &eq_path,
+            "lhs",
+            eq_idx,
+            errors,
+        );
+        validate_expression_references_with_systems(
+            &equation.rhs,
+            &defined_vars,
+            system_refs,
+            &eq_path,
+            "rhs",
+            eq_idx,
+            errors,
+        );
+
+        // Validate dimensional consistency of equation
+        validate_equation_units(equation, &model.variables, &eq_path, eq_idx, warnings);
+    }
+
+    // Validate observed variable expressions
+    for (var_name, variable) in &model.variables {
+        if variable.var_type == crate::VariableType::Observed && variable.expression.is_none() {
+            errors.push(StructuralError {
+                path: format!("{}/variables/{}", model_path, var_name),
+                code: StructuralErrorCode::MissingObservedExpr,
+                message: format!(
+                    "Observed variable \"{}\" is missing its expression field",
+                    var_name
+                ),
+                details: serde_json::json!({
+                    "variable_name": var_name,
+                    "field": "expression"
+                }),
+            });
+        } else if variable.var_type == crate::VariableType::Observed {
+            // If the expression exists, validate its variable references
+            if let Some(ref expr) = variable.expression {
+                let expr_path = format!("{}/variables/{}/expression", model_path, var_name);
+                validate_expression_references_with_systems(
+                    expr,
+                    &defined_vars,
+                    system_refs,
+                    &expr_path,
+                    "expression",
+                    0,
+                    errors,
+                );
+            }
+        }
+    }
+
+    // Validate discrete events
+    if let Some(ref discrete_events) = model.discrete_events {
+        for (event_idx, event) in discrete_events.iter().enumerate() {
+            validate_discrete_event(event, event_idx, &model_path, &defined_vars, errors);
+        }
+    }
+
+    // Validate continuous events
+    // TODO: Implement validate_continuous_event function
+    // if let Some(ref continuous_events) = model.continuous_events {
+    //     for (event_idx, event) in continuous_events.iter().enumerate() {
+    //         validate_continuous_event(event, event_idx, &model_path, &defined_vars, errors);
+    //     }
+    // }
+}
+
+fn count_ode_equations(equations: &[crate::Equation]) -> usize {
+    equations.iter().filter(|eq| {
+        // Check if LHS is a time derivative (D operation with wrt="t")
+        matches!(&eq.lhs, crate::Expr::Operator(op) if op.op == "D" && op.wrt.as_deref() == Some("t"))
+    }).count()
+}
+
+fn analyze_equation_mismatch(
+    equations: &[crate::Equation],
+    state_vars: &[String],
+) -> (Vec<String>, Vec<String>) {
+    let mut lhs_vars = HashSet::new();
+
+    // Extract variables from LHS of ODE equations
+    for equation in equations {
+        if let crate::Expr::Operator(op) = &equation.lhs {
+            if op.op == "D" && op.wrt.as_deref() == Some("t") {
+                if let Some(crate::Expr::Variable(var_name)) = op.args.first() {
+                    lhs_vars.insert(var_name.clone());
+                }
+            }
+        }
+    }
+
+    let state_vars_set: HashSet<_> = state_vars.iter().cloned().collect();
+
+    let extra_equations_for: Vec<_> = lhs_vars.difference(&state_vars_set).cloned().collect();
+    let missing_equations_for: Vec<_> = state_vars_set.difference(&lhs_vars).cloned().collect();
+
+    (extra_equations_for, missing_equations_for)
+}
+
+fn validate_reaction_system(
+    rs_name: &str,
+    rs: &crate::ReactionSystem,
+    _system_refs: &HashMap<String, SystemInfo>,
+    errors: &mut Vec<StructuralError>,
+    warnings: &mut Vec<String>,
+) {
+    let rs_path = format!("/reaction_systems/{}", rs_name);
+
+    // Create a map of defined species
+    let mut defined_species = HashSet::new();
+    for species in &rs.species {
+        defined_species.insert(species.name.clone());
+    }
+
+    // Note: ReactionSystem currently doesn't have parameters field
+    // This would be added when types are updated to match spec
+    let defined_parameters = HashSet::new();
+
+    // Check that all reaction references are defined
+    for (rxn_idx, reaction) in rs.reactions.iter().enumerate() {
+        let rxn_path = format!("{}/reactions/{}", rs_path, rxn_idx);
+
+        // Check for null reaction (both substrates and products are null/empty)
+        let substrates_empty = reaction.substrates.is_empty();
+        let products_empty = reaction.products.is_empty();
+
+        if substrates_empty && products_empty {
+            errors.push(StructuralError {
+                path: rxn_path.clone(),
+                code: StructuralErrorCode::NullReaction,
+                message: "Reaction has both substrates: null and products: null".to_string(),
+                details: serde_json::json!({
+                    "reaction_id": reaction.name.as_deref().unwrap_or("unnamed")
+                }),
+            });
+        }
+
+        // Check substrate references
+        for substrate in &reaction.substrates {
+            if !defined_species.contains(&substrate.species) {
+                errors.push(StructuralError {
+                    path: rxn_path.clone(),
+                    code: StructuralErrorCode::UndefinedSpecies,
+                    message: format!(
+                        "Species '{}' referenced in reaction substrates is not declared",
+                        substrate.species
+                    ),
+                    details: serde_json::json!({
+                        "species": substrate.species,
+                        "reaction_id": reaction.name.as_deref().unwrap_or("unnamed"),
+                        "location": "substrates",
+                        "expected_in": "species"
+                    }),
+                });
+            }
+        }
+
+        // Check product references
+        for product in &reaction.products {
+            if !defined_species.contains(&product.species) {
+                errors.push(StructuralError {
+                    path: rxn_path.clone(),
+                    code: StructuralErrorCode::UndefinedSpecies,
+                    message: format!(
+                        "Species '{}' referenced in reaction products is not declared",
+                        product.species
+                    ),
+                    details: serde_json::json!({
+                        "species": product.species,
+                        "reaction_id": reaction.name.as_deref().unwrap_or("unnamed"),
+                        "location": "products",
+                        "expected_in": "species"
+                    }),
+                });
+            }
+        }
+
+        // Validate rate expression references
+        validate_rate_expression(
+            &reaction.rate,
+            &defined_parameters,
+            &rxn_path,
+            reaction.name.as_deref().unwrap_or("unnamed"),
+            errors,
+        );
+    }
+
+    // Note: Event validation would go here when ReactionSystem types support events
+}
+
+fn validate_rate_expression(
+    rate: &crate::Expr,
+    defined_parameters: &HashSet<String>,
+    reaction_path: &str,
+    reaction_id: &str,
+    errors: &mut Vec<StructuralError>,
+) {
+    match rate {
+        crate::Expr::Variable(var_name) => {
+            if !defined_parameters.contains(var_name) {
+                errors.push(StructuralError {
+                    path: reaction_path.to_string(),
+                    code: StructuralErrorCode::UndefinedParameter,
+                    message: format!(
+                        "Parameter '{}' referenced in rate expression is not declared",
+                        var_name
+                    ),
+                    details: serde_json::json!({
+                        "parameter": var_name,
+                        "reaction_id": reaction_id,
+                        "expected_in": "parameters"
+                    }),
+                });
+            }
+        }
+        crate::Expr::Operator(op_node) => {
+            for arg in &op_node.args {
+                validate_rate_expression(
+                    arg,
+                    defined_parameters,
+                    reaction_path,
+                    reaction_id,
+                    errors,
+                );
+            }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers are always valid
+        }
+    }
+}
+
+fn validate_expression_references(
+    expr: &crate::Expr,
+    defined_vars: &HashSet<String>,
+    base_path: &str,
+    field: &str,
+    equation_index: usize,
+    errors: &mut Vec<StructuralError>,
+) {
+    validate_expression_references_with_systems(
+        expr,
+        defined_vars,
+        &HashMap::new(),
+        base_path,
+        field,
+        equation_index,
+        errors,
+    );
+}
+
+fn validate_expression_references_with_systems(
+    expr: &crate::Expr,
+    defined_vars: &HashSet<String>,
+    system_refs: &HashMap<String, SystemInfo>,
+    base_path: &str,
+    field: &str,
+    equation_index: usize,
+    errors: &mut Vec<StructuralError>,
+) {
+    match expr {
+        crate::Expr::Variable(var_name) => {
+            // Skip derivatives, time variable, and built-in functions
+            if var_name.starts_with("d(")
+                || var_name.starts_with("t")
+                || var_name == "t"
+                || is_builtin_function(var_name)
+            {
+                return; // These are always valid
+            }
+
+            // Check for scoped references (e.g., "ModelA.x")
+            if let Some(dot_pos) = var_name.find('.') {
+                let system_name = &var_name[..dot_pos];
+                let var_suffix = &var_name[dot_pos + 1..];
+
+                // Validate scoped reference
+                if let Some(system) = system_refs.get(system_name) {
+                    let var_exists = system.variables.contains(var_suffix)
+                        || system.species.contains(var_suffix)
+                        || system.parameters.contains(var_suffix);
+
+                    if !var_exists {
+                        errors.push(StructuralError {
+                            path: base_path.to_string(),
+                            code: StructuralErrorCode::UnresolvedScopedRef,
+                            message: format!("Scoped reference '{}' cannot be resolved", var_name),
+                            details: serde_json::json!({
+                                "reference": var_name,
+                                "equation_index": equation_index,
+                                "missing_component": var_suffix
+                            }),
+                        });
+                    }
+                    // If scoped reference is valid, don't generate undefined variable error
+                } else {
+                    errors.push(StructuralError {
+                        path: base_path.to_string(),
+                        code: StructuralErrorCode::UnresolvedScopedRef,
+                        message: format!("Scoped reference '{}' cannot be resolved", var_name),
+                        details: serde_json::json!({
+                            "reference": var_name,
+                            "equation_index": equation_index,
+                            "missing_component": system_name
+                        }),
+                    });
+                }
+            } else {
+                // Regular variable - check if defined locally
+                if !defined_vars.contains(var_name) {
+                    errors.push(StructuralError {
+                        path: base_path.to_string(),
+                        code: StructuralErrorCode::UndefinedVariable,
+                        message: format!(
+                            "Variable '{}' referenced in equation is not declared",
+                            var_name
+                        ),
+                        details: serde_json::json!({
+                            "variable": var_name,
+                            "equation_index": equation_index,
+                            "expected_in": "variables"
+                        }),
+                    });
+                }
+            }
+        }
+        crate::Expr::Operator(op_node) => {
+            // Recursively validate operands
+            for arg in &op_node.args {
+                validate_expression_references_with_systems(
+                    arg,
+                    defined_vars,
+                    system_refs,
+                    base_path,
+                    field,
+                    equation_index,
+                    errors,
+                );
+            }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers are always valid
+        }
+    }
+}
+
+/// Check if a variable name is a built-in function
+fn is_builtin_function(name: &str) -> bool {
+    matches!(
+        name,
+        "exp"
+            | "log"
+            | "log10"
+            | "sqrt"
+            | "abs"
+            | "sign"
+            | "sin"
+            | "cos"
+            | "tan"
+            | "asin"
+            | "acos"
+            | "atan"
+            | "atan2"
+            | "min"
+            | "max"
+            | "floor"
+            | "ceil"
+            | "ifelse"
+            | "Pre"
+    )
+}
+
+fn validate_discrete_event(
+    event: &crate::DiscreteEvent,
+    event_idx: usize,
+    parent_path: &str,
+    defined_vars: &HashSet<String>,
+    errors: &mut Vec<StructuralError>,
+) {
+    let event_path = format!("{}/discrete_events/{}", parent_path, event_idx);
+
+    // Validate trigger expression
+    if let crate::DiscreteEventTrigger::Condition { expression } = &event.trigger {
+        validate_event_expression(
+            expression,
+            defined_vars,
+            &event_path,
+            "condition",
+            event.name.as_deref().unwrap_or("unnamed"),
+            "discrete",
+            errors,
+        );
+    }
+
+    // Validate affects
+    if let Some(ref affects) = event.affects {
+        for affect in affects {
+            // Check LHS variable exists
+            if !defined_vars.contains(&affect.lhs) {
+                errors.push(StructuralError {
+                    path: event_path.clone(),
+                    code: StructuralErrorCode::EventVarUndeclared,
+                    message: format!("Variable '{}' in event affects is not declared", affect.lhs),
+                    details: serde_json::json!({
+                        "variable": affect.lhs,
+                        "event_name": event.name.as_deref().unwrap_or("unnamed"),
+                        "event_type": "discrete",
+                        "location": "affects",
+                        "expected_in": "variables"
+                    }),
+                });
+            }
+
+            // Validate RHS expression
+            validate_event_expression(
+                &affect.rhs,
+                defined_vars,
+                &event_path,
+                "affects",
+                event.name.as_deref().unwrap_or("unnamed"),
+                "discrete",
+                errors,
+            );
+        }
+    }
+
+    // Note: discrete_parameters field validation would go here when DiscreteEvent type supports it
+}
+
+// Note: ContinuousEvent validation would be implemented when types support it
+
+fn validate_event_expression(
+    expr: &crate::Expr,
+    defined_vars: &HashSet<String>,
+    event_path: &str,
+    location: &str,
+    event_name: &str,
+    event_type: &str,
+    errors: &mut Vec<StructuralError>,
+) {
+    match expr {
+        crate::Expr::Variable(var_name) => {
+            if !var_name.starts_with("t")
+                && var_name != "t"
+                && !is_builtin_function(var_name)
+                && !defined_vars.contains(var_name)
+            {
+                errors.push(StructuralError {
+                    path: event_path.to_string(),
+                    code: StructuralErrorCode::EventVarUndeclared,
+                    message: format!(
+                        "Variable '{}' in event {} is not declared",
+                        var_name, location
+                    ),
+                    details: serde_json::json!({
+                        "variable": var_name,
+                        "event_name": event_name,
+                        "event_type": event_type,
+                        "location": location,
+                        "expected_in": "variables"
+                    }),
+                });
+            }
+        }
+        crate::Expr::Operator(op_node) => {
+            for arg in &op_node.args {
+                validate_event_expression(
+                    arg,
+                    defined_vars,
+                    event_path,
+                    location,
+                    event_name,
+                    event_type,
+                    errors,
+                );
+            }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers are always valid
+        }
+    }
+}
+
+fn validate_coupling(
+    coupling: &[crate::CouplingEntry],
+    system_refs: &HashMap<String, SystemInfo>,
+    esm_file: &EsmFile,
+    errors: &mut Vec<StructuralError>,
+) {
+    for (idx, entry) in coupling.iter().enumerate() {
+        let coupling_path = format!("/coupling/{}", idx);
+
+        match entry {
+            crate::CouplingEntry::VariableMap { from, to, .. } => {
+                validate_scoped_reference(
+                    from,
+                    system_refs,
+                    &coupling_path,
+                    "variable_map",
+                    errors,
+                );
+                validate_scoped_reference(to, system_refs, &coupling_path, "variable_map", errors);
+            }
+            crate::CouplingEntry::OperatorApply { operator, .. } => {
+                if let Some(ref operators) = esm_file.operators {
+                    if !operators.contains_key(operator) {
+                        errors.push(StructuralError {
+                            path: coupling_path.clone(),
+                            code: StructuralErrorCode::UndefinedOperator,
+                            message: format!("Operator '{}' referenced in operator_apply coupling is not declared", operator),
+                            details: serde_json::json!({
+                                "operator": operator,
+                                "coupling_type": "operator_apply",
+                                "expected_in": "operators"
+                            }),
+                        });
+                    } else {
+                        // Validate operator variables
+                        if let Some(op) = operators.get(operator) {
+                            // Collect all available variables from all systems
+                            let mut available_vars = HashSet::new();
+                            for system_info in system_refs.values() {
+                                available_vars.extend(system_info.variables.iter().cloned());
+                                available_vars.extend(system_info.species.iter().cloned());
+                                available_vars.extend(system_info.parameters.iter().cloned());
+                            }
+
+                            // Check needed_vars
+                            for needed_var in &op.needed_vars {
+                                if !available_vars.contains(needed_var) {
+                                    errors.push(StructuralError {
+                                        path: format!("{}.needed_vars", coupling_path),
+                                        code: StructuralErrorCode::OperatorVariableMissing,
+                                        message: format!("Operator '{}' requires variable '{}' which is not available", operator, needed_var),
+                                        details: serde_json::json!({
+                                            "operator": operator,
+                                            "variable": needed_var,
+                                            "field": "needed_vars",
+                                            "available_variables": available_vars.clone().into_iter().collect::<Vec<_>>()
+                                        }),
+                                    });
+                                }
+                            }
+
+                            // Check modifies variables (if specified)
+                            if let Some(ref modifies) = op.modifies {
+                                for modified_var in modifies {
+                                    if !available_vars.contains(modified_var) {
+                                        errors.push(StructuralError {
+                                            path: format!("{}.modifies", coupling_path),
+                                            code: StructuralErrorCode::OperatorVariableMissing,
+                                            message: format!("Operator '{}' modifies variable '{}' which is not available", operator, modified_var),
+                                            details: serde_json::json!({
+                                                "operator": operator,
+                                                "variable": modified_var,
+                                                "field": "modifies",
+                                                "available_variables": available_vars.clone().into_iter().collect::<Vec<_>>()
+                                            }),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    errors.push(StructuralError {
+                        path: coupling_path,
+                        code: StructuralErrorCode::UndefinedOperator,
+                        message: format!(
+                            "Operator '{}' referenced but no operators are declared",
+                            operator
+                        ),
+                        details: serde_json::json!({
+                            "operator": operator,
+                            "coupling_type": "operator_apply",
+                            "expected_in": "operators"
+                        }),
+                    });
+                }
+            }
+            crate::CouplingEntry::Couple2 { systems, .. } => {
+                if systems.len() >= 2 {
+                    for (_i, system) in systems.iter().take(2).enumerate() {
+                        if !system_refs.contains_key(system) {
+                            errors.push(StructuralError {
+                                path: coupling_path.clone(),
+                                code: StructuralErrorCode::UndefinedSystem,
+                                message: format!("Coupling entry references nonexistent system '{}'", system),
+                                details: serde_json::json!({
+                                    "system": system,
+                                    "coupling_type": "couple2",
+                                    "expected_in": "models, reaction_systems, data_loaders, operators"
+                                }),
+                            });
+                        }
+                    }
+                } else {
+                    errors.push(StructuralError {
+                        path: coupling_path.clone(),
+                        code: StructuralErrorCode::UndefinedSystem,
+                        message: "Couple2 coupling requires exactly 2 systems".to_string(),
+                        details: serde_json::json!({
+                            "coupling_type": "couple2",
+                            "systems_count": systems.len(),
+                            "expected_count": 2
+                        }),
+                    });
+                }
+            }
+            crate::CouplingEntry::OperatorCompose { systems, .. } => {
+                if systems.len() >= 2 {
+                    for (_i, system) in systems.iter().take(2).enumerate() {
+                        if !system_refs.contains_key(system) {
+                            errors.push(StructuralError {
+                                path: coupling_path.clone(),
+                                code: StructuralErrorCode::UndefinedSystem,
+                                message: format!("Coupling entry references nonexistent system '{}'", system),
+                                details: serde_json::json!({
+                                    "system": system,
+                                    "coupling_type": "operator_compose",
+                                    "expected_in": "models, reaction_systems, data_loaders, operators"
+                                }),
+                            });
+                        }
+                    }
+                } else {
+                    errors.push(StructuralError {
+                        path: coupling_path.clone(),
+                        code: StructuralErrorCode::UndefinedSystem,
+                        message: "OperatorCompose coupling requires exactly 2 systems".to_string(),
+                        details: serde_json::json!({
+                            "coupling_type": "operator_compose",
+                            "systems_count": systems.len(),
+                            "expected_count": 2
+                        }),
+                    });
+                }
+            }
+            _ => {
+                // Handle other coupling types as needed
+            }
+        }
+    }
+}
+
+fn validate_scoped_reference(
+    reference: &str,
+    system_refs: &HashMap<String, SystemInfo>,
+    coupling_path: &str,
+    coupling_type: &str,
+    errors: &mut Vec<StructuralError>,
+) {
+    let parts: Vec<&str> = reference.split('.').collect();
+    if parts.len() < 2 {
+        return; // Not a scoped reference
+    }
+
+    let system_name = parts[0];
+    let var_name = parts[parts.len() - 1];
+
+    // Check if system exists
+    if let Some(system) = system_refs.get(system_name) {
+        // Check if variable exists in the system
+        let var_exists = system.variables.contains(var_name)
+            || system.species.contains(var_name)
+            || system.parameters.contains(var_name);
+
+        if !var_exists {
+            errors.push(StructuralError {
+                path: coupling_path.to_string(),
+                code: StructuralErrorCode::UnresolvedScopedRef,
+                message: format!("Scoped reference '{}' cannot be resolved", reference),
+                details: serde_json::json!({
+                    "reference": reference,
+                    "coupling_type": coupling_type,
+                    "missing_component": var_name
+                }),
+            });
+        }
+    } else {
+        errors.push(StructuralError {
+            path: coupling_path.to_string(),
+            code: StructuralErrorCode::UnresolvedScopedRef,
+            message: format!("Scoped reference '{}' cannot be resolved", reference),
+            details: serde_json::json!({
+                "reference": reference,
+                "coupling_type": coupling_type,
+                "missing_component": system_name
+            }),
+        });
+    }
+}
+
+/// Validate dimensional consistency of an equation
+fn validate_equation_units(
+    equation: &crate::Equation,
+    variables: &HashMap<String, crate::ModelVariable>,
+    eq_path: &str,
+    eq_idx: usize,
+    warnings: &mut Vec<String>,
+) {
+    // Get units for LHS and RHS
+    let lhs_unit = get_expression_unit(&equation.lhs, variables);
+    let rhs_unit = get_expression_unit(&equation.rhs, variables);
+
+    // Check if both sides have units defined
+    match (lhs_unit, rhs_unit) {
+        (Ok(lhs), Ok(rhs)) => {
+            // Check dimensional consistency
+            if let Err(unit_error) = check_dimensional_consistency(&lhs, &rhs) {
+                warnings.push(format!(
+                    "Equation {}: {} (in {})",
+                    eq_idx, unit_error, eq_path
+                ));
+            }
+        }
+        (Err(e), _) => {
+            warnings.push(format!(
+                "Equation {} LHS: Could not determine units - {} (in {})",
+                eq_idx, e, eq_path
+            ));
+        }
+        (_, Err(e)) => {
+            warnings.push(format!(
+                "Equation {} RHS: Could not determine units - {} (in {})",
+                eq_idx, e, eq_path
+            ));
+        }
+    }
+}
+
+/// Get the dimensional units of an expression
+fn get_expression_unit(
+    expr: &crate::Expr,
+    variables: &HashMap<String, crate::ModelVariable>,
+) -> Result<Unit, UnitError> {
+    match expr {
+        crate::Expr::Variable(var_name) => {
+            // Handle special time variable
+            if var_name == "t" {
+                return parse_unit("s"); // time has units of seconds
+            }
+
+            // Look up variable units
+            if let Some(var) = variables.get(var_name) {
+                if let Some(ref units_str) = var.units {
+                    parse_unit(units_str)
+                } else {
+                    // No units specified, assume dimensionless
+                    Ok(Unit::dimensionless())
+                }
+            } else {
+                // Variable not found, assume dimensionless for built-in functions
+                if is_builtin_function(var_name) {
+                    Ok(Unit::dimensionless())
+                } else {
+                    Err(UnitError::UnknownUnit(format!("Variable: {}", var_name)))
+                }
+            }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers are dimensionless
+            Ok(Unit::dimensionless())
+        }
+        crate::Expr::Operator(op) => get_operator_unit(op, variables),
+    }
+}
+
+/// Get the dimensional units of an operator expression
+fn get_operator_unit(
+    op: &crate::ExpressionNode,
+    variables: &HashMap<String, crate::ModelVariable>,
+) -> Result<Unit, UnitError> {
+    match op.op.as_str() {
+        // Arithmetic operations
+        "+" | "-" => {
+            // Addition/subtraction: all operands must have same units
+            if op.args.is_empty() {
+                return Ok(Unit::dimensionless());
+            }
+
+            let first_unit = get_expression_unit(&op.args[0], variables)?;
+            for arg in op.args.iter().skip(1) {
+                let arg_unit = get_expression_unit(arg, variables)?;
+                if !first_unit.is_compatible(&arg_unit) {
+                    return Err(UnitError::DimensionMismatch(format!(
+                        "Incompatible units in {} operation",
+                        op.op
+                    )));
+                }
+            }
+            Ok(first_unit)
+        }
+        "*" => {
+            // Multiplication: multiply units
+            let mut result = Unit::dimensionless();
+            for arg in &op.args {
+                let arg_unit = get_expression_unit(arg, variables)?;
+                result = result.multiply(&arg_unit);
+            }
+            Ok(result)
+        }
+        "/" => {
+            // Division: divide units
+            if op.args.len() != 2 {
+                return Err(UnitError::ParseError(
+                    "Division requires exactly 2 operands".to_string(),
+                ));
+            }
+            let numerator = get_expression_unit(&op.args[0], variables)?;
+            let denominator = get_expression_unit(&op.args[1], variables)?;
+            Ok(numerator.divide(&denominator))
+        }
+        "^" | "power" => {
+            // Power: raise units to power
+            if op.args.len() != 2 {
+                return Err(UnitError::ParseError(
+                    "Power requires exactly 2 operands".to_string(),
+                ));
+            }
+            let base_unit = get_expression_unit(&op.args[0], variables)?;
+
+            // For now, only handle constant integer exponents
+            if let crate::Expr::Number(exp) = &op.args[1] {
+                let exponent = *exp as i32;
+                Ok(base_unit.power(exponent))
+            } else {
+                // For variable exponents, we can't determine units statically
+                Err(UnitError::ParseError(
+                    "Variable exponents not supported for unit analysis".to_string(),
+                ))
+            }
+        }
+        "D" => {
+            // Derivative: d/dt has units of [quantity]/[time]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError(
+                    "Derivative requires at least one argument".to_string(),
+                ));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+
+            // Check what we're differentiating with respect to
+            if let Some(ref wrt) = op.wrt {
+                if wrt == "t" {
+                    // d/dt: divide by time units
+                    let time_unit = parse_unit("s")?;
+                    Ok(quantity_unit.divide(&time_unit))
+                } else {
+                    // For spatial derivatives, we need to know the coordinate units
+                    // For now, assume length units
+                    let coord_unit = parse_unit("m")?;
+                    Ok(quantity_unit.divide(&coord_unit))
+                }
+            } else {
+                Err(UnitError::ParseError(
+                    "Derivative missing 'wrt' specification".to_string(),
+                ))
+            }
+        }
+        "grad" => {
+            // Gradient: has units of [quantity]/[length]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError(
+                    "Gradient requires at least one argument".to_string(),
+                ));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+            let length_unit = parse_unit("m")?;
+            Ok(quantity_unit.divide(&length_unit))
+        }
+        "div" => {
+            // Divergence: has units of [quantity]/[length]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError(
+                    "Divergence requires at least one argument".to_string(),
+                ));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+            let length_unit = parse_unit("m")?;
+            Ok(quantity_unit.divide(&length_unit))
+        }
+        "laplacian" => {
+            // Laplacian: has units of [quantity]/[length^2]
+            if op.args.is_empty() {
+                return Err(UnitError::ParseError(
+                    "Laplacian requires at least one argument".to_string(),
+                ));
+            }
+
+            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
+            let length_squared = parse_unit("m")?.power(2);
+            Ok(quantity_unit.divide(&length_squared))
+        }
+        // Transcendental functions (typically dimensionless input/output)
+        "exp" | "log" | "log10" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "sqrt"
+        | "abs" | "sign" | "floor" | "ceil" => {
+            // These functions require dimensionless input for mathematical validity
+            if !op.args.is_empty() {
+                let arg_unit = get_expression_unit(&op.args[0], variables)?;
+                if !arg_unit.is_dimensionless() {
+                    return Err(UnitError::DimensionMismatch(format!(
+                        "Function {} requires dimensionless input, got units with dimensions",
+                        op.op
+                    )));
+                }
+            }
+            Ok(Unit::dimensionless())
+        }
+        "min" | "max" => {
+            // Min/max: all operands must have same units
+            if op.args.is_empty() {
+                return Ok(Unit::dimensionless());
+            }
+
+            let first_unit = get_expression_unit(&op.args[0], variables)?;
+            for arg in op.args.iter().skip(1) {
+                let arg_unit = get_expression_unit(arg, variables)?;
+                if !first_unit.is_compatible(&arg_unit) {
+                    return Err(UnitError::DimensionMismatch(format!(
+                        "Incompatible units in {} operation",
+                        op.op
+                    )));
+                }
+            }
+            Ok(first_unit)
+        }
+        "ifelse" => {
+            // ifelse(condition, true_val, false_val): condition must be dimensionless,
+            // true_val and false_val must have same units
+            if op.args.len() != 3 {
+                return Err(UnitError::ParseError(
+                    "ifelse requires exactly 3 arguments".to_string(),
+                ));
+            }
+
+            let condition_unit = get_expression_unit(&op.args[0], variables)?;
+            if !condition_unit.is_dimensionless() {
+                return Err(UnitError::DimensionMismatch(
+                    "ifelse condition must be dimensionless".to_string(),
+                ));
+            }
+
+            let true_unit = get_expression_unit(&op.args[1], variables)?;
+            let false_unit = get_expression_unit(&op.args[2], variables)?;
+
+            if !true_unit.is_compatible(&false_unit) {
+                return Err(UnitError::DimensionMismatch(
+                    "ifelse true and false branches must have compatible units".to_string(),
+                ));
+            }
+
+            Ok(true_unit)
+        }
+        _ => {
+            // Unknown operator - assume dimensionless for now
+            Ok(Unit::dimensionless())
+        }
+    }
+}
+
+/// Check for circular dependencies between models
+fn check_circular_dependencies_in_models(
+    models: &HashMap<String, crate::Model>,
+    errors: &mut Vec<StructuralError>,
+) {
+    let mut dependencies: HashMap<String, HashSet<String>> = HashMap::new();
+
+    // Build dependency graph by analyzing scoped references in equations
+    for (model_name, model) in models {
+        let mut model_deps = HashSet::new();
+
+        for equation in &model.equations {
+            // Check RHS for scoped references
+            extract_model_dependencies(&equation.rhs, &mut model_deps);
+
+            // Check LHS for scoped references (though less common)
+            extract_model_dependencies(&equation.lhs, &mut model_deps);
+        }
+
+        // Also check observed variable expressions
+        for variable in model.variables.values() {
+            if let Some(ref expr) = variable.expression {
+                extract_model_dependencies(expr, &mut model_deps);
+            }
+        }
+
+        dependencies.insert(model_name.clone(), model_deps);
+    }
+
+    // Detect cycles using DFS
+    let mut visited = HashSet::new();
+    let mut rec_stack = HashSet::new();
+
+    for model_name in models.keys() {
+        if !visited.contains(model_name) {
+            if has_cycle_dfs(model_name, &dependencies, &mut visited, &mut rec_stack) {
+                // Find the actual cycle for error reporting
+                let cycle = find_cycle(&dependencies, model_name);
+                errors.push(StructuralError {
+                    path: format!("/models"),
+                    code: StructuralErrorCode::CircularDependency,
+                    message: format!(
+                        "Circular dependency detected in model dependencies: {}",
+                        cycle.join(" -> ")
+                    ),
+                    details: serde_json::json!({
+                        "cycle": cycle,
+                        "dependency_type": "model_references"
+                    }),
+                });
+                break; // Report only the first cycle found
+            }
+        }
+    }
+}
+
+/// Extract model dependencies from an expression by finding scoped references
+fn extract_model_dependencies(expr: &crate::Expr, deps: &mut HashSet<String>) {
+    match expr {
+        crate::Expr::Variable(var_name) => {
+            // Check if it's a scoped reference (e.g., "ModelA.x")
+            if let Some(dot_pos) = var_name.find('.') {
+                let model_name = &var_name[..dot_pos];
+                deps.insert(model_name.to_string());
+            }
+        }
+        crate::Expr::Operator(op_node) => {
+            for arg in &op_node.args {
+                extract_model_dependencies(arg, deps);
+            }
+        }
+        crate::Expr::Number(_) => {
+            // Numbers don't reference models
+        }
+    }
+}
+
+/// Check for cycles using depth-first search
+fn has_cycle_dfs(
+    node: &str,
+    graph: &HashMap<String, HashSet<String>>,
+    visited: &mut HashSet<String>,
+    rec_stack: &mut HashSet<String>,
+) -> bool {
+    visited.insert(node.to_string());
+    rec_stack.insert(node.to_string());
+
+    if let Some(neighbors) = graph.get(node) {
+        for neighbor in neighbors {
+            if !visited.contains(neighbor) {
+                if has_cycle_dfs(neighbor, graph, visited, rec_stack) {
+                    return true;
+                }
+            } else if rec_stack.contains(neighbor) {
+                return true;
+            }
+        }
+    }
+
+    rec_stack.remove(node);
+    false
+}
+
+/// Find the actual cycle path for error reporting
+fn find_cycle(graph: &HashMap<String, HashSet<String>>, start: &str) -> Vec<String> {
+    let mut path = vec![];
+    let mut visited = HashSet::new();
+
+    if find_cycle_path(start, graph, &mut path, &mut visited) {
+        path
+    } else {
+        vec![start.to_string()] // Fallback
+    }
+}
+
+/// Helper function to find the actual cycle path
+fn find_cycle_path(
+    current: &str,
+    graph: &HashMap<String, HashSet<String>>,
+    path: &mut Vec<String>,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if path.contains(&current.to_string()) {
+        // Found cycle - include the current node to complete the cycle
+        path.push(current.to_string());
+        return true;
+    }
+
+    if visited.contains(current) {
+        return false;
+    }
+
+    visited.insert(current.to_string());
+    path.push(current.to_string());
+
+    if let Some(neighbors) = graph.get(current) {
+        for neighbor in neighbors {
+            if find_cycle_path(neighbor, graph, path, visited) {
+                return true;
+            }
+        }
+    }
+
+    path.pop();
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Equation, ExpressionNode, Metadata, ModelVariable, VariableType};
+    use crate::{Expr, Model};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_validate_empty_file() {
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: None,
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        assert!(result.is_valid);
+        assert!(result.structural_errors.is_empty());
+        assert!(result.schema_errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_model_with_undefined_variable() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: None,
+                default: None,
+                description: None,
+                expression: None,
+            },
+        );
+
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Variable("undefined_var".to_string()), // This should cause an error
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        assert!(!result.is_valid);
+        assert!(!result.structural_errors.is_empty());
+        assert!(result.structural_errors[0]
+            .message
+            .contains("Variable 'undefined_var' referenced in equation is not declared"));
+        assert!(matches!(
+            result.structural_errors[0].code,
+            StructuralErrorCode::UndefinedVariable
+        ));
+    }
+
+    #[test]
+    fn test_equation_count_mismatch() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // Define two state variables
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: None,
+                default: None,
+                description: None,
+                expression: None,
+            },
+        );
+        variables.insert(
+            "y".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: None,
+                default: None,
+                description: None,
+                expression: None,
+            },
+        );
+
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![
+                    // Only one equation for two state variables
+                    Equation {
+                        lhs: Expr::Operator(ExpressionNode {
+                            op: "D".to_string(),
+                            args: vec![Expr::Variable("x".to_string())],
+                            wrt: Some("t".to_string()),
+                            dim: None,
+                        }),
+                        rhs: Expr::Variable("x".to_string()),
+                    },
+                ],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        assert!(!result.is_valid);
+        assert!(!result.structural_errors.is_empty());
+
+        let error = &result.structural_errors[0];
+        assert!(matches!(
+            error.code,
+            StructuralErrorCode::EquationCountMismatch
+        ));
+        assert!(error
+            .message
+            .contains("Number of ODE equations (1) does not match number of state variables (2)"));
+    }
+
+    #[test]
+    fn test_validation_result_structure() {
+        // Test that the new ValidationResult structure works as expected
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: None,
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+
+        // Check the new structure
+        assert!(result.is_valid);
+        assert!(result.schema_errors.is_empty());
+        assert!(result.structural_errors.is_empty());
+        assert!(result.unit_warnings.is_empty());
+    }
+
+    #[test]
+    fn test_missing_observed_expression() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // Observed variable without expression - should cause validation error
+        variables.insert(
+            "total".to_string(),
+            ModelVariable {
+                var_type: VariableType::Observed,
+                units: None,
+                default: None,
+                description: None,
+                expression: None, // Missing expression
+            },
+        );
+
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![], // No equations needed for this test
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should fail validation due to missing expression
+        assert!(!result.is_valid);
+        assert_eq!(result.structural_errors.len(), 1);
+        assert!(matches!(
+            result.structural_errors[0].code,
+            StructuralErrorCode::MissingObservedExpr
+        ));
+        assert!(result.structural_errors[0]
+            .message
+            .contains("Observed variable \"total\" is missing its expression field"));
+    }
+
+    #[test]
+    fn test_observed_variable_with_expression() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()),
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
+
+        // Parameter
+        variables.insert(
+            "k".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("1/s".to_string()),
+                default: Some(0.1),
+                description: None,
+                expression: None,
+            },
+        );
+
+        // Observed variable WITH expression - should pass validation
+        variables.insert(
+            "rate".to_string(),
+            ModelVariable {
+                var_type: VariableType::Observed,
+                units: Some("m/s".to_string()),
+                default: None,
+                description: Some("Rate of change".to_string()),
+                expression: Some(Expr::Operator(ExpressionNode {
+                    op: "*".to_string(),
+                    args: vec![
+                        Expr::Variable("k".to_string()),
+                        Expr::Variable("x".to_string()),
+                    ],
+                    wrt: None,
+                    dim: None,
+                })),
+            },
+        );
+
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Variable("rate".to_string()),
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should pass validation - observed variable has expression
+        assert!(
+            result.is_valid,
+            "Validation failed: {:?}",
+            result.structural_errors
+        );
+        assert!(result.structural_errors.is_empty());
+    }
+
+    #[test]
+    fn test_json_serialization_with_observed_expression() {
+        // Test that we can serialize and deserialize observed variables with expressions
+        let json_str = r#"{
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "TestModel",
+                "description": "Test observed variables with expressions"
+            },
+            "models": {
+                "TestModel": {
+                    "variables": {
+                        "x": { "type": "state", "units": "m", "default": 1.0 },
+                        "k": { "type": "parameter", "units": "1/s", "default": 0.1 },
+                        "rate": {
+                            "type": "observed",
+                            "units": "m/s",
+                            "expression": { "op": "*", "args": ["k", "x"] },
+                            "description": "Rate of change"
+                        }
+                    },
+                    "equations": [
+                        {
+                            "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+                            "rhs": "rate"
+                        }
+                    ]
+                }
+            }
+        }"#;
+
+        // Parse JSON
+        let esm_file: EsmFile = serde_json::from_str(json_str).expect("Failed to parse JSON");
+
+        // Validate the model
+        let result = validate(&esm_file);
+        assert!(
+            result.is_valid,
+            "Validation should pass: {:?}",
+            result.structural_errors
+        );
+
+        // Verify the observed variable has the expression
+        let model = esm_file.models.as_ref().unwrap().get("TestModel").unwrap();
+        let rate_var = model.variables.get("rate").unwrap();
+        assert_eq!(rate_var.var_type, VariableType::Observed);
+        assert!(
+            rate_var.expression.is_some(),
+            "Observed variable should have expression"
+        );
+
+        // Test serialization back to JSON
+        let serialized =
+            serde_json::to_string_pretty(&esm_file).expect("Failed to serialize to JSON");
+
+        // Should be able to parse it again
+        let _reparsed: EsmFile =
+            serde_json::from_str(&serialized).expect("Failed to reparse serialized JSON");
+    }
+
+    #[test]
+    fn test_unit_validation() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with units
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()), // meters
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
+
+        // Parameter with units
+        variables.insert(
+            "k".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("1/s".to_string()), // per second
+                default: Some(0.1),
+                description: None,
+                expression: None,
+            },
+        );
+
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Operator(ExpressionNode {
+                        op: "*".to_string(),
+                        args: vec![
+                            Expr::Variable("k".to_string()),
+                            Expr::Variable("x".to_string()),
+                        ],
+                        wrt: None,
+                        dim: None,
+                    }),
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should pass validation - units are dimensionally consistent
+        // LHS: d(m)/dt = m/s, RHS: (1/s) * m = m/s
+        assert!(
+            result.is_valid,
+            "Validation should pass: {:?}",
+            result.structural_errors
+        );
+        assert!(result.structural_errors.is_empty());
+        // Unit warnings should be empty since dimensions are consistent
+        assert!(
+            result.unit_warnings.is_empty(),
+            "Unit warnings: {:?}",
+            result.unit_warnings
+        );
+    }
+
+    #[test]
+    fn test_unit_validation_mismatch() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with units
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()), // meters
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
+
+        // Parameter with incompatible units
+        variables.insert(
+            "k".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("kg".to_string()), // mass units (incompatible)
+                default: Some(0.1),
+                description: None,
+                expression: None,
+            },
+        );
+
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Variable("k".to_string()), // Just k, not k*x
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should still be structurally valid (no structural errors)
+        assert!(result.is_valid, "Structural validation should pass");
+        assert!(result.structural_errors.is_empty());
+        // But should have unit warnings
+        assert!(
+            !result.unit_warnings.is_empty(),
+            "Should have unit warnings"
+        );
+        assert!(
+            result.unit_warnings[0].contains("Dimension mismatch"),
+            "Should contain dimension mismatch warning"
+        );
+    }
+
+    #[test]
+    fn test_unit_validation_integration() {
+        // Test that unit validation warnings are properly returned from the main validate function
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with position units
+        variables.insert(
+            "position".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()),
+                default: Some(0.0),
+                description: None,
+                expression: None,
+            },
+        );
+
+        // Parameter with velocity units - should be compatible
+        variables.insert(
+            "velocity".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("m/s".to_string()),
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
+
+        models.insert(
+            "test_model".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("position".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Variable("velocity".to_string()),
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("Unit Test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should pass validation - LHS: d(position)/dt = m/s, RHS: velocity = m/s
+        assert!(
+            result.is_valid,
+            "Validation should pass: {:?}",
+            result.structural_errors
+        );
+        assert!(result.structural_errors.is_empty());
+        assert!(
+            result.unit_warnings.is_empty(),
+            "No unit warnings expected: {:?}",
+            result.unit_warnings
+        );
+    }
+
+    #[test]
+    fn test_transcendental_function_units() {
+        let mut models = HashMap::new();
+        let mut variables = HashMap::new();
+
+        // State variable with units (should cause warning when used in exp)
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()), // meters
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
+
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
+                    lhs: Expr::Operator(ExpressionNode {
+                        op: "D".to_string(),
+                        args: vec![Expr::Variable("x".to_string())],
+                        wrt: Some("t".to_string()),
+                        dim: None,
+                    }),
+                    rhs: Expr::Operator(ExpressionNode {
+                        op: "exp".to_string(),
+                        args: vec![Expr::Variable("x".to_string())], // exp(x) where x has units - should warn
+                        wrt: None,
+                        dim: None,
+                    }),
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: Some(models),
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        let result = validate(&esm_file);
+        // Should still be structurally valid
+        assert!(
+            result.is_valid,
+            "Structural validation should pass: {:?}",
+            result
+        );
+        assert!(result.structural_errors.is_empty());
+        // But should have unit warnings about exp requiring dimensionless input
+        assert!(
+            !result.unit_warnings.is_empty(),
+            "Should have unit warnings"
+        );
+        assert!(
+            result.unit_warnings[0].contains("requires dimensionless input"),
+            "Should warn about dimensionless requirement: {:?}",
+            result.unit_warnings
+        );
+    }
+
+    #[test]
+    fn test_validate_vs_validate_complete() {
+        // Test to demonstrate the difference between validate() and validate_complete()
+        // validate() only does structural validation, validate_complete() does both
+
+        // Create a valid EsmFile structure
+        let esm_file = EsmFile {
+            esm: "0.1.0".to_string(),
+            metadata: Metadata {
+                name: Some("test".to_string()),
+                description: None,
+                authors: None,
+                created: None,
+                modified: None,
+                license: None,
+                tags: None,
+                references: None,
+            },
+            models: None,
+            reaction_systems: None,
+            data_loaders: None,
+            operators: None,
+            coupling: None,
+            domain: None,
+            solver: None,
+        };
+
+        // JSON that should fail schema validation (has invalid variable type)
+        let invalid_json = r#"
+        {
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "test"
+            },
+            "models": {
+                "test_model": {
+                    "variables": {
+                        "x": {
+                            "type": "invalid_type_that_should_fail_schema"
+                        }
+                    },
+                    "equations": []
+                }
+            }
+        }
+        "#;
+
+        // The validate() function - only does structural validation
+        let result1 = validate(&esm_file);
+
+        // The validate_complete() function - does both schema and structural validation
+        let result2 = validate_complete(invalid_json);
+
+        // Correct behavior: validate() should have empty schema_errors (it doesn't check schema)
+        assert!(
+            result1.schema_errors.is_empty(),
+            "validate() should have empty schema_errors because it only does structural validation"
+        );
+        assert!(
+            result1.is_valid,
+            "validate() should pass structural validation on valid ESM structure"
+        );
+
+        // validate_complete() should find schema errors
+        assert!(
+            !result2.schema_errors.is_empty(),
+            "validate_complete() should find schema errors"
+        );
+        assert!(
+            !result2.is_valid,
+            "validate_complete() should fail due to schema errors"
+        );
+
+        println!("CORRECT BEHAVIOR: validate() found {} schema errors, validate_complete() found {} schema errors",
+                result1.schema_errors.len(), result2.schema_errors.len());
+    }
+
+    #[test]
+    fn test_validate_complete_with_schema_errors() {
+        // Test the new validate_complete function that should detect schema errors
+        let invalid_json = r#"
+        {
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "test"
+            },
+            "models": {
+                "test_model": {
+                    "variables": {
+                        "x": {
+                            "type": "invalid_type_that_should_fail_schema"
+                        }
+                    },
+                    "equations": []
+                }
+            }
+        }
+        "#;
+
+        let result = validate_complete(invalid_json);
+
+        // Should detect schema errors
+        assert!(
+            !result.is_valid,
+            "validate_complete should detect schema validation failures"
+        );
+        assert!(
+            !result.schema_errors.is_empty(),
+            "validate_complete should find schema errors"
+        );
+
+        // Schema error should mention the validation failure
+        assert!(
+            result.schema_errors[0]
+                .message
+                .contains("Failed to load ESM file"),
+            "Should report load failure: {}",
+            result.schema_errors[0].message
+        );
+    }
+
+    #[test]
+    fn test_validate_complete_with_valid_json() {
+        // Test validate_complete with valid JSON
+        let valid_json = r#"
+        {
+            "esm": "0.1.0",
+            "metadata": {
+                "name": "test"
+            },
+            "models": {
+                "test_model": {
+                    "variables": {
+                        "x": {
+                            "type": "state",
+                            "units": "m",
+                            "default": 1.0
+                        }
+                    },
+                    "equations": [
+                        {
+                            "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+                            "rhs": {"op": "*", "args": [0.1, "x"]}
+                        }
+                    ]
+                }
+            }
+        }
+        "#;
+
+        let result = validate_complete(valid_json);
+
+        // Should pass validation
+        assert!(
+            result.is_valid,
+            "validate_complete should pass with valid JSON: {:?}",
+            result
+        );
+        assert!(
+            result.schema_errors.is_empty(),
+            "Should have no schema errors"
+        );
+        assert!(
+            result.structural_errors.is_empty(),
+            "Should have no structural errors"
+        );
+    }
+}

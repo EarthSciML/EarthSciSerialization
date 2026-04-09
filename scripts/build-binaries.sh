@@ -48,7 +48,7 @@ build_rust_binary() {
 
     echo "Building Rust binary for $platform ($rust_target)..."
 
-    cd "${PROJECT_ROOT}/packages/esm-format-rust"
+    cd "${PROJECT_ROOT}/packages/earthsci-toolkit"
 
     # Install target if needed
     rustup target add "$rust_target" || true
@@ -398,7 +398,7 @@ curl -sSL https://github.com/ctessum/EarthSciSerialization/releases/latest/downl
 - **Python**: \`pip install esm-format\`
 - **TypeScript/JavaScript**: \`npm install esm-format\`
 - **Julia**: \`using Pkg; Pkg.add("ESMFormat")\`
-- **Rust**: Add \`esm-format = "${VERSION}"\` to Cargo.toml
+- **Rust**: Add \`earthsci-toolkit = "${VERSION}"\` to Cargo.toml
 
 ### Verification
 Download [checksums.txt](checksums.txt) to verify package integrity:

@@ -25,10 +25,10 @@ pip install -e .
 
 ### Rust
 ```bash
-cargo install esm-format --features cli
+cargo install earthsci-toolkit --features cli
 # Or add to Cargo.toml:
 # [dependencies]
-# esm-format = "0.1.0"
+# earthsci-toolkit = "0.1.0"
 ```
 
 ## Detailed Installation
@@ -181,11 +181,11 @@ print(f"Loaded test model: {esm_file.metadata.name}")
 ```bash
 # Install from GitHub
 cargo install --git https://github.com/EarthSciML/EarthSciSerialization \
-  --root . esm-format --features cli
+  --root . earthsci-toolkit --features cli
 
 # Or clone and install locally
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/esm-format-rust
+cd EarthSciSerialization/packages/earthsci-toolkit
 cargo install --path . --features cli
 ```
 
@@ -193,10 +193,10 @@ cargo install --path . --features cli
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-esm-format = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "esm-format" }
+earthsci-toolkit = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "earthsci-toolkit" }
 
 # Or with specific features
-esm-format = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "esm-format", features = ["wasm"] }
+earthsci-toolkit = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "earthsci-toolkit", features = ["wasm"] }
 ```
 
 #### WebAssembly
@@ -206,7 +206,7 @@ cargo install wasm-pack
 
 # Clone repository
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/esm-format-rust
+cd EarthSciSerialization/packages/earthsci-toolkit
 
 # Build for web
 wasm-pack build --target web --features wasm
@@ -225,7 +225,7 @@ esm validate test.esm
 
 ```rust
 // Library usage
-use esm_format::{load, validate};
+use earthsci_toolkit::{load, validate};
 
 fn main() {
     let esm_data = r#"{"esm": "0.1.0", "metadata": {"name": "Test"}}"#;
@@ -255,7 +255,7 @@ pip install esm-format
 
 # 4. Install Rust and CLI
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo install esm-format --features cli
+cargo install earthsci-toolkit --features cli
 ```
 
 ### Docker Environment
@@ -278,7 +278,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Install ESM packages
 RUN pip install esm-format
 RUN npm install -g esm-format
-RUN cargo install esm-format --features cli
+RUN cargo install earthsci-toolkit --features cli
 RUN julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/ESMFormat.jl")'
 
 WORKDIR /workspace
@@ -332,7 +332,7 @@ rustup update
 cargo clean
 
 # Install with verbose output
-cargo install --verbose esm-format --features cli
+cargo install --verbose earthsci-toolkit --features cli
 ```
 
 ### Platform-Specific Notes
