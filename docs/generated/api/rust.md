@@ -2243,6 +2243,9 @@ Substitute variables in all expressions within a model
 
 * New model with substitutions applied
 
+**Available in other languages:**
+- [Python](python.md#substitute_in_model)
+
 ---
 
 ### substitute_in_model_with_context
@@ -2289,6 +2292,9 @@ Substitute variables in all expressions within a reaction system
 # Returns
 
 * New reaction system with substitutions applied
+
+**Available in other languages:**
+- [Python](python.md#substitute_in_reaction_system)
 
 ---
 
