@@ -307,17 +307,6 @@ pub fn base(dimension: Dimension, power: i32, scale: f64) -> Self {
 **Description:**
 Create a unit with a single dimension
 
-**Available in other languages:**
-- [Python](python.md#base)
-- [Python](python.md#base)
-- [Python](python.md#base)
-- [Python](python.md#base)
-- [Python](python.md#base)
-- [Python](python.md#base)
-- [Python](python.md#base)
-- [Python](python.md#base)
-- [Python](python.md#base)
-
 ---
 
 ### benchmark_parsing
@@ -508,49 +497,6 @@ Check if an expression contains a specific variable
 **Available in other languages:**
 - [Julia](julia.md#contains)
 - [Julia](julia.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
 - [Typescript](typescript.md#contains)
 
 ---
@@ -576,10 +522,6 @@ Convert between compatible units
 # Returns
 
 * `Result<f64, UnitError>` - Converted value or error
-
-**Available in other languages:**
-- [Python](python.md#convert_units)
-- [Python](python.md#convert_units)
 
 ---
 
@@ -699,10 +641,6 @@ pub fn divide(&self, other: &Unit) -> Unit {
 **Description:**
 Divide two units
 
-**Available in other languages:**
-- [Python](python.md#divide)
-- [Python](python.md#divide)
-
 ---
 
 ### dot_product_simd
@@ -731,9 +669,6 @@ pub fn errors(&self) -> Vec<StructuralError> {
 **Description:**
 Get all errors as a combined vector (for compatibility with old API)
 
-**Available in other languages:**
-- [Python](python.md#errors)
-
 ---
 
 ### evaluate
@@ -761,17 +696,6 @@ Evaluate an expression with given variable values
 **Available in other languages:**
 - [Julia](julia.md#evaluate)
 - [Julia](julia.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
 - [Typescript](typescript.md#evaluate)
 
 ---
@@ -926,12 +850,6 @@ pub fn from_expr(expr: &Expr) -> Self {
 **Description:**
 Create a compact expression from a standard expression
 
-**Available in other languages:**
-- [Python](python.md#from_expr)
-- [Python](python.md#from_expr)
-- [Python](python.md#from_expr)
-- [Python](python.md#from_expr)
-
 ---
 
 ### get_component_type
@@ -1012,12 +930,6 @@ pub fn is_compatible(&self, other: &Unit) -> bool {
 **Description:**
 Check if two units have compatible dimensions
 
-**Available in other languages:**
-- [Python](python.md#is_compatible)
-- [Python](python.md#is_compatible)
-- [Python](python.md#is_compatible)
-- [Python](python.md#is_compatible)
-
 ---
 
 ### is_dimensionless
@@ -1031,9 +943,6 @@ pub fn is_dimensionless(&self) -> bool {
 
 **Description:**
 Check if this unit is dimensionless
-
-**Available in other languages:**
-- [Python](python.md#is_dimensionless)
 
 ---
 
@@ -1090,23 +999,6 @@ assert_eq!(esm_file.esm, "0.1.0");
 - [Julia](julia.md#load)
 - [Julia](julia.md#load)
 - [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
 - [Typescript](typescript.md#load)
 
 ---
@@ -1125,23 +1017,6 @@ pub fn load(json_str: &str) -> Result<JsValue, JsValue> {
 - [Julia](julia.md#load)
 - [Julia](julia.md#load)
 - [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
 - [Typescript](typescript.md#load)
 
 ---
@@ -1156,71 +1031,6 @@ pub fn main() {
 ```
 
 **Available in other languages:**
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
-- [Python](python.md#main)
 - [Python](python.md#main)
 - [Python](python.md#main)
 - [Python](python.md#main)
@@ -1273,18 +1083,6 @@ pub fn multiply(&self, other: &Unit) -> Unit {
 **Description:**
 Multiply two units
 
-**Available in other languages:**
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-- [Python](python.md#multiply)
-
 ---
 
 ### multiply_vectors_simd
@@ -1313,36 +1111,6 @@ pub fn new(num_threads: Option<usize>) -> Result<Self, PerformanceError> {
 **Description:**
 Create a new parallel evaluator with specified number of threads
 
-**Available in other languages:**
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-
 ---
 
 ### new
@@ -1356,36 +1124,6 @@ pub fn new() -> Self {
 
 **Description:**
 Create a new model allocator with specified capacity
-
-**Available in other languages:**
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
-- [Python](python.md#new)
 
 ---
 
@@ -1428,15 +1166,6 @@ pub fn power(&self, exponent: i32) -> Unit {
 
 **Description:**
 Raise unit to a power
-
-**Available in other languages:**
-- [Python](python.md#power)
-- [Python](python.md#power)
-- [Python](python.md#power)
-- [Python](python.md#power)
-- [Python](python.md#power)
-- [Python](python.md#power)
-- [Python](python.md#power)
 
 ---
 
@@ -1704,34 +1433,6 @@ pub fn reset(&mut self) {
 **Description:**
 Reset the allocator for reuse
 
-**Available in other languages:**
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-- [Python](python.md#reset)
-
 ---
 
 ### resolve_scoped_reference
@@ -1762,22 +1463,6 @@ pub fn save(esm_file_js: &JsValue) -> Result<String, JsValue> {
 - [Julia](julia.md#save)
 - [Julia](julia.md#save)
 - [Julia](julia.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
 - [Typescript](typescript.md#save)
 
 ---
@@ -1840,22 +1525,6 @@ assert!(json.contains("\"esm\": \"0.1.0\""));
 - [Julia](julia.md#save)
 - [Julia](julia.md#save)
 - [Julia](julia.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
 - [Typescript](typescript.md#save)
 
 ---
@@ -1909,16 +1578,6 @@ Simplify an expression (basic symbolic simplification)
 **Available in other languages:**
 - [Julia](julia.md#simplify)
 - [Julia](julia.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
 - [Typescript](typescript.md#simplify)
 
 ---
@@ -1987,8 +1646,6 @@ Substitute variables in an expression
 **Available in other languages:**
 - [Julia](julia.md#substitute)
 - [Julia](julia.md#substitute)
-- [Python](python.md#substitute)
-- [Python](python.md#substitute)
 - [Typescript](typescript.md#substitute)
 
 ---
@@ -2005,8 +1662,6 @@ pub fn substitute(json_str: &str, bindings_str: &str) -> Result<String, JsValue>
 **Available in other languages:**
 - [Julia](julia.md#substitute)
 - [Julia](julia.md#substitute)
-- [Python](python.md#substitute)
-- [Python](python.md#substitute)
 - [Typescript](typescript.md#substitute)
 
 ---
@@ -2398,7 +2053,6 @@ Export graph to DOT format for Graphviz
 **Available in other languages:**
 - [Julia](julia.md#to_dot)
 - [Julia](julia.md#to_dot)
-- [Python](python.md#to_dot)
 
 ---
 
@@ -2421,7 +2075,6 @@ Export graph to DOT format for Graphviz
 **Available in other languages:**
 - [Julia](julia.md#to_dot)
 - [Julia](julia.md#to_dot)
-- [Python](python.md#to_dot)
 
 ---
 
@@ -2650,21 +2303,6 @@ assert!(result.schema_errors.is_empty()); // Always empty for this function
 **Available in other languages:**
 - [Julia](julia.md#validate)
 - [Julia](julia.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
 - [Typescript](typescript.md#validate)
 
 ---
@@ -2681,21 +2319,6 @@ pub fn validate(json_str: &str) -> Result<JsValue, JsValue> {
 **Available in other languages:**
 - [Julia](julia.md#validate)
 - [Julia](julia.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
 - [Typescript](typescript.md#validate)
 
 ---
@@ -2972,8 +2595,6 @@ pub struct Domain {
 **Available in other languages:**
 - [Julia](julia.md#domain)
 - [Python](python.md#domain)
-- [Python](python.md#domain)
-- [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
 
 ---
@@ -3074,8 +2695,6 @@ pub struct Metadata {
 **Available in other languages:**
 - [Julia](julia.md#metadata)
 - [Python](python.md#metadata)
-- [Python](python.md#metadata)
-- [Python](python.md#metadata)
 - [Typescript](typescript.md#metadata)
 
 ---
@@ -3105,7 +2724,6 @@ pub struct Model {
 
 **Available in other languages:**
 - [Julia](julia.md#model)
-- [Python](python.md#model)
 - [Python](python.md#model)
 - [Typescript](typescript.md#model)
 
@@ -3150,8 +2768,6 @@ pub struct Operator {
 **Available in other languages:**
 - [Julia](julia.md#operator)
 - [Python](python.md#operator)
-- [Python](python.md#operator)
-- [Python](python.md#operator)
 - [Typescript](typescript.md#operator)
 
 ---
@@ -3194,8 +2810,6 @@ pub struct ParseError {
 
 **Available in other languages:**
 - [Julia](julia.md#parseerror)
-- [Python](python.md#parseerror)
-- [Python](python.md#parseerror)
 
 ---
 
@@ -3243,7 +2857,6 @@ pub struct Reference {
 **Available in other languages:**
 - [Julia](julia.md#reference)
 - [Python](python.md#reference)
-- [Python](python.md#reference)
 - [Typescript](typescript.md#reference)
 
 ---
@@ -3259,7 +2872,6 @@ pub struct SchemaError {
 
 **Available in other languages:**
 - [Julia](julia.md#schemaerror)
-- [Python](python.md#schemaerror)
 - [Typescript](typescript.md#schemaerror)
 
 ---
@@ -3357,9 +2969,6 @@ pub struct StructuralError {
 pub struct Unit {
 ```
 
-**Available in other languages:**
-- [Python](python.md#unit)
-
 ---
 
 ### ValidationResult
@@ -3413,9 +3022,6 @@ pub struct VariableNode {
 ```rust
 pub struct VersionInfo {
 ```
-
-**Available in other languages:**
-- [Python](python.md#versioninfo)
 
 ---
 
