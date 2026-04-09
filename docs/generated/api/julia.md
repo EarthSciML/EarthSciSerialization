@@ -3093,6 +3093,22 @@ Create a JSON parse error with fix suggestions.
 
 ### create_mock_catalyst_system
 
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:448`
+
+**Signature:**
+```julia
+function create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
+```
+
+**Description:**
+create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> MockCatalystSystem
+
+Create a mock Catalyst system for testing when Catalyst is not available.
+
+---
+
+### create_mock_catalyst_system
+
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/catalyst.jl:218`
 
 **Signature:**
@@ -3105,22 +3121,6 @@ create_mock_catalyst_system(rs::ReactionSystem) -> MockCatalystSystem
 
 Create a mock Catalyst system for testing when Catalyst.jl is not available.
 Preserves all the structural information in a testable format.
-
----
-
-### create_mock_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:448`
-
-**Signature:**
-```julia
-function create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
-```
-
-**Description:**
-create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> MockCatalystSystem
-
-Create a mock Catalyst system for testing when Catalyst is not available.
 
 ---
 
@@ -3190,6 +3190,22 @@ Create performance warning with optimization suggestions.
 
 ### create_real_catalyst_system
 
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:324`
+
+**Signature:**
+```julia
+function create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
+```
+
+**Description:**
+create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> ReactionSystem
+
+Create a real Catalyst ReactionSystem from an ESM reaction system.
+
+---
+
+### create_real_catalyst_system
+
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/catalyst.jl:79`
 
 **Signature:**
@@ -3202,22 +3218,6 @@ create_real_catalyst_system(rs::ReactionSystem) -> ReactionSystem
 
 Create a real Catalyst.jl ReactionSystem from an ESM ReactionSystem.
 Handles the full conversion pipeline with proper symbolic mathematics.
-
----
-
-### create_real_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:324`
-
-**Signature:**
-```julia
-function create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
-```
-
-**Description:**
-create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> ReactionSystem
-
-Create a real Catalyst ReactionSystem from an ESM reaction system.
 
 ---
 
@@ -6806,6 +6806,35 @@ to_catalyst_system(...)
 
 ### to_catalyst_system
 
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:304`
+
+**Signature:**
+```julia
+function to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false)
+```
+
+**Description:**
+to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false) -> Union{ReactionSystem, MockCatalystSystem}
+
+Convert an ESM ReactionSystem to a Catalyst ReactionSystem with comprehensive features.
+
+# Arguments
+- `reaction_system::ReactionSystem`: ESM reaction system to convert
+- `name::String`: Name for the resulting system
+- `advanced_features::Bool`: Enable advanced features
+
+# Enhanced Features
+- Species and parameter registration with metadata preservation
+- Rate law expression translation with kinetics detection
+- Conservation law preservation
+- Mass action vs. general kinetics handling
+- Event system support for reaction systems
+- Performance optimization hints for large systems
+
+---
+
+### to_catalyst_system
+
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/catalyst.jl:58`
 
 **Signature:**
@@ -6849,35 +6878,6 @@ catalyst_sys = to_catalyst_system(rs)
 - Gracefully falls back to mock implementation if Catalyst.jl unavailable
 - Warns about unsupported features but continues processing
 - Validates species and parameter references in reactions
-
----
-
-### to_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:304`
-
-**Signature:**
-```julia
-function to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false)
-```
-
-**Description:**
-to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false) -> Union{ReactionSystem, MockCatalystSystem}
-
-Convert an ESM ReactionSystem to a Catalyst ReactionSystem with comprehensive features.
-
-# Arguments
-- `reaction_system::ReactionSystem`: ESM reaction system to convert
-- `name::String`: Name for the resulting system
-- `advanced_features::Bool`: Enable advanced features
-
-# Enhanced Features
-- Species and parameter registration with metadata preservation
-- Rate law expression translation with kinetics detection
-- Conservation law preservation
-- Mass action vs. general kinetics handling
-- Event system support for reaction systems
-- Performance optimization hints for large systems
 
 ---
 
@@ -7037,6 +7037,38 @@ to_mtk_system(...)
 
 ### to_mtk_system
 
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:60`
+
+**Signature:**
+```julia
+function to_mtk_system(model::Model, name::String; advanced_features=false)
+```
+
+**Description:**
+to_mtk_system(model::Model, name::String; advanced_features=false) -> Union{ODESystem, MockMTKSystem}
+
+Convert an ESM Model to a ModelingToolkit ODESystem with comprehensive features.
+
+# Arguments
+- `model::Model`: ESM model to convert
+- `name::String`: Name for the resulting system
+- `advanced_features::Bool`: Enable advanced features like algebraic reduction
+
+# Enhanced Features
+- Parameter/variable mapping with proper scoping and metadata preservation
+- Event system translation (continuous/discrete) with full MTK compatibility
+- Initial condition and boundary condition handling
+- Symbolic differentiation integration with enhanced expression support
+- Hierarchical system composition for complex models
+- Cross-system coupling via MTK connectors
+- Automated algebraic reduction where possible
+- Numerical method selection optimization
+- Performance profiling integration
+
+---
+
+### to_mtk_system
+
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk.jl:57`
 
 **Signature:**
@@ -7069,38 +7101,6 @@ Convert an ESM Model to a ModelingToolkit ODESystem or MockMTKSystem.
 Creates symbolic variables for state vars as functions of t, parameters as plain symbols.
 Maps equations to MTK ~ syntax. Maps continuous events to SymbolicContinuousCallback,
 discrete events to SymbolicDiscreteCallback.
-
----
-
-### to_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/src/mtk_catalyst.jl:60`
-
-**Signature:**
-```julia
-function to_mtk_system(model::Model, name::String; advanced_features=false)
-```
-
-**Description:**
-to_mtk_system(model::Model, name::String; advanced_features=false) -> Union{ODESystem, MockMTKSystem}
-
-Convert an ESM Model to a ModelingToolkit ODESystem with comprehensive features.
-
-# Arguments
-- `model::Model`: ESM model to convert
-- `name::String`: Name for the resulting system
-- `advanced_features::Bool`: Enable advanced features like algebraic reduction
-
-# Enhanced Features
-- Parameter/variable mapping with proper scoping and metadata preservation
-- Event system translation (continuous/discrete) with full MTK compatibility
-- Initial condition and boundary condition handling
-- Symbolic differentiation integration with enhanced expression support
-- Hierarchical system composition for complex models
-- Cross-system coupling via MTK connectors
-- Automated algebraic reduction where possible
-- Numerical method selection optimization
-- Performance profiling integration
 
 ---
 
