@@ -1,6 +1,6 @@
 //! Reaction system analysis and ODE generation
 
-use crate::{ReactionSystem, Model, Expr, ExpressionNode, Equation, ModelVariable, VariableType};
+use crate::{Equation, Expr, ExpressionNode, Model, ModelVariable, ReactionSystem, VariableType};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -55,19 +55,22 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     // Validate system has species and reactions
     if system.species.is_empty() && !system.reactions.is_empty() {
         return Err(DeriveError::InvalidStoichiometry(
-            "Reaction system has reactions but no species defined".to_string()
+            "Reaction system has reactions but no species defined".to_string(),
         ));
     }
 
     // Create state variables for each species
     for species in &system.species {
-        variables.insert(species.name.clone(), ModelVariable {
-            var_type: VariableType::State,
-            units: species.units.clone(),
-            default: species.default,
-            description: species.description.clone(),
-            expression: None,
-        });
+        variables.insert(
+            species.name.clone(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: species.units.clone(),
+                default: species.default,
+                description: species.description.clone(),
+                expression: None,
+            },
+        );
     }
 
     // Validate reactions and their stoichiometry
@@ -75,41 +78,44 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         // Check for invalid stoichiometry
         for substrate in &reaction.substrates {
             if substrate.coefficient.map_or(false, |c| c < 0.0) {
-                return Err(DeriveError::InvalidStoichiometry(
-                    format!("Negative substrate coefficient {} in reaction {}",
-                           substrate.coefficient.unwrap(), reaction_idx)
-                ));
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Negative substrate coefficient {} in reaction {}",
+                    substrate.coefficient.unwrap(),
+                    reaction_idx
+                )));
             }
             // Verify substrate species exists
             if !system.species.iter().any(|s| s.name == substrate.species) {
-                return Err(DeriveError::InvalidStoichiometry(
-                    format!("Unknown substrate species '{}' in reaction {}",
-                           substrate.species, reaction_idx)
-                ));
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Unknown substrate species '{}' in reaction {}",
+                    substrate.species, reaction_idx
+                )));
             }
         }
 
         for product in &reaction.products {
             if product.coefficient.map_or(false, |c| c < 0.0) {
-                return Err(DeriveError::InvalidStoichiometry(
-                    format!("Negative product coefficient {} in reaction {}",
-                           product.coefficient.unwrap(), reaction_idx)
-                ));
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Negative product coefficient {} in reaction {}",
+                    product.coefficient.unwrap(),
+                    reaction_idx
+                )));
             }
             // Verify product species exists
             if !system.species.iter().any(|s| s.name == product.species) {
-                return Err(DeriveError::InvalidStoichiometry(
-                    format!("Unknown product species '{}' in reaction {}",
-                           product.species, reaction_idx)
-                ));
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Unknown product species '{}' in reaction {}",
+                    product.species, reaction_idx
+                )));
             }
         }
 
         // Check for source/sink reactions (no substrates or no products)
         if reaction.substrates.is_empty() && reaction.products.is_empty() {
-            return Err(DeriveError::InvalidStoichiometry(
-                format!("Reaction {} has no substrates or products", reaction_idx)
-            ));
+            return Err(DeriveError::InvalidStoichiometry(format!(
+                "Reaction {} has no substrates or products",
+                reaction_idx
+            )));
         }
     }
 
@@ -138,7 +144,8 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
             // If species participates in this reaction, add rate term
             if net_stoichiometry != 0.0 {
                 // For mass action kinetics, we need to multiply the base rate by concentration terms
-                let enhanced_rate = enhance_rate_with_mass_action(&reaction.rate, &reaction.substrates)?;
+                let enhanced_rate =
+                    enhance_rate_with_mass_action(&reaction.rate, &reaction.substrates)?;
 
                 if net_stoichiometry == 1.0 {
                     // Direct rate contribution
@@ -147,10 +154,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
                     // Negative rate contribution
                     rate_terms.push(Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
-                        args: vec![
-                            Expr::Number(-1.0),
-                            enhanced_rate
-                        ],
+                        args: vec![Expr::Number(-1.0), enhanced_rate],
                         wrt: None,
                         dim: None,
                     }));
@@ -158,10 +162,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
                     // Scaled rate contribution
                     rate_terms.push(Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
-                        args: vec![
-                            Expr::Number(net_stoichiometry),
-                            enhanced_rate
-                        ],
+                        args: vec![Expr::Number(net_stoichiometry), enhanced_rate],
                         wrt: None,
                         dim: None,
                     }));
@@ -220,7 +221,9 @@ fn enhance_rate_with_mass_action(
     }
 
     // Check if rate expression already contains substrate variables
-    let rate_contains_substrates = substrates.iter().any(|s| contains_variable(rate, &s.species));
+    let rate_contains_substrates = substrates
+        .iter()
+        .any(|s| contains_variable(rate, &s.species));
 
     // If rate already contains substrate concentrations, use as-is
     if rate_contains_substrates {
@@ -293,9 +296,7 @@ fn contains_variable(expr: &Expr, var_name: &str) -> bool {
     match expr {
         Expr::Variable(name) => name == var_name,
         Expr::Number(_) => false,
-        Expr::Operator(node) => {
-            node.args.iter().any(|arg| contains_variable(arg, var_name))
-        }
+        Expr::Operator(node) => node.args.iter().any(|arg| contains_variable(arg, var_name)),
     }
 }
 
@@ -320,7 +321,8 @@ pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<f64>> {
     let mut matrix = vec![vec![0.0f64; num_reactions]; num_species];
 
     // Create mapping from species name to index
-    let species_index: HashMap<String, usize> = system.species
+    let species_index: HashMap<String, usize> = system
+        .species
         .iter()
         .enumerate()
         .map(|(idx, species)| (species.name.clone(), idx))
@@ -517,11 +519,15 @@ fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationVi
         }
 
         // Calculate total substrate and product coefficients
-        let substrate_sum: f64 = reaction.substrates.iter()
+        let substrate_sum: f64 = reaction
+            .substrates
+            .iter()
             .map(|s| s.coefficient.unwrap_or(1.0))
             .sum();
 
-        let product_sum: f64 = reaction.products.iter()
+        let product_sum: f64 = reaction
+            .products
+            .iter()
             .map(|p| p.coefficient.unwrap_or(1.0))
             .sum();
 
@@ -561,15 +567,19 @@ fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Ve
 
     if num_reactions == 0 {
         // No reactions means all species are conserved individually
-        return species.iter().enumerate().map(|(i, species)| {
-            let mut coefficients = vec![0.0; num_species];
-            coefficients[i] = 1.0;
-            LinearInvariant {
-                coefficients,
-                species_names: vec![species.name.clone()],
-                description: format!("Conservation of {}", species.name),
-            }
-        }).collect();
+        return species
+            .iter()
+            .enumerate()
+            .map(|(i, species)| {
+                let mut coefficients = vec![0.0; num_species];
+                coefficients[i] = 1.0;
+                LinearInvariant {
+                    coefficients,
+                    species_names: vec![species.name.clone()],
+                    description: format!("Conservation of {}", species.name),
+                }
+            })
+            .collect();
     }
 
     // Find the null space of the transpose of the stoichiometric matrix
@@ -577,51 +587,63 @@ fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Ve
     let invariants = find_null_space_transpose(matrix);
 
     // Convert to LinearInvariant structs with descriptions
-    invariants.into_iter().map(|coeffs| {
-        let species_names: Vec<String> = coeffs.iter()
-            .enumerate()
-            .filter_map(|(i, &coeff)| {
-                if coeff.abs() > 1e-10 {
-                    Some(species[i].name.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
+    invariants
+        .into_iter()
+        .map(|coeffs| {
+            let species_names: Vec<String> = coeffs
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &coeff)| {
+                    if coeff.abs() > 1e-10 {
+                        Some(species[i].name.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
 
-        let description = if species_names.len() <= 3 {
-            format!("Linear combination: {}",
-                coeffs.iter()
-                    .enumerate()
-                    .filter(|(_, &coeff)| coeff.abs() > 1e-10)
-                    .map(|(i, &coeff)| format!("{:.3}*{}", coeff, species[i].name))
-                    .collect::<Vec<_>>()
-                    .join(" + ")
-            )
-        } else {
-            format!("Linear invariant involving {} species", species_names.len())
-        };
+            let description = if species_names.len() <= 3 {
+                format!(
+                    "Linear combination: {}",
+                    coeffs
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, &coeff)| coeff.abs() > 1e-10)
+                        .map(|(i, &coeff)| format!("{:.3}*{}", coeff, species[i].name))
+                        .collect::<Vec<_>>()
+                        .join(" + ")
+                )
+            } else {
+                format!("Linear invariant involving {} species", species_names.len())
+            };
 
-        LinearInvariant {
-            coefficients: coeffs,
-            species_names,
-            description,
-        }
-    }).collect()
+            LinearInvariant {
+                coefficients: coeffs,
+                species_names,
+                description,
+            }
+        })
+        .collect()
 }
 
 /// Find the null space of the transpose of a matrix (simplified implementation)
 fn find_null_space_transpose(matrix: &[Vec<f64>]) -> Vec<Vec<f64>> {
     let num_species = matrix.len();
-    let num_reactions = if matrix.is_empty() { 0 } else { matrix[0].len() };
+    let num_reactions = if matrix.is_empty() {
+        0
+    } else {
+        matrix[0].len()
+    };
 
     if num_reactions == 0 {
         // All species are independent invariants
-        return (0..num_species).map(|i| {
-            let mut inv = vec![0.0; num_species];
-            inv[i] = 1.0;
-            inv
-        }).collect();
+        return (0..num_species)
+            .map(|i| {
+                let mut inv = vec![0.0; num_species];
+                inv[i] = 1.0;
+                inv
+            })
+            .collect();
     }
 
     // For the transpose null space, we need to find vectors v such that:
@@ -786,17 +808,20 @@ fn calculate_matrix_rank(matrix: &[Vec<f64>]) -> usize {
 #[cfg(feature = "simd")]
 pub fn compute_conservation_weights_simd(
     species_concentrations: &[f64],
-    conservation_coefficients: &[f64]
+    conservation_coefficients: &[f64],
 ) -> Result<f64, crate::PerformanceError> {
     if species_concentrations.len() != conservation_coefficients.len() {
         return Err(crate::PerformanceError::SimdError(
-            "Concentration and coefficient arrays must have the same length".to_string()
+            "Concentration and coefficient arrays must have the same length".to_string(),
         ));
     }
 
     // Use SIMD dot product to compute the conservation weight
     // This represents how well a conservation law is satisfied
-    crate::performance::simd_math::dot_product_simd(species_concentrations, conservation_coefficients)
+    crate::performance::simd_math::dot_product_simd(
+        species_concentrations,
+        conservation_coefficients,
+    )
 }
 
 /// Batch computation of multiple conservation weights using SIMD
@@ -815,7 +840,7 @@ pub fn compute_conservation_weights_simd(
 #[cfg(feature = "simd")]
 pub fn compute_batch_conservation_weights_simd(
     species_concentrations: &[f64],
-    conservation_matrix: &[Vec<f64>]
+    conservation_matrix: &[Vec<f64>],
 ) -> Result<Vec<f64>, crate::PerformanceError> {
     let mut weights = Vec::with_capacity(conservation_matrix.len());
 
@@ -845,12 +870,13 @@ pub fn compute_batch_conservation_weights_simd(
 pub fn analyze_conservation_violation_simd(
     current_concentrations: &[f64],
     previous_concentrations: &[f64],
-    conservation_coefficients: &[f64]
+    conservation_coefficients: &[f64],
 ) -> Result<f64, crate::PerformanceError> {
-    if current_concentrations.len() != previous_concentrations.len() ||
-       current_concentrations.len() != conservation_coefficients.len() {
+    if current_concentrations.len() != previous_concentrations.len()
+        || current_concentrations.len() != conservation_coefficients.len()
+    {
         return Err(crate::PerformanceError::SimdError(
-            "All arrays must have the same length".to_string()
+            "All arrays must have the same length".to_string(),
         ));
     }
 
@@ -861,17 +887,20 @@ pub fn analyze_conservation_violation_simd(
     crate::performance::simd_math::add_vectors_simd(
         current_concentrations,
         &negated_previous,
-        &mut concentration_changes
+        &mut concentration_changes,
     )?;
 
     // Compute conservation violation using SIMD dot product
-    crate::performance::simd_math::dot_product_simd(&concentration_changes, conservation_coefficients)
+    crate::performance::simd_math::dot_product_simd(
+        &concentration_changes,
+        conservation_coefficients,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Species, Reaction, StoichiometricEntry};
+    use crate::{Reaction, Species, StoichiometricEntry};
 
     fn create_test_species(name: &str) -> Species {
         Species {
@@ -889,14 +918,20 @@ mod tests {
     ) -> Reaction {
         Reaction {
             name: None,
-            substrates: substrates.into_iter().map(|(species, coeff)| StoichiometricEntry {
-                species: species.to_string(),
-                coefficient: coeff,
-            }).collect(),
-            products: products.into_iter().map(|(species, coeff)| StoichiometricEntry {
-                species: species.to_string(),
-                coefficient: coeff,
-            }).collect(),
+            substrates: substrates
+                .into_iter()
+                .map(|(species, coeff)| StoichiometricEntry {
+                    species: species.to_string(),
+                    coefficient: coeff,
+                })
+                .collect(),
+            products: products
+                .into_iter()
+                .map(|(species, coeff)| StoichiometricEntry {
+                    species: species.to_string(),
+                    coefficient: coeff,
+                })
+                .collect(),
             rate,
             description: None,
         }
@@ -906,10 +941,7 @@ mod tests {
     fn test_derive_odes_simple() {
         let system = ReactionSystem {
             name: Some("Simple System".to_string()),
-            species: vec![
-                create_test_species("A"),
-                create_test_species("B"),
-            ],
+            species: vec![create_test_species("A"), create_test_species("B")],
             reactions: vec![
                 // A -> B with rate k1 * A
                 create_test_reaction(
@@ -923,7 +955,7 @@ mod tests {
                         ],
                         wrt: None,
                         dim: None,
-                    })
+                    }),
                 ),
             ],
             parameters: HashMap::new(),
@@ -939,17 +971,17 @@ mod tests {
         assert_eq!(model.equations.len(), 2);
 
         // Both species should have ODE equations
-        let var_names: Vec<String> = model.equations.iter().map(|eq| {
-            match &eq.lhs {
-                Expr::Operator(node) if node.op == "D" => {
-                    match &node.args[0] {
-                        Expr::Variable(name) => name.clone(),
-                        _ => "unknown".to_string(),
-                    }
+        let var_names: Vec<String> = model
+            .equations
+            .iter()
+            .map(|eq| match &eq.lhs {
+                Expr::Operator(node) if node.op == "D" => match &node.args[0] {
+                    Expr::Variable(name) => name.clone(),
+                    _ => "unknown".to_string(),
                 },
                 _ => "unknown".to_string(),
-            }
-        }).collect();
+            })
+            .collect();
 
         assert!(var_names.contains(&"A".to_string()));
         assert!(var_names.contains(&"B".to_string()));
@@ -969,19 +1001,19 @@ mod tests {
                 create_test_reaction(
                     vec![("A", Some(1.0))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("k1".to_string())
+                    Expr::Variable("k1".to_string()),
                 ),
                 // Reaction 2: B -> C
                 create_test_reaction(
                     vec![("B", Some(1.0))],
                     vec![("C", Some(1.0))],
-                    Expr::Variable("k2".to_string())
+                    Expr::Variable("k2".to_string()),
                 ),
                 // Reaction 3: 2A -> C
                 create_test_reaction(
                     vec![("A", Some(2.0))],
                     vec![("C", Some(1.0))],
-                    Expr::Variable("k3".to_string())
+                    Expr::Variable("k3".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1041,13 +1073,11 @@ mod tests {
         let system = ReactionSystem {
             name: Some("Invalid System".to_string()),
             species: vec![create_test_species("A")],
-            reactions: vec![
-                create_test_reaction(
-                    vec![("B", Some(1.0))], // B is not defined in species
-                    vec![("A", Some(1.0))],
-                    Expr::Variable("k1".to_string())
-                ),
-            ],
+            reactions: vec![create_test_reaction(
+                vec![("B", Some(1.0))], // B is not defined in species
+                vec![("A", Some(1.0))],
+                Expr::Variable("k1".to_string()),
+            )],
             parameters: HashMap::new(),
             description: None,
         };
@@ -1067,13 +1097,11 @@ mod tests {
         let system = ReactionSystem {
             name: Some("Invalid System".to_string()),
             species: vec![create_test_species("A"), create_test_species("B")],
-            reactions: vec![
-                create_test_reaction(
-                    vec![("A", Some(-1.0))], // Negative coefficient
-                    vec![("B", Some(1.0))],
-                    Expr::Variable("k1".to_string())
-                ),
-            ],
+            reactions: vec![create_test_reaction(
+                vec![("A", Some(-1.0))], // Negative coefficient
+                vec![("B", Some(1.0))],
+                Expr::Variable("k1".to_string()),
+            )],
             parameters: HashMap::new(),
             description: None,
         };
@@ -1102,7 +1130,7 @@ mod tests {
                 create_test_reaction(
                     vec![("A", Some(1.0)), ("B", Some(1.0))],
                     vec![("C", Some(1.0))],
-                    Expr::Variable("k1".to_string())
+                    Expr::Variable("k1".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1115,13 +1143,13 @@ mod tests {
 
         // Check that the rate law includes mass action terms
         // For species C: d[C]/dt = k1 * A * B
-        let c_equation = model.equations.iter()
+        let c_equation = model
+            .equations
+            .iter()
             .find(|eq| match &eq.lhs {
-                Expr::Operator(node) if node.op == "D" => {
-                    match &node.args[0] {
-                        Expr::Variable(name) => name == "C",
-                        _ => false,
-                    }
+                Expr::Operator(node) if node.op == "D" => match &node.args[0] {
+                    Expr::Variable(name) => name == "C",
+                    _ => false,
                 },
                 _ => false,
             })
@@ -1132,7 +1160,7 @@ mod tests {
             Expr::Operator(node) if node.op == "*" => {
                 assert!(node.args.len() >= 2);
                 // Should contain k1, A, and B in some form
-            },
+            }
             _ => panic!("Expected multiplication for mass action kinetics"),
         }
     }
@@ -1147,7 +1175,7 @@ mod tests {
                 create_test_reaction(
                     vec![],
                     vec![("A", Some(1.0))],
-                    Expr::Variable("k0".to_string())
+                    Expr::Variable("k0".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1176,7 +1204,7 @@ mod tests {
                 create_test_reaction(
                     vec![("A", Some(1.0))],
                     vec![],
-                    Expr::Variable("k_deg".to_string())
+                    Expr::Variable("k_deg".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1198,8 +1226,11 @@ mod tests {
                     Expr::Number(n) => assert_eq!(*n, -1.0),
                     _ => panic!("Expected -1 as first argument"),
                 }
-            },
-            _ => panic!("Expected multiplication for sink reaction kinetics, got: {:?}", a_equation.rhs),
+            }
+            _ => panic!(
+                "Expected multiplication for sink reaction kinetics, got: {:?}",
+                a_equation.rhs
+            ),
         }
     }
 
@@ -1207,16 +1238,13 @@ mod tests {
     fn test_derive_odes_higher_order_reaction() {
         let system = ReactionSystem {
             name: Some("Higher Order System".to_string()),
-            species: vec![
-                create_test_species("A"),
-                create_test_species("B"),
-            ],
+            species: vec![create_test_species("A"), create_test_species("B")],
             reactions: vec![
                 // 2A -> B with rate k1 (second order in A)
                 create_test_reaction(
                     vec![("A", Some(2.0))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("k1".to_string())
+                    Expr::Variable("k1".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1228,13 +1256,13 @@ mod tests {
         assert_eq!(model.equations.len(), 2);
 
         // Check that the rate law includes A^2 term (or A*A)
-        let b_equation = model.equations.iter()
+        let b_equation = model
+            .equations
+            .iter()
             .find(|eq| match &eq.lhs {
-                Expr::Operator(node) if node.op == "D" => {
-                    match &node.args[0] {
-                        Expr::Variable(name) => name == "B",
-                        _ => false,
-                    }
+                Expr::Operator(node) if node.op == "D" => match &node.args[0] {
+                    Expr::Variable(name) => name == "B",
+                    _ => false,
                 },
                 _ => false,
             })
@@ -1245,7 +1273,7 @@ mod tests {
             Expr::Operator(node) if node.op == "*" => {
                 assert!(node.args.len() >= 2);
                 // Should contain k1 and either A*A or pow(A, 2)
-            },
+            }
             _ => panic!("Expected multiplication for higher order kinetics"),
         }
     }
@@ -1255,13 +1283,11 @@ mod tests {
         let system = ReactionSystem {
             name: Some("Invalid System".to_string()),
             species: vec![create_test_species("A")],
-            reactions: vec![
-                create_test_reaction(
-                    vec![], // No substrates
-                    vec![], // No products
-                    Expr::Variable("k1".to_string())
-                ),
-            ],
+            reactions: vec![create_test_reaction(
+                vec![], // No substrates
+                vec![], // No products
+                Expr::Variable("k1".to_string()),
+            )],
             parameters: HashMap::new(),
             description: None,
         };
@@ -1280,16 +1306,13 @@ mod tests {
     fn test_derive_odes_fractional_coefficients() {
         let system = ReactionSystem {
             name: Some("Fractional System".to_string()),
-            species: vec![
-                create_test_species("A"),
-                create_test_species("B"),
-            ],
+            species: vec![create_test_species("A"), create_test_species("B")],
             reactions: vec![
                 // 0.5A -> B with rate k1
                 create_test_reaction(
                     vec![("A", Some(0.5))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("k1".to_string())
+                    Expr::Variable("k1".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1301,13 +1324,13 @@ mod tests {
         assert_eq!(model.equations.len(), 2);
 
         // Check that fractional stoichiometry is handled correctly
-        let b_equation = model.equations.iter()
+        let b_equation = model
+            .equations
+            .iter()
             .find(|eq| match &eq.lhs {
-                Expr::Operator(node) if node.op == "D" => {
-                    match &node.args[0] {
-                        Expr::Variable(name) => name == "B",
-                        _ => false,
-                    }
+                Expr::Operator(node) if node.op == "D" => match &node.args[0] {
+                    Expr::Variable(name) => name == "B",
+                    _ => false,
                 },
                 _ => false,
             })
@@ -1318,7 +1341,7 @@ mod tests {
             Expr::Operator(node) if node.op == "*" => {
                 assert!(node.args.len() >= 2);
                 // Should contain k1 and pow(A, 0.5)
-            },
+            }
             _ => panic!("Expected multiplication for fractional coefficient kinetics"),
         }
     }
@@ -1338,19 +1361,19 @@ mod tests {
                 create_test_reaction(
                     vec![("A", Some(1.0)), ("B", Some(1.0))],
                     vec![("C", Some(1.0)), ("D", Some(1.0))],
-                    Expr::Variable("k1".to_string())
+                    Expr::Variable("k1".to_string()),
                 ),
                 // C -> A (rate k2)
                 create_test_reaction(
                     vec![("C", Some(1.0))],
                     vec![("A", Some(1.0))],
-                    Expr::Variable("k2".to_string())
+                    Expr::Variable("k2".to_string()),
                 ),
                 // D -> B (rate k3)
                 create_test_reaction(
                     vec![("D", Some(1.0))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("k3".to_string())
+                    Expr::Variable("k3".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1363,16 +1386,12 @@ mod tests {
 
         // Each species should have an equation
         for species_name in &["A", "B", "C", "D"] {
-            let found = model.equations.iter().any(|eq| {
-                match &eq.lhs {
-                    Expr::Operator(node) if node.op == "D" => {
-                        match &node.args[0] {
-                            Expr::Variable(name) => name == species_name,
-                            _ => false,
-                        }
-                    },
+            let found = model.equations.iter().any(|eq| match &eq.lhs {
+                Expr::Operator(node) if node.op == "D" => match &node.args[0] {
+                    Expr::Variable(name) => name == species_name,
                     _ => false,
-                }
+                },
+                _ => false,
             });
             assert!(found, "Should have equation for species {}", species_name);
         }
@@ -1406,28 +1425,23 @@ mod tests {
     fn test_floating_point_precision_fix() {
         // Test that coefficients with floating-point precision issues are handled correctly
         let test_cases = vec![
-            (2.0, true),                        // Exact integer
-            (2.0000000000000004, true),         // Should be treated as 2
-            (1.9999999999999998, true),         // Should be treated as 2
-            (3.0 + std::f64::EPSILON, true),    // Should be treated as 3
-            (2.5, false),                       // True fractional, should use pow
-            (1.5, false),                       // True fractional, should use pow
+            (2.0, true),                     // Exact integer
+            (2.0000000000000004, true),      // Should be treated as 2
+            (1.9999999999999998, true),      // Should be treated as 2
+            (3.0 + std::f64::EPSILON, true), // Should be treated as 3
+            (2.5, false),                    // True fractional, should use pow
+            (1.5, false),                    // True fractional, should use pow
         ];
 
         for (coeff, should_use_multiplication) in test_cases {
             let system = ReactionSystem {
                 name: Some("Floating Point Test".to_string()),
-                species: vec![
-                    create_test_species("A"),
-                    create_test_species("B"),
-                ],
-                reactions: vec![
-                    create_test_reaction(
-                        vec![("A", Some(coeff))],
-                        vec![("B", Some(1.0))],
-                        Expr::Variable("k1".to_string())
-                    ),
-                ],
+                species: vec![create_test_species("A"), create_test_species("B")],
+                reactions: vec![create_test_reaction(
+                    vec![("A", Some(coeff))],
+                    vec![("B", Some(1.0))],
+                    Expr::Variable("k1".to_string()),
+                )],
                 parameters: HashMap::new(),
                 description: None,
             };
@@ -1435,13 +1449,13 @@ mod tests {
             let model = derive_odes(&system).expect("Should derive ODEs successfully");
 
             // Find the equation for species B
-            let b_equation = model.equations.iter()
+            let b_equation = model
+                .equations
+                .iter()
                 .find(|eq| match &eq.lhs {
-                    Expr::Operator(node) if node.op == "D" => {
-                        match &node.args[0] {
-                            Expr::Variable(name) => name == "B",
-                            _ => false,
-                        }
+                    Expr::Operator(node) if node.op == "D" => match &node.args[0] {
+                        Expr::Variable(name) => name == "B",
+                        _ => false,
                     },
                     _ => false,
                 })
@@ -1449,35 +1463,43 @@ mod tests {
 
             // Check if the result uses multiplication or pow appropriately
             let uses_multiplication = match &b_equation.rhs {
-                Expr::Operator(node) if node.op == "*" => {
-                    node.args.iter().any(|arg| match arg {
-                        Expr::Operator(inner) if inner.op == "*" => true,
-                        _ => false,
-                    })
-                },
+                Expr::Operator(node) if node.op == "*" => node.args.iter().any(|arg| match arg {
+                    Expr::Operator(inner) if inner.op == "*" => true,
+                    _ => false,
+                }),
                 _ => false,
             };
 
             let uses_pow = match &b_equation.rhs {
-                Expr::Operator(node) if node.op == "*" => {
-                    node.args.iter().any(|arg| match arg {
-                        Expr::Operator(inner) if inner.op == "pow" => true,
-                        _ => false,
-                    })
-                },
+                Expr::Operator(node) if node.op == "*" => node.args.iter().any(|arg| match arg {
+                    Expr::Operator(inner) if inner.op == "pow" => true,
+                    _ => false,
+                }),
                 _ => false,
             };
 
             if should_use_multiplication {
-                assert!(uses_multiplication,
-                    "Coefficient {:.17} should use multiplication but uses pow", coeff);
-                assert!(!uses_pow,
-                    "Coefficient {:.17} should not use pow but does", coeff);
+                assert!(
+                    uses_multiplication,
+                    "Coefficient {:.17} should use multiplication but uses pow",
+                    coeff
+                );
+                assert!(
+                    !uses_pow,
+                    "Coefficient {:.17} should not use pow but does",
+                    coeff
+                );
             } else {
-                assert!(uses_pow,
-                    "Coefficient {:.17} should use pow but doesn't", coeff);
-                assert!(!uses_multiplication,
-                    "Coefficient {:.17} should not use multiplication but does", coeff);
+                assert!(
+                    uses_pow,
+                    "Coefficient {:.17} should use pow but doesn't",
+                    coeff
+                );
+                assert!(
+                    !uses_multiplication,
+                    "Coefficient {:.17} should not use multiplication but does",
+                    coeff
+                );
             }
         }
     }
@@ -1499,13 +1521,13 @@ mod tests {
                 create_test_reaction(
                     vec![("A", Some(1.0))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("k1".to_string())
+                    Expr::Variable("k1".to_string()),
                 ),
                 // B -> C
                 create_test_reaction(
                     vec![("B", Some(1.0))],
                     vec![("C", Some(1.0))],
-                    Expr::Variable("k2".to_string())
+                    Expr::Variable("k2".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1525,8 +1547,11 @@ mod tests {
 
         for (i, row) in parallel_matrix.iter().enumerate() {
             for (j, &val) in row.iter().enumerate() {
-                assert_eq!(val, sequential_matrix[i][j],
-                    "Parallel and sequential results should match at position [{}, {}]", i, j);
+                assert_eq!(
+                    val, sequential_matrix[i][j],
+                    "Parallel and sequential results should match at position [{}, {}]",
+                    i, j
+                );
             }
         }
 
@@ -1541,21 +1566,18 @@ mod tests {
     fn test_conservation_detection_balanced_system() {
         let system = ReactionSystem {
             name: Some("Balanced System".to_string()),
-            species: vec![
-                create_test_species("A"),
-                create_test_species("B"),
-            ],
+            species: vec![create_test_species("A"), create_test_species("B")],
             reactions: vec![
                 // A <-> B (reversible)
                 create_test_reaction(
                     vec![("A", Some(1.0))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("kf".to_string())
+                    Expr::Variable("kf".to_string()),
                 ),
                 create_test_reaction(
                     vec![("B", Some(1.0))],
                     vec![("A", Some(1.0))],
-                    Expr::Variable("kr".to_string())
+                    Expr::Variable("kr".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1565,30 +1587,39 @@ mod tests {
         let analysis = detect_conservation_violations(&system);
 
         // Should have no mass balance violations
-        let mass_violations: Vec<_> = analysis.violations.iter()
+        let mass_violations: Vec<_> = analysis
+            .violations
+            .iter()
             .filter(|v| v.violation_type == ConservationLawType::MassBalance)
             .collect();
-        assert_eq!(mass_violations.len(), 0, "Balanced system should have no mass violations");
+        assert_eq!(
+            mass_violations.len(),
+            0,
+            "Balanced system should have no mass violations"
+        );
 
         // Should detect total mass conservation (A + B = constant)
-        assert!(analysis.linear_invariants.len() > 0, "Should detect conservation laws");
-        assert_eq!(analysis.conservation_laws_count, 1, "Should have one conservation law");
+        assert!(
+            analysis.linear_invariants.len() > 0,
+            "Should detect conservation laws"
+        );
+        assert_eq!(
+            analysis.conservation_laws_count, 1,
+            "Should have one conservation law"
+        );
     }
 
     #[test]
     fn test_conservation_detection_unbalanced_reaction() {
         let system = ReactionSystem {
             name: Some("Unbalanced System".to_string()),
-            species: vec![
-                create_test_species("A"),
-                create_test_species("B"),
-            ],
+            species: vec![create_test_species("A"), create_test_species("B")],
             reactions: vec![
                 // Unbalanced: 2A -> B (mass not conserved)
                 create_test_reaction(
                     vec![("A", Some(2.0))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("k".to_string())
+                    Expr::Variable("k".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1598,10 +1629,16 @@ mod tests {
         let analysis = detect_conservation_violations(&system);
 
         // Should detect mass balance violation
-        let mass_violations: Vec<_> = analysis.violations.iter()
+        let mass_violations: Vec<_> = analysis
+            .violations
+            .iter()
             .filter(|v| v.violation_type == ConservationLawType::MassBalance)
             .collect();
-        assert_eq!(mass_violations.len(), 1, "Should detect one mass balance violation");
+        assert_eq!(
+            mass_violations.len(),
+            1,
+            "Should detect one mass balance violation"
+        );
 
         let violation = &mass_violations[0];
         assert_eq!(violation.reaction_index, Some(0));
@@ -1624,13 +1661,13 @@ mod tests {
                 create_test_reaction(
                     vec![("A", Some(1.0))],
                     vec![("B", Some(0.5)), ("C", Some(0.5))],
-                    Expr::Variable("k1".to_string())
+                    Expr::Variable("k1".to_string()),
                 ),
                 // B -> A (mass conserved)
                 create_test_reaction(
                     vec![("B", Some(1.0))],
                     vec![("A", Some(1.0))],
-                    Expr::Variable("k2".to_string())
+                    Expr::Variable("k2".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1640,13 +1677,22 @@ mod tests {
         let analysis = detect_conservation_violations(&system);
 
         // All reactions should be mass balanced
-        let mass_violations: Vec<_> = analysis.violations.iter()
+        let mass_violations: Vec<_> = analysis
+            .violations
+            .iter()
             .filter(|v| v.violation_type == ConservationLawType::MassBalance)
             .collect();
-        assert_eq!(mass_violations.len(), 0, "All reactions should be mass balanced");
+        assert_eq!(
+            mass_violations.len(),
+            0,
+            "All reactions should be mass balanced"
+        );
 
         // Should have conservation laws
-        assert!(analysis.conservation_laws_count > 0, "Should have conservation laws");
+        assert!(
+            analysis.conservation_laws_count > 0,
+            "Should have conservation laws"
+        );
     }
 
     #[test]
@@ -1661,31 +1707,43 @@ mod tests {
 
         let analysis = detect_conservation_violations(&system);
 
-        assert_eq!(analysis.violations.len(), 0, "Empty system should have no violations");
-        assert_eq!(analysis.linear_invariants.len(), 0, "Empty system should have no invariants");
-        assert_eq!(analysis.stoichiometric_rank, 0, "Empty system should have rank 0");
-        assert_eq!(analysis.conservation_laws_count, 0, "Empty system should have no conservation laws");
+        assert_eq!(
+            analysis.violations.len(),
+            0,
+            "Empty system should have no violations"
+        );
+        assert_eq!(
+            analysis.linear_invariants.len(),
+            0,
+            "Empty system should have no invariants"
+        );
+        assert_eq!(
+            analysis.stoichiometric_rank, 0,
+            "Empty system should have rank 0"
+        );
+        assert_eq!(
+            analysis.conservation_laws_count, 0,
+            "Empty system should have no conservation laws"
+        );
     }
 
     #[test]
     fn test_conservation_detection_source_sink() {
         let system = ReactionSystem {
             name: Some("Source-Sink System".to_string()),
-            species: vec![
-                create_test_species("A"),
-            ],
+            species: vec![create_test_species("A")],
             reactions: vec![
                 // Source: -> A
                 create_test_reaction(
                     vec![],
                     vec![("A", Some(1.0))],
-                    Expr::Variable("k_source".to_string())
+                    Expr::Variable("k_source".to_string()),
                 ),
                 // Sink: A ->
                 create_test_reaction(
                     vec![("A", Some(1.0))],
                     vec![],
-                    Expr::Variable("k_sink".to_string())
+                    Expr::Variable("k_sink".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1696,10 +1754,16 @@ mod tests {
 
         // Source and sink reactions should not be flagged as mass balance violations
         // (they represent exchange with environment)
-        let mass_violations: Vec<_> = analysis.violations.iter()
+        let mass_violations: Vec<_> = analysis
+            .violations
+            .iter()
             .filter(|v| v.violation_type == ConservationLawType::MassBalance)
             .collect();
-        assert_eq!(mass_violations.len(), 0, "Source/sink reactions should not be flagged");
+        assert_eq!(
+            mass_violations.len(),
+            0,
+            "Source/sink reactions should not be flagged"
+        );
     }
 
     #[test]
@@ -1707,16 +1771,13 @@ mod tests {
         // Test system where A + B = constant
         let system = ReactionSystem {
             name: Some("Conservation Test".to_string()),
-            species: vec![
-                create_test_species("A"),
-                create_test_species("B"),
-            ],
+            species: vec![create_test_species("A"), create_test_species("B")],
             reactions: vec![
                 // A <-> B
                 create_test_reaction(
                     vec![("A", Some(1.0))],
                     vec![("B", Some(1.0))],
-                    Expr::Variable("k".to_string())
+                    Expr::Variable("k".to_string()),
                 ),
             ],
             parameters: HashMap::new(),
@@ -1731,11 +1792,14 @@ mod tests {
 
         // Check that we found the A + B conservation
         let total_mass_invariant = invariants.iter().find(|inv| {
-            inv.coefficients.len() == 2 &&
-            (inv.coefficients[0] - inv.coefficients[1]).abs() < 1e-10 &&
-            inv.coefficients[0].abs() > 0.5
+            inv.coefficients.len() == 2
+                && (inv.coefficients[0] - inv.coefficients[1]).abs() < 1e-10
+                && inv.coefficients[0].abs() > 0.5
         });
-        assert!(total_mass_invariant.is_some(), "Should find A + B conservation law");
+        assert!(
+            total_mass_invariant.is_some(),
+            "Should find A + B conservation law"
+        );
     }
 
     #[test]
@@ -1743,29 +1807,36 @@ mod tests {
         // Test rank calculation with known matrices
 
         // Full rank 2x2 matrix
-        let full_rank_matrix = vec![
-            vec![1.0, 0.0],
-            vec![0.0, 1.0],
-        ];
-        assert_eq!(calculate_matrix_rank(&full_rank_matrix), 2, "Identity matrix should have full rank");
+        let full_rank_matrix = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        assert_eq!(
+            calculate_matrix_rank(&full_rank_matrix),
+            2,
+            "Identity matrix should have full rank"
+        );
 
         // Rank 1 matrix
-        let rank_1_matrix = vec![
-            vec![1.0, 2.0],
-            vec![2.0, 4.0],
-        ];
-        assert_eq!(calculate_matrix_rank(&rank_1_matrix), 1, "Dependent rows should give rank 1");
+        let rank_1_matrix = vec![vec![1.0, 2.0], vec![2.0, 4.0]];
+        assert_eq!(
+            calculate_matrix_rank(&rank_1_matrix),
+            1,
+            "Dependent rows should give rank 1"
+        );
 
         // Zero matrix
-        let zero_matrix = vec![
-            vec![0.0, 0.0],
-            vec![0.0, 0.0],
-        ];
-        assert_eq!(calculate_matrix_rank(&zero_matrix), 0, "Zero matrix should have rank 0");
+        let zero_matrix = vec![vec![0.0, 0.0], vec![0.0, 0.0]];
+        assert_eq!(
+            calculate_matrix_rank(&zero_matrix),
+            0,
+            "Zero matrix should have rank 0"
+        );
 
         // Empty matrix
         let empty_matrix: Vec<Vec<f64>> = vec![];
-        assert_eq!(calculate_matrix_rank(&empty_matrix), 0, "Empty matrix should have rank 0");
+        assert_eq!(
+            calculate_matrix_rank(&empty_matrix),
+            0,
+            "Empty matrix should have rank 0"
+        );
     }
 
     #[test]
@@ -1804,16 +1875,16 @@ mod tests {
         // Test batch computation
         let concentrations = vec![1.0, 2.0, 3.0, 4.0];
         let matrix = vec![
-            vec![1.0, 1.0, 0.0, 0.0],     // First invariant: A + B
-            vec![0.0, 0.0, 1.0, 1.0],     // Second invariant: C + D
-            vec![1.0, -1.0, 1.0, -1.0],   // Third invariant: A - B + C - D
+            vec![1.0, 1.0, 0.0, 0.0],   // First invariant: A + B
+            vec![0.0, 0.0, 1.0, 1.0],   // Second invariant: C + D
+            vec![1.0, -1.0, 1.0, -1.0], // Third invariant: A - B + C - D
         ];
 
         let weights = compute_batch_conservation_weights_simd(&concentrations, &matrix).unwrap();
 
         assert_eq!(weights.len(), 3);
-        assert_eq!(weights[0], 3.0);  // 1*1 + 2*1 = 3
-        assert_eq!(weights[1], 7.0);  // 3*1 + 4*1 = 7
+        assert_eq!(weights[0], 3.0); // 1*1 + 2*1 = 3
+        assert_eq!(weights[1], 7.0); // 3*1 + 4*1 = 7
         assert_eq!(weights[2], -2.0); // 1*1 + (-1)*2 + 1*3 + (-1)*4 = 1 - 2 + 3 - 4 = -2
     }
 
@@ -1825,7 +1896,8 @@ mod tests {
         let previous = vec![4.0, 2.0, 1.0, 3.0];
         let coefficients = vec![1.0, 1.0, -1.0, -1.0]; // Conservation law: A + B - C - D = 0
 
-        let violation = analyze_conservation_violation_simd(&current, &previous, &coefficients).unwrap();
+        let violation =
+            analyze_conservation_violation_simd(&current, &previous, &coefficients).unwrap();
 
         // Changes: [1.0, 1.0, 1.0, 1.0] (all increased by 1)
         // Violation: 1*1 + 1*1 + (-1)*1 + (-1)*1 = 1 + 1 - 1 - 1 = 0

@@ -243,9 +243,7 @@ pub struct DiscreteEvent {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DiscreteEventTrigger {
     /// Fires when boolean condition is true
-    Condition {
-        expression: Expr,
-    },
+    Condition { expression: Expr },
     /// Fires at regular intervals
     Periodic {
         /// Interval in simulation time units

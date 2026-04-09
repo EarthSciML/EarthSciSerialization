@@ -18,11 +18,12 @@ fn test_unknown_variable_reference() {
             assert!(validation_result.has_errors());
 
             // Check for unknown variable reference error
-            let has_unknown_var_error = validation_result.errors().iter().any(|err| {
-                matches!(err.code, StructuralErrorCode::UndefinedVariable)
-            });
+            let has_unknown_var_error = validation_result
+                .errors()
+                .iter()
+                .any(|err| matches!(err.code, StructuralErrorCode::UndefinedVariable));
             assert!(has_unknown_var_error, "Expected UndefinedVariable error");
-        },
+        }
         Err(_) => {
             // If it fails to parse, that's also acceptable for this test
         }
@@ -33,9 +34,18 @@ fn test_unknown_variable_reference() {
 #[test]
 fn test_undefined_species() {
     let fixtures = [
-        ("undefined_species", include_str!("../../../tests/invalid/undefined_species.esm")),
-        ("undefined_species_in_substrates", include_str!("../../../tests/invalid/undefined_species_in_substrates.esm")),
-        ("undefined_species_in_products", include_str!("../../../tests/invalid/undefined_species_in_products.esm")),
+        (
+            "undefined_species",
+            include_str!("../../../tests/invalid/undefined_species.esm"),
+        ),
+        (
+            "undefined_species_in_substrates",
+            include_str!("../../../tests/invalid/undefined_species_in_substrates.esm"),
+        ),
+        (
+            "undefined_species_in_products",
+            include_str!("../../../tests/invalid/undefined_species_in_products.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -44,13 +54,22 @@ fn test_undefined_species() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_undefined_species_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::UndefinedSpecies)
-                });
-                assert!(has_undefined_species_error, "Expected UndefinedSpecies error for {}", name);
-            },
+                let has_undefined_species_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::UndefinedSpecies));
+                assert!(
+                    has_undefined_species_error,
+                    "Expected UndefinedSpecies error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -62,9 +81,18 @@ fn test_undefined_species() {
 #[test]
 fn test_undefined_parameter() {
     let fixtures = [
-        ("undefined_parameter", include_str!("../../../tests/invalid/undefined_parameter.esm")),
-        ("undefined_parameter_simple_rate", include_str!("../../../tests/invalid/undefined_parameter_simple_rate.esm")),
-        ("undefined_parameter_complex_rate", include_str!("../../../tests/invalid/undefined_parameter_complex_rate.esm")),
+        (
+            "undefined_parameter",
+            include_str!("../../../tests/invalid/undefined_parameter.esm"),
+        ),
+        (
+            "undefined_parameter_simple_rate",
+            include_str!("../../../tests/invalid/undefined_parameter_simple_rate.esm"),
+        ),
+        (
+            "undefined_parameter_complex_rate",
+            include_str!("../../../tests/invalid/undefined_parameter_complex_rate.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -73,13 +101,22 @@ fn test_undefined_parameter() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_undefined_param_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::UndefinedParameter)
-                });
-                assert!(has_undefined_param_error, "Expected UndefinedParameter error for {}", name);
-            },
+                let has_undefined_param_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::UndefinedParameter));
+                assert!(
+                    has_undefined_param_error,
+                    "Expected UndefinedParameter error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -91,9 +128,18 @@ fn test_undefined_parameter() {
 #[test]
 fn test_equation_count_mismatch() {
     let fixtures = [
-        ("equation_count_mismatch", include_str!("../../../tests/invalid/equation_count_mismatch.esm")),
-        ("equation_count_mismatch_too_many_vars", include_str!("../../../tests/invalid/equation_count_mismatch_too_many_vars.esm")),
-        ("equation_count_mismatch_too_many_equations", include_str!("../../../tests/invalid/equation_count_mismatch_too_many_equations.esm")),
+        (
+            "equation_count_mismatch",
+            include_str!("../../../tests/invalid/equation_count_mismatch.esm"),
+        ),
+        (
+            "equation_count_mismatch_too_many_vars",
+            include_str!("../../../tests/invalid/equation_count_mismatch_too_many_vars.esm"),
+        ),
+        (
+            "equation_count_mismatch_too_many_equations",
+            include_str!("../../../tests/invalid/equation_count_mismatch_too_many_equations.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -102,13 +148,22 @@ fn test_equation_count_mismatch() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_equation_count_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::EquationCountMismatch)
-                });
-                assert!(has_equation_count_error, "Expected EquationCountMismatch error for {}", name);
-            },
+                let has_equation_count_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::EquationCountMismatch));
+                assert!(
+                    has_equation_count_error,
+                    "Expected EquationCountMismatch error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -120,8 +175,14 @@ fn test_equation_count_mismatch() {
 #[test]
 fn test_null_reaction() {
     let fixtures = [
-        ("null_reaction", include_str!("../../../tests/invalid/null_reaction.esm")),
-        ("null_reaction_explicit_nulls", include_str!("../../../tests/invalid/null_reaction_explicit_nulls.esm")),
+        (
+            "null_reaction",
+            include_str!("../../../tests/invalid/null_reaction.esm"),
+        ),
+        (
+            "null_reaction_explicit_nulls",
+            include_str!("../../../tests/invalid/null_reaction_explicit_nulls.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -130,13 +191,22 @@ fn test_null_reaction() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_null_reaction_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::NullReaction)
-                });
-                assert!(has_null_reaction_error, "Expected NullReaction error for {}", name);
-            },
+                let has_null_reaction_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::NullReaction));
+                assert!(
+                    has_null_reaction_error,
+                    "Expected NullReaction error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -148,9 +218,18 @@ fn test_null_reaction() {
 #[test]
 fn test_missing_observed_expression() {
     let fixtures = [
-        ("missing_observed_expr", include_str!("../../../tests/invalid/missing_observed_expr.esm")),
-        ("missing_observed_expr_single", include_str!("../../../tests/invalid/missing_observed_expr_single.esm")),
-        ("missing_observed_expr_multiple", include_str!("../../../tests/invalid/missing_observed_expr_multiple.esm")),
+        (
+            "missing_observed_expr",
+            include_str!("../../../tests/invalid/missing_observed_expr.esm"),
+        ),
+        (
+            "missing_observed_expr_single",
+            include_str!("../../../tests/invalid/missing_observed_expr_single.esm"),
+        ),
+        (
+            "missing_observed_expr_multiple",
+            include_str!("../../../tests/invalid/missing_observed_expr_multiple.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -159,13 +238,22 @@ fn test_missing_observed_expression() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_missing_observed_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::MissingObservedExpr)
-                });
-                assert!(has_missing_observed_error, "Expected MissingObservedExpr error for {}", name);
-            },
+                let has_missing_observed_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::MissingObservedExpr));
+                assert!(
+                    has_missing_observed_error,
+                    "Expected MissingObservedExpr error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -177,9 +265,18 @@ fn test_missing_observed_expression() {
 #[test]
 fn test_unresolved_scoped_reference() {
     let fixtures = [
-        ("unresolved_scoped_ref", include_str!("../../../tests/invalid/unresolved_scoped_ref.esm")),
-        ("unresolved_scoped_ref_missing_system", include_str!("../../../tests/invalid/unresolved_scoped_ref_missing_system.esm")),
-        ("unresolved_scoped_ref_missing_variable", include_str!("../../../tests/invalid/unresolved_scoped_ref_missing_variable.esm")),
+        (
+            "unresolved_scoped_ref",
+            include_str!("../../../tests/invalid/unresolved_scoped_ref.esm"),
+        ),
+        (
+            "unresolved_scoped_ref_missing_system",
+            include_str!("../../../tests/invalid/unresolved_scoped_ref_missing_system.esm"),
+        ),
+        (
+            "unresolved_scoped_ref_missing_variable",
+            include_str!("../../../tests/invalid/unresolved_scoped_ref_missing_variable.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -188,13 +285,22 @@ fn test_unresolved_scoped_reference() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_unresolved_ref_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::UnresolvedScopedRef)
-                });
-                assert!(has_unresolved_ref_error, "Expected UnresolvedScopedRef error for {}", name);
-            },
+                let has_unresolved_ref_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::UnresolvedScopedRef));
+                assert!(
+                    has_unresolved_ref_error,
+                    "Expected UnresolvedScopedRef error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -206,9 +312,18 @@ fn test_unresolved_scoped_reference() {
 #[test]
 fn test_event_variable_undeclared() {
     let fixtures = [
-        ("event_var_undeclared", include_str!("../../../tests/invalid/event_var_undeclared.esm")),
-        ("event_var_undeclared_condition", include_str!("../../../tests/invalid/event_var_undeclared_condition.esm")),
-        ("event_var_undeclared_affects", include_str!("../../../tests/invalid/event_var_undeclared_affects.esm")),
+        (
+            "event_var_undeclared",
+            include_str!("../../../tests/invalid/event_var_undeclared.esm"),
+        ),
+        (
+            "event_var_undeclared_condition",
+            include_str!("../../../tests/invalid/event_var_undeclared_condition.esm"),
+        ),
+        (
+            "event_var_undeclared_affects",
+            include_str!("../../../tests/invalid/event_var_undeclared_affects.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -217,13 +332,22 @@ fn test_event_variable_undeclared() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_event_var_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::EventVarUndeclared)
-                });
-                assert!(has_event_var_error, "Expected EventVarUndeclared error for {}", name);
-            },
+                let has_event_var_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::EventVarUndeclared));
+                assert!(
+                    has_event_var_error,
+                    "Expected EventVarUndeclared error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -235,8 +359,14 @@ fn test_event_variable_undeclared() {
 #[test]
 fn test_invalid_discrete_parameter() {
     let fixtures = [
-        ("invalid_discrete_param", include_str!("../../../tests/invalid/invalid_discrete_param.esm")),
-        ("invalid_discrete_param_not_parameter", include_str!("../../../tests/invalid/invalid_discrete_param_not_parameter.esm")),
+        (
+            "invalid_discrete_param",
+            include_str!("../../../tests/invalid/invalid_discrete_param.esm"),
+        ),
+        (
+            "invalid_discrete_param_not_parameter",
+            include_str!("../../../tests/invalid/invalid_discrete_param_not_parameter.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -245,13 +375,22 @@ fn test_invalid_discrete_parameter() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_invalid_discrete_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::InvalidDiscreteParam)
-                });
-                assert!(has_invalid_discrete_error, "Expected InvalidDiscreteParam error for {}", name);
-            },
+                let has_invalid_discrete_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::InvalidDiscreteParam));
+                assert!(
+                    has_invalid_discrete_error,
+                    "Expected InvalidDiscreteParam error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -263,8 +402,14 @@ fn test_invalid_discrete_parameter() {
 #[test]
 fn test_undefined_operator() {
     let fixtures = [
-        ("undefined_operator", include_str!("../../../tests/invalid/undefined_operator.esm")),
-        ("undefined_operator_in_apply", include_str!("../../../tests/invalid/undefined_operator_in_apply.esm")),
+        (
+            "undefined_operator",
+            include_str!("../../../tests/invalid/undefined_operator.esm"),
+        ),
+        (
+            "undefined_operator_in_apply",
+            include_str!("../../../tests/invalid/undefined_operator_in_apply.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -273,13 +418,22 @@ fn test_undefined_operator() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_undefined_operator_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::UndefinedOperator)
-                });
-                assert!(has_undefined_operator_error, "Expected UndefinedOperator error for {}", name);
-            },
+                let has_undefined_operator_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::UndefinedOperator));
+                assert!(
+                    has_undefined_operator_error,
+                    "Expected UndefinedOperator error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -291,8 +445,14 @@ fn test_undefined_operator() {
 #[test]
 fn test_undefined_variable_contexts() {
     let fixtures = [
-        ("undefined_variable_in_rhs", include_str!("../../../tests/invalid/undefined_variable_in_rhs.esm")),
-        ("undefined_variable_in_nested_expr", include_str!("../../../tests/invalid/undefined_variable_in_nested_expr.esm")),
+        (
+            "undefined_variable_in_rhs",
+            include_str!("../../../tests/invalid/undefined_variable_in_rhs.esm"),
+        ),
+        (
+            "undefined_variable_in_nested_expr",
+            include_str!("../../../tests/invalid/undefined_variable_in_nested_expr.esm"),
+        ),
     ];
 
     for (name, fixture) in fixtures {
@@ -301,13 +461,22 @@ fn test_undefined_variable_contexts() {
         match parsed_result {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
-                assert!(validation_result.has_errors(), "Expected {} to have validation errors", name);
+                assert!(
+                    validation_result.has_errors(),
+                    "Expected {} to have validation errors",
+                    name
+                );
 
-                let has_undefined_var_error = validation_result.errors().iter().any(|err| {
-                    matches!(err.code, StructuralErrorCode::UndefinedVariable)
-                });
-                assert!(has_undefined_var_error, "Expected UndefinedVariable error for {}", name);
-            },
+                let has_undefined_var_error = validation_result
+                    .errors()
+                    .iter()
+                    .any(|err| matches!(err.code, StructuralErrorCode::UndefinedVariable));
+                assert!(
+                    has_undefined_var_error,
+                    "Expected UndefinedVariable error for {}",
+                    name
+                );
+            }
             Err(_) => {
                 // Parse failure is also acceptable
             }
@@ -327,11 +496,12 @@ fn test_undefined_system() {
             let validation_result = validate(&esm_file);
             assert!(validation_result.has_errors());
 
-            let has_undefined_system_error = validation_result.errors().iter().any(|err| {
-                matches!(err.code, StructuralErrorCode::UndefinedSystem)
-            });
+            let has_undefined_system_error = validation_result
+                .errors()
+                .iter()
+                .any(|err| matches!(err.code, StructuralErrorCode::UndefinedSystem));
             assert!(has_undefined_system_error, "Expected UndefinedSystem error");
-        },
+        }
         Err(_) => {
             // Parse failure is also acceptable
         }
@@ -351,8 +521,11 @@ fn test_multiple_errors_combined() {
             assert!(validation_result.has_errors());
 
             // Should have multiple different error types
-            assert!(validation_result.errors().len() > 1, "Expected multiple validation errors");
-        },
+            assert!(
+                validation_result.errors().len() > 1,
+                "Expected multiple validation errors"
+            );
+        }
         Err(_) => {
             // Parse failure is also acceptable for a severely malformed file
         }
@@ -370,7 +543,7 @@ fn test_event_error_conditions() {
         Ok(esm_file) => {
             let validation_result = validate(&esm_file);
             assert!(validation_result.has_errors());
-        },
+        }
         Err(_) => {
             // Parse failure is also acceptable
         }
@@ -387,25 +560,38 @@ fn test_circular_dependency_detection() {
     match parsed_result {
         Ok(esm_file) => {
             let validation_result = validate(&esm_file);
-            assert!(validation_result.has_errors(), "Expected circular coupling to have validation errors");
+            assert!(
+                validation_result.has_errors(),
+                "Expected circular coupling to have validation errors"
+            );
 
-            let has_circular_dependency_error = validation_result.errors().iter().any(|err| {
-                matches!(err.code, StructuralErrorCode::CircularDependency)
-            });
-            assert!(has_circular_dependency_error, "Expected CircularDependency error");
+            let has_circular_dependency_error = validation_result
+                .errors()
+                .iter()
+                .any(|err| matches!(err.code, StructuralErrorCode::CircularDependency));
+            assert!(
+                has_circular_dependency_error,
+                "Expected CircularDependency error"
+            );
 
             // Verify the error message contains cycle information
             let errors = validation_result.errors();
-            let circular_error = errors.iter()
+            let circular_error = errors
+                .iter()
                 .find(|err| matches!(err.code, StructuralErrorCode::CircularDependency))
                 .expect("CircularDependency error should exist");
 
-            assert!(circular_error.message.contains("Circular dependency detected"));
+            assert!(circular_error
+                .message
+                .contains("Circular dependency detected"));
             assert!(circular_error.message.contains("ModelA"));
             assert!(circular_error.message.contains("ModelB"));
-        },
+        }
         Err(e) => {
-            panic!("Circular coupling file should parse successfully, but got error: {}", e);
+            panic!(
+                "Circular coupling file should parse successfully, but got error: {}",
+                e
+            );
         }
     }
 }
@@ -461,19 +647,30 @@ fn test_valid_cross_model_references() {
             let validation_result = validate(&esm_file);
 
             // Should not have circular dependency errors
-            let has_circular_dependency_error = validation_result.errors().iter().any(|err| {
-                matches!(err.code, StructuralErrorCode::CircularDependency)
-            });
-            assert!(!has_circular_dependency_error, "Valid cross-model references should not trigger CircularDependency error");
+            let has_circular_dependency_error = validation_result
+                .errors()
+                .iter()
+                .any(|err| matches!(err.code, StructuralErrorCode::CircularDependency));
+            assert!(
+                !has_circular_dependency_error,
+                "Valid cross-model references should not trigger CircularDependency error"
+            );
 
             // Should not have unresolved scoped reference errors for valid references
-            let has_unresolved_ref_error = validation_result.errors().iter().any(|err| {
-                matches!(err.code, StructuralErrorCode::UnresolvedScopedRef)
-            });
-            assert!(!has_unresolved_ref_error, "Valid scoped references should not trigger UnresolvedScopedRef error");
-        },
+            let has_unresolved_ref_error = validation_result
+                .errors()
+                .iter()
+                .any(|err| matches!(err.code, StructuralErrorCode::UnresolvedScopedRef));
+            assert!(
+                !has_unresolved_ref_error,
+                "Valid scoped references should not trigger UnresolvedScopedRef error"
+            );
+        }
         Err(e) => {
-            panic!("Valid cross-model reference file should parse successfully, but got error: {}", e);
+            panic!(
+                "Valid cross-model reference file should parse successfully, but got error: {}",
+                e
+            );
         }
     }
 }

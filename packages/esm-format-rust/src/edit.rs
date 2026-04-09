@@ -1,6 +1,9 @@
 //! Immutable editing operations for ESM models
 
-use crate::{EsmFile, Model, ReactionSystem, Expr, ExpressionNode, Equation, Species, Reaction, ModelVariable, DiscreteEvent, ContinuousEvent, CouplingEntry};
+use crate::{
+    ContinuousEvent, CouplingEntry, DiscreteEvent, Equation, EsmFile, Expr, ExpressionNode, Model,
+    ModelVariable, Reaction, ReactionSystem, Species,
+};
 use std::collections::HashMap;
 
 /// Result type for editing operations
@@ -33,11 +36,15 @@ impl std::fmt::Display for EditError {
             EditError::ComponentNotFound(name) => write!(f, "Component not found: {}", name),
             EditError::InvalidOperation(msg) => write!(f, "Invalid operation: {}", msg),
             EditError::VariableExists(name) => write!(f, "Variable already exists: {}", name),
-            EditError::EquationIndexError(idx) => write!(f, "Equation index out of bounds: {}", idx),
+            EditError::EquationIndexError(idx) => {
+                write!(f, "Equation index out of bounds: {}", idx)
+            }
             EditError::SpeciesNotFound(name) => write!(f, "Species not found: {}", name),
             EditError::ReactionNotFound(name) => write!(f, "Reaction not found: {}", name),
             EditError::EventIndexError(idx) => write!(f, "Event index out of bounds: {}", idx),
-            EditError::CouplingIndexError(idx) => write!(f, "Coupling index out of bounds: {}", idx),
+            EditError::CouplingIndexError(idx) => {
+                write!(f, "Coupling index out of bounds: {}", idx)
+            }
         }
     }
 }
@@ -65,13 +72,18 @@ pub fn add_model(esm_file: &EsmFile, model_id: &str, model: Model) -> EditResult
 
     // Check if model already exists
     if new_file.models.as_ref().unwrap().contains_key(model_id) {
-        return Err(EditError::InvalidOperation(
-            format!("Model '{}' already exists", model_id)
-        ));
+        return Err(EditError::InvalidOperation(format!(
+            "Model '{}' already exists",
+            model_id
+        )));
     }
 
     // Add the new model
-    new_file.models.as_mut().unwrap().insert(model_id.to_string(), model);
+    new_file
+        .models
+        .as_mut()
+        .unwrap()
+        .insert(model_id.to_string(), model);
 
     Ok(new_file)
 }
@@ -210,7 +222,11 @@ pub fn replace_equation(model: &Model, index: usize, equation: Equation) -> Edit
 /// # Returns
 ///
 /// * `EditResult<EsmFile>` - New ESM file with the added reaction system
-pub fn add_reaction_system(esm_file: &EsmFile, system_id: &str, system: ReactionSystem) -> EditResult<EsmFile> {
+pub fn add_reaction_system(
+    esm_file: &EsmFile,
+    system_id: &str,
+    system: ReactionSystem,
+) -> EditResult<EsmFile> {
     let mut new_file = esm_file.clone();
 
     // Initialize reaction_systems map if it doesn't exist
@@ -219,14 +235,24 @@ pub fn add_reaction_system(esm_file: &EsmFile, system_id: &str, system: Reaction
     }
 
     // Check if reaction system already exists
-    if new_file.reaction_systems.as_ref().unwrap().contains_key(system_id) {
-        return Err(EditError::InvalidOperation(
-            format!("Reaction system '{}' already exists", system_id)
-        ));
+    if new_file
+        .reaction_systems
+        .as_ref()
+        .unwrap()
+        .contains_key(system_id)
+    {
+        return Err(EditError::InvalidOperation(format!(
+            "Reaction system '{}' already exists",
+            system_id
+        )));
     }
 
     // Add the new reaction system
-    new_file.reaction_systems.as_mut().unwrap().insert(system_id.to_string(), system);
+    new_file
+        .reaction_systems
+        .as_mut()
+        .unwrap()
+        .insert(system_id.to_string(), system);
 
     Ok(new_file)
 }
@@ -246,9 +272,10 @@ pub fn add_species(system: &ReactionSystem, species: Species) -> EditResult<Reac
 
     // Check if species already exists
     if new_system.species.iter().any(|s| s.name == species.name) {
-        return Err(EditError::InvalidOperation(
-            format!("Species '{}' already exists", species.name)
-        ));
+        return Err(EditError::InvalidOperation(format!(
+            "Species '{}' already exists",
+            species.name
+        )));
     }
 
     new_system.species.push(species);
@@ -306,9 +333,10 @@ pub fn add_reaction(system: &ReactionSystem, reaction: Reaction) -> EditResult<R
 /// * `EditResult<ReactionSystem>` - New reaction system without the reaction
 pub fn remove_reaction(system: &ReactionSystem, index: usize) -> EditResult<ReactionSystem> {
     if index >= system.reactions.len() {
-        return Err(EditError::InvalidOperation(
-            format!("Reaction index {} out of bounds", index)
-        ));
+        return Err(EditError::InvalidOperation(format!(
+            "Reaction index {} out of bounds",
+            index
+        )));
     }
 
     let mut new_system = system.clone();
@@ -327,7 +355,11 @@ pub fn remove_reaction(system: &ReactionSystem, index: usize) -> EditResult<Reac
 /// # Returns
 ///
 /// * `EditResult<Model>` - New model with updated metadata
-pub fn update_model_metadata(model: &Model, name: Option<String>, description: Option<String>) -> EditResult<Model> {
+pub fn update_model_metadata(
+    model: &Model,
+    name: Option<String>,
+    description: Option<String>,
+) -> EditResult<Model> {
     let mut new_model = model.clone();
 
     if let Some(new_name) = name {
@@ -362,7 +394,8 @@ pub fn substitute_in_expression(expr: &Expr, substitutions: &HashMap<String, Exp
             }
         }
         Expr::Operator(node) => {
-            let new_args = node.args
+            let new_args = node
+                .args
                 .iter()
                 .map(|arg| substitute_in_expression(arg, substitutions))
                 .collect();
@@ -544,7 +577,11 @@ pub fn remove_coupling(esm_file: &EsmFile, index: usize) -> EditResult<EsmFile> 
 /// # Returns
 ///
 /// * `EditResult<EsmFile>` - New ESM file with the replaced coupling entry
-pub fn replace_coupling(esm_file: &EsmFile, index: usize, coupling: CouplingEntry) -> EditResult<EsmFile> {
+pub fn replace_coupling(
+    esm_file: &EsmFile,
+    index: usize,
+    coupling: CouplingEntry,
+) -> EditResult<EsmFile> {
     let mut new_file = esm_file.clone();
 
     if let Some(ref mut coupling_entries) = new_file.coupling {
@@ -624,7 +661,10 @@ mod tests {
         let new_file = result1.unwrap();
         let result2 = add_model(&new_file, "test_model", model);
         assert!(result2.is_err());
-        assert!(matches!(result2.unwrap_err(), EditError::InvalidOperation(_)));
+        assert!(matches!(
+            result2.unwrap_err(),
+            EditError::InvalidOperation(_)
+        ));
     }
 
     #[test]
@@ -648,13 +688,16 @@ mod tests {
     #[test]
     fn test_add_duplicate_variable() {
         let mut model = create_simple_model();
-        model.variables.insert("existing_var".to_string(), ModelVariable {
-            var_type: VariableType::Parameter,
-            units: None,
-            default: None,
-            description: None,
-            expression: None,
-        });
+        model.variables.insert(
+            "existing_var".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: None,
+                default: None,
+                description: None,
+                expression: None,
+            },
+        );
 
         let variable = ModelVariable {
             var_type: VariableType::State,
@@ -701,17 +744,17 @@ mod tests {
         // Test out of bounds
         let result = remove_equation(&model, 1);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), EditError::EquationIndexError(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            EditError::EquationIndexError(_)
+        ));
     }
 
     #[test]
     fn test_substitute_in_expression() {
         let expr = Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            args: vec![
-                Expr::Variable("x".to_string()),
-                Expr::Number(1.0),
-            ],
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
         });
@@ -733,7 +776,7 @@ mod tests {
 
     #[test]
     fn test_add_discrete_event() {
-        use crate::{DiscreteEventTrigger, AffectEquation};
+        use crate::{AffectEquation, DiscreteEventTrigger};
 
         let model = create_simple_model();
         let event = DiscreteEvent {
@@ -757,12 +800,15 @@ mod tests {
         let new_model = result.unwrap();
         assert!(new_model.discrete_events.is_some());
         assert_eq!(new_model.discrete_events.as_ref().unwrap().len(), 1);
-        assert_eq!(new_model.discrete_events.as_ref().unwrap()[0].name, Some("test_discrete_event".to_string()));
+        assert_eq!(
+            new_model.discrete_events.as_ref().unwrap()[0].name,
+            Some("test_discrete_event".to_string())
+        );
     }
 
     #[test]
     fn test_remove_discrete_event() {
-        use crate::{DiscreteEventTrigger, AffectEquation};
+        use crate::{AffectEquation, DiscreteEventTrigger};
 
         let mut model = create_simple_model();
         model.discrete_events = Some(vec![DiscreteEvent {
@@ -825,7 +871,10 @@ mod tests {
         let new_model = result.unwrap();
         assert!(new_model.continuous_events.is_some());
         assert_eq!(new_model.continuous_events.as_ref().unwrap().len(), 1);
-        assert_eq!(new_model.continuous_events.as_ref().unwrap()[0].name, Some("test_continuous_event".to_string()));
+        assert_eq!(
+            new_model.continuous_events.as_ref().unwrap()[0].name,
+            Some("test_continuous_event".to_string())
+        );
     }
 
     #[test]
@@ -869,7 +918,7 @@ mod tests {
 
     #[test]
     fn test_multiple_discrete_events() {
-        use crate::{DiscreteEventTrigger, AffectEquation};
+        use crate::{AffectEquation, DiscreteEventTrigger};
 
         let model = create_simple_model();
 
@@ -920,7 +969,14 @@ mod tests {
         let model_with_one_removed = result3.unwrap();
 
         assert!(model_with_one_removed.discrete_events.is_some());
-        assert_eq!(model_with_one_removed.discrete_events.as_ref().unwrap().len(), 1);
+        assert_eq!(
+            model_with_one_removed
+                .discrete_events
+                .as_ref()
+                .unwrap()
+                .len(),
+            1
+        );
         assert_eq!(
             model_with_one_removed.discrete_events.as_ref().unwrap()[0].name,
             Some("event2".to_string())
@@ -944,7 +1000,11 @@ mod tests {
         assert_eq!(new_file.coupling.as_ref().unwrap().len(), 1);
 
         match &new_file.coupling.as_ref().unwrap()[0] {
-            CouplingEntry::OperatorCompose { systems, description, .. } => {
+            CouplingEntry::OperatorCompose {
+                systems,
+                description,
+                ..
+            } => {
                 assert_eq!(systems, &vec!["system1", "system2"]);
                 assert_eq!(description, &Some("Test coupling".to_string()));
             }
@@ -1021,25 +1081,29 @@ mod tests {
         // Test out of bounds error
         let result = remove_coupling(&esm_file, 5);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(5)));
+        assert!(matches!(
+            result.unwrap_err(),
+            EditError::CouplingIndexError(5)
+        ));
 
         // Test error when no coupling entries exist
         let empty_file = create_empty_esm_file();
         let result = remove_coupling(&empty_file, 0);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(0)));
+        assert!(matches!(
+            result.unwrap_err(),
+            EditError::CouplingIndexError(0)
+        ));
     }
 
     #[test]
     fn test_remove_last_coupling() {
         let mut esm_file = create_empty_esm_file();
-        esm_file.coupling = Some(vec![
-            CouplingEntry::OperatorCompose {
-                systems: vec!["system1".to_string(), "system2".to_string()],
-                translate: None,
-                description: Some("Only coupling".to_string()),
-            },
-        ]);
+        esm_file.coupling = Some(vec![CouplingEntry::OperatorCompose {
+            systems: vec!["system1".to_string(), "system2".to_string()],
+            translate: None,
+            description: Some("Only coupling".to_string()),
+        }]);
 
         // Remove the only coupling entry
         let result = remove_coupling(&esm_file, 0);
@@ -1052,13 +1116,11 @@ mod tests {
     #[test]
     fn test_replace_coupling() {
         let mut esm_file = create_empty_esm_file();
-        esm_file.coupling = Some(vec![
-            CouplingEntry::OperatorCompose {
-                systems: vec!["old_system1".to_string(), "old_system2".to_string()],
-                translate: None,
-                description: Some("Old coupling".to_string()),
-            },
-        ]);
+        esm_file.coupling = Some(vec![CouplingEntry::OperatorCompose {
+            systems: vec!["old_system1".to_string(), "old_system2".to_string()],
+            translate: None,
+            description: Some("Old coupling".to_string()),
+        }]);
 
         let new_coupling = CouplingEntry::VariableMap {
             from: "new_source.var".to_string(),
@@ -1078,7 +1140,13 @@ mod tests {
 
         // Verify the entry was replaced
         match &new_file.coupling.as_ref().unwrap()[0] {
-            CouplingEntry::VariableMap { from, to, transform, factor, description } => {
+            CouplingEntry::VariableMap {
+                from,
+                to,
+                transform,
+                factor,
+                description,
+            } => {
                 assert_eq!(from, "new_source.var");
                 assert_eq!(to, "new_target.param");
                 assert_eq!(transform, "linear");
@@ -1096,7 +1164,10 @@ mod tests {
         };
         let result = replace_coupling(&esm_file, 5, dummy_coupling);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(5)));
+        assert!(matches!(
+            result.unwrap_err(),
+            EditError::CouplingIndexError(5)
+        ));
 
         // Test error when no coupling entries exist
         let empty_file = create_empty_esm_file();
@@ -1107,7 +1178,10 @@ mod tests {
         };
         let result = replace_coupling(&empty_file, 0, dummy_coupling2);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), EditError::CouplingIndexError(0)));
+        assert!(matches!(
+            result.unwrap_err(),
+            EditError::CouplingIndexError(0)
+        ));
     }
 
     #[test]
@@ -1125,7 +1199,10 @@ mod tests {
 
         let new_file = result.unwrap();
         match &new_file.coupling.as_ref().unwrap()[0] {
-            CouplingEntry::OperatorApply { operator, description } => {
+            CouplingEntry::OperatorApply {
+                operator,
+                description,
+            } => {
                 assert_eq!(operator, "my_operator");
                 assert_eq!(description, &Some("Operator application".to_string()));
             }

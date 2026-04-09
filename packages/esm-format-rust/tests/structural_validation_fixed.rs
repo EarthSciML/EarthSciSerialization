@@ -12,24 +12,25 @@ fn test_undefined_variable_in_model() {
 
     // Create a model with equation referencing undefined variable
     let mut variables = HashMap::new();
-    variables.insert("x".to_string(), ModelVariable {
-        var_type: VariableType::State,
-        units: None,
-        default: Some(1.0),
-        description: None,
-        expression: None,
-    });
+    variables.insert(
+        "x".to_string(),
+        ModelVariable {
+            var_type: VariableType::State,
+            units: None,
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        },
+    );
 
     let model = Model {
         reference: None,
         name: Some("Test Model".to_string()),
         variables,
-        equations: vec![
-            Equation {
-                lhs: Expr::Variable("y".to_string()), // 'y' is not defined
-                rhs: Expr::Number(1.0),
-            }
-        ],
+        equations: vec![Equation {
+            lhs: Expr::Variable("y".to_string()), // 'y' is not defined
+            rhs: Expr::Number(1.0),
+        }],
         discrete_events: None,
         continuous_events: None,
         description: None,
@@ -60,12 +61,16 @@ fn test_undefined_variable_in_model() {
     };
 
     let validation_result = validate(&esm_file);
-    assert!(!validation_result.structural_errors.is_empty(), "Expected structural validation errors");
+    assert!(
+        !validation_result.structural_errors.is_empty(),
+        "Expected structural validation errors"
+    );
 
     // Check for undefined variable error
-    let has_undefined_var_error = validation_result.structural_errors.iter().any(|err| {
-        matches!(err.code, StructuralErrorCode::UndefinedVariable)
-    });
+    let has_undefined_var_error = validation_result
+        .structural_errors
+        .iter()
+        .any(|err| matches!(err.code, StructuralErrorCode::UndefinedVariable));
     assert!(has_undefined_var_error, "Expected UndefinedVariable error");
 }
 
@@ -76,20 +81,26 @@ fn test_equation_count_mismatch() {
 
     // Create a model with more equations than state variables
     let mut variables = HashMap::new();
-    variables.insert("x".to_string(), ModelVariable {
-        var_type: VariableType::State,
-        units: None,
-        default: Some(1.0),
-        description: None,
-        expression: None,
-    });
-    variables.insert("k".to_string(), ModelVariable {
-        var_type: VariableType::Parameter,
-        units: None,
-        default: Some(0.1),
-        description: None,
-        expression: None,
-    });
+    variables.insert(
+        "x".to_string(),
+        ModelVariable {
+            var_type: VariableType::State,
+            units: None,
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        },
+    );
+    variables.insert(
+        "k".to_string(),
+        ModelVariable {
+            var_type: VariableType::Parameter,
+            units: None,
+            default: Some(0.1),
+            description: None,
+            expression: None,
+        },
+    );
 
     let model = Model {
         reference: None,
@@ -135,42 +146,45 @@ fn test_equation_count_mismatch() {
     };
 
     let validation_result = validate(&esm_file);
-    assert!(!validation_result.structural_errors.is_empty(), "Expected structural validation errors");
+    assert!(
+        !validation_result.structural_errors.is_empty(),
+        "Expected structural validation errors"
+    );
 
     // Check for equation count error
-    let has_equation_count_error = validation_result.structural_errors.iter().any(|err| {
-        matches!(err.code, StructuralErrorCode::EquationCountMismatch)
-    });
-    assert!(has_equation_count_error, "Expected EquationCountMismatch error");
+    let has_equation_count_error = validation_result
+        .structural_errors
+        .iter()
+        .any(|err| matches!(err.code, StructuralErrorCode::EquationCountMismatch));
+    assert!(
+        has_equation_count_error,
+        "Expected EquationCountMismatch error"
+    );
 }
 
 /// Test undefined species in reaction system
 #[test]
 fn test_undefined_species_in_reaction() {
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-    ];
+    let species = vec![Species {
+        name: "A".to_string(),
+        units: Some("mol/L".to_string()),
+        default: Some(1.0),
+        description: None,
+    }];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![StoichiometricEntry {
-                species: "B".to_string(), // 'B' is not defined
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
-                species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            rate: Expr::Variable("k".to_string()),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![StoichiometricEntry {
+            species: "B".to_string(), // 'B' is not defined
+            coefficient: Some(1.0),
+        }],
+        products: vec![StoichiometricEntry {
+            species: "A".to_string(),
+            coefficient: Some(1.0),
+        }],
+        rate: Expr::Variable("k".to_string()),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Test RS".to_string()),
@@ -205,13 +219,20 @@ fn test_undefined_species_in_reaction() {
     };
 
     let validation_result = validate(&esm_file);
-    assert!(!validation_result.structural_errors.is_empty(), "Expected structural validation errors");
+    assert!(
+        !validation_result.structural_errors.is_empty(),
+        "Expected structural validation errors"
+    );
 
     // Check for undefined species error
-    let has_undefined_species_error = validation_result.structural_errors.iter().any(|err| {
-        matches!(err.code, StructuralErrorCode::UndefinedSpecies)
-    });
-    assert!(has_undefined_species_error, "Expected UndefinedSpecies error");
+    let has_undefined_species_error = validation_result
+        .structural_errors
+        .iter()
+        .any(|err| matches!(err.code, StructuralErrorCode::UndefinedSpecies));
+    assert!(
+        has_undefined_species_error,
+        "Expected UndefinedSpecies error"
+    );
 }
 
 /// Test fixture-based validation (only if fixtures exist and are parseable)
@@ -227,8 +248,11 @@ fn test_fixture_based_validation() {
             Ok(esm_file) => {
                 let validation_result = validate(&esm_file);
                 // If it parses, it should have structural errors
-                assert!(!validation_result.structural_errors.is_empty(), "Fixture should have structural errors");
-            },
+                assert!(
+                    !validation_result.structural_errors.is_empty(),
+                    "Fixture should have structural errors"
+                );
+            }
             Err(_) => {
                 // If it fails to parse due to schema issues, that's also acceptable for invalid fixtures
                 // The important thing is that invalid data doesn't silently pass
@@ -247,13 +271,16 @@ fn test_valid_file_passes() {
 
     // Create a valid model with parameter only (no state variables to avoid ODE requirement)
     let mut variables = HashMap::new();
-    variables.insert("k".to_string(), ModelVariable {
-        var_type: VariableType::Parameter,
-        units: None,
-        default: Some(0.1),
-        description: None,
-        expression: None,
-    });
+    variables.insert(
+        "k".to_string(),
+        ModelVariable {
+            var_type: VariableType::Parameter,
+            units: None,
+            default: Some(0.1),
+            description: None,
+            expression: None,
+        },
+    );
 
     let model = Model {
         reference: None,
@@ -294,10 +321,22 @@ fn test_valid_file_passes() {
     // Debug output to see what's failing
     if !validation_result.is_valid {
         println!("Schema errors: {:?}", validation_result.schema_errors);
-        println!("Structural errors: {:?}", validation_result.structural_errors);
+        println!(
+            "Structural errors: {:?}",
+            validation_result.structural_errors
+        );
     }
 
-    assert!(validation_result.is_valid, "Valid file should pass validation");
-    assert!(validation_result.structural_errors.is_empty(), "Valid file should have no structural errors");
-    assert!(validation_result.schema_errors.is_empty(), "Valid file should have no schema errors");
+    assert!(
+        validation_result.is_valid,
+        "Valid file should pass validation"
+    );
+    assert!(
+        validation_result.structural_errors.is_empty(),
+        "Valid file should have no structural errors"
+    );
+    assert!(
+        validation_result.schema_errors.is_empty(),
+        "Valid file should have no schema errors"
+    );
 }

@@ -51,7 +51,8 @@ fn test_coupled_atmospheric_system_round_trip() {
 
     let parsed: EsmFile = load(fixture).expect("Failed to parse coupled atmospheric system");
     let serialized = save(&parsed).expect("Failed to serialize coupled atmospheric system");
-    let reparsed: EsmFile = load(&serialized).expect("Failed to reparse coupled atmospheric system");
+    let reparsed: EsmFile =
+        load(&serialized).expect("Failed to reparse coupled atmospheric system");
 
     assert_eq!(parsed.esm, reparsed.esm);
     if let (Some(models1), Some(models2)) = (&parsed.models, &reparsed.models) {
@@ -79,13 +80,13 @@ fn test_comprehensive_events_round_trip() {
             // Compare discrete events
             match (&model1.discrete_events, &model2.discrete_events) {
                 (Some(events1), Some(events2)) => assert_eq!(events1.len(), events2.len()),
-                (None, None) => {},
+                (None, None) => {}
                 _ => panic!("Discrete events structure mismatch for model {}", name),
             }
             // Compare continuous events
             match (&model1.continuous_events, &model2.continuous_events) {
                 (Some(events1), Some(events2)) => assert_eq!(events1.len(), events2.len()),
-                (None, None) => {},
+                (None, None) => {}
                 _ => panic!("Continuous events structure mismatch for model {}", name),
             }
         }
@@ -189,8 +190,8 @@ fn test_mathematical_correctness_round_trip() {
     ];
 
     for (i, fixture) in fixtures.iter().enumerate() {
-        let parsed: EsmFile = load(fixture)
-            .unwrap_or_else(|e| panic!("Failed to parse math fixture {}: {}", i, e));
+        let parsed: EsmFile =
+            load(fixture).unwrap_or_else(|e| panic!("Failed to parse math fixture {}: {}", i, e));
         let serialized = save(&parsed)
             .unwrap_or_else(|e| panic!("Failed to serialize math fixture {}: {}", i, e));
         let reparsed: EsmFile = load(&serialized)

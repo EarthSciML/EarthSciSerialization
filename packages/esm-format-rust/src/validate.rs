@@ -1,11 +1,11 @@
 //! Structural validation for ESM files
 
+use crate::parse::{load, validate_schema};
+use crate::units::{check_dimensional_consistency, parse_unit, Unit, UnitError};
 use crate::EsmFile;
-use crate::parse::{validate_schema, load};
-use crate::units::{parse_unit, check_dimensional_consistency, Unit, UnitError};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use serde::{Serialize, Deserialize};
 
 /// Result of structural validation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,7 +169,13 @@ pub fn validate(esm_file: &EsmFile) -> ValidationResult {
     // Validate models
     if let Some(ref models) = esm_file.models {
         for (model_name, model) in models {
-            validate_model(model_name, model, &system_refs, &mut structural_errors, &mut unit_warnings);
+            validate_model(
+                model_name,
+                model,
+                &system_refs,
+                &mut structural_errors,
+                &mut unit_warnings,
+            );
         }
 
         // Check for circular dependencies between models
@@ -179,7 +185,13 @@ pub fn validate(esm_file: &EsmFile) -> ValidationResult {
     // Validate reaction systems
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (rs_name, rs) in reaction_systems {
-            validate_reaction_system(rs_name, rs, &system_refs, &mut structural_errors, &mut unit_warnings);
+            validate_reaction_system(
+                rs_name,
+                rs,
+                &system_refs,
+                &mut structural_errors,
+                &mut unit_warnings,
+            );
         }
     }
 
@@ -286,12 +298,15 @@ fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo>
             for var_name in model.variables.keys() {
                 variables.insert(var_name.clone());
             }
-            systems.insert(name.clone(), SystemInfo {
-                _system_type: SystemType::Model,
-                variables,
-                species: HashSet::new(),
-                parameters: HashSet::new(),
-            });
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::Model,
+                    variables,
+                    species: HashSet::new(),
+                    parameters: HashSet::new(),
+                },
+            );
         }
     }
 
@@ -306,36 +321,45 @@ fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo>
             // Note: parameters field would be added here when ReactionSystem supports it
             let parameters = HashSet::new();
 
-            systems.insert(name.clone(), SystemInfo {
-                _system_type: SystemType::ReactionSystem,
-                variables: HashSet::new(),
-                species,
-                parameters,
-            });
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::ReactionSystem,
+                    variables: HashSet::new(),
+                    species,
+                    parameters,
+                },
+            );
         }
     }
 
     // Add data loaders (note: current type doesn't have provides field)
     if let Some(ref data_loaders) = esm_file.data_loaders {
         for (name, _dl) in data_loaders {
-            systems.insert(name.clone(), SystemInfo {
-                _system_type: SystemType::DataLoader,
-                variables: HashSet::new(), // Would be populated from provides field when available
-                species: HashSet::new(),
-                parameters: HashSet::new(),
-            });
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::DataLoader,
+                    variables: HashSet::new(), // Would be populated from provides field when available
+                    species: HashSet::new(),
+                    parameters: HashSet::new(),
+                },
+            );
         }
     }
 
     // Add operators
     if let Some(ref operators) = esm_file.operators {
         for (name, _op) in operators {
-            systems.insert(name.clone(), SystemInfo {
-                _system_type: SystemType::Operator,
-                variables: HashSet::new(),
-                species: HashSet::new(),
-                parameters: HashSet::new(),
-            });
+            systems.insert(
+                name.clone(),
+                SystemInfo {
+                    _system_type: SystemType::Operator,
+                    variables: HashSet::new(),
+                    species: HashSet::new(),
+                    parameters: HashSet::new(),
+                },
+            );
         }
     }
 
@@ -385,7 +409,8 @@ fn validate_model(
     // Check equation-unknown balance
     let ode_equations = count_ode_equations(&model.equations);
     if ode_equations != state_vars.len() {
-        let (extra_equations_for, missing_equations_for) = analyze_equation_mismatch(&model.equations, &state_vars);
+        let (extra_equations_for, missing_equations_for) =
+            analyze_equation_mismatch(&model.equations, &state_vars);
 
         let mut details = serde_json::json!({
             "state_variables": state_vars,
@@ -402,7 +427,11 @@ fn validate_model(
         errors.push(StructuralError {
             path: model_path.clone(),
             code: StructuralErrorCode::EquationCountMismatch,
-            message: format!("Number of ODE equations ({}) does not match number of state variables ({})", ode_equations, state_vars.len()),
+            message: format!(
+                "Number of ODE equations ({}) does not match number of state variables ({})",
+                ode_equations,
+                state_vars.len()
+            ),
             details,
         });
     }
@@ -410,8 +439,24 @@ fn validate_model(
     // Check that all equation references are defined and validate dimensional consistency
     for (eq_idx, equation) in model.equations.iter().enumerate() {
         let eq_path = format!("{}/equations/{}", model_path, eq_idx);
-        validate_expression_references_with_systems(&equation.lhs, &defined_vars, system_refs, &eq_path, "lhs", eq_idx, errors);
-        validate_expression_references_with_systems(&equation.rhs, &defined_vars, system_refs, &eq_path, "rhs", eq_idx, errors);
+        validate_expression_references_with_systems(
+            &equation.lhs,
+            &defined_vars,
+            system_refs,
+            &eq_path,
+            "lhs",
+            eq_idx,
+            errors,
+        );
+        validate_expression_references_with_systems(
+            &equation.rhs,
+            &defined_vars,
+            system_refs,
+            &eq_path,
+            "rhs",
+            eq_idx,
+            errors,
+        );
 
         // Validate dimensional consistency of equation
         validate_equation_units(equation, &model.variables, &eq_path, eq_idx, warnings);
@@ -423,7 +468,10 @@ fn validate_model(
             errors.push(StructuralError {
                 path: format!("{}/variables/{}", model_path, var_name),
                 code: StructuralErrorCode::MissingObservedExpr,
-                message: format!("Observed variable \"{}\" is missing its expression field", var_name),
+                message: format!(
+                    "Observed variable \"{}\" is missing its expression field",
+                    var_name
+                ),
                 details: serde_json::json!({
                     "variable_name": var_name,
                     "field": "expression"
@@ -433,7 +481,15 @@ fn validate_model(
             // If the expression exists, validate its variable references
             if let Some(ref expr) = variable.expression {
                 let expr_path = format!("{}/variables/{}/expression", model_path, var_name);
-                validate_expression_references_with_systems(expr, &defined_vars, system_refs, &expr_path, "expression", 0, errors);
+                validate_expression_references_with_systems(
+                    expr,
+                    &defined_vars,
+                    system_refs,
+                    &expr_path,
+                    "expression",
+                    0,
+                    errors,
+                );
             }
         }
     }
@@ -461,7 +517,10 @@ fn count_ode_equations(equations: &[crate::Equation]) -> usize {
     }).count()
 }
 
-fn analyze_equation_mismatch(equations: &[crate::Equation], state_vars: &[String]) -> (Vec<String>, Vec<String>) {
+fn analyze_equation_mismatch(
+    equations: &[crate::Equation],
+    state_vars: &[String],
+) -> (Vec<String>, Vec<String>) {
     let mut lhs_vars = HashSet::new();
 
     // Extract variables from LHS of ODE equations
@@ -527,7 +586,10 @@ fn validate_reaction_system(
                 errors.push(StructuralError {
                     path: rxn_path.clone(),
                     code: StructuralErrorCode::UndefinedSpecies,
-                    message: format!("Species '{}' referenced in reaction substrates is not declared", substrate.species),
+                    message: format!(
+                        "Species '{}' referenced in reaction substrates is not declared",
+                        substrate.species
+                    ),
                     details: serde_json::json!({
                         "species": substrate.species,
                         "reaction_id": reaction.name.as_deref().unwrap_or("unnamed"),
@@ -544,7 +606,10 @@ fn validate_reaction_system(
                 errors.push(StructuralError {
                     path: rxn_path.clone(),
                     code: StructuralErrorCode::UndefinedSpecies,
-                    message: format!("Species '{}' referenced in reaction products is not declared", product.species),
+                    message: format!(
+                        "Species '{}' referenced in reaction products is not declared",
+                        product.species
+                    ),
                     details: serde_json::json!({
                         "species": product.species,
                         "reaction_id": reaction.name.as_deref().unwrap_or("unnamed"),
@@ -556,7 +621,13 @@ fn validate_reaction_system(
         }
 
         // Validate rate expression references
-        validate_rate_expression(&reaction.rate, &defined_parameters, &rxn_path, reaction.name.as_deref().unwrap_or("unnamed"), errors);
+        validate_rate_expression(
+            &reaction.rate,
+            &defined_parameters,
+            &rxn_path,
+            reaction.name.as_deref().unwrap_or("unnamed"),
+            errors,
+        );
     }
 
     // Note: Event validation would go here when ReactionSystem types support events
@@ -575,7 +646,10 @@ fn validate_rate_expression(
                 errors.push(StructuralError {
                     path: reaction_path.to_string(),
                     code: StructuralErrorCode::UndefinedParameter,
-                    message: format!("Parameter '{}' referenced in rate expression is not declared", var_name),
+                    message: format!(
+                        "Parameter '{}' referenced in rate expression is not declared",
+                        var_name
+                    ),
                     details: serde_json::json!({
                         "parameter": var_name,
                         "reaction_id": reaction_id,
@@ -586,7 +660,13 @@ fn validate_rate_expression(
         }
         crate::Expr::Operator(op_node) => {
             for arg in &op_node.args {
-                validate_rate_expression(arg, defined_parameters, reaction_path, reaction_id, errors);
+                validate_rate_expression(
+                    arg,
+                    defined_parameters,
+                    reaction_path,
+                    reaction_id,
+                    errors,
+                );
             }
         }
         crate::Expr::Number(_) => {
@@ -604,7 +684,13 @@ fn validate_expression_references(
     errors: &mut Vec<StructuralError>,
 ) {
     validate_expression_references_with_systems(
-        expr, defined_vars, &HashMap::new(), base_path, field, equation_index, errors
+        expr,
+        defined_vars,
+        &HashMap::new(),
+        base_path,
+        field,
+        equation_index,
+        errors,
     );
 }
 
@@ -620,10 +706,11 @@ fn validate_expression_references_with_systems(
     match expr {
         crate::Expr::Variable(var_name) => {
             // Skip derivatives, time variable, and built-in functions
-            if var_name.starts_with("d(") ||
-               var_name.starts_with("t") ||
-               var_name == "t" ||
-               is_builtin_function(var_name) {
+            if var_name.starts_with("d(")
+                || var_name.starts_with("t")
+                || var_name == "t"
+                || is_builtin_function(var_name)
+            {
                 return; // These are always valid
             }
 
@@ -634,9 +721,9 @@ fn validate_expression_references_with_systems(
 
                 // Validate scoped reference
                 if let Some(system) = system_refs.get(system_name) {
-                    let var_exists = system.variables.contains(var_suffix) ||
-                                    system.species.contains(var_suffix) ||
-                                    system.parameters.contains(var_suffix);
+                    let var_exists = system.variables.contains(var_suffix)
+                        || system.species.contains(var_suffix)
+                        || system.parameters.contains(var_suffix);
 
                     if !var_exists {
                         errors.push(StructuralError {
@@ -669,7 +756,10 @@ fn validate_expression_references_with_systems(
                     errors.push(StructuralError {
                         path: base_path.to_string(),
                         code: StructuralErrorCode::UndefinedVariable,
-                        message: format!("Variable '{}' referenced in equation is not declared", var_name),
+                        message: format!(
+                            "Variable '{}' referenced in equation is not declared",
+                            var_name
+                        ),
                         details: serde_json::json!({
                             "variable": var_name,
                             "equation_index": equation_index,
@@ -689,7 +779,7 @@ fn validate_expression_references_with_systems(
                     base_path,
                     field,
                     equation_index,
-                    errors
+                    errors,
                 );
             }
         }
@@ -701,9 +791,28 @@ fn validate_expression_references_with_systems(
 
 /// Check if a variable name is a built-in function
 fn is_builtin_function(name: &str) -> bool {
-    matches!(name, "exp" | "log" | "log10" | "sqrt" | "abs" | "sign" |
-                   "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2" |
-                   "min" | "max" | "floor" | "ceil" | "ifelse" | "Pre")
+    matches!(
+        name,
+        "exp"
+            | "log"
+            | "log10"
+            | "sqrt"
+            | "abs"
+            | "sign"
+            | "sin"
+            | "cos"
+            | "tan"
+            | "asin"
+            | "acos"
+            | "atan"
+            | "atan2"
+            | "min"
+            | "max"
+            | "floor"
+            | "ceil"
+            | "ifelse"
+            | "Pre"
+    )
 }
 
 fn validate_discrete_event(
@@ -717,8 +826,15 @@ fn validate_discrete_event(
 
     // Validate trigger expression
     if let crate::DiscreteEventTrigger::Condition { expression } = &event.trigger {
-        validate_event_expression(expression, defined_vars, &event_path, "condition",
-                                event.name.as_deref().unwrap_or("unnamed"), "discrete", errors);
+        validate_event_expression(
+            expression,
+            defined_vars,
+            &event_path,
+            "condition",
+            event.name.as_deref().unwrap_or("unnamed"),
+            "discrete",
+            errors,
+        );
     }
 
     // Validate affects
@@ -741,8 +857,15 @@ fn validate_discrete_event(
             }
 
             // Validate RHS expression
-            validate_event_expression(&affect.rhs, defined_vars, &event_path, "affects",
-                                    event.name.as_deref().unwrap_or("unnamed"), "discrete", errors);
+            validate_event_expression(
+                &affect.rhs,
+                defined_vars,
+                &event_path,
+                "affects",
+                event.name.as_deref().unwrap_or("unnamed"),
+                "discrete",
+                errors,
+            );
         }
     }
 
@@ -762,14 +885,18 @@ fn validate_event_expression(
 ) {
     match expr {
         crate::Expr::Variable(var_name) => {
-            if !var_name.starts_with("t") &&
-               var_name != "t" &&
-               !is_builtin_function(var_name) &&
-               !defined_vars.contains(var_name) {
+            if !var_name.starts_with("t")
+                && var_name != "t"
+                && !is_builtin_function(var_name)
+                && !defined_vars.contains(var_name)
+            {
                 errors.push(StructuralError {
                     path: event_path.to_string(),
                     code: StructuralErrorCode::EventVarUndeclared,
-                    message: format!("Variable '{}' in event {} is not declared", var_name, location),
+                    message: format!(
+                        "Variable '{}' in event {} is not declared",
+                        var_name, location
+                    ),
                     details: serde_json::json!({
                         "variable": var_name,
                         "event_name": event_name,
@@ -782,7 +909,15 @@ fn validate_event_expression(
         }
         crate::Expr::Operator(op_node) => {
             for arg in &op_node.args {
-                validate_event_expression(arg, defined_vars, event_path, location, event_name, event_type, errors);
+                validate_event_expression(
+                    arg,
+                    defined_vars,
+                    event_path,
+                    location,
+                    event_name,
+                    event_type,
+                    errors,
+                );
             }
         }
         crate::Expr::Number(_) => {
@@ -802,7 +937,13 @@ fn validate_coupling(
 
         match entry {
             crate::CouplingEntry::VariableMap { from, to, .. } => {
-                validate_scoped_reference(from, system_refs, &coupling_path, "variable_map", errors);
+                validate_scoped_reference(
+                    from,
+                    system_refs,
+                    &coupling_path,
+                    "variable_map",
+                    errors,
+                );
                 validate_scoped_reference(to, system_refs, &coupling_path, "variable_map", errors);
             }
             crate::CouplingEntry::OperatorApply { operator, .. } => {
@@ -870,7 +1011,10 @@ fn validate_coupling(
                     errors.push(StructuralError {
                         path: coupling_path,
                         code: StructuralErrorCode::UndefinedOperator,
-                        message: format!("Operator '{}' referenced but no operators are declared", operator),
+                        message: format!(
+                            "Operator '{}' referenced but no operators are declared",
+                            operator
+                        ),
                         details: serde_json::json!({
                             "operator": operator,
                             "coupling_type": "operator_apply",
@@ -962,9 +1106,9 @@ fn validate_scoped_reference(
     // Check if system exists
     if let Some(system) = system_refs.get(system_name) {
         // Check if variable exists in the system
-        let var_exists = system.variables.contains(var_name) ||
-                        system.species.contains(var_name) ||
-                        system.parameters.contains(var_name);
+        let var_exists = system.variables.contains(var_name)
+            || system.species.contains(var_name)
+            || system.parameters.contains(var_name);
 
         if !var_exists {
             errors.push(StructuralError {
@@ -1011,9 +1155,7 @@ fn validate_equation_units(
             if let Err(unit_error) = check_dimensional_consistency(&lhs, &rhs) {
                 warnings.push(format!(
                     "Equation {}: {} (in {})",
-                    eq_idx,
-                    unit_error,
-                    eq_path
+                    eq_idx, unit_error, eq_path
                 ));
             }
         }
@@ -1065,9 +1207,7 @@ fn get_expression_unit(
             // Numbers are dimensionless
             Ok(Unit::dimensionless())
         }
-        crate::Expr::Operator(op) => {
-            get_operator_unit(op, variables)
-        }
+        crate::Expr::Operator(op) => get_operator_unit(op, variables),
     }
 }
 
@@ -1089,7 +1229,8 @@ fn get_operator_unit(
                 let arg_unit = get_expression_unit(arg, variables)?;
                 if !first_unit.is_compatible(&arg_unit) {
                     return Err(UnitError::DimensionMismatch(format!(
-                        "Incompatible units in {} operation", op.op
+                        "Incompatible units in {} operation",
+                        op.op
                     )));
                 }
             }
@@ -1107,7 +1248,9 @@ fn get_operator_unit(
         "/" => {
             // Division: divide units
             if op.args.len() != 2 {
-                return Err(UnitError::ParseError("Division requires exactly 2 operands".to_string()));
+                return Err(UnitError::ParseError(
+                    "Division requires exactly 2 operands".to_string(),
+                ));
             }
             let numerator = get_expression_unit(&op.args[0], variables)?;
             let denominator = get_expression_unit(&op.args[1], variables)?;
@@ -1116,7 +1259,9 @@ fn get_operator_unit(
         "^" | "power" => {
             // Power: raise units to power
             if op.args.len() != 2 {
-                return Err(UnitError::ParseError("Power requires exactly 2 operands".to_string()));
+                return Err(UnitError::ParseError(
+                    "Power requires exactly 2 operands".to_string(),
+                ));
             }
             let base_unit = get_expression_unit(&op.args[0], variables)?;
 
@@ -1126,13 +1271,17 @@ fn get_operator_unit(
                 Ok(base_unit.power(exponent))
             } else {
                 // For variable exponents, we can't determine units statically
-                Err(UnitError::ParseError("Variable exponents not supported for unit analysis".to_string()))
+                Err(UnitError::ParseError(
+                    "Variable exponents not supported for unit analysis".to_string(),
+                ))
             }
         }
         "D" => {
             // Derivative: d/dt has units of [quantity]/[time]
             if op.args.is_empty() {
-                return Err(UnitError::ParseError("Derivative requires at least one argument".to_string()));
+                return Err(UnitError::ParseError(
+                    "Derivative requires at least one argument".to_string(),
+                ));
             }
 
             let quantity_unit = get_expression_unit(&op.args[0], variables)?;
@@ -1150,13 +1299,17 @@ fn get_operator_unit(
                     Ok(quantity_unit.divide(&coord_unit))
                 }
             } else {
-                Err(UnitError::ParseError("Derivative missing 'wrt' specification".to_string()))
+                Err(UnitError::ParseError(
+                    "Derivative missing 'wrt' specification".to_string(),
+                ))
             }
         }
         "grad" => {
             // Gradient: has units of [quantity]/[length]
             if op.args.is_empty() {
-                return Err(UnitError::ParseError("Gradient requires at least one argument".to_string()));
+                return Err(UnitError::ParseError(
+                    "Gradient requires at least one argument".to_string(),
+                ));
             }
 
             let quantity_unit = get_expression_unit(&op.args[0], variables)?;
@@ -1166,7 +1319,9 @@ fn get_operator_unit(
         "div" => {
             // Divergence: has units of [quantity]/[length]
             if op.args.is_empty() {
-                return Err(UnitError::ParseError("Divergence requires at least one argument".to_string()));
+                return Err(UnitError::ParseError(
+                    "Divergence requires at least one argument".to_string(),
+                ));
             }
 
             let quantity_unit = get_expression_unit(&op.args[0], variables)?;
@@ -1176,7 +1331,9 @@ fn get_operator_unit(
         "laplacian" => {
             // Laplacian: has units of [quantity]/[length^2]
             if op.args.is_empty() {
-                return Err(UnitError::ParseError("Laplacian requires at least one argument".to_string()));
+                return Err(UnitError::ParseError(
+                    "Laplacian requires at least one argument".to_string(),
+                ));
             }
 
             let quantity_unit = get_expression_unit(&op.args[0], variables)?;
@@ -1184,9 +1341,8 @@ fn get_operator_unit(
             Ok(quantity_unit.divide(&length_squared))
         }
         // Transcendental functions (typically dimensionless input/output)
-        "exp" | "log" | "log10" | "sin" | "cos" | "tan" |
-        "asin" | "acos" | "atan" | "sqrt" | "abs" | "sign" |
-        "floor" | "ceil" => {
+        "exp" | "log" | "log10" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "sqrt"
+        | "abs" | "sign" | "floor" | "ceil" => {
             // These functions require dimensionless input for mathematical validity
             if !op.args.is_empty() {
                 let arg_unit = get_expression_unit(&op.args[0], variables)?;
@@ -1210,7 +1366,8 @@ fn get_operator_unit(
                 let arg_unit = get_expression_unit(arg, variables)?;
                 if !first_unit.is_compatible(&arg_unit) {
                     return Err(UnitError::DimensionMismatch(format!(
-                        "Incompatible units in {} operation", op.op
+                        "Incompatible units in {} operation",
+                        op.op
                     )));
                 }
             }
@@ -1220,13 +1377,15 @@ fn get_operator_unit(
             // ifelse(condition, true_val, false_val): condition must be dimensionless,
             // true_val and false_val must have same units
             if op.args.len() != 3 {
-                return Err(UnitError::ParseError("ifelse requires exactly 3 arguments".to_string()));
+                return Err(UnitError::ParseError(
+                    "ifelse requires exactly 3 arguments".to_string(),
+                ));
             }
 
             let condition_unit = get_expression_unit(&op.args[0], variables)?;
             if !condition_unit.is_dimensionless() {
                 return Err(UnitError::DimensionMismatch(
-                    "ifelse condition must be dimensionless".to_string()
+                    "ifelse condition must be dimensionless".to_string(),
                 ));
             }
 
@@ -1235,7 +1394,7 @@ fn get_operator_unit(
 
             if !true_unit.is_compatible(&false_unit) {
                 return Err(UnitError::DimensionMismatch(
-                    "ifelse true and false branches must have compatible units".to_string()
+                    "ifelse true and false branches must have compatible units".to_string(),
                 ));
             }
 
@@ -1398,8 +1557,8 @@ fn find_cycle_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Model, Expr};
-    use crate::types::{Metadata, ModelVariable, VariableType, Equation, ExpressionNode};
+    use crate::types::{Equation, ExpressionNode, Metadata, ModelVariable, VariableType};
+    use crate::{Expr, Model};
     use std::collections::HashMap;
 
     #[test]
@@ -1435,20 +1594,24 @@ mod tests {
     fn test_validate_model_with_undefined_variable() {
         let mut models = HashMap::new();
         let mut variables = HashMap::new();
-        variables.insert("x".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: None,
-            default: None,
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: None,
+                default: None,
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                Equation {
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
                     lhs: Expr::Operator(ExpressionNode {
                         op: "D".to_string(),
                         args: vec![Expr::Variable("x".to_string())],
@@ -1456,12 +1619,12 @@ mod tests {
                         dim: None,
                     }),
                     rhs: Expr::Variable("undefined_var".to_string()), // This should cause an error
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1487,8 +1650,13 @@ mod tests {
         let result = validate(&esm_file);
         assert!(!result.is_valid);
         assert!(!result.structural_errors.is_empty());
-        assert!(result.structural_errors[0].message.contains("Variable 'undefined_var' referenced in equation is not declared"));
-        assert!(matches!(result.structural_errors[0].code, StructuralErrorCode::UndefinedVariable));
+        assert!(result.structural_errors[0]
+            .message
+            .contains("Variable 'undefined_var' referenced in equation is not declared"));
+        assert!(matches!(
+            result.structural_errors[0].code,
+            StructuralErrorCode::UndefinedVariable
+        ));
     }
 
     #[test]
@@ -1497,41 +1665,50 @@ mod tests {
         let mut variables = HashMap::new();
 
         // Define two state variables
-        variables.insert("x".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: None,
-            default: None,
-            description: None,
-            expression: None,
-        });
-        variables.insert("y".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: None,
-            default: None,
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: None,
+                default: None,
+                description: None,
+                expression: None,
+            },
+        );
+        variables.insert(
+            "y".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: None,
+                default: None,
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                // Only one equation for two state variables
-                Equation {
-                    lhs: Expr::Operator(ExpressionNode {
-                        op: "D".to_string(),
-                        args: vec![Expr::Variable("x".to_string())],
-                        wrt: Some("t".to_string()),
-                        dim: None,
-                    }),
-                    rhs: Expr::Variable("x".to_string()),
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![
+                    // Only one equation for two state variables
+                    Equation {
+                        lhs: Expr::Operator(ExpressionNode {
+                            op: "D".to_string(),
+                            args: vec![Expr::Variable("x".to_string())],
+                            wrt: Some("t".to_string()),
+                            dim: None,
+                        }),
+                        rhs: Expr::Variable("x".to_string()),
+                    },
+                ],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1559,8 +1736,13 @@ mod tests {
         assert!(!result.structural_errors.is_empty());
 
         let error = &result.structural_errors[0];
-        assert!(matches!(error.code, StructuralErrorCode::EquationCountMismatch));
-        assert!(error.message.contains("Number of ODE equations (1) does not match number of state variables (2)"));
+        assert!(matches!(
+            error.code,
+            StructuralErrorCode::EquationCountMismatch
+        ));
+        assert!(error
+            .message
+            .contains("Number of ODE equations (1) does not match number of state variables (2)"));
     }
 
     #[test]
@@ -1602,23 +1784,29 @@ mod tests {
         let mut variables = HashMap::new();
 
         // Observed variable without expression - should cause validation error
-        variables.insert("total".to_string(), ModelVariable {
-            var_type: VariableType::Observed,
-            units: None,
-            default: None,
-            description: None,
-            expression: None, // Missing expression
-        });
+        variables.insert(
+            "total".to_string(),
+            ModelVariable {
+                var_type: VariableType::Observed,
+                units: None,
+                default: None,
+                description: None,
+                expression: None, // Missing expression
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![], // No equations needed for this test
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![], // No equations needed for this test
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1645,8 +1833,13 @@ mod tests {
         // Should fail validation due to missing expression
         assert!(!result.is_valid);
         assert_eq!(result.structural_errors.len(), 1);
-        assert!(matches!(result.structural_errors[0].code, StructuralErrorCode::MissingObservedExpr));
-        assert!(result.structural_errors[0].message.contains("Observed variable \"total\" is missing its expression field"));
+        assert!(matches!(
+            result.structural_errors[0].code,
+            StructuralErrorCode::MissingObservedExpr
+        ));
+        assert!(result.structural_errors[0]
+            .message
+            .contains("Observed variable \"total\" is missing its expression field"));
     }
 
     #[test]
@@ -1655,43 +1848,56 @@ mod tests {
         let mut variables = HashMap::new();
 
         // State variable
-        variables.insert("x".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("m".to_string()),
-            default: Some(1.0),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()),
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
 
         // Parameter
-        variables.insert("k".to_string(), ModelVariable {
-            var_type: VariableType::Parameter,
-            units: Some("1/s".to_string()),
-            default: Some(0.1),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "k".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("1/s".to_string()),
+                default: Some(0.1),
+                description: None,
+                expression: None,
+            },
+        );
 
         // Observed variable WITH expression - should pass validation
-        variables.insert("rate".to_string(), ModelVariable {
-            var_type: VariableType::Observed,
-            units: Some("m/s".to_string()),
-            default: None,
-            description: Some("Rate of change".to_string()),
-            expression: Some(Expr::Operator(ExpressionNode {
-                op: "*".to_string(),
-                args: vec![Expr::Variable("k".to_string()), Expr::Variable("x".to_string())],
-                wrt: None,
-                dim: None,
-            })),
-        });
+        variables.insert(
+            "rate".to_string(),
+            ModelVariable {
+                var_type: VariableType::Observed,
+                units: Some("m/s".to_string()),
+                default: None,
+                description: Some("Rate of change".to_string()),
+                expression: Some(Expr::Operator(ExpressionNode {
+                    op: "*".to_string(),
+                    args: vec![
+                        Expr::Variable("k".to_string()),
+                        Expr::Variable("x".to_string()),
+                    ],
+                    wrt: None,
+                    dim: None,
+                })),
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                Equation {
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
                     lhs: Expr::Operator(ExpressionNode {
                         op: "D".to_string(),
                         args: vec![Expr::Variable("x".to_string())],
@@ -1699,12 +1905,12 @@ mod tests {
                         dim: None,
                     }),
                     rhs: Expr::Variable("rate".to_string()),
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1729,7 +1935,11 @@ mod tests {
 
         let result = validate(&esm_file);
         // Should pass validation - observed variable has expression
-        assert!(result.is_valid, "Validation failed: {:?}", result.structural_errors);
+        assert!(
+            result.is_valid,
+            "Validation failed: {:?}",
+            result.structural_errors
+        );
         assert!(result.structural_errors.is_empty());
     }
 
@@ -1765,26 +1975,32 @@ mod tests {
         }"#;
 
         // Parse JSON
-        let esm_file: EsmFile = serde_json::from_str(json_str)
-            .expect("Failed to parse JSON");
+        let esm_file: EsmFile = serde_json::from_str(json_str).expect("Failed to parse JSON");
 
         // Validate the model
         let result = validate(&esm_file);
-        assert!(result.is_valid, "Validation should pass: {:?}", result.structural_errors);
+        assert!(
+            result.is_valid,
+            "Validation should pass: {:?}",
+            result.structural_errors
+        );
 
         // Verify the observed variable has the expression
         let model = esm_file.models.as_ref().unwrap().get("TestModel").unwrap();
         let rate_var = model.variables.get("rate").unwrap();
         assert_eq!(rate_var.var_type, VariableType::Observed);
-        assert!(rate_var.expression.is_some(), "Observed variable should have expression");
+        assert!(
+            rate_var.expression.is_some(),
+            "Observed variable should have expression"
+        );
 
         // Test serialization back to JSON
-        let serialized = serde_json::to_string_pretty(&esm_file)
-            .expect("Failed to serialize to JSON");
+        let serialized =
+            serde_json::to_string_pretty(&esm_file).expect("Failed to serialize to JSON");
 
         // Should be able to parse it again
-        let _reparsed: EsmFile = serde_json::from_str(&serialized)
-            .expect("Failed to reparse serialized JSON");
+        let _reparsed: EsmFile =
+            serde_json::from_str(&serialized).expect("Failed to reparse serialized JSON");
     }
 
     #[test]
@@ -1793,29 +2009,36 @@ mod tests {
         let mut variables = HashMap::new();
 
         // State variable with units
-        variables.insert("x".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("m".to_string()), // meters
-            default: Some(1.0),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()), // meters
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
 
         // Parameter with units
-        variables.insert("k".to_string(), ModelVariable {
-            var_type: VariableType::Parameter,
-            units: Some("1/s".to_string()), // per second
-            default: Some(0.1),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "k".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("1/s".to_string()), // per second
+                default: Some(0.1),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                Equation {
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
                     lhs: Expr::Operator(ExpressionNode {
                         op: "D".to_string(),
                         args: vec![Expr::Variable("x".to_string())],
@@ -1824,16 +2047,19 @@ mod tests {
                     }),
                     rhs: Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
-                        args: vec![Expr::Variable("k".to_string()), Expr::Variable("x".to_string())],
+                        args: vec![
+                            Expr::Variable("k".to_string()),
+                            Expr::Variable("x".to_string()),
+                        ],
                         wrt: None,
                         dim: None,
                     }),
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1859,10 +2085,18 @@ mod tests {
         let result = validate(&esm_file);
         // Should pass validation - units are dimensionally consistent
         // LHS: d(m)/dt = m/s, RHS: (1/s) * m = m/s
-        assert!(result.is_valid, "Validation should pass: {:?}", result.structural_errors);
+        assert!(
+            result.is_valid,
+            "Validation should pass: {:?}",
+            result.structural_errors
+        );
         assert!(result.structural_errors.is_empty());
         // Unit warnings should be empty since dimensions are consistent
-        assert!(result.unit_warnings.is_empty(), "Unit warnings: {:?}", result.unit_warnings);
+        assert!(
+            result.unit_warnings.is_empty(),
+            "Unit warnings: {:?}",
+            result.unit_warnings
+        );
     }
 
     #[test]
@@ -1871,29 +2105,36 @@ mod tests {
         let mut variables = HashMap::new();
 
         // State variable with units
-        variables.insert("x".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("m".to_string()), // meters
-            default: Some(1.0),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()), // meters
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
 
         // Parameter with incompatible units
-        variables.insert("k".to_string(), ModelVariable {
-            var_type: VariableType::Parameter,
-            units: Some("kg".to_string()), // mass units (incompatible)
-            default: Some(0.1),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "k".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("kg".to_string()), // mass units (incompatible)
+                default: Some(0.1),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                Equation {
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
                     lhs: Expr::Operator(ExpressionNode {
                         op: "D".to_string(),
                         args: vec![Expr::Variable("x".to_string())],
@@ -1901,12 +2142,12 @@ mod tests {
                         dim: None,
                     }),
                     rhs: Expr::Variable("k".to_string()), // Just k, not k*x
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1934,8 +2175,14 @@ mod tests {
         assert!(result.is_valid, "Structural validation should pass");
         assert!(result.structural_errors.is_empty());
         // But should have unit warnings
-        assert!(!result.unit_warnings.is_empty(), "Should have unit warnings");
-        assert!(result.unit_warnings[0].contains("Dimension mismatch"), "Should contain dimension mismatch warning");
+        assert!(
+            !result.unit_warnings.is_empty(),
+            "Should have unit warnings"
+        );
+        assert!(
+            result.unit_warnings[0].contains("Dimension mismatch"),
+            "Should contain dimension mismatch warning"
+        );
     }
 
     #[test]
@@ -1945,29 +2192,36 @@ mod tests {
         let mut variables = HashMap::new();
 
         // State variable with position units
-        variables.insert("position".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("m".to_string()),
-            default: Some(0.0),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "position".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()),
+                default: Some(0.0),
+                description: None,
+                expression: None,
+            },
+        );
 
         // Parameter with velocity units - should be compatible
-        variables.insert("velocity".to_string(), ModelVariable {
-            var_type: VariableType::Parameter,
-            units: Some("m/s".to_string()),
-            default: Some(1.0),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "velocity".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("m/s".to_string()),
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("test_model".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                Equation {
+        models.insert(
+            "test_model".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
                     lhs: Expr::Operator(ExpressionNode {
                         op: "D".to_string(),
                         args: vec![Expr::Variable("position".to_string())],
@@ -1975,12 +2229,12 @@ mod tests {
                         dim: None,
                     }),
                     rhs: Expr::Variable("velocity".to_string()),
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -2005,9 +2259,17 @@ mod tests {
 
         let result = validate(&esm_file);
         // Should pass validation - LHS: d(position)/dt = m/s, RHS: velocity = m/s
-        assert!(result.is_valid, "Validation should pass: {:?}", result.structural_errors);
+        assert!(
+            result.is_valid,
+            "Validation should pass: {:?}",
+            result.structural_errors
+        );
         assert!(result.structural_errors.is_empty());
-        assert!(result.unit_warnings.is_empty(), "No unit warnings expected: {:?}", result.unit_warnings);
+        assert!(
+            result.unit_warnings.is_empty(),
+            "No unit warnings expected: {:?}",
+            result.unit_warnings
+        );
     }
 
     #[test]
@@ -2016,20 +2278,24 @@ mod tests {
         let mut variables = HashMap::new();
 
         // State variable with units (should cause warning when used in exp)
-        variables.insert("x".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("m".to_string()), // meters
-            default: Some(1.0),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()), // meters
+                default: Some(1.0),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                Equation {
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
                     lhs: Expr::Operator(ExpressionNode {
                         op: "D".to_string(),
                         args: vec![Expr::Variable("x".to_string())],
@@ -2042,12 +2308,12 @@ mod tests {
                         wrt: None,
                         dim: None,
                     }),
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -2072,12 +2338,22 @@ mod tests {
 
         let result = validate(&esm_file);
         // Should still be structurally valid
-        assert!(result.is_valid, "Structural validation should pass: {:?}", result);
+        assert!(
+            result.is_valid,
+            "Structural validation should pass: {:?}",
+            result
+        );
         assert!(result.structural_errors.is_empty());
         // But should have unit warnings about exp requiring dimensionless input
-        assert!(!result.unit_warnings.is_empty(), "Should have unit warnings");
-        assert!(result.unit_warnings[0].contains("requires dimensionless input"),
-               "Should warn about dimensionless requirement: {:?}", result.unit_warnings);
+        assert!(
+            !result.unit_warnings.is_empty(),
+            "Should have unit warnings"
+        );
+        assert!(
+            result.unit_warnings[0].contains("requires dimensionless input"),
+            "Should warn about dimensionless requirement: {:?}",
+            result.unit_warnings
+        );
     }
 
     #[test]
@@ -2134,12 +2410,24 @@ mod tests {
         let result2 = validate_complete(invalid_json);
 
         // Correct behavior: validate() should have empty schema_errors (it doesn't check schema)
-        assert!(result1.schema_errors.is_empty(), "validate() should have empty schema_errors because it only does structural validation");
-        assert!(result1.is_valid, "validate() should pass structural validation on valid ESM structure");
+        assert!(
+            result1.schema_errors.is_empty(),
+            "validate() should have empty schema_errors because it only does structural validation"
+        );
+        assert!(
+            result1.is_valid,
+            "validate() should pass structural validation on valid ESM structure"
+        );
 
         // validate_complete() should find schema errors
-        assert!(!result2.schema_errors.is_empty(), "validate_complete() should find schema errors");
-        assert!(!result2.is_valid, "validate_complete() should fail due to schema errors");
+        assert!(
+            !result2.schema_errors.is_empty(),
+            "validate_complete() should find schema errors"
+        );
+        assert!(
+            !result2.is_valid,
+            "validate_complete() should fail due to schema errors"
+        );
 
         println!("CORRECT BEHAVIOR: validate() found {} schema errors, validate_complete() found {} schema errors",
                 result1.schema_errors.len(), result2.schema_errors.len());
@@ -2170,12 +2458,23 @@ mod tests {
         let result = validate_complete(invalid_json);
 
         // Should detect schema errors
-        assert!(!result.is_valid, "validate_complete should detect schema validation failures");
-        assert!(!result.schema_errors.is_empty(), "validate_complete should find schema errors");
+        assert!(
+            !result.is_valid,
+            "validate_complete should detect schema validation failures"
+        );
+        assert!(
+            !result.schema_errors.is_empty(),
+            "validate_complete should find schema errors"
+        );
 
         // Schema error should mention the validation failure
-        assert!(result.schema_errors[0].message.contains("Failed to load ESM file"),
-                "Should report load failure: {}", result.schema_errors[0].message);
+        assert!(
+            result.schema_errors[0]
+                .message
+                .contains("Failed to load ESM file"),
+            "Should report load failure: {}",
+            result.schema_errors[0].message
+        );
     }
 
     #[test]
@@ -2210,8 +2509,18 @@ mod tests {
         let result = validate_complete(valid_json);
 
         // Should pass validation
-        assert!(result.is_valid, "validate_complete should pass with valid JSON: {:?}", result);
-        assert!(result.schema_errors.is_empty(), "Should have no schema errors");
-        assert!(result.structural_errors.is_empty(), "Should have no structural errors");
+        assert!(
+            result.is_valid,
+            "validate_complete should pass with valid JSON: {:?}",
+            result
+        );
+        assert!(
+            result.schema_errors.is_empty(),
+            "Should have no schema errors"
+        );
+        assert!(
+            result.structural_errors.is_empty(),
+            "Should have no structural errors"
+        );
     }
 }

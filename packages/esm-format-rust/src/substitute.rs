@@ -1,7 +1,10 @@
 //! Expression substitution utilities
 
-use crate::{Expr, Model, ReactionSystem, EsmFile};
-use crate::types::{ExpressionNode, Equation, Reaction, DiscreteEvent, ContinuousEvent, DiscreteEventTrigger, AffectEquation};
+use crate::types::{
+    AffectEquation, ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, Equation, ExpressionNode,
+    Reaction,
+};
+use crate::{EsmFile, Expr, Model, ReactionSystem};
 use std::collections::HashMap;
 
 /// Substitute variables in an expression
@@ -23,9 +26,11 @@ pub fn substitute(expr: &Expr, substitutions: &std::collections::HashMap<String,
             } else {
                 Expr::Variable(var_name.clone())
             }
-        },
+        }
         Expr::Operator(op_node) => {
-            let new_args: Vec<Expr> = op_node.args.iter()
+            let new_args: Vec<Expr> = op_node
+                .args
+                .iter()
                 .map(|arg| substitute(arg, substitutions))
                 .collect();
 
@@ -51,21 +56,22 @@ pub fn substitute(expr: &Expr, substitutions: &std::collections::HashMap<String,
 /// * New discrete event trigger with substitutions applied
 pub fn substitute_in_discrete_event_trigger(
     trigger: &DiscreteEventTrigger,
-    substitutions: &std::collections::HashMap<String, Expr>
+    substitutions: &std::collections::HashMap<String, Expr>,
 ) -> DiscreteEventTrigger {
     match trigger {
-        DiscreteEventTrigger::Condition { expression } => {
-            DiscreteEventTrigger::Condition {
-                expression: substitute(expression, substitutions),
-            }
+        DiscreteEventTrigger::Condition { expression } => DiscreteEventTrigger::Condition {
+            expression: substitute(expression, substitutions),
         },
-        DiscreteEventTrigger::Periodic { interval, initial_offset } => {
+        DiscreteEventTrigger::Periodic {
+            interval,
+            initial_offset,
+        } => {
             // Periodic triggers have no expressions to substitute
             DiscreteEventTrigger::Periodic {
                 interval: *interval,
                 initial_offset: *initial_offset,
             }
-        },
+        }
         DiscreteEventTrigger::PresetTimes { times } => {
             // Preset times have no expressions to substitute
             DiscreteEventTrigger::PresetTimes {
@@ -87,7 +93,7 @@ pub fn substitute_in_discrete_event_trigger(
 /// * New affect equation with substitutions applied
 pub fn substitute_in_affect_equation(
     affect: &AffectEquation,
-    substitutions: &std::collections::HashMap<String, Expr>
+    substitutions: &std::collections::HashMap<String, Expr>,
 ) -> AffectEquation {
     AffectEquation {
         lhs: affect.lhs.clone(), // LHS is a variable name string, not an expression
@@ -107,13 +113,14 @@ pub fn substitute_in_affect_equation(
 /// * New discrete event with substitutions applied
 pub fn substitute_in_discrete_event(
     event: &DiscreteEvent,
-    substitutions: &std::collections::HashMap<String, Expr>
+    substitutions: &std::collections::HashMap<String, Expr>,
 ) -> DiscreteEvent {
     DiscreteEvent {
         name: event.name.clone(),
         trigger: substitute_in_discrete_event_trigger(&event.trigger, substitutions),
         affects: event.affects.as_ref().map(|affects| {
-            affects.iter()
+            affects
+                .iter()
                 .map(|affect| substitute_in_affect_equation(affect, substitutions))
                 .collect()
         }),
@@ -136,18 +143,23 @@ pub fn substitute_in_discrete_event(
 /// * New continuous event with substitutions applied
 pub fn substitute_in_continuous_event(
     event: &ContinuousEvent,
-    substitutions: &std::collections::HashMap<String, Expr>
+    substitutions: &std::collections::HashMap<String, Expr>,
 ) -> ContinuousEvent {
     ContinuousEvent {
         name: event.name.clone(),
-        conditions: event.conditions.iter()
+        conditions: event
+            .conditions
+            .iter()
             .map(|condition| substitute(condition, substitutions))
             .collect(),
-        affects: event.affects.iter()
+        affects: event
+            .affects
+            .iter()
             .map(|affect| substitute_in_affect_equation(affect, substitutions))
             .collect(),
         affect_neg: event.affect_neg.as_ref().map(|affects| {
-            affects.iter()
+            affects
+                .iter()
                 .map(|affect| substitute_in_affect_equation(affect, substitutions))
                 .collect()
         }),
@@ -171,9 +183,11 @@ pub fn substitute_in_continuous_event(
 /// * New model with substitutions applied
 pub fn substitute_in_model(
     model: &Model,
-    substitutions: &std::collections::HashMap<String, Expr>
+    substitutions: &std::collections::HashMap<String, Expr>,
 ) -> Model {
-    let new_equations = model.equations.iter()
+    let new_equations = model
+        .equations
+        .iter()
         .map(|eq| Equation {
             lhs: substitute(&eq.lhs, substitutions),
             rhs: substitute(&eq.rhs, substitutions),
@@ -186,12 +200,14 @@ pub fn substitute_in_model(
         variables: model.variables.clone(),
         equations: new_equations,
         discrete_events: model.discrete_events.as_ref().map(|events| {
-            events.iter()
+            events
+                .iter()
                 .map(|event| substitute_in_discrete_event(event, substitutions))
                 .collect()
         }),
         continuous_events: model.continuous_events.as_ref().map(|events| {
-            events.iter()
+            events
+                .iter()
                 .map(|event| substitute_in_continuous_event(event, substitutions))
                 .collect()
         }),
@@ -211,9 +227,11 @@ pub fn substitute_in_model(
 /// * New reaction system with substitutions applied
 pub fn substitute_in_reaction_system(
     reaction_system: &ReactionSystem,
-    substitutions: &std::collections::HashMap<String, Expr>
+    substitutions: &std::collections::HashMap<String, Expr>,
 ) -> ReactionSystem {
-    let new_reactions = reaction_system.reactions.iter()
+    let new_reactions = reaction_system
+        .reactions
+        .iter()
         .map(|rxn| Reaction {
             name: rxn.name.clone(),
             substrates: rxn.substrates.clone(),
@@ -280,7 +298,8 @@ impl ScopedContext {
             full_path.extend(components.iter().map(|s| s.to_string()));
             let full_path_str = full_path.join(".");
 
-            if self.can_resolve_full_path(&full_path.iter().map(|s| s.as_str()).collect::<Vec<_>>()) {
+            if self.can_resolve_full_path(&full_path.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+            {
                 return Some(full_path_str);
             }
         }
@@ -393,7 +412,7 @@ impl ScopedContext {
 pub fn substitute_with_context(
     expr: &Expr,
     substitutions: &std::collections::HashMap<String, Expr>,
-    context: &ScopedContext
+    context: &ScopedContext,
 ) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
@@ -414,9 +433,11 @@ pub fn substitute_with_context(
 
             // Return original if no resolution possible
             Expr::Variable(var_name.clone())
-        },
+        }
         Expr::Operator(op_node) => {
-            let new_args: Vec<Expr> = op_node.args.iter()
+            let new_args: Vec<Expr> = op_node
+                .args
+                .iter()
                 .map(|arg| substitute_with_context(arg, substitutions, context))
                 .collect();
 
@@ -444,9 +465,11 @@ pub fn substitute_with_context(
 pub fn substitute_in_model_with_context(
     model: &Model,
     substitutions: &std::collections::HashMap<String, Expr>,
-    context: &ScopedContext
+    context: &ScopedContext,
 ) -> Model {
-    let new_equations = model.equations.iter()
+    let new_equations = model
+        .equations
+        .iter()
         .map(|eq| Equation {
             lhs: substitute_with_context(&eq.lhs, substitutions, context),
             rhs: substitute_with_context(&eq.rhs, substitutions, context),
@@ -459,13 +482,19 @@ pub fn substitute_in_model_with_context(
         variables: model.variables.clone(),
         equations: new_equations,
         discrete_events: model.discrete_events.as_ref().map(|events| {
-            events.iter()
-                .map(|event| substitute_in_discrete_event_with_context(event, substitutions, context))
+            events
+                .iter()
+                .map(|event| {
+                    substitute_in_discrete_event_with_context(event, substitutions, context)
+                })
                 .collect()
         }),
         continuous_events: model.continuous_events.as_ref().map(|events| {
-            events.iter()
-                .map(|event| substitute_in_continuous_event_with_context(event, substitutions, context))
+            events
+                .iter()
+                .map(|event| {
+                    substitute_in_continuous_event_with_context(event, substitutions, context)
+                })
                 .collect()
         }),
         description: model.description.clone(),
@@ -486,21 +515,22 @@ pub fn substitute_in_model_with_context(
 pub fn substitute_in_discrete_event_trigger_with_context(
     trigger: &DiscreteEventTrigger,
     substitutions: &std::collections::HashMap<String, Expr>,
-    context: &ScopedContext
+    context: &ScopedContext,
 ) -> DiscreteEventTrigger {
     match trigger {
-        DiscreteEventTrigger::Condition { expression } => {
-            DiscreteEventTrigger::Condition {
-                expression: substitute_with_context(expression, substitutions, context),
-            }
+        DiscreteEventTrigger::Condition { expression } => DiscreteEventTrigger::Condition {
+            expression: substitute_with_context(expression, substitutions, context),
         },
-        DiscreteEventTrigger::Periodic { interval, initial_offset } => {
+        DiscreteEventTrigger::Periodic {
+            interval,
+            initial_offset,
+        } => {
             // Periodic triggers have no expressions to substitute
             DiscreteEventTrigger::Periodic {
                 interval: *interval,
                 initial_offset: *initial_offset,
             }
-        },
+        }
         DiscreteEventTrigger::PresetTimes { times } => {
             // Preset times have no expressions to substitute
             DiscreteEventTrigger::PresetTimes {
@@ -524,7 +554,7 @@ pub fn substitute_in_discrete_event_trigger_with_context(
 pub fn substitute_in_affect_equation_with_context(
     affect: &AffectEquation,
     substitutions: &std::collections::HashMap<String, Expr>,
-    context: &ScopedContext
+    context: &ScopedContext,
 ) -> AffectEquation {
     AffectEquation {
         lhs: affect.lhs.clone(), // LHS is a variable name string, not an expression
@@ -546,14 +576,21 @@ pub fn substitute_in_affect_equation_with_context(
 pub fn substitute_in_discrete_event_with_context(
     event: &DiscreteEvent,
     substitutions: &std::collections::HashMap<String, Expr>,
-    context: &ScopedContext
+    context: &ScopedContext,
 ) -> DiscreteEvent {
     DiscreteEvent {
         name: event.name.clone(),
-        trigger: substitute_in_discrete_event_trigger_with_context(&event.trigger, substitutions, context),
+        trigger: substitute_in_discrete_event_trigger_with_context(
+            &event.trigger,
+            substitutions,
+            context,
+        ),
         affects: event.affects.as_ref().map(|affects| {
-            affects.iter()
-                .map(|affect| substitute_in_affect_equation_with_context(affect, substitutions, context))
+            affects
+                .iter()
+                .map(|affect| {
+                    substitute_in_affect_equation_with_context(affect, substitutions, context)
+                })
                 .collect()
         }),
         functional_affect: event.functional_affect.clone(), // TODO: Could also substitute in functional affects if needed
@@ -577,19 +614,28 @@ pub fn substitute_in_discrete_event_with_context(
 pub fn substitute_in_continuous_event_with_context(
     event: &ContinuousEvent,
     substitutions: &std::collections::HashMap<String, Expr>,
-    context: &ScopedContext
+    context: &ScopedContext,
 ) -> ContinuousEvent {
     ContinuousEvent {
         name: event.name.clone(),
-        conditions: event.conditions.iter()
+        conditions: event
+            .conditions
+            .iter()
             .map(|condition| substitute_with_context(condition, substitutions, context))
             .collect(),
-        affects: event.affects.iter()
-            .map(|affect| substitute_in_affect_equation_with_context(affect, substitutions, context))
+        affects: event
+            .affects
+            .iter()
+            .map(|affect| {
+                substitute_in_affect_equation_with_context(affect, substitutions, context)
+            })
             .collect(),
         affect_neg: event.affect_neg.as_ref().map(|affects| {
-            affects.iter()
-                .map(|affect| substitute_in_affect_equation_with_context(affect, substitutions, context))
+            affects
+                .iter()
+                .map(|affect| {
+                    substitute_in_affect_equation_with_context(affect, substitutions, context)
+                })
                 .collect()
         }),
         root_find: event.root_find.clone(),
@@ -614,9 +660,11 @@ pub fn substitute_in_continuous_event_with_context(
 pub fn substitute_in_reaction_system_with_context(
     reaction_system: &ReactionSystem,
     substitutions: &std::collections::HashMap<String, Expr>,
-    context: &ScopedContext
+    context: &ScopedContext,
 ) -> ReactionSystem {
-    let new_reactions = reaction_system.reactions.iter()
+    let new_reactions = reaction_system
+        .reactions
+        .iter()
         .map(|rxn| Reaction {
             name: rxn.name.clone(),
             substrates: rxn.substrates.clone(),
@@ -697,7 +745,7 @@ mod tests {
                     Expr::Number(n) => assert_eq!(*n, 3.0),
                     _ => panic!("Expected number"),
                 }
-            },
+            }
             _ => panic!("Expected operator"),
         }
     }
@@ -708,23 +756,29 @@ mod tests {
 
         let mut models = HashMap::new();
         let mut model_variables = HashMap::new();
-        model_variables.insert("temperature".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("K".to_string()),
-            default: Some(298.15),
-            description: None,
-            expression: None,
-        });
+        model_variables.insert(
+            "temperature".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("K".to_string()),
+                default: Some(298.15),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("Atmosphere".to_string(), Model {
-            name: Some("Atmosphere".to_string()),
-            reference: None,
-            variables: model_variables,
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "Atmosphere".to_string(),
+            Model {
+                name: Some("Atmosphere".to_string()),
+                reference: None,
+                variables: model_variables,
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -749,7 +803,12 @@ mod tests {
 
         let context = ScopedContext::from_esm_file(&esm_file);
         assert!(context.models.contains_key("Atmosphere"));
-        assert!(context.models.get("Atmosphere").unwrap().variables.contains_key("temperature"));
+        assert!(context
+            .models
+            .get("Atmosphere")
+            .unwrap()
+            .variables
+            .contains_key("temperature"));
     }
 
     #[test]
@@ -758,23 +817,29 @@ mod tests {
 
         let mut models = HashMap::new();
         let mut model_variables = HashMap::new();
-        model_variables.insert("temperature".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("K".to_string()),
-            default: Some(298.15),
-            description: None,
-            expression: None,
-        });
+        model_variables.insert(
+            "temperature".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("K".to_string()),
+                default: Some(298.15),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("Atmosphere".to_string(), Model {
-            name: Some("Atmosphere".to_string()),
-            reference: None,
-            variables: model_variables,
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "Atmosphere".to_string(),
+            Model {
+                name: Some("Atmosphere".to_string()),
+                reference: None,
+                variables: model_variables,
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -818,23 +883,29 @@ mod tests {
 
         let mut models = HashMap::new();
         let mut model_variables = HashMap::new();
-        model_variables.insert("temperature".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("K".to_string()),
-            default: Some(298.15),
-            description: None,
-            expression: None,
-        });
+        model_variables.insert(
+            "temperature".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("K".to_string()),
+                default: Some(298.15),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("Atmosphere".to_string(), Model {
-            name: Some("Atmosphere".to_string()),
-            reference: None,
-            variables: model_variables,
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "Atmosphere".to_string(),
+            Model {
+                name: Some("Atmosphere".to_string()),
+                reference: None,
+                variables: model_variables,
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -878,30 +949,39 @@ mod tests {
         // Create a more complex model with hierarchical scoped references
         let mut models = HashMap::new();
         let mut model_variables = HashMap::new();
-        model_variables.insert("Chemistry.FastChem.O3".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("mol/L".to_string()),
-            default: Some(40e-9),
-            description: None,
-            expression: None,
-        });
-        model_variables.insert("Chemistry.FastChem.k_rate".to_string(), ModelVariable {
-            var_type: VariableType::Parameter,
-            units: Some("s-1".to_string()),
-            default: Some(1.8e-12),
-            description: None,
-            expression: None,
-        });
+        model_variables.insert(
+            "Chemistry.FastChem.O3".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("mol/L".to_string()),
+                default: Some(40e-9),
+                description: None,
+                expression: None,
+            },
+        );
+        model_variables.insert(
+            "Chemistry.FastChem.k_rate".to_string(),
+            ModelVariable {
+                var_type: VariableType::Parameter,
+                units: Some("s-1".to_string()),
+                default: Some(1.8e-12),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("Atmosphere".to_string(), Model {
-            name: Some("Atmosphere".to_string()),
-            reference: None,
-            variables: model_variables,
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "Atmosphere".to_string(),
+            Model {
+                name: Some("Atmosphere".to_string()),
+                reference: None,
+                variables: model_variables,
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -938,8 +1018,14 @@ mod tests {
         });
 
         let mut substitutions = HashMap::new();
-        substitutions.insert("Atmosphere.Chemistry.FastChem.k_rate".to_string(), Expr::Number(2.0e-12));
-        substitutions.insert("Atmosphere.Chemistry.FastChem.O3".to_string(), Expr::Variable("local_O3".to_string()));
+        substitutions.insert(
+            "Atmosphere.Chemistry.FastChem.k_rate".to_string(),
+            Expr::Number(2.0e-12),
+        );
+        substitutions.insert(
+            "Atmosphere.Chemistry.FastChem.O3".to_string(),
+            Expr::Variable("local_O3".to_string()),
+        );
 
         let result = substitute_with_context(&complex_expr, &substitutions, &context);
 
@@ -958,7 +1044,7 @@ mod tests {
                     Expr::Variable(name) => assert_eq!(name, "local_O3"),
                     _ => panic!("Expected variable for second arg"),
                 }
-            },
+            }
             _ => panic!("Expected operator expression"),
         }
     }
@@ -975,12 +1061,10 @@ mod tests {
             trigger: DiscreteEventTrigger::Condition {
                 expression: Expr::Variable("x".to_string()),
             },
-            affects: Some(vec![
-                AffectEquation {
-                    lhs: "target".to_string(),
-                    rhs: Expr::Variable("y".to_string()),
-                },
-            ]),
+            affects: Some(vec![AffectEquation {
+                lhs: "target".to_string(),
+                rhs: Expr::Variable("y".to_string()),
+            }]),
             functional_affect: None,
             discrete_parameters: None,
             reinitialize: None,
@@ -991,11 +1075,9 @@ mod tests {
 
         // Verify trigger expression was substituted
         match &result.trigger {
-            DiscreteEventTrigger::Condition { expression } => {
-                match expression {
-                    Expr::Number(n) => assert_eq!(*n, 10.0),
-                    _ => panic!("Expected number after substitution"),
-                }
+            DiscreteEventTrigger::Condition { expression } => match expression {
+                Expr::Number(n) => assert_eq!(*n, 10.0),
+                _ => panic!("Expected number after substitution"),
             },
             _ => panic!("Expected condition trigger"),
         }
@@ -1019,15 +1101,11 @@ mod tests {
         // Create a continuous event with conditions and affects
         let event = ContinuousEvent {
             name: Some("continuous_test".to_string()),
-            conditions: vec![
-                Expr::Variable("threshold".to_string()),
-            ],
-            affects: vec![
-                AffectEquation {
-                    lhs: "output".to_string(),
-                    rhs: Expr::Variable("action_value".to_string()),
-                },
-            ],
+            conditions: vec![Expr::Variable("threshold".to_string())],
+            affects: vec![AffectEquation {
+                lhs: "output".to_string(),
+                rhs: Expr::Variable("action_value".to_string()),
+            }],
             affect_neg: None,
             root_find: None,
             reinitialize: None,
@@ -1056,7 +1134,7 @@ mod tests {
 
     #[test]
     fn test_substitute_in_model_with_events() {
-        use crate::{VariableType, ModelVariable};
+        use crate::{ModelVariable, VariableType};
 
         let mut substitutions = HashMap::new();
         substitutions.insert("param".to_string(), Expr::Number(42.0));
@@ -1067,13 +1145,16 @@ mod tests {
             reference: None,
             variables: {
                 let mut vars = HashMap::new();
-                vars.insert("state_var".to_string(), ModelVariable {
-                    var_type: VariableType::State,
-                    units: Some("m".to_string()),
-                    default: Some(0.0),
-                    description: None,
-                    expression: None,
-                });
+                vars.insert(
+                    "state_var".to_string(),
+                    ModelVariable {
+                        var_type: VariableType::State,
+                        units: Some("m".to_string()),
+                        default: Some(0.0),
+                        description: None,
+                        expression: None,
+                    },
+                );
                 vars
             },
             equations: vec![],
@@ -1114,11 +1195,9 @@ mod tests {
         let discrete_events = result.discrete_events.unwrap();
         assert_eq!(discrete_events.len(), 1);
         match &discrete_events[0].trigger {
-            DiscreteEventTrigger::Condition { expression } => {
-                match expression {
-                    Expr::Number(n) => assert_eq!(*n, 42.0),
-                    _ => panic!("Expected number after substitution in discrete event trigger"),
-                }
+            DiscreteEventTrigger::Condition { expression } => match expression {
+                Expr::Number(n) => assert_eq!(*n, 42.0),
+                _ => panic!("Expected number after substitution in discrete event trigger"),
             },
             _ => panic!("Expected condition trigger"),
         }

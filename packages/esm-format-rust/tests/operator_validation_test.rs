@@ -9,7 +9,10 @@ fn test_invalid_operator_without_required_fields() {
     }"#;
 
     let result: Result<Operator, _> = serde_json::from_str(operator_json);
-    assert!(result.is_err(), "Should fail without required needed_vars field");
+    assert!(
+        result.is_err(),
+        "Should fail without required needed_vars field"
+    );
 }
 
 #[test]
@@ -29,7 +32,10 @@ fn test_schema_compliant_operator_succeeds() {
     let operator = result.unwrap();
     assert_eq!(operator.operator_id, "dry_deposition");
     assert_eq!(operator.needed_vars, vec!["wind_speed", "temperature"]);
-    assert_eq!(operator.modifies, Some(vec!["O3".to_string(), "NO2".to_string()]));
+    assert_eq!(
+        operator.modifies,
+        Some(vec!["O3".to_string(), "NO2".to_string()])
+    );
 }
 
 #[test]

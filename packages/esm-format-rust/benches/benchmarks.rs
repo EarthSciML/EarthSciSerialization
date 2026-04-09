@@ -1,9 +1,9 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use esm_format::{
-    EsmFile, Metadata, load, save, validate,
+    load,
     performance::{CompactExpr, PerformanceError},
-    Expr, Model, ReactionSystem, Species, Reaction, StoichiometricEntry,
-    stoichiometric_matrix,
+    save, stoichiometric_matrix, validate, EsmFile, Expr, Metadata, Model, Reaction,
+    ReactionSystem, Species, StoichiometricEntry,
 };
 use std::collections::HashMap;
 
@@ -24,15 +24,18 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         // Create variables
         for j in 0..equations_per_model {
             let var_name = format!("x{}_{}", i, j);
-            variables.insert(var_name.clone(), esm_format::ModelVariable {
-                name: Some(var_name.clone()),
-                var_type: esm_format::VariableType::StateVariable,
-                units: Some("m/s".to_string()),
-                description: None,
-                initial_condition: Some(Expr::Number(1.0)),
-                bounds: None,
-        expression: None,
-            });
+            variables.insert(
+                var_name.clone(),
+                esm_format::ModelVariable {
+                    name: Some(var_name.clone()),
+                    var_type: esm_format::VariableType::StateVariable,
+                    units: Some("m/s".to_string()),
+                    description: None,
+                    initial_condition: Some(Expr::Number(1.0)),
+                    bounds: None,
+                    expression: None,
+                },
+            );
         }
 
         // Create equations
@@ -43,7 +46,11 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
                 rhs: Expr::BinaryOp {
                     op: "*".to_string(),
                     left: Box::new(Expr::Variable("k".to_string())),
-                    right: Box::new(Expr::Variable(format!("x{}_{}", i, (j + 1) % equations_per_model))),
+                    right: Box::new(Expr::Variable(format!(
+                        "x{}_{}",
+                        i,
+                        (j + 1) % equations_per_model
+                    ))),
                 },
             });
         }
@@ -134,19 +141,25 @@ fn benchmark_parsing(c: &mut Criterion) {
         let esm_file = create_test_esm(*size, 10);
         let json_str = save(&esm_file).unwrap();
 
-        group.bench_with_input(BenchmarkId::new("standard_parse", size), &json_str, |b, json| {
-            b.iter(|| load(black_box(json)).unwrap())
-        });
+        group.bench_with_input(
+            BenchmarkId::new("standard_parse", size),
+            &json_str,
+            |b, json| b.iter(|| load(black_box(json)).unwrap()),
+        );
 
         #[cfg(feature = "zero_copy")]
         {
             let mut json_bytes = json_str.clone().into_bytes();
-            group.bench_with_input(BenchmarkId::new("simd_parse", size), &json_bytes, |b, bytes| {
-                b.iter(|| {
-                    let mut data = bytes.clone();
-                    esm_format::performance::fast_parse(black_box(&mut data)).unwrap()
-                })
-            });
+            group.bench_with_input(
+                BenchmarkId::new("simd_parse", size),
+                &json_bytes,
+                |b, bytes| {
+                    b.iter(|| {
+                        let mut data = bytes.clone();
+                        esm_format::performance::fast_parse(black_box(&mut data)).unwrap()
+                    })
+                },
+            );
         }
     }
 
@@ -176,9 +189,7 @@ fn benchmark_stoichiometric_matrix(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("sequential", format!("{}x{}", species, reactions)),
             &system,
-            |b, sys| {
-                b.iter(|| stoichiometric_matrix(black_box(sys)))
-            }
+            |b, sys| b.iter(|| stoichiometric_matrix(black_box(sys))),
         );
 
         #[cfg(feature = "parallel")]
@@ -188,8 +199,12 @@ fn benchmark_stoichiometric_matrix(c: &mut Criterion) {
                 BenchmarkId::new("parallel", format!("{}x{}", species, reactions)),
                 &system,
                 |b, sys| {
-                    b.iter(|| evaluator.compute_stoichiometric_matrix_parallel(black_box(sys)).unwrap())
-                }
+                    b.iter(|| {
+                        evaluator
+                            .compute_stoichiometric_matrix_parallel(black_box(sys))
+                            .unwrap()
+                    })
+                },
             );
         }
     }
@@ -233,11 +248,17 @@ fn benchmark_expression_evaluation(c: &mut Criterion) {
     variables.insert("k".to_string(), 0.1);
 
     group.bench_function("simple_standard", |b| {
-        b.iter(|| esm_format::expression::evaluate(black_box(&simple_expr), black_box(&variables)).unwrap())
+        b.iter(|| {
+            esm_format::expression::evaluate(black_box(&simple_expr), black_box(&variables))
+                .unwrap()
+        })
     });
 
     group.bench_function("complex_standard", |b| {
-        b.iter(|| esm_format::expression::evaluate(black_box(&complex_expr), black_box(&variables)).unwrap())
+        b.iter(|| {
+            esm_format::expression::evaluate(black_box(&complex_expr), black_box(&variables))
+                .unwrap()
+        })
     });
 
     // Compact expression benchmarks
@@ -251,7 +272,11 @@ fn benchmark_expression_evaluation(c: &mut Criterion) {
         });
 
         group.bench_function("complex_compact", |b| {
-            b.iter(|| compact_complex.evaluate_fast(black_box(&variables)).unwrap())
+            b.iter(|| {
+                compact_complex
+                    .evaluate_fast(black_box(&variables))
+                    .unwrap()
+            })
         });
     }
 
@@ -262,7 +287,11 @@ fn benchmark_expression_evaluation(c: &mut Criterion) {
         let evaluator = ParallelEvaluator::new(None).unwrap();
 
         group.bench_function("batch_parallel", |b| {
-            b.iter(|| evaluator.evaluate_batch(black_box(&expressions), black_box(&variables)).unwrap())
+            b.iter(|| {
+                evaluator
+                    .evaluate_batch(black_box(&expressions), black_box(&variables))
+                    .unwrap()
+            })
         });
     }
 
@@ -278,51 +307,81 @@ fn benchmark_simd_operations(c: &mut Criterion) {
         let b: Vec<f64> = (0..*size).map(|i| (i + 1) as f64).collect();
         let mut result = vec![0.0; *size];
 
-        group.bench_with_input(BenchmarkId::new("add_scalar", size), &(*size, &a, &b), |bench, (_, a, b)| {
-            bench.iter(|| {
-                for i in 0..a.len() {
-                    result[i] = a[i] + b[i];
-                }
-                black_box(&result);
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("add_scalar", size),
+            &(*size, &a, &b),
+            |bench, (_, a, b)| {
+                bench.iter(|| {
+                    for i in 0..a.len() {
+                        result[i] = a[i] + b[i];
+                    }
+                    black_box(&result);
+                })
+            },
+        );
 
-        group.bench_with_input(BenchmarkId::new("add_simd", size), &(*size, &a, &b), |bench, (_, a, b)| {
-            bench.iter(|| {
-                simd_math::add_vectors_simd(black_box(a), black_box(b), black_box(&mut result)).unwrap();
-                black_box(&result);
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("add_simd", size),
+            &(*size, &a, &b),
+            |bench, (_, a, b)| {
+                bench.iter(|| {
+                    simd_math::add_vectors_simd(black_box(a), black_box(b), black_box(&mut result))
+                        .unwrap();
+                    black_box(&result);
+                })
+            },
+        );
 
-        group.bench_with_input(BenchmarkId::new("multiply_scalar", size), &(*size, &a, &b), |bench, (_, a, b)| {
-            bench.iter(|| {
-                for i in 0..a.len() {
-                    result[i] = a[i] * b[i];
-                }
-                black_box(&result);
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("multiply_scalar", size),
+            &(*size, &a, &b),
+            |bench, (_, a, b)| {
+                bench.iter(|| {
+                    for i in 0..a.len() {
+                        result[i] = a[i] * b[i];
+                    }
+                    black_box(&result);
+                })
+            },
+        );
 
-        group.bench_with_input(BenchmarkId::new("multiply_simd", size), &(*size, &a, &b), |bench, (_, a, b)| {
-            bench.iter(|| {
-                simd_math::multiply_vectors_simd(black_box(a), black_box(b), black_box(&mut result)).unwrap();
-                black_box(&result);
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("multiply_simd", size),
+            &(*size, &a, &b),
+            |bench, (_, a, b)| {
+                bench.iter(|| {
+                    simd_math::multiply_vectors_simd(
+                        black_box(a),
+                        black_box(b),
+                        black_box(&mut result),
+                    )
+                    .unwrap();
+                    black_box(&result);
+                })
+            },
+        );
 
-        group.bench_with_input(BenchmarkId::new("dot_scalar", size), &(*size, &a, &b), |bench, (_, a, b)| {
-            bench.iter(|| {
-                let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-                black_box(dot);
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("dot_scalar", size),
+            &(*size, &a, &b),
+            |bench, (_, a, b)| {
+                bench.iter(|| {
+                    let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+                    black_box(dot);
+                })
+            },
+        );
 
-        group.bench_with_input(BenchmarkId::new("dot_simd", size), &(*size, &a, &b), |bench, (_, a, b)| {
-            bench.iter(|| {
-                let dot = simd_math::dot_product_simd(black_box(a), black_box(b)).unwrap();
-                black_box(dot);
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("dot_simd", size),
+            &(*size, &a, &b),
+            |bench, (_, a, b)| {
+                bench.iter(|| {
+                    let dot = simd_math::dot_product_simd(black_box(a), black_box(b)).unwrap();
+                    black_box(dot);
+                })
+            },
+        );
     }
 
     group.finish();
@@ -333,12 +392,16 @@ fn benchmark_memory_allocation(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_allocation");
 
     for size in [1000, 10000, 100000].iter() {
-        group.bench_with_input(BenchmarkId::new("standard_alloc", size), size, |b, &size| {
-            b.iter(|| {
-                let _data: Vec<f64> = vec![0.0; size];
-                black_box(&_data);
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("standard_alloc", size),
+            size,
+            |b, &size| {
+                b.iter(|| {
+                    let _data: Vec<f64> = vec![0.0; size];
+                    black_box(&_data);
+                })
+            },
+        );
 
         group.bench_with_input(BenchmarkId::new("bump_alloc", size), size, |b, &size| {
             b.iter(|| {
