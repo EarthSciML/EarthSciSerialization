@@ -608,8 +608,8 @@ fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Ve
                     coeffs
                         .iter()
                         .enumerate()
-                        .filter(|(_, &coeff)| coeff.abs() > 1e-10)
-                        .map(|(i, &coeff)| format!("{:.3}*{}", coeff, species[i].name))
+                        .filter(|(_, coeff)| coeff.abs() > 1e-10)
+                        .map(|(i, coeff)| format!("{:.3}*{}", coeff, species[i].name))
                         .collect::<Vec<_>>()
                         .join(" + ")
                 )

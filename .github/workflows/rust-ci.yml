@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: ['stable', 'beta', '1.83.0']  # MSRV (minimum supported Rust version)
+        rust: ['stable', 'beta', '1.85.0']  # MSRV (minimum supported Rust version)
 
     steps:
     - uses: actions/checkout@v4
