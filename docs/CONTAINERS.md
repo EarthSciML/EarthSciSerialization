@@ -50,7 +50,7 @@ docker run --rm -v $(pwd)/results:/workspace/conformance-results ghcr.io/ctessum
 | Language   | Image Name | Base Image | Size (approx) | Architectures |
 |------------|------------|------------|---------------|---------------|
 | Julia      | `esm-format-julia` | `julia:1.10-bookworm` | ~800MB | amd64, arm64 |
-| TypeScript | `esm-format-typescript` | `node:18-bookworm` | ~400MB | amd64, arm64 |
+| TypeScript | `earthsci-toolkit-typescript` | `node:18-bookworm` | ~400MB | amd64, arm64 |
 | Python     | `esm-format-python` | `python:3.11-bookworm` | ~300MB | amd64, arm64 |
 | Rust       | `esm-format-rust` | `rust:1.70-bookworm` | ~200MB | amd64, arm64 |
 

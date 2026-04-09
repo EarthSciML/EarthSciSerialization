@@ -542,7 +542,7 @@ class PackageVerifier:
         package_mapping = {
             'EarthSciSerialization.jl': 'julia',
             'esm_format': 'python',
-            'esm-format': 'npm',
+            'earthsci-toolkit': 'npm',
             'esm-editor': 'npm',
             'esm-format-rust': 'rust'
         }

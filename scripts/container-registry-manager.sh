@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 REGISTRY="${ESM_REGISTRY:-ghcr.io}"
 NAMESPACE="${ESM_NAMESPACE:-ctessum}"
-PROJECT_NAME="esm-format"
+PROJECT_NAME="earthsci-toolkit"
 
 # Colors
 RED='\033[0;31m'

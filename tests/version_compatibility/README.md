@@ -63,7 +63,7 @@ Each ESM format library must:
 
 ### TypeScript/JavaScript
 ```typescript
-import { load } from 'esm-format';
+import { load } from 'earthsci-toolkit';
 
 // Should load successfully
 const file1 = load('version_0_1_0_baseline.esm');

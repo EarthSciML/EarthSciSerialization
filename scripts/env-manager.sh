@@ -425,7 +425,7 @@ esm-go() {
 }
 
 esm-typescript() {
-    cd "$WORKSPACE_ROOT/packages/esm-format"
+    cd "$WORKSPACE_ROOT/packages/earthsci-toolkit"
     npm "\$@"
 }
 

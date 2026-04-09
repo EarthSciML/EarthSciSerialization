@@ -218,7 +218,7 @@ julia --project=. -e 'using Pkg; Pkg.add(["BenchmarkTools", "JSON3"])'
 
 **TypeScript:**
 ```bash
-cd packages/esm-format
+cd packages/earthsci-toolkit
 npm install
 npm run build
 ```

@@ -445,7 +445,7 @@ end
 run_typescript_benchmarks() {
     log_info "Running TypeScript benchmarks..."
 
-    local ts_dir="$PROJECT_ROOT/packages/esm-format"
+    local ts_dir="$PROJECT_ROOT/packages/earthsci-toolkit"
     if [[ ! -d "$ts_dir" ]]; then
         log_warning "TypeScript package directory not found: $ts_dir, skipping"
         return 0

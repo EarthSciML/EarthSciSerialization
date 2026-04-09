@@ -123,7 +123,7 @@ All packages maintain synchronized version numbers:
 using Pkg; Pkg.add("EarthSciSerialization")
 ```
 
-### TypeScript/JavaScript (esm-format)
+### TypeScript/JavaScript (earthsci-toolkit)
 
 - Tests run on Node.js 18, 20, 21
 - Published to NPM registry
@@ -132,7 +132,7 @@ using Pkg; Pkg.add("EarthSciSerialization")
 
 **Installation**:
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ### Python (esm_format)
@@ -144,7 +144,7 @@ npm install esm-format
 
 **Installation**:
 ```bash
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 ### Rust (esm-format-rust)
@@ -202,7 +202,7 @@ cd esm-cli-1.2.3-linux-x64/
 Multi-architecture container images for each language runtime:
 
 - `ghcr.io/ctessum/esm-format-julia:latest`
-- `ghcr.io/ctessum/esm-format-typescript:latest`
+- `ghcr.io/ctessum/earthsci-toolkit-typescript:latest`
 - `ghcr.io/ctessum/esm-format-python:latest`
 - `ghcr.io/ctessum/esm-format-rust:latest`
 

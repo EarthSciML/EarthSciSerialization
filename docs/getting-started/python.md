@@ -6,7 +6,7 @@ The Python implementation provides scientific computing integration with NumPy, 
 
 ### From PyPI (when available)
 ```bash
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 ### Development Installation
@@ -19,13 +19,13 @@ pip install -e .
 ### With Optional Dependencies
 ```bash
 # For visualization
-pip install esm-format[viz]
+pip install earthsci-toolkit[viz]
 
 # For symbolic computation
-pip install esm-format[symbolic]
+pip install earthsci-toolkit[symbolic]
 
 # For all optional features
-pip install esm-format[all]
+pip install earthsci-toolkit[all]
 ```
 
 ## Core Capabilities

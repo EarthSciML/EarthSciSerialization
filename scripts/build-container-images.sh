@@ -11,7 +11,7 @@ BUILD_DIR="${PROJECT_ROOT}/dist/containers"
 VERSION="${ESM_VERSION:-$(cat "${PROJECT_ROOT}/workspace.json" | jq -r '.version // "dev"')}"
 REGISTRY="${ESM_REGISTRY:-docker.io}"
 NAMESPACE="${ESM_NAMESPACE:-ctessum}"
-PROJECT_NAME="esm-format"
+PROJECT_NAME="earthsci-toolkit"
 
 # Build configuration
 PLATFORMS="${ESM_PLATFORMS:-linux/amd64,linux/arm64}"
@@ -682,7 +682,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: esm-config
-  namespace: esm-format
+  namespace: earthsci-toolkit
 data:
   ESM_TEST_TIMEOUT: "300"
   JULIA_NUM_THREADS: "auto"
@@ -698,7 +698,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: esm-julia
-  namespace: esm-format
+  namespace: earthsci-toolkit
   labels:
     app: esm-julia
     component: conformance
@@ -748,7 +748,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: esm-julia-service
-  namespace: esm-format
+  namespace: earthsci-toolkit
 spec:
   selector:
     app: esm-julia
@@ -764,9 +764,9 @@ EOF
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: esm-format
+  name: earthsci-toolkit
   labels:
-    name: esm-format
+    name: earthsci-toolkit
 EOF
 
     success "Created Kubernetes manifests"

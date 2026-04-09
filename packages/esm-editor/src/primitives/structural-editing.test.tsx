@@ -9,7 +9,7 @@ import {
   WRAP_OPERATORS,
   COMMUTATIVE_OPERATORS
 } from './structural-editing';
-import type { Expression } from 'esm-format';
+import type { Expression } from 'earthsci-toolkit';
 
 describe('Structural editing operations', () => {
   describe('StructuralEditingProvider', () => {

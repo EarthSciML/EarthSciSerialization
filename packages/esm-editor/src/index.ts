@@ -113,7 +113,7 @@ export {
   type EsmCouplingGraphProps
 } from './web-components';
 
-// Re-export types from esm-format for convenience
+// Re-export types from earthsci-toolkit for convenience
 export type {
   Expression,
   ExpressionNode as ExprNode,
@@ -123,4 +123,4 @@ export type {
   EsmFile,
   Model,
   ReactionSystem
-} from 'esm-format';
+} from 'earthsci-toolkit';

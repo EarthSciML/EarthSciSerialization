@@ -249,7 +249,7 @@ cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.test()'
 
 # TypeScript
-cd packages/esm-format
+cd packages/earthsci-toolkit
 npm test -- --run
 
 # Python
@@ -257,7 +257,7 @@ cd packages/esm_format
 python -m pytest tests/ -v
 
 # Rust
-cd packages/esm-format-rust
+cd packages/earthsci-toolkit-rust
 cargo test
 ```
 

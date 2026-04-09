@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRoot } from 'solid-js';
 import { createAstStore, PathUtils, CommonPaths } from './ast-store';
-import type { EsmFile, Model } from 'esm-format';
+import type { EsmFile, Model } from 'earthsci-toolkit';
 
 describe('AST Store', () => {
   let cleanup: (() => void) | null = null;

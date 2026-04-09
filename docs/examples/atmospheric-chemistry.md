@@ -467,7 +467,7 @@ print(f"PSS Ratio (should ≈ 1): {pss_ratio:.3f}")
 ### TypeScript Visualization
 
 ```typescript
-import { load, validate, toUnicode, toLatex } from 'esm-format';
+import { load, validate, toUnicode, toLatex } from 'earthsci-toolkit';
 import * as d3 from 'd3';
 
 // Load and validate model

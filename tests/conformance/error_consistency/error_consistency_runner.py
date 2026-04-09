@@ -120,7 +120,7 @@ class ErrorConsistencyRunner:
 
     def validate_with_typescript(self, esm_file: Path) -> Dict[str, Any]:
         """Run validation using the TypeScript implementation."""
-        ts_dir = self.project_root / "packages" / "esm-format"
+        ts_dir = self.project_root / "packages" / "earthsci-toolkit"
 
         # Create a temporary TypeScript script that uses the validate function
         ts_script = f'''

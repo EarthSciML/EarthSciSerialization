@@ -11,12 +11,12 @@ julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerializ
 
 ### TypeScript/JavaScript
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ### Python
 ```bash
-pip install esm-format  # When available on PyPI
+pip install earthsci-toolkit  # When available on PyPI
 # Or install from source:
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
 cd EarthSciSerialization/packages/esm_format
@@ -25,10 +25,10 @@ pip install -e .
 
 ### Rust
 ```bash
-cargo install esm-format --features cli
+cargo install earthsci-toolkit --features cli
 # Or add to Cargo.toml:
 # [dependencies]
-# esm-format = "0.1.0"
+# earthsci-toolkit = "0.1.0"
 ```
 
 ## Detailed Installation
@@ -76,37 +76,37 @@ println("Loaded test model: ", esm_file.metadata.name)
 
 #### NPM
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 #### Yarn
 ```bash
-yarn add esm-format
+yarn add earthsci-toolkit
 ```
 
 #### Pnpm
 ```bash
-pnpm add esm-format
+pnpm add earthsci-toolkit
 ```
 
 #### CDN (Browser)
 ```html
 <!-- ES Modules -->
 <script type="module">
-  import { load, validate } from 'https://unpkg.com/esm-format/dist/esm/index.js';
+  import { load, validate } from 'https://unpkg.com/earthsci-toolkit/dist/esm/index.js';
 </script>
 
 <!-- UMD (older browsers) -->
-<script src="https://unpkg.com/esm-format/dist/umd/index.js"></script>
+<script src="https://unpkg.com/earthsci-toolkit/dist/umd/index.js"></script>
 ```
 
 #### Verify Installation
 ```javascript
 // Node.js/CommonJS
-const { load, validate } = require('esm-format');
+const { load, validate } = require('earthsci-toolkit');
 
 // ES Modules
-import { load, validate } from 'esm-format';
+import { load, validate } from 'earthsci-toolkit';
 
 // Test functionality
 const esmData = '{"esm": "0.1.0", "metadata": {"name": "Test"}}';
@@ -118,7 +118,7 @@ console.log('Loaded test model:', esmFile.metadata.name);
 
 #### From PyPI (when available)
 ```bash
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 #### From Source
@@ -131,13 +131,13 @@ pip install -e .
 #### With Optional Dependencies
 ```bash
 # For visualization support
-pip install esm-format[viz]
+pip install earthsci-toolkit[viz]
 
 # For symbolic computation
-pip install esm-format[symbolic]
+pip install earthsci-toolkit[symbolic]
 
 # All optional features
-pip install esm-format[all]
+pip install earthsci-toolkit[all]
 ```
 
 #### Virtual Environment Setup
@@ -148,7 +148,7 @@ source esm_env/bin/activate  # Linux/macOS
 # esm_env\Scripts\activate   # Windows
 
 # Install package
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 #### Conda Environment
@@ -161,13 +161,13 @@ conda activate esm_env
 conda install numpy scipy matplotlib sympy
 
 # Install ESM format
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 #### Verify Installation
 ```python
 import esm_format
-print("esm-format installed successfully!")
+print("earthsci-toolkit installed successfully!")
 
 # Test basic functionality
 esm_data = '{"esm": "0.1.0", "metadata": {"name": "Test"}}'
@@ -181,11 +181,11 @@ print(f"Loaded test model: {esm_file.metadata.name}")
 ```bash
 # Install from GitHub
 cargo install --git https://github.com/EarthSciML/EarthSciSerialization \
-  --root . esm-format --features cli
+  --root . earthsci-toolkit --features cli
 
 # Or clone and install locally
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/esm-format-rust
+cd EarthSciSerialization/packages/earthsci-toolkit-rust
 cargo install --path . --features cli
 ```
 
@@ -193,10 +193,10 @@ cargo install --path . --features cli
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-esm-format = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "esm-format" }
+earthsci-toolkit = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "earthsci-toolkit" }
 
 # Or with specific features
-esm-format = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "esm-format", features = ["wasm"] }
+earthsci-toolkit = { git = "https://github.com/EarthSciML/EarthSciSerialization", package = "earthsci-toolkit", features = ["wasm"] }
 ```
 
 #### WebAssembly
@@ -206,7 +206,7 @@ cargo install wasm-pack
 
 # Clone repository
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/esm-format-rust
+cd EarthSciSerialization/packages/earthsci-toolkit-rust
 
 # Build for web
 wasm-pack build --target web --features wasm
@@ -247,15 +247,15 @@ julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerializ
 # 2. Install Node.js and package
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
-npm install -g esm-format
+npm install -g earthsci-toolkit
 
 # 3. Install Python and package
 sudo apt-get install python3 python3-pip
-pip install esm-format
+pip install earthsci-toolkit
 
 # 4. Install Rust and CLI
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo install esm-format --features cli
+cargo install earthsci-toolkit --features cli
 ```
 
 ### Docker Environment
@@ -276,9 +276,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install ESM packages
-RUN pip install esm-format
-RUN npm install -g esm-format
-RUN cargo install esm-format --features cli
+RUN pip install earthsci-toolkit
+RUN npm install -g earthsci-toolkit
+RUN cargo install earthsci-toolkit --features cli
 RUN julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")'
 
 WORKDIR /workspace
@@ -317,10 +317,10 @@ npm install
 pip install --upgrade pip setuptools wheel
 
 # Install with verbose output for debugging
-pip install -v esm-format
+pip install -v earthsci-toolkit
 
 # Use --user if permissions issues
-pip install --user esm-format
+pip install --user earthsci-toolkit
 ```
 
 #### Rust Compilation Errors
@@ -332,7 +332,7 @@ rustup update
 cargo clean
 
 # Install with verbose output
-cargo install --verbose esm-format --features cli
+cargo install --verbose earthsci-toolkit --features cli
 ```
 
 ### Platform-Specific Notes

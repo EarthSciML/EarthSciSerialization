@@ -316,7 +316,7 @@ class DocumentationMaintainer:
         types = []
 
         ts_dirs = [
-            self.packages_dir / "esm-format" / "src",
+            self.packages_dir / "earthsci-toolkit" / "src",
             self.packages_dir / "esm-editor" / "src"
         ]
 

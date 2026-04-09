@@ -552,7 +552,7 @@ end
 
 ### TypeScript
 ```typescript
-import { load, validate } from 'esm-format';
+import { load, validate } from 'earthsci-toolkit';
 
 const esmFile = load(esmData);
 const result = validate(esmFile);

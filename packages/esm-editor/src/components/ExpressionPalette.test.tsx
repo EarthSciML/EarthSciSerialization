@@ -5,7 +5,7 @@
 import { render, screen, fireEvent } from '@solidjs/testing-library';
 import { describe, it, expect, vi } from 'vitest';
 import { ExpressionPalette } from './ExpressionPalette';
-import type { Model } from 'esm-format';
+import type { Model } from 'earthsci-toolkit';
 
 describe('ExpressionPalette', () => {
   const mockModel: Model = {

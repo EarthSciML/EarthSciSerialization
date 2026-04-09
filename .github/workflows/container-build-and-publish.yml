@@ -71,7 +71,7 @@ on:
 env:
   REGISTRY: ${{ inputs.registry || github.event.inputs.registry || 'ghcr.io' }}
   NAMESPACE: ${{ github.repository_owner }}
-  PROJECT_NAME: esm-format
+  PROJECT_NAME: earthsci-toolkit
   OPTIMIZATION_PROFILE: ${{ inputs.optimization_profile || github.event.inputs.optimization_profile || 'production' }}
   TARGET_PLATFORMS: ${{ inputs.target_platforms || github.event.inputs.target_platforms || 'linux/amd64,linux/arm64' }}
 
@@ -193,7 +193,7 @@ jobs:
           # Map language to package name
           case "$LANGUAGE" in
             "julia") PACKAGE_NAME="EarthSciSerialization.jl" ;;
-            "typescript") PACKAGE_NAME="esm-format" ;;
+            "typescript") PACKAGE_NAME="earthsci-toolkit" ;;
             "python") PACKAGE_NAME="esm_format" ;;
             "rust") PACKAGE_NAME="esm-format-rust" ;;
             *) PACKAGE_NAME="$LANGUAGE" ;;
