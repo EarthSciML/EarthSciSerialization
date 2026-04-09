@@ -33,7 +33,7 @@ monitoring/
 from monitoring.python_integration import ESMAnalytics, track_performance, record_event
 
 # Initialize analytics
-ESMAnalytics.initialize("esm-format-python", "0.1.0")
+ESMAnalytics.initialize("earthsci-toolkit-python", "0.1.0")
 
 # Use decorators
 @track_performance("parse_esm", track_file_size=True)
@@ -195,7 +195,7 @@ ESMAnalytics.initialize({
   "memory_mb": 15.2,
   "cpu_percent": 45.0,
   "timestamp": "2026-02-17T10:30:00Z",
-  "package": "esm-format-python",
+  "package": "earthsci-toolkit-python",
   "version": "0.1.0",
   "platform_info": {
     "os": "Linux",
@@ -215,7 +215,7 @@ ESMAnalytics.initialize({
 ```json
 {
   "event_type": "parse",
-  "package": "esm-format-python",
+  "package": "earthsci-toolkit-python",
   "version": "0.1.0",
   "timestamp": "2026-02-17T10:30:00Z",
   "user_id": "a1b2c3d4e5f6g7h8",
@@ -233,7 +233,7 @@ ESMAnalytics.initialize({
 ```json
 {
   "feedback_id": "f1f2f3f4-f5f6-f7f8-f9f0-f1f2f3f4f5f6",
-  "package": "esm-format-python",
+  "package": "earthsci-toolkit-python",
   "version": "0.1.0",
   "timestamp": "2026-02-17T10:30:00Z",
   "user_id": "a1b2c3d4e5f6g7h8",
