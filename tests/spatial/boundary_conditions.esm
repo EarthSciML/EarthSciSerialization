@@ -3,21 +3,26 @@
   "metadata": {
     "name": "BoundaryConditionTests",
     "description": "Test boundary condition implementation for atmospheric models",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z",
-    "tags": ["boundary-conditions", "atmospheric-modeling", "spatial-discretization"]
+    "tags": [
+      "boundary-conditions",
+      "atmospheric-modeling",
+      "spatial-discretization"
+    ]
   },
-
   "models": {
     "NeumannBoundary": {
       "reference": {
-        "notes": "Test zero-gradient (Neumann) boundary conditions: ∂C/∂n = 0 at domain edges"
+        "notes": "Test zero-gradient (Neumann) boundary conditions: \u2202C/\u2202n = 0 at domain edges"
       },
       "variables": {
         "concentration": {
           "type": "state",
           "units": "mol/mol",
-          "default": 1e-8,
+          "default": 1e-08,
           "description": "Species concentration with zero-gradient at boundaries"
         },
         "diffusivity": {
@@ -29,19 +34,31 @@
       },
       "equations": [
         {
-          "_comment": "Pure diffusion with zero-gradient boundaries",
-          "lhs": {"op": "D", "args": ["concentration"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "concentration"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "*",
-            "args": ["diffusivity", {"op": "laplacian", "args": ["concentration"]}]
+            "args": [
+              "diffusivity",
+              {
+                "op": "laplacian",
+                "args": [
+                  "concentration"
+                ]
+              }
+            ]
           }
         }
       ]
     },
-
     "DirichletBoundary": {
       "reference": {
-        "notes": "Test fixed-value (Dirichlet) boundary conditions: C = C₀ at domain edges"
+        "notes": "Test fixed-value (Dirichlet) boundary conditions: C = C\u2080 at domain edges"
       },
       "variables": {
         "tracer": {
@@ -53,7 +70,7 @@
         "boundary_value": {
           "type": "parameter",
           "units": "mol/mol",
-          "default": 1e-6,
+          "default": 1e-06,
           "description": "Fixed boundary concentration"
         },
         "K_diff": {
@@ -64,16 +81,28 @@
       },
       "equations": [
         {
-          "_comment": "Diffusion with constant boundary values",
-          "lhs": {"op": "D", "args": ["tracer"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "tracer"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "*",
-            "args": ["K_diff", {"op": "laplacian", "args": ["tracer"]}]
+            "args": [
+              "K_diff",
+              {
+                "op": "laplacian",
+                "args": [
+                  "tracer"
+                ]
+              }
+            ]
           }
         }
       ]
     },
-
     "PeriodicBoundary": {
       "reference": {
         "notes": "Test periodic boundary conditions: C(0) = C(L) for global atmospheric models"
@@ -82,7 +111,7 @@
         "global_tracer": {
           "type": "state",
           "units": "mol/mol",
-          "default": 1e-9,
+          "default": 1e-09,
           "description": "Globally transported species with periodic longitude boundaries"
         },
         "wind_speed": {
@@ -94,19 +123,34 @@
       },
       "equations": [
         {
-          "_comment": "Pure advection with periodic boundaries",
-          "lhs": {"op": "D", "args": ["global_tracer"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "global_tracer"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "*",
             "args": [
-              {"op": "-", "args": ["wind_speed"]},
-              {"op": "grad", "args": ["global_tracer"], "dim": "lon"}
+              {
+                "op": "-",
+                "args": [
+                  "wind_speed"
+                ]
+              },
+              {
+                "op": "grad",
+                "args": [
+                  "global_tracer"
+                ],
+                "dim": "lon"
+              }
             ]
           }
         }
       ]
     },
-
     "MixedBoundaries": {
       "reference": {
         "notes": "Test mixed boundary conditions: different BC types on different domain edges"
@@ -133,17 +177,26 @@
       },
       "equations": [
         {
-          "_comment": "Pollutant transport with surface emission and deposition",
-          "lhs": {"op": "D", "args": ["pollution"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "pollution"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "+",
             "args": [
               "surface_emission",
               {
-                "_comment": "Surface loss term: -v_dep * pollution at bottom boundary",
                 "op": "*",
                 "args": [
-                  {"op": "-", "args": ["deposition_velocity"]},
+                  {
+                    "op": "-",
+                    "args": [
+                      "deposition_velocity"
+                    ]
+                  },
                   "pollution"
                 ]
               }
@@ -153,91 +206,6 @@
       ]
     }
   },
-
-  "domain": {
-    "independent_variable": "t",
-    "temporal": {
-      "start": "2024-01-01T00:00:00Z",
-      "end": "2024-01-01T06:00:00Z"
-    },
-    "spatial": {
-      "x": {
-        "min": 0.0,
-        "max": 50000.0,
-        "units": "meters",
-        "grid_spacing": 1000.0,
-        "description": "West-east domain"
-      },
-      "y": {
-        "min": 0.0,
-        "max": 50000.0,
-        "units": "meters",
-        "grid_spacing": 1000.0,
-        "description": "South-north domain"
-      },
-      "lon": {
-        "min": -180.0,
-        "max": 180.0,
-        "units": "degrees",
-        "grid_spacing": 2.0,
-        "description": "Longitude for periodic test"
-      }
-    },
-    "initial_conditions": {
-      "type": "per_variable",
-      "values": {
-        "concentration": "1e-8",
-        "tracer": "0.0",
-        "global_tracer": "1e-9",
-        "pollution": "0.0"
-      }
-    },
-    "boundary_conditions": [
-      {
-        "type": "zero_gradient",
-        "dimensions": ["x", "y"],
-        "applies_to": ["concentration"],
-        "description": "∂C/∂n = 0 at all boundaries"
-      },
-      {
-        "type": "constant",
-        "dimensions": ["x", "y"],
-        "value": "1e-6",
-        "applies_to": ["tracer"],
-        "description": "Fixed concentration at boundaries"
-      },
-      {
-        "type": "periodic",
-        "dimensions": ["lon"],
-        "applies_to": ["global_tracer"],
-        "description": "C(lon=-180°) = C(lon=+180°)"
-      },
-      {
-        "type": "mixed",
-        "applies_to": ["pollution"],
-        "conditions": [
-          {
-            "boundary": "bottom",
-            "type": "flux",
-            "value": "surface_emission",
-            "description": "Upward emission flux at surface"
-          },
-          {
-            "boundary": "top",
-            "type": "zero_gradient",
-            "description": "No flux through model top"
-          },
-          {
-            "boundary": "lateral",
-            "type": "zero_gradient",
-            "description": "No lateral flux"
-          }
-        ]
-      }
-    ],
-    "element_type": "Float64"
-  },
-
   "solver": {
     "strategy": "strang_serial",
     "config": {
@@ -246,8 +214,76 @@
       "boundary_method": "ghost_cells",
       "stiff_kwargs": {
         "abstol": 1e-10,
-        "reltol": 1e-8
+        "reltol": 1e-08
       }
+    }
+  },
+  "domains": {
+    "default": {
+      "independent_variable": "t",
+      "temporal": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-01-01T06:00:00Z"
+      },
+      "spatial": {
+        "x": {
+          "min": 0.0,
+          "max": 50000.0,
+          "units": "meters",
+          "grid_spacing": 1000.0
+        },
+        "y": {
+          "min": 0.0,
+          "max": 50000.0,
+          "units": "meters",
+          "grid_spacing": 1000.0
+        },
+        "lon": {
+          "min": -180.0,
+          "max": 180.0,
+          "units": "degrees",
+          "grid_spacing": 2.0
+        }
+      },
+      "initial_conditions": {
+        "type": "per_variable",
+        "values": {
+          "concentration": 1e-08,
+          "tracer": 0.0,
+          "global_tracer": 1e-09,
+          "pollution": 0.0
+        }
+      },
+      "boundary_conditions": [
+        {
+          "type": "zero_gradient",
+          "dimensions": [
+            "x",
+            "y"
+          ]
+        },
+        {
+          "type": "constant",
+          "dimensions": [
+            "x",
+            "y"
+          ],
+          "value": 1e-06
+        },
+        {
+          "type": "periodic",
+          "dimensions": [
+            "lon"
+          ]
+        },
+        {
+          "type": "robin",
+          "dimensions": [
+            "x"
+          ]
+        }
+      ],
+      "element_type": "Float64"
     }
   }
 }

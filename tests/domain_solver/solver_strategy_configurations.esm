@@ -3,9 +3,15 @@
   "metadata": {
     "name": "SolverStrategyConfigurations",
     "description": "Comprehensive test of all solver strategies (strang_threads, strang_serial, imex) with various algorithm combinations and configuration options",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-17T00:00:00Z",
-    "tags": ["solver-strategies", "time-integration", "numerical-methods"],
+    "tags": [
+      "solver-strategies",
+      "time-integration",
+      "numerical-methods"
+    ],
     "references": [
       {
         "citation": "Solver strategy test fixture for time integration algorithms",
@@ -13,52 +19,105 @@
       }
     ]
   },
-
   "reaction_systems": {
     "StiffChemistry": {
-      "reference": { "notes": "Stiff chemical system requiring robust time integration" },
+      "reference": {
+        "notes": "Stiff chemical system requiring robust time integration"
+      },
       "species": {
-        "A": { "units": "mol/mol", "default": 1e-3, "description": "Fast-reacting species A" },
-        "B": { "units": "mol/mol", "default": 1e-6, "description": "Intermediate species B" },
-        "C": { "units": "mol/mol", "default": 1e-9, "description": "Product species C" }
+        "A": {
+          "units": "mol/mol",
+          "default": 0.001,
+          "description": "Fast-reacting species A"
+        },
+        "B": {
+          "units": "mol/mol",
+          "default": 1e-06,
+          "description": "Intermediate species B"
+        },
+        "C": {
+          "units": "mol/mol",
+          "default": 1e-09,
+          "description": "Product species C"
+        }
       },
       "parameters": {
-        "k1_fast": { "units": "1/s", "default": 1000.0, "description": "Fast reaction rate" },
-        "k2_medium": { "units": "1/s", "default": 10.0, "description": "Medium reaction rate" },
-        "k3_slow": { "units": "1/s", "default": 0.1, "description": "Slow reaction rate" }
+        "k1_fast": {
+          "units": "1/s",
+          "default": 1000.0,
+          "description": "Fast reaction rate"
+        },
+        "k2_medium": {
+          "units": "1/s",
+          "default": 10.0,
+          "description": "Medium reaction rate"
+        },
+        "k3_slow": {
+          "units": "1/s",
+          "default": 0.1,
+          "description": "Slow reaction rate"
+        }
       },
       "reactions": [
         {
           "id": "R1_fast",
           "name": "A_to_B_fast",
-          "substrates": [{ "species": "A", "stoichiometry": 1 }],
-          "products": [{ "species": "B", "stoichiometry": 1 }],
-          "rate": "k1_fast",
-          "_comment": "Fast: A → B (stiff)"
+          "substrates": [
+            {
+              "species": "A",
+              "stoichiometry": 1
+            }
+          ],
+          "products": [
+            {
+              "species": "B",
+              "stoichiometry": 1
+            }
+          ],
+          "rate": "k1_fast"
         },
         {
           "id": "R2_medium",
           "name": "B_to_C_medium",
-          "substrates": [{ "species": "B", "stoichiometry": 1 }],
-          "products": [{ "species": "C", "stoichiometry": 1 }],
-          "rate": "k2_medium",
-          "_comment": "Medium: B → C"
+          "substrates": [
+            {
+              "species": "B",
+              "stoichiometry": 1
+            }
+          ],
+          "products": [
+            {
+              "species": "C",
+              "stoichiometry": 1
+            }
+          ],
+          "rate": "k2_medium"
         },
         {
           "id": "R3_slow",
           "name": "C_to_A_slow",
-          "substrates": [{ "species": "C", "stoichiometry": 1 }],
-          "products": [{ "species": "A", "stoichiometry": 1 }],
-          "rate": "k3_slow",
-          "_comment": "Slow: C → A (recycling)"
+          "substrates": [
+            {
+              "species": "C",
+              "stoichiometry": 1
+            }
+          ],
+          "products": [
+            {
+              "species": "A",
+              "stoichiometry": 1
+            }
+          ],
+          "rate": "k3_slow"
         }
       ]
     }
   },
-
   "models": {
     "NonStiffTransport": {
-      "reference": { "notes": "Non-stiff transport processes suitable for explicit methods" },
+      "reference": {
+        "notes": "Non-stiff transport processes suitable for explicit methods"
+      },
       "variables": {
         "wind_u": {
           "type": "parameter",
@@ -81,35 +140,68 @@
       },
       "equations": [
         {
-          "_comment": "Advection-diffusion for all chemical species via _var placeholder",
-          "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "u"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "+",
             "args": [
               {
-                "_comment": "Advection terms (non-stiff)",
                 "op": "+",
                 "args": [
                   {
                     "op": "*",
                     "args": [
-                      {"op": "-", "args": ["wind_u"]},
-                      {"op": "grad", "args": ["_var"], "dim": "x"}
+                      {
+                        "op": "-",
+                        "args": [
+                          "wind_u"
+                        ]
+                      },
+                      {
+                        "op": "grad",
+                        "args": [
+                          "u"
+                        ],
+                        "dim": "x"
+                      }
                     ]
                   },
                   {
                     "op": "*",
                     "args": [
-                      {"op": "-", "args": ["wind_v"]},
-                      {"op": "grad", "args": ["_var"], "dim": "y"}
+                      {
+                        "op": "-",
+                        "args": [
+                          "wind_v"
+                        ]
+                      },
+                      {
+                        "op": "grad",
+                        "args": [
+                          "u"
+                        ],
+                        "dim": "y"
+                      }
                     ]
                   }
                 ]
               },
               {
-                "_comment": "Horizontal diffusion (mildly stiff)",
                 "op": "*",
-                "args": ["diffusivity_h", {"op": "laplacian", "args": ["_var"]}]
+                "args": [
+                  "diffusivity_h",
+                  {
+                    "op": "laplacian",
+                    "args": [
+                      "u"
+                    ]
+                  }
+                ]
               }
             ]
           }
@@ -117,49 +209,6 @@
       ]
     }
   },
-
-  "domain": {
-    "independent_variable": "t",
-    "temporal": {
-      "start": "2024-01-01T00:00:00Z",
-      "end": "2024-01-01T01:00:00Z",
-      "_comment": "1-hour simulation to test solver performance"
-    },
-    "spatial": {
-      "x": {
-        "min": 0.0,
-        "max": 10000.0,
-        "units": "meters",
-        "grid_spacing": 500.0,
-        "_comment": "10 km domain, 500 m resolution (21 points)"
-      },
-      "y": {
-        "min": 0.0,
-        "max": 5000.0,
-        "units": "meters",
-        "grid_spacing": 500.0,
-        "_comment": "5 km domain, 500 m resolution (11 points)"
-      }
-    },
-    "initial_conditions": {
-      "type": "per_variable",
-      "values": {
-        "A": 1e-3,
-        "B": 1e-6,
-        "C": 1e-9
-      },
-      "_comment": "Non-equilibrium initial state to test stiffness"
-    },
-    "boundary_conditions": [
-      {
-        "type": "periodic",
-        "dimensions": ["x", "y"],
-        "_comment": "Periodic boundaries to focus on time integration"
-      }
-    ],
-    "element_type": "Float64"
-  },
-
   "solver": {
     "strategy": "strang_threads",
     "config": {
@@ -169,126 +218,83 @@
       "timestep": 1.0,
       "stiff_kwargs": {
         "abstol": 1e-12,
-        "reltol": 1e-9,
+        "reltol": 1e-09,
         "maxiters": 10000,
-        "dtmax": 0.1,
-        "_comment": "Tight tolerances for stiff chemistry"
+        "dtmax": 0.1
       },
       "nonstiff_kwargs": {
-        "abstol": 1e-8,
-        "reltol": 1e-5,
-        "dtmax": 1.0,
-        "_comment": "Looser tolerances for transport"
+        "abstol": 1e-08,
+        "reltol": 1e-05,
+        "dtmax": 1.0
       },
       "map_algorithm": "threads",
       "operator_splitting": {
         "chemistry_timestep": 0.1,
-        "transport_timestep": 1.0,
-        "_comment": "Sub-cycling for different time scales"
+        "transport_timestep": 1.0
       },
       "load_balancing": {
         "enabled": true,
         "chunk_size": 50,
         "dynamic_scheduling": true
-      }
-    },
-    "adaptive_timestepping": {
-      "enabled": true,
-      "min_timestep": 1e-6,
-      "max_timestep": 10.0,
-      "safety_factor": 0.8,
-      "error_estimator": "embedded",
-      "_comment": "Adaptive timestepping for efficiency"
-    },
-    "performance_monitoring": {
-      "enabled": true,
-      "log_frequency": 100,
-      "track_metrics": ["walltime", "iterations", "rejections", "function_evaluations"]
-    }
-  },
-
-  "_alternative_solver_configs": {
-    "strang_serial_conservative": {
-      "strategy": "strang_serial",
-      "config": {
-        "stiff_algorithm": "Rodas4",
-        "timestep": 0.5,
-        "stiff_kwargs": {
-          "abstol": 1e-10,
-          "reltol": 1e-7
-        },
-        "_use_case": "Conservative serial execution with robust L-stable method"
-      }
-    },
-    "imex_high_performance": {
-      "strategy": "imex",
-      "config": {
-        "stiff_algorithm": "QNDF",
-        "nonstiff_algorithm": "Vern9",
-        "timestep": 2.0,
-        "stiff_kwargs": {
-          "abstol": 1e-11,
-          "reltol": 1e-8,
-          "nlsolve": "NLNewton"
-        },
-        "nonstiff_kwargs": {
-          "abstol": 1e-9,
-          "reltol": 1e-6
-        },
-        "_use_case": "High-order IMEX for maximum accuracy"
-      }
-    },
-    "strang_threads_moderate": {
-      "strategy": "strang_threads",
-      "config": {
-        "threads": 4,
-        "stiff_algorithm": "Rosenbrock23",
-        "timestep": 5.0,
-        "stiff_kwargs": {
-          "abstol": 1e-8,
-          "reltol": 1e-5
-        },
-        "map_algorithm": "distributed",
-        "_use_case": "Moderate accuracy with good parallel efficiency"
+      },
+      "adaptive_timestepping": {
+        "enabled": true,
+        "min_timestep": 1e-06,
+        "max_timestep": 10.0,
+        "safety_factor": 0.8,
+        "error_estimator": "embedded"
+      },
+      "performance_monitoring": {
+        "enabled": true,
+        "log_frequency": 100,
+        "track_metrics": [
+          "walltime",
+          "iterations",
+          "rejections",
+          "function_evaluations"
+        ]
       }
     }
   },
-
-  "_test_expectations": {
-    "solver_strategy_validation": {
-      "expected_primary_strategy": "strang_threads",
-      "expected_thread_count": 6,
-      "expected_stiff_solver": "QNDF",
-      "expected_nonstiff_solver": "Vern7"
-    },
-    "time_integration_properties": {
-      "chemistry_timescale": "fast (0.001 - 1.0 seconds)",
-      "transport_timescale": "medium (1 - 10 seconds)",
-      "overall_timestep": 1.0,
-      "adaptive_enabled": true
-    },
-    "numerical_accuracy": {
-      "stiff_abstol": 1e-12,
-      "stiff_reltol": 1e-9,
-      "nonstiff_abstol": 1e-8,
-      "nonstiff_reltol": 1e-5
-    },
-    "parallel_performance": {
-      "threading_enabled": true,
-      "load_balancing": true,
-      "chunk_size": 50,
-      "expected_speedup_range": [2.0, 5.0]
-    },
-    "operator_splitting_validation": {
-      "chemistry_substep": 0.1,
-      "transport_substep": 1.0,
-      "splitting_order": "strang",
-      "subcycling_ratio": 10
-    },
-    "alternative_configurations": {
-      "conservative_serial": "Rodas4 with small timesteps",
-      "high_accuracy_imex": "QNDF/Vern9 combination",
-      "moderate_parallel": "Rosenbrock23 with 4 threads"
+  "domains": {
+    "default": {
+      "independent_variable": "t",
+      "temporal": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-01-01T01:00:00Z"
+      },
+      "spatial": {
+        "x": {
+          "min": 0.0,
+          "max": 10000.0,
+          "units": "meters",
+          "grid_spacing": 500.0
+        },
+        "y": {
+          "min": 0.0,
+          "max": 5000.0,
+          "units": "meters",
+          "grid_spacing": 500.0
+        }
+      },
+      "initial_conditions": {
+        "type": "per_variable",
+        "values": {
+          "A": 0.001,
+          "B": 1e-06,
+          "C": 1e-09
+        }
+      },
+      "boundary_conditions": [
+        {
+          "type": "periodic",
+          "dimensions": [
+            "x",
+            "y"
+          ]
+        }
+      ],
+      "element_type": "Float64"
     }
   }
 }

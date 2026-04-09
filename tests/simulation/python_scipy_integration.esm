@@ -3,21 +3,27 @@
   "metadata": {
     "name": "PythonSciPyIntegration",
     "description": "Test Python SciPy simulation capability for 0D box models",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z",
-    "tags": ["python", "scipy", "simulation", "box-model"]
+    "tags": [
+      "python",
+      "scipy",
+      "simulation",
+      "box-model"
+    ]
   },
-
   "models": {
     "ExponentialDecay": {
       "reference": {
-        "notes": "Simple exponential decay with analytical solution: C(t) = C₀ * exp(-k*t)"
+        "notes": "Simple exponential decay with analytical solution: C(t) = C\u2080 * exp(-k*t)"
       },
       "variables": {
         "concentration": {
           "type": "state",
           "units": "mol/mol",
-          "default": 1e-6,
+          "default": 1e-06,
           "description": "Decaying species concentration"
         },
         "decay_rate": {
@@ -32,27 +38,53 @@
           "expression": {
             "op": "*",
             "args": [
-              1e-6,
-              {"op": "exp", "args": [{"op": "*", "args": [{"op": "-", "args": ["decay_rate"]}, "t"]}]}
+              1e-06,
+              {
+                "op": "exp",
+                "args": [
+                  {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "decay_rate"
+                        ]
+                      },
+                      "t"
+                    ]
+                  }
+                ]
+              }
             ]
           },
-          "description": "C₀ * exp(-k*t)"
+          "description": "C\u2080 * exp(-k*t)"
         }
       },
       "equations": [
         {
-          "lhs": {"op": "D", "args": ["concentration"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "concentration"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "*",
             "args": [
-              {"op": "-", "args": ["decay_rate"]},
+              {
+                "op": "-",
+                "args": [
+                  "decay_rate"
+                ]
+              },
               "concentration"
             ]
           }
         }
       ]
     },
-
     "LogisticGrowth": {
       "reference": {
         "notes": "Test nonlinear dynamics with logistic growth equation"
@@ -85,85 +117,131 @@
       },
       "equations": [
         {
-          "_comment": "Logistic equation: dp/dt = r*p*(1 - p/K)",
-          "lhs": {"op": "D", "args": ["population"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "population"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "*",
             "args": [
               "growth_rate",
               "population",
-              {"op": "-", "args": [
-                1.0,
-                {"op": "/", "args": ["population", "carrying_capacity"]}
-              ]}
+              {
+                "op": "-",
+                "args": [
+                  1.0,
+                  {
+                    "op": "/",
+                    "args": [
+                      "population",
+                      "carrying_capacity"
+                    ]
+                  }
+                ]
+              }
             ]
           }
         }
       ]
     }
   },
-
   "reaction_systems": {
     "SimpleKinetics": {
       "reference": {
-        "notes": "Test reaction system → ODE conversion and mass balance verification"
+        "notes": "Test reaction system \u2192 ODE conversion and mass balance verification"
       },
       "species": {
-        "A": {"units": "mol/mol", "default": 1e-3, "description": "Reactant A"},
-        "B": {"units": "mol/mol", "default": 0.0, "description": "Product B"},
-        "C": {"units": "mol/mol", "default": 0.0, "description": "Product C"}
+        "A": {
+          "units": "mol/mol",
+          "default": 0.001,
+          "description": "Reactant A"
+        },
+        "B": {
+          "units": "mol/mol",
+          "default": 0.0,
+          "description": "Product B"
+        },
+        "C": {
+          "units": "mol/mol",
+          "default": 0.0,
+          "description": "Product C"
+        }
       },
       "parameters": {
-        "k_forward": {"units": "1/s", "default": 0.1, "description": "Forward rate constant"},
-        "k_reverse": {"units": "1/s", "default": 0.01, "description": "Reverse rate constant"},
-        "k_side": {"units": "1/s", "default": 0.005, "description": "Side reaction rate"}
+        "k_forward": {
+          "units": "1/s",
+          "default": 0.1,
+          "description": "Forward rate constant"
+        },
+        "k_reverse": {
+          "units": "1/s",
+          "default": 0.01,
+          "description": "Reverse rate constant"
+        },
+        "k_side": {
+          "units": "1/s",
+          "default": 0.005,
+          "description": "Side reaction rate"
+        }
       },
       "reactions": [
         {
           "id": "R1",
           "name": "main_reaction",
-          "substrates": [{"species": "A", "stoichiometry": 1}],
-          "products": [{"species": "B", "stoichiometry": 1}],
+          "substrates": [
+            {
+              "species": "A",
+              "stoichiometry": 1
+            }
+          ],
+          "products": [
+            {
+              "species": "B",
+              "stoichiometry": 1
+            }
+          ],
           "rate": "k_forward"
         },
         {
           "id": "R2",
           "name": "reverse_reaction",
-          "substrates": [{"species": "B", "stoichiometry": 1}],
-          "products": [{"species": "A", "stoichiometry": 1}],
+          "substrates": [
+            {
+              "species": "B",
+              "stoichiometry": 1
+            }
+          ],
+          "products": [
+            {
+              "species": "A",
+              "stoichiometry": 1
+            }
+          ],
           "rate": "k_reverse"
         },
         {
           "id": "R3",
           "name": "side_reaction",
-          "substrates": [{"species": "A", "stoichiometry": 1}],
-          "products": [{"species": "C", "stoichiometry": 1}],
+          "substrates": [
+            {
+              "species": "A",
+              "stoichiometry": 1
+            }
+          ],
+          "products": [
+            {
+              "species": "C",
+              "stoichiometry": 1
+            }
+          ],
           "rate": "k_side"
         }
       ]
     }
   },
-
-  "domain": {
-    "independent_variable": "t",
-    "temporal": {
-      "start": "2024-01-01T00:00:00Z",
-      "end": "2024-01-01T12:00:00Z",
-      "reference_time": "2024-01-01T00:00:00Z"
-    },
-    "initial_conditions": {
-      "type": "per_variable",
-      "values": {
-        "concentration": 1e-6,
-        "population": 0.1,
-        "A": 1e-3,
-        "B": 0.0,
-        "C": 0.0
-      }
-    },
-    "element_type": "Float64"
-  },
-
   "solver": {
     "strategy": "strang_serial",
     "config": {
@@ -171,9 +249,30 @@
       "timestep": 60.0,
       "stiff_kwargs": {
         "abstol": 1e-10,
-        "reltol": 1e-8,
+        "reltol": 1e-08,
         "max_step": 600.0
       }
+    }
+  },
+  "domains": {
+    "default": {
+      "independent_variable": "t",
+      "temporal": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-01-01T12:00:00Z",
+        "reference_time": "2024-01-01T00:00:00Z"
+      },
+      "initial_conditions": {
+        "type": "per_variable",
+        "values": {
+          "concentration": 1e-06,
+          "population": 0.1,
+          "A": 0.001,
+          "B": 0.0,
+          "C": 0.0
+        }
+      },
+      "element_type": "Float64"
     }
   }
 }

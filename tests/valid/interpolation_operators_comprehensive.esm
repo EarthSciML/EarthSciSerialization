@@ -3,11 +3,17 @@
   "metadata": {
     "name": "InterpolationOperatorsComprehensive",
     "description": "Comprehensive test fixtures for interpolation operators supporting various interpolation methods, grid remapping, and coordinate transformations",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-19T00:00:00Z",
-    "tags": ["interpolation", "operators", "regridding", "data_fusion"]
+    "tags": [
+      "interpolation",
+      "operators",
+      "regridding",
+      "data_fusion"
+    ]
   },
-
   "operators": {
     "LinearInterpolation": {
       "operator_id": "LinearInterp1D",
@@ -20,15 +26,22 @@
         "method": "linear",
         "extrapolation": "constant",
         "fill_value": "nan",
-        "bounds_error": false
+        "bounds_error": false,
+        "temporal_resolution": "PT1S",
+        "spatial_resolution": {
+          "adaptive": true
+        }
       },
-      "needed_vars": ["source_coordinates", "source_values", "target_coordinates"],
-      "modifies": ["interpolated_values"],
-      "description": "1D linear interpolation for temporal or spatial data",
-      "temporal_resolution": "PT1S",
-      "spatial_resolution": { "adaptive": true }
+      "needed_vars": [
+        "source_coordinates",
+        "source_values",
+        "target_coordinates"
+      ],
+      "modifies": [
+        "interpolated_values"
+      ],
+      "description": "1D linear interpolation for temporal or spatial data"
     },
-
     "CubicSplineInterpolation": {
       "operator_id": "CubicSpline1D",
       "reference": {
@@ -41,15 +54,23 @@
         "boundary_conditions": "natural",
         "extrapolation": "linear",
         "smoothing_factor": 0.0,
-        "derivative_order": 0
+        "derivative_order": 0,
+        "temporal_resolution": "PT1S",
+        "spatial_resolution": {
+          "adaptive": true
+        }
       },
-      "needed_vars": ["source_coordinates", "source_values", "target_coordinates"],
-      "modifies": ["interpolated_values", "interpolated_derivatives"],
-      "description": "Cubic spline interpolation with smooth derivatives",
-      "temporal_resolution": "PT1S",
-      "spatial_resolution": { "adaptive": true }
+      "needed_vars": [
+        "source_coordinates",
+        "source_values",
+        "target_coordinates"
+      ],
+      "modifies": [
+        "interpolated_values",
+        "interpolated_derivatives"
+      ],
+      "description": "Cubic spline interpolation with smooth derivatives"
     },
-
     "BSplineInterpolation": {
       "operator_id": "BSplineND",
       "reference": {
@@ -62,15 +83,24 @@
         "knot_spacing": "uniform",
         "extrapolation": "constant",
         "boundary_conditions": "clamped",
-        "smoothing_parameter": 0.0
+        "smoothing_parameter": 0.0,
+        "temporal_resolution": "PT1S",
+        "spatial_resolution": {
+          "lon": 0.001,
+          "lat": 0.001,
+          "lev": 1.0
+        }
       },
-      "needed_vars": ["source_coordinates", "source_values", "target_coordinates"],
-      "modifies": ["interpolated_values"],
-      "description": "Multi-dimensional B-spline interpolation for smooth regridding",
-      "temporal_resolution": "PT1S",
-      "spatial_resolution": { "lon": 0.001, "lat": 0.001, "lev": 1.0 }
+      "needed_vars": [
+        "source_coordinates",
+        "source_values",
+        "target_coordinates"
+      ],
+      "modifies": [
+        "interpolated_values"
+      ],
+      "description": "Multi-dimensional B-spline interpolation for smooth regridding"
     },
-
     "BilinearGridInterpolation": {
       "operator_id": "BilinearGrid2D",
       "reference": {
@@ -83,15 +113,25 @@
         "grid_type": "regular",
         "coordinate_system": "geographic",
         "wrap_longitude": true,
-        "fill_value": "nan"
+        "fill_value": "nan",
+        "temporal_resolution": "PT5M",
+        "spatial_resolution": {
+          "lon": 0.01,
+          "lat": 0.01
+        }
       },
-      "needed_vars": ["source_lon", "source_lat", "source_values", "target_lon", "target_lat"],
-      "modifies": ["interpolated_values"],
-      "description": "Bilinear interpolation for 2D geographic grids",
-      "temporal_resolution": "PT5M",
-      "spatial_resolution": { "lon": 0.01, "lat": 0.01 }
+      "needed_vars": [
+        "source_lon",
+        "source_lat",
+        "source_values",
+        "target_lon",
+        "target_lat"
+      ],
+      "modifies": [
+        "interpolated_values"
+      ],
+      "description": "Bilinear interpolation for 2D geographic grids"
     },
-
     "TrilinearGridInterpolation": {
       "operator_id": "TrilinearGrid3D",
       "reference": {
@@ -105,15 +145,28 @@
         "vertical_coordinate": "pressure",
         "wrap_longitude": true,
         "extrapolation_below": "constant",
-        "extrapolation_above": "constant"
+        "extrapolation_above": "constant",
+        "temporal_resolution": "PT1H",
+        "spatial_resolution": {
+          "lon": 0.25,
+          "lat": 0.25,
+          "lev": 25.0
+        }
       },
-      "needed_vars": ["source_lon", "source_lat", "source_lev", "source_values", "target_lon", "target_lat", "target_lev"],
-      "modifies": ["interpolated_values"],
-      "description": "Trilinear interpolation for 3D atmospheric/oceanic data",
-      "temporal_resolution": "PT1H",
-      "spatial_resolution": { "lon": 0.25, "lat": 0.25, "lev": 25.0 }
+      "needed_vars": [
+        "source_lon",
+        "source_lat",
+        "source_lev",
+        "source_values",
+        "target_lon",
+        "target_lat",
+        "target_lev"
+      ],
+      "modifies": [
+        "interpolated_values"
+      ],
+      "description": "Trilinear interpolation for 3D atmospheric/oceanic data"
     },
-
     "NearestNeighborInterpolation": {
       "operator_id": "NearestNeighbor",
       "reference": {
@@ -124,15 +177,22 @@
         "method": "nearest",
         "distance_metric": "euclidean",
         "max_distance": null,
-        "fill_value": "nan"
+        "fill_value": "nan",
+        "temporal_resolution": "PT1S",
+        "spatial_resolution": {
+          "adaptive": true
+        }
       },
-      "needed_vars": ["source_coordinates", "source_values", "target_coordinates"],
-      "modifies": ["interpolated_values"],
-      "description": "Nearest neighbor interpolation for categorical data",
-      "temporal_resolution": "PT1S",
-      "spatial_resolution": { "adaptive": true }
+      "needed_vars": [
+        "source_coordinates",
+        "source_values",
+        "target_coordinates"
+      ],
+      "modifies": [
+        "interpolated_values"
+      ],
+      "description": "Nearest neighbor interpolation for categorical data"
     },
-
     "RadialBasisFunctionInterpolation": {
       "operator_id": "RBFInterp",
       "reference": {
@@ -145,15 +205,22 @@
         "shape_parameter": 1.0,
         "smoothing": 0.0,
         "polynomial_degree": -1,
-        "max_points": 1000
+        "max_points": 1000,
+        "temporal_resolution": "PT10M",
+        "spatial_resolution": {
+          "adaptive": true
+        }
       },
-      "needed_vars": ["source_coordinates", "source_values", "target_coordinates"],
-      "modifies": ["interpolated_values"],
-      "description": "Radial basis function interpolation for irregular data",
-      "temporal_resolution": "PT10M",
-      "spatial_resolution": { "adaptive": true }
+      "needed_vars": [
+        "source_coordinates",
+        "source_values",
+        "target_coordinates"
+      ],
+      "modifies": [
+        "interpolated_values"
+      ],
+      "description": "Radial basis function interpolation for irregular data"
     },
-
     "ConservativeRemapping": {
       "operator_id": "ConservativeRemap",
       "reference": {
@@ -166,15 +233,26 @@
         "normalization": "fracarea",
         "monotonic": true,
         "positive_definite": false,
-        "search_radius": 5
+        "search_radius": 5,
+        "temporal_resolution": "PT1H",
+        "spatial_resolution": {
+          "lon": 1.0,
+          "lat": 1.0
+        }
       },
-      "needed_vars": ["source_grid", "source_areas", "source_values", "target_grid", "target_areas"],
-      "modifies": ["interpolated_values", "remapping_weights"],
-      "description": "Conservative remapping for flux quantities and climate data",
-      "temporal_resolution": "PT1H",
-      "spatial_resolution": { "lon": 1.0, "lat": 1.0 }
+      "needed_vars": [
+        "source_grid",
+        "source_areas",
+        "source_values",
+        "target_grid",
+        "target_areas"
+      ],
+      "modifies": [
+        "interpolated_values",
+        "remapping_weights"
+      ],
+      "description": "Conservative remapping for flux quantities and climate data"
     },
-
     "TemporalInterpolation": {
       "operator_id": "TimeInterp",
       "reference": {
@@ -186,14 +264,20 @@
         "time_units": "hours since 1900-01-01",
         "seasonal_adjustment": false,
         "leap_year_handling": "proportional",
-        "missing_data_threshold": 0.1
+        "missing_data_threshold": 0.1,
+        "temporal_resolution": "PT1M"
       },
-      "needed_vars": ["source_time", "source_values", "target_time"],
-      "modifies": ["interpolated_values", "interpolation_quality"],
-      "description": "Temporal interpolation with calendar awareness",
-      "temporal_resolution": "PT1M"
+      "needed_vars": [
+        "source_time",
+        "source_values",
+        "target_time"
+      ],
+      "modifies": [
+        "interpolated_values",
+        "interpolation_quality"
+      ],
+      "description": "Temporal interpolation with calendar awareness"
     },
-
     "CoordinateTransformInterpolation": {
       "operator_id": "CoordTransformInterp",
       "reference": {
@@ -205,16 +289,27 @@
         "target_crs": "EPSG:3857",
         "interpolation_method": "bilinear",
         "transform_method": "proj4",
-        "resampling": "bilinear"
+        "resampling": "bilinear",
+        "temporal_resolution": "PT15M",
+        "spatial_resolution": {
+          "x": 1000.0,
+          "y": 1000.0
+        }
       },
-      "needed_vars": ["source_x", "source_y", "source_values", "target_x", "target_y"],
-      "modifies": ["interpolated_values", "transformed_coordinates"],
-      "description": "Interpolation with coordinate reference system transformation",
-      "temporal_resolution": "PT15M",
-      "spatial_resolution": { "x": 1000.0, "y": 1000.0 }
+      "needed_vars": [
+        "source_x",
+        "source_y",
+        "source_values",
+        "target_x",
+        "target_y"
+      ],
+      "modifies": [
+        "interpolated_values",
+        "transformed_coordinates"
+      ],
+      "description": "Interpolation with coordinate reference system transformation"
     }
   },
-
   "models": {
     "InterpolationTestModel": {
       "variables": {
@@ -239,17 +334,40 @@
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["temperature"], "wrt": "t" },
-          "rhs": { "op": "*", "args": [-0.001, "temperature"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "temperature"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              -0.001,
+              "temperature"
+            ]
+          }
         },
         {
-          "lhs": { "op": "D", "args": ["pressure"], "wrt": "t" },
-          "rhs": { "op": "*", "args": [0.0001, "pressure"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "pressure"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              0.0001,
+              "pressure"
+            ]
+          }
         }
       ]
     }
   },
-
   "coupling": [
     {
       "type": "operator_apply",
@@ -272,35 +390,51 @@
       "description": "Apply conservative remapping for flux conservation"
     }
   ],
-
-  "domain": {
-    "temporal": {
-      "start": "2024-01-01T00:00:00Z",
-      "end": "2024-01-02T00:00:00Z"
-    },
-    "spatial": {
-      "lon": { "min": -180.0, "max": 180.0, "units": "degrees_east" },
-      "lat": { "min": -90.0, "max": 90.0, "units": "degrees_north" },
-      "lev": { "min": 0.0, "max": 100000.0, "units": "Pa" }
-    },
-    "coordinate_transforms": [
-      {
-        "id": "geographic_to_cartesian",
-        "description": "Transform from geographic to cartesian coordinates",
-        "dimensions": ["lon", "lat", "lev"]
-      }
-    ]
-  },
-
   "solver": {
     "strategy": "strang_threads",
     "config": {
       "timestep": 60.0,
       "threads": 4,
       "stiff_kwargs": {
-        "abstol": 1e-8,
-        "reltol": 1e-6
+        "abstol": 1e-08,
+        "reltol": 1e-06
       }
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-01-02T00:00:00Z"
+      },
+      "spatial": {
+        "lon": {
+          "min": -180.0,
+          "max": 180.0,
+          "units": "degrees_east"
+        },
+        "lat": {
+          "min": -90.0,
+          "max": 90.0,
+          "units": "degrees_north"
+        },
+        "lev": {
+          "min": 0.0,
+          "max": 100000.0,
+          "units": "Pa"
+        }
+      },
+      "coordinate_transforms": [
+        {
+          "id": "geographic_to_cartesian",
+          "description": "Transform from geographic to cartesian coordinates",
+          "dimensions": [
+            "lon",
+            "lat",
+            "lev"
+          ]
+        }
+      ]
     }
   }
 }
