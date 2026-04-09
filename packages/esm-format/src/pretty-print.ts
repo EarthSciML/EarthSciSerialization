@@ -119,6 +119,11 @@ function formatChemicalSubscripts(variable: string, format: 'unicode' | 'latex')
     }
 
     if (hasElements) {
+      // A bare element symbol without digits (e.g. "B", "C", "N") is treated
+      // as a variable name, not a chemical formula
+      if (ELEMENTS.has(variable) && !/\d/.test(variable)) {
+        return variable
+      }
       // Pure chemical formula: wrap in \mathrm{} and convert digits to subscripts
       let result = variable
       result = result.replace(/(\d+)/g, (match, digits) => {
@@ -324,11 +329,15 @@ function formatNumber(num: number, format: 'unicode' | 'latex' | 'ascii'): strin
 
   // For integers, show as plain integer
   if (Number.isInteger(num)) {
-    return num.toString()
+    const str = num.toString()
+    if (format === 'unicode') return str.replace(/^-/, '−')
+    return str
   }
 
   // For decimals, use standard notation
-  return num.toString()
+  const str = num.toString()
+  if (format === 'unicode') return str.replace(/^-/, '−')
+  return str
 }
 
 /**
@@ -939,7 +948,12 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
 
       case 'exp': case 'sin': case 'cos': case 'tan':
         if (format === 'latex') {
-          return `\\${op}(${toLatex(arg)})`
+          const latexArg = toLatex(arg)
+          // Use \left( \right) when the argument contains tall elements like \frac
+          if (latexArg.includes('\\frac')) {
+            return `\\${op}\\left(${latexArg}\\right)`
+          }
+          return `\\${op}(${latexArg})`
         }
         return `${op}(${formatArg(arg)})`
 
@@ -961,7 +975,12 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
 
       case 'sqrt':
         if (format === 'unicode') {
-          return `√${formatArg(arg)}`
+          const argStr = toUnicode(arg)
+          // Wrap compound expressions in parentheses for clarity
+          if (typeof arg === 'object' && 'op' in arg) {
+            return `√(${argStr})`
+          }
+          return `√${argStr}`
         } else if (format === 'latex') {
           return `\\sqrt{${toLatex(arg)}}`
         }
@@ -1059,6 +1078,9 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
       case 'ifelse':
         if (args.length === 3) {
           const [cond, thenExpr, elseExpr] = args
+          if (format === 'latex') {
+            return `\\begin{cases} ${toLatex(thenExpr)} & \\text{if } ${toLatex(cond)} \\\\ ${toLatex(elseExpr)} & \\text{otherwise} \\end{cases}`
+          }
           return `ifelse(${formatArg(cond)}, ${formatArg(thenExpr)}, ${formatArg(elseExpr)})`
         }
         break
