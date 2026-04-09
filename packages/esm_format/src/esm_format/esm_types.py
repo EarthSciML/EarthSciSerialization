@@ -430,5 +430,5 @@ class EsmFile:
     data_loaders: List[DataLoader] = field(default_factory=list)
     operators: List[Operator] = field(default_factory=list)
     coupling: List[CouplingEntry] = field(default_factory=list)
-    domain: Optional[Domain] = None
+    domains: Dict[str, Domain] = field(default_factory=dict)
     solver: Optional[Solver] = None

@@ -69,9 +69,10 @@ def to_julia_code(file: Dict[str, Any]) -> str:
         lines.append("")
 
     # Generate domain as TODO comment
-    if file.get('domain'):
-        lines.append("# Domain (TODO)")
-        lines.extend(_generate_domain_comment(file['domain']))
+    if file.get('domains'):
+        for domain_name, domain_data in file['domains'].items():
+            lines.append(f"# Domain '{domain_name}' (TODO)")
+            lines.extend(_generate_domain_comment(domain_data))
         lines.append("")
 
     # Generate solver as TODO comment
@@ -148,9 +149,10 @@ def to_python_code(file: Dict[str, Any]) -> str:
             lines.extend(_generate_python_coupling_comment(coupling))
         lines.append("")
 
-    if file.get('domain'):
-        lines.append("# Domain (TODO)")
-        lines.extend(_generate_python_domain_comment(file['domain']))
+    if file.get('domains'):
+        for domain_name, domain_data in file['domains'].items():
+            lines.append(f"# Domain '{domain_name}' (TODO)")
+            lines.extend(_generate_python_domain_comment(domain_data))
         lines.append("")
 
     if file.get('solver'):

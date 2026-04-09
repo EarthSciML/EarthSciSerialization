@@ -782,11 +782,13 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             rs.name = rs_name
             reaction_systems[rs_name] = rs
 
-    # Parse domain if present
-    domain = None
-    if "domain" in data:
-        domain = _parse_domain(data["domain"])
-        _validate_domain(domain)
+    # Parse domains if present
+    domains = {}
+    if "domains" in data:
+        for domain_name, domain_data in data["domains"].items():
+            d = _parse_domain(domain_data)
+            _validate_domain(d)
+            domains[domain_name] = d
 
     # Parse data loaders
     data_loaders = []
@@ -847,7 +849,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         data_loaders=data_loaders,
         operators=operators,
         coupling=coupling,
-        domain=domain,
+        domains=domains,
         solver=solver
     )
 

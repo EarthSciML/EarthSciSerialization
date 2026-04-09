@@ -802,14 +802,14 @@ class TestComplexValidationScenarios:
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
-            "domain": {
+            "domains": {"default": {
                 "spatial": {
                     "x": {
                         "max": 10.0
                         # Missing required "min" field
                     }
                 }
-            }
+            }}
         }
         with pytest.raises(ValidationError, match="'min' is a required property"):
             jsonschema.validate(invalid_data, schema)
@@ -891,12 +891,12 @@ class TestEdgeCaseValidation:
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
-            "domain": {
+            "domains": {"default": {
                 "boundary_conditions": [{
                     "type": "constant",
                     "dimensions": []  # Empty array violates minItems: 1
                 }]
-            }
+            }}
         }
         with pytest.raises(ValidationError, match="should be non-empty|is too short"):
             jsonschema.validate(invalid_data, schema)
