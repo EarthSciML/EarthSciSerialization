@@ -47,7 +47,7 @@
             "code": "validation_error",
             "details": {
               "exception_type": "AttributeError",
-              "traceback": "Traceback (most recent call last):\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 116, in validate\n    _validate_equation_balance_enhanced(esm_file, error_collector)\n  File \"/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format/validation.py\", line 276, in _validate_equation_balance_enhanced\n    for i, model in enumerate(esm_file.models):\n                              ^^^^^^^^^^^^^^^\nAttributeError: 'str' object has no attribute 'models'\n"
+              "traceback": "Traceback (most recent call last):\n  File \"/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/validation.py\", line 116, in validate\n    _validate_equation_balance_enhanced(esm_file, error_collector)\n  File \"/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/validation.py\", line 276, in _validate_equation_balance_enhanced\n    for i, model in enumerate(esm_file.models):\n                              ^^^^^^^^^^^^^^^\nAttributeError: 'str' object has no attribute 'models'\n"
             }
           }
         ]

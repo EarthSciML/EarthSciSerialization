@@ -9,7 +9,7 @@ import json
 import importlib.util
 
 # Import modules directly
-base_path = os.path.join(os.path.dirname(__file__), 'packages', 'esm_format', 'src', 'esm_format')
+base_path = os.path.join(os.path.dirname(__file__), 'packages', 'earthsci_toolkit', 'src', 'earthsci_toolkit')
 
 # Load hierarchical_scope_resolution module
 spec = importlib.util.spec_from_file_location("hierarchical_scope_resolution", os.path.join(base_path, "hierarchical_scope_resolution.py"))

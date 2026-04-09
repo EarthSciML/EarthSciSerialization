@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python package files first for better layer caching
-COPY packages/esm_format/pyproject.toml ./packages/esm_format/
+COPY packages/earthsci_toolkit/pyproject.toml ./packages/earthsci_toolkit/
 
 # Install Python dependencies
-WORKDIR /workspace/packages/esm_format
-COPY packages/esm_format ./
+WORKDIR /workspace/packages/earthsci_toolkit
+COPY packages/earthsci_toolkit ./
 RUN python -m pip install --upgrade pip && \
     pip install -e .[dev,test]
 
@@ -28,7 +28,7 @@ COPY scripts ./scripts/
 RUN chmod +x scripts/*.py
 
 # Set environment variables for testing
-ENV PYTHONPATH=/workspace/packages/esm_format/src
+ENV PYTHONPATH=/workspace/packages/earthsci_toolkit/src
 ENV ESM_TEST_TIMEOUT=300
 ENV PYTHONUNBUFFERED=1
 

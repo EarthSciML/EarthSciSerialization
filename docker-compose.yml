@@ -49,7 +49,7 @@ services:
     volumes:
       - ./conformance-results:/workspace/conformance-results
     environment:
-      - PYTHONPATH=/workspace/packages/esm_format/src
+      - PYTHONPATH=/workspace/packages/earthsci_toolkit/src
       - ESM_TEST_TIMEOUT=300
       - PYTHONUNBUFFERED=1
     cpus: '2.0'

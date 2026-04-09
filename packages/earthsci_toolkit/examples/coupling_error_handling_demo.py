@@ -17,7 +17,7 @@ from typing import Dict, Tuple, Optional, List
 # Add the package to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from esm_format.coupling_error_handling import (
+from earthsci_toolkit.coupling_error_handling import (
     create_robust_coupling_iterator,
     create_fault_tolerant_iterator,
     RecoveryConfig,
@@ -25,8 +25,8 @@ from esm_format.coupling_error_handling import (
     RecoveryStrategy,
     CouplingErrorType
 )
-from esm_format.coupling_iteration import ConvergenceConfig, ConvergenceMethod
-from esm_format.types import EsmFile, Metadata
+from earthsci_toolkit.coupling_iteration import ConvergenceConfig, ConvergenceMethod
+from earthsci_toolkit.types import EsmFile, Metadata
 
 
 def create_earth_system_esm() -> EsmFile:

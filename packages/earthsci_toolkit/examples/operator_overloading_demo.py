@@ -14,7 +14,7 @@ import os
 # Add src to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from esm_format.operator_dispatch import (
+from earthsci_toolkit.operator_dispatch import (
     get_dispatcher,
     dispatch_operator,
     register_operator_overload,

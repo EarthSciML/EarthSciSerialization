@@ -161,9 +161,9 @@ For releases:
 ## Package Structure
 
 ```
-esm_format/
+earthsci_toolkit/
 ├── src/
-│   └── esm_format/          # Main package code
+│   └── earthsci_toolkit/          # Main package code
 ├── tests/                   # Test files
 ├── dist/                    # Built distributions
 ├── scripts/                 # Build automation scripts

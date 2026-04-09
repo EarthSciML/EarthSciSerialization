@@ -12,9 +12,9 @@ This example shows how to:
 import tempfile
 import sqlite3
 from pathlib import Path
-from esm_format.types import DataLoader, DataLoaderType
-from esm_format.data_loaders import DatabaseLoader
-from esm_format.data_loader_registry import create_auto_loader, detect_loader_type
+from earthsci_toolkit.types import DataLoader, DataLoaderType
+from earthsci_toolkit.data_loaders import DatabaseLoader
+from earthsci_toolkit.data_loader_registry import create_auto_loader, detect_loader_type
 
 
 def create_sample_database():

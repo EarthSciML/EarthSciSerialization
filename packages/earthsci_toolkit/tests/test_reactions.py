@@ -5,7 +5,7 @@ Test cases for reaction system analysis functions.
 import pytest
 import numpy as np
 
-from esm_format import (
+from earthsci_toolkit import (
     ReactionSystem, Reaction, Species, Parameter,
     derive_odes, stoichiometric_matrix, substrate_matrix, product_matrix,
     ExprNode

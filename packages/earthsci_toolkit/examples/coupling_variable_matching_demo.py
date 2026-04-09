@@ -6,9 +6,9 @@ This script shows how the coupling variable matching algorithm works
 to validate compatibility between variables in different model components.
 """
 
-from esm_format.coupling_graph import match_coupling_variables, validate_coupling_variables
-from esm_format.coupling_graph import CouplingGraph, CouplingNode, CouplingEdge, NodeType
-from esm_format.types import (
+from earthsci_toolkit.coupling_graph import match_coupling_variables, validate_coupling_variables
+from earthsci_toolkit.coupling_graph import CouplingGraph, CouplingNode, CouplingEdge, NodeType
+from earthsci_toolkit.types import (
     Model, ReactionSystem, EsmFile, Metadata,
     ModelVariable, Species, Parameter, CouplingType
 )

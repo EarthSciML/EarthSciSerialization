@@ -7,10 +7,10 @@ import sys
 import os
 
 # Add the package to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages', 'esm_format', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages', 'earthsci_toolkit', 'src'))
 
 # Import types directly from the renamed module
-from esm_format.esm_types import CouplingType, CouplingEntry, ConnectorEquation, Connector
+from earthsci_toolkit.esm_types import CouplingType, CouplingEntry, ConnectorEquation, Connector
 
 def test_parse_coupling_entry(coupling_data):
     """Simple test function to parse coupling entries."""

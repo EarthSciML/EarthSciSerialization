@@ -22,7 +22,7 @@ pip install -e .
 ## Usage
 
 ```python
-from esm_format import Expr, Model, Species, Reaction
+from earthsci_toolkit import Expr, Model, Species, Reaction
 
 # Create mathematical expressions
 expr = ExprNode(op="+", args=[1, 2])

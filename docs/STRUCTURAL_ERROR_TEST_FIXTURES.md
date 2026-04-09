@@ -188,7 +188,7 @@ These fixtures demonstrate multiple error conditions in a single file, useful fo
 ## Usage in Test Suites
 
 ### Python Tests
-Located in `packages/esm_format/tests/test_validate_structural.py`, these tests load fixtures and verify that structural validation correctly identifies the expected error codes.
+Located in `packages/earthsci_toolkit/tests/test_validate_structural.py`, these tests load fixtures and verify that structural validation correctly identifies the expected error codes.
 
 ### Julia Tests
 Located in `packages/EarthSciSerialization.jl/test/structural_validation_test.jl`, these tests create programmatic examples of each error condition and verify the Julia implementation detects them.

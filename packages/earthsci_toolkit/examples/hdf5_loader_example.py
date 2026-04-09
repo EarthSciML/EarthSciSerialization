@@ -14,9 +14,9 @@ import numpy as np
 import tempfile
 from pathlib import Path
 import h5py
-from esm_format.types import DataLoader, DataLoaderType
-from esm_format.data_loaders import HDF5Loader
-from esm_format.data_loader_registry import create_data_loader
+from earthsci_toolkit.types import DataLoader, DataLoaderType
+from earthsci_toolkit.data_loaders import HDF5Loader
+from earthsci_toolkit.data_loader_registry import create_data_loader
 
 
 def create_sample_hdf5_file(filepath: str) -> None:

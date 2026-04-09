@@ -231,15 +231,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python package files
-COPY packages/esm_format/pyproject.toml packages/esm_format/setup.cfg ./packages/esm_format/
+COPY packages/earthsci_toolkit/pyproject.toml packages/earthsci_toolkit/setup.cfg ./packages/earthsci_toolkit/
 
 # Install Python dependencies
-WORKDIR /workspace/packages/esm_format
+WORKDIR /workspace/packages/earthsci_toolkit
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir build wheel
 
 # Copy source and build
-COPY packages/esm_format ./
+COPY packages/earthsci_toolkit ./
 RUN python -m build --wheel
 
 # Production stage
@@ -259,7 +259,7 @@ RUN groupadd -r esm && useradd -r -g esm -d /workspace -s /bin/bash esm
 WORKDIR /workspace
 
 # Copy wheel from builder and install
-COPY --from=builder /workspace/packages/esm_format/dist/*.whl ./
+COPY --from=builder /workspace/packages/earthsci_toolkit/dist/*.whl ./
 RUN pip install --no-cache-dir *.whl && rm *.whl
 
 # Copy test data and scripts
@@ -270,7 +270,7 @@ COPY --chown=esm:esm scripts ./scripts/
 RUN chmod +x scripts/*.py
 
 # Set environment variables
-ENV PYTHONPATH=/workspace/packages/esm_format/src
+ENV PYTHONPATH=/workspace/packages/earthsci_toolkit/src
 ENV ESM_TEST_TIMEOUT=300
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONOPTIMIZE=2
@@ -635,7 +635,7 @@ services:
       - ./:/workspace:delegated
       - pip-cache:/root/.cache/pip
     environment:
-      - PYTHONPATH=/workspace/packages/esm_format/src
+      - PYTHONPATH=/workspace/packages/earthsci_toolkit/src
       - ESM_DEBUG=true
       - PYTHONUNBUFFERED=1
     ports:

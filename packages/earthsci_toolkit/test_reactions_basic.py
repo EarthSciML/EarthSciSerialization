@@ -11,7 +11,7 @@ import numpy as np
 # Add the src directory to the path so we can import our module
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from esm_format import (
+from earthsci_toolkit import (
     ReactionSystem, Reaction, Species, Parameter,
     derive_odes, stoichiometric_matrix, substrate_matrix, product_matrix
 )

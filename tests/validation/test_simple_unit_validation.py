@@ -10,8 +10,8 @@ import os
 import inspect
 
 # Add the package to path
-sys.path.insert(0, 'packages/esm_format/src')
-sys.path.insert(0, 'packages/esm_format/src/esm_format')
+sys.path.insert(0, 'packages/earthsci_toolkit/src')
+sys.path.insert(0, 'packages/earthsci_toolkit/src/earthsci_toolkit')
 
 def test_validate_units_function():
     """Test that _validate_units is no longer a no-op."""
@@ -20,7 +20,7 @@ def test_validate_units_function():
 
     try:
         # Import the function directly
-        from esm_format.validation import _validate_units
+        from earthsci_toolkit.validation import _validate_units
         print("✓ Successfully imported _validate_units function")
     except ImportError as e:
         print(f"✗ Failed to import _validate_units: {e}")

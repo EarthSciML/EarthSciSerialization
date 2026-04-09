@@ -6,7 +6,7 @@ import sys
 import os
 
 # Add the package to path
-sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/esm_format/src/esm_format')
+sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit')
 
 try:
     from esm_types import ContinuousEvent, AffectEquation

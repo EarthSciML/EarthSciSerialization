@@ -15,8 +15,8 @@ import os
 # Add the source path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from esm_format.dynamic_scope_resolution import DynamicScopeResolver
-from esm_format.types import EsmFile, Metadata
+from earthsci_toolkit.dynamic_scope_resolution import DynamicScopeResolver
+from earthsci_toolkit.types import EsmFile, Metadata
 
 
 def create_demo_esm():

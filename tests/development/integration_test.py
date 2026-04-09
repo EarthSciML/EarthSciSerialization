@@ -6,15 +6,15 @@ Integration test for graph exports that avoids pandas dependency.
 import sys
 import os
 
-# Add the esm_format source directory to path
-sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/esm_format/src')
+# Add the earthsci_toolkit source directory to path
+sys.path.insert(0, '/home/ctessum/EarthSciSerialization/packages/earthsci_toolkit/src')
 
 # Mock problematic imports to avoid pandas dependency
 sys.modules['pandas'] = type('MockPandas', (), {})()
 
 try:
     # This might still fail due to other dependencies
-    from esm_format.graph import Graph, GraphNode, GraphEdge
+    from earthsci_toolkit.graph import Graph, GraphNode, GraphEdge
     print("✓ Successfully imported graph modules")
     integration_success = True
 except ImportError as e:

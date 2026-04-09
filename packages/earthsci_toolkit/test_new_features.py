@@ -6,7 +6,7 @@ Test script for the newly implemented analysis and Jupyter integration features.
 import sys
 sys.path.insert(0, 'src')
 
-from esm_format import (
+from earthsci_toolkit import (
     EsmFile, Model, ReactionSystem, ModelVariable, Species, Parameter, Reaction,
     ExprNode, Equation, Metadata,
     component_graph, expression_graph, validate_units, explore, ESMEditor

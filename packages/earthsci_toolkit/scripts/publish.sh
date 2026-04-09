@@ -1,9 +1,9 @@
 #!/bin/bash
-# Publishing script for esm-format Python package
+# Publishing script for earthsci-toolkit Python package
 
 set -e  # Exit on any error
 
-echo "🚀 Publishing esm-format Python package"
+echo "🚀 Publishing earthsci-toolkit Python package"
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -69,17 +69,17 @@ if [ "$REPOSITORY" = "testpypi" ]; then
     python -m twine upload --repository testpypi dist/*
     echo ""
     echo "✅ Upload to TestPyPI complete!"
-    echo "🔗 View at: https://test.pypi.org/project/esm-format/"
+    echo "🔗 View at: https://test.pypi.org/project/earthsci-toolkit/"
     echo ""
     echo "To install from TestPyPI:"
-    echo "  pip install --index-url https://test.pypi.org/simple/ esm-format"
+    echo "  pip install --index-url https://test.pypi.org/simple/ earthsci-toolkit"
 else
     echo "📤 Uploading to PyPI (production)..."
     python -m twine upload dist/*
     echo ""
     echo "✅ Upload to PyPI complete!"
-    echo "🔗 View at: https://pypi.org/project/esm-format/"
+    echo "🔗 View at: https://pypi.org/project/earthsci-toolkit/"
     echo ""
     echo "To install:"
-    echo "  pip install esm-format"
+    echo "  pip install earthsci-toolkit"
 fi

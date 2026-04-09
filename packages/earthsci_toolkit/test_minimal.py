@@ -17,8 +17,8 @@ class ExprNode:
 import sys
 import os
 
-# Add the src/esm_format directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'esm_format'))
+# Add the src/earthsci_toolkit directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'earthsci_toolkit'))
 
 # Import the display module directly
 from display import to_unicode, to_latex

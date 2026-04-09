@@ -15,7 +15,7 @@ specified in ESM coupling entries according to the ESM specification.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from esm_format.data_transformation import (
+from earthsci_toolkit.data_transformation import (
     TransformationType, TransformationConfig, DataDescriptor,
     UnitConversionTransformation, GridInterpolationTransformation,
     CoordinateTransformation, VariableTransformation,

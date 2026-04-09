@@ -202,7 +202,7 @@ class ErrorConsistencyRunner:
 
     def validate_with_python(self, esm_file: Path) -> Dict[str, Any]:
         """Run validation using the Python implementation."""
-        python_dir = self.project_root / "packages" / "esm_format"
+        python_dir = self.project_root / "packages" / "earthsci_toolkit"
         venv_python = python_dir / "venv" / "bin" / "python"
 
         python_script = f'''
@@ -210,7 +210,7 @@ import sys
 sys.path.insert(0, "{python_dir / 'src'}")
 
 import json
-from esm_format import validate
+from earthsci_toolkit import validate
 
 try:
     with open("{esm_file}", "r") as f:

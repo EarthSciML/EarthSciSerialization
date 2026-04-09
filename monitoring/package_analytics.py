@@ -470,7 +470,7 @@ def create_context_manager(package_name: str, version: str):
 
 if __name__ == "__main__":
     # Example usage
-    analytics = PackageAnalytics("esm-format", "0.1.0")
+    analytics = PackageAnalytics("earthsci-toolkit", "0.1.0")
 
     # Performance tracking example
     op_id = analytics.start_operation("parse", file_size_bytes=1024)

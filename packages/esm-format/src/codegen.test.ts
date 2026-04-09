@@ -350,7 +350,7 @@ describe('toPythonCode', () => {
     const code = toPythonCode(file)
 
     expect(code).toContain('import sympy as sp')
-    expect(code).toContain('import esm_format as esm')
+    expect(code).toContain('import earthsci_toolkit as esm')
     expect(code).toContain('import scipy')
     expect(code).toContain('# Title: Test Model')
     expect(code).toContain('# Description: A test model for Python code generation')

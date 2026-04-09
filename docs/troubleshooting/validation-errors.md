@@ -567,7 +567,7 @@ if (!result.isValid) {
 
 ### Python
 ```python
-from esm_format import load_esm, validate
+from earthsci_toolkit import load_esm, validate
 
 esm_file = load_esm('model.esm')
 result = validate(esm_file)

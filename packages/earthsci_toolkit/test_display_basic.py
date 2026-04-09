@@ -6,8 +6,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Import directly without going through __init__
-from esm_format.types import ExprNode
-from esm_format.display import to_unicode, to_latex
+from earthsci_toolkit.types import ExprNode
+from earthsci_toolkit.display import to_unicode, to_latex
 
 def test_basic_functionality():
     """Test basic functionality of display module."""

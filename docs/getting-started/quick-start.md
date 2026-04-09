@@ -93,7 +93,7 @@ if (result.isValid) {
 
 ### Python
 ```python
-from esm_format import load_esm, validate, to_unicode
+from earthsci_toolkit import load_esm, validate, to_unicode
 
 # Load and validate
 esm_file = load_esm('simple-model.esm')

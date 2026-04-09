@@ -9,8 +9,8 @@ import pytest
 import json
 from pathlib import Path
 
-from esm_format.display import to_unicode, to_latex, explore
-from esm_format.parse import load
+from earthsci_toolkit.display import to_unicode, to_latex, explore
+from earthsci_toolkit.parse import load
 
 
 class TestDisplayFixtures:

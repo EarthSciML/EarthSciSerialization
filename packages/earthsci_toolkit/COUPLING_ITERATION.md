@@ -18,7 +18,7 @@ The coupling iteration module provides sophisticated control for iterative coupl
 The main class that manages the iterative coupling process.
 
 ```python
-from esm_format import CouplingIterator, ConvergenceConfig, RelaxationConfig, AccelerationConfig
+from earthsci_toolkit import CouplingIterator, ConvergenceConfig, RelaxationConfig, AccelerationConfig
 
 # Create configuration objects
 convergence_config = ConvergenceConfig(
@@ -67,8 +67,8 @@ iterator = CouplingIterator(convergence_config, relaxation_config, acceleration_
 ## Usage Example
 
 ```python
-from esm_format import create_default_coupling_iterator
-from esm_format.types import EsmFile, Metadata
+from earthsci_toolkit import create_default_coupling_iterator
+from earthsci_toolkit.types import EsmFile, Metadata
 
 # Create a simple coupling iterator with sensible defaults
 iterator = create_default_coupling_iterator(

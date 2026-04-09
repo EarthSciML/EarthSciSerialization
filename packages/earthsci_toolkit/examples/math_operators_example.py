@@ -13,7 +13,7 @@ import numpy as np
 # is not currently implemented in the ESM format specification.
 # OperatorType has been removed as it's not part of the spec.
 
-from esm_format import (
+from earthsci_toolkit import (
     Operator,
     # Registry functionality not implemented
 )

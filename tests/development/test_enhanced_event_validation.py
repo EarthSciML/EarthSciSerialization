@@ -6,10 +6,10 @@ Python Event validation incomplete - no checks for affect variables, functional 
 """
 
 import sys
-sys.path.insert(0, 'packages/esm_format/src')
+sys.path.insert(0, 'packages/earthsci_toolkit/src')
 
-from esm_format.validation import validate
-from esm_format.esm_types import (
+from earthsci_toolkit.validation import validate
+from earthsci_toolkit.esm_types import (
     EsmFile, ContinuousEvent, DiscreteEvent, AffectEquation, FunctionalAffect,
     Metadata, Model, ModelVariable, Operator, Parameter, ReactionSystem, Species,
     CouplingEntry, CouplingType, DiscreteEventTrigger

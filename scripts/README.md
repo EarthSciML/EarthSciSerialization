@@ -96,7 +96,7 @@ The `workspace.json` file defines all packages in the workspace:
       "type": "typescript"
     },
     "esm-format-py": {
-      "path": "./packages/esm_format",
+      "path": "./packages/earthsci_toolkit",
       "version": "0.1.0",
       "type": "python"
     },

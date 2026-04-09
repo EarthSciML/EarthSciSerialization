@@ -21,7 +21,7 @@ def test_basic_import():
     print("Testing module imports...")
 
     try:
-        from esm_format.coupling_performance import (
+        from earthsci_toolkit.coupling_performance import (
             PerformanceOptimizedCouplingIterator,
             OptimizationConfig,
             ExecutionStrategy,
@@ -42,7 +42,7 @@ def test_performance_metrics():
     print("\nTesting PerformanceMetrics...")
 
     try:
-        from esm_format.coupling_performance import PerformanceMetrics
+        from earthsci_toolkit.coupling_performance import PerformanceMetrics
 
         metrics = PerformanceMetrics()
 
@@ -82,7 +82,7 @@ def test_optimization_config():
     print("\nTesting OptimizationConfig...")
 
     try:
-        from esm_format.coupling_performance import (
+        from earthsci_toolkit.coupling_performance import (
             OptimizationConfig,
             ExecutionStrategy,
             LoadBalancingMethod,
@@ -122,7 +122,7 @@ def test_cache_manager():
     print("\nTesting CacheManager...")
 
     try:
-        from esm_format.coupling_performance import CacheManager, CachingStrategy
+        from earthsci_toolkit.coupling_performance import CacheManager, CachingStrategy
 
         # Test basic caching functionality
         cache = CacheManager(CachingStrategy.LRU, max_size=3, ttl_seconds=1.0)
@@ -168,7 +168,7 @@ def test_load_balancer():
     print("\nTesting LoadBalancer...")
 
     try:
-        from esm_format.coupling_performance import LoadBalancer, LoadBalancingMethod
+        from earthsci_toolkit.coupling_performance import LoadBalancer, LoadBalancingMethod
 
         # Test round-robin balancing
         balancer = LoadBalancer(LoadBalancingMethod.ROUND_ROBIN, max_workers=3)
@@ -213,8 +213,8 @@ def test_memory_optimizer():
     print("\nTesting MemoryOptimizer...")
 
     try:
-        from esm_format.coupling_performance import MemoryOptimizer
-        from esm_format.coupling_graph import CouplingGraph
+        from earthsci_toolkit.coupling_performance import MemoryOptimizer
+        from earthsci_toolkit.coupling_graph import CouplingGraph
 
         optimizer = MemoryOptimizer(memory_limit_mb=100.0)
 
@@ -254,7 +254,7 @@ def test_parallel_execution_engine():
     print("\nTesting ParallelExecutionEngine...")
 
     try:
-        from esm_format.coupling_performance import (
+        from earthsci_toolkit.coupling_performance import (
             ParallelExecutionEngine,
             OptimizationConfig,
             ExecutionStrategy
@@ -313,9 +313,9 @@ def test_performance_optimized_iterator():
     print("\nTesting PerformanceOptimizedCouplingIterator...")
 
     try:
-        from esm_format.coupling_performance import create_performance_optimized_iterator, ExecutionStrategy
-        from esm_format.coupling_iteration import create_default_coupling_iterator
-        from esm_format.types import EsmFile, Model, ModelVariable, CouplingEntry, CouplingType
+        from earthsci_toolkit.coupling_performance import create_performance_optimized_iterator, ExecutionStrategy
+        from earthsci_toolkit.coupling_iteration import create_default_coupling_iterator
+        from earthsci_toolkit.types import EsmFile, Model, ModelVariable, CouplingEntry, CouplingType
 
         # Create a simple ESM file for testing
         test_model = Model(
@@ -408,7 +408,7 @@ def test_convenience_functions():
     print("\nTesting convenience functions...")
 
     try:
-        from esm_format.coupling_performance import (
+        from earthsci_toolkit.coupling_performance import (
             create_performance_optimized_iterator,
             create_high_performance_iterator,
             ExecutionStrategy
@@ -443,9 +443,9 @@ def run_performance_benchmark():
     print("\nRunning performance benchmark...")
 
     try:
-        from esm_format.coupling_performance import create_performance_optimized_iterator, ExecutionStrategy
-        from esm_format.coupling_iteration import create_default_coupling_iterator
-        from esm_format.types import EsmFile, Model, ModelVariable
+        from earthsci_toolkit.coupling_performance import create_performance_optimized_iterator, ExecutionStrategy
+        from earthsci_toolkit.coupling_iteration import create_default_coupling_iterator
+        from earthsci_toolkit.types import EsmFile, Model, ModelVariable
 
         # Create a more complex test model
         test_model = Model(

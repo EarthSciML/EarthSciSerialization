@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the Python package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages/esm_format/src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages/earthsci_toolkit/src'))
 
 class MockEsmFile:
     """Mock EsmFile for testing"""
@@ -35,7 +35,7 @@ class MockMetadata:
         self.description = description
 
 try:
-    from esm_format.migration import migrate, can_migrate, get_supported_migration_targets, MigrationError
+    from earthsci_toolkit.migration import migrate, can_migrate, get_supported_migration_targets, MigrationError
 
     print("Testing migration functionality...\n")
 

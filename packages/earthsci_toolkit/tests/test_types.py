@@ -1,7 +1,7 @@
-"""Test the type definitions in esm_format.types."""
+"""Test the type definitions in earthsci_toolkit.types."""
 
 import pytest
-from esm_format.esm_types import (
+from earthsci_toolkit.esm_types import (
     ExprNode, Expr, Equation, AffectEquation, ModelVariable, Model,
     Species, Parameter, Reaction, ReactionSystem,
     ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,

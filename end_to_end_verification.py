@@ -18,12 +18,12 @@ from typing import Dict, Any, Tuple, List, Optional
 import sys
 import os
 
-# Add the esm_format package to the path
-sys.path.insert(0, str(Path(__file__).parent / "packages" / "esm_format" / "src"))
+# Add the earthsci_toolkit package to the path
+sys.path.insert(0, str(Path(__file__).parent / "packages" / "earthsci_toolkit" / "src"))
 
-from esm_format.parse import load
-from esm_format.simulation import simulate, SimulationResult
-from esm_format.types import (
+from earthsci_toolkit.parse import load
+from earthsci_toolkit.simulation import simulate, SimulationResult
+from earthsci_toolkit.types import (
     ReactionSystem, Species, Reaction, Parameter, Model
 )
 

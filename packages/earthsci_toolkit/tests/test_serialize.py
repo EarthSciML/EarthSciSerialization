@@ -5,9 +5,9 @@ import tempfile
 import os
 from pathlib import Path
 
-from esm_format import save
-from esm_format.serialize import _serialize_expression
-from esm_format.esm_types import (
+from earthsci_toolkit import save
+from earthsci_toolkit.serialize import _serialize_expression
+from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, Model, ModelVariable, Equation, ExprNode,
     ReactionSystem, Species, Parameter, Reaction
 )

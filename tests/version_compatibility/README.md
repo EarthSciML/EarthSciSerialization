@@ -97,7 +97,7 @@ file3 = EarthSciSerialization.load("version_0_2_0_minor_upgrade.esm")
 
 ### Python
 ```python
-import esm_format as esm
+import earthsci_toolkit as esm
 
 # Should load successfully
 file1 = esm.load('version_0_1_0_baseline.esm')

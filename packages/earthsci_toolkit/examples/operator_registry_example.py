@@ -17,7 +17,7 @@ This example shows what would be possible with:
 # is not currently implemented in the ESM format specification.
 # This is kept for future reference but will not work as-is.
 
-from esm_format import (
+from earthsci_toolkit import (
     Operator,
     # OperatorRegistry functionality not implemented
     # OperatorType removed - not in specification
