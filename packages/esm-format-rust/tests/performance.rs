@@ -1,6 +1,6 @@
 use esm_format::{
-    performance::CompactExpr, types::Parameter, Expr, ExpressionNode, Reaction, ReactionSystem,
-    Species, StoichiometricEntry,
+    Expr, ExpressionNode, Reaction, ReactionSystem, Species, StoichiometricEntry,
+    performance::CompactExpr, types::Parameter,
 };
 use std::collections::HashMap;
 
@@ -131,10 +131,11 @@ fn test_simd_vector_length_mismatch() {
 
     let err = simd_math::add_vectors_simd(&a, &b, &mut result);
     assert!(err.is_err());
-    assert!(err
-        .unwrap_err()
-        .to_string()
-        .contains("Vector length mismatch"));
+    assert!(
+        err.unwrap_err()
+            .to_string()
+            .contains("Vector length mismatch")
+    );
 
     let err = simd_math::multiply_vectors_simd(&a, &b, &mut result);
     assert!(err.is_err());
@@ -152,10 +153,11 @@ fn test_simd_result_buffer_size_mismatch() {
 
     let err = simd_math::add_vectors_simd(&a, &b, &mut result);
     assert!(err.is_err());
-    assert!(err
-        .unwrap_err()
-        .to_string()
-        .contains("Vector length mismatch"));
+    assert!(
+        err.unwrap_err()
+            .to_string()
+            .contains("Vector length mismatch")
+    );
 }
 
 #[cfg(feature = "parallel")]
@@ -168,10 +170,12 @@ fn test_compact_expr_evaluation_errors() {
 
     let result = compact.evaluate_fast(&variables);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Undefined variable"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Undefined variable")
+    );
 
     // Test division by zero
     let expr = Expr::Operator(ExpressionNode {
@@ -197,10 +201,12 @@ fn test_compact_expr_evaluation_errors() {
 
     let result = compact.evaluate_fast(&variables);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Invalid log argument"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid log argument")
+    );
 }
 
 #[cfg(feature = "zero_copy")]

@@ -803,12 +803,14 @@ mod tests {
 
         let context = ScopedContext::from_esm_file(&esm_file);
         assert!(context.models.contains_key("Atmosphere"));
-        assert!(context
-            .models
-            .get("Atmosphere")
-            .unwrap()
-            .variables
-            .contains_key("temperature"));
+        assert!(
+            context
+                .models
+                .get("Atmosphere")
+                .unwrap()
+                .variables
+                .contains_key("temperature")
+        );
     }
 
     #[test]

@@ -1,9 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use esm_format::{
-    load,
+    EsmFile, Expr, Metadata, Model, Reaction, ReactionSystem, Species, StoichiometricEntry, load,
     performance::{CompactExpr, PerformanceError},
-    save, stoichiometric_matrix, validate, EsmFile, Expr, Metadata, Model, Reaction,
-    ReactionSystem, Species, StoichiometricEntry,
+    save, stoichiometric_matrix, validate,
 };
 use std::collections::HashMap;
 
