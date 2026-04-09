@@ -464,8 +464,6 @@ Domain(...)
 
 **Available in other languages:**
 - [Python](python.md#domain)
-- [Python](python.md#domain)
-- [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
 - [Rust](rust.md#domain)
 
@@ -753,8 +751,6 @@ Metadata(...)
 
 **Available in other languages:**
 - [Python](python.md#metadata)
-- [Python](python.md#metadata)
-- [Python](python.md#metadata)
 - [Typescript](typescript.md#metadata)
 - [Rust](rust.md#metadata)
 
@@ -826,7 +822,6 @@ Model(...)
 
 **Available in other languages:**
 - [Python](python.md#model)
-- [Python](python.md#model)
 - [Typescript](typescript.md#model)
 - [Rust](rust.md#model)
 
@@ -842,7 +837,6 @@ Model(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#model)
 - [Python](python.md#model)
 - [Typescript](typescript.md#model)
 - [Rust](rust.md#model)
@@ -942,8 +936,6 @@ Operator(...)
 
 **Available in other languages:**
 - [Python](python.md#operator)
-- [Python](python.md#operator)
-- [Python](python.md#operator)
 - [Typescript](typescript.md#operator)
 - [Rust](rust.md#operator)
 
@@ -997,8 +989,6 @@ ParseError(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#parseerror)
-- [Python](python.md#parseerror)
 - [Rust](rust.md#parseerror)
 
 ---
@@ -1152,7 +1142,6 @@ Reference(...)
 
 **Available in other languages:**
 - [Python](python.md#reference)
-- [Python](python.md#reference)
 - [Typescript](typescript.md#reference)
 - [Rust](rust.md#reference)
 
@@ -1179,7 +1168,6 @@ SchemaError(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#schemaerror)
 - [Typescript](typescript.md#schemaerror)
 - [Rust](rust.md#schemaerror)
 
@@ -2660,9 +2648,6 @@ compatibility(...)
 component(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#component)
-
 ---
 
 ### component_graph
@@ -2733,19 +2718,6 @@ compose(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
 - [Typescript](typescript.md#compose)
 
 ---
@@ -2765,19 +2737,6 @@ compose(file::EsmFile, system_a::String, system_b::String) -> EsmFile
 Convenience function to create an operator_compose coupling entry.
 
 **Available in other languages:**
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
-- [Python](python.md#compose)
 - [Typescript](typescript.md#compose)
 
 ---
@@ -2812,49 +2771,6 @@ contains(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
 - [Typescript](typescript.md#contains)
 - [Rust](rust.md#contains)
 
@@ -2885,49 +2801,6 @@ contains(sum_expr, "z")  # false
 ```
 
 **Available in other languages:**
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
-- [Python](python.md#contains)
 - [Typescript](typescript.md#contains)
 - [Rust](rust.md#contains)
 
@@ -3009,9 +2882,6 @@ Implement bi-directional coupling via coupletype dispatch:
 ```julia
 coupling(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#coupling)
 
 ---
 
@@ -3306,9 +3176,6 @@ Create an actual variable mapping constraint that modifies the coupled system.
 derivation(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#derivation)
-
 ---
 
 ### derive_odes
@@ -3365,11 +3232,6 @@ Convert old-style Dict{String,Int} format to new StoichiometryEntry vector forma
 ```julia
 display(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#display)
-- [Python](python.md#display)
-- [Python](python.md#display)
 
 ---
 
@@ -3465,17 +3327,6 @@ evaluate(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
 - [Typescript](typescript.md#evaluate)
 - [Rust](rust.md#evaluate)
 
@@ -3515,17 +3366,6 @@ result = evaluate(sum_expr, bindings)  # 5.0
 - Constants: "π", "e"
 
 **Available in other languages:**
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
-- [Python](python.md#evaluate)
 - [Typescript](typescript.md#evaluate)
 - [Rust](rust.md#evaluate)
 
@@ -3616,17 +3456,6 @@ extract(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
 - [Typescript](typescript.md#extract)
 
 ---
@@ -3649,17 +3478,6 @@ Creates a new file containing only the specified component and any
 coupling entries that reference it.
 
 **Available in other languages:**
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
-- [Python](python.md#extract)
 - [Typescript](typescript.md#extract)
 
 ---
@@ -3760,29 +3578,6 @@ for(...)
 ```julia
 format(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
-- [Python](python.md#format)
 
 ---
 
@@ -4118,8 +3913,16 @@ functionality(...)
 functions(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#functions)
+---
+
+### functions
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+functions(...)
+```
 
 ---
 
@@ -4132,8 +3935,16 @@ functions(...)
 functions(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#functions)
+---
+
+### functions
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+functions(...)
+```
 
 ---
 
@@ -4146,9 +3957,6 @@ functions(...)
 functions(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#functions)
-
 ---
 
 ### functions
@@ -4160,9 +3968,6 @@ functions(...)
 functions(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#functions)
-
 ---
 
 ### functions
@@ -4173,37 +3978,6 @@ functions(...)
 ```julia
 functions(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#functions)
-
----
-
-### functions
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-functions(...)
-```
-
-**Available in other languages:**
-- [Python](python.md#functions)
-
----
-
-### functions
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-functions(...)
-```
-
-**Available in other languages:**
-- [Python](python.md#functions)
 
 ---
 
@@ -4466,9 +4240,6 @@ This can help suggest units when they are not explicitly specified.
 internal(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#internal)
-
 ---
 
 ### is_better_performance
@@ -4526,23 +4297,6 @@ load(...)
 
 **Available in other languages:**
 - [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
 - [Typescript](typescript.md#load)
 - [Rust](rust.md#load)
 - [Rust](rust.md#load)
@@ -4565,23 +4319,6 @@ Load and parse an ESM file from a file path.
 
 **Available in other languages:**
 - [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
 - [Typescript](typescript.md#load)
 - [Rust](rust.md#load)
 - [Rust](rust.md#load)
@@ -4603,23 +4340,6 @@ load(io::IO) -> EsmFile
 Load and parse an ESM file from an IO stream.
 
 **Available in other languages:**
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
-- [Python](python.md#load)
 - [Python](python.md#load)
 - [Typescript](typescript.md#load)
 - [Rust](rust.md#load)
@@ -4675,43 +4395,6 @@ merge(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
 - [Typescript](typescript.md#merge)
 
 ---
@@ -4734,43 +4417,6 @@ Combines all components from both files. In case of conflicts, components
 from file_b take precedence.
 
 **Available in other languages:**
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
-- [Python](python.md#merge)
 - [Typescript](typescript.md#merge)
 
 ---
@@ -4940,9 +4586,6 @@ parse_expression(data::Any) -> Expr
 
 Parse JSON data into an Expression (NumExpr, VarExpr, or OpExpr).
 Handles the oneOf discriminated union based on JSON structure.
-
-**Available in other languages:**
-- [Python](python.md#parse_expression)
 
 ---
 
@@ -5527,11 +5170,6 @@ rendering(...)
 resolution(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#resolution)
-- [Python](python.md#resolution)
-- [Python](python.md#resolution)
-
 ---
 
 ### resolve_qualified_reference
@@ -5589,22 +5227,6 @@ save(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
 - [Typescript](typescript.md#save)
 - [Rust](rust.md#save)
 - [Rust](rust.md#save)
@@ -5626,22 +5248,6 @@ save(file::EsmFile, path::String)
 Save an EsmFile object to a JSON file at the specified path.
 
 **Available in other languages:**
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
 - [Typescript](typescript.md#save)
 - [Rust](rust.md#save)
 - [Rust](rust.md#save)
@@ -5663,22 +5269,6 @@ save(file::EsmFile, io::IO)
 Save an EsmFile object to a JSON stream.
 
 **Available in other languages:**
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
-- [Python](python.md#save)
 - [Typescript](typescript.md#save)
 - [Rust](rust.md#save)
 - [Rust](rust.md#save)
@@ -6281,16 +5871,6 @@ simplify(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
 - [Typescript](typescript.md#simplify)
 - [Rust](rust.md#simplify)
 
@@ -6330,16 +5910,6 @@ result = simplify(expr)  # VarExpr("x")
 ```
 
 **Available in other languages:**
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
-- [Python](python.md#simplify)
 - [Typescript](typescript.md#simplify)
 - [Rust](rust.md#simplify)
 
@@ -6353,10 +5923,6 @@ result = simplify(expr)  # VarExpr("x")
 ```julia
 solver(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#solver)
-- [Python](python.md#solver)
 
 ---
 
@@ -6458,10 +6024,6 @@ Convert new StoichiometryEntry vector format to old-style Dict{String,Int} forma
 subscript(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#subscript)
-- [Python](python.md#subscript)
-
 ---
 
 ### substitute
@@ -6474,8 +6036,6 @@ substitute(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#substitute)
-- [Python](python.md#substitute)
 - [Typescript](typescript.md#substitute)
 - [Rust](rust.md#substitute)
 - [Rust](rust.md#substitute)
@@ -6517,8 +6077,6 @@ result = substitute(nested, bindings)  # OpExpr("*", [OpExpr("+", [NumExpr(2.0),
 ```
 
 **Available in other languages:**
-- [Python](python.md#substitute)
-- [Python](python.md#substitute)
 - [Typescript](typescript.md#substitute)
 - [Rust](rust.md#substitute)
 - [Rust](rust.md#substitute)
@@ -6691,10 +6249,6 @@ Convert Symbolics/MTK symbolic expression back to ESM form.
 system(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#system)
-- [Python](python.md#system)
-
 ---
 
 ### system
@@ -6705,10 +6259,6 @@ system(...)
 ```julia
 system(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#system)
-- [Python](python.md#system)
 
 ---
 
@@ -6930,7 +6480,6 @@ to_dot(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#to_dot)
 - [Rust](rust.md#to_dot)
 - [Rust](rust.md#to_dot)
 
@@ -6949,7 +6498,6 @@ function to_dot(graph::Graph{ComponentNode, CouplingEdge})::String
 Export graph to DOT format for Graphviz rendering.
 
 **Available in other languages:**
-- [Python](python.md#to_dot)
 - [Rust](rust.md#to_dot)
 - [Rust](rust.md#to_dot)
 
@@ -7156,10 +6704,16 @@ Convert text to Unicode superscript representation.
 types(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
+---
+
+### types
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+types(...)
+```
 
 ---
 
@@ -7172,10 +6726,16 @@ types(...)
 types(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
+---
+
+### types
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+types(...)
+```
 
 ---
 
@@ -7188,10 +6748,16 @@ types(...)
 types(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
+---
+
+### types
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+types(...)
+```
 
 ---
 
@@ -7204,11 +6770,6 @@ types(...)
 types(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
-
 ---
 
 ### types
@@ -7220,11 +6781,6 @@ types(...)
 types(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
-
 ---
 
 ### types
@@ -7235,59 +6791,6 @@ types(...)
 ```julia
 types(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
-
----
-
-### types
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-types(...)
-```
-
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
-
----
-
-### types
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-types(...)
-```
-
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
-
----
-
-### types
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-types(...)
-```
-
-**Available in other languages:**
-- [Python](python.md#types)
-- [Python](python.md#types)
-- [Python](python.md#types)
 
 ---
 
@@ -7323,21 +6826,6 @@ validate(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
 - [Typescript](typescript.md#validate)
 - [Rust](rust.md#validate)
 - [Rust](rust.md#validate)
@@ -7360,21 +6848,6 @@ Complete validation combining schema, structural, and unit validation.
 Returns ValidationResult with all errors and warnings.
 
 **Available in other languages:**
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
-- [Python](python.md#validate)
 - [Typescript](typescript.md#validate)
 - [Rust](rust.md#validate)
 - [Rust](rust.md#validate)
@@ -7823,9 +7296,6 @@ and event consistency.
 validation(...)
 ```
 
-**Available in other languages:**
-- [Python](python.md#validation)
-
 ---
 
 ### validation
@@ -7836,9 +7306,6 @@ validation(...)
 ```julia
 validation(...)
 ```
-
-**Available in other languages:**
-- [Python](python.md#validation)
 
 ---
 
@@ -7873,9 +7340,6 @@ variable_map(coupled_system::MockCoupledSystem, coupling::CouplingVariableMap, f
 Implement variable mapping with transform operations:
 1. Resolve from/to scoped references using the qualified reference system
 2. Apply transform: param_to_var, identity, additive, multiplicative, conversion_factor
-
-**Available in other languages:**
-- [Python](python.md#variable_map)
 
 ---
 
@@ -8184,8 +7648,6 @@ Spatial and temporal domain specification.
 
 **Available in other languages:**
 - [Python](python.md#domain)
-- [Python](python.md#domain)
-- [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
 - [Rust](rust.md#domain)
 
@@ -8403,8 +7865,6 @@ Authorship, provenance, and description metadata.
 
 **Available in other languages:**
 - [Python](python.md#metadata)
-- [Python](python.md#metadata)
-- [Python](python.md#metadata)
 - [Typescript](typescript.md#metadata)
 - [Rust](rust.md#metadata)
 
@@ -8460,7 +7920,6 @@ ODE-based model component containing variables, equations, and optional subsyste
 Supports hierarchical composition through subsystems.
 
 **Available in other languages:**
-- [Python](python.md#model)
 - [Python](python.md#model)
 - [Typescript](typescript.md#model)
 - [Rust](rust.md#model)
@@ -8541,8 +8000,6 @@ Platform-specific computational kernels and operations.
 
 **Available in other languages:**
 - [Python](python.md#operator)
-- [Python](python.md#operator)
-- [Python](python.md#operator)
 - [Typescript](typescript.md#operator)
 - [Rust](rust.md#operator)
 
@@ -8600,8 +8057,6 @@ ParseError
 Exception thrown when JSON parsing fails.
 
 **Available in other languages:**
-- [Python](python.md#parseerror)
-- [Python](python.md#parseerror)
 - [Rust](rust.md#parseerror)
 
 ---
@@ -8766,7 +8221,6 @@ Academic citation or data source reference.
 
 **Available in other languages:**
 - [Python](python.md#reference)
-- [Python](python.md#reference)
 - [Typescript](typescript.md#reference)
 - [Rust](rust.md#reference)
 
@@ -8805,7 +8259,6 @@ Represents a validation error with detailed information.
 Contains path, message, and keyword from JSON Schema validation.
 
 **Available in other languages:**
-- [Python](python.md#schemaerror)
 - [Typescript](typescript.md#schemaerror)
 - [Rust](rust.md#schemaerror)
 
