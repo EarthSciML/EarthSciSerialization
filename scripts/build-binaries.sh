@@ -398,7 +398,7 @@ curl -sSL https://github.com/ctessum/EarthSciSerialization/releases/latest/downl
 - **Python**: \`pip install esm-format\`
 - **TypeScript/JavaScript**: \`npm install earthsci-toolkit\`
 - **Julia**: \`using Pkg; Pkg.add("EarthSciSerialization")\`
-- **Rust**: Add \`esm-format = "${VERSION}"\` to Cargo.toml
+- **Rust**: Add \`earthsci-toolkit = "${VERSION}"\` to Cargo.toml
 
 ### Verification
 Download [checksums.txt](checksums.txt) to verify package integrity:

@@ -30,7 +30,7 @@ Commands:
 
 Examples:
   ./scripts/rust_deps.sh check
-  ./scripts/rust_deps.sh install esm-format-rs
+  ./scripts/rust_deps.sh install earthsci-toolkit
   ./scripts/rust_deps.sh update
   ./scripts/rust_deps.sh report
 

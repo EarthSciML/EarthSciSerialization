@@ -75,7 +75,7 @@ pip install esm-format
 ### Rust
 ```toml
 [dependencies]
-esm-format = "0.1.0"
+earthsci-toolkit = "0.1.0"
 ```
 
 ### Go

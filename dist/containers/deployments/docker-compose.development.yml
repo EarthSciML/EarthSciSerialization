@@ -31,7 +31,7 @@ services:
       - esm-development
 
   rust-dev:
-    image: docker.io/ctessum/esm-format-rust:0.1.0-development
+    image: docker.io/ctessum/earthsci-toolkit:0.1.0-development
     container_name: esm-rust-dev
     volumes:
       - ./:/workspace:delegated
