@@ -43,7 +43,10 @@ fn test_missing_esm_version() {
     "#;
 
     let result = load(json);
-    assert!(result.is_err(), "Expected parsing to fail for missing ESM version");
+    assert!(
+        result.is_err(),
+        "Expected parsing to fail for missing ESM version"
+    );
 
     if let Err(EsmError::SchemaValidation(error)) = result {
         assert!(error.contains("esm") || error.to_lowercase().contains("required"));
@@ -65,7 +68,10 @@ fn test_wrong_data_types() {
     "#;
 
     let result = load(json);
-    assert!(result.is_err(), "Expected parsing to fail for wrong data type");
+    assert!(
+        result.is_err(),
+        "Expected parsing to fail for wrong data type"
+    );
 }
 
 /// Test structural validation
@@ -77,12 +83,10 @@ fn test_structural_validation() {
         reference: None,
         name: Some("Test Model".to_string()),
         variables,
-        equations: vec![
-            Equation {
-                lhs: Expr::Variable("x".to_string()),
-                rhs: Expr::Number(1.0),
-            }
-        ],
+        equations: vec![Equation {
+            lhs: Expr::Variable("x".to_string()),
+            rhs: Expr::Number(1.0),
+        }],
         discrete_events: None,
         continuous_events: None,
         description: None,
@@ -100,8 +104,8 @@ fn test_structural_validation() {
             created: None,
             modified: None,
             license: None,
-        tags: None,
-        references: None,
+            tags: None,
+            references: None,
         },
         models: Some(models),
         reaction_systems: None,
@@ -113,7 +117,10 @@ fn test_structural_validation() {
     };
 
     let validation_result = validate(&esm_file);
-    assert!(!validation_result.structural_errors.is_empty(), "Expected structural validation to find errors");
+    assert!(
+        !validation_result.structural_errors.is_empty(),
+        "Expected structural validation to find errors"
+    );
 }
 
 /// Test expression operations
@@ -121,10 +128,7 @@ fn test_structural_validation() {
 fn test_expression_operations() {
     let expr = Expr::Operator(ExpressionNode {
         op: "+".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(5.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(5.0)],
         wrt: None,
         dim: None,
     });
@@ -171,21 +175,19 @@ fn test_stoichiometric_matrix() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![StoichiometricEntry {
-                species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
-                species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
-            rate: Expr::Variable("k".to_string()),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![StoichiometricEntry {
+            species: "A".to_string(),
+            coefficient: Some(1.0),
+        }],
+        products: vec![StoichiometricEntry {
+            species: "B".to_string(),
+            coefficient: Some(1.0),
+        }],
+        rate: Expr::Variable("k".to_string()),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Test RS".to_string()),
@@ -199,7 +201,7 @@ fn test_stoichiometric_matrix() {
     assert_eq!(matrix.len(), 2);
     assert_eq!(matrix[0].len(), 1);
     assert_eq!(matrix[0][0], -1.0); // A consumed
-    assert_eq!(matrix[1][0], 1.0);  // B produced
+    assert_eq!(matrix[1][0], 1.0); // B produced
 }
 
 /// Test component graph generation
@@ -334,7 +336,8 @@ fn test_functional_affect_fields() {
     };
 
     // Test serialization
-    let json = serde_json::to_string_pretty(&functional_affect).expect("Failed to serialize FunctionalAffect");
+    let json = serde_json::to_string_pretty(&functional_affect)
+        .expect("Failed to serialize FunctionalAffect");
 
     // Verify JSON contains required fields
     assert!(json.contains("handler_id"));
@@ -344,12 +347,16 @@ fn test_functional_affect_fields() {
     assert!(json.contains("config"));
 
     // Test deserialization
-    let deserialized: FunctionalAffect = serde_json::from_str(&json).expect("Failed to deserialize FunctionalAffect");
+    let deserialized: FunctionalAffect =
+        serde_json::from_str(&json).expect("Failed to deserialize FunctionalAffect");
 
     assert_eq!(deserialized.handler_id, "test_handler");
     assert_eq!(deserialized.read_vars, vec!["var1", "var2"]);
     assert_eq!(deserialized.read_params, vec!["param1"]);
-    assert_eq!(deserialized.modified_params, Some(vec!["param2".to_string()]));
+    assert_eq!(
+        deserialized.modified_params,
+        Some(vec!["param2".to_string()])
+    );
     assert!(deserialized.config.is_some());
 }
 
@@ -368,7 +375,8 @@ fn test_functional_affect_minimal() {
     };
 
     // Test serialization - should not include None fields due to skip_serializing_if
-    let json = serde_json::to_string_pretty(&functional_affect).expect("Failed to serialize minimal FunctionalAffect");
+    let json = serde_json::to_string_pretty(&functional_affect)
+        .expect("Failed to serialize minimal FunctionalAffect");
 
     // Verify JSON has required fields but not optional ones
     assert!(json.contains("handler_id"));
@@ -379,7 +387,8 @@ fn test_functional_affect_minimal() {
     assert!(!json.contains("config"));
 
     // Test deserialization
-    let deserialized: FunctionalAffect = serde_json::from_str(&json).expect("Failed to deserialize minimal FunctionalAffect");
+    let deserialized: FunctionalAffect =
+        serde_json::from_str(&json).expect("Failed to deserialize minimal FunctionalAffect");
 
     assert_eq!(deserialized.handler_id, "minimal_handler");
     assert_eq!(deserialized.read_vars, vec!["var1"]);

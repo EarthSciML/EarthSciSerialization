@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use esm_format::{
-    Expr, ExpressionNode, performance::CompactExpr,
-    Species, Reaction, StoichiometricEntry, ReactionSystem,
-    types::Parameter,
+    performance::CompactExpr, types::Parameter, Expr, ExpressionNode, Reaction, ReactionSystem,
+    Species, StoichiometricEntry,
 };
+use std::collections::HashMap;
 
 #[cfg(feature = "parallel")]
 use esm_format::performance::ParallelEvaluator;
@@ -22,10 +21,7 @@ fn test_compact_expression_creation() {
     // Test simple expression: x + 1
     let expr = Expr::Operator(esm_format::ExpressionNode {
         op: "+".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(1.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
     });
@@ -46,10 +42,7 @@ fn test_compact_expression_evaluation() {
     // Test simple expression: x + 1
     let expr = Expr::Operator(esm_format::ExpressionNode {
         op: "+".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(1.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
     });
@@ -138,7 +131,10 @@ fn test_simd_vector_length_mismatch() {
 
     let err = simd_math::add_vectors_simd(&a, &b, &mut result);
     assert!(err.is_err());
-    assert!(err.unwrap_err().to_string().contains("Vector length mismatch"));
+    assert!(err
+        .unwrap_err()
+        .to_string()
+        .contains("Vector length mismatch"));
 
     let err = simd_math::multiply_vectors_simd(&a, &b, &mut result);
     assert!(err.is_err());
@@ -156,7 +152,10 @@ fn test_simd_result_buffer_size_mismatch() {
 
     let err = simd_math::add_vectors_simd(&a, &b, &mut result);
     assert!(err.is_err());
-    assert!(err.unwrap_err().to_string().contains("Vector length mismatch"));
+    assert!(err
+        .unwrap_err()
+        .to_string()
+        .contains("Vector length mismatch"));
 }
 
 #[cfg(feature = "parallel")]
@@ -169,7 +168,10 @@ fn test_compact_expr_evaluation_errors() {
 
     let result = compact.evaluate_fast(&variables);
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Undefined variable"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Undefined variable"));
 
     // Test division by zero
     let expr = Expr::Operator(ExpressionNode {
@@ -195,7 +197,10 @@ fn test_compact_expr_evaluation_errors() {
 
     let result = compact.evaluate_fast(&variables);
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Invalid log argument"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Invalid log argument"));
 }
 
 #[cfg(feature = "zero_copy")]
@@ -375,8 +380,13 @@ fn test_compact_expr_all_operators() {
         let compact = CompactExpr::from_expr(&expr);
         let variables = HashMap::new();
         let result = compact.evaluate_fast(&variables).unwrap();
-        assert!((result - expected).abs() < 1e-10,
-                "Failed for operator {}: got {}, expected {}", op, result, expected);
+        assert!(
+            (result - expected).abs() < 1e-10,
+            "Failed for operator {}: got {}, expected {}",
+            op,
+            result,
+            expected
+        );
     }
 
     // Test unary operators
@@ -398,8 +408,13 @@ fn test_compact_expr_all_operators() {
         let compact = CompactExpr::from_expr(&expr);
         let variables = HashMap::new();
         let result = compact.evaluate_fast(&variables).unwrap();
-        assert!((result - expected).abs() < 1e-10,
-                "Failed for operator {}: got {}, expected {}", op, result, expected);
+        assert!(
+            (result - expected).abs() < 1e-10,
+            "Failed for operator {}: got {}, expected {}",
+            op,
+            result,
+            expected
+        );
     }
 }
 
@@ -416,11 +431,7 @@ fn test_parallel_evaluator_different_thread_counts() {
         let evaluator = ParallelEvaluator::new(Some(num_threads)).unwrap();
 
         // Test with batch evaluation
-        let expressions = vec![
-            Expr::Number(1.0),
-            Expr::Number(2.0),
-            Expr::Number(3.0),
-        ];
+        let expressions = vec![Expr::Number(1.0), Expr::Number(2.0), Expr::Number(3.0)];
         let variables = HashMap::new();
 
         let results = evaluator.evaluate_batch(&expressions, &variables).unwrap();
@@ -494,28 +505,36 @@ fn test_parallel_stoichiometric_matrix_computation() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: Some("R1".to_string()),
-            substrates: vec![
-                StoichiometricEntry { species: "A".to_string(), coefficient: Some(1.0) },
-                StoichiometricEntry { species: "B".to_string(), coefficient: Some(1.0) },
-            ],
-            products: vec![
-                StoichiometricEntry { species: "C".to_string(), coefficient: Some(1.0) },
-            ],
-            rate: Expr::Number(1.0),
-            description: None,
-        },
-    ];
+    let reactions = vec![Reaction {
+        name: Some("R1".to_string()),
+        substrates: vec![
+            StoichiometricEntry {
+                species: "A".to_string(),
+                coefficient: Some(1.0),
+            },
+            StoichiometricEntry {
+                species: "B".to_string(),
+                coefficient: Some(1.0),
+            },
+        ],
+        products: vec![StoichiometricEntry {
+            species: "C".to_string(),
+            coefficient: Some(1.0),
+        }],
+        rate: Expr::Number(1.0),
+        description: None,
+    }];
 
     let mut parameters = HashMap::new();
     // Add a simple parameter if needed
-    parameters.insert("k1".to_string(), Parameter {
-        units: Some("1/s".to_string()),
-        default: Some(1.0),
-        description: None,
-    });
+    parameters.insert(
+        "k1".to_string(),
+        Parameter {
+            units: Some("1/s".to_string()),
+            default: Some(1.0),
+            description: None,
+        },
+    );
 
     let system = ReactionSystem {
         name: Some("test_system".to_string()),
@@ -525,7 +544,9 @@ fn test_parallel_stoichiometric_matrix_computation() {
         description: None,
     };
 
-    let matrix = evaluator.compute_stoichiometric_matrix_parallel(&system).unwrap();
+    let matrix = evaluator
+        .compute_stoichiometric_matrix_parallel(&system)
+        .unwrap();
 
     // Matrix should be 3x1 (3 species, 1 reaction)
     assert_eq!(matrix.len(), 3);
@@ -534,7 +555,7 @@ fn test_parallel_stoichiometric_matrix_computation() {
     // A: -1 (substrate), B: -1 (substrate), C: +1 (product)
     assert_eq!(matrix[0][0], -1.0); // A
     assert_eq!(matrix[1][0], -1.0); // B
-    assert_eq!(matrix[2][0], 1.0);  // C
+    assert_eq!(matrix[2][0], 1.0); // C
 }
 
 // ============================================================================
@@ -559,15 +580,22 @@ fn test_model_allocator_with_capacity() {
 
     // Test that allocated bytes reflect memory usage
     // (Note: Some allocators may not change allocated_bytes until a threshold is reached)
-    assert!(bytes_after >= bytes_before,
-           "Expected allocated_bytes to be >= {} but was {}", bytes_before, bytes_after);
+    assert!(
+        bytes_after >= bytes_before,
+        "Expected allocated_bytes to be >= {} but was {}",
+        bytes_before,
+        bytes_after
+    );
 
     // Test that we can allocate more memory
     let _slice2 = allocator.alloc_slice::<i32>(200);
     let bytes_after_second = allocator.allocated_bytes();
-    assert!(bytes_after_second >= bytes_after,
-           "Expected allocated_bytes after second allocation to be >= {} but was {}",
-           bytes_after, bytes_after_second);
+    assert!(
+        bytes_after_second >= bytes_after,
+        "Expected allocated_bytes after second allocation to be >= {} but was {}",
+        bytes_after,
+        bytes_after_second
+    );
 }
 
 #[cfg(feature = "custom_alloc")]

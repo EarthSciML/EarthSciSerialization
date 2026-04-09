@@ -10,31 +10,37 @@ use std::collections::HashMap;
 #[test]
 fn test_simple_var_replace() {
     let fixture = include_str!("../../../tests/substitution/simple_var_replace.json");
-    let test_data: serde_json::Value = serde_json::from_str(fixture)
-        .expect("Failed to parse simple var replace fixture");
+    let test_data: serde_json::Value =
+        serde_json::from_str(fixture).expect("Failed to parse simple var replace fixture");
 
     if let (Some(input_expr), Some(substitutions_data), Some(expected_expr)) = (
         test_data.get("input_expression"),
         test_data.get("substitutions"),
-        test_data.get("expected_result")
+        test_data.get("expected_result"),
     ) {
         // Parse input expression
-        let input_str = serde_json::to_string(input_expr).expect("Failed to serialize input expression");
-        let input: Expr = serde_json::from_str(&input_str).expect("Failed to parse input expression");
+        let input_str =
+            serde_json::to_string(input_expr).expect("Failed to serialize input expression");
+        let input: Expr =
+            serde_json::from_str(&input_str).expect("Failed to parse input expression");
 
         // Parse substitutions
         let mut substitutions = HashMap::new();
         if let Some(subs_obj) = substitutions_data.as_object() {
             for (var_name, sub_expr) in subs_obj {
-                let sub_str = serde_json::to_string(sub_expr).expect("Failed to serialize substitution");
-                let sub: Expr = serde_json::from_str(&sub_str).expect("Failed to parse substitution");
+                let sub_str =
+                    serde_json::to_string(sub_expr).expect("Failed to serialize substitution");
+                let sub: Expr =
+                    serde_json::from_str(&sub_str).expect("Failed to parse substitution");
                 substitutions.insert(var_name.clone(), sub);
             }
         }
 
         // Parse expected result
-        let expected_str = serde_json::to_string(expected_expr).expect("Failed to serialize expected result");
-        let expected: Expr = serde_json::from_str(&expected_str).expect("Failed to parse expected result");
+        let expected_str =
+            serde_json::to_string(expected_expr).expect("Failed to serialize expected result");
+        let expected: Expr =
+            serde_json::from_str(&expected_str).expect("Failed to parse expected result");
 
         // Perform substitution
         let result = substitute_in_expression(&input, &substitutions);
@@ -52,31 +58,37 @@ fn test_simple_var_replace() {
 #[test]
 fn test_nested_substitution() {
     let fixture = include_str!("../../../tests/substitution/nested_substitution.json");
-    let test_data: serde_json::Value = serde_json::from_str(fixture)
-        .expect("Failed to parse nested substitution fixture");
+    let test_data: serde_json::Value =
+        serde_json::from_str(fixture).expect("Failed to parse nested substitution fixture");
 
     if let (Some(input_expr), Some(substitutions_data), Some(expected_expr)) = (
         test_data.get("input_expression"),
         test_data.get("substitutions"),
-        test_data.get("expected_result")
+        test_data.get("expected_result"),
     ) {
         // Parse input expression
-        let input_str = serde_json::to_string(input_expr).expect("Failed to serialize input expression");
-        let input: Expr = serde_json::from_str(&input_str).expect("Failed to parse input expression");
+        let input_str =
+            serde_json::to_string(input_expr).expect("Failed to serialize input expression");
+        let input: Expr =
+            serde_json::from_str(&input_str).expect("Failed to parse input expression");
 
         // Parse substitutions
         let mut substitutions = HashMap::new();
         if let Some(subs_obj) = substitutions_data.as_object() {
             for (var_name, sub_expr) in subs_obj {
-                let sub_str = serde_json::to_string(sub_expr).expect("Failed to serialize substitution");
-                let sub: Expr = serde_json::from_str(&sub_str).expect("Failed to parse substitution");
+                let sub_str =
+                    serde_json::to_string(sub_expr).expect("Failed to serialize substitution");
+                let sub: Expr =
+                    serde_json::from_str(&sub_str).expect("Failed to parse substitution");
                 substitutions.insert(var_name.clone(), sub);
             }
         }
 
         // Parse expected result
-        let expected_str = serde_json::to_string(expected_expr).expect("Failed to serialize expected result");
-        let expected: Expr = serde_json::from_str(&expected_str).expect("Failed to parse expected result");
+        let expected_str =
+            serde_json::to_string(expected_expr).expect("Failed to serialize expected result");
+        let expected: Expr =
+            serde_json::from_str(&expected_str).expect("Failed to parse expected result");
 
         // Perform substitution
         let result = substitute_in_expression(&input, &substitutions);
@@ -94,31 +106,37 @@ fn test_nested_substitution() {
 #[test]
 fn test_scoped_reference() {
     let fixture = include_str!("../../../tests/substitution/scoped_reference.json");
-    let test_data: serde_json::Value = serde_json::from_str(fixture)
-        .expect("Failed to parse scoped reference fixture");
+    let test_data: serde_json::Value =
+        serde_json::from_str(fixture).expect("Failed to parse scoped reference fixture");
 
     if let (Some(input_expr), Some(substitutions_data), Some(expected_expr)) = (
         test_data.get("input_expression"),
         test_data.get("substitutions"),
-        test_data.get("expected_result")
+        test_data.get("expected_result"),
     ) {
         // Parse input expression
-        let input_str = serde_json::to_string(input_expr).expect("Failed to serialize input expression");
-        let input: Expr = serde_json::from_str(&input_str).expect("Failed to parse input expression");
+        let input_str =
+            serde_json::to_string(input_expr).expect("Failed to serialize input expression");
+        let input: Expr =
+            serde_json::from_str(&input_str).expect("Failed to parse input expression");
 
         // Parse substitutions
         let mut substitutions = HashMap::new();
         if let Some(subs_obj) = substitutions_data.as_object() {
             for (var_name, sub_expr) in subs_obj {
-                let sub_str = serde_json::to_string(sub_expr).expect("Failed to serialize substitution");
-                let sub: Expr = serde_json::from_str(&sub_str).expect("Failed to parse substitution");
+                let sub_str =
+                    serde_json::to_string(sub_expr).expect("Failed to serialize substitution");
+                let sub: Expr =
+                    serde_json::from_str(&sub_str).expect("Failed to parse substitution");
                 substitutions.insert(var_name.clone(), sub);
             }
         }
 
         // Parse expected result
-        let expected_str = serde_json::to_string(expected_expr).expect("Failed to serialize expected result");
-        let expected: Expr = serde_json::from_str(&expected_str).expect("Failed to parse expected result");
+        let expected_str =
+            serde_json::to_string(expected_expr).expect("Failed to serialize expected result");
+        let expected: Expr =
+            serde_json::from_str(&expected_str).expect("Failed to parse expected result");
 
         // Perform substitution
         let result = substitute_in_expression(&input, &substitutions);
@@ -137,51 +155,58 @@ fn test_scoped_reference() {
 fn test_model_substitution() {
     // Create a simple model for testing
     let mut variables = HashMap::new();
-    variables.insert("x".to_string(), ModelVariable {
-        var_type: VariableType::State,
-        units: None,
-        default: Some(1.0),
-        description: None,
-        expression: None,
-    });
-    variables.insert("k".to_string(), ModelVariable {
-        var_type: VariableType::Parameter,
-        units: None,
-        default: Some(0.1),
-        description: None,
-        expression: None,
-    });
-    variables.insert("y".to_string(), ModelVariable {
-        var_type: VariableType::State,
-        units: None,
-        default: Some(0.0),
-        description: None,
-        expression: None,
-    });
+    variables.insert(
+        "x".to_string(),
+        ModelVariable {
+            var_type: VariableType::State,
+            units: None,
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        },
+    );
+    variables.insert(
+        "k".to_string(),
+        ModelVariable {
+            var_type: VariableType::Parameter,
+            units: None,
+            default: Some(0.1),
+            description: None,
+            expression: None,
+        },
+    );
+    variables.insert(
+        "y".to_string(),
+        ModelVariable {
+            var_type: VariableType::State,
+            units: None,
+            default: Some(0.0),
+            description: None,
+            expression: None,
+        },
+    );
 
     let model = Model {
         reference: None,
         name: Some("Test Model".to_string()),
         variables,
-        equations: vec![
-            Equation {
-                lhs: Expr::Operator(ExpressionNode {
-                    op: "D".to_string(),
-                    args: vec![Expr::Variable("x".to_string())],
-                    wrt: Some("t".to_string()),
-                    dim: None,
-                }),
-                rhs: Expr::Operator(ExpressionNode {
-                    op: "*".to_string(),
-                    args: vec![
-                        Expr::Variable("k".to_string()),
-                        Expr::Variable("x".to_string()),
-                    ],
-                    wrt: None,
-                    dim: None,
-                }),
-            },
-        ],
+        equations: vec![Equation {
+            lhs: Expr::Operator(ExpressionNode {
+                op: "D".to_string(),
+                args: vec![Expr::Variable("x".to_string())],
+                wrt: Some("t".to_string()),
+                dim: None,
+            }),
+            rhs: Expr::Operator(ExpressionNode {
+                op: "*".to_string(),
+                args: vec![
+                    Expr::Variable("k".to_string()),
+                    Expr::Variable("x".to_string()),
+                ],
+                wrt: None,
+                dim: None,
+            }),
+        }],
         discrete_events: None,
         continuous_events: None,
         description: None,
@@ -223,29 +248,27 @@ fn test_reaction_system_substitution() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![StoichiometricEntry {
-                species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
-                species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
-            rate: Expr::Operator(ExpressionNode {
-                op: "*".to_string(),
-                args: vec![
-                    Expr::Variable("k_rate".to_string()),
-                    Expr::Variable("A".to_string()),
-                ],
-                wrt: None,
-                dim: None,
-            }),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![StoichiometricEntry {
+            species: "A".to_string(),
+            coefficient: Some(1.0),
+        }],
+        products: vec![StoichiometricEntry {
+            species: "B".to_string(),
+            coefficient: Some(1.0),
+        }],
+        rate: Expr::Operator(ExpressionNode {
+            op: "*".to_string(),
+            args: vec![
+                Expr::Variable("k_rate".to_string()),
+                Expr::Variable("A".to_string()),
+            ],
+            wrt: None,
+            dim: None,
+        }),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Test RS".to_string()),
@@ -285,10 +308,7 @@ fn test_complex_substitution_patterns() {
                     Expr::Variable("a".to_string()),
                     Expr::Operator(ExpressionNode {
                         op: "^".to_string(),
-                        args: vec![
-                            Expr::Variable("x".to_string()),
-                            Expr::Number(2.0),
-                        ],
+                        args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
                         wrt: None,
                         dim: None,
                     }),

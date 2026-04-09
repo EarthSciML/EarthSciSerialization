@@ -3,9 +3,9 @@
 //! Implements Section 8.3 of the ESM Libraries Specification:
 //! migrate(file: EsmFile, target_version: String) → EsmFile
 
+use crate::types::EsmFile;
 use std::error::Error;
 use std::fmt;
-use crate::types::EsmFile;
 
 /// Migration error that occurs when migration fails
 #[derive(Debug, Clone)]
@@ -64,7 +64,11 @@ fn parse_version(version: &str) -> Result<VersionInfo, MigrationError> {
         to_version: String::new(),
     })?;
 
-    Ok(VersionInfo { major, minor, patch })
+    Ok(VersionInfo {
+        major,
+        minor,
+        patch,
+    })
 }
 
 /// Compare two semantic versions
@@ -128,19 +132,19 @@ fn migrate_species_units(
 }
 
 /// Add migration notes to the metadata
-fn add_migration_notes(
-    file: &EsmFile,
-    from_version: &str,
-    to_version: &str,
-) -> EsmFile {
+fn add_migration_notes(file: &EsmFile, from_version: &str, to_version: &str) -> EsmFile {
     let mut new_file = file.clone();
 
-    let migration_note = format!("Migrated from version {} to version {}", from_version, to_version);
+    let migration_note = format!(
+        "Migrated from version {} to version {}",
+        from_version, to_version
+    );
 
     // Add migration note to description
     match &new_file.metadata.description {
         Some(desc) if !desc.is_empty() => {
-            new_file.metadata.description = Some(format!("{}\nMigration notes: {}", desc, migration_note));
+            new_file.metadata.description =
+                Some(format!("{}\nMigration notes: {}", desc, migration_note));
         }
         _ => {
             new_file.metadata.description = Some(format!("Migration notes: {}", migration_note));
@@ -247,9 +251,7 @@ pub fn get_supported_migration_targets(from_version: &str) -> Vec<String> {
     // Filter to only include versions that are later than the from version
     targets
         .into_iter()
-        .filter(|target| {
-            compare_versions(from_version, target).map_or(false, |cmp| cmp < 0)
-        })
+        .filter(|target| compare_versions(from_version, target).map_or(false, |cmp| cmp < 0))
         .collect()
 }
 
