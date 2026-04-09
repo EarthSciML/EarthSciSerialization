@@ -5,7 +5,7 @@ import pytest
 
 from esm_format.esm_types import (
     EsmFile, Metadata, DataLoader, DataLoaderType, Operator,
-    CouplingEntry, CouplingType, Solver, SolverType, ContinuousEvent, AffectEquation
+    VariableMapCoupling, CouplingType, Solver, SolverType, ContinuousEvent, AffectEquation
 )
 from esm_format.serialize import save
 
@@ -37,14 +37,14 @@ def test_roundtrip_preserves_data_loaders():
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        models=[],
-        reaction_systems=[],
+        models={},
+        reaction_systems={},
         events=[],
         data_loaders=[data_loader],
         operators=[],
-        couplings=[],
-        domains=[],
-        solvers=[]
+        coupling=[],
+        domains={},
+        solver=None
     )
 
     # Serialize to JSON
@@ -87,14 +87,14 @@ def test_roundtrip_preserves_operators():
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        models=[],
-        reaction_systems=[],
+        models={},
+        reaction_systems={},
         events=[],
         data_loaders=[],
         operators=[operator],
-        couplings=[],
-        domains=[],
-        solvers=[]
+        coupling=[],
+        domains={},
+        solver=None
     )
 
     # Serialize to JSON
@@ -127,27 +127,23 @@ def test_roundtrip_preserves_couplings():
     )
 
     # Create coupling entry
-    coupling = CouplingEntry(
-        source_model="model1",
-        target_model="model2",
-        source_variables=["x"],
-        target_variables=["y"],
-        coupling_type=CouplingType.DIRECT,
-        transformation=None
+    coupling = VariableMapCoupling(
+        from_var="model1.x",
+        to_var="model2.y",
     )
 
     # Create ESM file
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        models=[],
-        reaction_systems=[],
+        models={},
+        reaction_systems={},
         events=[],
         data_loaders=[],
         operators=[],
-        couplings=[coupling],
-        domains=[],
-        solvers=[]
+        coupling=[coupling],
+        domains={},
+        solver=None
     )
 
     # Serialize to JSON
@@ -190,14 +186,14 @@ def test_roundtrip_preserves_solvers():
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        models=[],
-        reaction_systems=[],
+        models={},
+        reaction_systems={},
         events=[],
         data_loaders=[],
         operators=[],
-        couplings=[],
-        domains=[],
-        solvers=[solver]
+        coupling=[],
+        domains={},
+        solver=solver
     )
 
     # Serialize to JSON
@@ -239,14 +235,14 @@ def test_roundtrip_preserves_events():
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        models=[],
-        reaction_systems=[],
+        models={},
+        reaction_systems={},
         events=[event],
         data_loaders=[],
         operators=[],
-        couplings=[],
-        domains=[],
-        solvers=[]
+        coupling=[],
+        domains={},
+        solver=None
     )
 
     # Serialize to JSON
@@ -293,13 +289,9 @@ def test_roundtrip_preserves_all_missing_fields():
         config={}
     )
 
-    coupling = CouplingEntry(
-        source_model="m1",
-        target_model="m2",
-        source_variables=["a"],
-        target_variables=["b"],
-        coupling_type=CouplingType.DIRECT,
-        transformation=None
+    coupling = VariableMapCoupling(
+        from_var="m1.a",
+        to_var="m2.b",
     )
 
     solver = Solver(
@@ -321,14 +313,14 @@ def test_roundtrip_preserves_all_missing_fields():
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        models=[],
-        reaction_systems=[],
+        models={},
+        reaction_systems={},
         events=[event],
         data_loaders=[data_loader],
         operators=[operator],
-        couplings=[coupling],
-        domains=[],
-        solvers=[solver]
+        coupling=[coupling],
+        domains={},
+        solver=solver
     )
 
     # Serialize to JSON

@@ -20,6 +20,8 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
     Returns:
         Expression with variables substituted
     """
+    if expr is None:
+        return None
     if isinstance(expr, str):
         # String is a variable name - substitute if binding exists
         return bindings.get(expr, expr)
@@ -35,22 +37,46 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
             wrt=expr.wrt,
             dim=expr.dim
         )
+    elif isinstance(expr, dict):
+        # Handle dict-form expression nodes (e.g. {"op": "+", "args": ["x", "y"]})
+        if "op" in expr and "args" in expr:
+            substituted_args = [substitute(arg, bindings) for arg in expr["args"]]
+            result = {"op": expr["op"], "args": substituted_args}
+            if "wrt" in expr:
+                result["wrt"] = expr["wrt"]
+            if "dim" in expr:
+                result["dim"] = expr["dim"]
+            return result
+        # For other dicts, return unchanged
+        return expr
     else:
         # Unknown type, return unchanged
         return expr
 
 
-def substitute_in_model(model: Model, bindings: Dict[str, Expr]) -> Model:
+def substitute_in_model(model, bindings: Dict[str, Expr]):
     """
     Apply substitutions to all expressions in a model.
 
     Args:
-        model: Model to perform substitutions on
+        model: Model object or dict to perform substitutions on
         bindings: Dictionary mapping variable names to replacement expressions
 
     Returns:
-        New model with substitutions applied
+        New model (same type as input) with substitutions applied
     """
+    # Handle dict-form models
+    if isinstance(model, dict):
+        import copy
+        result = copy.deepcopy(model)
+        # Substitute in equations
+        if "equations" in result:
+            for eq in result["equations"]:
+                eq["lhs"] = substitute(eq["lhs"], bindings)
+                eq["rhs"] = substitute(eq["rhs"], bindings)
+        return result
+
+    # Typed Model object
     # Substitute in model variables
     new_variables = {}
     for name, var in model.variables.items():
@@ -83,17 +109,34 @@ def substitute_in_model(model: Model, bindings: Dict[str, Expr]) -> Model:
     )
 
 
-def substitute_in_reaction_system(system: ReactionSystem, bindings: Dict[str, Expr]) -> ReactionSystem:
+def substitute_in_reaction_system(system, bindings: Dict[str, Expr]):
     """
     Apply substitutions to all expressions in a reaction system.
 
     Args:
-        system: Reaction system to perform substitutions on
+        system: Reaction system object or dict to perform substitutions on
         bindings: Dictionary mapping variable names to replacement expressions
 
     Returns:
-        New reaction system with substitutions applied
+        New reaction system (same type as input) with substitutions applied
     """
+    # Handle dict-form reaction systems
+    if isinstance(system, dict):
+        import copy
+        result = copy.deepcopy(system)
+        # Substitute in parameters
+        if "parameters" in result:
+            for param_name, param_data in result["parameters"].items():
+                if "default" in param_data:
+                    param_data["default"] = substitute(param_data["default"], bindings)
+        # Substitute in reactions
+        if "reactions" in result:
+            for reaction in result["reactions"]:
+                if "rate" in reaction:
+                    reaction["rate"] = substitute(reaction["rate"], bindings)
+        return result
+
+    # Typed ReactionSystem object
     # Substitute in parameters
     new_parameters = []
     for param in system.parameters:

@@ -51,11 +51,9 @@ class TestSection01Overview:
         """Test invalid format version strings."""
         schema = _get_schema()
 
-        # Invalid versions should fail
-        invalid_versions = [
-            "1.0.0",  # Wrong version
-            "0.2.0",  # Wrong version
-            "v0.1.0", # Invalid format
+        # Invalid format versions should fail schema validation
+        invalid_format_versions = [
+            "v0.1.0", # Invalid format (v prefix)
             "0.1",    # Missing patch
             "0.1.0-beta", # Pre-release not allowed
             "",       # Empty string
@@ -63,7 +61,7 @@ class TestSection01Overview:
             1.0,      # Number instead of string
         ]
 
-        for version in invalid_versions:
+        for version in invalid_format_versions:
             invalid_data = {
                 "esm": version,
                 "metadata": {"name": "Test"},
@@ -71,6 +69,17 @@ class TestSection01Overview:
             }
             with pytest.raises(ValidationError):
                 jsonschema.validate(invalid_data, schema)
+
+        # Incompatible major versions should fail at library level
+        from esm_format.parse import UnsupportedVersionError, load
+        for version in ["1.0.0", "2.0.0"]:
+            invalid_data = {
+                "esm": version,
+                "metadata": {"name": "Test"},
+                "models": {"test": {"variables": {}, "equations": []}}
+            }
+            with pytest.raises(UnsupportedVersionError):
+                load(invalid_data)
 
     def test_file_extension_mime_type_constants(self):
         """Test that spec constants are documented (non-validating test)."""
@@ -1800,10 +1809,10 @@ class TestSection15FutureConsiderations:
         }
         jsonschema.validate(current_version, schema)
 
-        # Future versions should fail (ensuring schema updates are intentional)
+        # Invalid format should fail schema validation
         with pytest.raises(ValidationError):
             jsonschema.validate({
-                "esm": "0.2.0",  # Future version
+                "esm": "invalid",  # Not semver
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}}
             }, schema)
