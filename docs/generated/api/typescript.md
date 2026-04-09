@@ -167,6 +167,21 @@ Build a dependency graph from an ESM file, model, or expression
 
 ---
 
+### canMigrate
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/migration.ts:22`
+
+**Signature:**
+```typescript
+export function canMigrate(sourceVersion: string, targetVersion: string): boolean {
+```
+
+**Description:**
+Check if migration is possible from the source version to target version.
+/
+
+---
+
 ### checkDimensions
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/units.ts:210`
@@ -1031,6 +1046,21 @@ export function getProfiler(): PerformanceProfiler {
 
 ---
 
+### getSupportedMigrationTargets
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/migration.ts:30`
+
+**Signature:**
+```typescript
+export function getSupportedMigrationTargets(sourceVersion: string): string[] {
+```
+
+**Description:**
+Get the list of schema versions that a given source version can migrate to.
+/
+
+---
+
 ### gradient
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/differentiation.ts:52`
@@ -1234,6 +1264,26 @@ Merge two ESM files
 - [Python](python.md#merge)
 - [Python](python.md#merge)
 - [Python](python.md#merge)
+
+---
+
+### migrate
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/migration.ts:40`
+
+**Signature:**
+```typescript
+export function migrate(file: EsmFile, targetVersion: string): EsmFile {
+```
+
+**Description:**
+Migrate an ESM file from its current schema version to the target version.
+/
+
+**Available in other languages:**
+- [Julia](julia.md#migrate)
+- [Python](python.md#migrate)
+- [Rust](rust.md#migrate)
 
 ---
 
@@ -1703,7 +1753,7 @@ Returns the substrate stoichiometric matrix (species × reactions) where:
 
 ### toAscii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:473`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:482`
 
 **Signature:**
 ```typescript
@@ -1735,7 +1785,7 @@ Generate a self-contained Julia script from an ESM file
 
 ### toLatex
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:432`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:441`
 
 **Signature:**
 ```typescript
@@ -1750,7 +1800,7 @@ Format an expression as LaTeX mathematical notation
 
 ### toMathML
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:513`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:522`
 
 **Signature:**
 ```typescript
@@ -1782,7 +1832,7 @@ Generate a self-contained Python script from an ESM file
 
 ### toUnicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:392`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:401`
 
 **Signature:**
 ```typescript
