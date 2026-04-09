@@ -1,6 +1,6 @@
 # Model Validation (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/units_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/units_test.jl`
 
 ```julia
 # Test validate_model_dimensions function
@@ -13,7 +13,7 @@
 
         equations = [
             Equation(
-                OpExpr("D", ESMFormat.Expr[VarExpr("x")], wrt="t"),
+                OpExpr("D", EarthSciSerialization.Expr[VarExpr("x")], wrt="t"),
                 VarExpr("v")
             )
         ]
@@ -25,7 +25,7 @@
         )
 
         # Should validate correctly
-        result = ESMFormat.validate_model_dimensions(model)
+        result = EarthSciSerialization.validate_model_dimensions(model)
         @test result isa Bool  # Just test that it returns a boolean without error
 ```
 

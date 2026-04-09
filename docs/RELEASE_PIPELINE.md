@@ -111,16 +111,16 @@ All packages maintain synchronized version numbers:
 
 ## Package Publishing
 
-### Julia (ESMFormat.jl)
+### Julia (EarthSciSerialization.jl)
 
 - Tests run on Julia 1.9, 1.10, 1.11, 1.12
 - Automatic registration with Julia General Registry
 - Coverage reporting via Codecov
-- Package tagged as `ESMFormat-v{version}`
+- Package tagged as `EarthSciSerialization-v{version}`
 
 **Installation**:
 ```julia
-using Pkg; Pkg.add("ESMFormat")
+using Pkg; Pkg.add("EarthSciSerialization")
 ```
 
 ### TypeScript/JavaScript (esm-format)

@@ -1,6 +1,6 @@
 # IO Stream Interface (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/parse_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/parse_test.jl`
 
 ```julia
 # Test with IO streams

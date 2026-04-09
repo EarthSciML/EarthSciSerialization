@@ -191,7 +191,7 @@ These fixtures demonstrate multiple error conditions in a single file, useful fo
 Located in `packages/esm_format/tests/test_validate_structural.py`, these tests load fixtures and verify that structural validation correctly identifies the expected error codes.
 
 ### Julia Tests
-Located in `packages/ESMFormat.jl/test/structural_validation_test.jl`, these tests create programmatic examples of each error condition and verify the Julia implementation detects them.
+Located in `packages/EarthSciSerialization.jl/test/structural_validation_test.jl`, these tests create programmatic examples of each error condition and verify the Julia implementation detects them.
 
 ### Rust Tests
 Located in `packages/esm-format-rust/tests/structural_validation.rs`, these tests load the fixture files and verify the Rust implementation correctly identifies each error code.

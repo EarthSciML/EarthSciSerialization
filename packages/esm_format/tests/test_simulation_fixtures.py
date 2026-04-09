@@ -937,7 +937,7 @@ class TestJupyterIntegration:
 # Integration Tests with ESM Format
 # ========================================
 
-class TestESMFormatIntegration:
+class TestEarthSciSerializationIntegration:
     """Test integration of simulation capabilities with ESM format."""
 
     def test_simulation_model_serialization(self):
@@ -1099,7 +1099,7 @@ def simulation_test_coverage_summary():
         'sensitivity_analysis': 'TestSensitivityAnalysis class',
         'parallel_execution': 'TestParallelExecution class',
         'jupyter_integration': 'TestJupyterIntegration class',
-        'esm_integration': 'TestESMFormatIntegration class'
+        'esm_integration': 'TestEarthSciSerializationIntegration class'
     }
 
     print("✓ All simulation test categories are covered:")

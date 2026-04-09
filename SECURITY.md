@@ -8,7 +8,7 @@ This document describes the security measures implemented for the EarthSciSerial
 
 The EarthSciSerialization project implements comprehensive security scanning and package verification for all distributed packages:
 
-- **Julia**: ESMFormat.jl
+- **Julia**: EarthSciSerialization.jl
 - **Python**: esm_format
 - **TypeScript/JavaScript**: esm-format, esm-editor
 - **Rust**: esm-format-rust

@@ -22,7 +22,7 @@ The ESM (`.esm`) format enables persistence, interchange, and version control fo
 
 **Julia:**
 ```julia
-using ESMFormat
+using EarthSciSerialization
 esm_file = load("model.esm")
 println("Model has $(length(esm_file.models)) components")
 ```
@@ -47,7 +47,7 @@ This repository contains multiple language implementations of the ESM format:
 
 | Package | Language | Description | Directory |
 |---------|----------|-------------|-----------|
-| **ESMFormat.jl** | Julia | Complete MTK/Catalyst integration | [`packages/ESMFormat.jl/`](packages/ESMFormat.jl/) |
+| **EarthSciSerialization.jl** | Julia | Complete MTK/Catalyst integration | [`packages/EarthSciSerialization.jl/`](packages/EarthSciSerialization.jl/) |
 | **esm-format** | TypeScript | Web/Node.js types and utilities | [`packages/esm-format/`](packages/esm-format/) |
 | **esm_format** | Python | Scientific Python integration | [`packages/esm_format/`](packages/esm_format/) |
 | **esm-format-rust** | Rust | High-performance implementation | [`packages/esm-format-rust/`](packages/esm-format-rust/) |
@@ -59,7 +59,7 @@ This repository contains multiple language implementations of the ESM format:
 ### Julia
 ```julia
 using Pkg
-Pkg.add("ESMFormat")
+Pkg.add("EarthSciSerialization")
 ```
 
 ### TypeScript/Node.js

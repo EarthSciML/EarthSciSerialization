@@ -64,7 +64,7 @@ Let's create a simple atmospheric chemistry model. Save this as `simple-model.es
 
 ### Julia
 ```julia
-using ESMFormat
+using EarthSciSerialization
 
 # Load and parse
 esm_file = load_esm("simple-model.esm")

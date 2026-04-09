@@ -1,6 +1,6 @@
 # Solver Optimization Tests (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/solver_optimization_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/solver_optimization_test.jl`
 
 ```julia
 @testset "PerformanceMetrics" begin
@@ -14,12 +14,12 @@
         @test metrics.success == true
 
         # Test performance scoring
-        score = ESMFormat.calculate_performance_score(metrics)
+        score = EarthSciSerialization.calculate_performance_score(metrics)
         @test score > 0.0
         @test score <= 1.0
 
         # Test failed run scoring
         failed_metrics = PerformanceMetrics(1.0, 100, 1e-3, 1024*1024, 0.1, false)
-        @test ESMFormat.calculate_performance_score(failed_metrics) == 0.0
+        @test EarthSciSerialization.calculate_performance_score(failed_metrics) == 0.0
 ```
 

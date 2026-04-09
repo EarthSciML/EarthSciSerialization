@@ -122,7 +122,7 @@ jobs:
         NEW_VERSION="${{ steps.version.outputs.new_version }}"
 
         # Update Julia Project.toml
-        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/ESMFormat.jl/Project.toml
+        sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/EarthSciSerialization.jl/Project.toml
 
         # Update TypeScript package.json
         cd packages/esm-format
@@ -155,7 +155,7 @@ jobs:
         echo "" >> RELEASE_NOTES.md
         echo "" >> RELEASE_NOTES.md
         echo "## Package Versions:" >> RELEASE_NOTES.md
-        echo "- Julia ESMFormat.jl: v$NEW_VERSION" >> RELEASE_NOTES.md
+        echo "- Julia EarthSciSerialization.jl: v$NEW_VERSION" >> RELEASE_NOTES.md
         echo "- TypeScript esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
         echo "- Python esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
         echo "- Rust esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md

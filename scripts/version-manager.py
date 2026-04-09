@@ -283,7 +283,7 @@ const Version = "{version}"
         notes.append("## Installation:")
         notes.append("```bash")
         notes.append("# Julia")
-        notes.append("julia> ] add ESMFormat")
+        notes.append("julia> ] add EarthSciSerialization")
         notes.append("")
         notes.append("# TypeScript/JavaScript")
         notes.append("npm install esm-format")

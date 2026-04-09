@@ -176,7 +176,7 @@ While this distribution focuses on native executables, EarthSciSerialization is 
 
 - **Python**: `pip install esm-format`
 - **TypeScript/JavaScript**: `npm install esm-format`
-- **Julia**: `using Pkg; Pkg.add("ESMFormat")`
+- **Julia**: `using Pkg; Pkg.add("EarthSciSerialization")`
 - **Rust**: Add `esm-format = "VERSION"` to Cargo.toml
 
 ## Troubleshooting

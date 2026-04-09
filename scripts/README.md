@@ -101,7 +101,7 @@ The `workspace.json` file defines all packages in the workspace:
       "type": "python"
     },
     "esm-format-jl": {
-      "path": "./packages/ESMFormat.jl",
+      "path": "./packages/EarthSciSerialization.jl",
       "version": "0.1.0",
       "type": "julia"
     }

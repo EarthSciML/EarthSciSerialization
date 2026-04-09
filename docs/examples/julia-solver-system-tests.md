@@ -1,6 +1,6 @@
 # Solver System Tests (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/solver_test.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/solver_test.jl`
 
 ```julia
 @testset "Solver Strategy Enum" begin

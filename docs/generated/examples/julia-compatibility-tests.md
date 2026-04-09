@@ -1,6 +1,6 @@
 # Compatibility Tests (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/compat_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/compat_test.jl`
 
 ```julia
 @testset "Julia Version Compatibility" begin

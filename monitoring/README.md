@@ -56,7 +56,7 @@ with track_operation("validate_model", file_size_bytes=1024):
 using ESMAnalytics
 
 # Initialize analytics
-initialize_analytics("ESMFormat.jl", "0.1.0")
+initialize_analytics("EarthSciSerialization.jl", "0.1.0")
 
 # Use macros
 function parse_file(path::String)

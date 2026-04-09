@@ -1,13 +1,13 @@
 # Invalid fixture: $filename (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/runtests.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/runtests.jl`
 
 ```julia
 # Should either throw ParseError or produce validation errors
                         error_found = false
                         try
-                            esm_data = ESMFormat.load(filepath)
-                            result = ESMFormat.validate(esm_data)
+                            esm_data = EarthSciSerialization.load(filepath)
+                            result = EarthSciSerialization.validate(esm_data)
                             if !result.is_valid
                                 @test !isempty(result.schema_errors) || !isempty(result.structural_errors)
                                 error_found = true

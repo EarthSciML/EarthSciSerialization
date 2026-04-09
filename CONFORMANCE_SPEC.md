@@ -541,9 +541,9 @@ The test fixture format is designed to accommodate:
 
 ## 10. Reference Implementation
 
-The Julia `ESMFormat.jl` library serves as the reference implementation for conformance test development. When adding new test fixtures:
+The Julia `EarthSciSerialization.jl` library serves as the reference implementation for conformance test development. When adding new test fixtures:
 
-1. Verify behavior using `ESMFormat.jl`
+1. Verify behavior using `EarthSciSerialization.jl`
 2. Generate expected outputs using Julia implementation
 3. Validate that other implementations produce equivalent results
 4. Document any acceptable implementation differences

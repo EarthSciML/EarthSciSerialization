@@ -1,6 +1,6 @@
 # Bidirectional conversion: ESM → MTK → ESM with metadata preservation (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/mtk_catalyst_test.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/mtk_catalyst_test.jl`
 
 ```julia
 # Test round-trip conversion for model
@@ -11,8 +11,8 @@
 
         equations = [
             Equation(
-                OpExpr("D", ESMFormat.Expr[VarExpr("x")], wrt="t"),
-                OpExpr("*", ESMFormat.Expr[OpExpr("-", ESMFormat.Expr[VarExpr("k")]), VarExpr("x")])
+                OpExpr("D", EarthSciSerialization.Expr[VarExpr("x")], wrt="t"),
+                OpExpr("*", EarthSciSerialization.Expr[OpExpr("-", EarthSciSerialization.Expr[VarExpr("k")]), VarExpr("x")])
             )
         ]
 

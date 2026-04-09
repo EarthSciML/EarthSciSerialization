@@ -1,11 +1,11 @@
 # Equation Display (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/display_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/display_test.jl`
 
 ```julia
 # Test Equation show method
-        lhs = OpExpr("D", ESMFormat.Expr[VarExpr("x")], wrt="t")
-        rhs = OpExpr("*", ESMFormat.Expr[NumExpr(2.0), VarExpr("x")])
+        lhs = OpExpr("D", EarthSciSerialization.Expr[VarExpr("x")], wrt="t")
+        rhs = OpExpr("*", EarthSciSerialization.Expr[NumExpr(2.0), VarExpr("x")])
         eq = Equation(lhs, rhs)
 
         io = IOBuffer()

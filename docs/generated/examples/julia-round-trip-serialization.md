@@ -1,6 +1,6 @@
 # Round-trip Serialization (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/parse_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/parse_test.jl`
 
 ```julia
 # Create test data
@@ -8,8 +8,8 @@
 
         variables = Dict("x" => ModelVariable(StateVariable, default=1.0))
 
-        lhs = OpExpr("D", Vector{ESMFormat.Expr}([VarExpr("x")]), wrt="t")
-        rhs = OpExpr("*", Vector{ESMFormat.Expr}([NumExpr(-0.1), VarExpr("x")]))
+        lhs = OpExpr("D", Vector{EarthSciSerialization.Expr}([VarExpr("x")]), wrt="t")
+        rhs = OpExpr("*", Vector{EarthSciSerialization.Expr}([NumExpr(-0.1), VarExpr("x")]))
         equations = [Equation(lhs, rhs)]
 
         model = Model(variables, equations)

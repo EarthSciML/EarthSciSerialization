@@ -540,7 +540,7 @@ class PackageVerifier:
             raise SecurityScannerError(f"Packages directory not found: {packages_dir}")
 
         package_mapping = {
-            'ESMFormat.jl': 'julia',
+            'EarthSciSerialization.jl': 'julia',
             'esm_format': 'python',
             'esm-format': 'npm',
             'esm-editor': 'npm',
