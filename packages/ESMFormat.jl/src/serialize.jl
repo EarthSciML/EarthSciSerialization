@@ -233,6 +233,10 @@ function serialize_model(model::Model)::Dict{String,Any}
         result["subsystems"] = Dict(k => serialize_model(v) for (k, v) in model.subsystems)
     end
 
+    if model.domain !== nothing
+        result["domain"] = model.domain
+    end
+
     return result
 end
 
@@ -329,6 +333,11 @@ function serialize_reaction_system(rs::ReactionSystem)::Dict{String,Any}
         "parameters" => Dict(p.name => serialize_parameter(p) for p in rs.parameters),
         "reactions" => [serialize_reaction(r) for r in rs.reactions]
     )
+
+    if rs.domain !== nothing
+        result["domain"] = rs.domain
+    end
+
     return result
 end
 
@@ -423,6 +432,12 @@ function serialize_operator_compose(entry::CouplingOperatorCompose)::Dict{String
     if entry.description !== nothing
         result["description"] = entry.description
     end
+    if entry.interface !== nothing
+        result["interface"] = entry.interface
+    end
+    if entry.lifting !== nothing
+        result["lifting"] = entry.lifting
+    end
 
     return result
 end
@@ -442,6 +457,12 @@ function serialize_couple2(entry::CouplingCouple2)::Dict{String,Any}
 
     if entry.description !== nothing
         result["description"] = entry.description
+    end
+    if entry.interface !== nothing
+        result["interface"] = entry.interface
+    end
+    if entry.lifting !== nothing
+        result["lifting"] = entry.lifting
     end
 
     return result
@@ -465,6 +486,12 @@ function serialize_variable_map(entry::CouplingVariableMap)::Dict{String,Any}
     end
     if entry.description !== nothing
         result["description"] = entry.description
+    end
+    if entry.interface !== nothing
+        result["interface"] = entry.interface
+    end
+    if entry.lifting !== nothing
+        result["lifting"] = entry.lifting
     end
 
     return result
@@ -612,6 +639,25 @@ function serialize_domain(domain::Domain)::Dict{String,Any}
 end
 
 """
+    serialize_interface(iface::Interface) -> Dict{String,Any}
+
+Serialize Interface to JSON-compatible format.
+"""
+function serialize_interface(iface::Interface)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "domains" => iface.domains,
+        "dimension_mapping" => iface.dimension_mapping
+    )
+    if iface.description !== nothing
+        result["description"] = iface.description
+    end
+    if iface.regridding !== nothing
+        result["regridding"] = iface.regridding
+    end
+    return result
+end
+
+"""
     serialize_solver(solver::Solver) -> Dict{String,Any}
 
 Serialize Solver to JSON-compatible format matching the ESM schema.
@@ -704,8 +750,11 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     if !isempty(file.coupling)
         result["coupling"] = [serialize_coupling_entry(c) for c in file.coupling]
     end
-    if file.domain !== nothing
-        result["domain"] = serialize_domain(file.domain)
+    if file.domains !== nothing
+        result["domains"] = Dict(k => serialize_domain(v) for (k, v) in file.domains)
+    end
+    if file.interfaces !== nothing
+        result["interfaces"] = Dict(k => serialize_interface(v) for (k, v) in file.interfaces)
     end
     if file.solver !== nothing
         result["solver"] = serialize_solver(file.solver)
