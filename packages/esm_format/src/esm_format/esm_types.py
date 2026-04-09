@@ -418,6 +418,11 @@ class Metadata:
     keywords: List[str] = field(default_factory=list)
     custom: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def name(self) -> str:
+        """Alias for title field (matches JSON 'name' key)."""
+        return self.title
+
 
 @dataclass
 class EsmFile:
@@ -432,3 +437,8 @@ class EsmFile:
     coupling: List[CouplingEntry] = field(default_factory=list)
     domains: Dict[str, Domain] = field(default_factory=dict)
     solver: Optional[Solver] = None
+
+    @property
+    def esm(self) -> str:
+        """Alias for version field (matches JSON 'esm' key)."""
+        return self.version

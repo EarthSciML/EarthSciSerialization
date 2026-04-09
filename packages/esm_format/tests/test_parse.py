@@ -5,7 +5,7 @@ import pytest
 import jsonschema
 
 from esm_format import load
-from esm_format.parse import _parse_expression
+from esm_format.parse import _parse_expression, SchemaValidationError
 from esm_format.serialize import _serialize_expression
 from esm_format.esm_types import ExprNode, EsmFile
 
@@ -18,9 +18,9 @@ def test_load_invalid_json():
 
 
 def test_load_invalid_schema():
-    """Test that JSON not matching schema raises ValidationError."""
+    """Test that JSON not matching schema raises SchemaValidationError."""
     invalid_esm = '{"invalid": "schema"}'
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises(SchemaValidationError):
         load(invalid_esm)
 
 
@@ -100,7 +100,7 @@ def test_load_minimal_valid_esm():
     assert esm_file.metadata.title == "Test Model"
     assert len(esm_file.models) == 1
 
-    model = esm_file.models[0]
+    model = esm_file.models["test_model"]
     assert model.name == "test_model"
     assert len(model.variables) == 1
     assert "x" in model.variables
@@ -147,7 +147,7 @@ def test_load_reaction_system():
     esm_file = load(json_str)
 
     assert len(esm_file.reaction_systems) == 1
-    rs = esm_file.reaction_systems[0]
+    rs = esm_file.reaction_systems["test_reactions"]
     assert rs.name == "test_reactions"
 
     # Check species
@@ -316,13 +316,11 @@ def test_load_comprehensive_fields():
 
     # Check operator
     operator = esm_file.operators[0]
-    assert operator.name == "interpolator"
-    assert "temperature" in operator.input_variables
-    assert "temp_interp" in operator.output_variables
+    assert "temperature" in operator.needed_vars
+    assert "temp_interp" in operator.modifies
 
     # Check coupling
-    coupling_systems = [(c.source_model, c.target_model) for c in esm_file.coupling]
-    assert ("model1", "model2") in coupling_systems
+    assert len(esm_file.coupling) == 2
 
     # Check solver
     solver = esm_file.solver

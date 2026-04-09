@@ -819,26 +819,27 @@ class TestVersionConstraintValidation:
     """Test validation of version constraint violations."""
 
     def test_version_const_constraint(self):
-        """Test that version must be exactly '0.1.0'."""
+        """Test that version must match semver pattern and library rejects incompatible versions."""
         schema = _get_schema()
 
-        # Wrong version
+        # Invalid format (not semver) - rejected by schema pattern
         invalid_data = {
-            "esm": "0.2.0",
+            "esm": "invalid",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}}
         }
-        with pytest.raises(ValidationError, match="'0.1.0' was expected"):
+        with pytest.raises(ValidationError, match="pattern"):
             jsonschema.validate(invalid_data, schema)
 
-        # Another wrong version
+        # Incompatible major version - rejected by library
+        from esm_format.parse import UnsupportedVersionError, load
         invalid_data = {
             "esm": "1.0.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}}
         }
-        with pytest.raises(ValidationError, match="'0.1.0' was expected"):
-            jsonschema.validate(invalid_data, schema)
+        with pytest.raises(UnsupportedVersionError):
+            load(invalid_data)
 
 
 class TestEdgeCaseValidation:
@@ -953,13 +954,14 @@ class TestIntegrationValidationScenarios:
 
     def test_load_function_with_schema_violations(self):
         """Test the load function with various schema violations."""
+        from esm_format.parse import SchemaValidationError
 
         # Invalid JSON structure
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaValidationError):
             load('{"esm": "invalid"}')
 
         # Valid JSON but invalid schema
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaValidationError):
             load('{"wrong": "structure"}')
 
         # Test specific schema violations through the load function
@@ -968,7 +970,7 @@ class TestIntegrationValidationScenarios:
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}}
         })
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaValidationError):
             load(invalid_esm_json)
 
     def test_valid_minimal_examples_for_regression(self):

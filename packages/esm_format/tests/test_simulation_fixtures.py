@@ -965,7 +965,7 @@ class TestEarthSciSerializationIntegration:
         esm_file = EsmFile(
             version="0.1.0",
             metadata=Metadata(title="Exponential Decay Simulation"),
-            models=[model]
+            models={"exponential_decay": model}
         )
 
         # Serialize and deserialize
@@ -974,7 +974,7 @@ class TestEarthSciSerializationIntegration:
 
         # Verify simulation-relevant properties
         assert len(reconstructed.models) == 1
-        recon_model = reconstructed.models[0]
+        recon_model = reconstructed.models["exponential_decay"]
         assert recon_model.name == "exponential_decay"
         assert "x" in recon_model.variables
         assert "k" in recon_model.variables
@@ -1007,7 +1007,7 @@ class TestEarthSciSerializationIntegration:
         esm_file = EsmFile(
             version="0.1.0",
             metadata=Metadata(title="Reaction System Simulation"),
-            reaction_systems=[reaction_system]
+            reaction_systems={"simple_decay": reaction_system}
         )
 
         # Test serialization
@@ -1016,7 +1016,7 @@ class TestEarthSciSerializationIntegration:
 
         # Verify reaction system for simulation
         assert len(reconstructed.reaction_systems) == 1
-        rs = reconstructed.reaction_systems[0]
+        rs = reconstructed.reaction_systems["simple_decay"]
 
         # Check species (state variables)
         assert len(rs.species) == 2

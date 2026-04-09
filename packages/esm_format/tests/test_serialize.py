@@ -81,7 +81,7 @@ def test_save_minimal_esm():
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        models=[model]
+        models={"test_model": model}
     )
 
     json_str = save(esm_file)
@@ -129,7 +129,7 @@ def test_save_reaction_system():
     esm_file = EsmFile(
         version="0.1.0",
         metadata=metadata,
-        reaction_systems=[rs]
+        reaction_systems={"test_reactions": rs}
     )
 
     json_str = save(esm_file)

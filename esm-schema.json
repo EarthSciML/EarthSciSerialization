@@ -14,8 +14,7 @@
     "esm": {
       "type": "string",
       "description": "Format version string (semver).",
-      "pattern": "^\\d+\\.\\d+\\.\\d+$",
-      "const": "0.1.0"
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
     },
     "metadata": { "$ref": "#/$defs/Metadata" },
     "models": {

@@ -87,7 +87,7 @@ def _convert_jsonschema_error(error: JsonSchemaValidationError) -> ValidationErr
     )
 
 
-def validate(esm_file: EsmFile) -> ValidationResult:
+def validate(esm_file) -> ValidationResult:
     """
     Validate an ESM file against schema, structural, and unit requirements.
 
@@ -98,11 +98,43 @@ def validate(esm_file: EsmFile) -> ValidationResult:
     4. Event consistency (condition types, affect vars, functional affect refs)
 
     Args:
-        esm_file: The EsmFile object to validate
+        esm_file: The EsmFile object, JSON string, or dict to validate
 
     Returns:
         ValidationResult containing schema_errors, structural_errors, unit_warnings, and is_valid flag
     """
+    # Handle JSON string or dict input by parsing first
+    if isinstance(esm_file, str):
+        try:
+            esm_file = load(esm_file)
+        except SchemaValidationError as e:
+            return ValidationResult(
+                is_valid=False,
+                schema_errors=[ValidationError(path="$", message=str(e), code="schema")],
+                structural_errors=[]
+            )
+        except Exception as e:
+            return ValidationResult(
+                is_valid=False,
+                schema_errors=[ValidationError(path="$", message=str(e), code="parse")],
+                structural_errors=[]
+            )
+    elif isinstance(esm_file, dict):
+        try:
+            esm_file = load(esm_file)
+        except SchemaValidationError as e:
+            return ValidationResult(
+                is_valid=False,
+                schema_errors=[ValidationError(path="$", message=str(e), code="schema")],
+                structural_errors=[]
+            )
+        except Exception as e:
+            return ValidationResult(
+                is_valid=False,
+                schema_errors=[ValidationError(path="$", message=str(e), code="parse")],
+                structural_errors=[]
+            )
+
     schema_errors = []
     structural_errors = []
     unit_warnings = []
