@@ -1,0 +1,197 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "InterfaceDefinitions",
+    "description": "Test fixture for interface definitions with dimension_mapping, constraints, and regridding methods",
+    "authors": ["EarthSciML"],
+    "created": "2026-04-09T00:00:00Z",
+    "tags": ["interfaces", "dimension-mapping", "regridding", "constraints"]
+  },
+
+  "models": {
+    "UpperAtmosphere": {
+      "domain": "upper_atmos",
+      "variables": {
+        "O3": { "type": "state", "units": "mol/mol", "default": 1.0e-7, "description": "Ozone mixing ratio" },
+        "T": { "type": "state", "units": "K", "default": 220.0, "description": "Temperature" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["O3"], "wrt": "t" }, "rhs": 0.0 },
+        { "lhs": { "op": "D", "args": ["T"], "wrt": "t" }, "rhs": 0.0 }
+      ]
+    },
+
+    "LowerAtmosphere": {
+      "domain": "lower_atmos",
+      "variables": {
+        "T": { "type": "state", "units": "K", "default": 288.0, "description": "Temperature" },
+        "q": { "type": "state", "units": "kg/kg", "default": 0.01, "description": "Specific humidity" },
+        "O3_boundary": { "type": "parameter", "units": "mol/mol", "default": 5.0e-8, "description": "Ozone from upper atmosphere" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["T"], "wrt": "t" }, "rhs": 0.0 },
+        { "lhs": { "op": "D", "args": ["q"], "wrt": "t" }, "rhs": 0.0 }
+      ]
+    },
+
+    "LandSurface": {
+      "domain": "land",
+      "variables": {
+        "T_soil": { "type": "state", "units": "K", "default": 290.0, "description": "Soil temperature" },
+        "soil_moisture": { "type": "state", "units": "m^3/m^3", "default": 0.3, "description": "Volumetric soil moisture" },
+        "atm_precip": { "type": "parameter", "units": "kg/(m^2*s)", "default": 0.0, "description": "Precipitation from atmosphere" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["T_soil"], "wrt": "t" }, "rhs": 0.0 },
+        {
+          "lhs": { "op": "D", "args": ["soil_moisture"], "wrt": "t" },
+          "rhs": { "op": "/", "args": ["atm_precip", 1000.0] }
+        }
+      ]
+    },
+
+    "IceSheet": {
+      "domain": "ice",
+      "variables": {
+        "thickness": { "type": "state", "units": "m", "default": 1000.0, "description": "Ice thickness" },
+        "basal_melt": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Basal melting rate" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["thickness"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["basal_melt"] }
+        }
+      ]
+    }
+  },
+
+  "domains": {
+    "upper_atmos": {
+      "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -180.0, "max": 180.0, "units": "degrees", "grid_spacing": 2.5 },
+        "lat": { "min": -90.0, "max": 90.0, "units": "degrees", "grid_spacing": 2.5 },
+        "pressure": { "min": 1.0, "max": 100.0, "units": "hPa", "grid_spacing": 10.0 }
+      },
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 0.0 },
+      "boundary_conditions": [
+        { "type": "periodic", "dimensions": ["lon"] },
+        { "type": "zero_gradient", "dimensions": ["lat", "pressure"] }
+      ],
+      "element_type": "Float64"
+    },
+    "lower_atmos": {
+      "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -180.0, "max": 180.0, "units": "degrees", "grid_spacing": 1.0 },
+        "lat": { "min": -90.0, "max": 90.0, "units": "degrees", "grid_spacing": 1.0 },
+        "lev": { "min": 0.0, "max": 15000.0, "units": "m", "grid_spacing": 500.0 }
+      },
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 288.0 },
+      "boundary_conditions": [
+        { "type": "periodic", "dimensions": ["lon"] },
+        { "type": "zero_gradient", "dimensions": ["lat", "lev"] }
+      ],
+      "element_type": "Float64"
+    },
+    "land": {
+      "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z" },
+      "spatial": {
+        "lon": { "min": -180.0, "max": 180.0, "units": "degrees", "grid_spacing": 0.5 },
+        "lat": { "min": -90.0, "max": 90.0, "units": "degrees", "grid_spacing": 0.5 }
+      },
+      "spatial_ref": "WGS84",
+      "initial_conditions": { "type": "constant", "value": 290.0 },
+      "boundary_conditions": [
+        { "type": "periodic", "dimensions": ["lon"] },
+        { "type": "zero_gradient", "dimensions": ["lat"] }
+      ],
+      "element_type": "Float64"
+    },
+    "ice": {
+      "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z" },
+      "spatial": {
+        "x": { "min": -500000.0, "max": 500000.0, "units": "m", "grid_spacing": 5000.0 },
+        "y": { "min": -500000.0, "max": 500000.0, "units": "m", "grid_spacing": 5000.0 }
+      },
+      "initial_conditions": { "type": "constant", "value": 1000.0 },
+      "boundary_conditions": [
+        { "type": "zero_gradient", "dimensions": ["x", "y"] }
+      ],
+      "element_type": "Float64"
+    }
+  },
+
+  "interfaces": {
+    "tropopause": {
+      "description": "Tropopause interface between upper and lower atmosphere",
+      "domains": ["upper_atmos", "lower_atmos"],
+      "dimension_mapping": {
+        "shared": {
+          "upper_atmos.lon": "lower_atmos.lon",
+          "upper_atmos.lat": "lower_atmos.lat"
+        },
+        "constraints": {
+          "upper_atmos.pressure": { "value": "max" },
+          "lower_atmos.lev": { "value": "max" }
+        }
+      },
+      "regridding": { "method": "bilinear" }
+    },
+    "land_atmosphere": {
+      "description": "Land-atmosphere interface at ground level",
+      "domains": ["lower_atmos", "land"],
+      "dimension_mapping": {
+        "shared": {
+          "lower_atmos.lon": "land.lon",
+          "lower_atmos.lat": "land.lat"
+        },
+        "constraints": {
+          "lower_atmos.lev": { "value": "min" }
+        }
+      },
+      "regridding": { "method": "conservative" }
+    },
+    "ice_atmosphere": {
+      "description": "Ice sheet to atmosphere interface with coordinate transform",
+      "domains": ["lower_atmos", "ice"],
+      "dimension_mapping": {
+        "shared": {},
+        "constraints": {
+          "lower_atmos.lev": { "value": "min" }
+        }
+      },
+      "regridding": { "method": "nearest" }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "variable_map",
+      "from": "UpperAtmosphere.O3",
+      "to": "LowerAtmosphere.O3_boundary",
+      "transform": "param_to_var",
+      "interface": "tropopause",
+      "description": "Ozone flux from stratosphere to troposphere"
+    },
+    {
+      "type": "variable_map",
+      "from": "LowerAtmosphere.q",
+      "to": "LandSurface.atm_precip",
+      "transform": "conversion_factor",
+      "factor": 0.001,
+      "interface": "land_atmosphere",
+      "description": "Precipitation from atmosphere to land surface"
+    }
+  ],
+
+  "solver": {
+    "strategy": "strang_serial",
+    "config": {
+      "stiff_algorithm": "Rosenbrock23",
+      "timestep": 3600.0
+    }
+  }
+}
