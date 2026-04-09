@@ -44,7 +44,7 @@ AUTO_APPROVE=false
 
 # Package directories
 declare -A PACKAGES=(
-    ["julia"]="packages/ESMFormat.jl"
+    ["julia"]="packages/EarthSciSerialization.jl"
     ["typescript"]="packages/esm-format"
     ["python"]="packages/esm_format"
     ["rust"]="packages/esm-format-rust"

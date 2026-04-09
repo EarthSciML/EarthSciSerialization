@@ -1,6 +1,6 @@
 # System Configuration Types (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/runtests.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/runtests.jl`
 
 ```julia
 # Test Reference

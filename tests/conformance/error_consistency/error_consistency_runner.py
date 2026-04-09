@@ -32,18 +32,18 @@ class ErrorConsistencyRunner:
 
     def validate_with_julia(self, esm_file: Path) -> Dict[str, Any]:
         """Run validation using the Julia implementation."""
-        julia_dir = self.project_root / "packages" / "ESMFormat.jl"
+        julia_dir = self.project_root / "packages" / "EarthSciSerialization.jl"
 
         # Create a temporary Julia script to run validation
         julia_script = f'''
         using Pkg
         Pkg.activate("{julia_dir}")
-        using ESMFormat
+        using EarthSciSerialization
         using JSON3
 
         try
-            result = ESMFormat.load("{esm_file}")
-            validation = ESMFormat.validate(result)
+            result = EarthSciSerialization.load("{esm_file}")
+            validation = EarthSciSerialization.validate(result)
 
             # Convert to standardized format
             output = Dict(

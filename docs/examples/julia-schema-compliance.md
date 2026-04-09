@@ -1,6 +1,6 @@
 # Schema Compliance (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/solver_test.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/solver_test.jl`
 
 ```julia
 # Test that serialized format matches expected schema structure

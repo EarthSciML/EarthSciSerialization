@@ -1,6 +1,6 @@
 # Reference Resolution - Mixed System Types (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/reference_resolution_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/reference_resolution_test.jl`
 
 ```julia
 # Test with models, reaction_systems, data_loaders, and operators

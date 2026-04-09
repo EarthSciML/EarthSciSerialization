@@ -1,6 +1,6 @@
 # Auto-tuning Convenience Functions (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/solver_optimization_test.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/solver_optimization_test.jl`
 
 ```julia
 # Test create_auto_tuning_optimizer

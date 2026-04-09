@@ -1,11 +1,11 @@
 # Equation Types (Julia)
 
-**Source:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/test/runtests.jl`
+**Source:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/test/runtests.jl`
 
 ```julia
 # Test Equation
-        lhs = OpExpr("D", ESMFormat.Expr[VarExpr("x")], wrt="t")
-        rhs = OpExpr("*", ESMFormat.Expr[NumExpr(2.0), VarExpr("x")])
+        lhs = OpExpr("D", EarthSciSerialization.Expr[VarExpr("x")], wrt="t")
+        rhs = OpExpr("*", EarthSciSerialization.Expr[NumExpr(2.0), VarExpr("x")])
         eq = Equation(lhs, rhs)
         @test eq.lhs == lhs
         @test eq.rhs == rhs

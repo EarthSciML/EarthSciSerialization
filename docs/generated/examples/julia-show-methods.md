@@ -1,6 +1,6 @@
 # Show Methods (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/display_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/display_test.jl`
 
 ```julia
 # Test Expr show methods
@@ -20,11 +20,11 @@
         @test String(take!(io)) == "2.5"
 
         # Test more complex expressions with ASCII MIME type
-        mul_expr = OpExpr("*", ESMFormat.Expr[VarExpr("x"), NumExpr(2.0)])
+        mul_expr = OpExpr("*", EarthSciSerialization.Expr[VarExpr("x"), NumExpr(2.0)])
         show(io, "text/ascii", mul_expr)
         @test String(take!(io)) == "x*2"
 
-        pow_expr = OpExpr("^", ESMFormat.Expr[VarExpr("x"), NumExpr(2.0)])
+        pow_expr = OpExpr("^", EarthSciSerialization.Expr[VarExpr("x"), NumExpr(2.0)])
         show(io, "text/ascii", pow_expr)
         @test String(take!(io)) == "x^2"
 

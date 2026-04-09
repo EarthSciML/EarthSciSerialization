@@ -312,7 +312,7 @@ source venv/bin/activate
 python -m pytest tests/test_mathematical_verification.py -v
 
 # Julia implementation
-cd packages/ESMFormat.jl
+cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.test()'
 
 # TypeScript implementation

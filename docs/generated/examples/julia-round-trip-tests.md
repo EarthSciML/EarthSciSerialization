@@ -1,6 +1,6 @@
 # Round-trip Tests (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/runtests.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/runtests.jl`
 
 ```julia
 # Test that load(save(load(file))) == load(file) for all valid fixtures

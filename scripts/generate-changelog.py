@@ -148,7 +148,7 @@ class ChangelogGenerator:
 
                 affected_packages = set()
                 for file in files:
-                    if file.startswith('packages/ESMFormat.jl/'):
+                    if file.startswith('packages/EarthSciSerialization.jl/'):
                         affected_packages.add('julia')
                     elif file.startswith('packages/esm-format/') and not file.startswith('packages/esm-format-rust/'):
                         affected_packages.add('typescript')

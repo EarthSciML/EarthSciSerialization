@@ -390,7 +390,7 @@ if [[ -d "$WORKSPACE_ROOT/packages/esm_format/venv" ]]; then
 fi
 
 if command -v julia &> /dev/null; then
-    export JULIA_PROJECT="$WORKSPACE_ROOT/packages/ESMFormat.jl"
+    export JULIA_PROJECT="$WORKSPACE_ROOT/packages/EarthSciSerialization.jl"
 fi
 
 # Useful aliases
@@ -410,7 +410,7 @@ esm-python() {
 }
 
 esm-julia() {
-    cd "$WORKSPACE_ROOT/packages/ESMFormat.jl"
+    cd "$WORKSPACE_ROOT/packages/EarthSciSerialization.jl"
     julia --project=. "\$@"
 }
 

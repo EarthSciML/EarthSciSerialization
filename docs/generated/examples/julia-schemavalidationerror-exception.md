@@ -1,10 +1,10 @@
 # SchemaValidationError exception (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/validate_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/validate_test.jl`
 
 ```julia
-errors = [ESMFormat.SchemaError("/", "Test error", "required")]
-        exception = ESMFormat.SchemaValidationError("Validation failed", errors)
+errors = [EarthSciSerialization.SchemaError("/", "Test error", "required")]
+        exception = EarthSciSerialization.SchemaValidationError("Validation failed", errors)
         @test exception.message == "Validation failed"
         @test length(exception.errors) == 1
         @test exception.errors[1].path == "/"

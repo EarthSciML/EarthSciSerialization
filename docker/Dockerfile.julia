@@ -4,14 +4,14 @@ FROM julia:1.10-bookworm
 WORKDIR /workspace
 
 # Copy Julia package files first for better layer caching
-COPY packages/ESMFormat.jl/Project.toml packages/ESMFormat.jl/Manifest.toml ./packages/ESMFormat.jl/
+COPY packages/EarthSciSerialization.jl/Project.toml packages/EarthSciSerialization.jl/Manifest.toml ./packages/EarthSciSerialization.jl/
 
 # Install Julia dependencies
-WORKDIR /workspace/packages/ESMFormat.jl
+WORKDIR /workspace/packages/EarthSciSerialization.jl
 RUN julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 # Copy the rest of the Julia package
-COPY packages/ESMFormat.jl ./
+COPY packages/EarthSciSerialization.jl ./
 
 # Copy test data and scripts
 WORKDIR /workspace
@@ -38,4 +38,4 @@ ENV ESM_TEST_TIMEOUT=300
 RUN mkdir -p /workspace/conformance-results
 
 # Default command runs conformance tests
-CMD ["julia", "--project=packages/ESMFormat.jl", "scripts/run-julia-conformance.jl", "/workspace/conformance-results/julia"]
+CMD ["julia", "--project=packages/EarthSciSerialization.jl", "scripts/run-julia-conformance.jl", "/workspace/conformance-results/julia"]

@@ -1,6 +1,6 @@
 # Reaction System ODE Derivation Tests (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/ESMFormat.jl/test/reactions_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/reactions_test.jl`
 
 ```julia
 @testset "Stoichiometric Matrix Tests" begin

@@ -26,7 +26,7 @@ This report documents the successful implementation and verification of end-to-e
 
 #### 2. Julia End-to-End Verification (`end_to_end_verification.jl`)
 - **Status:** 📝 **IMPLEMENTED** (compilation issues with dependencies)
-- **Location:** `/home/ctessum/EarthSciSerialization/packages/ESMFormat.jl/end_to_end_verification.jl`
+- **Location:** `/home/ctessum/EarthSciSerialization/packages/EarthSciSerialization.jl/end_to_end_verification.jl`
 - **Functionality:**
   - Designed for MTK/Catalyst integration
   - Implements same verification workflow as Python version
@@ -205,7 +205,7 @@ The verification uses the classic O3-NO-NO2 photochemical cycle, fundamental to 
 
 ### New Files
 1. `end_to_end_verification.py` - Main Python verification script
-2. `packages/ESMFormat.jl/end_to_end_verification.jl` - Julia verification script
+2. `packages/EarthSciSerialization.jl/end_to_end_verification.jl` - Julia verification script
 3. `atmospheric_chemistry_verification.png` - Diagnostic plots
 4. `ATMOSPHERIC_CHEMISTRY_VERIFICATION_REPORT.md` - This report
 

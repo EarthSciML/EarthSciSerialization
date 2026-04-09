@@ -6,7 +6,7 @@ Get the ESM format libraries installed and running on your system. Choose the la
 
 ### Julia
 ```bash
-julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/ESMFormat.jl")'
+julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")'
 ```
 
 ### TypeScript/JavaScript
@@ -52,19 +52,19 @@ cargo install esm-format --features cli
 #### From GitHub (Recommended)
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/ESMFormat.jl")
+Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")
 ```
 
 #### Development Setup
 ```julia
 using Pkg
-Pkg.develop(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/ESMFormat.jl")
+Pkg.develop(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")
 ```
 
 #### Verify Installation
 ```julia
-using ESMFormat
-println("ESMFormat.jl installed successfully!")
+using EarthSciSerialization
+println("EarthSciSerialization.jl installed successfully!")
 
 # Test basic functionality
 esm_data = """{"esm": "0.1.0", "metadata": {"name": "Test"}}"""
@@ -242,7 +242,7 @@ For comprehensive ESM format development, you may want multiple languages:
 ```bash
 # 1. Install Julia
 curl -fsSL https://install.julialang.org | sh
-julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/ESMFormat.jl")'
+julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")'
 
 # 2. Install Node.js and package
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
@@ -279,7 +279,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN pip install esm-format
 RUN npm install -g esm-format
 RUN cargo install esm-format --features cli
-RUN julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/ESMFormat.jl")'
+RUN julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")'
 
 WORKDIR /workspace
 ```

@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/ESMFormat.jl
+        working-directory: packages/EarthSciSerialization.jl
     steps:
       - uses: actions/checkout@v4
 
@@ -43,7 +43,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.julia
-          key: ${{ runner.os }}-julia-${{ env.JULIA_VERSION }}-${{ hashFiles('packages/ESMFormat.jl/Project.toml', 'packages/ESMFormat.jl/Manifest.toml') }}
+          key: ${{ runner.os }}-julia-${{ env.JULIA_VERSION }}-${{ hashFiles('packages/EarthSciSerialization.jl/Project.toml', 'packages/EarthSciSerialization.jl/Manifest.toml') }}
           restore-keys: |
             ${{ runner.os }}-julia-${{ env.JULIA_VERSION }}-
 
@@ -184,7 +184,7 @@ jobs:
 
       # Install dependencies for all languages
       - name: Install Julia dependencies
-        working-directory: packages/ESMFormat.jl
+        working-directory: packages/EarthSciSerialization.jl
         run: |
           julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
