@@ -581,9 +581,11 @@ fn test_circular_dependency_detection() {
                 .find(|err| matches!(err.code, StructuralErrorCode::CircularDependency))
                 .expect("CircularDependency error should exist");
 
-            assert!(circular_error
-                .message
-                .contains("Circular dependency detected"));
+            assert!(
+                circular_error
+                    .message
+                    .contains("Circular dependency detected")
+            );
             assert!(circular_error.message.contains("ModelA"));
             assert!(circular_error.message.contains("ModelB"));
         }

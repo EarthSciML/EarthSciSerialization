@@ -2733,7 +2733,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 _ => {
-                    eprintln!("Unsupported analysis type: {}. Use all, structure, complexity, or coupling.", analysis_type);
+                    eprintln!(
+                        "Unsupported analysis type: {}. Use all, structure, complexity, or coupling.",
+                        analysis_type
+                    );
                     std::process::exit(1);
                 }
             }
@@ -3223,7 +3226,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     analyze_performance_optimization(&esm_file);
                 }
                 _ => {
-                    eprintln!("Unsupported optimization type: {}. Use expression, structure, or performance.", opt_type);
+                    eprintln!(
+                        "Unsupported optimization type: {}. Use expression, structure, or performance.",
+                        opt_type
+                    );
                     std::process::exit(1);
                 }
             }
@@ -3349,7 +3355,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }"#
                 }
                 _ => {
-                    eprintln!("Unsupported template: {}. Use minimal, atmospheric, ecosystem, or coupling.", template);
+                    eprintln!(
+                        "Unsupported template: {}. Use minimal, atmospheric, ecosystem, or coupling.",
+                        template
+                    );
                     std::process::exit(1);
                 }
             };

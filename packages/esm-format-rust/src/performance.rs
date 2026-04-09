@@ -463,7 +463,7 @@ impl CompactExpr {
                         return Err(PerformanceError::ParallelError(format!(
                             "Unsupported operator: {}",
                             op
-                        )))
+                        )));
                     }
                 },
             }
