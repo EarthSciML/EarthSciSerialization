@@ -19,62 +19,50 @@ class TestSubstitutionFixtures:
     @pytest.fixture
     def fixtures_dir(self):
         """Get path to substitution fixtures."""
-        return Path("/home/ctessum/EarthSciSerialization/tests/substitution")
+        fixtures = Path(__file__).parent.parent.parent.parent / "tests" / "substitution"
+        if not fixtures.exists():
+            fixtures = Path("/home/ctessum/EarthSciSerialization/tests/substitution")
+        return fixtures
+
+    @staticmethod
+    def _run_fixture_cases(fixture_file):
+        """Load and run substitute test cases from a fixture file."""
+        with open(fixture_file) as f:
+            data = json.load(f)
+
+        # Handle both list format and dict format
+        cases = data if isinstance(data, list) else data.get("cases", [data])
+
+        for case in cases:
+            # Try both key naming conventions
+            input_expr = case.get("input") or case.get("original")
+            bindings = case.get("bindings") or case.get("substitutions", {})
+            expected = case.get("expected")
+
+            if input_expr is not None and expected is not None:
+                result = substitute(input_expr, bindings)
+                assert result == expected, f"For input {input_expr} with bindings {bindings}: got {result}, expected {expected}"
 
     def test_simple_variable_replacement(self, fixtures_dir):
         """Test simple variable replacement using fixture."""
         fixture_file = fixtures_dir / "simple_var_replace.json"
-
         if not fixture_file.exists():
             pytest.skip("simple_var_replace.json fixture not found")
-
-        with open(fixture_file) as f:
-            test_case = json.load(f)
-
-        # Extract test components
-        original_expr = test_case.get("original")
-        substitutions = test_case.get("substitutions", {})
-        expected_result = test_case.get("expected")
-
-        if original_expr and expected_result:
-            result = substitute(original_expr, substitutions)
-            assert result == expected_result
+        self._run_fixture_cases(fixture_file)
 
     def test_scoped_reference_substitution(self, fixtures_dir):
         """Test scoped reference substitution using fixture."""
         fixture_file = fixtures_dir / "scoped_reference.json"
-
         if not fixture_file.exists():
             pytest.skip("scoped_reference.json fixture not found")
-
-        with open(fixture_file) as f:
-            test_case = json.load(f)
-
-        original_expr = test_case.get("original")
-        substitutions = test_case.get("substitutions", {})
-        expected_result = test_case.get("expected")
-
-        if original_expr and expected_result:
-            result = substitute(original_expr, substitutions)
-            assert result == expected_result
+        self._run_fixture_cases(fixture_file)
 
     def test_nested_substitution(self, fixtures_dir):
         """Test nested substitution using fixture."""
         fixture_file = fixtures_dir / "nested_substitution.json"
-
         if not fixture_file.exists():
             pytest.skip("nested_substitution.json fixture not found")
-
-        with open(fixture_file) as f:
-            test_case = json.load(f)
-
-        original_expr = test_case.get("original")
-        substitutions = test_case.get("substitutions", {})
-        expected_result = test_case.get("expected")
-
-        if original_expr and expected_result:
-            result = substitute(original_expr, substitutions)
-            assert result == expected_result
+        self._run_fixture_cases(fixture_file)
 
 
 class TestSubstitutionFunctions:
@@ -235,7 +223,7 @@ class TestReactionSystemSubstitution:
                 "id": "R1",
                 "substrates": [{"species": "A", "stoichiometry": 1}],
                 "products": [{"species": "B", "stoichiometry": 1}],
-                "rate": "k * param_rate"
+                "rate": {"op": "*", "args": ["k", "param_rate"]}
             }]
         }
 
@@ -245,7 +233,7 @@ class TestReactionSystemSubstitution:
         # Check parameter substitution
         assert result["parameters"]["k"]["default"] == 0.1
         # Check rate expression substitution
-        assert result["reactions"][0]["rate"] == "k * A"
+        assert result["reactions"][0]["rate"] == {"op": "*", "args": ["k", "A"]}
 
     def test_substitute_in_reaction_system_complex_rate(self):
         """Test substitution in reaction system with complex rate expression."""

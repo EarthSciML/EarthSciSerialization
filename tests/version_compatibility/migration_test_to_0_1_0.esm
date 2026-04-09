@@ -6,7 +6,8 @@
     "authors": [
       "ESM Format Team"
     ],
-    "created": "2023-10-01T00:00:00Z"
+    "created": "2023-10-01T00:00:00Z",
+    "migration_notes": "Migrated from version 0.0.5. Units converted from ppbv to mol/mol."
   },
   "reaction_systems": {
     "LegacyChemistry": {

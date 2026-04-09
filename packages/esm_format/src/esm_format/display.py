@@ -273,9 +273,10 @@ def to_unicode(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) ->
     if isinstance(target, ExprNode):
         return _format_expression_node(target, 'unicode')
 
-    if isinstance(target, dict) and 'op' in target and 'args' in target:
+    if isinstance(target, dict) and 'op' in target:
         # Handle dictionary-style expressions for compatibility
-        return _format_expression_node(ExprNode(op=target['op'], args=target['args']), 'unicode')
+        args = target.get('args') or []
+        return _format_expression_node(ExprNode(op=target['op'], args=args), 'unicode')
 
     if isinstance(target, dict):
         # Handle malformed dict expressions gracefully
@@ -318,9 +319,10 @@ def to_latex(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) -> s
     if isinstance(target, ExprNode):
         return _format_expression_node(target, 'latex')
 
-    if isinstance(target, dict) and 'op' in target and 'args' in target:
+    if isinstance(target, dict) and 'op' in target:
         # Handle dictionary-style expressions for compatibility
-        return _format_expression_node(ExprNode(op=target['op'], args=target['args']), 'latex')
+        args = target.get('args') or []
+        return _format_expression_node(ExprNode(op=target['op'], args=args), 'latex')
 
     if isinstance(target, dict):
         # Handle malformed dict expressions gracefully

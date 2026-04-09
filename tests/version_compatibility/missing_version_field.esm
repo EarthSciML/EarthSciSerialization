@@ -1,5 +1,4 @@
 {
-  "esm": "0.1.0",
   "metadata": {
     "name": "MissingVersionField",
     "description": "Test file missing the required 'esm' version field - should fail schema validation",
