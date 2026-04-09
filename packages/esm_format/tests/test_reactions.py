@@ -216,7 +216,7 @@ class TestDeriveODEs:
         # Check equations structure (they should be differential equations)
         for eq in model.equations:
             assert isinstance(eq.lhs, ExprNode)
-            assert eq.lhs.op == "diff"
+            assert eq.lhs.op == "D"
             assert eq.lhs.wrt == "t"
 
     def test_unknown_species_error(self):

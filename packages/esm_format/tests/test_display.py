@@ -19,7 +19,21 @@ class TestDisplayFixtures:
     @pytest.fixture
     def fixtures_dir(self):
         """Get path to display fixtures."""
-        return Path("/home/ctessum/EarthSciSerialization/tests/display")
+        fixtures = Path(__file__).parent.parent.parent.parent / "tests" / "display"
+        if not fixtures.exists():
+            fixtures = Path("/home/ctessum/EarthSciSerialization/tests/display")
+        return fixtures
+
+    def _get_cases(self, test_cases):
+        """Extract cases from fixture data (handles both list and dict formats)."""
+        if isinstance(test_cases, list):
+            return test_cases
+        return test_cases.get("cases", [])
+
+    @staticmethod
+    def _get_expected(case, key):
+        """Get expected value from fixture case, trying both 'expected_X' and 'X' keys."""
+        return case.get(f"expected_{key}") or case.get(key)
 
     def test_chemical_subscripts(self, fixtures_dir):
         """Test chemical subscripts formatting using fixture."""
@@ -31,10 +45,10 @@ class TestDisplayFixtures:
         with open(fixture_file) as f:
             test_cases = json.load(f)
 
-        for case in test_cases.get("cases", []):
+        for case in self._get_cases(test_cases):
             input_expr = case.get("input")
-            expected_unicode = case.get("expected_unicode")
-            expected_latex = case.get("expected_latex")
+            expected_unicode = self._get_expected(case, "unicode")
+            expected_latex = self._get_expected(case, "latex")
 
             if input_expr and expected_unicode:
                 result_unicode = to_unicode(input_expr)
@@ -56,10 +70,10 @@ class TestDisplayFixtures:
         with open(fixture_file) as f:
             test_cases = json.load(f)
 
-        for case in test_cases.get("cases", []):
+        for case in self._get_cases(test_cases):
             input_expr = case.get("input")
-            expected_unicode = case.get("expected_unicode")
-            expected_latex = case.get("expected_latex")
+            expected_unicode = self._get_expected(case, "unicode")
+            expected_latex = self._get_expected(case, "latex")
 
             if input_expr and expected_unicode:
                 result_unicode = to_unicode(input_expr)
@@ -79,10 +93,10 @@ class TestDisplayFixtures:
         with open(fixture_file) as f:
             test_cases = json.load(f)
 
-        for case in test_cases.get("cases", []):
+        for case in self._get_cases(test_cases):
             input_expr = case.get("input")
-            expected_unicode = case.get("expected_unicode")
-            expected_latex = case.get("expected_latex")
+            expected_unicode = self._get_expected(case, "unicode")
+            expected_latex = self._get_expected(case, "latex")
 
             if input_expr is not None and expected_unicode is not None:
                 result_unicode = to_unicode(input_expr)
@@ -102,10 +116,10 @@ class TestDisplayFixtures:
         with open(fixture_file) as f:
             test_cases = json.load(f)
 
-        for case in test_cases.get("cases", []):
+        for case in self._get_cases(test_cases):
             input_expr = case.get("input")
-            expected_unicode = case.get("expected_unicode")
-            expected_latex = case.get("expected_latex")
+            expected_unicode = self._get_expected(case, "unicode")
+            expected_latex = self._get_expected(case, "latex")
 
             if input_expr and expected_unicode:
                 result_unicode = to_unicode(input_expr)
@@ -125,10 +139,10 @@ class TestDisplayFixtures:
         with open(fixture_file) as f:
             test_cases = json.load(f)
 
-        for case in test_cases.get("cases", []):
+        for case in self._get_cases(test_cases):
             input_expr = case.get("input")
-            expected_unicode = case.get("expected_unicode")
-            expected_latex = case.get("expected_latex")
+            expected_unicode = self._get_expected(case, "unicode")
+            expected_latex = self._get_expected(case, "latex")
 
             if input_expr and expected_unicode:
                 result_unicode = to_unicode(input_expr)
@@ -148,10 +162,10 @@ class TestDisplayFixtures:
         with open(fixture_file) as f:
             test_cases = json.load(f)
 
-        for case in test_cases.get("cases", []):
+        for case in self._get_cases(test_cases):
             input_expr = case.get("input")
-            expected_unicode = case.get("expected_unicode")
-            expected_latex = case.get("expected_latex")
+            expected_unicode = self._get_expected(case, "unicode")
+            expected_latex = self._get_expected(case, "latex")
 
             if input_expr and expected_unicode:
                 result_unicode = to_unicode(input_expr)
@@ -171,10 +185,10 @@ class TestDisplayFixtures:
         with open(fixture_file) as f:
             test_cases = json.load(f)
 
-        for case in test_cases.get("cases", []):
+        for case in self._get_cases(test_cases):
             input_expr = case.get("input")
-            expected_unicode = case.get("expected_unicode")
-            expected_latex = case.get("expected_latex")
+            expected_unicode = self._get_expected(case, "unicode")
+            expected_latex = self._get_expected(case, "latex")
 
             if input_expr and expected_unicode:
                 result_unicode = to_unicode(input_expr)

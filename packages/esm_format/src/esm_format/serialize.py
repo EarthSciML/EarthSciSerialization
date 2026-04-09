@@ -521,17 +521,29 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
 
     # Serialize models
     if esm_file.models:
-        result["models"] = {
-            model_name: _serialize_model(model)
-            for model_name, model in esm_file.models.items()
-        }
+        if isinstance(esm_file.models, dict):
+            result["models"] = {
+                model_name: _serialize_model(model)
+                for model_name, model in esm_file.models.items()
+            }
+        elif isinstance(esm_file.models, list):
+            result["models"] = {
+                model.name: _serialize_model(model)
+                for model in esm_file.models
+            }
 
     # Serialize reaction systems
     if esm_file.reaction_systems:
-        result["reaction_systems"] = {
-            rs_name: _serialize_reaction_system(rs)
-            for rs_name, rs in esm_file.reaction_systems.items()
-        }
+        if isinstance(esm_file.reaction_systems, dict):
+            result["reaction_systems"] = {
+                rs_name: _serialize_reaction_system(rs)
+                for rs_name, rs in esm_file.reaction_systems.items()
+            }
+        elif isinstance(esm_file.reaction_systems, list):
+            result["reaction_systems"] = {
+                rs.name: _serialize_reaction_system(rs)
+                for rs in esm_file.reaction_systems
+            }
 
     # Serialize domains
     if esm_file.domains:
@@ -549,7 +561,7 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     # Serialize operators
     if esm_file.operators:
         result["operators"] = {
-            operator.name: _serialize_operator(operator)
+            getattr(operator, 'name', operator.operator_id): _serialize_operator(operator)
             for operator in esm_file.operators
         }
 

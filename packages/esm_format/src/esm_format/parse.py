@@ -55,6 +55,40 @@ class UnsupportedVersionError(Exception):
     pass
 
 
+# Current library version for compatibility checking
+_CURRENT_VERSION = (0, 1, 0)
+
+
+def _check_version_compatibility(version_string: str) -> None:
+    """Check ESM version compatibility, raising errors or warnings as appropriate."""
+    import re
+    import warnings
+
+    match = re.match(r'^(\d+)\.(\d+)\.(\d+)$', version_string)
+    if not match:
+        return  # Schema validation should catch invalid formats
+
+    major = int(match.group(1))
+    minor = int(match.group(2))
+
+    # Reject unsupported major versions
+    if major != _CURRENT_VERSION[0]:
+        raise UnsupportedVersionError(
+            f"Unsupported major version {major}. "
+            f"This library supports major version {_CURRENT_VERSION[0]}."
+        )
+
+    # Warn about newer minor versions
+    if minor > _CURRENT_VERSION[1]:
+        warnings.warn(
+            f"{version_string} is newer than the current library version "
+            f"{'.'.join(str(v) for v in _CURRENT_VERSION)}. "
+            f"Some features may not be supported.",
+            UserWarning,
+            stacklevel=3
+        )
+
+
 def _get_schema() -> Dict[str, Any]:
     """Load the bundled ESM schema."""
     if _RESOURCES_AVAILABLE:
@@ -630,8 +664,8 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
         for transform_data in domain_data["coordinate_transforms"]:
             transform = CoordinateTransform(
                 id=transform_data["id"],
-                description=transform_data["description"],
-                dimensions=transform_data["dimensions"]
+                description=transform_data.get("description", ""),
+                dimensions=transform_data.get("dimensions", [])
             )
             domain.coordinate_transforms.append(transform)
 
@@ -854,12 +888,12 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
     )
 
 
-def load(path_or_string: Union[str, Path]) -> EsmFile:
+def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     """
-    Load an ESM file from a file path or JSON string.
+    Load an ESM file from a file path, JSON string, or dict.
 
     Args:
-        path_or_string: File path to JSON file or JSON string
+        path_or_string: File path to JSON file, JSON string, or parsed dict
 
     Returns:
         EsmFile object with parsed data
@@ -869,8 +903,10 @@ def load(path_or_string: Union[str, Path]) -> EsmFile:
         jsonschema.ValidationError: If the JSON doesn't match the schema
         FileNotFoundError: If the file path doesn't exist
     """
-    # Determine if input is a file path or JSON string
-    if isinstance(path_or_string, Path) or (isinstance(path_or_string, str) and os.path.exists(path_or_string)):
+    # Handle dict input directly
+    if isinstance(path_or_string, dict):
+        data = path_or_string
+    elif isinstance(path_or_string, Path) or (isinstance(path_or_string, str) and os.path.exists(path_or_string)):
         # It's a file path
         with open(path_or_string, 'r') as f:
             data = json.load(f)
@@ -880,7 +916,13 @@ def load(path_or_string: Union[str, Path]) -> EsmFile:
 
     # Load and validate against schema
     schema = _get_schema()
-    validate(data, schema)
+    try:
+        validate(data, schema)
+    except jsonschema.ValidationError as e:
+        raise SchemaValidationError(str(e)) from e
+
+    # Check version compatibility
+    _check_version_compatibility(data.get("esm", ""))
 
     # Parse into ESM objects
     return _parse_esm_data(data)
