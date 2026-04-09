@@ -47,8 +47,7 @@ pub fn fast_parse(json_bytes: &mut [u8]) -> Result<EsmFile, PerformanceError> {
 /// Fallback parser for when SIMD-JSON is not available
 #[cfg(not(feature = "zero_copy"))]
 pub fn fast_parse(json_str: &str) -> Result<EsmFile, PerformanceError> {
-    serde_json::from_str(json_str)
-        .map_err(|e| PerformanceError::SimdJsonError(e.to_string()))
+    serde_json::from_str(json_str).map_err(|e| PerformanceError::SimdJsonError(e.to_string()))
 }
 
 /// Parallel evaluation context for expressions
@@ -101,7 +100,8 @@ impl ParallelEvaluator {
         let num_reactions = system.reactions.len();
 
         // Create species index mapping
-        let species_index: HashMap<String, usize> = system.species
+        let species_index: HashMap<String, usize> = system
+            .species
             .iter()
             .enumerate()
             .map(|(idx, species)| (species.name.clone(), idx))
@@ -115,7 +115,8 @@ impl ParallelEvaluator {
                 .collect();
 
             // Process reactions in parallel
-            let reaction_contributions: Vec<Vec<(usize, f64)>> = system.reactions
+            let reaction_contributions: Vec<Vec<(usize, f64)>> = system
+                .reactions
                 .par_iter()
                 .enumerate()
                 .map(|(_reaction_idx, reaction)| {
@@ -159,9 +160,15 @@ pub mod simd_math {
     use super::*;
 
     /// SIMD-optimized vector addition
-    pub fn add_vectors_simd(a: &[f64], b: &[f64], result: &mut [f64]) -> Result<(), PerformanceError> {
+    pub fn add_vectors_simd(
+        a: &[f64],
+        b: &[f64],
+        result: &mut [f64],
+    ) -> Result<(), PerformanceError> {
         if a.len() != b.len() || a.len() != result.len() {
-            return Err(PerformanceError::SimdError("Vector length mismatch".to_string()));
+            return Err(PerformanceError::SimdError(
+                "Vector length mismatch".to_string(),
+            ));
         }
 
         let chunks = a.len() / 4;
@@ -169,11 +176,11 @@ pub mod simd_math {
         // Process 4 elements at a time with SIMD
         for i in 0..chunks {
             let idx = i * 4;
-            let va = f64x4::from([a[idx], a[idx+1], a[idx+2], a[idx+3]]);
-            let vb = f64x4::from([b[idx], b[idx+1], b[idx+2], b[idx+3]]);
+            let va = f64x4::from([a[idx], a[idx + 1], a[idx + 2], a[idx + 3]]);
+            let vb = f64x4::from([b[idx], b[idx + 1], b[idx + 2], b[idx + 3]]);
             let vr = va + vb;
 
-            result[idx..idx+4].copy_from_slice(&vr.to_array());
+            result[idx..idx + 4].copy_from_slice(&vr.to_array());
         }
 
         // Handle remaining elements
@@ -185,9 +192,15 @@ pub mod simd_math {
     }
 
     /// SIMD-optimized element-wise multiplication
-    pub fn multiply_vectors_simd(a: &[f64], b: &[f64], result: &mut [f64]) -> Result<(), PerformanceError> {
+    pub fn multiply_vectors_simd(
+        a: &[f64],
+        b: &[f64],
+        result: &mut [f64],
+    ) -> Result<(), PerformanceError> {
         if a.len() != b.len() || a.len() != result.len() {
-            return Err(PerformanceError::SimdError("Vector length mismatch".to_string()));
+            return Err(PerformanceError::SimdError(
+                "Vector length mismatch".to_string(),
+            ));
         }
 
         let chunks = a.len() / 4;
@@ -195,11 +208,11 @@ pub mod simd_math {
         // Process 4 elements at a time with SIMD
         for i in 0..chunks {
             let idx = i * 4;
-            let va = f64x4::from([a[idx], a[idx+1], a[idx+2], a[idx+3]]);
-            let vb = f64x4::from([b[idx], b[idx+1], b[idx+2], b[idx+3]]);
+            let va = f64x4::from([a[idx], a[idx + 1], a[idx + 2], a[idx + 3]]);
+            let vb = f64x4::from([b[idx], b[idx + 1], b[idx + 2], b[idx + 3]]);
             let vr = va * vb;
 
-            result[idx..idx+4].copy_from_slice(&vr.to_array());
+            result[idx..idx + 4].copy_from_slice(&vr.to_array());
         }
 
         // Handle remaining elements
@@ -213,7 +226,9 @@ pub mod simd_math {
     /// SIMD-optimized dot product
     pub fn dot_product_simd(a: &[f64], b: &[f64]) -> Result<f64, PerformanceError> {
         if a.len() != b.len() {
-            return Err(PerformanceError::SimdError("Vector length mismatch".to_string()));
+            return Err(PerformanceError::SimdError(
+                "Vector length mismatch".to_string(),
+            ));
         }
 
         let chunks = a.len() / 4;
@@ -222,8 +237,8 @@ pub mod simd_math {
         // Process 4 elements at a time with SIMD
         for i in 0..chunks {
             let idx = i * 4;
-            let va = f64x4::from([a[idx], a[idx+1], a[idx+2], a[idx+3]]);
-            let vb = f64x4::from([b[idx], b[idx+1], b[idx+2], b[idx+3]]);
+            let va = f64x4::from([a[idx], a[idx + 1], a[idx + 2], a[idx + 3]]);
+            let vb = f64x4::from([b[idx], b[idx + 1], b[idx + 2], b[idx + 3]]);
             sum = sum + (va * vb);
         }
 
@@ -248,9 +263,7 @@ pub struct ModelAllocator {
 impl ModelAllocator {
     /// Create a new model allocator with specified capacity
     pub fn new() -> Self {
-        Self {
-            bump: Bump::new(),
-        }
+        Self { bump: Bump::new() }
     }
 
     /// Create allocator with pre-allocated capacity
@@ -344,98 +357,122 @@ impl CompactExpr {
             match node {
                 CompactNode::Number(n) => stack.push(*n),
                 CompactNode::Variable(name) => {
-                    let value = variables.get(name)
-                        .ok_or_else(|| PerformanceError::ParallelError(
-                            format!("Undefined variable: {}", name)
-                        ))?;
+                    let value = variables.get(name).ok_or_else(|| {
+                        PerformanceError::ParallelError(format!("Undefined variable: {}", name))
+                    })?;
                     stack.push(*value);
                 }
-                CompactNode::Operator(op) => {
-                    match op.as_str() {
-                        "+" => {
-                            if stack.len() < 2 {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let b = stack.pop().unwrap();
-                            let a = stack.pop().unwrap();
-                            stack.push(a + b);
+                CompactNode::Operator(op) => match op.as_str() {
+                    "+" => {
+                        if stack.len() < 2 {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
                         }
-                        "-" => {
-                            if stack.len() < 2 {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let b = stack.pop().unwrap();
-                            let a = stack.pop().unwrap();
-                            stack.push(a - b);
-                        }
-                        "*" => {
-                            if stack.len() < 2 {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let b = stack.pop().unwrap();
-                            let a = stack.pop().unwrap();
-                            stack.push(a * b);
-                        }
-                        "/" => {
-                            if stack.len() < 2 {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let b = stack.pop().unwrap();
-                            let a = stack.pop().unwrap();
-                            if b == 0.0 {
-                                return Err(PerformanceError::ParallelError("Division by zero".to_string()));
-                            }
-                            stack.push(a / b);
-                        }
-                        "^" | "**" => {
-                            if stack.len() < 2 {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let b = stack.pop().unwrap();
-                            let a = stack.pop().unwrap();
-                            stack.push(a.powf(b));
-                        }
-                        "sin" => {
-                            if stack.is_empty() {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let a = stack.pop().unwrap();
-                            stack.push(a.sin());
-                        }
-                        "cos" => {
-                            if stack.is_empty() {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let a = stack.pop().unwrap();
-                            stack.push(a.cos());
-                        }
-                        "exp" => {
-                            if stack.is_empty() {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let a = stack.pop().unwrap();
-                            stack.push(a.exp());
-                        }
-                        "log" => {
-                            if stack.is_empty() {
-                                return Err(PerformanceError::ParallelError("Stack underflow".to_string()));
-                            }
-                            let a = stack.pop().unwrap();
-                            if a <= 0.0 {
-                                return Err(PerformanceError::ParallelError("Invalid log argument".to_string()));
-                            }
-                            stack.push(a.ln());
-                        }
-                        _ => return Err(PerformanceError::ParallelError(
-                            format!("Unsupported operator: {}", op)
-                        )),
+                        let b = stack.pop().unwrap();
+                        let a = stack.pop().unwrap();
+                        stack.push(a + b);
                     }
-                }
+                    "-" => {
+                        if stack.len() < 2 {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let b = stack.pop().unwrap();
+                        let a = stack.pop().unwrap();
+                        stack.push(a - b);
+                    }
+                    "*" => {
+                        if stack.len() < 2 {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let b = stack.pop().unwrap();
+                        let a = stack.pop().unwrap();
+                        stack.push(a * b);
+                    }
+                    "/" => {
+                        if stack.len() < 2 {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let b = stack.pop().unwrap();
+                        let a = stack.pop().unwrap();
+                        if b == 0.0 {
+                            return Err(PerformanceError::ParallelError(
+                                "Division by zero".to_string(),
+                            ));
+                        }
+                        stack.push(a / b);
+                    }
+                    "^" | "**" => {
+                        if stack.len() < 2 {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let b = stack.pop().unwrap();
+                        let a = stack.pop().unwrap();
+                        stack.push(a.powf(b));
+                    }
+                    "sin" => {
+                        if stack.is_empty() {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let a = stack.pop().unwrap();
+                        stack.push(a.sin());
+                    }
+                    "cos" => {
+                        if stack.is_empty() {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let a = stack.pop().unwrap();
+                        stack.push(a.cos());
+                    }
+                    "exp" => {
+                        if stack.is_empty() {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let a = stack.pop().unwrap();
+                        stack.push(a.exp());
+                    }
+                    "log" => {
+                        if stack.is_empty() {
+                            return Err(PerformanceError::ParallelError(
+                                "Stack underflow".to_string(),
+                            ));
+                        }
+                        let a = stack.pop().unwrap();
+                        if a <= 0.0 {
+                            return Err(PerformanceError::ParallelError(
+                                "Invalid log argument".to_string(),
+                            ));
+                        }
+                        stack.push(a.ln());
+                    }
+                    _ => {
+                        return Err(PerformanceError::ParallelError(format!(
+                            "Unsupported operator: {}",
+                            op
+                        )))
+                    }
+                },
             }
         }
 
         if stack.len() != 1 {
-            return Err(PerformanceError::ParallelError("Invalid expression".to_string()));
+            return Err(PerformanceError::ParallelError(
+                "Invalid expression".to_string(),
+            ));
         }
 
         Ok(stack[0])
@@ -451,10 +488,7 @@ mod tests {
     fn test_compact_expr_creation() {
         let expr = Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            args: vec![
-                Expr::Variable("x".to_string()),
-                Expr::Number(1.0)
-            ],
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
         });
@@ -470,10 +504,7 @@ mod tests {
     fn test_fast_evaluation() {
         let expr = Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            args: vec![
-                Expr::Variable("x".to_string()),
-                Expr::Number(1.0)
-            ],
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
         });

@@ -24,21 +24,19 @@ fn test_simple_stoichiometric_matrix() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![StoichiometricEntry {
-                species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
-                species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
-            rate: Expr::Variable("k".to_string()),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![StoichiometricEntry {
+            species: "A".to_string(),
+            coefficient: Some(1.0),
+        }],
+        products: vec![StoichiometricEntry {
+            species: "B".to_string(),
+            coefficient: Some(1.0),
+        }],
+        rate: Expr::Variable("k".to_string()),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Simple RS".to_string()),
@@ -110,7 +108,7 @@ fn test_multiple_reaction_stoichiometric_matrix() {
             }],
             rate: Expr::Variable("k2".to_string()),
             description: None,
-        }
+        },
     ];
 
     let rs = ReactionSystem {
@@ -163,27 +161,25 @@ fn test_stoichiometric_coefficients() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![
-                StoichiometricEntry {
-                    species: "A".to_string(),
-                    coefficient: Some(2.0),
-                },
-                StoichiometricEntry {
-                    species: "B".to_string(),
-                    coefficient: Some(1.0),
-                },
-            ],
-            products: vec![StoichiometricEntry {
-                species: "C".to_string(),
-                coefficient: Some(3.0),
-            }],
-            rate: Expr::Variable("k".to_string()),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![
+            StoichiometricEntry {
+                species: "A".to_string(),
+                coefficient: Some(2.0),
+            },
+            StoichiometricEntry {
+                species: "B".to_string(),
+                coefficient: Some(1.0),
+            },
+        ],
+        products: vec![StoichiometricEntry {
+            species: "C".to_string(),
+            coefficient: Some(3.0),
+        }],
+        rate: Expr::Variable("k".to_string()),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Coefficients RS".to_string()),
@@ -246,7 +242,7 @@ fn test_reversible_reactions() {
             }],
             rate: Expr::Variable("kr".to_string()),
             description: None,
-        }
+        },
     ];
 
     let rs = ReactionSystem {
@@ -277,11 +273,36 @@ fn test_reversible_reactions() {
 fn test_complex_reaction_network() {
     // Network: A + B -> C, C -> D + E, D -> A
     let species = vec![
-        Species { name: "A".to_string(), units: Some("mol/L".to_string()), default: Some(1.0), description: None },
-        Species { name: "B".to_string(), units: Some("mol/L".to_string()), default: Some(1.0), description: None },
-        Species { name: "C".to_string(), units: Some("mol/L".to_string()), default: Some(0.0), description: None },
-        Species { name: "D".to_string(), units: Some("mol/L".to_string()), default: Some(0.0), description: None },
-        Species { name: "E".to_string(), units: Some("mol/L".to_string()), default: Some(0.0), description: None },
+        Species {
+            name: "A".to_string(),
+            units: Some("mol/L".to_string()),
+            default: Some(1.0),
+            description: None,
+        },
+        Species {
+            name: "B".to_string(),
+            units: Some("mol/L".to_string()),
+            default: Some(1.0),
+            description: None,
+        },
+        Species {
+            name: "C".to_string(),
+            units: Some("mol/L".to_string()),
+            default: Some(0.0),
+            description: None,
+        },
+        Species {
+            name: "D".to_string(),
+            units: Some("mol/L".to_string()),
+            default: Some(0.0),
+            description: None,
+        },
+        Species {
+            name: "E".to_string(),
+            units: Some("mol/L".to_string()),
+            default: Some(0.0),
+            description: None,
+        },
     ];
 
     let reactions = vec![
@@ -289,20 +310,38 @@ fn test_complex_reaction_network() {
         Reaction {
             name: Some("R1".to_string()),
             substrates: vec![
-                StoichiometricEntry { species: "A".to_string(), coefficient: Some(1.0) },
-                StoichiometricEntry { species: "B".to_string(), coefficient: Some(1.0) },
+                StoichiometricEntry {
+                    species: "A".to_string(),
+                    coefficient: Some(1.0),
+                },
+                StoichiometricEntry {
+                    species: "B".to_string(),
+                    coefficient: Some(1.0),
+                },
             ],
-            products: vec![StoichiometricEntry { species: "C".to_string(), coefficient: Some(1.0) }],
+            products: vec![StoichiometricEntry {
+                species: "C".to_string(),
+                coefficient: Some(1.0),
+            }],
             rate: Expr::Variable("k1".to_string()),
             description: None,
         },
         // C -> D + E
         Reaction {
             name: Some("R2".to_string()),
-            substrates: vec![StoichiometricEntry { species: "C".to_string(), coefficient: Some(1.0) }],
+            substrates: vec![StoichiometricEntry {
+                species: "C".to_string(),
+                coefficient: Some(1.0),
+            }],
             products: vec![
-                StoichiometricEntry { species: "D".to_string(), coefficient: Some(1.0) },
-                StoichiometricEntry { species: "E".to_string(), coefficient: Some(1.0) },
+                StoichiometricEntry {
+                    species: "D".to_string(),
+                    coefficient: Some(1.0),
+                },
+                StoichiometricEntry {
+                    species: "E".to_string(),
+                    coefficient: Some(1.0),
+                },
             ],
             rate: Expr::Variable("k2".to_string()),
             description: None,
@@ -310,11 +349,17 @@ fn test_complex_reaction_network() {
         // D -> A
         Reaction {
             name: Some("R3".to_string()),
-            substrates: vec![StoichiometricEntry { species: "D".to_string(), coefficient: Some(1.0) }],
-            products: vec![StoichiometricEntry { species: "A".to_string(), coefficient: Some(1.0) }],
+            substrates: vec![StoichiometricEntry {
+                species: "D".to_string(),
+                coefficient: Some(1.0),
+            }],
+            products: vec![StoichiometricEntry {
+                species: "A".to_string(),
+                coefficient: Some(1.0),
+            }],
             rate: Expr::Variable("k3".to_string()),
             description: None,
-        }
+        },
     ];
 
     let rs = ReactionSystem {
@@ -365,20 +410,21 @@ fn test_empty_reaction_system() {
     };
 
     let matrix = stoichiometric_matrix(&rs);
-    assert!(matrix.is_empty(), "Empty reaction system should produce empty matrix");
+    assert!(
+        matrix.is_empty(),
+        "Empty reaction system should produce empty matrix"
+    );
 }
 
 /// Test reaction system with no reactions
 #[test]
 fn test_no_reactions() {
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-    ];
+    let species = vec![Species {
+        name: "A".to_string(),
+        units: Some("mol/L".to_string()),
+        default: Some(1.0),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("No Reactions RS".to_string()),
@@ -412,21 +458,19 @@ fn test_fractional_coefficients() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![StoichiometricEntry {
-                species: "A".to_string(),
-                coefficient: Some(0.5),
-            }],
-            products: vec![StoichiometricEntry {
-                species: "B".to_string(),
-                coefficient: Some(1.5),
-            }],
-            rate: Expr::Variable("k".to_string()),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![StoichiometricEntry {
+            species: "A".to_string(),
+            coefficient: Some(0.5),
+        }],
+        products: vec![StoichiometricEntry {
+            species: "B".to_string(),
+            coefficient: Some(1.5),
+        }],
+        rate: Expr::Variable("k".to_string()),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Fractional RS".to_string()),
@@ -461,21 +505,19 @@ fn test_default_coefficients() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![StoichiometricEntry {
-                species: "A".to_string(),
-                coefficient: None, // Should default to 1.0
-            }],
-            products: vec![StoichiometricEntry {
-                species: "B".to_string(),
-                coefficient: None, // Should default to 1.0
-            }],
-            rate: Expr::Variable("k".to_string()),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![StoichiometricEntry {
+            species: "A".to_string(),
+            coefficient: None, // Should default to 1.0
+        }],
+        products: vec![StoichiometricEntry {
+            species: "B".to_string(),
+            coefficient: None, // Should default to 1.0
+        }],
+        rate: Expr::Variable("k".to_string()),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Default Coeffs RS".to_string()),
@@ -487,6 +529,12 @@ fn test_default_coefficients() {
 
     let matrix = stoichiometric_matrix(&rs);
 
-    assert_eq!(matrix[0][0], -1.0, "Default coefficient should be -1 for substrate");
-    assert_eq!(matrix[1][0], 1.0, "Default coefficient should be 1 for product");
+    assert_eq!(
+        matrix[0][0], -1.0,
+        "Default coefficient should be -1 for substrate"
+    );
+    assert_eq!(
+        matrix[1][0], 1.0,
+        "Default coefficient should be 1 for product"
+    );
 }

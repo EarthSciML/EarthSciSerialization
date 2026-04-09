@@ -15,10 +15,7 @@ fn test_basic_expression_formatting() {
         Expr::Number(42.0),
         Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            args: vec![
-                Expr::Variable("x".to_string()),
-                Expr::Number(1.0),
-            ],
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
         }),
@@ -29,9 +26,18 @@ fn test_basic_expression_formatting() {
         let latex_result = to_latex(expr);
         let ascii_result = to_ascii(expr);
 
-        assert!(!unicode_result.is_empty(), "Unicode formatting should not be empty");
-        assert!(!latex_result.is_empty(), "LaTeX formatting should not be empty");
-        assert!(!ascii_result.is_empty(), "ASCII formatting should not be empty");
+        assert!(
+            !unicode_result.is_empty(),
+            "Unicode formatting should not be empty"
+        );
+        assert!(
+            !latex_result.is_empty(),
+            "LaTeX formatting should not be empty"
+        );
+        assert!(
+            !ascii_result.is_empty(),
+            "ASCII formatting should not be empty"
+        );
     }
 }
 
@@ -52,9 +58,21 @@ fn test_operator_formatting() {
         let latex_result = to_latex(&expr);
         let ascii_result = to_ascii(&expr);
 
-        assert!(!unicode_result.is_empty(), "Unicode formatting for {} should not be empty", op);
-        assert!(!latex_result.is_empty(), "LaTeX formatting for {} should not be empty", op);
-        assert!(!ascii_result.is_empty(), "ASCII formatting for {} should not be empty", op);
+        assert!(
+            !unicode_result.is_empty(),
+            "Unicode formatting for {} should not be empty",
+            op
+        );
+        assert!(
+            !latex_result.is_empty(),
+            "LaTeX formatting for {} should not be empty",
+            op
+        );
+        assert!(
+            !ascii_result.is_empty(),
+            "ASCII formatting for {} should not be empty",
+            op
+        );
     }
 }
 
@@ -148,15 +166,7 @@ fn test_derivative_formatting() {
 /// Test number formatting
 #[test]
 fn test_number_formatting() {
-    let numbers = [
-        1.0,
-        -1.0,
-        42.0,
-        3.14159,
-        1.23e-6,
-        1.23e15,
-        0.0,
-    ];
+    let numbers = [1.0, -1.0, 42.0, 3.14159, 1.23e-6, 1.23e15, 0.0];
 
     for &num in &numbers {
         let expr = Expr::Number(num);
@@ -175,7 +185,11 @@ fn test_number_formatting() {
             unicode_result.chars().any(|c| c.is_ascii_digit()) ||
             unicode_result.contains("×") || // Scientific notation
             unicode_result.contains("e"); // Exponential notation
-        assert!(has_number_representation, "Number {} should be represented in unicode output", num);
+        assert!(
+            has_number_representation,
+            "Number {} should be represented in unicode output",
+            num
+        );
     }
 }
 
@@ -194,7 +208,8 @@ fn test_fixture_based_formatting() {
             if let Ok(test_data) = serde_json::from_str::<serde_json::Value>(&fixture_content) {
                 // Process test cases if they exist
                 if let Some(cases) = test_data.as_array() {
-                    for case in cases.iter().take(5) { // Test first 5 cases only
+                    for case in cases.iter().take(5) {
+                        // Test first 5 cases only
                         if let Some(input) = case.get("input").and_then(|v| v.as_str()) {
                             // Create a variable expression from the input
                             let expr = Expr::Variable(input.to_string());
@@ -210,7 +225,8 @@ fn test_fixture_based_formatting() {
                     }
                 } else if let Some(obj) = test_data.as_object() {
                     // Handle object-based test format
-                    for (key, _value) in obj.iter().take(3) { // Test first 3 entries only
+                    for (key, _value) in obj.iter().take(3) {
+                        // Test first 3 entries only
                         let expr = Expr::Variable(key.to_string());
 
                         let unicode_result = to_unicode(&expr);
@@ -231,7 +247,7 @@ fn test_fixture_based_formatting() {
 #[test]
 fn test_edge_cases() {
     let edge_cases = [
-        Expr::Variable("123".to_string()), // Numeric variable name
+        Expr::Variable("123".to_string()),   // Numeric variable name
         Expr::Variable("x_y_z".to_string()), // Underscores
         Expr::Variable("long_variable_name_with_many_underscores".to_string()),
         Expr::Operator(ExpressionNode {

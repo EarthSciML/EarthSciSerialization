@@ -110,7 +110,8 @@ impl Unit {
 
     /// Raise unit to a power
     pub fn power(&self, exponent: i32) -> Unit {
-        let dimensions = self.dimensions
+        let dimensions = self
+            .dimensions
             .iter()
             .map(|(dim, power)| (dim.clone(), power * exponent))
             .filter(|(_, power)| *power != 0)
@@ -175,7 +176,8 @@ pub fn parse_unit(unit_str: &str) -> Result<Unit, UnitError> {
         let parts: Vec<&str> = unit_str.split('^').collect();
         if parts.len() == 2 {
             let base_unit = parse_unit(parts[0])?;
-            let power: i32 = parts[1].parse()
+            let power: i32 = parts[1]
+                .parse()
                 .map_err(|_| UnitError::ParseError(format!("Invalid power: {}", parts[1])))?;
             return Ok(base_unit.power(power));
         }
@@ -211,33 +213,45 @@ fn get_base_units() -> HashMap<String, Unit> {
 
     // Derived units
     // Velocity: m/s
-    units.insert("m/s".to_string(),
-        Unit::base(Dimension::Length, 1, 1.0).divide(&Unit::base(Dimension::Time, 1, 1.0)));
+    units.insert(
+        "m/s".to_string(),
+        Unit::base(Dimension::Length, 1, 1.0).divide(&Unit::base(Dimension::Time, 1, 1.0)),
+    );
 
     // Concentration: mol/L (mol/m^3)
     let liter = Unit::base(Dimension::Length, 3, 0.001); // 1 L = 0.001 m^3
-    units.insert("mol/L".to_string(),
-        Unit::base(Dimension::Amount, 1, 1.0).divide(&liter));
-    units.insert("M".to_string(),
-        Unit::base(Dimension::Amount, 1, 1.0).divide(&liter)); // Molarity
+    units.insert(
+        "mol/L".to_string(),
+        Unit::base(Dimension::Amount, 1, 1.0).divide(&liter),
+    );
+    units.insert(
+        "M".to_string(),
+        Unit::base(Dimension::Amount, 1, 1.0).divide(&liter),
+    ); // Molarity
 
     // Force: kg*m/s^2 (Newton)
-    units.insert("N".to_string(),
+    units.insert(
+        "N".to_string(),
         Unit::base(Dimension::Mass, 1, 1.0)
             .multiply(&Unit::base(Dimension::Length, 1, 1.0))
-            .divide(&Unit::base(Dimension::Time, 2, 1.0)));
+            .divide(&Unit::base(Dimension::Time, 2, 1.0)),
+    );
 
     // Energy: kg*m^2/s^2 (Joule)
-    units.insert("J".to_string(),
+    units.insert(
+        "J".to_string(),
         Unit::base(Dimension::Mass, 1, 1.0)
             .multiply(&Unit::base(Dimension::Length, 2, 1.0))
-            .divide(&Unit::base(Dimension::Time, 2, 1.0)));
+            .divide(&Unit::base(Dimension::Time, 2, 1.0)),
+    );
 
     // Power: kg*m^2/s^3 (Watt)
-    units.insert("W".to_string(),
+    units.insert(
+        "W".to_string(),
         Unit::base(Dimension::Mass, 1, 1.0)
             .multiply(&Unit::base(Dimension::Length, 2, 1.0))
-            .divide(&Unit::base(Dimension::Time, 3, 1.0)));
+            .divide(&Unit::base(Dimension::Time, 3, 1.0)),
+    );
 
     units
 }
@@ -257,7 +271,7 @@ pub fn check_dimensional_consistency(lhs_unit: &Unit, rhs_unit: &Unit) -> Result
         Ok(())
     } else {
         Err(UnitError::DimensionMismatch(
-            "Left and right sides have incompatible dimensions".to_string()
+            "Left and right sides have incompatible dimensions".to_string(),
         ))
     }
 }
@@ -276,7 +290,7 @@ pub fn check_dimensional_consistency(lhs_unit: &Unit, rhs_unit: &Unit) -> Result
 pub fn convert_units(value: f64, from_unit: &Unit, to_unit: &Unit) -> Result<f64, UnitError> {
     if !from_unit.is_compatible(to_unit) {
         return Err(UnitError::DimensionMismatch(
-            "Units have incompatible dimensions".to_string()
+            "Units have incompatible dimensions".to_string(),
         ));
     }
 

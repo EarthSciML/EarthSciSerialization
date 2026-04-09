@@ -1,6 +1,6 @@
 //! Graph utilities for analyzing model structure and coupling
 
-use crate::{EsmFile, CouplingEntry};
+use crate::{CouplingEntry, EsmFile};
 
 /// Component graph representing model structure
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -112,48 +112,76 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
             let (from, to, coupling_type_str) = match entry {
                 CouplingEntry::OperatorCompose { systems, .. } => {
                     if systems.len() >= 2 {
-                        (systems[0].clone(), systems[1].clone(), "operator_compose".to_string())
+                        (
+                            systems[0].clone(),
+                            systems[1].clone(),
+                            "operator_compose".to_string(),
+                        )
                     } else {
                         continue; // Skip invalid coupling
                     }
-                },
+                }
                 CouplingEntry::Couple2 { systems, .. } => {
                     if systems.len() >= 2 {
-                        (systems[0].clone(), systems[1].clone(), "couple2".to_string())
+                        (
+                            systems[0].clone(),
+                            systems[1].clone(),
+                            "couple2".to_string(),
+                        )
                     } else {
                         continue; // Skip invalid coupling
                     }
-                },
+                }
                 CouplingEntry::VariableMap { from, to, .. } => {
                     // Parse scoped references to extract system names
                     let from_system = from.split('.').next().unwrap_or(from).to_string();
                     let to_system = to.split('.').next().unwrap_or(to).to_string();
                     (from_system, to_system, "variable_map".to_string())
-                },
-                CouplingEntry::OperatorApply { operator, .. } =>
-                    (operator.clone(), "unknown_target".to_string(), "operator_apply".to_string()),
-                CouplingEntry::Callback { callback_id, .. } =>
-                    (callback_id.clone(), "unknown_target".to_string(), "callback".to_string()),
+                }
+                CouplingEntry::OperatorApply { operator, .. } => (
+                    operator.clone(),
+                    "unknown_target".to_string(),
+                    "operator_apply".to_string(),
+                ),
+                CouplingEntry::Callback { callback_id, .. } => (
+                    callback_id.clone(),
+                    "unknown_target".to_string(),
+                    "callback".to_string(),
+                ),
                 CouplingEntry::Event { name, affects, .. } => {
                     // Extract system names from affect variable references (e.g., "System1.var")
-                    let systems: Vec<String> = affects.as_ref().map(|affects| {
-                        affects.iter().filter_map(|affect| {
-                            if affect.lhs.contains('.') {
-                                Some(affect.lhs.split('.').next().unwrap_or("").to_string())
-                            } else {
-                                None
-                            }
-                        }).collect()
-                    }).unwrap_or_default();
+                    let systems: Vec<String> = affects
+                        .as_ref()
+                        .map(|affects| {
+                            affects
+                                .iter()
+                                .filter_map(|affect| {
+                                    if affect.lhs.contains('.') {
+                                        Some(affect.lhs.split('.').next().unwrap_or("").to_string())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
 
                     if systems.len() >= 2 {
                         (systems[0].clone(), systems[1].clone(), "event".to_string())
                     } else if systems.len() == 1 {
                         let event_name = name.as_deref().unwrap_or("unknown_event");
-                        (event_name.to_string(), systems[0].clone(), "event".to_string())
+                        (
+                            event_name.to_string(),
+                            systems[0].clone(),
+                            "event".to_string(),
+                        )
                     } else {
                         let event_name = name.as_deref().unwrap_or("unknown_event");
-                        (event_name.to_string(), "unknown".to_string(), "event".to_string())
+                        (
+                            event_name.to_string(),
+                            "unknown".to_string(),
+                            "event".to_string(),
+                        )
                     }
                 }
             };
@@ -549,13 +577,16 @@ impl ExpressionGraphInput for crate::Expr {
         // For a standalone expression, there are no variable-to-variable dependencies
         ExpressionGraph {
             nodes,
-            edges: Vec::new()
+            edges: Vec::new(),
         }
     }
 }
 
 /// Helper function to extract nodes and edges from a model
-fn extract_from_model(model: &crate::Model, system_id: &str) -> (Vec<VariableNode>, Vec<DependencyEdge>) {
+fn extract_from_model(
+    model: &crate::Model,
+    system_id: &str,
+) -> (Vec<VariableNode>, Vec<DependencyEdge>) {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
 
@@ -610,7 +641,10 @@ fn extract_from_model(model: &crate::Model, system_id: &str) -> (Vec<VariableNod
 }
 
 /// Helper function to extract nodes and edges from a reaction system
-fn extract_from_reaction_system(rs: &crate::ReactionSystem, system_id: &str) -> (Vec<VariableNode>, Vec<DependencyEdge>) {
+fn extract_from_reaction_system(
+    rs: &crate::ReactionSystem,
+    system_id: &str,
+) -> (Vec<VariableNode>, Vec<DependencyEdge>) {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
 
@@ -708,7 +742,10 @@ fn collect_variables(expr: &crate::Expr, vars: &mut Vec<String>) {
 /// Merge variable nodes, avoiding duplicates
 fn merge_variable_nodes(existing: &mut Vec<VariableNode>, new_nodes: Vec<VariableNode>) {
     for new_node in new_nodes {
-        if !existing.iter().any(|n: &VariableNode| n.name == new_node.name && n.system == new_node.system) {
+        if !existing
+            .iter()
+            .any(|n: &VariableNode| n.name == new_node.name && n.system == new_node.system)
+        {
             existing.push(new_node);
         }
     }
@@ -735,16 +772,20 @@ impl ComponentGraph {
             };
 
             let label = node.name.as_ref().unwrap_or(&node.id);
-            dot.push_str(&format!("  \"{}\" [label=\"{}\" shape={}];\n",
-                node.id, label, shape));
+            dot.push_str(&format!(
+                "  \"{}\" [label=\"{}\" shape={}];\n",
+                node.id, label, shape
+            ));
         }
 
         dot.push_str("\n");
 
         // Add edges
         for edge in &self.edges {
-            dot.push_str(&format!("  \"{}\" -> \"{}\" [label=\"{}\"];\n",
-                edge.from, edge.to, edge.coupling_type));
+            dot.push_str(&format!(
+                "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
+                edge.from, edge.to, edge.coupling_type
+            ));
         }
 
         dot.push_str("}\n");
@@ -769,14 +810,15 @@ impl ComponentGraph {
             };
 
             let label = node.name.as_ref().unwrap_or(&node.id);
-            mermaid.push_str(&format!("  {}{}{}{}\n",
-                node.id, shape.0, label, shape.1));
+            mermaid.push_str(&format!("  {}{}{}{}\n", node.id, shape.0, label, shape.1));
         }
 
         // Add edges
         for edge in &self.edges {
-            mermaid.push_str(&format!("  {} -->|{}| {}\n",
-                edge.from, edge.coupling_type, edge.to));
+            mermaid.push_str(&format!(
+                "  {} -->|{}| {}\n",
+                edge.from, edge.coupling_type, edge.to
+            ));
         }
 
         mermaid
@@ -812,8 +854,10 @@ impl ExpressionGraph {
                 VariableKind::Species => "circle",
             };
 
-            dot.push_str(&format!("  \"{}\" [label=\"{}\" shape={}];\n",
-                node.name, node.name, shape));
+            dot.push_str(&format!(
+                "  \"{}\" [label=\"{}\" shape={}];\n",
+                node.name, node.name, shape
+            ));
         }
 
         dot.push_str("\n");
@@ -826,8 +870,10 @@ impl ExpressionGraph {
                 DependencyRelationship::Rate => "rate",
                 DependencyRelationship::Stoichiometric => "stoich",
             };
-            dot.push_str(&format!("  \"{}\" -> \"{}\" [label=\"{}\"];\n",
-                edge.source, edge.target, label));
+            dot.push_str(&format!(
+                "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
+                edge.source, edge.target, label
+            ));
         }
 
         dot.push_str("}\n");
@@ -851,7 +897,10 @@ impl ExpressionGraph {
                 VariableKind::Species => ("((", "))"),
             };
 
-            mermaid.push_str(&format!("  {}{}{}{}\n", node.name, shape_start, node.name, shape_end));
+            mermaid.push_str(&format!(
+                "  {}{}{}{}\n",
+                node.name, shape_start, node.name, shape_end
+            ));
         }
 
         // Add edges
@@ -875,8 +924,8 @@ impl ExpressionGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Model, ReactionSystem, Expr, ExpressionNode as ExprNode};
     use crate::types::Metadata;
+    use crate::{Expr, ExpressionNode as ExprNode, Model, ReactionSystem};
     use std::collections::HashMap;
 
     #[test]
@@ -910,24 +959,30 @@ mod tests {
     #[test]
     fn test_component_graph_with_models() {
         let mut models = HashMap::new();
-        models.insert("model1".to_string(), Model {
-            reference: None,
-            name: Some("Test Model 1".to_string()),
-            variables: HashMap::new(),
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
-        models.insert("model2".to_string(), Model {
-            reference: None,
-            name: Some("Test Model 2".to_string()),
-            variables: HashMap::new(),
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "model1".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model 1".to_string()),
+                variables: HashMap::new(),
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+        models.insert(
+            "model2".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model 2".to_string()),
+                variables: HashMap::new(),
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -965,15 +1020,18 @@ mod tests {
     #[test]
     fn test_component_exists() {
         let mut models = HashMap::new();
-        models.insert("test_model".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables: HashMap::new(),
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "test_model".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables: HashMap::new(),
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1003,24 +1061,30 @@ mod tests {
     #[test]
     fn test_get_component_type() {
         let mut models = HashMap::new();
-        models.insert("test_model".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables: HashMap::new(),
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+        models.insert(
+            "test_model".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables: HashMap::new(),
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let mut reaction_systems = HashMap::new();
-        reaction_systems.insert("test_rs".to_string(), ReactionSystem {
-            name: Some("Test RS".to_string()),
-            species: vec![],
-            parameters: HashMap::new(),
-            reactions: vec![],
-            description: None,
-        });
+        reaction_systems.insert(
+            "test_rs".to_string(),
+            ReactionSystem {
+                name: Some("Test RS".to_string()),
+                species: vec![],
+                parameters: HashMap::new(),
+                reactions: vec![],
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1043,8 +1107,14 @@ mod tests {
             solver: None,
         };
 
-        assert_eq!(get_component_type(&esm_file, "test_model"), Some(ComponentType::Model));
-        assert_eq!(get_component_type(&esm_file, "test_rs"), Some(ComponentType::ReactionSystem));
+        assert_eq!(
+            get_component_type(&esm_file, "test_model"),
+            Some(ComponentType::Model)
+        );
+        assert_eq!(
+            get_component_type(&esm_file, "test_rs"),
+            Some(ComponentType::ReactionSystem)
+        );
         assert_eq!(get_component_type(&esm_file, "nonexistent"), None);
     }
 
@@ -1052,10 +1122,7 @@ mod tests {
     fn test_expression_graph() {
         let expr = Expr::Operator(ExprNode {
             op: "+".to_string(),
-            args: vec![
-                Expr::Variable("x".to_string()),
-                Expr::Number(1.0),
-            ],
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
         });
@@ -1073,13 +1140,11 @@ mod tests {
     #[test]
     fn test_component_graph_to_dot() {
         let graph = ComponentGraph {
-            nodes: vec![
-                ComponentNode {
-                    id: "model1".to_string(),
-                    component_type: ComponentType::Model,
-                    name: Some("Test Model".to_string()),
-                },
-            ],
+            nodes: vec![ComponentNode {
+                id: "model1".to_string(),
+                component_type: ComponentType::Model,
+                name: Some("Test Model".to_string()),
+            }],
             edges: vec![],
         };
 
@@ -1092,13 +1157,11 @@ mod tests {
     #[test]
     fn test_component_graph_to_mermaid() {
         let graph = ComponentGraph {
-            nodes: vec![
-                ComponentNode {
-                    id: "model1".to_string(),
-                    component_type: ComponentType::Model,
-                    name: Some("Test Model".to_string()),
-                },
-            ],
+            nodes: vec![ComponentNode {
+                id: "model1".to_string(),
+                component_type: ComponentType::Model,
+                name: Some("Test Model".to_string()),
+            }],
             edges: vec![],
         };
 
@@ -1111,10 +1174,7 @@ mod tests {
     fn test_expression_graph_to_mermaid() {
         let expr = Expr::Operator(ExprNode {
             op: "+".to_string(),
-            args: vec![
-                Expr::Variable("x".to_string()),
-                Expr::Number(1.0),
-            ],
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
         });
@@ -1123,45 +1183,49 @@ mod tests {
         let mermaid = graph.to_mermaid();
 
         assert!(mermaid.contains("graph TD"));
-        assert!(mermaid.contains("x[x]"));  // Parameter variable node (square brackets)
-        // No constants or operators in variable dependency graph
-        assert!(!mermaid.contains("const_"));  // No constant nodes
-        assert!(!mermaid.contains("{+}"));    // No operator nodes
-        // No edges for standalone expression
-        assert!(!mermaid.contains("-->"));    // No edges
+        assert!(mermaid.contains("x[x]")); // Parameter variable node (square brackets)
+                                           // No constants or operators in variable dependency graph
+        assert!(!mermaid.contains("const_")); // No constant nodes
+        assert!(!mermaid.contains("{+}")); // No operator nodes
+                                           // No edges for standalone expression
+        assert!(!mermaid.contains("-->")); // No edges
     }
 
     #[test]
     fn test_component_graph_variable_map_edge_extraction() {
         let mut models = HashMap::new();
-        models.insert("source".to_string(), Model {
-            reference: None,
-            name: Some("Source System".to_string()),
-            variables: HashMap::new(),
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
-        models.insert("target".to_string(), Model {
-            reference: None,
-            name: Some("Target System".to_string()),
-            variables: HashMap::new(),
-            equations: vec![],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
-
-        let coupling_entries = vec![
-            crate::CouplingEntry::VariableMap {
-                from: "source.var".to_string(),
-                to: "target.param".to_string(),
-                transform: "identity".to_string(),
-                factor: None,
+        models.insert(
+            "source".to_string(),
+            Model {
+                reference: None,
+                name: Some("Source System".to_string()),
+                variables: HashMap::new(),
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
                 description: None,
-            }
-        ];
+            },
+        );
+        models.insert(
+            "target".to_string(),
+            Model {
+                reference: None,
+                name: Some("Target System".to_string()),
+                variables: HashMap::new(),
+                equations: vec![],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
+
+        let coupling_entries = vec![crate::CouplingEntry::VariableMap {
+            from: "source.var".to_string(),
+            to: "target.param".to_string(),
+            transform: "identity".to_string(),
+            factor: None,
+            description: None,
+        }];
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),
@@ -1195,8 +1259,8 @@ mod tests {
         let edge = &graph.edges[0];
 
         // Edge should connect system names, not full scoped references
-        assert_eq!(edge.from, "source");  // Not "source.var"
-        assert_eq!(edge.to, "target");    // Not "target.param"
+        assert_eq!(edge.from, "source"); // Not "source.var"
+        assert_eq!(edge.to, "target"); // Not "target.param"
         assert_eq!(edge.coupling_type, "variable_map");
     }
 }
