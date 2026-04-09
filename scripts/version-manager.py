@@ -269,7 +269,7 @@ const Version = "{version}"
             if package_type == "Julia":
                 registry_info = f" (Julia General Registry)"
             elif package_type == "Typescript":
-                registry_info = f" (npm: {package_info.get('npm_name', 'esm-format')})"
+                registry_info = f" (npm: {package_info.get('npm_name', 'earthsci-toolkit')})"
             elif package_type == "Python":
                 registry_info = f" (PyPI: {package_info.get('pypi_name', 'earthsci-toolkit')})"
             elif package_type == "Rust":
@@ -286,7 +286,7 @@ const Version = "{version}"
         notes.append("julia> ] add EarthSciSerialization")
         notes.append("")
         notes.append("# TypeScript/JavaScript")
-        notes.append("npm install esm-format")
+        notes.append("npm install earthsci-toolkit")
         notes.append("")
         notes.append("# Python")
         notes.append("pip install earthsci-toolkit")

@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@solidjs/testing-library';
 import { CouplingGraph } from './CouplingGraph';
-import type { ComponentNode, CouplingEdge, Graph } from 'esm-format';
+import type { ComponentNode, CouplingEdge, Graph } from 'earthsci-toolkit';
 
 // No need to mock d3-force since we're using manual implementation
 

@@ -2026,7 +2026,7 @@ function simplify(expr) {
  *
  * @example
  * ```typescript
- * import { EsmFile, Model, Expr } from 'esm-format/core';
+ * import { EsmFile, Model, Expr } from 'earthsci-toolkit/core';
  * ```
  */
 // Re-export all types from types.ts (which includes generated types and augmentations)

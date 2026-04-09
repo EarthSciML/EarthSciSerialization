@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createSignal, createRoot } from 'solid-js';
 import { createUndoHistory, createUndoKeyboardHandler } from './history';
-import type { EsmFile } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
 
 describe('History Management', () => {
   let cleanup: (() => void) | null = null;

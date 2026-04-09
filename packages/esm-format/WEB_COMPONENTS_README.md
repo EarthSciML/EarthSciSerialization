@@ -18,7 +18,7 @@ Framework-agnostic web components for the EarthSciML Serialization Format, built
 ## Installation & Setup
 
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ### Browser (ES Modules)
@@ -380,7 +380,7 @@ import type {
   EsmModelEditorProps,
   EsmCouplingGraphProps,
   EsmValidationPanelProps
-} from 'esm-format/web-components';
+} from 'earthsci-toolkit/web-components';
 ```
 
 ## Development & Testing

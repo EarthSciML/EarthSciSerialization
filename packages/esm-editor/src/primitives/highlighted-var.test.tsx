@@ -11,7 +11,7 @@ import {
   isHighlighted,
   type ScopingMode
 } from './highlighted-var';
-import type { EsmFile, CouplingEntry } from 'esm-format';
+import type { EsmFile, CouplingEntry } from 'earthsci-toolkit';
 
 // Helper to create a minimal ESM file
 function createEsmFile(couplings: CouplingEntry[] = []): EsmFile {

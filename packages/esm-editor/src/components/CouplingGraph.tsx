@@ -2,12 +2,12 @@
  * CouplingGraph - Visual directed graph of the coupling structure
  *
  * Implements a comprehensive graph visualization component that consumes
- * componentGraph() from esm-format and provides interactive exploration
+ * componentGraph() from earthsci-toolkit and provides interactive exploration
  * of system coupling relationships.
  */
 
 import { Component, createSignal, createMemo, onMount, onCleanup, Show, For } from 'solid-js';
-import type { ComponentNode, CouplingEdge, Graph } from 'esm-format';
+import type { ComponentNode, CouplingEdge, Graph } from 'earthsci-toolkit';
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force';
 import type { Simulation, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 

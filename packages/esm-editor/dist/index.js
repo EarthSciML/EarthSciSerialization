@@ -1,6 +1,6 @@
 import { sharedConfig as Z, createRenderEffect as T, createMemo as M, untrack as at, createContext as Ie, useContext as Fe, createSignal as O, createComponent as v, Show as C, For as L, onMount as pt, onCleanup as ye, mergeProps as fe, createEffect as je, $PROXY as ne, batch as Pt, $TRACK as Ue, getListener as Te } from "solid-js";
 import { forceSimulation as At, forceLink as Rt, forceManyBody as qt, forceCenter as Dt, forceCollide as Vt } from "d3-force";
-import { validate as ot } from "esm-format";
+import { validate as ot } from "earthsci-toolkit";
 import { customElement as ge } from "solid-element";
 const Nt = /* @__PURE__ */ new Set(["innerHTML", "textContent", "innerText", "children"]), Tt = /* @__PURE__ */ Object.assign(/* @__PURE__ */ Object.create(null), {
   className: "class",

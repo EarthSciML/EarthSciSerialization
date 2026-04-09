@@ -1,5 +1,5 @@
 {
-  "name": "esm-format",
+  "name": "earthsci-toolkit",
   "version": "0.1.0",
   "type": "module",
   "description": "TypeScript types and utilities for EarthSciML Serialization Format",

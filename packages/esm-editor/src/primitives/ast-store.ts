@@ -8,7 +8,7 @@
 
 import { createStore, produce, Store, SetStoreFunction } from 'solid-js/store';
 import { createSignal, createMemo } from 'solid-js';
-import type { EsmFile, Expression, Model, ReactionSystem } from 'esm-format';
+import type { EsmFile, Expression, Model, ReactionSystem } from 'earthsci-toolkit';
 import { createUndoHistory, type UndoHistory, type UndoHistoryConfig } from './history.js';
 
 /**

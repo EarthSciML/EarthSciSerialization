@@ -9,7 +9,7 @@
  */
 
 import { Component, createMemo, For, Show } from 'solid-js';
-import type { EsmFile, Model, ReactionSystem, DataLoader, CouplingEntry } from 'esm-format';
+import type { EsmFile, Model, ReactionSystem, DataLoader, CouplingEntry } from 'earthsci-toolkit';
 
 export interface FileSummaryProps {
   /** The ESM file to summarize */

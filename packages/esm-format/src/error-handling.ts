@@ -311,7 +311,7 @@ export class ESMErrorFactory {
 
     suggestions.push({
       description: 'Review the mathematical model to ensure proper formulation',
-      documentationLink: 'https://docs.earthsciml.org/esm-format/models/#equation-balance',
+      documentationLink: 'https://docs.earthsciml.org/earthsci-toolkit/models/#equation-balance',
       priority: 2
     })
 
@@ -369,7 +369,7 @@ export class ESMErrorFactory {
       },
       {
         description: 'Ensure the variable is declared in the correct scope',
-        documentationLink: 'https://docs.earthsciml.org/esm-format/scoping/',
+        documentationLink: 'https://docs.earthsciml.org/earthsci-toolkit/scoping/',
         priority: 3
       }
     )
@@ -409,12 +409,12 @@ export class ESMErrorFactory {
       },
       {
         description: 'Check for inefficient coupling patterns',
-        documentationLink: 'https://docs.earthsciml.org/esm-format/performance/',
+        documentationLink: 'https://docs.earthsciml.org/earthsci-toolkit/performance/',
         priority: 2
       },
       {
         description: 'Use performance profiling tools to identify bottlenecks',
-        codeExample: 'import { PerformanceProfiler } from "esm-format/error-handling"',
+        codeExample: 'import { PerformanceProfiler } from "earthsci-toolkit/error-handling"',
         priority: 3
       }
     ]

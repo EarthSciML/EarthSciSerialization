@@ -12,7 +12,7 @@
  */
 
 import { Component, createSignal, createMemo, For, Show, JSX } from 'solid-js';
-import type { ReactionSystem, Reaction, Species, ModelVariable, Expression } from 'esm-format';
+import type { ReactionSystem, Reaction, Species, ModelVariable, Expression } from 'earthsci-toolkit';
 import { ExpressionNode } from './ExpressionNode';
 
 export interface ReactionEditorProps {

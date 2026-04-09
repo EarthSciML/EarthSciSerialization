@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { EsmFile, Model, Expr } from 'esm-format';
+ * import { EsmFile, Model, Expr } from 'earthsci-toolkit';
  *
  * const myModel: Model = {
  *   name: "atmospheric_chemistry",

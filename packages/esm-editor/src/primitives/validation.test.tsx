@@ -5,15 +5,15 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { createSignal, createRoot } from 'solid-js';
 import { createValidationSignals, createValidationContext, createDebouncedValidation } from './validation';
-import type { EsmFile } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
 
-// Mock the esm-format validate function
-vi.mock('esm-format', () => ({
+// Mock the earthsci-toolkit validate function
+vi.mock('earthsci-toolkit', () => ({
   validate: vi.fn(),
   type: {} // Mock type exports
 }));
 
-import { validate } from 'esm-format';
+import { validate } from 'earthsci-toolkit';
 const mockValidate = vi.mocked(validate);
 
 describe('validation primitive', () => {

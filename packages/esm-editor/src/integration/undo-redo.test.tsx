@@ -15,7 +15,7 @@ import { ExpressionEditor } from '../components/ExpressionEditor';
 import { ModelEditor } from '../components/ModelEditor';
 import { EquationEditor } from '../components/EquationEditor';
 
-// Define types locally to avoid esm-format import issues
+// Define types locally to avoid earthsci-toolkit import issues
 type Expression = number | string | { op: string; args: any[] };
 type ModelVariable = {
   type: "state" | "parameter" | "observed";
