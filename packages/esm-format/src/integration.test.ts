@@ -7,9 +7,11 @@ import { validate } from './validate.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+const testsDir = join(__dirname, '../../../tests');
+
 describe('Structural validation integration', () => {
   it('should detect equation count mismatch in actual test file', () => {
-    const testFile = '/home/ctessum/EarthSciSerialization/tests/invalid/equation_count_mismatch.esm';
+    const testFile = join(testsDir, 'invalid/equation_count_mismatch.esm');
     const data = readFileSync(testFile, 'utf-8');
 
     const result = validate(data);
