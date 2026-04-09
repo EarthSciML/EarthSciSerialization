@@ -41,12 +41,12 @@ jobs:
       run: julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
 
     - name: Process coverage
-      working-directory: packages/ESMFormat.jl
       uses: julia-actions/julia-processcoverage@v1
       if: matrix.julia-version == '1.12'
+      with:
+        directories: packages/ESMFormat.jl/src
 
     - name: Upload coverage
-      working-directory: packages/ESMFormat.jl
       uses: codecov/codecov-action@v4
       if: matrix.julia-version == '1.12'
       with:
