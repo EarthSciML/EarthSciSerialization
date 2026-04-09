@@ -1,6 +1,6 @@
 //! JSON parsing and schema validation for ESM files
 
-use crate::{error::EsmError, EsmFile};
+use crate::{EsmFile, error::EsmError};
 use jsonschema::JSONSchema;
 use serde_json::Value;
 use std::sync::OnceLock;

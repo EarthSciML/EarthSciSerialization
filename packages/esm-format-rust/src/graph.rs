@@ -1184,10 +1184,10 @@ mod tests {
 
         assert!(mermaid.contains("graph TD"));
         assert!(mermaid.contains("x[x]")); // Parameter variable node (square brackets)
-                                           // No constants or operators in variable dependency graph
+        // No constants or operators in variable dependency graph
         assert!(!mermaid.contains("const_")); // No constant nodes
         assert!(!mermaid.contains("{+}")); // No operator nodes
-                                           // No edges for standalone expression
+        // No edges for standalone expression
         assert!(!mermaid.contains("-->")); // No edges
     }
 
