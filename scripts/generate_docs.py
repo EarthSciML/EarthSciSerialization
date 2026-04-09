@@ -14,7 +14,7 @@ import json
 import re
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 import subprocess
@@ -157,7 +157,7 @@ class DocumentationExtractor:
 
         return functions
 
-    def _parse_julia_file(self, file_path: Path) -> tuple[List[APIFunction], List[APIType]]:
+    def _parse_julia_file(self, file_path: Path) -> Tuple[List[APIFunction], List[APIType]]:
         """Parse Julia file for functions and types with documentation."""
         functions = []
         types = []
@@ -284,7 +284,7 @@ class DocumentationExtractor:
 
         return {"functions": functions, "types": types, "examples": examples}
 
-    def _parse_python_file(self, file_path: Path) -> tuple[List[APIFunction], List[APIType]]:
+    def _parse_python_file(self, file_path: Path) -> Tuple[List[APIFunction], List[APIType]]:
         """Parse Python file for functions and classes with docstrings."""
         functions = []
         types = []
@@ -408,7 +408,7 @@ class DocumentationExtractor:
 
         return {"functions": functions, "types": types, "examples": examples}
 
-    def _parse_typescript_file(self, file_path: Path) -> tuple[List[APIFunction], List[APIType]]:
+    def _parse_typescript_file(self, file_path: Path) -> Tuple[List[APIFunction], List[APIType]]:
         """Parse TypeScript file for functions and interfaces."""
         functions = []
         types = []
@@ -511,7 +511,7 @@ class DocumentationExtractor:
 
         return {"functions": functions, "types": types, "examples": examples}
 
-    def _parse_rust_file(self, file_path: Path) -> tuple[List[APIFunction], List[APIType]]:
+    def _parse_rust_file(self, file_path: Path) -> Tuple[List[APIFunction], List[APIType]]:
         """Parse Rust file for functions and structs."""
         functions = []
         types = []
