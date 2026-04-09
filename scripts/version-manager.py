@@ -273,7 +273,7 @@ const Version = "{version}"
             elif package_type == "Python":
                 registry_info = f" (PyPI: {package_info.get('pypi_name', 'earthsci-toolkit')})"
             elif package_type == "Rust":
-                registry_info = f" (crates.io: {package_info.get('crate_name', 'esm-format')})"
+                registry_info = f" (crates.io: {package_info.get('crate_name', 'earthsci-toolkit')})"
             elif package_type == "Go":
                 registry_info = f" (Go modules)"
 
@@ -292,7 +292,7 @@ const Version = "{version}"
         notes.append("pip install earthsci-toolkit")
         notes.append("")
         notes.append("# Rust")
-        notes.append("cargo add esm-format")
+        notes.append("cargo add earthsci-toolkit")
         notes.append("")
         notes.append("# Go")
         notes.append("go get github.com/ctessum/EarthSciSerialization/packages/esm-format-go")

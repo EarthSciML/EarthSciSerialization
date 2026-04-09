@@ -79,7 +79,7 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
         sed -i "s/version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
-        cargo update -p esm-format --precise $VERSION
+        cargo update -p earthsci-toolkit --precise $VERSION
 
     - name: Build for release
       working-directory: packages/earthsci-toolkit

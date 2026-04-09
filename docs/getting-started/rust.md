@@ -474,13 +474,13 @@ jobs:
       run: |
         mkdir dist
         cp target/${{ matrix.target }}/release/esm* dist/
-        tar -czf esm-format-${{ matrix.name }}.tar.gz -C dist .
+        tar -czf earthsci-toolkit-${{ matrix.name }}.tar.gz -C dist .
 
     - name: Upload
       uses: actions/upload-artifact@v3
       with:
-        name: esm-format-${{ matrix.name }}
-        path: esm-format-${{ matrix.name }}.tar.gz
+        name: earthsci-toolkit-${{ matrix.name }}
+        path: earthsci-toolkit-${{ matrix.name }}.tar.gz
 ```
 
 ### Docker Integration
@@ -504,8 +504,8 @@ ENTRYPOINT ["esm"]
 
 ```bash
 # Build and run
-docker build -t esm-format .
-docker run --rm -v $(pwd):/data esm-format validate /data/model.esm
+docker build -t earthsci-toolkit .
+docker run --rm -v $(pwd):/data earthsci-toolkit validate /data/model.esm
 ```
 
 ## Testing and Benchmarking

@@ -159,7 +159,7 @@ jobs:
         - Julia EarthSciSerialization.jl: v$NEW_VERSION
         - TypeScript earthsci-toolkit: v$NEW_VERSION
         - Python earthsci_toolkit: v$NEW_VERSION
-        - Rust esm-format: v$NEW_VERSION
+        - Rust earthsci-toolkit: v$NEW_VERSION
 
         ## Installation:
 
@@ -180,7 +180,7 @@ jobs:
         pip install esm-format
 
         # Rust
-        cargo add esm-format
+        cargo add earthsci-toolkit
         \`\`\`
 
         ### Container Images
