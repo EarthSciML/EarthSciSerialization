@@ -15,6 +15,7 @@ src/esm_format/graph.py
 src/esm_format/gridded_loader.py
 src/esm_format/hierarchical_scope_resolution.py
 src/esm_format/migration.py
+src/esm_format/operator_registry.py
 src/esm_format/parse.py
 src/esm_format/reactions.py
 src/esm_format/serialize.py
