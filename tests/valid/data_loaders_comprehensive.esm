@@ -3,18 +3,26 @@
   "metadata": {
     "name": "DataLoadersComprehensive",
     "description": "Comprehensive test fixtures for data loader types, validation, and configuration",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z",
-    "tags": ["data-loaders", "validation", "comprehensive"]
+    "tags": [
+      "data-loaders",
+      "validation",
+      "comprehensive"
+    ]
   },
-
   "data_loaders": {
     "GEOSFP_MeteoData": {
       "type": "gridded_data",
       "loader_id": "GEOSFP",
       "config": {
         "resolution": "0.25x0.3125_NA",
-        "coord_defaults": { "lat": 34.0, "lev": 1 },
+        "coord_defaults": {
+          "lat": 34.0,
+          "lev": 1
+        },
         "cache_size": 1000,
         "parallel_load": true
       },
@@ -26,35 +34,33 @@
       "provides": {
         "u": {
           "units": "m/s",
-          "description": "Eastward wind component",
-          "standard_name": "eastward_wind"
+          "description": "Eastward wind component"
         },
         "v": {
           "units": "m/s",
-          "description": "Northward wind component",
-          "standard_name": "northward_wind"
+          "description": "Northward wind component"
         },
         "T": {
           "units": "K",
-          "description": "Air temperature",
-          "standard_name": "air_temperature"
+          "description": "Air temperature"
         },
         "PBLH": {
           "units": "m",
-          "description": "Planetary boundary layer height",
-          "standard_name": "atmosphere_boundary_layer_thickness"
+          "description": "Planetary boundary layer height"
         },
         "P": {
           "units": "Pa",
-          "description": "Air pressure",
-          "standard_name": "air_pressure"
+          "description": "Air pressure"
         }
       },
       "temporal_resolution": "PT3H",
-      "spatial_resolution": { "lon": 0.3125, "lat": 0.25, "lev": 72 },
+      "spatial_resolution": {
+        "lon": 0.3125,
+        "lat": 0.25,
+        "lev": 72
+      },
       "interpolation": "linear"
     },
-
     "NEI_Emissions": {
       "type": "emissions",
       "loader_id": "NEI2016",
@@ -72,31 +78,36 @@
       "provides": {
         "emission_rate_NO": {
           "units": "kg/m^2/s",
-          "description": "NO emission rate",
-          "conversion_factor": 2.14e19
+          "description": "NO emission rate"
         },
         "emission_rate_CO": {
           "units": "kg/m^2/s",
-          "description": "CO emission rate",
-          "conversion_factor": 2.15e19
+          "description": "CO emission rate"
         },
         "emission_rate_SO2": {
           "units": "kg/m^2/s",
-          "description": "SO2 emission rate",
-          "conversion_factor": 9.39e18
+          "description": "SO2 emission rate"
         }
       },
       "temporal_resolution": "PT1H",
-      "spatial_resolution": { "lon": 0.1, "lat": 0.1 },
+      "spatial_resolution": {
+        "lon": 0.1,
+        "lat": 0.1
+      },
       "interpolation": "nearest"
     },
-
     "ObservationalData": {
       "type": "timeseries",
       "loader_id": "EPA_AQS",
       "config": {
-        "stations": ["060371201", "060371202"],
-        "parameters": ["44201", "42401"],
+        "stations": [
+          "060371201",
+          "060371202"
+        ],
+        "parameters": [
+          "44201",
+          "42401"
+        ],
         "quality_flag": "valid_only"
       },
       "reference": {
@@ -106,19 +117,16 @@
       "provides": {
         "observed_O3": {
           "units": "ppb",
-          "description": "Surface ozone concentration",
-          "measurement_height": 10.0
+          "description": "Surface ozone concentration"
         },
         "observed_SO2": {
           "units": "ppb",
-          "description": "Surface SO2 concentration",
-          "measurement_height": 10.0
+          "description": "Surface SO2 concentration"
         }
       },
       "temporal_resolution": "PT1H",
       "interpolation": "linear"
     },
-
     "StaticFields": {
       "type": "static",
       "loader_id": "LandUseCover",
@@ -133,23 +141,19 @@
       "provides": {
         "land_use_type": {
           "units": "1",
-          "description": "IGBP land use classification (1-17)",
-          "categories": {
-            "1": "Evergreen Needleleaf Forest",
-            "2": "Evergreen Broadleaf Forest",
-            "3": "Deciduous Needleleaf Forest"
-          }
+          "description": "IGBP land use classification (1-17)"
         },
         "leaf_area_index": {
           "units": "m^2/m^2",
-          "description": "Leaf area index",
-          "valid_range": [0.0, 10.0]
+          "description": "Leaf area index"
         }
       },
-      "spatial_resolution": { "lon": 0.00833333, "lat": 0.00833333 },
+      "spatial_resolution": {
+        "lon": 0.00833333,
+        "lat": 0.00833333
+      },
       "interpolation": "nearest"
     },
-
     "CallbackData": {
       "type": "callback",
       "loader_id": "UserDefinedCallback",
@@ -174,35 +178,48 @@
       "interpolation": "linear"
     }
   },
-
   "models": {
     "SimpleChemistry": {
       "variables": {
         "O3": {
           "type": "state",
           "units": "mol/mol",
-          "default": 50e-9,
+          "default": 5e-08,
           "description": "Ozone concentration"
         },
         "NO": {
           "type": "state",
           "units": "mol/mol",
-          "default": 10e-9,
+          "default": 1e-08,
           "description": "NO concentration"
         }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
-          "rhs": { "op": "+", "args": [
-            { "op": "*", "args": [-1e-5, "O3"] },
-            "GEOSFP_MeteoData.u"
-          ]}
+          "lhs": {
+            "op": "D",
+            "args": [
+              "O3"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  -1e-05,
+                  "O3"
+                ]
+              },
+              "GEOSFP_MeteoData.u"
+            ]
+          }
         }
       ]
     }
   },
-
   "coupling": [
     {
       "type": "variable_map",
@@ -212,20 +229,28 @@
       "description": "Map wind data to chemistry model"
     }
   ],
-
-  "domain": {
-    "temporal": {
-      "start": "2024-07-01T00:00:00Z",
-      "end": "2024-07-01T12:00:00Z"
-    },
-    "spatial": {
-      "lon": [-125.0, -66.0],
-      "lat": [20.0, 50.0]
-    }
-  },
-
   "solver": {
     "strategy": "strang_serial",
-    "config": { "timestep": 300.0 }
+    "config": {
+      "timestep": 300.0
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {
+        "start": "2024-07-01T00:00:00Z",
+        "end": "2024-07-01T12:00:00Z"
+      },
+      "spatial": {
+        "lon": {
+          "min": -125.0,
+          "max": -66.0
+        },
+        "lat": {
+          "min": 20.0,
+          "max": 50.0
+        }
+      }
+    }
   }
 }

@@ -3,11 +3,17 @@
   "metadata": {
     "name": "HierarchicalSubsystemTests",
     "description": "Test hierarchical subsystem and scoped reference resolution with 3-level nesting",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z",
-    "tags": ["scoping", "subsystems", "hierarchical", "reference-resolution"]
+    "tags": [
+      "scoping",
+      "subsystems",
+      "hierarchical",
+      "reference-resolution"
+    ]
   },
-
   "models": {
     "AtmosphereModel": {
       "reference": {
@@ -28,7 +34,6 @@
         }
       },
       "equations": [],
-
       "subsystems": {
         "TroposphereLayer": {
           "reference": {
@@ -49,7 +54,6 @@
             }
           },
           "equations": [],
-
           "subsystems": {
             "ChemicalMechanism": {
               "reference": {
@@ -59,19 +63,19 @@
                 "O3": {
                   "type": "state",
                   "units": "mol/mol",
-                  "default": 40e-9,
+                  "default": 4e-08,
                   "description": "Ozone mixing ratio"
                 },
                 "NO": {
                   "type": "state",
                   "units": "mol/mol",
-                  "default": 0.1e-9,
+                  "default": 1e-10,
                   "description": "Nitric oxide mixing ratio"
                 },
                 "NO2": {
                   "type": "state",
                   "units": "mol/mol",
-                  "default": 1e-9,
+                  "default": 1e-09,
                   "description": "Nitrogen dioxide mixing ratio"
                 },
                 "rate_constant": {
@@ -83,21 +87,68 @@
               },
               "equations": [
                 {
-                  "_comment": "NO + O3 → NO2 reaction",
-                  "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
-                  "rhs": {"op": "*", "args": [{"op": "-", "args": ["rate_constant"]}, "O3", "NO"]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "O3"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "rate_constant"
+                        ]
+                      },
+                      "O3",
+                      "NO"
+                    ]
+                  }
                 },
                 {
-                  "lhs": {"op": "D", "args": ["NO"], "wrt": "t"},
-                  "rhs": {"op": "*", "args": [{"op": "-", "args": ["rate_constant"]}, "O3", "NO"]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "NO"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "rate_constant"
+                        ]
+                      },
+                      "O3",
+                      "NO"
+                    ]
+                  }
                 },
                 {
-                  "lhs": {"op": "D", "args": ["NO2"], "wrt": "t"},
-                  "rhs": {"op": "*", "args": ["rate_constant", "O3", "NO"]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "NO2"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      "rate_constant",
+                      "O3",
+                      "NO"
+                    ]
+                  }
                 }
               ]
             },
-
             "TransportProcess": {
               "reference": {
                 "notes": "Transport within troposphere"
@@ -118,15 +169,30 @@
               },
               "equations": [
                 {
-                  "_comment": "Horizontal diffusion for _var placeholder",
-                  "lhs": {"op": "D", "args": ["_var"], "wrt": "t"},
-                  "rhs": {"op": "*", "args": ["horizontal_diffusivity", {"op": "laplacian", "args": ["_var"]}]}
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "u"
+                    ],
+                    "wrt": "t"
+                  },
+                  "rhs": {
+                    "op": "*",
+                    "args": [
+                      "horizontal_diffusivity",
+                      {
+                        "op": "laplacian",
+                        "args": [
+                          "u"
+                        ]
+                      }
+                    ]
+                  }
                 }
               ]
             }
           }
         },
-
         "StratosphereLayer": {
           "reference": {
             "notes": "Stratospheric chemistry with ozone production"
@@ -140,14 +206,13 @@
             }
           },
           "equations": [],
-
           "subsystems": {
             "StratChemistry": {
               "variables": {
                 "O3": {
                   "type": "state",
                   "units": "mol/mol",
-                  "default": 8e-6,
+                  "default": 8e-06,
                   "description": "Stratospheric ozone"
                 },
                 "production_rate": {
@@ -159,19 +224,35 @@
                 "loss_rate": {
                   "type": "parameter",
                   "units": "1/s",
-                  "default": 1e-7,
+                  "default": 1e-07,
                   "description": "Ozone loss rate"
                 }
               },
               "equations": [
                 {
-                  "_comment": "Stratospheric ozone production and loss",
-                  "lhs": {"op": "D", "args": ["O3"], "wrt": "t"},
+                  "lhs": {
+                    "op": "D",
+                    "args": [
+                      "O3"
+                    ],
+                    "wrt": "t"
+                  },
                   "rhs": {
                     "op": "+",
                     "args": [
                       "production_rate",
-                      {"op": "*", "args": [{"op": "-", "args": ["loss_rate"]}, "O3"]}
+                      {
+                        "op": "*",
+                        "args": [
+                          {
+                            "op": "-",
+                            "args": [
+                              "loss_rate"
+                            ]
+                          },
+                          "O3"
+                        ]
+                      }
                     ]
                   }
                 }
@@ -181,7 +262,6 @@
         }
       }
     },
-
     "SurfaceModel": {
       "reference": {
         "notes": "Surface processes for testing cross-system scoped references"
@@ -201,7 +281,6 @@
         }
       },
       "equations": [],
-
       "subsystems": {
         "VegetationCanopy": {
           "variables": {
@@ -223,24 +302,33 @@
       }
     }
   },
-
   "data_loaders": {
     "MeteorologicalFields": {
       "type": "gridded_data",
       "loader_id": "ECMWF_ERA5",
       "provides": {
-        "temperature_3d": {"units": "K", "description": "3D temperature field"},
-        "wind_u": {"units": "m/s", "description": "Eastward wind component"},
-        "wind_v": {"units": "m/s", "description": "Northward wind component"}
+        "temperature_3d": {
+          "units": "K",
+          "description": "3D temperature field"
+        },
+        "wind_u": {
+          "units": "m/s",
+          "description": "Eastward wind component"
+        },
+        "wind_v": {
+          "units": "m/s",
+          "description": "Northward wind component"
+        }
       }
     }
   },
-
   "coupling": [
     {
-      "_comment": "Test scoped references in operator_compose",
       "type": "operator_compose",
-      "systems": ["AtmosphereModel.TroposphereLayer.ChemicalMechanism", "AtmosphereModel.TroposphereLayer.TransportProcess"],
+      "systems": [
+        "AtmosphereModel.TroposphereLayer.ChemicalMechanism",
+        "AtmosphereModel.TroposphereLayer.TransportProcess"
+      ],
       "translate": {
         "AtmosphereModel.TroposphereLayer.ChemicalMechanism.O3": "AtmosphereModel.TroposphereLayer.TransportProcess._var",
         "AtmosphereModel.TroposphereLayer.ChemicalMechanism.NO": "AtmosphereModel.TroposphereLayer.TransportProcess._var",
@@ -248,16 +336,13 @@
       },
       "description": "Add transport to tropospheric chemistry using scoped references"
     },
-
     {
-      "_comment": "Test variable_map with deeply nested references",
       "type": "variable_map",
       "from": "MeteorologicalFields.temperature_3d",
       "to": "AtmosphereModel.TroposphereLayer.ChemicalMechanism.rate_constant",
       "transform": "param_to_var",
       "description": "Map 3D temperature to affect reaction rate in nested chemistry"
     },
-
     {
       "type": "variable_map",
       "from": "AtmosphereModel.global_temperature",
@@ -266,9 +351,7 @@
       "factor": 1.02,
       "description": "Surface temperature follows global temperature with offset"
     },
-
     {
-      "_comment": "Test cross-system variable reference with 3-level nesting",
       "type": "variable_map",
       "from": "AtmosphereModel.TroposphereLayer.mixing_efficiency",
       "to": "SurfaceModel.VegetationCanopy.stomatal_conductance",
@@ -276,28 +359,38 @@
       "factor": 0.5,
       "description": "Atmospheric mixing affects vegetation gas exchange"
     },
-
     {
-      "_comment": "Test event with cross-system scoped references",
       "type": "event",
       "event_type": "continuous",
       "name": "stratosphere_troposphere_exchange",
       "conditions": [
         {
-          "_comment": "When tropospheric ozone drops below threshold",
           "op": "-",
-          "args": ["AtmosphereModel.TroposphereLayer.ChemicalMechanism.O3", 20e-9]
+          "args": [
+            "AtmosphereModel.TroposphereLayer.ChemicalMechanism.O3",
+            2e-08
+          ]
         }
       ],
       "affects": [
         {
-          "_comment": "Increase stratospheric ozone transport downward",
           "lhs": "AtmosphereModel.TroposphereLayer.ChemicalMechanism.O3",
           "rhs": {
             "op": "+",
             "args": [
-              {"op": "Pre", "args": ["AtmosphereModel.TroposphereLayer.ChemicalMechanism.O3"]},
-              {"op": "*", "args": [0.1, "AtmosphereModel.StratosphereLayer.StratChemistry.O3"]}
+              {
+                "op": "Pre",
+                "args": [
+                  "AtmosphereModel.TroposphereLayer.ChemicalMechanism.O3"
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  0.1,
+                  "AtmosphereModel.StratosphereLayer.StratChemistry.O3"
+                ]
+              }
             ]
           }
         }
@@ -305,35 +398,6 @@
       "description": "Cross-layer ozone transport using deeply nested scoped references"
     }
   ],
-
-  "domain": {
-    "independent_variable": "t",
-    "temporal": {
-      "start": "2024-06-01T00:00:00Z",
-      "end": "2024-06-02T00:00:00Z"
-    },
-    "spatial": {
-      "z": {
-        "min": 0.0,
-        "max": 50000.0,
-        "units": "meters",
-        "grid_spacing": 1000.0,
-        "description": "Vertical coordinate"
-      }
-    },
-    "initial_conditions": {
-      "type": "constant",
-      "value": 0.0
-    },
-    "boundary_conditions": [
-      {
-        "type": "zero_gradient",
-        "dimensions": ["z"]
-      }
-    ],
-    "element_type": "Float64"
-  },
-
   "solver": {
     "strategy": "strang_threads",
     "config": {
@@ -342,8 +406,38 @@
       "timestep": 600.0,
       "stiff_kwargs": {
         "abstol": 1e-10,
-        "reltol": 1e-8
+        "reltol": 1e-08
       }
+    }
+  },
+  "domains": {
+    "default": {
+      "independent_variable": "t",
+      "temporal": {
+        "start": "2024-06-01T00:00:00Z",
+        "end": "2024-06-02T00:00:00Z"
+      },
+      "spatial": {
+        "z": {
+          "min": 0.0,
+          "max": 50000.0,
+          "units": "meters",
+          "grid_spacing": 1000.0
+        }
+      },
+      "initial_conditions": {
+        "type": "constant",
+        "value": 0.0
+      },
+      "boundary_conditions": [
+        {
+          "type": "zero_gradient",
+          "dimensions": [
+            "z"
+          ]
+        }
+      ],
+      "element_type": "Float64"
     }
   }
 }

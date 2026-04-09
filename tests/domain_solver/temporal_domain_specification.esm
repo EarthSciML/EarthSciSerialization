@@ -3,9 +3,15 @@
   "metadata": {
     "name": "TemporalDomainSpecification",
     "description": "Test comprehensive temporal domain specifications with various date-time formats and reference times",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-02-17T00:00:00Z",
-    "tags": ["temporal-domain", "date-time", "simulation-time"],
+    "tags": [
+      "temporal-domain",
+      "date-time",
+      "simulation-time"
+    ],
     "references": [
       {
         "citation": "Test fixture for temporal domain specification validation",
@@ -13,87 +19,75 @@
       }
     ]
   },
-
   "models": {
     "SimpleTracer": {
-      "reference": { "notes": "Minimal tracer for temporal domain testing" },
+      "reference": {
+        "notes": "Minimal tracer for temporal domain testing"
+      },
       "variables": {
         "tracer_concentration": {
           "type": "state",
           "units": "mol/mol",
-          "default": 1e-9,
+          "default": 1e-09,
           "description": "Simple atmospheric tracer"
         },
         "decay_constant": {
           "type": "parameter",
           "units": "1/s",
-          "default": 1e-5,
+          "default": 1e-05,
           "description": "First-order decay rate"
         }
       },
       "equations": [
         {
-          "_comment": "Simple exponential decay: dC/dt = -k*C",
-          "lhs": {"op": "D", "args": ["tracer_concentration"], "wrt": "t"},
+          "lhs": {
+            "op": "D",
+            "args": [
+              "tracer_concentration"
+            ],
+            "wrt": "t"
+          },
           "rhs": {
             "op": "*",
-            "args": [{"op": "-", "args": ["decay_constant"]}, "tracer_concentration"]
+            "args": [
+              {
+                "op": "-",
+                "args": [
+                  "decay_constant"
+                ]
+              },
+              "tracer_concentration"
+            ]
           }
         }
       ]
     }
   },
-
-  "domain": {
-    "independent_variable": "t",
-    "temporal": {
-      "start": "2024-06-15T12:00:00Z",
-      "end": "2024-06-18T18:30:00Z",
-      "reference_time": "2024-06-15T00:00:00Z",
-      "_comment": "3.25-day simulation starting at noon UTC, with midnight reference time"
-    },
-    "initial_conditions": {
-      "type": "constant",
-      "value": 1e-9,
-      "_comment": "Uniform initial concentration for temporal evolution test"
-    },
-    "element_type": "Float64",
-    "array_type": "Array",
-    "_expected_simulation_duration": 280800.0,
-    "_expected_duration_comment": "3.25 days = 78 hours = 280800 seconds"
-  },
-
   "solver": {
     "strategy": "strang_serial",
     "config": {
       "stiff_algorithm": "Rosenbrock23",
       "timestep": 300.0,
       "stiff_kwargs": {
-        "abstol": 1e-9,
-        "reltol": 1e-6
-      },
-      "_comment": "5-minute timesteps for moderate temporal resolution"
+        "abstol": 1e-09,
+        "reltol": 1e-06
+      }
     }
   },
-
-  "_test_expectations": {
-    "temporal_parsing": {
-      "start_timestamp": "2024-06-15T12:00:00Z",
-      "end_timestamp": "2024-06-18T18:30:00Z",
-      "reference_timestamp": "2024-06-15T00:00:00Z",
-      "simulation_hours": 78.5,
-      "expected_timesteps": 942
-    },
-    "domain_interpretation": {
-      "time_units": "seconds",
-      "reference_offset_hours": 12.0,
-      "temporal_only": true,
-      "spatial_dimensions": 0
-    },
-    "solver_setup": {
-      "expected_algorithm": "Rosenbrock23",
-      "expected_dt": 300.0,
-      "expected_strategy": "serial"
+  "domains": {
+    "default": {
+      "independent_variable": "t",
+      "temporal": {
+        "start": "2024-06-15T12:00:00Z",
+        "end": "2024-06-18T18:30:00Z",
+        "reference_time": "2024-06-15T00:00:00Z"
+      },
+      "initial_conditions": {
+        "type": "constant",
+        "value": 1e-09
+      },
+      "element_type": "Float64",
+      "array_type": "Array"
     }
   }
 }
