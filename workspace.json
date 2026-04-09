@@ -1,16 +1,16 @@
 {
-  "version": "",
-  "updated": "2026-04-09T14:49:26+00:00",
+  "version": "0.0.1",
+  "updated": "2026-04-09T14:57:31+00:00",
   "packages": {
-    "julia": "v",
-    "typescript": "v",
-    "python": "v",
-    "rust": "v"
+    "julia": "v0.0.1",
+    "typescript": "v0.0.1",
+    "python": "v0.0.1",
+    "rust": "v0.0.1"
   },
   "release_coordination": {
     "status": "partial",
-    "completed": "2026-04-09T14:49:26+00:00",
-    "workflow_run_id": "24196639717",
+    "completed": "2026-04-09T14:57:31+00:00",
+    "workflow_run_id": "24196860060",
     "binaries_status": "skipped",
     "containers_status": "skipped",
     "conformance_status": "skipped"
