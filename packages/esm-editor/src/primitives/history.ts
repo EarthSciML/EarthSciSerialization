@@ -6,7 +6,7 @@
  */
 
 import { createSignal, createEffect, onCleanup } from 'solid-js';
-import type { EsmFile } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
 
 /**
  * Configuration for undo history behavior

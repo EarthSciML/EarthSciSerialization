@@ -18,24 +18,24 @@ Framework-agnostic web components for the EarthSciML Serialization Format, built
 ## Installation & Setup
 
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ### Browser (ES Modules)
 ```html
 <script type="module">
-  import 'esm-format/dist/web-components.js';
+  import 'earthsci-toolkit/dist/web-components.js';
 </script>
 ```
 
 ### Node.js / Bundler
 ```typescript
-import 'esm-format/web-components';
+import 'earthsci-toolkit/web-components';
 ```
 
 ### CDN
 ```html
-<script type="module" src="https://unpkg.com/esm-format/dist/web-components.js"></script>
+<script type="module" src="https://unpkg.com/earthsci-toolkit/dist/web-components.js"></script>
 ```
 
 ## Component Usage
@@ -190,7 +190,7 @@ Control simulation execution with parameter adjustment and progress monitoring.
 
 ```jsx
 import { useEffect, useRef } from 'react';
-import 'esm-format/web-components';
+import 'earthsci-toolkit/web-components';
 
 function MyComponent() {
   const elementRef = useRef();
@@ -233,7 +233,7 @@ function MyComponent() {
 
 <script setup>
 import { ref } from 'vue';
-import 'esm-format/web-components';
+import 'earthsci-toolkit/web-components';
 
 const esmFile = ref({
   components: [],
@@ -251,7 +251,7 @@ const handleComponentSelect = (event) => {
 ```typescript
 // app.module.ts
 import { CUSTOM_ELEMENTS_SCHEMA, NgModule } from '@angular/core';
-import 'esm-format/web-components';
+import 'earthsci-toolkit/web-components';
 
 @NgModule({
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -273,7 +273,7 @@ export class AppModule {}
 
 ```svelte
 <script>
-  import 'esm-format/web-components';
+  import 'earthsci-toolkit/web-components';
 
   let simulationRunning = false;
   let progress = 0;
@@ -380,7 +380,7 @@ import type {
   EsmModelEditorProps,
   EsmCouplingGraphProps,
   EsmValidationPanelProps
-} from 'esm-format/web-components';
+} from 'earthsci-toolkit/web-components';
 ```
 
 ## Development & Testing

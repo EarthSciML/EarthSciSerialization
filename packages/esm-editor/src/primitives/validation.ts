@@ -7,8 +7,8 @@
  */
 
 import { createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
-import { validate, type ValidationError, type ValidationResult } from 'esm-format';
-import type { EsmFile } from 'esm-format';
+import { validate, type ValidationError, type ValidationResult } from 'earthsci-toolkit';
+import type { EsmFile } from 'earthsci-toolkit';
 
 /**
  * Configuration for validation behavior

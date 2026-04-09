@@ -5,7 +5,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { createSignal, createRoot } from 'solid-js';
 import { createValidationSignals, createValidationContext, createDebouncedValidation } from './validation';
-import type { EsmFile } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
 
 // Mock the esm-format validate function
 vi.mock('esm-format', () => ({
@@ -13,7 +13,7 @@ vi.mock('esm-format', () => ({
   type: {} // Mock type exports
 }));
 
-import { validate } from 'esm-format';
+import { validate } from 'earthsci-toolkit';
 const mockValidate = vi.mocked(validate);
 
 describe('validation primitive', () => {

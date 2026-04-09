@@ -1,5 +1,5 @@
 {
-  "name": "esm-format",
+  "name": "earthsci-toolkit",
   "version": "0.1.0",
   "type": "module",
   "description": "TypeScript types and utilities for EarthSciML Serialization Format",
@@ -60,7 +60,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/user/EarthSciSerialization.git",
-    "directory": "packages/esm-format"
+    "directory": "packages/earthsci-toolkit"
   },
   "bugs": {
     "url": "https://github.com/user/EarthSciSerialization/issues"

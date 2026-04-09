@@ -9,7 +9,7 @@
  */
 
 import { Component, Accessor, createSignal, createMemo, Show } from 'solid-js';
-import type { Expression, ExpressionNode as ExprNode } from 'esm-format';
+import type { Expression, ExpressionNode as ExprNode } from 'earthsci-toolkit';
 import { useStructuralEditingContext, DraggableExpression, StructuralEditingMenu, COMMUTATIVE_OPERATORS } from '../primitives/structural-editing';
 
 export interface ExpressionNodeProps {

@@ -123,4 +123,4 @@ export type {
   EsmFile,
   Model,
   ReactionSystem
-} from 'esm-format';
+} from 'earthsci-toolkit';

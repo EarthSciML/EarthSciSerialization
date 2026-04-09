@@ -414,7 +414,7 @@ export class ESMErrorFactory {
       },
       {
         description: 'Use performance profiling tools to identify bottlenecks',
-        codeExample: 'import { PerformanceProfiler } from "esm-format/error-handling"',
+        codeExample: 'import { PerformanceProfiler } from "earthsci-toolkit/error-handling"',
         priority: 3
       }
     ]

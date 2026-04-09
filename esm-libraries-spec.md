@@ -677,13 +677,13 @@ sol = solve(prob, Tsit5())
 
 ---
 
-### 5.2 TypeScript / SolidJS — `esm-format` + `esm-editor`
+### 5.2 TypeScript / SolidJS — `earthsci-toolkit` + `esm-editor`
 
-**Tier: Core + Analysis (esm-format), Interactive Editing (esm-editor)**
+**Tier: Core + Analysis (earthsci-toolkit), Interactive Editing (esm-editor)**
 
 The web story is split into two packages with a clean dependency boundary:
 
-- **`esm-format`** — Pure TypeScript, zero framework dependencies. Types, parsing, validation, substitution, LaTeX/Unicode string generation. Usable in any JS/TS environment (Node, Deno, Bun, browser, web workers).
+- **`earthsci-toolkit`** — Pure TypeScript, zero framework dependencies. Types, parsing, validation, substitution, LaTeX/Unicode string generation. Usable in any JS/TS environment (Node, Deno, Bun, browser, web workers).
 - **`esm-editor`** — SolidJS-based interactive expression and model editor. Renders the AST directly as clickable, editable DOM elements. Exported as both Solid components and framework-agnostic web components.
 
 #### 5.2.1 Why SolidJS for the Editor
@@ -696,12 +696,12 @@ The expression editor is fundamentally a tree of reactive nodes. When a user cli
 - **Small bundle:** The editor component adds ~7KB gzipped (Solid runtime) vs ~40KB+ (React).
 - **Web component export:** Solid components compile to native custom elements via `solid-element`, making them embeddable in React, Vue, Svelte, plain HTML, or the seshat.pub platform without framework coupling.
 
-#### 5.2.2 `esm-format` — Pure TypeScript Library
+#### 5.2.2 `earthsci-toolkit` — Pure TypeScript Library
 
 **Dependencies:** `ajv` (schema validation). No framework, no DOM.
 
 ```
-esm-format/
+earthsci-toolkit/
 ├── src/
 │   ├── types.ts          # TypeScript type definitions matching JSON Schema
 │   ├── parse.ts          # JSON → typed EsmFile
@@ -730,7 +730,7 @@ import {
   deriveODEs, stoichiometricMatrix,
   toLatex, toUnicode, toAscii,
   type EsmFile, type Expr, type Model
-} from 'esm-format';
+} from 'earthsci-toolkit';
 
 // Parse from JSON string or object
 const file: EsmFile = load(jsonString);
@@ -799,7 +799,7 @@ Types should be auto-generated from the JSON Schema where possible (using `json-
 
 #### 5.2.3 `esm-editor` — SolidJS Interactive Editor
 
-**Dependencies:** `solid-js`, `solid-element` (web component export), `esm-format` (peer dependency).
+**Dependencies:** `solid-js`, `solid-element` (web component export), `earthsci-toolkit` (peer dependency).
 
 ```
 esm-editor/
@@ -838,7 +838,7 @@ Every AST node renders as a Solid component that knows its own path, handles cli
 ```tsx
 // Conceptual structure — each AST node is an interactive component
 import { Component, Show, For, createSignal } from 'solid-js';
-import type { Expr, ExprNode } from 'esm-format';
+import type { Expr, ExprNode } from 'earthsci-toolkit';
 
 interface ExpressionNodeProps {
   expr: Expr;                      // reactive (from Solid store)
@@ -972,7 +972,7 @@ const DerivativeLayout: Component<{node: ExprNode; path: ...}> = (props) => (
 
 ```typescript
 import { createSignal, createMemo } from 'solid-js';
-import type { EsmFile } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
 
 // Build equivalence classes from coupling rules at file load / on coupling change
 function buildVarEquivalences(file: EsmFile): Map<string, Set<string>> {
@@ -1040,8 +1040,8 @@ Scoped references are normalized: both `O3` (bare) and `SimpleOzone.O3` (qualifi
 
 ```typescript
 import { createStore, produce } from 'solid-js/store';
-import type { EsmFile } from 'esm-format';
-import { validate } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
+import { validate } from 'earthsci-toolkit';
 
 const [file, setFile] = createStore<EsmFile>(loadedFile);
 
@@ -1134,7 +1134,7 @@ Code generation does **not** need to handle (these are emitted as TODO comments)
 - Data loaders and operators (runtime-specific; emitted as placeholder comments with the loader/operator ID).
 
 ```typescript
-import { toJuliaCode, toPythonCode } from 'esm-format';
+import { toJuliaCode, toPythonCode } from 'earthsci-toolkit';
 
 // Generate a self-contained Julia script
 const julia: string = toJuliaCode(file);
@@ -1397,7 +1397,7 @@ pub enum CouplingEntry {
 The Rust library can be compiled to WASM and used by the TypeScript library for performance-critical operations (validation, large expression manipulation). The TypeScript library would use the pure-TS implementation by default but optionally delegate to WASM:
 
 ```typescript
-import { validate } from 'esm-format';
+import { validate } from 'earthsci-toolkit';
 import { validate as validateWasm } from 'esm-format-wasm'; // optional fast path
 ```
 

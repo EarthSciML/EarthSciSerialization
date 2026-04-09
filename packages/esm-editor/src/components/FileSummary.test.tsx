@@ -4,7 +4,7 @@
 
 import { render, screen } from '@solidjs/testing-library';
 import { describe, it, expect, vi } from 'vitest';
-import type { EsmFile } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
 import { FileSummary } from './FileSummary';
 
 describe('FileSummary', () => {

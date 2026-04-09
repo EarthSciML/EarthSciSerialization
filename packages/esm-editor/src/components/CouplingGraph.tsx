@@ -7,7 +7,7 @@
  */
 
 import { Component, createSignal, createMemo, onMount, onCleanup, Show, For } from 'solid-js';
-import type { ComponentNode, CouplingEdge, Graph } from 'esm-format';
+import type { ComponentNode, CouplingEdge, Graph } from 'earthsci-toolkit';
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force';
 import type { Simulation, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 

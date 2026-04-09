@@ -11,7 +11,7 @@ julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerializ
 
 ### TypeScript/JavaScript
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 ### Python
@@ -76,37 +76,37 @@ println("Loaded test model: ", esm_file.metadata.name)
 
 #### NPM
 ```bash
-npm install esm-format
+npm install earthsci-toolkit
 ```
 
 #### Yarn
 ```bash
-yarn add esm-format
+yarn add earthsci-toolkit
 ```
 
 #### Pnpm
 ```bash
-pnpm add esm-format
+pnpm add earthsci-toolkit
 ```
 
 #### CDN (Browser)
 ```html
 <!-- ES Modules -->
 <script type="module">
-  import { load, validate } from 'https://unpkg.com/esm-format/dist/esm/index.js';
+  import { load, validate } from 'https://unpkg.com/earthsci-toolkit/dist/esm/index.js';
 </script>
 
 <!-- UMD (older browsers) -->
-<script src="https://unpkg.com/esm-format/dist/umd/index.js"></script>
+<script src="https://unpkg.com/earthsci-toolkit/dist/umd/index.js"></script>
 ```
 
 #### Verify Installation
 ```javascript
 // Node.js/CommonJS
-const { load, validate } = require('esm-format');
+const { load, validate } = require('earthsci-toolkit');
 
 // ES Modules
-import { load, validate } from 'esm-format';
+import { load, validate } from 'earthsci-toolkit';
 
 // Test functionality
 const esmData = '{"esm": "0.1.0", "metadata": {"name": "Test"}}';
@@ -247,7 +247,7 @@ julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerializ
 # 2. Install Node.js and package
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
-npm install -g esm-format
+npm install -g earthsci-toolkit
 
 # 3. Install Python and package
 sudo apt-get install python3 python3-pip
@@ -277,7 +277,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install ESM packages
 RUN pip install esm-format
-RUN npm install -g esm-format
+RUN npm install -g earthsci-toolkit
 RUN cargo install esm-format --features cli
 RUN julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")'
 

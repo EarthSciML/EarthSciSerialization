@@ -21,7 +21,7 @@ Thank you for your interest in contributing to EarthSciSerialization! This guide
 EarthSciSerialization is a language-agnostic JSON-based format for earth science model components with implementations across multiple programming languages:
 
 - **Julia** (EarthSciSerialization.jl) - Complete MTK/Catalyst integration
-- **TypeScript** (esm-format) - Web/Node.js types and utilities
+- **TypeScript** (earthsci-toolkit) - Web/Node.js types and utilities
 - **Python** (esm_format) - Scientific Python integration
 - **Rust** (esm-format-rust) - High-performance implementation
 - **Go** (esm-format-go) - Lightweight Go implementation
@@ -87,7 +87,7 @@ The project includes environment management scripts:
 EarthSciSerialization/
 ├── packages/                 # Language-specific implementations
 │   ├── EarthSciSerialization.jl/        # Julia implementation
-│   ├── esm-format/          # TypeScript implementation
+│   ├── earthsci-toolkit/    # TypeScript implementation
 │   ├── esm_format/          # Python implementation
 │   ├── esm-format-rust/     # Rust implementation
 │   ├── esm-format-go/       # Go implementation
@@ -153,7 +153,7 @@ All code contributions must:
 
 # Individual language testing
 julia --project=. -e 'using Pkg; Pkg.test()'                    # Julia
-cd packages/esm-format && npm test                              # TypeScript
+cd packages/earthsci-toolkit && npm test                         # TypeScript
 cd packages/esm_format && python -m pytest                     # Python
 cd packages/esm-format-rust && cargo test                      # Rust
 cd packages/esm-format-go && go test ./...                     # Go
@@ -275,7 +275,7 @@ cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.activate("."); Pkg.test()'
 ```
 
-### TypeScript (esm-format)
+### TypeScript (earthsci-toolkit)
 
 - **Standards**: Strict TypeScript, ESLint + Prettier
 - **Testing**: Jest for unit tests, cross-browser compatibility
@@ -284,7 +284,7 @@ julia --project=. -e 'using Pkg; Pkg.activate("."); Pkg.test()'
 
 ```bash
 # TypeScript development workflow
-cd packages/esm-format
+cd packages/earthsci-toolkit
 npm install
 npm run lint
 npm test

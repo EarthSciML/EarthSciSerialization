@@ -8,7 +8,7 @@
  */
 
 import { Component, createSignal, createMemo, Show } from 'solid-js';
-import type { Expression } from 'esm-format';
+import type { Expression } from 'earthsci-toolkit';
 import { ExpressionNode } from './ExpressionNode';
 import { ExpressionPalette } from './ExpressionPalette';
 

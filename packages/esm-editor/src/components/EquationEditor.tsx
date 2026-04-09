@@ -7,7 +7,7 @@
  */
 
 import { Component, createSignal, createMemo, Show } from 'solid-js';
-import type { Equation, Expression } from 'esm-format';
+import type { Equation, Expression } from 'earthsci-toolkit';
 import { ExpressionNode } from './ExpressionNode';
 
 export interface EquationEditorProps {
