@@ -4,11 +4,11 @@
 
 import { render, screen } from '@solidjs/testing-library';
 import { describe, it, expect, vi } from 'vitest';
-import type { EsmFile } from 'esm-format';
+import type { EsmFile } from 'earthsci-toolkit';
 import { ValidationPanel } from './ValidationPanel';
 
-// Mock the validate function from esm-format
-vi.mock('esm-format', () => ({
+// Mock the validate function from earthsci-toolkit
+vi.mock('earthsci-toolkit', () => ({
   validate: vi.fn()
 }));
 
@@ -50,7 +50,7 @@ describe('ValidationPanel', () => {
   });
 
   it('renders with valid ESM file', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: true,
       schema_errors: [],
@@ -65,7 +65,7 @@ describe('ValidationPanel', () => {
   });
 
   it('renders with schema errors', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: false,
       schema_errors: [{
@@ -86,7 +86,7 @@ describe('ValidationPanel', () => {
   });
 
   it('renders with structural errors', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: false,
       schema_errors: [],
@@ -107,7 +107,7 @@ describe('ValidationPanel', () => {
   });
 
   it('displays error count badges', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: false,
       schema_errors: [{
@@ -131,7 +131,7 @@ describe('ValidationPanel', () => {
   });
 
   it('handles error clicks', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: false,
       schema_errors: [{
@@ -154,7 +154,7 @@ describe('ValidationPanel', () => {
   });
 
   it('supports collapse/expand functionality', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: true,
       schema_errors: [],
@@ -178,7 +178,7 @@ describe('ValidationPanel', () => {
   });
 
   it('does not show content when collapsed', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: true,
       schema_errors: [],
@@ -192,7 +192,7 @@ describe('ValidationPanel', () => {
   });
 
   it('displays error details when available', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: false,
       schema_errors: [{
@@ -214,7 +214,7 @@ describe('ValidationPanel', () => {
   });
 
   it('handles keyboard interactions for error items', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: false,
       schema_errors: [{
@@ -247,7 +247,7 @@ describe('ValidationPanel', () => {
   });
 
   it('applies custom CSS classes', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: true,
       schema_errors: [],
@@ -264,7 +264,7 @@ describe('ValidationPanel', () => {
   });
 
   it('shows correct CSS classes for invalid state', async () => {
-    const { validate } = await import('esm-format');
+    const { validate } = await import('earthsci-toolkit');
     (validate as any).mockReturnValue({
       is_valid: false,
       schema_errors: [{

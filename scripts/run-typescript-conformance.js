@@ -26,7 +26,7 @@ try {
     // Try to import from built distribution
     esmFormat = await import(path.join(typescriptPackage, 'dist', 'esm', 'index.js'));
 } catch (error) {
-    console.error('Failed to import esm-format TypeScript library:', error.message);
+    console.error('Failed to import earthsci-toolkit TypeScript library:', error.message);
     console.error('Make sure the library is built with: npm run build');
     process.exit(1);
 }

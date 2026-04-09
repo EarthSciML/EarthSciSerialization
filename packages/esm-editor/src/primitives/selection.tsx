@@ -10,7 +10,7 @@
  */
 
 import { createSignal, createMemo, Accessor, Setter, createContext, useContext } from 'solid-js';
-import type { Expression, ExpressionNode as ExprNode, EsmFile } from 'esm-format';
+import type { Expression, ExpressionNode as ExprNode, EsmFile } from 'earthsci-toolkit';
 
 // Types for selection context
 export interface SelectionContextValue {

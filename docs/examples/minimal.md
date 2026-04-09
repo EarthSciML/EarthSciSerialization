@@ -127,7 +127,7 @@ println("Decay factor: ", sol[end] / sol[1])  # Should be ≈ exp(-1)
 
 ### TypeScript
 ```typescript
-import { load, validate, toUnicode } from 'esm-format';
+import { load, validate, toUnicode } from 'earthsci-toolkit';
 import fs from 'fs';
 
 // Load and validate

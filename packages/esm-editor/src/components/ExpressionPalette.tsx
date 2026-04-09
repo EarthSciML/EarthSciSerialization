@@ -10,7 +10,7 @@
  */
 
 import { Component, createSignal, createMemo, For, Show, JSX } from 'solid-js';
-import type { Expression, ExpressionNode as ExprNode, Model } from 'esm-format';
+import type { Expression, ExpressionNode as ExprNode, Model } from 'earthsci-toolkit';
 
 export interface ExpressionPaletteProps {
   /** Current model for context-aware suggestions */

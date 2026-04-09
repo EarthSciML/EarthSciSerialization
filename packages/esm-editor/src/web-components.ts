@@ -14,7 +14,7 @@
 
 import { customElement } from 'solid-element';
 import { createSignal } from 'solid-js';
-// Stub types for esm-format - this will be properly imported when module resolution works
+// Stub types for earthsci-toolkit - this will be properly imported when module resolution works
 type EsmFile = any;
 type Expression = any;
 type Model = any;
@@ -35,7 +35,7 @@ import './web-components.css';
 // Stub function to convert EsmFile to Graph - this should be replaced with proper import when module resolution works
 function component_graph(esmFile: EsmFile): any {
   // This is a temporary stub implementation
-  // The real implementation should come from esm-format/src/graph.js
+  // The real implementation should come from earthsci-toolkit/src/graph.js
   return {
     nodes: [],
     edges: []
