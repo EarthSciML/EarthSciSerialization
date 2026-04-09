@@ -7,7 +7,7 @@ The EarthSciSerialization project uses an automated release system that manages 
 - **Julia**: EarthSciSerialization.jl (Julia General Registry)
 - **TypeScript/JavaScript**: esm-format (npm)
 - **Python**: esm-format (PyPI)
-- **Rust**: esm-format (crates.io)
+- **Rust**: earthsci-toolkit (crates.io)
 - **Go**: esm-format-go (Go modules)
 
 ## Semantic Versioning
@@ -233,7 +233,7 @@ cargo package --list           # Rust
 # Test installation
 npm install earthsci-toolkit          # npm
 pip install esm-format          # PyPI
-cargo add esm-format            # crates.io
+cargo add earthsci-toolkit            # crates.io
 julia> ] add EarthSciSerialization          # Julia
 go get github.com/ctessum/EarthSciSerialization/packages/esm-format-go # Go
 ```

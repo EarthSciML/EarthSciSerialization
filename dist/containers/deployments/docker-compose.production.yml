@@ -51,7 +51,7 @@ services:
       - esm-production
 
   rust-conformance:
-    image: docker.io/ctessum/esm-format-rust:0.1.0-optimized
+    image: docker.io/ctessum/earthsci-toolkit:0.1.0-optimized
     container_name: esm-rust-production
     restart: unless-stopped
     volumes:

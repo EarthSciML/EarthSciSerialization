@@ -24,7 +24,7 @@ NC='\033[0m' # No Color
 JULIA_DIR="$PROJECT_ROOT/packages/EarthSciSerialization.jl"
 TYPESCRIPT_DIR="$PROJECT_ROOT/packages/esm-format"
 PYTHON_DIR="$PROJECT_ROOT/packages/earthsci_toolkit"
-RUST_DIR="$PROJECT_ROOT/packages/esm-format-rust"
+RUST_DIR="$PROJECT_ROOT/packages/earthsci-toolkit"
 
 # Test categories
 VALID_TESTS_DIR="$TESTS_DIR/valid"
