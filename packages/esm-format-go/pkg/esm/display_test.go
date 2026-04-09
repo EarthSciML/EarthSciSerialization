@@ -477,17 +477,19 @@ func TestModelSummary(t *testing.T) {
 				Transform: "param_to_var",
 			},
 		},
-		Domain: &Domain{
-			Temporal: &TemporalDomain{
-				Start: "2024-05-01T00:00:00Z",
-				End:   "2024-05-03T00:00:00Z",
-			},
-			Spatial: map[string]SpatialDimension{
-				"lon": {
-					Min:         -130.0,
-					Max:         -100.0,
-					GridSpacing: 0.3125,
-					Units:       "degrees",
+		Domains: map[string]Domain{
+			"default": {
+				Temporal: &TemporalDomain{
+					Start: "2024-05-01T00:00:00Z",
+					End:   "2024-05-03T00:00:00Z",
+				},
+				Spatial: map[string]SpatialDimension{
+					"lon": {
+						Min:         -130.0,
+						Max:         -100.0,
+						GridSpacing: 0.3125,
+						Units:       "degrees",
+					},
 				},
 			},
 		},

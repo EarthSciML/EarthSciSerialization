@@ -198,6 +198,8 @@ type OperatorComposeCoupling struct {
 	Type        string                       `json:"type"` // "operator_compose"
 	Systems     [2]string                    `json:"systems"`
 	Translate   map[string]interface{}       `json:"translate,omitempty"`
+	Interface   *string                      `json:"interface,omitempty"`
+	Lifting     *string                      `json:"lifting,omitempty"`
 	Description *string                      `json:"description,omitempty"`
 }
 
@@ -209,6 +211,8 @@ type Couple2Coupling struct {
 	Systems        [2]string              `json:"systems"`
 	CoupleTypePair [2]string              `json:"coupletype_pair"`
 	Connector      Connector              `json:"connector"`
+	Interface      *string                `json:"interface,omitempty"`
+	Lifting        *string                `json:"lifting,omitempty"`
 	Description    *string                `json:"description,omitempty"`
 }
 
@@ -221,6 +225,8 @@ type VariableMapCoupling struct {
 	To          string   `json:"to"`
 	Transform   string   `json:"transform"`
 	Factor      *float64 `json:"factor,omitempty"`
+	Interface   *string  `json:"interface,omitempty"`
+	Lifting     *string  `json:"lifting,omitempty"`
 	Description *string  `json:"description,omitempty"`
 }
 
@@ -247,14 +253,18 @@ func (c CallbackCoupling) GetType() string { return c.Type }
 
 // EventCoupling represents event-based coupling
 type EventCoupling struct {
-	Type               string               `json:"type"` // "event"
-	EventType          string               `json:"event_type"` // "continuous" or "discrete"
-	Name               string               `json:"name"`
-	Conditions         []Expression         `json:"conditions,omitempty"`         // for continuous events
-	Trigger            *DiscreteEventTrigger `json:"trigger,omitempty"`            // for discrete events
-	Affects            []AffectEquation     `json:"affects"`
-	DiscreteParameters []string             `json:"discrete_parameters,omitempty"`
-	Description        *string              `json:"description,omitempty"`
+	Type               string                `json:"type"` // "event"
+	EventType          string                `json:"event_type"` // "continuous" or "discrete"
+	Name               string                `json:"name"`
+	Conditions         []Expression          `json:"conditions,omitempty"`          // for continuous events
+	Trigger            *DiscreteEventTrigger  `json:"trigger,omitempty"`             // for discrete events
+	Affects            []AffectEquation      `json:"affects,omitempty"`
+	FunctionalAffect   *FunctionalAffect     `json:"functional_affect,omitempty"`
+	AffectNeg          []AffectEquation      `json:"affect_neg,omitempty"`
+	DiscreteParameters []string              `json:"discrete_parameters,omitempty"`
+	RootFind           *string               `json:"root_find,omitempty"`
+	Reinitialize       *bool                 `json:"reinitialize,omitempty"`
+	Description        *string               `json:"description,omitempty"`
 }
 
 func (e EventCoupling) GetType() string { return e.Type }
@@ -327,6 +337,36 @@ type BoundaryCondition struct {
 	Value      interface{} `json:"value,omitempty"`
 }
 
+// ========================================
+// 7b. Interfaces
+// ========================================
+
+// Interface represents a geometric connection between two domains
+type Interface struct {
+	Description      *string          `json:"description,omitempty"`
+	Domains          [2]string        `json:"domains"`
+	DimensionMapping DimensionMapping `json:"dimension_mapping"`
+	Regridding       *Regridding      `json:"regridding,omitempty"`
+}
+
+// DimensionMapping specifies shared dimensions and constraints at an interface
+type DimensionMapping struct {
+	Shared      map[string]string              `json:"shared,omitempty"`
+	Constraints map[string]InterfaceConstraint `json:"constraints,omitempty"`
+}
+
+// InterfaceConstraint represents a constraint on a non-shared dimension at the interface
+type InterfaceConstraint struct {
+	Value       interface{} `json:"value"` // string ("min", "max", "boundary") or number
+	Description *string     `json:"description,omitempty"`
+}
+
+// Regridding represents the regridding strategy at an interface
+type Regridding struct {
+	Method      string  `json:"method"` // "bilinear", "conservative", "nearest", "patch"
+	Description *string `json:"description,omitempty"`
+}
+
 // Solver represents solver configuration
 type Solver struct {
 	Strategy string                 `json:"strategy"`
@@ -370,7 +410,8 @@ type EsmFile struct {
 	DataLoaders     map[string]DataLoader     `json:"data_loaders,omitempty"`
 	Operators       map[string]Operator       `json:"operators,omitempty"`
 	Coupling        []interface{}             `json:"coupling,omitempty"` // Properly deserialized coupling entries
-	Domain          *Domain                   `json:"domain,omitempty"`
+	Domains         map[string]Domain         `json:"domains,omitempty"`
+	Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
 	Solver          *Solver                   `json:"solver,omitempty"`
 }
 
@@ -627,7 +668,8 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 		DataLoaders     map[string]DataLoader     `json:"data_loaders,omitempty"`
 		Operators       map[string]Operator       `json:"operators,omitempty"`
 		Coupling        json.RawMessage           `json:"coupling,omitempty"`
-		Domain          *Domain                   `json:"domain,omitempty"`
+		Domains         map[string]Domain         `json:"domains,omitempty"`
+		Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
 		Solver          *Solver                   `json:"solver,omitempty"`
 	}
 
@@ -643,7 +685,8 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.ReactionSystems = temp.ReactionSystems
 	esm.DataLoaders = temp.DataLoaders
 	esm.Operators = temp.Operators
-	esm.Domain = temp.Domain
+	esm.Domains = temp.Domains
+	esm.Interfaces = temp.Interfaces
 	esm.Solver = temp.Solver
 
 	// Handle coupling array with proper type deserialization
