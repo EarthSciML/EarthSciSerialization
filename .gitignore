@@ -81,3 +81,8 @@ security-reports/
 
 # Test results
 results.json
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
