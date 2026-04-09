@@ -1,7 +1,0 @@
-{
-  "database": "dolt",
-  "backend": "dolt",
-  "dolt_mode": "embedded",
-  "dolt_database": "EarthSciSerialization",
-  "project_id": "1e7069aa-cae9-442e-9811-138bbecef398"
-}
