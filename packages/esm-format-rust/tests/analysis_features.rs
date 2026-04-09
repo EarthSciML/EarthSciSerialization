@@ -17,20 +17,26 @@ fn test_analysis_features_integration() {
     };
 
     let mut variables = HashMap::new();
-    variables.insert("x".to_string(), ModelVariable {
-        var_type: VariableType::State,
-        units: None,
-        default: Some(1.0),
-        description: None,
-        expression: None,
-    });
-    variables.insert("k".to_string(), ModelVariable {
-        var_type: VariableType::Parameter,
-        units: None,
-        default: Some(0.1),
-        description: None,
-        expression: None,
-    });
+    variables.insert(
+        "x".to_string(),
+        ModelVariable {
+            var_type: VariableType::State,
+            units: None,
+            default: Some(1.0),
+            description: None,
+            expression: None,
+        },
+    );
+    variables.insert(
+        "k".to_string(),
+        ModelVariable {
+            var_type: VariableType::Parameter,
+            units: None,
+            default: Some(0.1),
+            description: None,
+            expression: None,
+        },
+    );
 
     let model = Model {
         reference: None,
@@ -77,29 +83,27 @@ fn test_analysis_features_integration() {
         },
     ];
 
-    let reactions = vec![
-        Reaction {
-            name: None,
-            substrates: vec![StoichiometricEntry {
-                species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
-                species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
-            rate: Expr::Operator(ExpressionNode {
-                op: "*".to_string(),
-                args: vec![
-                    Expr::Variable("k".to_string()),
-                    Expr::Variable("A".to_string()),
-                ],
-                wrt: None,
-                dim: None,
-            }),
-            description: None,
-        }
-    ];
+    let reactions = vec![Reaction {
+        name: None,
+        substrates: vec![StoichiometricEntry {
+            species: "A".to_string(),
+            coefficient: Some(1.0),
+        }],
+        products: vec![StoichiometricEntry {
+            species: "B".to_string(),
+            coefficient: Some(1.0),
+        }],
+        rate: Expr::Operator(ExpressionNode {
+            op: "*".to_string(),
+            args: vec![
+                Expr::Variable("k".to_string()),
+                Expr::Variable("A".to_string()),
+            ],
+            wrt: None,
+            dim: None,
+        }),
+        description: None,
+    }];
 
     let rs = ReactionSystem {
         name: Some("Simple RS".to_string()),
@@ -182,13 +186,19 @@ fn test_units_functionality() {
 
     // Test dimensional consistency (should fail)
     let consistency_check = check_dimensional_consistency(&m_per_s, &mol_per_l);
-    assert!(consistency_check.is_err(), "Should detect dimensional inconsistency");
+    assert!(
+        consistency_check.is_err(),
+        "Should detect dimensional inconsistency"
+    );
 
     // Test unit conversion
     let m_unit = parse_unit("m").expect("Failed to parse m");
     let cm_unit = parse_unit("cm").expect("Failed to parse cm");
     let conversion = convert_units(1.0, &m_unit, &cm_unit).expect("Failed to convert units");
-    assert!((conversion - 100.0).abs() < 1e-10, "1 m should equal 100 cm");
+    assert!(
+        (conversion - 100.0).abs() < 1e-10,
+        "1 m should equal 100 cm"
+    );
 }
 
 #[test]
@@ -231,10 +241,7 @@ fn test_editing_operations() {
     // Test variable substitution
     let expr = Expr::Operator(ExpressionNode {
         op: "+".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(1.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
     });

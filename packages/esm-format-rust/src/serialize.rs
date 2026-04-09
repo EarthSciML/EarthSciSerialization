@@ -1,6 +1,6 @@
 //! JSON serialization for ESM files
 
-use crate::{EsmFile, error::EsmError};
+use crate::{error::EsmError, EsmFile};
 
 /// Serialize an ESM file to JSON string
 ///
@@ -46,8 +46,7 @@ use crate::{EsmFile, error::EsmError};
 /// assert!(json.contains("\"esm\": \"0.1.0\""));
 /// ```
 pub fn save(esm_file: &EsmFile) -> Result<String, EsmError> {
-    serde_json::to_string_pretty(esm_file)
-        .map_err(|e| EsmError::JsonParse(e))
+    serde_json::to_string_pretty(esm_file).map_err(|e| EsmError::JsonParse(e))
 }
 
 /// Serialize an ESM file to compact JSON string (no pretty printing)
@@ -64,15 +63,14 @@ pub fn save(esm_file: &EsmFile) -> Result<String, EsmError> {
 /// * `Ok(String)` - Successfully serialized compact JSON string
 /// * `Err(EsmError)` - Serialization error
 pub fn save_compact(esm_file: &EsmFile) -> Result<String, EsmError> {
-    serde_json::to_string(esm_file)
-        .map_err(|e| EsmError::JsonParse(e))
+    serde_json::to_string(esm_file).map_err(|e| EsmError::JsonParse(e))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Model, Expr};
-    use crate::types::{Metadata, ModelVariable, VariableType, Equation};
+    use crate::types::{Equation, Metadata, ModelVariable, VariableType};
+    use crate::{Expr, Model};
     use std::collections::HashMap;
 
     #[test]
@@ -110,28 +108,32 @@ mod tests {
     fn test_save_with_model() {
         let mut models = HashMap::new();
         let mut variables = HashMap::new();
-        variables.insert("x".to_string(), ModelVariable {
-            var_type: VariableType::State,
-            units: Some("m".to_string()),
-            default: Some(0.0),
-            description: None,
-            expression: None,
-        });
+        variables.insert(
+            "x".to_string(),
+            ModelVariable {
+                var_type: VariableType::State,
+                units: Some("m".to_string()),
+                default: Some(0.0),
+                description: None,
+                expression: None,
+            },
+        );
 
-        models.insert("test".to_string(), Model {
-            reference: None,
-            name: Some("Test Model".to_string()),
-            variables,
-            equations: vec![
-                Equation {
+        models.insert(
+            "test".to_string(),
+            Model {
+                reference: None,
+                name: Some("Test Model".to_string()),
+                variables,
+                equations: vec![Equation {
                     lhs: Expr::Variable("d(x)/dt".to_string()),
                     rhs: Expr::Number(1.0),
-                }
-            ],
-            discrete_events: None,
-            continuous_events: None,
-            description: None,
-        });
+                }],
+                discrete_events: None,
+                continuous_events: None,
+                description: None,
+            },
+        );
 
         let esm_file = EsmFile {
             esm: "0.1.0".to_string(),

@@ -42,10 +42,7 @@ fn test_free_variables() {
             Expr::Variable("a".to_string()),
             Expr::Operator(ExpressionNode {
                 op: "^".to_string(),
-                args: vec![
-                    Expr::Variable("b".to_string()),
-                    Expr::Number(2.0),
-                ],
+                args: vec![Expr::Variable("b".to_string()), Expr::Number(2.0)],
                 wrt: None,
                 dim: None,
             }),
@@ -96,10 +93,7 @@ fn test_contains() {
     // Target in operator arguments
     let expr3 = Expr::Operator(ExpressionNode {
         op: "+".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(1.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
     });
@@ -112,10 +106,7 @@ fn test_contains() {
             Expr::Number(2.0),
             Expr::Operator(ExpressionNode {
                 op: "^".to_string(),
-                args: vec![
-                    Expr::Variable("x".to_string()),
-                    Expr::Number(2.0),
-                ],
+                args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
                 wrt: None,
                 dim: None,
             }),
@@ -128,9 +119,7 @@ fn test_contains() {
     // Target not in nested expression
     let expr5 = Expr::Operator(ExpressionNode {
         op: "sin".to_string(),
-        args: vec![
-            Expr::Variable("y".to_string()),
-        ],
+        args: vec![Expr::Variable("y".to_string())],
         wrt: None,
         dim: None,
     });
@@ -171,10 +160,7 @@ fn test_evaluate() {
     // Evaluate multiplication
     let expr4 = Expr::Operator(ExpressionNode {
         op: "*".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(3.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(3.0)],
         wrt: None,
         dim: None,
     });
@@ -184,7 +170,10 @@ fn test_evaluate() {
     // Test evaluation failure with missing variable
     let expr5 = Expr::Variable("z".to_string());
     let result5 = evaluate(&expr5, &context);
-    assert!(result5.is_err(), "Expected evaluation to fail for missing variable");
+    assert!(
+        result5.is_err(),
+        "Expected evaluation to fail for missing variable"
+    );
 }
 
 /// Test expression simplification
@@ -193,10 +182,7 @@ fn test_simplify() {
     // Test identity simplifications
     let expr1 = Expr::Operator(ExpressionNode {
         op: "+".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(0.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(0.0)],
         wrt: None,
         dim: None,
     });
@@ -206,10 +192,7 @@ fn test_simplify() {
     // Test zero multiplication
     let expr2 = Expr::Operator(ExpressionNode {
         op: "*".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(0.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(0.0)],
         wrt: None,
         dim: None,
     });
@@ -219,10 +202,7 @@ fn test_simplify() {
     // Test unit multiplication
     let expr3 = Expr::Operator(ExpressionNode {
         op: "*".to_string(),
-        args: vec![
-            Expr::Variable("x".to_string()),
-            Expr::Number(1.0),
-        ],
+        args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
     });
@@ -251,10 +231,7 @@ fn test_complex_expression_operations() {
                             Expr::Variable("a".to_string()),
                             Expr::Operator(ExpressionNode {
                                 op: "^".to_string(),
-                                args: vec![
-                                    Expr::Variable("x".to_string()),
-                                    Expr::Number(2.0),
-                                ],
+                                args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
                                 wrt: None,
                                 dim: None,
                             }),
@@ -324,17 +301,12 @@ fn test_derivative_expressions() {
     // Test partial derivative
     let partial_derivative = Expr::Operator(ExpressionNode {
         op: "∂/∂x".to_string(),
-        args: vec![
-            Expr::Operator(ExpressionNode {
-                op: "^".to_string(),
-                args: vec![
-                    Expr::Variable("x".to_string()),
-                    Expr::Number(2.0),
-                ],
-                wrt: None,
-                dim: None,
-            }),
-        ],
+        args: vec![Expr::Operator(ExpressionNode {
+            op: "^".to_string(),
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
+            wrt: None,
+            dim: None,
+        })],
         wrt: Some("x".to_string()),
         dim: None,
     });

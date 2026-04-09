@@ -1,10 +1,10 @@
 //! JSON parsing and schema validation for ESM files
 
-use crate::{EsmFile, error::EsmError};
-use serde_json::Value;
-use thiserror::Error;
+use crate::{error::EsmError, EsmFile};
 use jsonschema::JSONSchema;
+use serde_json::Value;
 use std::sync::OnceLock;
+use thiserror::Error;
 
 /// Error type for JSON parsing failures
 #[derive(Error, Debug)]
@@ -35,10 +35,9 @@ const ESM_SCHEMA_JSON: &str = include_str!("esm-schema.json");
 fn get_schema() -> &'static JSONSchema {
     static SCHEMA: OnceLock<JSONSchema> = OnceLock::new();
     SCHEMA.get_or_init(|| {
-        let schema_value: Value = serde_json::from_str(ESM_SCHEMA_JSON)
-            .expect("Bundled schema should be valid JSON");
-        JSONSchema::compile(&schema_value)
-            .expect("Bundled schema should compile successfully")
+        let schema_value: Value =
+            serde_json::from_str(ESM_SCHEMA_JSON).expect("Bundled schema should be valid JSON");
+        JSONSchema::compile(&schema_value).expect("Bundled schema should compile successfully")
     })
 }
 
@@ -81,15 +80,14 @@ fn get_schema() -> &'static JSONSchema {
 /// ```
 pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     // First, parse the JSON
-    let json_value: Value = serde_json::from_str(json_str)
-        .map_err(|e| EsmError::JsonParse(e))?;
+    let json_value: Value = serde_json::from_str(json_str).map_err(|e| EsmError::JsonParse(e))?;
 
     // Validate against schema
     validate_schema(&json_value)?;
 
     // Deserialize into our types
-    let esm_file: EsmFile = serde_json::from_value(json_value)
-        .map_err(|e| EsmError::JsonParse(e))?;
+    let esm_file: EsmFile =
+        serde_json::from_value(json_value).map_err(|e| EsmError::JsonParse(e))?;
 
     Ok(esm_file)
 }
@@ -113,12 +111,8 @@ pub fn validate_schema(json_value: &Value) -> Result<(), EsmError> {
     match validation_result {
         Ok(_) => Ok(()),
         Err(errors) => {
-            let error_messages: Vec<String> = errors
-                .map(|error| error.to_string())
-                .collect();
-            Err(EsmError::SchemaValidation(
-                error_messages.join("; ")
-            ))
+            let error_messages: Vec<String> = errors.map(|error| error.to_string()).collect();
+            Err(EsmError::SchemaValidation(error_messages.join("; ")))
         }
     }
 }
@@ -158,7 +152,7 @@ mod tests {
         let result = load(json);
         assert!(result.is_err());
         match result.unwrap_err() {
-            EsmError::JsonParse(_) => {}, // Expected
+            EsmError::JsonParse(_) => {} // Expected
             _ => panic!("Expected JsonParse error"),
         }
     }
@@ -177,7 +171,7 @@ mod tests {
         let result = load(json);
         assert!(result.is_err());
         match result.unwrap_err() {
-            EsmError::SchemaValidation(_) => {}, // Expected
+            EsmError::SchemaValidation(_) => {} // Expected
             _ => panic!("Expected SchemaValidation error"),
         }
     }
@@ -197,7 +191,7 @@ mod tests {
         let result = load(json);
         assert!(result.is_err());
         match result.unwrap_err() {
-            EsmError::SchemaValidation(_) => {}, // Expected
+            EsmError::SchemaValidation(_) => {} // Expected
             _ => panic!("Expected SchemaValidation error"),
         }
     }
@@ -216,7 +210,7 @@ mod tests {
         let result = load(json);
         assert!(result.is_err());
         match result.unwrap_err() {
-            EsmError::SchemaValidation(_) => {}, // Expected
+            EsmError::SchemaValidation(_) => {} // Expected
             _ => panic!("Expected SchemaValidation error"),
         }
     }
