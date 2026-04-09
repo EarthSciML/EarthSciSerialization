@@ -203,7 +203,7 @@ Multi-architecture container images for each language runtime:
 
 - `ghcr.io/ctessum/esm-format-julia:latest`
 - `ghcr.io/ctessum/esm-format-typescript:latest`
-- `ghcr.io/ctessum/esm-format-python:latest`
+- `ghcr.io/ctessum/earthsci-toolkit-python:latest`
 - `ghcr.io/ctessum/earthsci-toolkit:latest`
 
 ### Architecture Support
@@ -224,7 +224,7 @@ Multi-architecture container images for each language runtime:
 docker run --rm ghcr.io/ctessum/esm-format-julia:latest
 
 # Mount local data
-docker run --rm -v $(pwd):/workspace ghcr.io/ctessum/esm-format-python:latest
+docker run --rm -v $(pwd):/workspace ghcr.io/ctessum/earthsci-toolkit-python:latest
 
 # Docker Compose
 version: '3.8'
@@ -235,7 +235,7 @@ services:
       - ./results:/workspace/results
 
   conformance-python:
-    image: ghcr.io/ctessum/esm-format-python:latest
+    image: ghcr.io/ctessum/earthsci-toolkit-python:latest
     volumes:
       - ./results:/workspace/results
 ```
