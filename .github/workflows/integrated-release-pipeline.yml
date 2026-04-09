@@ -177,7 +177,7 @@ jobs:
         npm install earthsci-toolkit
 
         # Python
-        pip install esm-format
+        pip install earthsci-toolkit
 
         # Rust
         cargo add earthsci-toolkit

@@ -16,7 +16,7 @@ npm install earthsci-toolkit
 
 ### Python
 ```bash
-pip install esm-format  # When available on PyPI
+pip install earthsci-toolkit  # When available on PyPI
 # Or install from source:
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
 cd EarthSciSerialization/packages/earthsci_toolkit
@@ -118,7 +118,7 @@ console.log('Loaded test model:', esmFile.metadata.name);
 
 #### From PyPI (when available)
 ```bash
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 #### From Source
@@ -131,13 +131,13 @@ pip install -e .
 #### With Optional Dependencies
 ```bash
 # For visualization support
-pip install esm-format[viz]
+pip install earthsci-toolkit[viz]
 
 # For symbolic computation
-pip install esm-format[symbolic]
+pip install earthsci-toolkit[symbolic]
 
 # All optional features
-pip install esm-format[all]
+pip install earthsci-toolkit[all]
 ```
 
 #### Virtual Environment Setup
@@ -148,7 +148,7 @@ source esm_env/bin/activate  # Linux/macOS
 # esm_env\Scripts\activate   # Windows
 
 # Install package
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 #### Conda Environment
@@ -161,13 +161,13 @@ conda activate esm_env
 conda install numpy scipy matplotlib sympy
 
 # Install ESM format
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 #### Verify Installation
 ```python
 import earthsci_toolkit
-print("esm-format installed successfully!")
+print("earthsci-toolkit installed successfully!")
 
 # Test basic functionality
 esm_data = '{"esm": "0.1.0", "metadata": {"name": "Test"}}'
@@ -251,7 +251,7 @@ npm install -g earthsci-toolkit
 
 # 3. Install Python and package
 sudo apt-get install python3 python3-pip
-pip install esm-format
+pip install earthsci-toolkit
 
 # 4. Install Rust and CLI
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -276,7 +276,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install ESM packages
-RUN pip install esm-format
+RUN pip install earthsci-toolkit
 RUN npm install -g earthsci-toolkit
 RUN cargo install earthsci-toolkit --features cli
 RUN julia -e 'using Pkg; Pkg.add(url="https://github.com/EarthSciML/EarthSciSerialization", subdir="packages/EarthSciSerialization.jl")'
@@ -317,10 +317,10 @@ npm install
 pip install --upgrade pip setuptools wheel
 
 # Install with verbose output for debugging
-pip install -v esm-format
+pip install -v earthsci-toolkit
 
 # Use --user if permissions issues
-pip install --user esm-format
+pip install --user earthsci-toolkit
 ```
 
 #### Rust Compilation Errors

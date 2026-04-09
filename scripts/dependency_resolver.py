@@ -443,8 +443,8 @@ Usage:
 
 Examples:
   python dependency_resolver.py check
-  python dependency_resolver.py update esm-format-py
-  python dependency_resolver.py lockfile esm-format-py
+  python dependency_resolver.py update earthsci-toolkit-py
+  python dependency_resolver.py lockfile earthsci-toolkit-py
         """)
 
 
