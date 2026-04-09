@@ -1,6 +1,6 @@
 //! JSON serialization for ESM files
 
-use crate::{error::EsmError, EsmFile};
+use crate::{EsmFile, error::EsmError};
 
 /// Serialize an ESM file to JSON string
 ///

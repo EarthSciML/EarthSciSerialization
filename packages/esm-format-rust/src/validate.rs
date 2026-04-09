@@ -1,8 +1,8 @@
 //! Structural validation for ESM files
 
-use crate::parse::{load, validate_schema};
-use crate::units::{check_dimensional_consistency, parse_unit, Unit, UnitError};
 use crate::EsmFile;
+use crate::parse::{load, validate_schema};
+use crate::units::{Unit, UnitError, check_dimensional_consistency, parse_unit};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -1650,9 +1650,11 @@ mod tests {
         let result = validate(&esm_file);
         assert!(!result.is_valid);
         assert!(!result.structural_errors.is_empty());
-        assert!(result.structural_errors[0]
-            .message
-            .contains("Variable 'undefined_var' referenced in equation is not declared"));
+        assert!(
+            result.structural_errors[0]
+                .message
+                .contains("Variable 'undefined_var' referenced in equation is not declared")
+        );
         assert!(matches!(
             result.structural_errors[0].code,
             StructuralErrorCode::UndefinedVariable
@@ -1740,9 +1742,11 @@ mod tests {
             error.code,
             StructuralErrorCode::EquationCountMismatch
         ));
-        assert!(error
-            .message
-            .contains("Number of ODE equations (1) does not match number of state variables (2)"));
+        assert!(
+            error.message.contains(
+                "Number of ODE equations (1) does not match number of state variables (2)"
+            )
+        );
     }
 
     #[test]
@@ -1837,9 +1841,11 @@ mod tests {
             result.structural_errors[0].code,
             StructuralErrorCode::MissingObservedExpr
         ));
-        assert!(result.structural_errors[0]
-            .message
-            .contains("Observed variable \"total\" is missing its expression field"));
+        assert!(
+            result.structural_errors[0]
+                .message
+                .contains("Observed variable \"total\" is missing its expression field")
+        );
     }
 
     #[test]
@@ -2429,8 +2435,11 @@ mod tests {
             "validate_complete() should fail due to schema errors"
         );
 
-        println!("CORRECT BEHAVIOR: validate() found {} schema errors, validate_complete() found {} schema errors",
-                result1.schema_errors.len(), result2.schema_errors.len());
+        println!(
+            "CORRECT BEHAVIOR: validate() found {} schema errors, validate_complete() found {} schema errors",
+            result1.schema_errors.len(),
+            result2.schema_errors.len()
+        );
     }
 
     #[test]
