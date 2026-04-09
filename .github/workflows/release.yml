@@ -157,7 +157,7 @@ jobs:
         echo "## Package Versions:" >> RELEASE_NOTES.md
         echo "- Julia EarthSciSerialization.jl: v$NEW_VERSION" >> RELEASE_NOTES.md
         echo "- TypeScript earthsci-toolkit: v$NEW_VERSION" >> RELEASE_NOTES.md
-        echo "- Python esm-format: v$NEW_VERSION" >> RELEASE_NOTES.md
+        echo "- Python earthsci-toolkit: v$NEW_VERSION" >> RELEASE_NOTES.md
         echo "- Rust earthsci-toolkit: v$NEW_VERSION" >> RELEASE_NOTES.md
 
     - name: Commit version updates

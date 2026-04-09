@@ -1,6 +1,6 @@
 # Build and Distribution Guide
 
-This document describes how to build and distribute the `esm-format` Python package.
+This document describes how to build and distribute the `earthsci-toolkit` Python package.
 
 ## Quick Start
 

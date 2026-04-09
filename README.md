@@ -69,7 +69,7 @@ npm install earthsci-toolkit
 
 ### Python
 ```bash
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 ### Rust
