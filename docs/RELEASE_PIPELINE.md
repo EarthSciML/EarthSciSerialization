@@ -135,7 +135,7 @@ using Pkg; Pkg.add("EarthSciSerialization")
 npm install esm-format
 ```
 
-### Python (esm_format)
+### Python (earthsci_toolkit)
 
 - Tests run on Python 3.8-3.12
 - Published to PyPI with trusted publishing
@@ -144,7 +144,7 @@ npm install esm-format
 
 **Installation**:
 ```bash
-pip install esm-format
+pip install earthsci-toolkit
 ```
 
 ### Rust (esm-format-rust)

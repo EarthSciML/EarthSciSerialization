@@ -11,7 +11,7 @@ The EarthSciSerialization project implements comprehensive security scanning and
 - **Julia**: EarthSciSerialization.jl
 - **Python**: esm_format
 - **TypeScript/JavaScript**: esm-format, esm-editor
-- **Rust**: esm-format-rust
+- **Rust**: earthsci-toolkit
 
 ## Security Tools
 

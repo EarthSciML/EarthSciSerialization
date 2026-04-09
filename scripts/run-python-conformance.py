@@ -3,7 +3,7 @@
 """
 Python conformance test runner for ESM Format cross-language testing.
 
-This script runs the Python esm_format implementation against test fixtures
+This script runs the Python earthsci_toolkit implementation against test fixtures
 and generates standardized outputs for comparison with other language implementations.
 """
 
@@ -18,15 +18,15 @@ import traceback
 # Add the Python package to the path
 script_dir = Path(__file__).parent
 project_root = script_dir.parent
-python_package = project_root / "packages" / "esm_format"
+python_package = project_root / "packages" / "earthsci_toolkit"
 
 # Add the Python package to sys.path
 sys.path.insert(0, str(python_package / "src"))
 
 try:
-    import esm_format
+    import earthsci_toolkit
 except ImportError as e:
-    print(f"Failed to import esm_format Python library: {e}")
+    print(f"Failed to import earthsci_toolkit Python library: {e}")
     print("Make sure the Python package is properly installed")
     sys.exit(1)
 
@@ -74,8 +74,8 @@ def run_validation_tests(tests_dir: Path) -> Dict[str, Any]:
 
         for filepath in valid_files:
             try:
-                esm_data = esm_format.load(filepath)
-                result = esm_format.validate(esm_data)
+                esm_data = earthsci_toolkit.load(filepath)
+                result = earthsci_toolkit.validate(esm_data)
 
                 valid_results[filepath.name] = {
                     "is_valid": result.is_valid,
@@ -99,8 +99,8 @@ def run_validation_tests(tests_dir: Path) -> Dict[str, Any]:
 
         for filepath in invalid_files:
             try:
-                esm_data = esm_format.load(filepath)
-                result = esm_format.validate(esm_data)
+                esm_data = earthsci_toolkit.load(filepath)
+                result = earthsci_toolkit.validate(esm_data)
 
                 invalid_results[filepath.name] = {
                     "is_valid": result.is_valid,
@@ -141,7 +141,7 @@ def run_display_tests(tests_dir: Path) -> Dict[str, Any]:
                         if "input" in formula_test:
                             input_formula = formula_test["input"]
                             try:
-                                unicode_result = esm_format.render_chemical_formula(input_formula)
+                                unicode_result = earthsci_toolkit.render_chemical_formula(input_formula)
 
                                 formula_results.append({
                                     "input": input_formula,
@@ -165,10 +165,10 @@ def run_display_tests(tests_dir: Path) -> Dict[str, Any]:
                         if "input" in expr_test:
                             input_expr = expr_test["input"]
                             try:
-                                expr = esm_format.parse_expression(input_expr)
-                                unicode_result = esm_format.pretty_print(expr, format="unicode")
-                                latex_result = esm_format.pretty_print(expr, format="latex")
-                                ascii_result = esm_format.pretty_print(expr, format="ascii")
+                                expr = earthsci_toolkit.parse_expression(input_expr)
+                                unicode_result = earthsci_toolkit.pretty_print(expr, format="unicode")
+                                latex_result = earthsci_toolkit.pretty_print(expr, format="latex")
+                                ascii_result = earthsci_toolkit.pretty_print(expr, format="ascii")
 
                                 expression_results.append({
                                     "input": input_expr,
@@ -214,14 +214,14 @@ def run_substitution_tests(tests_dir: Path) -> Dict[str, Any]:
                     for test_case in test_data["tests"]:
                         if "expression" in test_case and "substitutions" in test_case:
                             try:
-                                expr = esm_format.parse_expression(test_case["expression"])
+                                expr = earthsci_toolkit.parse_expression(test_case["expression"])
                                 substitutions = {
-                                    k: esm_format.parse_expression(v)
+                                    k: earthsci_toolkit.parse_expression(v)
                                     for k, v in test_case["substitutions"].items()
                                 }
 
-                                result_expr = esm_format.substitute(expr, substitutions)
-                                result_str = esm_format.pretty_print(result_expr)
+                                result_expr = earthsci_toolkit.substitute(expr, substitutions)
+                                result_str = earthsci_toolkit.pretty_print(result_expr)
 
                                 test_results.append({
                                     "input": test_case["expression"],
@@ -264,14 +264,14 @@ def run_graph_tests(tests_dir: Path) -> Dict[str, Any]:
                     esm_file_path = filepath.parent / test_data["esm_file"]
                     if esm_file_path.exists():
                         try:
-                            esm_data = esm_format.load(esm_file_path)
+                            esm_data = earthsci_toolkit.load(esm_file_path)
 
                             # Generate system graph
-                            system_graph = esm_format.generate_system_graph(esm_data)
+                            system_graph = earthsci_toolkit.generate_system_graph(esm_data)
 
                             # Export in different formats
-                            dot_output = esm_format.export_dot(system_graph)
-                            json_output = esm_format.export_json(system_graph)
+                            dot_output = earthsci_toolkit.export_dot(system_graph)
+                            json_output = earthsci_toolkit.export_json(system_graph)
 
                             graph_results[filepath.name] = {
                                 "esm_file": str(esm_file_path),

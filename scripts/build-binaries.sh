@@ -173,7 +173,7 @@ EOF
 build_python_wheel() {
     echo "Building Python wheel..."
 
-    cd "${PROJECT_ROOT}/packages/esm_format"
+    cd "${PROJECT_ROOT}/packages/earthsci_toolkit"
 
     if [ -f "pyproject.toml" ]; then
         python -m build --wheel --outdir "${BUILD_DIR}/"
@@ -395,7 +395,7 @@ curl -sSL https://github.com/ctessum/EarthSciSerialization/releases/latest/downl
 \`\`\`
 
 ### Library Packages
-- **Python**: \`pip install esm-format\`
+- **Python**: \`pip install earthsci-toolkit\`
 - **TypeScript/JavaScript**: \`npm install esm-format\`
 - **Julia**: \`using Pkg; Pkg.add("EarthSciSerialization")\`
 - **Rust**: Add \`esm-format = "${VERSION}"\` to Cargo.toml

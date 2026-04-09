@@ -627,7 +627,7 @@ It will throw an error for malformed JSON or schema violations.
 # Examples
 
 ```rust
-use esm_format::load;
+use earthsci_toolkit::load;
 
 let json = r#"
 {
@@ -920,7 +920,7 @@ The output will be pretty-printed for human readability.
 # Examples
 
 ```rust
-use esm_format::{EsmFile, Metadata, save};
+use earthsci_toolkit::{EsmFile, Metadata, save};
 
 let esm_file = EsmFile {
 esm: "0.1.0".to_string(),
@@ -1420,7 +1420,7 @@ This goes beyond schema validation to check:
 # Examples
 
 ```rust
-use esm_format::{validate, EsmFile, Metadata};
+use earthsci_toolkit::{validate, EsmFile, Metadata};
 
 let esm_file = EsmFile {
 esm: "0.1.0".to_string(),

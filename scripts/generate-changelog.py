@@ -152,7 +152,7 @@ class ChangelogGenerator:
                         affected_packages.add('julia')
                     elif file.startswith('packages/esm-format/') and not file.startswith('packages/esm-format-rust/'):
                         affected_packages.add('typescript')
-                    elif file.startswith('packages/esm_format/'):
+                    elif file.startswith('packages/earthsci_toolkit/'):
                         affected_packages.add('python')
                     elif file.startswith('packages/esm-format-rust/'):
                         affected_packages.add('rust')

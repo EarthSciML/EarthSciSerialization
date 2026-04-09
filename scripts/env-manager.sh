@@ -385,7 +385,7 @@ export ESM_PROJECT_ROOT="$WORKSPACE_ROOT"
 export PATH="\$ESM_PROJECT_ROOT/scripts:\$PATH"
 
 # Language-specific paths and settings
-if [[ -d "$WORKSPACE_ROOT/packages/esm_format/venv" ]]; then
+if [[ -d "$WORKSPACE_ROOT/packages/earthsci_toolkit/venv" ]]; then
     export PYTHONPATH="$WORKSPACE_ROOT:\$PYTHONPATH"
 fi
 
@@ -402,7 +402,7 @@ alias dep-report='$WORKSPACE_ROOT/scripts/deps report'
 
 # Package management helpers
 esm-python() {
-    cd "$WORKSPACE_ROOT/packages/esm_format"
+    cd "$WORKSPACE_ROOT/packages/earthsci_toolkit"
     if [[ -d "venv" ]]; then
         source venv/bin/activate
     fi

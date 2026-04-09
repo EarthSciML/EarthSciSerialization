@@ -1325,7 +1325,7 @@ esm.explore(file)  # widget showing models, reactions, coupling graph
 
 ---
 
-### 5.4 Rust — `esm-format`
+### 5.4 Rust — `earthsci-toolkit`
 
 **Tier: Core + Analysis**
 

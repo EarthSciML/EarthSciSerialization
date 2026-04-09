@@ -656,7 +656,7 @@ including mass balance within reactions and system-wide linear invariants.
 # Examples
 
 ```rust
-use esm_format::{ReactionSystem, detect_conservation_violations};
+use earthsci_toolkit::{ReactionSystem, detect_conservation_violations};
 
 // Create a simple reaction system
 let system = ReactionSystem {
@@ -1064,7 +1064,7 @@ It will throw an error for malformed JSON or schema violations.
 # Examples
 
 ```rust
-use esm_format::load;
+use earthsci_toolkit::load;
 
 let json = r#"
 {
@@ -1809,7 +1809,7 @@ The output will be pretty-printed for human readability.
 # Examples
 
 ```rust
-use esm_format::{EsmFile, Metadata, save};
+use earthsci_toolkit::{EsmFile, Metadata, save};
 
 let esm_file = EsmFile {
 esm: "0.1.0".to_string(),
@@ -2622,7 +2622,7 @@ This function checks:
 # Examples
 
 ```rust
-use esm_format::{validate, load, EsmFile, Metadata};
+use earthsci_toolkit::{validate, load, EsmFile, Metadata};
 
 let json_str = r#"
 {

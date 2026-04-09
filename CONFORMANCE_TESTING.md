@@ -257,7 +257,7 @@ cd packages/esm_format
 python -m pytest tests/ -v
 
 # Rust
-cd packages/esm-format-rust
+cd packages/earthsci-toolkit
 cargo test
 ```
 
