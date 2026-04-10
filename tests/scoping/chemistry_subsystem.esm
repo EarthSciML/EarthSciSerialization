@@ -1,0 +1,54 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ChemistrySubsystem",
+    "description": "A chemistry model intended for inclusion as a subsystem by reference",
+    "authors": ["Test Suite"],
+    "created": "2026-04-10T00:00:00Z"
+  },
+  "models": {
+    "Chemistry": {
+      "variables": {
+        "O3": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 1e-6,
+          "description": "Ozone concentration"
+        },
+        "NO2": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 5e-7,
+          "description": "Nitrogen dioxide concentration"
+        },
+        "k_photo": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 0.01,
+          "description": "Photolysis rate"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              { "op": "-", "args": ["k_photo"] },
+              "O3"
+            ]
+          },
+          "_comment": "Ozone photolysis: dO3/dt = -k_photo * O3"
+        },
+        {
+          "lhs": { "op": "D", "args": ["NO2"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": ["k_photo", "O3"]
+          },
+          "_comment": "NO2 production from O3 photolysis: dNO2/dt = k_photo * O3"
+        }
+      ]
+    }
+  }
+}

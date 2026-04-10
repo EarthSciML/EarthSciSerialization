@@ -1,0 +1,41 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SubsystemRefURLTest",
+    "description": "Test subsystem inclusion by URL reference. Demonstrates that subsystems can be loaded from remote HTTP/HTTPS URLs. In practice, the URL would point to a hosted ESM file.",
+    "authors": ["Test Suite"],
+    "created": "2026-04-10T00:00:00Z"
+  },
+  "models": {
+    "ClimateModel": {
+      "variables": {
+        "global_temp": {
+          "type": "state",
+          "units": "K",
+          "default": 288.0,
+          "description": "Global mean temperature"
+        },
+        "forcing": {
+          "type": "parameter",
+          "units": "W/m^2",
+          "default": 3.7,
+          "description": "Radiative forcing"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["global_temp"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [0.3, "forcing"]
+          },
+          "_comment": "Simplified temperature response: dT/dt = 0.3 * forcing"
+        }
+      ],
+      "subsystems": {
+        "Atmosphere": { "ref": "https://example.com/models/atmosphere.esm" },
+        "Ocean": { "ref": "https://example.com/models/ocean.esm" }
+      }
+    }
+  }
+}

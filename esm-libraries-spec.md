@@ -64,6 +64,35 @@ The `load()` function must **throw** (or return an error, in languages without e
 - **Valid JSON that fails schema validation**: Throw a validation error with the list of schema violations. Libraries must not silently accept invalid files.
 - **Valid JSON that passes schema validation but fails structural validation**: `load()` succeeds (returns an `EsmFile`), but the structural issues are reported by the separate `validate()` function. This allows loading partially invalid files for inspection and repair.
 
+### 2.1b Subsystem Reference Resolution
+
+Before validation or any other processing, `load()` must resolve all subsystem references (objects with a `ref` field) to their inline definitions. This ensures the rest of the pipeline operates on a fully expanded in-memory representation.
+
+**Resolution algorithm:**
+
+1. Walk all `subsystems` maps in the loaded file (in both `models` and `reaction_systems`, at any nesting depth).
+2. For each subsystem value that is a reference object (has a `ref` field):
+   a. Determine the reference type:
+      - If `ref` starts with `http://` or `https://`, fetch the content from the URL.
+      - Otherwise, treat it as a local file path. Resolve relative paths against the directory of the referencing file.
+   b. Parse the referenced file as a valid ESM file.
+   c. Extract the single top-level model or reaction system from the referenced file. If the file contains zero or more than one top-level system, report an error.
+   d. Replace the reference object with the resolved model or reaction system definition.
+3. Resolution is recursive: a referenced file may itself contain subsystem references. Resolve depth-first.
+4. Libraries must detect circular references (file A references file B which references file A) and report an error rather than entering infinite recursion.
+
+**Error handling:**
+
+| Condition | Behavior |
+|---|---|
+| Local file not found | Throw/return error with path and context |
+| URL unreachable or returns non-200 | Throw/return error with URL and HTTP status |
+| Referenced file is not valid JSON | Throw/return error with path/URL and parse error |
+| Referenced file has zero or multiple top-level systems | Throw/return error identifying the file and the count of systems found |
+| Circular reference detected | Throw/return error listing the cycle |
+
+After resolution completes, the in-memory representation is indistinguishable from a file with all subsystems defined inline. All subsequent validation, editing, and conversion operates on the resolved representation.
+
 ### 2.2 Data Model
 
 Every library must define typed representations for:
@@ -297,6 +326,11 @@ UnitWarning:
 | `null_reaction` | Reaction has both `substrates: null` and `products: null` |
 | `missing_observed_expr` | Observed variable is missing its `expression` field |
 | `event_var_undeclared` | Variable in event affects/conditions is not declared |
+| `ref_not_found` | Subsystem reference points to a local file that does not exist |
+| `ref_unreachable` | Subsystem reference URL is unreachable or returned a non-200 status |
+| `ref_invalid_json` | Referenced file is not valid JSON or not a valid ESM file |
+| `ref_ambiguous_system` | Referenced file contains zero or more than one top-level model/reaction system |
+| `ref_circular` | Circular subsystem reference detected (e.g., file A → file B → file A) |
 
 ---
 

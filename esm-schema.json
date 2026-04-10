@@ -416,8 +416,26 @@
         },
         "subsystems": {
           "type": "object",
-          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\".",
-          "additionalProperties": { "$ref": "#/$defs/Model" }
+          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\". Each subsystem can be defined inline or included by reference via a local file path or URL.",
+          "additionalProperties": {
+            "oneOf": [
+              { "$ref": "#/$defs/Model" },
+              { "$ref": "#/$defs/SubsystemRef" }
+            ]
+          }
+        }
+      }
+    },
+
+    "SubsystemRef": {
+      "type": "object",
+      "description": "A reference to an external ESM file containing a model or reaction system definition. The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file.",
+      "required": ["ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model or reaction system, which is used as the subsystem definition."
         }
       }
     },
@@ -551,8 +569,13 @@
         },
         "subsystems": {
           "type": "object",
-          "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\".",
-          "additionalProperties": { "$ref": "#/$defs/ReactionSystem" }
+          "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\". Each subsystem can be defined inline or included by reference via a local file path or URL.",
+          "additionalProperties": {
+            "oneOf": [
+              { "$ref": "#/$defs/ReactionSystem" },
+              { "$ref": "#/$defs/SubsystemRef" }
+            ]
+          }
         }
       }
     },
