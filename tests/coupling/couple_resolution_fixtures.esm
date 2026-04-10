@@ -1,7 +1,7 @@
 {
   "esm": "0.1.0",
   "metadata": {
-    "name": "Couple2ResolutionFixtures",
+    "name": "CoupleResolutionFixtures",
     "description": "Test fixtures for couple coupling resolution algorithm (Section 4.7.2)",
     "authors": [
       "Test Suite"

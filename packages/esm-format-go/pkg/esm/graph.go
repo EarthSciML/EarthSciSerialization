@@ -189,18 +189,18 @@ func createCouplingEdges(coupling interface{}, nodeMap map[string]ComponentNode)
 			}
 		}
 
-	case Couple2Coupling:
+	case CouplingCouple:
 		if len(c.Systems) == 2 {
 			source, sourceExists := nodeMap[c.Systems[0]]
 			target, targetExists := nodeMap[c.Systems[1]]
 
 			if sourceExists && targetExists {
-				label := fmt.Sprintf("%s-%s", c.CoupleTypePair[0], c.CoupleTypePair[1])
+				label := fmt.Sprintf("%s ↔ %s", c.Systems[0], c.Systems[1])
 				edge := GraphEdge[ComponentNode, CouplingEdge]{
 					Source: source,
 					Target: target,
 					Data: CouplingEdge{
-						Type:          "couple2",
+						Type:          "couple",
 						Label:         &label,
 						Description:   c.Description,
 						Bidirectional: true,

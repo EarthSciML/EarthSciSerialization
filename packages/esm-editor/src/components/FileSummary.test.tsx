@@ -157,7 +157,7 @@ describe('FileSummary', () => {
     expect(screen.getByText('Rule 1')).toBeInTheDocument();
     expect(screen.getByText('Compose: TestModel, Chemistry')).toBeInTheDocument();
     expect(screen.getByText('Rule 2')).toBeInTheDocument();
-    expect(screen.getByText('Couple2: TestModel, Chemistry')).toBeInTheDocument();
+    expect(screen.getByText('Couple: TestModel, Chemistry')).toBeInTheDocument();
     expect(screen.getByText('Rule 3')).toBeInTheDocument();
     expect(screen.getByText('Apply operator: Interpolator')).toBeInTheDocument();
   });

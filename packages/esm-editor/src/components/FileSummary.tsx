@@ -43,7 +43,7 @@ function getCouplingDescription(coupling: CouplingEntry): string {
     case 'operator_compose':
       return `Compose: ${coupling.systems?.join(', ') || 'N/A'}`;
     case 'couple':
-      return `Couple2: ${coupling.systems?.join(', ') || 'N/A'}`;
+      return `Couple: ${coupling.systems?.join(', ') || 'N/A'}`;
     case 'operator_apply':
       return `Apply operator: ${coupling.operator || 'N/A'}`;
     default:

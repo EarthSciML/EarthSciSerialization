@@ -202,9 +202,8 @@ func TestCouplingDeserialization(t *testing.T) {
 				"factor": 1.0
 			},
 			{
-				"type": "couple2",
+				"type": "couple",
 				"systems": ["model1", "model2"],
-				"coupletype_pair": ["type1", "type2"],
 				"connector": {
 					"equations": [
 						{
@@ -248,12 +247,11 @@ func TestCouplingDeserialization(t *testing.T) {
 	require.NotNil(t, variableMap.Factor)
 	assert.Equal(t, 1.0, *variableMap.Factor)
 
-	couple2, ok := esmFile.Coupling[2].(Couple2Coupling)
-	require.True(t, ok, "Third coupling entry should be Couple2Coupling")
-	assert.Equal(t, "couple2", couple2.Type)
-	assert.Equal(t, [2]string{"model1", "model2"}, couple2.Systems)
-	assert.Equal(t, [2]string{"type1", "type2"}, couple2.CoupleTypePair)
-	assert.Len(t, couple2.Connector.Equations, 1)
+	couple, ok := esmFile.Coupling[2].(CouplingCouple)
+	require.True(t, ok, "Third coupling entry should be CouplingCouple")
+	assert.Equal(t, "couple", couple.Type)
+	assert.Equal(t, [2]string{"model1", "model2"}, couple.Systems)
+	assert.Len(t, couple.Connector.Equations, 1)
 
 	operatorApply, ok := esmFile.Coupling[3].(OperatorApplyCoupling)
 	require.True(t, ok, "Fourth coupling entry should be OperatorApplyCoupling")
@@ -334,9 +332,8 @@ func TestCouplingValidationWithTypedEntries(t *testing.T) {
 				"systems": ["model1", "model2"]
 			},
 			{
-				"type": "couple2",
+				"type": "couple",
 				"systems": ["model1", "model3"],
-				"coupletype_pair": ["type1", "type2"],
 				"connector": {
 					"equations": []
 				}
@@ -356,9 +353,9 @@ func TestCouplingValidationWithTypedEntries(t *testing.T) {
 	require.True(t, ok, "First coupling entry should be OperatorComposeCoupling")
 	assert.Equal(t, "operator_compose", operatorCompose.Type)
 
-	couple2, ok := esmFile.Coupling[1].(Couple2Coupling)
-	require.True(t, ok, "Second coupling entry should be Couple2Coupling")
-	assert.Equal(t, "couple2", couple2.Type)
+	couple, ok := esmFile.Coupling[1].(CouplingCouple)
+	require.True(t, ok, "Second coupling entry should be CouplingCouple")
+	assert.Equal(t, "couple", couple.Type)
 
 	// Now test validation - this should detect the reference to non-existent "model3"
 	// We'll test the detailed validation since it should now work properly with typed coupling entries

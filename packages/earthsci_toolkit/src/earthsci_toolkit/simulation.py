@@ -337,7 +337,7 @@ def _apply_coupling_rules(
                         # Subtract from source species to conserve mass
                         ode_exprs[from_idx] -= coupling_term
 
-        elif coupling.coupling_type == CouplingType.COUPLE2:
+        elif coupling.coupling_type == CouplingType.COUPLE:
             # Handle bidirectional coupling between systems
             if coupling.systems and len(coupling.systems) == 2:
                 # For now, implement simple exchange coupling
