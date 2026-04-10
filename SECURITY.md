@@ -222,7 +222,6 @@ The security system supports compliance with:
 
 ### Infrastructure Security
 
-- **Container Scanning**: All container images scanned for vulnerabilities
 - **Binary Verification**: All distributed binaries include checksums
 - **Supply Chain Protection**: Dependencies verified and pinned
 - **Secret Scanning**: Automated detection of exposed secrets
