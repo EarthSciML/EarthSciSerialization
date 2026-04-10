@@ -734,28 +734,6 @@ Metadata(...)
 
 ---
 
-### Migration
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-Migration(...)
-```
-
----
-
-### MigrationError
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-MigrationError(...)
-```
-
----
-
 ### MockCatalystSystem
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1819,17 +1797,6 @@ function apply_variable_transform(coupled_system, from_resolution, to_resolution
 apply_variable_transform(coupled_system, from_resolution, to_resolution, coupling)
 
 Apply the specified transform operation between variables.
-
----
-
-### can_migrate
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-can_migrate(...)
-```
 
 ---
 
@@ -3619,17 +3586,6 @@ functionality(...)
 
 ---
 
-### functionality
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-functionality(...)
-```
-
----
-
 ### functions
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -3790,17 +3746,6 @@ function get_summary(collector::ErrorCollector)
 get_summary(collector)
 
 Get a summary of all collected errors and warnings.
-
----
-
-### get_supported_migration_targets
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-get_supported_migration_targets(...)
-```
 
 ---
 
@@ -4022,21 +3967,6 @@ from file_b take precedence.
 
 **Available in other languages:**
 - [Typescript](typescript.md#merge)
-
----
-
-### migrate
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-migrate(...)
-```
-
-**Available in other languages:**
-- [Python](python.md#migrate)
-- [Typescript](typescript.md#migrate)
 
 ---
 

@@ -1161,7 +1161,6 @@ Migrate an ESM file from its current schema version to the target version.
 /
 
 **Available in other languages:**
-- [Julia](julia.md#migrate)
 - [Python](python.md#migrate)
 
 ---

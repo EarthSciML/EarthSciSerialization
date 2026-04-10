@@ -1108,20 +1108,6 @@ Convert a ModelingToolkit ODESystem or MockMTKSystem back to ESM Model format.
 
 ---
 
-### functionality
-
-**Julia:**
-```julia
-functionality(...)
-```
-
-**Julia:**
-```julia
-functionality(...)
-```
-
----
-
 ### functions
 
 **Julia:**
@@ -1465,11 +1451,6 @@ export function merge(
 ---
 
 ### migrate
-
-**Julia:**
-```julia
-migrate(...)
-```
 
 **Python:**
 ```python
