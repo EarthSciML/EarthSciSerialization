@@ -230,8 +230,8 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
                 end
             end
 
-        elseif coupling isa CouplingCouple2
-            # Bidirectional edge for couple2
+        elseif coupling isa CouplingCouple
+            # Bidirectional edge for couple
             if length(coupling.systems) >= 2
                 system_a = coupling.systems[1]
                 system_b = coupling.systems[2]
@@ -239,16 +239,13 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
                 to_node = get(node_map, system_b, nothing)
 
                 if from_node !== nothing && to_node !== nothing
-                    label = "couple2"
-                    if length(coupling.coupletype_pair) >= 1 && coupling.coupletype_pair[1] !== nothing
-                        label = "couple2(\$(coupling.coupletype_pair[1]))"
-                    end
+                    label = "couple"
 
                     edge = CouplingEdge(
                         edge_id,
                         system_a,
                         system_b,
-                        "couple2",
+                        "couple",
                         label,
                         "Bidirectional coupling",
                         coupling
@@ -769,7 +766,7 @@ function to_dot(graph::Graph{ComponentNode, CouplingEdge})::String
 
     # Add edges with colors based on coupling type
     for edge in graph.edges
-        edge_color = if edge.data.type == "operator_compose" || edge.data.type == "couple2"
+        edge_color = if edge.data.type == "operator_compose" || edge.data.type == "couple"
             "blue"
         elseif edge.data.type == "variable_map"
             "green"

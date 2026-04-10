@@ -4458,17 +4458,17 @@ Test different convergence criteria.
 
 ---
 
-### test_couple2_coupling
+### test_couple_coupling
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1136`
 
 **Signature:**
 ```python
-def test_couple2_coupling(self):
+def test_couple_coupling(self):
 ```
 
 **Description:**
-Test couple2 coupling with connector system.
+Test couple coupling with connector system.
 
 ---
 
@@ -10732,7 +10732,7 @@ class Couple2Coupling:
 ```
 
 **Description:**
-Coupling entry for couple2 type.
+Coupling entry for couple type.
 
 ---
 
@@ -13015,7 +13015,7 @@ class TestSection10Coupling:
 ```
 
 **Description:**
-Section 10: Coupling - all 6 types including couple2/operator_apply/callback/event
+Section 10: Coupling - all 6 types including couple/operator_apply/callback/event
 
 ---
 

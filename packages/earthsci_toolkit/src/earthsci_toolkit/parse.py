@@ -486,7 +486,7 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
     # Map schema types to our enum
     type_mapping = {
         "operator_compose": CouplingType.OPERATOR_COMPOSE,
-        "couple2": CouplingType.COUPLE2,
+        "couple": CouplingType.COUPLE2,
         "variable_map": CouplingType.VARIABLE_MAP,
         "operator_apply": CouplingType.OPERATOR_APPLY,
         "callback": CouplingType.CALLBACK,
@@ -526,7 +526,6 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
         return Couple2Coupling(
             description=description,
             systems=coupling_data.get("systems", []),
-            coupletype_pair=coupling_data.get("coupletype_pair", []),
             connector=connector
         )
 

@@ -781,14 +781,10 @@
       "description": "Placeholder for atmospheric transport coupling if extended"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphericCarbon",
         "OceanCarbon"
-      ],
-      "coupletype_pair": [
-        "AtmosphereCoupler",
-        "OceanCoupler"
       ],
       "connector": {
         "equations": [
@@ -931,7 +927,7 @@
       "description": "Bidirectional air-sea gas exchange for CO2 and O2"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "OceanCarbon",
         "MarineEcosystem"
@@ -1028,11 +1024,7 @@
           }
         ]
       },
-      "description": "Couple marine ecosystem carbon and oxygen fluxes",
-      "coupletype_pair": [
-        "OceanCarbonCoupler",
-        "MarineEcosystemCoupler"
-      ]
+      "description": "Couple marine ecosystem carbon and oxygen fluxes"
     },
     {
       "type": "variable_map",

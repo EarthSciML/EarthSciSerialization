@@ -23,8 +23,8 @@ Tests the `operator_compose` algorithm (Section 4.7.1) that merges ODE systems b
 - Translation map application with conversion factors
 - RHS combination (`rhs_A + factor * rhs_B`)
 
-### 2. `couple2_resolution_fixtures.esm`
-Tests the `couple2` algorithm (Section 4.7.2) that provides bidirectional coupling via ConnectorSystem equations.
+### 2. `couple_resolution_fixtures.esm`
+Tests the `couple` algorithm (Section 4.7.2) that provides bidirectional coupling via ConnectorSystem equations.
 
 **Key Test Cases:**
 - Additive transforms (source added to target equation RHS)
@@ -111,7 +111,7 @@ Tests error conditions that coupling resolution algorithms must detect and repor
 4. Combine matched equations by adding RHS terms
 5. Preserve unmatched equations unchanged
 
-### `couple2` Algorithm Steps
+### `couple` Algorithm Steps
 1. Read connector.equations array
 2. Resolve 'from' and 'to' scoped references
 3. Apply coupling based on transform type

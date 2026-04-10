@@ -20,7 +20,7 @@ This document maps ESM format specifications to test fixtures to ensure complete
 | 7. Reaction Systems | Species, reactions, mass action | ✅ Created | `valid/minimal_chemistry.esm` |
 | 8. Data Loaders | By reference, provides vars | ✅ Created | `valid/minimal_chemistry.esm` |
 | 9. Operators | By reference, needed_vars | ❌ Missing | **GAP**: Need operator fixtures |
-| 10. Coupling | All 6 coupling types | ✅ Created | `coupling/` (couple2, operator_apply, callback) |
+| 10. Coupling | All 6 coupling types | ✅ Created | `coupling/` (couple, operator_apply, callback) |
 | 11. Domain | Temporal, spatial, BCs, ICs | ❌ Partial | Basic spatial in minimal_chemistry.esm |
 | 12. Solver | All 3 solver strategies | ❌ Partial | Only strang_threads in minimal_chemistry.esm |
 | 13. Complete Example | MinimalChemAdvection | ✅ Created | `valid/minimal_chemistry.esm` |
@@ -80,7 +80,7 @@ Based on libraries spec Section 3.4:
    - `atan2`, `min`, `max`, `floor`, `ceil` (functions)
 
 2. **Coupling Types** (Section 10): Only 2/6 coupling types tested:
-   - ❌ `couple2` with connector equations
+   - ❌ `couple` with connector equations
    - ❌ `operator_apply`
    - ❌ `callback`
    - ❌ `event` (cross-system)
@@ -135,7 +135,7 @@ Based on libraries spec Section 3.4:
 
 2. **Create Coupling Test Suite**
    ```
-   tests/coupling/couple2_examples.esm        # Connector equations
+   tests/coupling/couple_examples.esm        # Connector equations
    tests/coupling/operator_apply_examples.esm  # Runtime operators
    tests/coupling/callback_examples.esm        # Simulation callbacks
    ```

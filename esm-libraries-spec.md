@@ -419,13 +419,13 @@ D(NO)/dt  = [chemistry RHS for NO]  + (-u·∂NO/∂x   - v·∂NO/∂y)
 D(NO₂)/dt = [chemistry RHS for NO₂] + (-u·∂NO₂/∂x  - v·∂NO₂/∂y)
 ```
 
-#### 4.7.2 `couple2` Semantics
+#### 4.7.2 `couple` Semantics
 
-`couple2` provides bidirectional coupling between two systems via a `ConnectorSystem` — a set of explicit equations that define how variables in one system affect the other.
+`couple` provides bidirectional coupling between two systems via a `ConnectorSystem` — a set of explicit equations that define how variables in one system affect the other.
 
-In Julia, `couple2` uses multiple dispatch on `coupletype` metadata to select the coupling method. **In non-Julia languages, dispatch is not needed** because the ESM file's `connector` field already contains the fully specified coupling equations. The `coupletype_pair` field is informational (identifying which Julia dispatch method produced the coupling) but the `connector.equations` array is the complete specification.
+The `connector.equations` array contains the complete coupling specification, explicitly provided by the user. Couplers must be manually added to a coupled system; they are not auto-discovered via dispatch or type matching.
 
-**Resolution algorithm for `couple2`:**
+**Resolution algorithm for `couple`:**
 
 1. Read the `connector.equations` array.
 2. For each connector equation:
@@ -477,7 +477,7 @@ All libraries (including Core tier) must implement the flattening algorithm. Fla
 
 3. **Apply coupling rules.** Process each coupling entry to merge equations across systems:
    - **`operator_compose`**: Match equations by dependent variable (applying the `translate` map and `_var` placeholder expansion as described in Section 4.7.1). Combine matched equations by summing their RHS terms. The resulting equation uses the namespaced LHS variable (e.g., `D(SimpleOzone.O3, t) = [chemistry RHS] + [advection RHS]`).
-   - **`couple2`**: Apply connector equations, resolving the `from` and `to` scoped references to their namespaced equivalents.
+   - **`couple`**: Apply connector equations, resolving the `from` and `to` scoped references to their namespaced equivalents.
    - **`variable_map`**: Substitute the target parameter with the source variable. For `param_to_var`, replace all occurrences of `Target.param` with `Source.var` in the flattened equations and remove the parameter from the target's parameter list.
    - **`operator_apply` / `callback`**: Record in the flattened system's metadata as opaque runtime references.
 
@@ -539,7 +539,7 @@ Each coupling entry produces one or more directed edges:
 | Coupling type | Edge(s) |
 |---|---|
 | `operator_compose` | Bidirectional edge between the two systems |
-| `couple2` | Bidirectional edge between the two systems, labeled with coupletype pair |
+| `couple` | Bidirectional edge between the two systems |
 | `variable_map` | Directed edge from source to target (e.g., `GEOSFP → SimpleOzone`), labeled with the mapped variable |
 | `operator_apply` | Directed edge from operator to the system(s) it modifies |
 | `callback` | Edge from callback to the system it targets |
@@ -891,7 +891,7 @@ interface ExprNode {
 // Discriminated union for coupling
 type CouplingEntry =
   | { type: 'operator_compose'; systems: [string, string]; translate?: Record<string, TranslateTarget>; description?: string }
-  | { type: 'couple2'; systems: [string, string]; coupletype_pair: [string, string]; connector: Connector; description?: string }
+  | { type: 'couple'; systems: [string, string]; connector: Connector; description?: string }
   | { type: 'variable_map'; from: string; to: string; transform: string; factor?: number; description?: string }
   | { type: 'operator_apply'; operator: string; description?: string }
   | { type: 'callback'; callback_id: string; config?: Record<string, unknown>; description?: string }

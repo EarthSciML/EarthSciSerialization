@@ -84,7 +84,7 @@ describe('componentGraph function', () => {
         description: 'Apply diffusion to transport'
       },
       {
-        type: 'couple2',
+        type: 'couple',
         systems: ['Transport', 'SimpleReactions'],
         description: 'Direct coupling between transport and reactions'
       }
@@ -186,12 +186,12 @@ describe('componentGraph function', () => {
     expect(applyEdge?.target).toBe('Transport');
     expect(applyEdge?.data.label).toBe('apply');
 
-    // Check couple2 edge
-    const couple2Edge = graph.edges.find(e => e.data.type === 'couple2');
-    expect(couple2Edge).toBeDefined();
-    expect(couple2Edge?.source).toBe('Transport');
-    expect(couple2Edge?.target).toBe('SimpleReactions');
-    expect(couple2Edge?.data.label).toBe('couple');
+    // Check couple edge
+    const coupleEdge = graph.edges.find(e => e.data.type === 'couple');
+    expect(coupleEdge).toBeDefined();
+    expect(coupleEdge?.source).toBe('Transport');
+    expect(coupleEdge?.target).toBe('SimpleReactions');
+    expect(coupleEdge?.data.label).toBe('couple');
   });
 
   it('should implement adjacency method correctly', () => {

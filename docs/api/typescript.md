@@ -1547,15 +1547,15 @@ Register a callback for simulation events.
 
 ---
 
-### CouplingCouple2
+### CouplingCouple
 
 **File:** `packages/esm-format/src/generated.ts:601`
 
 ```typescript
-export interface CouplingCouple2 {
+export interface CouplingCouple {
 ```
 
-Bi-directional coupling via coupletype dispatch.
+Bi-directional coupling via explicit ConnectorSystem equations.
 /
 
 ---

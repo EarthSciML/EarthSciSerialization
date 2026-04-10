@@ -15,7 +15,7 @@ import type {
     ExpressionNode,
     CouplingEntry,
     CouplingOperatorCompose,
-    CouplingCouple2,
+    CouplingCouple,
     CouplingOperatorApply,
     DiscreteEvent,
     ContinuousEvent,
@@ -511,10 +511,10 @@ function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
                     });
                 }
             }
-        } else if (coupling.type === 'couple2') {
+        } else if (coupling.type === 'couple') {
             // Check systems exist
-            const couple2Entry = coupling as CouplingCouple2;
-            for (const systemName of couple2Entry.systems) {
+            const coupleEntry = coupling as CouplingCouple;
+            for (const systemName of coupleEntry.systems) {
                 if (!availableSystems.has(systemName)) {
                     errors.push({
                         path: `${couplingPath}/systems`,

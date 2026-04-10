@@ -30,9 +30,8 @@ model2 = EarthSciSerialization.Model(model2_vars, model2_eqs)
 
 # Create coupling entries
 operator_compose_coupling = EarthSciSerialization.CouplingOperatorCompose(["model1", "model2"])
-couple2_coupling = EarthSciSerialization.CouplingCouple2(
+couple_coupling = EarthSciSerialization.CouplingCouple(
     ["model1", "model2"],
-    ["coupletype1", "coupletype2"],
     Dict{String, Any}("equations" => [Dict("from" => "model1.x", "to" => "model2.y", "transform" => "additive")])
 )
 variable_map_coupling = EarthSciSerialization.CouplingVariableMap("model1.k1", "model2.k2", "identity")
@@ -40,7 +39,7 @@ variable_map_coupling = EarthSciSerialization.CouplingVariableMap("model1.k1", "
 # Create ESM file with coupling
 metadata = EarthSciSerialization.Metadata("test-coupled-system")
 models = Dict("model1" => model1, "model2" => model2)
-coupling = [operator_compose_coupling, couple2_coupling, variable_map_coupling]
+coupling = [operator_compose_coupling, couple_coupling, variable_map_coupling]
 
 esm_file = EarthSciSerialization.EsmFile("0.1.0", metadata; models=models, coupling=coupling)
 

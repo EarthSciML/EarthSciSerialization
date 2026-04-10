@@ -110,12 +110,11 @@ describe('buildVarEquivalences', () => {
     expect(noClass!.has('Transport.NO')).toBe(true);
   });
 
-  it('should build equivalences from couple2 couplings', () => {
+  it('should build equivalences from couple couplings', () => {
     const couplings: CouplingEntry[] = [
       {
-        type: 'couple2',
+        type: 'couple',
         systems: ['Chemistry', 'Surface'],
-        coupletype_pair: ['ChemistryCoupler', 'SurfaceCoupler'],
         connector: {
           equations: [
             {
@@ -302,9 +301,8 @@ describe('complex equivalence scenarios', () => {
       },
       // Couple2 linking C -> D
       {
-        type: 'couple2',
+        type: 'couple',
         systems: ['ModelC', 'ModelD'],
-        coupletype_pair: ['TypeC', 'TypeD'],
         connector: {
           equations: [
             {

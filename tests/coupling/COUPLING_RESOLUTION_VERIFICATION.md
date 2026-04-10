@@ -32,7 +32,7 @@ This file provides positive test cases that verify each step of the algorithm wo
 | Case 5 | `AtmosphereModel.Transport.Advection.u_wind` | Alternative branch navigation |
 | Case 6 | `MeteorologicalData.QualityControl.data_quality_flag` | Data loader subsystem |
 | Case 7 | `BiogenicEmissions.TemperatureDependence.beta` | Operator subsystem |
-| Case 8 | References in `couple2` expressions | Scoped refs within expressions |
+| Case 8 | References in `couple` expressions | Scoped refs within expressions |
 
 ### Error Cases (`../invalid/coupling_resolution_errors.esm`)
 

@@ -902,14 +902,10 @@
       "description": "Couple 3D transport with gas-phase chemistry"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphericChemistry",
         "SurfaceExchange"
-      ],
-      "coupletype_pair": [
-        "ChemistryCoupler",
-        "SurfaceExchangeCoupler"
       ],
       "connector": {
         "equations": [

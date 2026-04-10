@@ -1956,21 +1956,21 @@ Register a callback for simulation events.
 
 ---
 
-### CouplingCouple2
+### CouplingCouple
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:616`
 
 **Definition:**
 ```typescript
-export interface CouplingCouple2 {
+export interface CouplingCouple {
 ```
 
 **Description:**
-Bi-directional coupling via coupletype dispatch.
+Bi-directional coupling via explicit ConnectorSystem equations.
 /
 
 **Available in other languages:**
-- [Julia](julia.md#couplingcouple2)
+- [Julia](julia.md#couplingcouple)
 
 ---
 

@@ -154,7 +154,7 @@ const advancedDemoEsmFile: EsmFile = {
       description: 'Apply chemical solver to chemistry model'
     },
     {
-      type: 'couple2',
+      type: 'couple',
       systems: ['Photolysis', 'ChemistryKinetics'],
       description: 'Bidirectional coupling between photolysis and chemistry'
     },
@@ -198,7 +198,7 @@ export const AdvancedCouplingGraphDemo: Component = () => {
   };
 
   const componentTypes: ComponentNode['type'][] = ['model', 'reaction_system', 'data_loader', 'operator'];
-  const couplingTypes = ['operator_compose', 'couple2', 'variable_map', 'operator_apply', 'callback'];
+  const couplingTypes = ['operator_compose', 'couple', 'variable_map', 'operator_apply', 'callback'];
 
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', 'flex-direction': 'column' }}>
