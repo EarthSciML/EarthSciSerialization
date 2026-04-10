@@ -80,12 +80,49 @@ fn get_schema() -> &'static JSONSchema {
 /// ```
 pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     // First, parse the JSON
-    let json_value: Value = serde_json::from_str(json_str).map_err(|e| EsmError::JsonParse(e))?;
+    let mut json_value: Value =
+        serde_json::from_str(json_str).map_err(|e| EsmError::JsonParse(e))?;
+
+    // Resolve any subsystem refs against the current working directory before
+    // schema validation, per spec section 2.1b. Callers that load from a known
+    // file path should use `load_path` instead, which uses the file's own
+    // directory as the base.
+    let base = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    crate::ref_loading::resolve_subsystem_refs(&mut json_value, &base)
+        .map_err(EsmError::SchemaValidation)?;
 
     // Validate against schema
     validate_schema(&json_value)?;
 
     // Deserialize into our types
+    let esm_file: EsmFile =
+        serde_json::from_value(json_value).map_err(|e| EsmError::JsonParse(e))?;
+
+    Ok(esm_file)
+}
+
+/// Load an ESM file from a filesystem path.
+///
+/// Reads the file, resolves any subsystem references relative to the file's
+/// directory, validates against the schema, and deserializes into an
+/// [`EsmFile`].
+pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError> {
+    let path = path.as_ref();
+    let json_str = std::fs::read_to_string(path)
+        .map_err(|e| EsmError::SchemaValidation(format!("failed to read {}: {e}", path.display())))?;
+
+    let mut json_value: Value =
+        serde_json::from_str(&json_str).map_err(|e| EsmError::JsonParse(e))?;
+
+    let base = path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    crate::ref_loading::resolve_subsystem_refs(&mut json_value, &base)
+        .map_err(EsmError::SchemaValidation)?;
+
+    validate_schema(&json_value)?;
+
     let esm_file: EsmFile =
         serde_json::from_value(json_value).map_err(|e| EsmError::JsonParse(e))?;
 
