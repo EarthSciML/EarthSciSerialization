@@ -73,13 +73,14 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
     "@types/node": "^20.0.0",
-    "jsdom": "^22.0.0",
+    "jsdom": "^29.0.0",
     "json-schema-to-typescript": "^13.0.0",
     "playwright": "^1.58.2",
     "rollup": "^4.57.1",
     "rollup-plugin-dts": "^6.3.0",
     "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "vite-plugin-solid": "^2.11.12",
+    "vitest": "^4.0.0"
   },
   "engines": {
     "node": ">=18"
