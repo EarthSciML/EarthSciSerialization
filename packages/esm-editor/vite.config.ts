@@ -27,11 +27,12 @@ export default defineConfig({
 
   test: {
     environment: 'jsdom',
-    transformMode: {
-      web: [/\.[jt]sx?$/]
-    },
     deps: {
-      inline: [/solid-js/, /solid-element/, /@solidjs\/testing-library/]
+      optimizer: {
+        web: {
+          include: ['solid-js', 'solid-element', '@solidjs/testing-library']
+        }
+      }
     }
   }
 });
