@@ -8,12 +8,27 @@ Implements output formats:
 Based on ESM Format Specification Section 6.1
 """
 
+import re
 from typing import Union, Dict, Any
 try:
     from .esm_types import Expr, ExprNode, Equation, Model, ReactionSystem, EsmFile
 except ImportError:
     # For direct imports when testing
     from types import Expr, ExprNode, Equation, Model, ReactionSystem, EsmFile
+
+
+# Greek letter to LaTeX mapping
+GREEK_LATEX = {
+    'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'δ': '\\delta',
+    'ε': '\\epsilon', 'ζ': '\\zeta', 'η': '\\eta', 'θ': '\\theta',
+    'ι': '\\iota', 'κ': '\\kappa', 'λ': '\\lambda', 'μ': '\\mu',
+    'ν': '\\nu', 'ξ': '\\xi', 'π': '\\pi', 'ρ': '\\rho',
+    'σ': '\\sigma', 'τ': '\\tau', 'υ': '\\upsilon', 'φ': '\\phi',
+    'χ': '\\chi', 'ψ': '\\psi', 'ω': '\\omega',
+    'Γ': '\\Gamma', 'Δ': '\\Delta', 'Θ': '\\Theta', 'Λ': '\\Lambda',
+    'Ξ': '\\Xi', 'Π': '\\Pi', 'Σ': '\\Sigma', 'Φ': '\\Phi',
+    'Ψ': '\\Psi', 'Ω': '\\Omega',
+}
 
 
 # Element lookup table for chemical subscript detection (118 elements)
@@ -104,22 +119,64 @@ def _has_element_pattern(variable: str) -> bool:
     return has_element
 
 
+def _find_first_element_index(variable: str) -> int:
+    """Find the index of the first chemical element in the variable name."""
+    i = 0
+    while i < len(variable):
+        if not variable[i].isalpha():
+            i += 1
+            continue
+        if i + 1 < len(variable):
+            two_char = variable[i:i+2]
+            if two_char in ELEMENTS:
+                return i
+        if variable[i] in ELEMENTS:
+            return i
+        i += 1
+    return -1
+
+
+def _latex_subscript_digits(s: str) -> str:
+    """Convert digit sequences in a string to LaTeX subscripts.
+    Single digits: _N, multi-digit: _{NN}"""
+    return re.sub(
+        r'(\d+)',
+        lambda m: f'_{{{m.group(1)}}}' if len(m.group(1)) > 1 else f'_{m.group(1)}',
+        s
+    )
+
+
 def _format_chemical_subscripts(variable: str, format_type: str) -> str:
     """
     Apply element-aware chemical subscript formatting to a variable name.
     Uses greedy 2-char-before-1-char matching for element detection.
     """
+    # Check for Greek letters in latex mode
+    if format_type == 'latex' and variable in GREEK_LATEX:
+        return GREEK_LATEX[variable]
+
     # Check if variable looks like a chemical formula
     has_elements = _has_element_pattern(variable)
 
     if format_type == 'latex':
         if has_elements:
-            # Chemical formula: wrap in \mathrm{} and convert digits to subscripts
-            import re
-            result = re.sub(r'(\d+)', r'_\1', variable)
-            return f'\\mathrm{{{result}}}'
+            elem_start = _find_first_element_index(variable)
+            if elem_start > 0:
+                # Mixed variable: non-element prefix + chemical part
+                prefix = variable[:elem_start].rstrip('_')
+                chemical = variable[elem_start:]
+                formatted_chemical = _latex_subscript_digits(chemical)
+                return f'{prefix}_{{\\mathrm{{{formatted_chemical}}}}}'
+            else:
+                # Pure chemical formula
+                formatted = _latex_subscript_digits(variable)
+                return f'\\mathrm{{{formatted}}}'
         else:
-            # Regular variable: return as-is
+            # Non-chemical with mixed alpha+digits: wrap in \mathrm for consistent display
+            has_alpha = any(c.isalpha() for c in variable)
+            has_digit = any(c.isdigit() for c in variable)
+            if has_alpha and has_digit:
+                return f'\\mathrm{{{variable}}}'
             return variable
 
     if format_type == 'ascii':
@@ -172,19 +229,27 @@ def _format_chemical_subscripts(variable: str, format_type: str) -> str:
 def _format_number(num: Union[int, float], format_type: str) -> str:
     """Format a number in scientific notation with appropriate formatting."""
     if isinstance(num, int) and abs(num) < 1e6:
-        return str(num)
+        s = str(num)
+        if format_type == 'unicode':
+            s = s.replace('-', '−')
+        return s
 
     if isinstance(num, float) and abs(num) >= 1e-4 and abs(num) < 1e5 and num.is_integer():
-        return str(int(num))
+        s = str(int(num))
+        if format_type == 'unicode':
+            s = s.replace('-', '−')
+        return s
 
     # For regular-sized floats, return as-is without scientific notation
     if isinstance(num, float) and abs(num) >= 1e-4 and abs(num) < 1e5:
         # Use reasonable precision for display
-        return f"{num:.12g}".rstrip('0').rstrip('.')
+        s = f"{num:.12g}".rstrip('0').rstrip('.')
+        if format_type == 'unicode':
+            s = s.replace('-', '−')
+        return s
 
     # Use scientific notation for very large or very small numbers
-    # Use a reasonable precision to start with
-    str_repr = f"{num:.1e}"
+    str_repr = f"{num:.6e}"
     if 'e' not in str_repr:
         return str_repr
 
@@ -214,7 +279,7 @@ def _get_operator_precedence(op: str) -> int:
     precedence_map = {
         'or': 1,
         'and': 2,
-        '==': 3, '!=': 3, '<': 3, '>': 3, '<=': 3, '>=': 3,
+        '=': 3, '==': 3, '!=': 3, '<': 3, '>': 3, '<=': 3, '>=': 3,
         '+': 4, '-': 4,
         '*': 5, '/': 5,
         'not': 6,  # Unary
@@ -226,6 +291,18 @@ def _get_operator_precedence(op: str) -> int:
 def _needs_parentheses(parent: ExprNode, child: Expr, is_right_operand: bool = False) -> bool:
     """Check if parentheses are needed around a subexpression."""
     if isinstance(child, (int, float, str)):
+        return False
+
+    # Handle dict-style expression nodes
+    if isinstance(child, dict) and 'op' in child:
+        parent_prec = _get_operator_precedence(parent.op)
+        child_prec = _get_operator_precedence(child['op'])
+        if child_prec < parent_prec:
+            return True
+        if child_prec > parent_prec:
+            return False
+        if is_right_operand and parent.op in ['-', '/', '^']:
+            return True
         return False
 
     if not isinstance(child, ExprNode):
@@ -276,7 +353,9 @@ def to_unicode(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) ->
     if isinstance(target, dict) and 'op' in target:
         # Handle dictionary-style expressions for compatibility
         args = target.get('args') or []
-        return _format_expression_node(ExprNode(op=target['op'], args=args), 'unicode')
+        node = ExprNode(op=target['op'], args=args,
+                        wrt=target.get('wrt'), dim=target.get('dim'))
+        return _format_expression_node(node, 'unicode')
 
     if isinstance(target, dict):
         # Handle malformed dict expressions gracefully
@@ -322,7 +401,9 @@ def to_latex(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) -> s
     if isinstance(target, dict) and 'op' in target:
         # Handle dictionary-style expressions for compatibility
         args = target.get('args') or []
-        return _format_expression_node(ExprNode(op=target['op'], args=args), 'latex')
+        node = ExprNode(op=target['op'], args=args,
+                        wrt=target.get('wrt'), dim=target.get('dim'))
+        return _format_expression_node(node, 'latex')
 
     if isinstance(target, dict):
         # Handle malformed dict expressions gracefully
@@ -368,9 +449,12 @@ def to_ascii(target: Union[Expr, Equation, Model, ReactionSystem, EsmFile]) -> s
     if isinstance(target, ExprNode):
         return _format_expression_node(target, 'ascii')
 
-    if isinstance(target, dict) and 'op' in target and 'args' in target:
+    if isinstance(target, dict) and 'op' in target:
         # Handle dictionary-style expressions for compatibility
-        return _format_expression_node(ExprNode(op=target['op'], args=target['args']), 'ascii')
+        args = target.get('args') or []
+        node = ExprNode(op=target['op'], args=args,
+                        wrt=target.get('wrt'), dim=target.get('dim'))
+        return _format_expression_node(node, 'ascii')
 
     if isinstance(target, dict):
         # Handle malformed dict expressions gracefully
@@ -395,105 +479,156 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
     """Format an ExpressionNode (operator with arguments)."""
     op, args = node.op, node.args
     wrt = getattr(node, 'wrt', None)
+    dim = getattr(node, 'dim', None)
 
-    # Helper to format arguments with proper parenthesization
+    # Formatter dispatch
+    _fmt = {'unicode': to_unicode, 'latex': to_latex, 'ascii': to_ascii}[format_type]
+
     def format_arg(arg: Expr, is_right_operand: bool = False) -> str:
-        if format_type == 'unicode':
-            result = to_unicode(arg)
-        elif format_type == 'latex':
-            result = to_latex(arg)
-        elif format_type == 'ascii':
-            result = to_ascii(arg)
-        else:
-            raise ValueError(f"Unknown format type: {format_type}")
-
+        result = _fmt(arg)
         if _needs_parentheses(node, arg, is_right_operand):
-            if format_type == 'latex':
-                return f'\\left({result}\\right)'
-            else:
-                return f'({result})'
+            return f'({result})'
         return result
 
-    # Binary operators
-    if len(args) == 2:
-        left, right = args
+    def _latex_func(name, arg_str):
+        """Wrap function call: use \\left/\\right when arg contains \\frac."""
+        if '\\frac' in arg_str:
+            return f'\\{name}\\left({arg_str}\\right)'
+        return f'\\{name}({arg_str})'
+
+    # ---- N-ary / Binary operators ----
+    if len(args) >= 2:
+        # Handle n-ary multiplication by folding
+        if op == '*' and len(args) > 2:
+            result = format_arg(args[0])
+            for a in args[1:]:
+                fa = format_arg(a, True)
+                if format_type == 'unicode':
+                    result = f"{result}·{fa}"
+                elif format_type == 'latex':
+                    result = f"{result} \\cdot {fa}"
+                else:
+                    result = f"{result} * {fa}"
+            return result
+
+        left, right = args[0], args[1]
 
         if op == '+':
+            # Detect a + (-b) → render as a − b
+            is_neg = False
+            if isinstance(right, ExprNode) and right.op == '-' and len(right.args) == 1:
+                is_neg = True
+                neg_inner = right.args[0]
+            elif isinstance(right, dict) and right.get('op') == '-' and len(right.get('args', [])) == 1:
+                is_neg = True
+                neg_inner = right['args'][0]
+            if is_neg:
+                sep = ' − ' if format_type == 'unicode' else ' - '
+                return f"{format_arg(left)}{sep}{_fmt(neg_inner)}"
             return f"{format_arg(left)} + {format_arg(right, True)}"
 
         elif op == '-':
-            if format_type == 'unicode':
-                return f"{format_arg(left)} − {format_arg(right, True)}"
-            return f"{format_arg(left)} - {format_arg(right, True)}"
+            sep = ' − ' if format_type == 'unicode' else ' - '
+            return f"{format_arg(left)}{sep}{format_arg(right, True)}"
 
         elif op == '*':
             if format_type == 'unicode':
                 return f"{format_arg(left)}·{format_arg(right, True)}"
             elif format_type == 'latex':
                 return f"{format_arg(left)} \\cdot {format_arg(right, True)}"
-            elif format_type == 'ascii':
-                return f"{format_arg(left)}*{format_arg(right, True)}"
+            else:
+                return f"{format_arg(left)} * {format_arg(right, True)}"
 
         elif op == '/':
             if format_type == 'latex':
                 return f"\\frac{{{to_latex(left)}}}{{{to_latex(right)}}}"
             elif format_type == 'unicode':
                 return f"{format_arg(left)}/{format_arg(right, True)}"
-            elif format_type == 'ascii':
-                return f"{format_arg(left)}/{format_arg(right, True)}"
+            else:
+                return f"{format_arg(left)} / {format_arg(right, True)}"
 
         elif op == '^':
             if format_type == 'latex':
                 return f"{format_arg(left)}^{{{to_latex(right)}}}"
-            # For unicode, try to use superscript digits
             if format_type == 'unicode' and isinstance(right, int):
                 return f"{format_arg(left)}{_to_superscript(str(right))}"
             return f"{format_arg(left)}^{format_arg(right, True)}"
 
-        elif op in ['>', '<']:
+        elif op in ('=', '=='):
+            if format_type == 'unicode':
+                return f"{format_arg(left)} = {format_arg(right, True)}"
+            elif format_type == 'latex':
+                return f"{format_arg(left)} = {format_arg(right, True)}"
+            else:
+                return f"{format_arg(left)} == {format_arg(right, True)}"
+
+        elif op == '!=':
+            if format_type == 'unicode':
+                return f"{format_arg(left)} ≠ {format_arg(right, True)}"
+            elif format_type == 'latex':
+                return f"{format_arg(left)} \\neq {format_arg(right, True)}"
+            else:
+                return f"{format_arg(left)} != {format_arg(right, True)}"
+
+        elif op in ('<', '>'):
             return f"{format_arg(left)} {op} {format_arg(right, True)}"
 
         elif op == '>=':
             if format_type == 'unicode':
                 return f"{format_arg(left)} ≥ {format_arg(right, True)}"
-            return f"{format_arg(left)} >= {format_arg(right, True)}"
+            elif format_type == 'latex':
+                return f"{format_arg(left)} \\geq {format_arg(right, True)}"
+            else:
+                return f"{format_arg(left)} >= {format_arg(right, True)}"
 
         elif op == '<=':
             if format_type == 'unicode':
                 return f"{format_arg(left)} ≤ {format_arg(right, True)}"
-            return f"{format_arg(left)} <= {format_arg(right, True)}"
-
-        elif op == '==':
-            if format_type == 'unicode':
-                return f"{format_arg(left)} = {format_arg(right, True)}"
-            return f"{format_arg(left)} == {format_arg(right, True)}"
-
-        elif op == '!=':
-            if format_type == 'unicode':
-                return f"{format_arg(left)} ≠ {format_arg(right, True)}"
-            return f"{format_arg(left)} != {format_arg(right, True)}"
+            elif format_type == 'latex':
+                return f"{format_arg(left)} \\leq {format_arg(right, True)}"
+            else:
+                return f"{format_arg(left)} <= {format_arg(right, True)}"
 
         elif op == 'and':
             if format_type == 'unicode':
                 return f"{format_arg(left)} ∧ {format_arg(right, True)}"
-            return f"{format_arg(left)} and {format_arg(right, True)}"
+            elif format_type == 'latex':
+                return f"{format_arg(left)} \\land {format_arg(right, True)}"
+            else:
+                return f"({format_arg(left)}) && ({format_arg(right)})"
 
         elif op == 'or':
             if format_type == 'unicode':
                 return f"{format_arg(left)} ∨ {format_arg(right, True)}"
-            return f"{format_arg(left)} or {format_arg(right, True)}"
+            elif format_type == 'latex':
+                return f"{format_arg(left)} \\lor {format_arg(right, True)}"
+            else:
+                return f"({format_arg(left)}) || ({format_arg(right)})"
 
-        elif op in ['min', 'max']:
+        elif op in ('min', 'max'):
             if format_type == 'latex':
                 return f"\\{op}({to_latex(left)}, {to_latex(right)})"
             return f"{op}({format_arg(left)}, {format_arg(right)})"
 
-    # Unary operators
-    elif len(args) == 1:
+        elif op == 'binomial':
+            if format_type == 'unicode':
+                return f"C({_fmt(left)},{_fmt(right)})"
+            elif format_type == 'latex':
+                return f"\\binom{{{to_latex(left)}}}{{{to_latex(right)}}}"
+            else:
+                return f"binomial({_fmt(left)}, {_fmt(right)})"
+
+        elif op == 'atan2':
+            if format_type == 'latex':
+                return f"\\mathrm{{atan2}}({to_latex(left)}, {to_latex(right)})"
+            return f"atan2({_fmt(left)}, {_fmt(right)})"
+
+    # ---- Unary operators ----
+    if len(args) == 1:
         arg = args[0]
+        fa = _fmt(arg)
 
         if op == '-':
-            # Unary minus
             if format_type == 'unicode':
                 return f"−{format_arg(arg)}"
             return f"-{format_arg(arg)}"
@@ -501,52 +636,153 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
         elif op == 'not':
             if format_type == 'unicode':
                 return f"¬{format_arg(arg)}"
-            return f"not {format_arg(arg)}"
+            elif format_type == 'latex':
+                return f"\\lnot {format_arg(arg)}"
+            else:
+                return f"!({format_arg(arg)})"
 
-        elif op in ['exp', 'sin', 'cos', 'tan']:
+        # Standard trig
+        elif op in ('sin', 'cos', 'tan'):
             if format_type == 'latex':
-                return f"\\{op}\\left({to_latex(arg)}\\right)"
-            return f"{op}({format_arg(arg)})"
+                return _latex_func(op, to_latex(arg))
+            return f"{op}({fa})"
+
+        # Inverse trig
+        elif op in ('asin', 'acos', 'atan'):
+            base = op[1:]  # sin, cos, tan
+            if format_type == 'unicode':
+                return f"{base}⁻¹({fa})"
+            elif format_type == 'latex':
+                return f"\\{base}^{{-1}}({to_latex(arg)})"
+            else:
+                return f"{op}({fa})"
+
+        # Hyperbolic
+        elif op in ('sinh', 'cosh', 'tanh'):
+            if format_type == 'latex':
+                return _latex_func(op, to_latex(arg))
+            return f"{op}({fa})"
+
+        # Inverse hyperbolic
+        elif op in ('asinh', 'acosh', 'atanh'):
+            base = op[1:]  # sinh, cosh, tanh
+            if format_type == 'unicode':
+                return f"{base}⁻¹({fa})"
+            elif format_type == 'latex':
+                return f"\\{base}^{{-1}}({to_latex(arg)})"
+            else:
+                return f"{op}({fa})"
+
+        elif op == 'exp':
+            if format_type == 'latex':
+                return _latex_func('exp', to_latex(arg))
+            return f"exp({fa})"
 
         elif op == 'log':
             if format_type == 'unicode':
-                return f"ln({format_arg(arg)})"
+                return f"ln({fa})"
             elif format_type == 'latex':
-                return f"\\log\\left({to_latex(arg)}\\right)"
-            elif format_type == 'ascii':
-                return f"log({format_arg(arg)})"
+                return _latex_func('ln', to_latex(arg))
+            else:
+                return f"log({fa})"
+
+        elif op == 'log10':
+            if format_type == 'unicode':
+                return f"log₁₀({fa})"
+            elif format_type == 'latex':
+                return f"\\log_{{10}}({to_latex(arg)})"
+            else:
+                return f"log10({fa})"
 
         elif op == 'sqrt':
             if format_type == 'unicode':
-                return f"√{format_arg(arg)}"
+                return f"√{fa}"
             elif format_type == 'latex':
                 return f"\\sqrt{{{to_latex(arg)}}}"
-            elif format_type == 'ascii':
-                return f"sqrt({format_arg(arg)})"
+            else:
+                return f"sqrt({fa})"
 
         elif op == 'abs':
+            return f"|{fa}|"
+
+        elif op == 'floor':
             if format_type == 'unicode':
-                return f"|{format_arg(arg)}|"
+                return f"⌊{fa}⌋"
             elif format_type == 'latex':
-                return f"|{to_latex(arg)}|"
+                return f"\\lfloor {to_latex(arg)} \\rfloor"
+            else:
+                return f"floor({fa})"
+
+        elif op == 'ceil':
+            if format_type == 'unicode':
+                return f"⌈{fa}⌉"
+            elif format_type == 'latex':
+                return f"\\lceil {to_latex(arg)} \\rceil"
+            else:
+                return f"ceil({fa})"
+
+        elif op == 'gamma':
+            if format_type == 'unicode':
+                return f"Γ({fa})"
+            elif format_type == 'latex':
+                return f"\\Gamma({to_latex(arg)})"
+            else:
+                return f"gamma({fa})"
+
+        elif op == 'div':
+            if format_type == 'unicode':
+                return f"∇·{fa}"
+            elif format_type == 'latex':
+                return f"\\nabla \\cdot {to_latex(arg)}"
+            else:
+                return f"div({fa})"
+
+        elif op == 'laplacian':
+            if format_type == 'unicode':
+                return f"∇²{fa}"
+            elif format_type == 'latex':
+                return f"\\nabla^2 {to_latex(arg)}"
+            else:
+                return f"laplacian({fa})"
+
+        elif op == 'grad':
+            dim_var = dim or 't'
+            if format_type == 'unicode':
+                return f"∂{fa}/∂{dim_var}"
+            elif format_type == 'latex':
+                return f"\\frac{{\\partial {to_latex(arg)}}}{{\\partial {dim_var}}}"
+            else:
+                return f"d({fa})/d{dim_var}"
 
         elif op == 'D':
-            # Derivative operator
             wrt_var = wrt or 't'
             if format_type == 'unicode':
-                variable = to_unicode(arg)
-                return f"∂{variable}/∂{wrt_var}"
+                return f"∂{to_unicode(arg)}/∂{wrt_var}"
             elif format_type == 'latex':
                 return f"\\frac{{\\partial {to_latex(arg)}}}{{\\partial {wrt_var}}}"
-            elif format_type == 'ascii':
-                return f"d({format_arg(arg)})/d{wrt_var}"
+            else:
+                return f"D({fa})/D{wrt_var}"
+
+        elif op in ('sign', 'erf', 'erfc', 'Pre'):
+            if format_type == 'latex':
+                return f"\\mathrm{{{op}}}({to_latex(arg)})"
+            return f"{op}({fa})"
+
+    # ---- Ternary: ifelse ----
+    if op == 'ifelse' and len(args) == 3:
+        cond, if_true, if_false = args
+        if format_type == 'latex':
+            return (f"\\begin{{cases}} {to_latex(if_true)} & "
+                    f"\\text{{if }} {to_latex(cond)} \\\\ "
+                    f"{to_latex(if_false)} & \\text{{otherwise}} \\end{{cases}}")
+        return f"ifelse({_fmt(cond)}, {_fmt(if_true)}, {_fmt(if_false)})"
 
     # Fallback: function call notation
     if format_type == 'unicode':
         arg_list = ', '.join(to_unicode(arg) for arg in args)
     elif format_type == 'latex':
         arg_list = ', '.join(to_latex(arg) for arg in args)
-        return f"\\text{{{op}}}\\left({arg_list}\\right)"
+        return f"\\mathrm{{{op}}}({arg_list})"
     elif format_type == 'ascii':
         arg_list = ', '.join(to_ascii(arg) for arg in args)
     else:
