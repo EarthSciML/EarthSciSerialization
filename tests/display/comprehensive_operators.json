@@ -52,7 +52,7 @@
       {
         "input": { "op": "div", "args": ["v"] },
         "unicode": "∇·v",
-        "latex": "\\nabla \\cdot \\mathbf{v}",
+        "latex": "\\nabla \\cdot v",
         "ascii": "div(v)"
       },
       {
