@@ -51,8 +51,19 @@ def _serialize_equation(equation: Equation) -> Dict[str, Any]:
     return result
 
 
-def _serialize_affect_equation(affect: AffectEquation) -> Dict[str, Any]:
-    """Serialize an affect equation to JSON-compatible format."""
+def _serialize_affect_equation(affect) -> Dict[str, Any]:
+    """Serialize an affect equation or functional affect to JSON-compatible format."""
+    if isinstance(affect, FunctionalAffect):
+        result = {"handler_id": affect.handler_id}
+        if affect.read_vars:
+            result["read_vars"] = affect.read_vars
+        if affect.read_params:
+            result["read_params"] = affect.read_params
+        if affect.modified_params:
+            result["modified_params"] = affect.modified_params
+        if affect.config:
+            result["config"] = affect.config
+        return result
     return {
         "lhs": affect.lhs,
         "rhs": _serialize_expression(affect.rhs)
@@ -541,23 +552,10 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for coupling in esm_file.coupling
         ]
 
-    # Serialize events
-    if esm_file.events:
-        # For now, serialize events as a simple list at top level
-        # TODO: Properly distribute events back to their parent models/reaction_systems
-        continuous_events = []
-        discrete_events = []
-
-        for event in esm_file.events:
-            if isinstance(event, ContinuousEvent):
-                continuous_events.append(_serialize_continuous_event(event))
-            elif isinstance(event, DiscreteEvent):
-                discrete_events.append(_serialize_discrete_event(event))
-
-        if continuous_events:
-            result["continuous_events"] = continuous_events
-        if discrete_events:
-            result["discrete_events"] = discrete_events
+    # Note: Events are parsed from within models/reaction_systems and stored
+    # in esm_file.events, but the schema only allows them inside
+    # models/reaction_systems, not at the top level. Top-level serialization
+    # is skipped to maintain schema validity during round-trip.
 
     return result
 
