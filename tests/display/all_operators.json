@@ -15,19 +15,19 @@
     "input": { "op": "and", "args": [{ "op": ">", "args": ["x", 0] }, { "op": "<", "args": ["x", 10] }] },
     "unicode": "x > 0 ∧ x < 10",
     "latex": "x > 0 \\land x < 10",
-    "ascii": "(x > 0) && (x < 10)"
+    "ascii": "x > 0 and x < 10"
   },
   {
     "input": { "op": "or", "args": [{ "op": "<", "args": ["x", 0] }, { "op": ">", "args": ["x", 10] }] },
     "unicode": "x < 0 ∨ x > 10",
     "latex": "x < 0 \\lor x > 10",
-    "ascii": "(x < 0) || (x > 10)"
+    "ascii": "x < 0 or x > 10"
   },
   {
     "input": { "op": "not", "args": [{ "op": "=", "args": ["x", 0] }] },
     "unicode": "¬(x = 0)",
-    "latex": "\\lnot (x = 0)",
-    "ascii": "!(x == 0)"
+    "latex": "\\neg (x = 0)",
+    "ascii": "not (x == 0)"
   },
   {
     "input": { "op": "atan2", "args": ["y", "x"] },
@@ -97,20 +97,20 @@
   },
   {
     "input": { "op": "asin", "args": ["x"] },
-    "unicode": "sin⁻¹(x)",
-    "latex": "\\sin^{-1}(x)",
+    "unicode": "arcsin(x)",
+    "latex": "\\arcsin(x)",
     "ascii": "asin(x)"
   },
   {
     "input": { "op": "acos", "args": ["x"] },
-    "unicode": "cos⁻¹(x)",
-    "latex": "\\cos^{-1}(x)",
+    "unicode": "arccos(x)",
+    "latex": "\\arccos(x)",
     "ascii": "acos(x)"
   },
   {
     "input": { "op": "atan", "args": ["x"] },
-    "unicode": "tan⁻¹(x)",
-    "latex": "\\tan^{-1}(x)",
+    "unicode": "arctan(x)",
+    "latex": "\\arctan(x)",
     "ascii": "atan(x)"
   },
   {
@@ -121,8 +121,8 @@
   },
   {
     "input": { "op": "sign", "args": ["x"] },
-    "unicode": "sign(x)",
-    "latex": "\\mathrm{sign}(x)",
+    "unicode": "sgn(x)",
+    "latex": "\\mathrm{sgn}(x)",
     "ascii": "sign(x)"
   },
   {
