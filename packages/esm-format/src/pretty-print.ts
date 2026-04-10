@@ -814,8 +814,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
     else result = toAscii(arg)
 
     if (needsParentheses(node, arg, isRightOperand)) {
-      if (format === 'latex') return `\\left(${result}\\right)`
-      else return `(${result})`
+      return `(${result})`
     }
     return result
   }
@@ -1041,7 +1040,7 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
         if (format === 'unicode') {
           return `∇·${formatArg(arg)}`
         } else if (format === 'latex') {
-          return `\\nabla \\cdot \\mathbf{${toLatex(arg)}}`
+          return `\\nabla \\cdot ${toLatex(arg)}`
         }
         return `${op}(${formatArg(arg)})`
 
