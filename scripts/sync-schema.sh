@@ -12,7 +12,7 @@ CANONICAL="${REPO_ROOT}/esm-schema.json"
 
 TARGETS=(
   "packages/esm-format-go/pkg/esm/esm-schema.json"
-  "packages/earthsci-toolkit/src/esm-schema.json"
+  "packages/earthsci-toolkit-rs/src/esm-schema.json"
   "packages/EarthSciSerialization.jl/data/esm-schema.json"
   "packages/earthsci_toolkit/src/earthsci_toolkit/data/esm-schema.json"
 )

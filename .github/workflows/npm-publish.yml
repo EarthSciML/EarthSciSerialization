@@ -22,18 +22,18 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-        cache-dependency-path: packages/esm-format/package-lock.json
+        cache-dependency-path: packages/earthsci-toolkit/package-lock.json
 
     - name: Install dependencies
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm ci
 
     - name: Run tests
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm run test:ci
 
     - name: Build package
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm run build
 
   publish-npm:
@@ -50,18 +50,18 @@ jobs:
         node-version: 20
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
-        cache-dependency-path: packages/esm-format/package-lock.json
+        cache-dependency-path: packages/earthsci-toolkit/package-lock.json
 
     - name: Install dependencies
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm ci
 
     - name: Build package
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm run build
 
     - name: Publish to NPM
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm publish
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -80,18 +80,18 @@ jobs:
         node-version: 20
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
-        cache-dependency-path: packages/esm-format/package-lock.json
+        cache-dependency-path: packages/earthsci-toolkit/package-lock.json
 
     - name: Install dependencies
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm ci
 
     - name: Build package
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm run build
 
     - name: Update version to beta
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: |
         CURRENT_VERSION=$(node -p "require('./package.json').version")
         BETA_VERSION="${CURRENT_VERSION}-beta.$(date +%s)"
@@ -99,7 +99,7 @@ jobs:
         echo "Publishing version: $BETA_VERSION"
 
     - name: Publish beta to NPM
-      working-directory: packages/esm-format
+      working-directory: packages/earthsci-toolkit
       run: npm publish --tag beta
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -150,7 +150,7 @@ jobs:
     - name: Setup Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        workspaces: packages/earthsci-toolkit
+        workspaces: packages/earthsci-toolkit-rs
 
     - name: Setup Node.js (for TypeScript build)
       uses: actions/setup-node@v4
@@ -172,7 +172,7 @@ jobs:
 
     - name: Build Rust binary
       shell: bash
-      working-directory: packages/earthsci-toolkit
+      working-directory: packages/earthsci-toolkit-rs
       run: |
         cargo build --release --target ${{ matrix.config.rust_target }} --bin esm
 
@@ -189,7 +189,7 @@ jobs:
         mkdir -p "$DIST_DIR"
 
         # Copy binary
-        cp "packages/earthsci-toolkit/target/${RUST_TARGET}/release/${BINARY_NAME}" "$DIST_DIR/"
+        cp "packages/earthsci-toolkit-rs/target/${RUST_TARGET}/release/${BINARY_NAME}" "$DIST_DIR/"
 
         # Copy documentation
         cp README.md "$DIST_DIR/" 2>/dev/null || echo "No README found"

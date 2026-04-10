@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Quick test to verify migration functionality works
-const { migrate, canMigrate, getSupportedMigrationTargets, MigrationError } = require('./packages/esm-format/dist/cjs/index.js');
+const { migrate, canMigrate, getSupportedMigrationTargets, MigrationError } = require('./packages/earthsci-toolkit/dist/cjs/index.js');
 
 console.log('Testing migration functionality...\n');
 

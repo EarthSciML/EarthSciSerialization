@@ -2,7 +2,7 @@
  * Simple test script to verify migration functionality across languages
  */
 
-import { migrate, canMigrate, getSupportedMigrationTargets } from './packages/esm-format/src/migration.js';
+import { migrate, canMigrate, getSupportedMigrationTargets } from './packages/earthsci-toolkit/src/migration.js';
 
 // Test data - simple ESM file that needs migration
 const testFile = {

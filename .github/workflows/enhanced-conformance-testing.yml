@@ -72,7 +72,7 @@ jobs:
     continue-on-error: true
     defaults:
       run:
-        working-directory: packages/esm-format
+        working-directory: packages/earthsci-toolkit
     steps:
       - uses: actions/checkout@v4
 
@@ -81,7 +81,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: packages/esm-format/package-lock.json
+          cache-dependency-path: packages/earthsci-toolkit/package-lock.json
 
       - name: Install TypeScript dependencies
         run: npm ci
@@ -128,7 +128,7 @@ jobs:
     continue-on-error: true
     defaults:
       run:
-        working-directory: packages/earthsci-toolkit
+        working-directory: packages/earthsci-toolkit-rs
     steps:
       - uses: actions/checkout@v4
 
@@ -143,8 +143,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/earthsci-toolkit/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/earthsci-toolkit/Cargo.lock') }}
+            packages/earthsci-toolkit-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/earthsci-toolkit-rs/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -172,7 +172,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: packages/esm-format/package-lock.json
+          cache-dependency-path: packages/earthsci-toolkit/package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -192,8 +192,8 @@ jobs:
             ~/.cache/pip
             ~/.cargo/registry
             ~/.cargo/git
-            packages/earthsci-toolkit/target
-            packages/esm-format/node_modules
+            packages/earthsci-toolkit-rs/target
+            packages/earthsci-toolkit/node_modules
           key: ${{ runner.os }}-conformance-${{ hashFiles('packages/*/Project.toml', 'packages/*/package*.json', 'packages/*/pyproject.toml', 'packages/*/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-conformance-
@@ -206,7 +206,7 @@ jobs:
         continue-on-error: true
 
       - name: Install TypeScript dependencies and build
-        working-directory: packages/esm-format
+        working-directory: packages/earthsci-toolkit
         run: |
           npm ci
           npm run build
@@ -220,7 +220,7 @@ jobs:
         continue-on-error: true
 
       - name: Build Rust package
-        working-directory: packages/earthsci-toolkit
+        working-directory: packages/earthsci-toolkit-rs
         run: |
           cargo build --release
         continue-on-error: true

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Test script to identify TypeScript code generation issues
-const { toJuliaCode, toPythonCode } = require('./packages/esm-format/dist/cjs/index.js');
+const { toJuliaCode, toPythonCode } = require('./packages/earthsci-toolkit/dist/cjs/index.js');
 
 // Create a test ESM file that exercises units, defaults, and expression mapping
 const testFile = {

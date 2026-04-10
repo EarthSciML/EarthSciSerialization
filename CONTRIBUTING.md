@@ -87,9 +87,9 @@ The project includes environment management scripts:
 EarthSciSerialization/
 ├── packages/                 # Language-specific implementations
 │   ├── EarthSciSerialization.jl/        # Julia implementation
-│   ├── esm-format/          # TypeScript implementation
+│   ├── earthsci-toolkit/    # TypeScript implementation
 │   ├── earthsci_toolkit/          # Python implementation
-│   ├── earthsci-toolkit/     # Rust implementation
+│   ├── earthsci-toolkit-rs/  # Rust implementation
 │   ├── esm-format-go/       # Go implementation
 │   └── esm-editor/          # SolidJS web editor
 ├── tests/                   # Cross-language conformance tests
@@ -153,9 +153,9 @@ All code contributions must:
 
 # Individual language testing
 julia --project=. -e 'using Pkg; Pkg.test()'                    # Julia
-cd packages/esm-format && npm test                              # TypeScript
+cd packages/earthsci-toolkit && npm test                              # TypeScript
 cd packages/earthsci_toolkit && python -m pytest                     # Python
-cd packages/earthsci-toolkit && cargo test                      # Rust
+cd packages/earthsci-toolkit-rs && cargo test                      # Rust
 cd packages/esm-format-go && go test ./...                     # Go
 ```
 
@@ -284,7 +284,7 @@ julia --project=. -e 'using Pkg; Pkg.activate("."); Pkg.test()'
 
 ```bash
 # TypeScript development workflow
-cd packages/esm-format
+cd packages/earthsci-toolkit
 npm install
 npm run lint
 npm test
@@ -316,7 +316,7 @@ python -m black earthsci_toolkit/
 
 ```bash
 # Rust development workflow
-cd packages/earthsci-toolkit
+cd packages/earthsci-toolkit-rs
 cargo fmt
 cargo clippy -- -D warnings
 cargo test

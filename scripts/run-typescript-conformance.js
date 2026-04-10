@@ -3,7 +3,7 @@
 /**
  * TypeScript conformance test runner for ESM Format cross-language testing.
  *
- * This script runs the TypeScript esm-format implementation against test fixtures
+ * This script runs the TypeScript earthsci-toolkit implementation against test fixtures
  * and generates standardized outputs for comparison with other language implementations.
  */
 
@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 
 // Project paths
 const projectRoot = path.dirname(__dirname);
-const typescriptPackage = path.join(projectRoot, 'packages', 'esm-format');
+const typescriptPackage = path.join(projectRoot, 'packages', 'earthsci-toolkit');
 const testsDir = path.join(projectRoot, 'tests');
 
 // Import ESM format library (assuming it's built)
