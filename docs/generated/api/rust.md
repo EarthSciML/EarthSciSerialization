@@ -1469,7 +1469,7 @@ pub fn save(esm_file_js: &JsValue) -> Result<String, JsValue> {
 
 ### save
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/serialize.rs:48`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/serialize.rs:47`
 
 **Signature:**
 ```rust
@@ -1514,7 +1514,6 @@ data_loaders: None,
 operators: None,
 coupling: None,
 domain: None,
-solver: None,
 };
 
 let json = save(&esm_file).expect("Failed to serialize ESM file");
@@ -1531,7 +1530,7 @@ assert!(json.contains("\"esm\": \"0.1.0\""));
 
 ### save_compact
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/serialize.rs:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/serialize.rs:64`
 
 **Signature:**
 ```rust
@@ -2426,7 +2425,7 @@ Create a scoped context with specific current scope
 
 ### AffectEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:264`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:260`
 
 **Definition:**
 ```rust
@@ -2505,7 +2504,7 @@ pub struct ConservationViolation {
 
 ### ContinuousEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:274`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:270`
 
 **Definition:**
 ```rust
@@ -2538,7 +2537,7 @@ pub struct CouplingEdge {
 
 ### DataLoader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:433`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:429`
 
 **Definition:**
 ```rust
@@ -2570,7 +2569,7 @@ pub struct DependencyEdge {
 
 ### DiscreteEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:212`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:208`
 
 **Definition:**
 ```rust
@@ -2585,7 +2584,7 @@ pub struct DiscreteEvent {
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:583`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:579`
 
 **Definition:**
 ```rust
@@ -2601,7 +2600,7 @@ pub struct Domain {
 
 ### Equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:202`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:198`
 
 **Definition:**
 ```rust
@@ -2644,7 +2643,7 @@ pub struct ExpressionGraph {
 
 ### ExpressionNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:118`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:114`
 
 **Definition:**
 ```rust
@@ -2658,7 +2657,7 @@ pub struct ExpressionNode {
 
 ### FunctionalAffect
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:312`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:308`
 
 **Definition:**
 ```rust
@@ -2685,7 +2684,7 @@ pub struct LinearInvariant {
 
 ### Metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:68`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:64`
 
 **Definition:**
 ```rust
@@ -2715,7 +2714,7 @@ pub struct MigrationError {
 
 ### Model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:136`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:132`
 
 **Definition:**
 ```rust
@@ -2742,7 +2741,7 @@ pub struct ModelAllocator {
 
 ### ModelVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:166`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:162`
 
 **Definition:**
 ```rust
@@ -2758,7 +2757,7 @@ pub struct ModelVariable {
 
 ### Operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:449`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:445`
 
 **Definition:**
 ```rust
@@ -2785,7 +2784,7 @@ pub struct ParallelEvaluator {
 
 ### Parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:385`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:381`
 
 **Definition:**
 ```rust
@@ -2815,7 +2814,7 @@ pub struct ParseError {
 
 ### Reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:401`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:397`
 
 **Definition:**
 ```rust
@@ -2831,7 +2830,7 @@ pub struct Reaction {
 
 ### ReactionSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:345`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:341`
 
 **Definition:**
 ```rust
@@ -2847,7 +2846,7 @@ pub struct ReactionSystem {
 
 ### Reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:48`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:44`
 
 **Definition:**
 ```rust
@@ -2902,25 +2901,9 @@ pub struct ScopedContext {
 
 ---
 
-### Solver
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:595`
-
-**Definition:**
-```rust
-pub struct Solver {
-```
-
-**Available in other languages:**
-- [Julia](julia.md#solver)
-- [Python](python.md#solver)
-- [Typescript](typescript.md#solver)
-
----
-
 ### Species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:366`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:362`
 
 **Definition:**
 ```rust
@@ -2936,7 +2919,7 @@ pub struct Species {
 
 ### StoichiometricEntry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:422`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:418`
 
 **Definition:**
 ```rust
@@ -2989,7 +2972,7 @@ pub struct ValidationResult {
 
 ### VariableMapping
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:571`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:567`
 
 **Definition:**
 ```rust

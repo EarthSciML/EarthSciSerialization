@@ -1057,7 +1057,7 @@ Check if an expression is differentiable with respect to a variable
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1477`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1442`
 
 **Signature:**
 ```typescript
@@ -1645,7 +1645,7 @@ Format an expression as MathML markup for web/academic publishing
 
 ### toPythonCode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/codegen.ts:108`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/codegen.ts:101`
 
 **Signature:**
 ```typescript
@@ -1701,7 +1701,7 @@ Validate ESM data and return structured validation result.
 
 ### validateSchema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1178`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1143`
 
 **Signature:**
 ```typescript
@@ -1735,7 +1735,7 @@ Validate dimensional consistency of all equations in an ESM file
 
 ### AffectEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:366`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:365`
 
 **Definition:**
 ```typescript
@@ -1785,7 +1785,7 @@ Configuration for the AST store
 
 ### BoundaryCondition
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:779`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:778`
 
 **Definition:**
 ```typescript
@@ -1888,7 +1888,7 @@ export interface ComponentNode {
 
 ### ConnectorEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:634`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:633`
 
 **Definition:**
 ```typescript
@@ -1906,7 +1906,7 @@ A single equation in a ConnectorSystem linking two coupled systems.
 
 ### ContinuousEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:406`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:405`
 
 **Definition:**
 ```typescript
@@ -1926,7 +1926,7 @@ Fires when a condition expression crosses zero (root-finding). Maps to MTK Symbo
 
 ### CoordinateTransform
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:771`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:770`
 
 **Definition:**
 ```typescript
@@ -1940,7 +1940,7 @@ export interface CoordinateTransform {
 
 ### CouplingCallback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:689`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:688`
 
 **Definition:**
 ```typescript
@@ -1958,7 +1958,7 @@ Register a callback for simulation events.
 
 ### CouplingCouple
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:616`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:615`
 
 **Definition:**
 ```typescript
@@ -1993,7 +1993,7 @@ export interface CouplingEdge {
 
 ### CouplingOperatorApply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:678`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:677`
 
 **Definition:**
 ```typescript
@@ -2011,7 +2011,7 @@ Register an Operator to run during simulation.
 
 ### CouplingOperatorCompose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:596`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:595`
 
 **Definition:**
 ```typescript
@@ -2029,7 +2029,7 @@ Match LHS time derivatives and add RHS terms together.
 
 ### CouplingVariableMap
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:655`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:654`
 
 **Definition:**
 ```typescript
@@ -2047,7 +2047,7 @@ Replace a parameter in one system with a variable from another.
 
 ### DataLoader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:524`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:523`
 
 **Definition:**
 ```typescript
@@ -2067,7 +2067,7 @@ An external data source registration. Runtime-specific; registered by type and l
 
 ### DataLoaderProvides
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:564`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:563`
 
 **Definition:**
 ```typescript
@@ -2169,7 +2169,7 @@ Maps base dimensions to their powers
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:730`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:729`
 
 **Definition:**
 ```typescript
@@ -2237,7 +2237,7 @@ export interface EditorState {
 
 ### Equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:358`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:357`
 
 **Definition:**
 ```typescript
@@ -2555,7 +2555,7 @@ export interface ExpressionLocation {
 
 ### ExpressionNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:300`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:299`
 
 **Definition:**
 ```typescript
@@ -2599,7 +2599,7 @@ export interface FixSuggestion {
 
 ### FunctionalAffect
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:379`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:378`
 
 **Definition:**
 ```typescript
@@ -2619,7 +2619,7 @@ Registered functional affect handler (alternative to symbolic affects).
 
 ### FunctionalAffect1
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:703`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:702`
 
 **Definition:**
 ```typescript
@@ -2719,7 +2719,7 @@ export interface MatchResult {
 
 ### Metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:225`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:224`
 
 **Definition:**
 ```typescript
@@ -2739,7 +2739,7 @@ Authorship, provenance, and description.
 
 ### Model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:256`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:255`
 
 **Definition:**
 ```typescript
@@ -2759,7 +2759,7 @@ An ODE system — a fully specified set of time-dependent equations.
 
 ### ModelVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:284`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:283`
 
 **Definition:**
 ```typescript
@@ -2779,7 +2779,7 @@ A variable in an ODE model.
 
 ### Operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:571`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:570`
 
 **Definition:**
 ```typescript
@@ -2810,7 +2810,7 @@ export interface Optimization {
 
 ### Parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:486`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:485`
 
 **Definition:**
 ```typescript
@@ -2830,7 +2830,7 @@ A parameter in a reaction system.
 
 ### Reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:494`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:493`
 
 **Definition:**
 ```typescript
@@ -2850,7 +2850,7 @@ A single reaction in a reaction system.
 
 ### ReactionSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:438`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:437`
 
 **Definition:**
 ```typescript
@@ -2870,7 +2870,7 @@ A reaction network — declarative representation of chemical or biological reac
 
 ### Reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:247`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:246`
 
 **Definition:**
 ```typescript
@@ -2907,29 +2907,9 @@ Schema validation error with JSON Pointer path
 
 ---
 
-### Solver
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:812`
-
-**Definition:**
-```typescript
-export interface Solver {
-```
-
-**Description:**
-Solver strategy for time integration.
-/
-
-**Available in other languages:**
-- [Julia](julia.md#solver)
-- [Python](python.md#solver)
-- [Rust](rust.md#solver)
-
----
-
 ### SpatialDimension
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:765`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:764`
 
 **Definition:**
 ```typescript
@@ -2947,7 +2927,7 @@ Specification of a single spatial dimension.
 
 ### Species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:478`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:477`
 
 **Definition:**
 ```typescript
@@ -2967,7 +2947,7 @@ A reactive species in a reaction system.
 
 ### StoichiometryEntry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:517`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:516`
 
 **Definition:**
 ```typescript
