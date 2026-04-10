@@ -388,7 +388,7 @@
           ]
         },
         "coupletype": {
-          "description": "Coupling type name for couple2 dispatch.",
+          "description": "Coupling type name. Informational label identifying this system's role in coupling.",
           "oneOf": [
             { "type": "string" },
             { "type": "null" }
@@ -415,8 +415,26 @@
         },
         "subsystems": {
           "type": "object",
-          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\".",
-          "additionalProperties": { "$ref": "#/$defs/Model" }
+          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\". Each subsystem can be defined inline or included by reference via a local file path or URL.",
+          "additionalProperties": {
+            "oneOf": [
+              { "$ref": "#/$defs/Model" },
+              { "$ref": "#/$defs/SubsystemRef" }
+            ]
+          }
+        }
+      }
+    },
+
+    "SubsystemRef": {
+      "type": "object",
+      "description": "A reference to an external ESM file containing a model or reaction system definition. The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file.",
+      "required": ["ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model or reaction system, which is used as the subsystem definition."
         }
       }
     },
@@ -512,7 +530,7 @@
           ]
         },
         "coupletype": {
-          "description": "Coupling type name for couple2 dispatch.",
+          "description": "Coupling type name. Informational label identifying this system's role in coupling.",
           "oneOf": [
             { "type": "string" },
             { "type": "null" }
@@ -550,8 +568,13 @@
         },
         "subsystems": {
           "type": "object",
-          "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\".",
-          "additionalProperties": { "$ref": "#/$defs/ReactionSystem" }
+          "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\". Each subsystem can be defined inline or included by reference via a local file path or URL.",
+          "additionalProperties": {
+            "oneOf": [
+              { "$ref": "#/$defs/ReactionSystem" },
+              { "$ref": "#/$defs/SubsystemRef" }
+            ]
+          }
         }
       }
     },
@@ -685,7 +708,7 @@
       "description": "A single coupling rule connecting models, reaction systems, data loaders, or operators.",
       "oneOf": [
         { "$ref": "#/$defs/CouplingOperatorCompose" },
-        { "$ref": "#/$defs/CouplingCouple2" },
+        { "$ref": "#/$defs/CouplingCouple" },
         { "$ref": "#/$defs/CouplingVariableMap" },
         { "$ref": "#/$defs/CouplingOperatorApply" },
         { "$ref": "#/$defs/CouplingCallback" },
@@ -725,25 +748,18 @@
       }
     },
 
-    "CouplingCouple2": {
+    "CouplingCouple": {
       "type": "object",
-      "description": "Bi-directional coupling via coupletype dispatch.",
-      "required": ["type", "systems", "coupletype_pair", "connector"],
+      "description": "Bi-directional coupling via explicit ConnectorSystem equations.",
+      "required": ["type", "systems", "connector"],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "couple2" },
+        "type": { "const": "couple" },
         "systems": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 2,
           "maxItems": 2
-        },
-        "coupletype_pair": {
-          "type": "array",
-          "items": { "type": "string" },
-          "minItems": 2,
-          "maxItems": 2,
-          "description": "The coupletype names for each system."
         },
         "connector": {
           "type": "object",
