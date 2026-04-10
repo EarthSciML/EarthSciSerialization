@@ -17,10 +17,9 @@ Sections covered:
 9. Operators - runtime-specific with needed_vars
 10. Coupling - all 6 types including couple/operator_apply/callback/event
 11. Domain - spatial/temporal with BCs/ICs
-12. Solver - all strategies with config validation
-13. Complete example validation
-14. Design principles adherence testing
-15. Future considerations compatibility
+12. Complete example validation
+13. Design principles adherence testing
+14. Future considerations compatibility
 """
 
 import json
@@ -113,8 +112,7 @@ class TestSection02TopLevelStructure:
             "data_loaders": {"test_loader": {"type": "gridded_data", "loader_id": "test", "provides": {}}},
             "operators": {"test_op": {"operator_id": "test", "needed_vars": []}},
             "coupling": [],
-            "domains": {"default": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}}},
-            "solver": {"strategy": "strang_threads"}
+            "domains": {"default": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}}}
         }
         jsonschema.validate(complete_data, schema)  # Should not raise
 
@@ -1397,59 +1395,6 @@ class TestSection11Domain:
             }, schema)
 
 
-class TestSection12Solver:
-    """Section 12: Solver - all strategies with config validation"""
-
-    def test_all_solver_strategies(self):
-        """Test all supported solver strategies."""
-        schema = _get_schema()
-
-        strategies = ["strang_threads", "strang_serial", "imex"]
-
-        for strategy in strategies:
-            valid_data = {
-                "esm": "0.1.0",
-                "metadata": {"name": "Test"},
-                "models": {"test": {"variables": {}, "equations": []}},
-                "solver": {"strategy": strategy}
-            }
-            jsonschema.validate(valid_data, schema)
-
-    def test_complete_solver_configuration(self):
-        """Test complete solver configuration from spec."""
-        schema = _get_schema()
-
-        valid_data = {
-            "esm": "0.1.0",
-            "metadata": {"name": "Test"},
-            "models": {"test": {"variables": {}, "equations": []}},
-            "solver": {
-                "strategy": "strang_threads",
-                "config": {
-                    "threads": 8,
-                    "stiff_algorithm": "Rosenbrock23",
-                    "timestep": 1800.0,
-                    "stiff_kwargs": {"abstol": 1e-6, "reltol": 1e-3},
-                    "nonstiff_algorithm": "Euler",
-                    "map_algorithm": "broadcast"
-                }
-            }
-        }
-        jsonschema.validate(valid_data, schema)
-
-    def test_solver_strategy_validation(self):
-        """Test that invalid solver strategies are rejected."""
-        schema = _get_schema()
-
-        with pytest.raises(ValidationError, match="'invalid_strategy' is not one of"):
-            jsonschema.validate({
-                "esm": "0.1.0",
-                "metadata": {"name": "Test"},
-                "models": {"test": {"variables": {}, "equations": []}},
-                "solver": {"strategy": "invalid_strategy"}
-            }, schema)
-
-
 class TestSection13CompleteExamples:
     """Section 13: Complete example validation"""
 
@@ -1550,11 +1495,7 @@ class TestSection13CompleteExamples:
                 "initial_conditions": {"type": "constant", "value": 1.0e-9},
                 "boundary_conditions": [{"type": "zero_gradient", "dimensions": ["lon"]}],
                 "element_type": "Float32"
-            }},
-            "solver": {
-                "strategy": "strang_threads",
-                "config": {"stiff_algorithm": "Rosenbrock23", "timestep": 1.0}
-            }
+            }}
         }
 
         jsonschema.validate(minimal_complete, schema)
@@ -1627,8 +1568,7 @@ class TestSection13CompleteExamples:
                 "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
                 "spatial": {"z": {"min": 0, "max": 1000, "units": "m"}},
                 "initial_conditions": {"type": "constant", "value": 1e-9}
-            }},
-            "solver": {"strategy": "strang_threads"}
+            }}
         }
 
         jsonschema.validate(complex_example, schema)
@@ -1969,8 +1909,7 @@ class TestCrossSectionValidation:
                 "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-01T01:00:00Z"},
                 "spatial": {"x": {"min": 0, "max": 100, "units": "m"}},
                 "initial_conditions": {"type": "constant", "value": 1e-9}
-            }},
-            "solver": {"strategy": "strang_threads", "config": {"timestep": 60}}
+            }}
         }
 
         jsonschema.validate(comprehensive, schema)
@@ -2043,7 +1982,7 @@ class TestNegativeValidationCases:
 def test_complete_specification_coverage():
     """Meta-test to ensure all 15 sections are covered by test classes."""
 
-    # Check that we have test classes for all 15 sections
+    # Check that we have test classes for all sections (solver section removed)
     expected_sections = [
         'TestSection01Overview',
         'TestSection02TopLevelStructure',
@@ -2056,7 +1995,6 @@ def test_complete_specification_coverage():
         'TestSection09Operators',
         'TestSection10Coupling',
         'TestSection11Domain',
-        'TestSection12Solver',
         'TestSection13CompleteExamples',
         'TestSection14DesignPrinciples',
         'TestSection15FutureConsiderations'

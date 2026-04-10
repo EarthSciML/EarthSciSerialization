@@ -1193,35 +1193,6 @@
       "description": "Reduce vertical mixing when PBL height drops below 100m"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 8,
-      "stiff_algorithm": "QNDF",
-      "nonstiff_algorithm": "Vern7",
-      "timestep": 600.0,
-      "stiff_kwargs": {
-        "abstol": 1e-12,
-        "reltol": 1e-08,
-        "maxiters": 1000
-      },
-      "nonstiff_kwargs": {
-        "abstol": 1e-10,
-        "reltol": 1e-06
-      },
-      "operator_splitting": {
-        "chemistry_timestep": 60.0,
-        "transport_timestep": 600.0,
-        "emissions_timestep": 3600.0
-      },
-      "adaptive_timestepping": {
-        "enabled": true,
-        "min_timestep": 1.0,
-        "max_timestep": 3600.0,
-        "safety_factor": 0.9
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

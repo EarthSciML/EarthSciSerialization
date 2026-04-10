@@ -189,15 +189,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "algorithm": "Tsit5",
-      "rtol": 1e-06,
-      "atol": 1e-08,
-      "event_tolerance": 1e-09
-    }
-  },
   "domains": {
     "default": {
       "temporal": {},

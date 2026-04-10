@@ -125,17 +125,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "stiff_algorithm": "Rodas4",
-      "timestep": 600.0,
-      "stiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-05
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

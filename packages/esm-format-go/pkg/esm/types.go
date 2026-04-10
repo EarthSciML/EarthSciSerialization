@@ -283,7 +283,7 @@ type ConnectorEquation struct {
 }
 
 // ========================================
-// 7. Domain and Solver
+// 7. Domain
 // ========================================
 
 // Domain represents the spatiotemporal domain
@@ -367,12 +367,6 @@ type Regridding struct {
 	Description *string `json:"description,omitempty"`
 }
 
-// Solver represents solver configuration
-type Solver struct {
-	Strategy string                 `json:"strategy"`
-	Config   map[string]interface{} `json:"config,omitempty"`
-}
-
 // ========================================
 // 8. Metadata and References
 // ========================================
@@ -412,7 +406,6 @@ type EsmFile struct {
 	Coupling        []interface{}             `json:"coupling,omitempty"` // Properly deserialized coupling entries
 	Domains         map[string]Domain         `json:"domains,omitempty"`
 	Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
-	Solver          *Solver                   `json:"solver,omitempty"`
 }
 
 // ========================================
@@ -670,7 +663,6 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 		Coupling        json.RawMessage           `json:"coupling,omitempty"`
 		Domains         map[string]Domain         `json:"domains,omitempty"`
 		Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
-		Solver          *Solver                   `json:"solver,omitempty"`
 	}
 
 	var temp TempEsmFile
@@ -687,7 +679,6 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.Operators = temp.Operators
 	esm.Domains = temp.Domains
 	esm.Interfaces = temp.Interfaces
-	esm.Solver = temp.Solver
 
 	// Handle coupling array with proper type deserialization
 	if len(temp.Coupling) > 0 && string(temp.Coupling) != "null" {

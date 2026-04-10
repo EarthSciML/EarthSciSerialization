@@ -684,37 +684,6 @@ func ModelSummary(esm *EsmFile) string {
 		}
 	}
 
-	// Solver
-	if esm.Solver != nil {
-		result.WriteString("  Solver: ")
-		result.WriteString(esm.Solver.Strategy)
-
-		if esm.Solver.Config != nil {
-			configParts := make([]string, 0)
-
-			// Handle specific known config keys with appropriate naming and order
-			if stiffAlg, ok := esm.Solver.Config["stiff_algorithm"]; ok {
-				configParts = append(configParts, fmt.Sprintf("%v", stiffAlg))
-			}
-			if timestep, ok := esm.Solver.Config["timestep"]; ok {
-				configParts = append(configParts, fmt.Sprintf("dt=%v", timestep))
-			}
-
-			// Handle any other config keys
-			for key, value := range esm.Solver.Config {
-				if key != "stiff_algorithm" && key != "timestep" {
-					configParts = append(configParts, fmt.Sprintf("%s=%v", key, value))
-				}
-			}
-			if len(configParts) > 0 {
-				result.WriteString(" (")
-				result.WriteString(strings.Join(configParts, ", "))
-				result.WriteString(")")
-			}
-		}
-		result.WriteString("\n")
-	}
-
 	return strings.TrimSpace(result.String())
 }
 

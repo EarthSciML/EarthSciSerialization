@@ -242,18 +242,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "stiff_algorithm": "BDF",
-      "timestep": 60.0,
-      "stiff_kwargs": {
-        "abstol": 1e-10,
-        "reltol": 1e-08,
-        "max_step": 600.0
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

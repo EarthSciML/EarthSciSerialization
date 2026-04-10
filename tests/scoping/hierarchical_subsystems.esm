@@ -398,18 +398,6 @@
       "description": "Cross-layer ozone transport using deeply nested scoped references"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 2,
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 600.0,
-      "stiff_kwargs": {
-        "abstol": 1e-10,
-        "reltol": 1e-08
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

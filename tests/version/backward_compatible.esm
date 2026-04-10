@@ -35,14 +35,6 @@
       "equations": []
     }
   },
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "rtol": 1e-06,
-      "atol": 1e-08,
-      "max_steps": 1000
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

@@ -367,13 +367,6 @@
       "description": "Cross-system event showing required scoped references in coupling context"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "stiff_algorithm": "Rodas5",
-      "timestep": 60.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

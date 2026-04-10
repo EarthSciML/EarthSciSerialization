@@ -7,7 +7,7 @@ from earthsci_toolkit.esm_types import (
     ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
     DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, VariableMapCoupling, OperatorComposeCoupling,
-    Domain, Solver, SolverType,
+    Domain,
     Reference, Metadata, EsmFile
 )
 
@@ -145,14 +145,6 @@ def test_domain():
     domain = Domain(name="2D", dimensions={"x": 100, "y": 50})
     assert domain.name == "2D"
     assert domain.dimensions == {"x": 100, "y": 50}
-
-
-def test_solver():
-    """Test Solver creation."""
-    solver = Solver(name="RK4", type=SolverType.ODE, algorithm="rk4")
-    assert solver.name == "RK4"
-    assert solver.type == SolverType.ODE
-    assert solver.algorithm == "rk4"
 
 
 def test_reference():

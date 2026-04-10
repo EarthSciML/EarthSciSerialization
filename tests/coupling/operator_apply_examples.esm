@@ -252,18 +252,6 @@
       ]
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "reaction_algorithm": "Rosenbrock23",
-      "transport_algorithm": "WENO5",
-      "operator_sequence": [
-        "operators",
-        "transport",
-        "reaction"
-      ]
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

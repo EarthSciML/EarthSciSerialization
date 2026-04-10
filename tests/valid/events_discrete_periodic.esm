@@ -574,15 +574,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "base_algorithm": "Tsit5",
-      "event_detection": "precise_callbacks",
-      "adaptive": true,
-      "timestep_adjustment": true
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

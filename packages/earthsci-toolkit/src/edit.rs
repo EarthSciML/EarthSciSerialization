@@ -621,7 +621,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         }
     }
 

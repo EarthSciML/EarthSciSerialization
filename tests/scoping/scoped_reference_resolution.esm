@@ -514,13 +514,6 @@
       "description": "Couple stratosphere-troposphere ozone exchange using four-level scoped references"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 300.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

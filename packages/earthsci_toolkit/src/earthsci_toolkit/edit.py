@@ -397,8 +397,6 @@ class ESMEditor:
                 merged_file.metadata = file_b.metadata
             if hasattr(file_b, 'domains') and file_b.domains:
                 merged_file.domains = file_b.domains
-            if hasattr(file_b, 'solver') and file_b.solver:
-                merged_file.solver = file_b.solver
 
             return EditResult(success=True, modified_object=merged_file)
 

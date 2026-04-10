@@ -52,13 +52,6 @@ def validate_fixture(esm_file, reference_file=None):
             temporal = domain['temporal']
             print(f"✓ Temporal domain: {temporal.get('start', 'N/A')} to {temporal.get('end', 'N/A')}")
 
-        # Check solver configuration
-        solver = esm_data.get('solver', {})
-        if not solver:
-            print("⚠ Warning: No solver configuration specified")
-        else:
-            print(f"✓ Solver strategy: {solver.get('strategy', 'N/A')}")
-
         # Count systems and components
         models = esm_data.get('models', {})
         reactions = esm_data.get('reaction_systems', {})

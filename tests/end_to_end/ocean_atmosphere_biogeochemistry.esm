@@ -1196,28 +1196,6 @@
       "description": "Seasonal nutrient injection every 90 days (upwelling)"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "physical_timestep": 3600.0,
-      "biogeochemical_timestep": 1800.0,
-      "gas_exchange_timestep": 300.0,
-      "stiff_algorithm": "CVODE_BDF",
-      "nonstiff_algorithm": "Vern8",
-      "stiff_kwargs": {
-        "abstol": 1e-10,
-        "reltol": 1e-08,
-        "maxord": 5
-      },
-      "adaptive_timestepping": {
-        "enabled": true,
-        "min_timestep": 60.0,
-        "max_timestep": 7200.0,
-        "growth_factor": 1.2,
-        "shrink_factor": 0.5
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

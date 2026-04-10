@@ -638,12 +638,6 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
         }
     }
 
-    // Basic solver setup
-    code.push_str("# Example solver setup\n");
-    code.push_str("# tspan = (0.0, 10.0)\n");
-    code.push_str("# prob = ODEProblem(model_function!, u0, tspan)\n");
-    code.push_str("# sol = solve(prob)\n");
-
     code
 }
 
@@ -808,8 +802,6 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
         }
     }
 
-    // Example solver setup
-    code.push_str("# Example solver setup\n");
     code.push_str("if __name__ == '__main__':\n");
     code.push_str("    # Time span\n");
     code.push_str("    t_span = (0, 10)\n");
@@ -2304,7 +2296,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 operators: None,
                 coupling: None,
                 domain: esm_file.domain.clone(),
-                solver: esm_file.solver.clone(),
             };
 
             // Extract the specific component

@@ -454,16 +454,6 @@
       "transform": "param_to_var"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "base_algorithm": "Tsit5",
-      "event_detection": "root_finding",
-      "event_tolerance": 1e-08,
-      "timestep": 1.0,
-      "adaptive": true
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

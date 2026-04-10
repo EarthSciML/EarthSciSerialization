@@ -124,12 +124,6 @@
       "description": "Apply linear interpolation for basic data regridding"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "timestep": 10.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

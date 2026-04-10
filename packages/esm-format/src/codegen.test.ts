@@ -158,7 +158,7 @@ describe('toJuliaCode', () => {
     expect(code).toContain('Differential(x)(u)')
   })
 
-  it('should generate implementation code for coupling, domain, solver, and data loaders', () => {
+  it('should generate implementation code for coupling, domain, and data loaders', () => {
     const file: EsmFile = {
       esm: '0.1.0',
       models: {},
@@ -174,13 +174,6 @@ describe('toJuliaCode', () => {
       domain: {
         spatial_coordinates: ['x', 'y'],
         temporal_coordinates: ['t']
-      },
-      solver: {
-        strategy: 'imex',
-        config: {
-          stiff_algorithm: 'CVODE_BDF',
-          tolerances: { abstol: 1e-6, reltol: 1e-3 }
-        }
       },
       data_loaders: {
         weather: {
@@ -204,11 +197,6 @@ describe('toJuliaCode', () => {
     expect(code).toContain('# Domain')
     expect(code).toContain('@variables t')
     expect(code).toContain('@variables x y')
-
-    // Check solver implementation
-    expect(code).toContain('# Solver')
-    expect(code).toContain('solver_strategy = IMEXIntegrator()')
-    expect(code).toContain('alg = CVODE_BDF()')
 
     // Check data loader implementation
     expect(code).toContain('# Data loader: weather')
@@ -488,7 +476,7 @@ describe('toPythonCode', () => {
     expect(code).toContain('sp.Derivative(u, x)')
   })
 
-  it('should generate implementation code for coupling, domain, and solver in Python', () => {
+  it('should generate implementation code for coupling, domain, and data loaders in Python', () => {
     const file: EsmFile = {
       esm: '0.1.0',
       models: {},
@@ -504,13 +492,6 @@ describe('toPythonCode', () => {
       domain: {
         spatial_coordinates: ['x', 'y'],
         temporal_coordinates: ['t']
-      },
-      solver: {
-        strategy: 'imex',
-        config: {
-          stiff_algorithm: 'CVODE_BDF',
-          tolerances: { abstol: 1e-6, reltol: 1e-3 }
-        }
       },
       data_loaders: {
         weather: {
@@ -536,10 +517,6 @@ describe('toPythonCode', () => {
     expect(code).toContain('x = sp.Symbol(\'x\')')
     expect(code).toContain('y = sp.Symbol(\'y\')')
     expect(code).toContain('domain = esm.Domain(')
-
-    // Check solver implementation
-    expect(code).toContain('# Solver')
-    expect(code).toContain('solver = esm.IMEXSolver(')
 
     // Check data loader implementation
     expect(code).toContain('# Data loader: weather')

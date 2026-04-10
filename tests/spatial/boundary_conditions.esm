@@ -206,18 +206,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "stiff_algorithm": "Rodas4",
-      "timestep": 300.0,
-      "boundary_method": "ghost_cells",
-      "stiff_kwargs": {
-        "abstol": 1e-10,
-        "reltol": 1e-08
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

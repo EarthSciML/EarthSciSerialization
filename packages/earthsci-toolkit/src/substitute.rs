@@ -798,7 +798,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -861,7 +860,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -927,7 +925,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -1003,7 +1000,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);

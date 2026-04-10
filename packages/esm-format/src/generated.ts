@@ -217,7 +217,6 @@ export interface ESMFormat2 {
    */
   coupling?: CouplingEntry[];
   domain?: Domain;
-  solver?: Solver;
 }
 /**
  * Authorship, provenance, and description.
@@ -805,29 +804,4 @@ export interface BoundaryCondition {
    * Robin BC RHS value γ in αu + β∂u/∂n = γ.
    */
   robin_gamma?: number;
-}
-/**
- * Solver strategy for time integration.
- */
-export interface Solver {
-  /**
-   * Solver strategy.
-   */
-  strategy: "strang_threads" | "strang_serial" | "imex";
-  /**
-   * Strategy-specific configuration.
-   */
-  config?: {
-    threads?: number;
-    stiff_algorithm?: string;
-    nonstiff_algorithm?: string;
-    timestep?: number;
-    stiff_kwargs?: {
-      abstol?: number;
-      reltol?: number;
-      [k: string]: unknown;
-    };
-    map_algorithm?: string;
-    [k: string]: unknown;
-  };
 }

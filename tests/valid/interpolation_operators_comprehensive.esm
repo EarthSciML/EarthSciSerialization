@@ -390,17 +390,6 @@
       "description": "Apply conservative remapping for flux conservation"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "timestep": 60.0,
-      "threads": 4,
-      "stiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-06
-      }
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

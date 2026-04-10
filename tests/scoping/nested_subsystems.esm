@@ -354,13 +354,6 @@
       "description": "Cross-chemistry coupling: NO2 affects OH production"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "stiff_algorithm": "Rodas5",
-      "timestep": 30.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

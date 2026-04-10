@@ -72,6 +72,5 @@ export type {
 
   // System configuration
   Domain,
-  Solver,
   Reference,
 } from './generated.js'

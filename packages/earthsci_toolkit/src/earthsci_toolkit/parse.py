@@ -37,7 +37,7 @@ from .esm_types import (
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator,
-    CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain, Solver, SolverType,
+    CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain,
     OperatorComposeCoupling, Couple2Coupling, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
@@ -599,37 +599,6 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
         raise ValueError(f"Unknown coupling type: {coupling_type}")
 
 
-def _parse_solver(solver_data: Dict[str, Any]) -> Solver:
-    """Parse a solver from JSON data."""
-    name = ""  # Name can be provided or left empty
-
-    # Schema doesn't have type enum, default to ODE
-    solver_type = SolverType.ODE
-
-    # Schema uses strategy
-    algorithm = solver_data.get("strategy", "")
-
-    # Schema uses config
-    parameters = solver_data.get("config", {})
-
-    # Extract tolerances from config if available
-    tolerances = {}
-    if "config" in solver_data and "stiff_kwargs" in solver_data["config"]:
-        stiff_kwargs = solver_data["config"]["stiff_kwargs"]
-        if "abstol" in stiff_kwargs:
-            tolerances["absolute"] = stiff_kwargs["abstol"]
-        if "reltol" in stiff_kwargs:
-            tolerances["relative"] = stiff_kwargs["reltol"]
-
-    return Solver(
-        name=name,
-        type=solver_type,
-        algorithm=algorithm,
-        parameters=parameters,
-        tolerances=tolerances
-    )
-
-
 def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
     """Parse domain configuration from JSON data."""
     domain = Domain()
@@ -845,11 +814,6 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         for coupling_data in data["coupling"]:
             coupling.append(_parse_coupling_entry(coupling_data))
 
-    # Parse solver
-    solver = None
-    if "solver" in data:
-        solver = _parse_solver(data["solver"])
-
     # Collect events from models and reaction systems
     events = []
 
@@ -883,7 +847,6 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         operators=operators,
         coupling=coupling,
         domains=domains,
-        solver=solver
     )
 
 

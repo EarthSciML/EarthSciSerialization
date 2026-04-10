@@ -453,19 +453,6 @@
       "callback_id": "apply_emissions"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "chemistry_algorithm": "Rosenbrock23",
-      "transport_algorithm": "ROCK4",
-      "timestep": 60.0,
-      "adaptive": true,
-      "tolerances": {
-        "rtol": 1e-06,
-        "atol": 1e-09
-      }
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

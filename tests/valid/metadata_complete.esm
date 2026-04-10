@@ -218,15 +218,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "imex",
-    "config": {
-      "algorithm": "Rosenbrock23",
-      "abstol": 1e-08,
-      "reltol": 1e-06,
-      "maxiters": 10000
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

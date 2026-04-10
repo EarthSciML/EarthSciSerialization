@@ -30,7 +30,7 @@ def run_tests():
             Species, Parameter, Reaction, ReactionSystem,
             ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
             DataLoader, DataLoaderType, Operator,
-            CouplingEntry, CouplingType, Domain, Solver, SolverType,
+            CouplingEntry, CouplingType, Domain,
             Reference, Metadata, EsmFile
         )
 
