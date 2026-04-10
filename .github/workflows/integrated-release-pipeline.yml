@@ -3,6 +3,9 @@ name: Integrated Release Pipeline
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+    - 'workspace.json'
+    - 'COMPATIBILITY.md'
   workflow_dispatch:
     inputs:
       version_type:
@@ -135,6 +138,11 @@ jobs:
             NEW_VERSION="$MAJOR.$MINOR.$PATCH-${PRERELEASE_TYPE}.1"
             echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
             echo "New prerelease version: $NEW_VERSION"
+            # Check if the computed tag already exists
+            if git tag -l "v$NEW_VERSION" | grep -q "v$NEW_VERSION"; then
+              echo "::warning::Tag v$NEW_VERSION already exists — skipping release"
+              echo "needs_release=false" >> $GITHUB_OUTPUT
+            fi
             exit 0
             ;;
         esac
@@ -142,6 +150,13 @@ jobs:
         NEW_VERSION="$MAJOR.$MINOR.$PATCH"
         echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
         echo "New version: $NEW_VERSION"
+
+        # Check if the computed tag already exists
+        if git tag -l "v$NEW_VERSION" | grep -q "v$NEW_VERSION"; then
+          echo "::warning::Tag v$NEW_VERSION already exists — skipping release"
+          echo "needs_release=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
 
         # Generate release notes
         cat > /tmp/release_notes.md << EOF
