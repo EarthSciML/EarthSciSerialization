@@ -186,7 +186,7 @@ class Operator:
 class CouplingType(Enum):
     """Types of coupling between model components matching ESM schema."""
     OPERATOR_COMPOSE = "operator_compose"
-    COUPLE2 = "couple"
+    COUPLE = "couple"
     VARIABLE_MAP = "variable_map"
     OPERATOR_APPLY = "operator_apply"
     CALLBACK = "callback"
@@ -225,9 +225,9 @@ class OperatorComposeCoupling(BaseCouplingEntry):
 
 
 @dataclass
-class Couple2Coupling(BaseCouplingEntry):
+class CouplingCouple(BaseCouplingEntry):
     """Coupling entry for couple type."""
-    coupling_type: CouplingType = field(default=CouplingType.COUPLE2, init=False)
+    coupling_type: CouplingType = field(default=CouplingType.COUPLE, init=False)
     systems: List[str] = field(default_factory=list)
     connector: Optional[Connector] = None
 
@@ -274,7 +274,7 @@ class EventCoupling(BaseCouplingEntry):
 # Discriminated union of all coupling entry types
 CouplingEntry = Union[
     OperatorComposeCoupling,
-    Couple2Coupling,
+    CouplingCouple,
     VariableMapCoupling,
     OperatorApplyCoupling,
     CallbackCoupling,

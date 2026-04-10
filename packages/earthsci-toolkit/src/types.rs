@@ -481,8 +481,8 @@ pub enum CouplingEntry {
         #[serde(skip_serializing_if = "Option::is_none")]
         description: Option<String>,
     },
-    /// Two-way coupling between systems
-    Couple2 {
+    /// Bi-directional coupling via explicit ConnectorSystem equations
+    Couple {
         /// The two systems involved in coupling
         systems: Vec<String>,
         /// Connector definition with equations

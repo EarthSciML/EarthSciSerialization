@@ -137,7 +137,7 @@ mod coupling_field_tests {
 
     #[test]
     fn test_couple_new_fields() {
-        // Test Couple2 with new systems field
+        // Test Couple with new systems field
         let json = r#"{
             "type": "couple",
             "systems": ["system1", "system2"],
@@ -148,10 +148,10 @@ mod coupling_field_tests {
 
         let entry: CouplingEntry = serde_json::from_str(json).unwrap();
         match entry {
-            CouplingEntry::Couple2 { systems, .. } => {
+            CouplingEntry::Couple { systems, .. } => {
                 assert_eq!(systems, vec!["system1", "system2"]);
             }
-            _ => panic!("Expected Couple2 variant"),
+            _ => panic!("Expected Couple variant"),
         }
     }
 

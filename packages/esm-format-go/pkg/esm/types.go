@@ -205,18 +205,17 @@ type OperatorComposeCoupling struct {
 
 func (o OperatorComposeCoupling) GetType() string { return o.Type }
 
-// Couple2Coupling represents couple2-style coupling
-type Couple2Coupling struct {
-	Type           string                 `json:"type"` // "couple2"
-	Systems        [2]string              `json:"systems"`
-	CoupleTypePair [2]string              `json:"coupletype_pair"`
-	Connector      Connector              `json:"connector"`
-	Interface      *string                `json:"interface,omitempty"`
-	Lifting        *string                `json:"lifting,omitempty"`
-	Description    *string                `json:"description,omitempty"`
+// CouplingCouple represents bi-directional coupling via connector equations
+type CouplingCouple struct {
+	Type        string    `json:"type"` // "couple"
+	Systems     [2]string `json:"systems"`
+	Connector   Connector `json:"connector"`
+	Interface   *string   `json:"interface,omitempty"`
+	Lifting     *string   `json:"lifting,omitempty"`
+	Description *string   `json:"description,omitempty"`
 }
 
-func (c Couple2Coupling) GetType() string { return c.Type }
+func (c CouplingCouple) GetType() string { return c.Type }
 
 // VariableMapCoupling represents variable mapping
 type VariableMapCoupling struct {
@@ -269,7 +268,7 @@ type EventCoupling struct {
 
 func (e EventCoupling) GetType() string { return e.Type }
 
-// Connector represents the connector system for couple2
+// Connector represents the connector system for couple coupling
 type Connector struct {
 	Equations []ConnectorEquation `json:"equations"`
 }
@@ -739,10 +738,10 @@ func UnmarshalCouplingEntry(data []byte) (CouplingEntry, error) {
 		}
 		return coupling, nil
 
-	case "couple2":
-		var coupling Couple2Coupling
+	case "couple":
+		var coupling CouplingCouple
 		if err := json.Unmarshal(data, &coupling); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Couple2Coupling: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal CouplingCouple: %w", err)
 		}
 		return coupling, nil
 

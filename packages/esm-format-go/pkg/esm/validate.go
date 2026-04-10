@@ -552,7 +552,7 @@ func validateCouplingReferences(file *EsmFile, result *DetailedValidationResult)
 				}
 			}
 
-		case Couple2Coupling:
+		case CouplingCouple:
 			for j, sysName := range c.Systems {
 				if !allSystems[sysName] {
 					result.Valid = false
@@ -979,7 +979,7 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 				}
 			}
 
-		case Couple2Coupling:
+		case CouplingCouple:
 			for j, sysName := range c.Systems {
 				if !allSystems[sysName] {
 					result.Valid = false
@@ -989,7 +989,7 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 						Message: fmt.Sprintf("Undefined system '%s' in coupling", sysName),
 						Details: map[string]interface{}{
 							"system":        sysName,
-							"coupling_type": "couple2",
+							"coupling_type": "couple",
 							"coupling_index": i,
 							"system_index":  j,
 						},
