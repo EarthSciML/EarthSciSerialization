@@ -27,7 +27,6 @@ AffectEquation(...)
 **Available in other languages:**
 - [Python](python.md#affectequation)
 - [Typescript](typescript.md#affectequation)
-- [Rust](rust.md#affectequation)
 
 ---
 
@@ -200,7 +199,6 @@ ComponentNode(...)
 **Available in other languages:**
 - [Python](python.md#componentnode)
 - [Typescript](typescript.md#componentnode)
-- [Rust](rust.md#componentnode)
 
 ---
 
@@ -238,7 +236,6 @@ ContinuousEvent(...)
 **Available in other languages:**
 - [Python](python.md#continuousevent)
 - [Typescript](typescript.md#continuousevent)
-- [Rust](rust.md#continuousevent)
 
 ---
 
@@ -306,7 +303,6 @@ CouplingEdge(...)
 - [Python](python.md#couplingedge)
 - [Python](python.md#couplingedge)
 - [Typescript](typescript.md#couplingedge)
-- [Rust](rust.md#couplingedge)
 
 ---
 
@@ -397,7 +393,6 @@ DataLoader(...)
 **Available in other languages:**
 - [Python](python.md#dataloader)
 - [Typescript](typescript.md#dataloader)
-- [Rust](rust.md#dataloader)
 
 ---
 
@@ -413,7 +408,6 @@ DependencyEdge(...)
 **Available in other languages:**
 - [Python](python.md#dependencyedge)
 - [Typescript](typescript.md#dependencyedge)
-- [Rust](rust.md#dependencyedge)
 
 ---
 
@@ -428,7 +422,6 @@ DiscreteEvent(...)
 
 **Available in other languages:**
 - [Python](python.md#discreteevent)
-- [Rust](rust.md#discreteevent)
 
 ---
 
@@ -455,7 +448,6 @@ Domain(...)
 **Available in other languages:**
 - [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
-- [Rust](rust.md#domain)
 
 ---
 
@@ -483,7 +475,6 @@ Equation(...)
 - [Python](python.md#equation)
 - [Python](python.md#equation)
 - [Typescript](typescript.md#equation)
-- [Rust](rust.md#equation)
 
 ---
 
@@ -500,7 +491,6 @@ Equation(...)
 - [Python](python.md#equation)
 - [Python](python.md#equation)
 - [Typescript](typescript.md#equation)
-- [Rust](rust.md#equation)
 
 ---
 
@@ -515,7 +505,6 @@ EsmFile(...)
 
 **Available in other languages:**
 - [Python](python.md#esmfile)
-- [Rust](rust.md#esmfile)
 
 ---
 
@@ -597,7 +586,6 @@ FlattenMetadata(...)
 **Available in other languages:**
 - [Python](python.md#flattenmetadata)
 - [Typescript](typescript.md#flattenmetadata)
-- [Rust](rust.md#flattenmetadata)
 
 ---
 
@@ -624,7 +612,6 @@ FlattenedEquation(...)
 **Available in other languages:**
 - [Python](python.md#flattenedequation)
 - [Typescript](typescript.md#flattenedequation)
-- [Rust](rust.md#flattenedequation)
 
 ---
 
@@ -640,7 +627,6 @@ FlattenedSystem(...)
 **Available in other languages:**
 - [Python](python.md#flattenedsystem)
 - [Typescript](typescript.md#flattenedsystem)
-- [Rust](rust.md#flattenedsystem)
 
 ---
 
@@ -656,7 +642,6 @@ FunctionalAffect(...)
 **Available in other languages:**
 - [Python](python.md#functionalaffect)
 - [Typescript](typescript.md#functionalaffect)
-- [Rust](rust.md#functionalaffect)
 
 ---
 
@@ -746,7 +731,6 @@ Metadata(...)
 **Available in other languages:**
 - [Python](python.md#metadata)
 - [Typescript](typescript.md#metadata)
-- [Rust](rust.md#metadata)
 
 ---
 
@@ -817,7 +801,6 @@ Model(...)
 **Available in other languages:**
 - [Python](python.md#model)
 - [Typescript](typescript.md#model)
-- [Rust](rust.md#model)
 
 ---
 
@@ -833,7 +816,6 @@ Model(...)
 **Available in other languages:**
 - [Python](python.md#model)
 - [Typescript](typescript.md#model)
-- [Rust](rust.md#model)
 
 ---
 
@@ -849,7 +831,6 @@ ModelVariable(...)
 **Available in other languages:**
 - [Python](python.md#modelvariable)
 - [Typescript](typescript.md#modelvariable)
-- [Rust](rust.md#modelvariable)
 
 ---
 
@@ -920,7 +901,6 @@ Operator(...)
 **Available in other languages:**
 - [Python](python.md#operator)
 - [Typescript](typescript.md#operator)
-- [Rust](rust.md#operator)
 
 ---
 
@@ -936,7 +916,6 @@ Parameter(...)
 **Available in other languages:**
 - [Python](python.md#parameter)
 - [Typescript](typescript.md#parameter)
-- [Rust](rust.md#parameter)
 
 ---
 
@@ -959,9 +938,6 @@ ParameterVariable(...)
 ```julia
 ParseError(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#parseerror)
 
 ---
 
@@ -1021,7 +997,6 @@ Reaction(...)
 **Available in other languages:**
 - [Python](python.md#reaction)
 - [Typescript](typescript.md#reaction)
-- [Rust](rust.md#reaction)
 
 ---
 
@@ -1037,7 +1012,6 @@ Reaction(...)
 **Available in other languages:**
 - [Python](python.md#reaction)
 - [Typescript](typescript.md#reaction)
-- [Rust](rust.md#reaction)
 
 ---
 
@@ -1058,7 +1032,6 @@ Legacy constructor for backward compatibility. Creates a reaction with auto-gene
 **Available in other languages:**
 - [Python](python.md#reaction)
 - [Typescript](typescript.md#reaction)
-- [Rust](rust.md#reaction)
 
 ---
 
@@ -1074,7 +1047,6 @@ ReactionSystem(...)
 **Available in other languages:**
 - [Python](python.md#reactionsystem)
 - [Typescript](typescript.md#reactionsystem)
-- [Rust](rust.md#reactionsystem)
 
 ---
 
@@ -1090,7 +1062,6 @@ Reference(...)
 **Available in other languages:**
 - [Python](python.md#reference)
 - [Typescript](typescript.md#reference)
-- [Rust](rust.md#reference)
 
 ---
 
@@ -1116,7 +1087,6 @@ SchemaError(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#schemaerror)
-- [Rust](rust.md#schemaerror)
 
 ---
 
@@ -1131,7 +1101,6 @@ SchemaValidationError(...)
 
 **Available in other languages:**
 - [Python](python.md#schemavalidationerror)
-- [Rust](rust.md#schemavalidationerror)
 
 ---
 
@@ -1169,7 +1138,6 @@ Species(...)
 **Available in other languages:**
 - [Python](python.md#species)
 - [Typescript](typescript.md#species)
-- [Rust](rust.md#species)
 
 ---
 
@@ -1206,7 +1174,6 @@ StructuralError(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#structuralerror)
-- [Rust](rust.md#structuralerror)
 
 ---
 
@@ -1280,7 +1247,6 @@ ValidationResult(...)
 **Available in other languages:**
 - [Python](python.md#validationresult)
 - [Typescript](typescript.md#validationresult)
-- [Rust](rust.md#validationresult)
 
 ---
 
@@ -1307,7 +1273,6 @@ VariableNode(...)
 **Available in other languages:**
 - [Python](python.md#variablenode)
 - [Typescript](typescript.md#variablenode)
-- [Rust](rust.md#variablenode)
 
 ---
 
@@ -1439,9 +1404,6 @@ Internal recursive resolver for subsystem references in an EsmFile.
 add_continuous_event(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#add_continuous_event)
-
 ---
 
 ### add_continuous_event
@@ -1458,9 +1420,6 @@ add_continuous_event(model::Model, event::ContinuousEvent) -> Model
 
 Add a continuous event to a model.
 
-**Available in other languages:**
-- [Rust](rust.md#add_continuous_event)
-
 ---
 
 ### add_coupling
@@ -1471,9 +1430,6 @@ Add a continuous event to a model.
 ```julia
 add_coupling(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#add_coupling)
 
 ---
 
@@ -1491,9 +1447,6 @@ add_coupling(file::EsmFile, entry::CouplingEntry) -> EsmFile
 
 Add a coupling entry to an ESM file.
 
-**Available in other languages:**
-- [Rust](rust.md#add_coupling)
-
 ---
 
 ### add_discrete_event
@@ -1504,9 +1457,6 @@ Add a coupling entry to an ESM file.
 ```julia
 add_discrete_event(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#add_discrete_event)
 
 ---
 
@@ -1524,9 +1474,6 @@ add_discrete_event(model::Model, event::DiscreteEvent) -> Model
 
 Add a discrete event to a model.
 
-**Available in other languages:**
-- [Rust](rust.md#add_discrete_event)
-
 ---
 
 ### add_equation
@@ -1537,9 +1484,6 @@ Add a discrete event to a model.
 ```julia
 add_equation(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#add_equation)
 
 ---
 
@@ -1558,9 +1502,6 @@ add_equation(model::Model, equation::Equation) -> Model
 Add a new equation to a model.
 
 Appends the equation to the end of the equations list.
-
-**Available in other languages:**
-- [Rust](rust.md#add_equation)
 
 ---
 
@@ -1589,9 +1530,6 @@ Add an error to the collection.
 add_reaction(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#add_reaction)
-
 ---
 
 ### add_reaction
@@ -1608,9 +1546,6 @@ add_reaction(system::ReactionSystem, reaction::Reaction) -> ReactionSystem
 
 Add a new reaction to a reaction system.
 
-**Available in other languages:**
-- [Rust](rust.md#add_reaction)
-
 ---
 
 ### add_species
@@ -1621,9 +1556,6 @@ Add a new reaction to a reaction system.
 ```julia
 add_species(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#add_species)
 
 ---
 
@@ -1641,9 +1573,6 @@ add_species(system::ReactionSystem, name::String, species::Species) -> ReactionS
 
 Add a new species to a reaction system.
 
-**Available in other languages:**
-- [Rust](rust.md#add_species)
-
 ---
 
 ### add_variable
@@ -1654,9 +1583,6 @@ Add a new species to a reaction system.
 ```julia
 add_variable(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#add_variable)
 
 ---
 
@@ -1675,9 +1601,6 @@ add_variable(model::Model, name::String, variable::ModelVariable) -> Model
 Add a new variable to a model.
 
 Creates a new model with the additional variable. Warns if variable already exists.
-
-**Available in other languages:**
-- [Rust](rust.md#add_variable)
 
 ---
 
@@ -1907,9 +1830,6 @@ Apply the specified transform operation between variables.
 ```julia
 can_migrate(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#can_migrate)
 
 ---
 
@@ -2468,8 +2388,6 @@ component_graph(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#component_graph)
-- [Rust](rust.md#component_graph)
-- [Rust](rust.md#component_graph)
 
 ---
 
@@ -2510,8 +2428,6 @@ end
 
 **Available in other languages:**
 - [Typescript](typescript.md#component_graph)
-- [Rust](rust.md#component_graph)
-- [Rust](rust.md#component_graph)
 
 ---
 
@@ -2579,7 +2495,6 @@ contains(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#contains)
-- [Rust](rust.md#contains)
 
 ---
 
@@ -2609,7 +2524,6 @@ contains(sum_expr, "z")  # false
 
 **Available in other languages:**
 - [Typescript](typescript.md#contains)
-- [Rust](rust.md#contains)
 
 ---
 
@@ -2939,9 +2853,6 @@ derivation(...)
 derive_odes(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#derive_odes)
-
 ---
 
 ### describe_coupling_entry
@@ -3069,7 +2980,6 @@ evaluate(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#evaluate)
-- [Rust](rust.md#evaluate)
 
 ---
 
@@ -3108,7 +3018,6 @@ result = evaluate(sum_expr, bindings)  # 5.0
 
 **Available in other languages:**
 - [Typescript](typescript.md#evaluate)
-- [Rust](rust.md#evaluate)
 
 ---
 
@@ -3136,9 +3045,6 @@ Convert ESM expression to string representation for mock systems.
 ```julia
 expression_graph(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#expression_graph)
 
 ---
 
@@ -3181,9 +3087,6 @@ graph = expression_graph(model)
 # Single equation analysis
 graph = expression_graph(equation)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#expression_graph)
 
 ---
 
@@ -3300,7 +3203,6 @@ flatten(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#flatten)
-- [Rust](rust.md#flatten)
 
 ---
 
@@ -3335,7 +3237,6 @@ println(flat.equations[1].lhs) # "Atmosphere.T"
 
 **Available in other languages:**
 - [Typescript](typescript.md#flatten)
-- [Rust](rust.md#flatten)
 
 ---
 
@@ -3577,9 +3478,6 @@ Format error message for end users.
 free_variables(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#free_variables)
-
 ---
 
 ### free_variables
@@ -3607,9 +3505,6 @@ vars = free_variables(sum_expr)  # Set(["x", "y"])
 nested = OpExpr("*", [OpExpr("+", [x, NumExpr(1.0)]), y])
 vars = free_variables(nested)  # Set(["x", "y"])
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#free_variables)
 
 ---
 
@@ -3907,9 +3802,6 @@ Get a summary of all collected errors and warnings.
 get_supported_migration_targets(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#get_supported_migration_targets)
-
 ---
 
 ### get_system_domain
@@ -4014,8 +3906,6 @@ load(...)
 **Available in other languages:**
 - [Python](python.md#load)
 - [Typescript](typescript.md#load)
-- [Rust](rust.md#load)
-- [Rust](rust.md#load)
 
 ---
 
@@ -4038,8 +3928,6 @@ to the directory containing the file.
 **Available in other languages:**
 - [Python](python.md#load)
 - [Typescript](typescript.md#load)
-- [Rust](rust.md#load)
-- [Rust](rust.md#load)
 
 ---
 
@@ -4060,8 +3948,6 @@ Load and parse an ESM file from an IO stream.
 **Available in other languages:**
 - [Python](python.md#load)
 - [Typescript](typescript.md#load)
-- [Rust](rust.md#load)
-- [Rust](rust.md#load)
 
 ---
 
@@ -4151,7 +4037,6 @@ migrate(...)
 **Available in other languages:**
 - [Python](python.md#migrate)
 - [Typescript](typescript.md#migrate)
-- [Rust](rust.md#migrate)
 
 ---
 
@@ -4533,9 +4418,6 @@ reference(...)
 remove_coupling(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#remove_coupling)
-
 ---
 
 ### remove_coupling
@@ -4552,9 +4434,6 @@ remove_coupling(file::EsmFile, index::Int) -> EsmFile
 
 Remove a coupling entry by index.
 
-**Available in other languages:**
-- [Rust](rust.md#remove_coupling)
-
 ---
 
 ### remove_equation
@@ -4565,9 +4444,6 @@ Remove a coupling entry by index.
 ```julia
 remove_equation(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#remove_equation)
 
 ---
 
@@ -4587,9 +4463,6 @@ remove_equation(model::Model, index::Int) -> Model
 Remove an equation from a model.
 
 Can remove by index (1-based) or by matching the left-hand side expression.
-
-**Available in other languages:**
-- [Rust](rust.md#remove_equation)
 
 ---
 
@@ -4631,9 +4504,6 @@ Searches both continuous and discrete events.
 remove_reaction(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#remove_reaction)
-
 ---
 
 ### remove_reaction
@@ -4653,9 +4523,6 @@ Remove a reaction by its ID.
 Note: This assumes reactions have an `id` field. If not available,
 this function will search by reaction equality.
 
-**Available in other languages:**
-- [Rust](rust.md#remove_reaction)
-
 ---
 
 ### remove_species
@@ -4666,9 +4533,6 @@ this function will search by reaction equality.
 ```julia
 remove_species(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#remove_species)
 
 ---
 
@@ -4688,9 +4552,6 @@ Remove a species from a reaction system.
 
 Warns about dependent reactions but does not automatically update them.
 
-**Available in other languages:**
-- [Rust](rust.md#remove_species)
-
 ---
 
 ### remove_variable
@@ -4701,9 +4562,6 @@ Warns about dependent reactions but does not automatically update them.
 ```julia
 remove_variable(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#remove_variable)
 
 ---
 
@@ -4723,9 +4581,6 @@ Remove a variable from a model.
 
 Creates a new model without the specified variable. Warns about dependencies
 but does not automatically update equations that reference the variable.
-
-**Available in other languages:**
-- [Rust](rust.md#remove_variable)
 
 ---
 
@@ -4921,8 +4776,6 @@ save(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#save)
-- [Rust](rust.md#save)
-- [Rust](rust.md#save)
 
 ---
 
@@ -4942,8 +4795,6 @@ Save an EsmFile object to a JSON file at the specified path.
 
 **Available in other languages:**
 - [Typescript](typescript.md#save)
-- [Rust](rust.md#save)
-- [Rust](rust.md#save)
 
 ---
 
@@ -4963,8 +4814,6 @@ Save an EsmFile object to a JSON stream.
 
 **Available in other languages:**
 - [Typescript](typescript.md#save)
-- [Rust](rust.md#save)
-- [Rust](rust.md#save)
 
 ---
 
@@ -5484,7 +5333,6 @@ simplify(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#simplify)
-- [Rust](rust.md#simplify)
 
 ---
 
@@ -5523,7 +5371,6 @@ result = simplify(expr)  # VarExpr("x")
 
 **Available in other languages:**
 - [Typescript](typescript.md#simplify)
-- [Rust](rust.md#simplify)
 
 ---
 
@@ -5551,9 +5398,6 @@ Start timing an operation.
 ```julia
 stoichiometric_matrix(...)
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#stoichiometric_matrix)
 
 ---
 
@@ -5595,8 +5439,6 @@ substitute(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#substitute)
-- [Rust](rust.md#substitute)
-- [Rust](rust.md#substitute)
 
 ---
 
@@ -5636,8 +5478,6 @@ result = substitute(nested, bindings)  # OpExpr("*", [OpExpr("+", [NumExpr(2.0),
 
 **Available in other languages:**
 - [Typescript](typescript.md#substitute)
-- [Rust](rust.md#substitute)
-- [Rust](rust.md#substitute)
 
 ---
 
@@ -5807,10 +5647,6 @@ tests(...)
 to_ascii(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#to_ascii)
-- [Rust](rust.md#to_ascii)
-
 ---
 
 ### to_ascii
@@ -5845,10 +5681,6 @@ to_ascii(expr)  # Returns "x*2"
 eq = Equation(VarExpr("y"), OpExpr("+", [VarExpr("x"), NumExpr(1.0)]))
 to_ascii(eq)   # Returns "y = x + 1"
 ```
-
-**Available in other languages:**
-- [Rust](rust.md#to_ascii)
-- [Rust](rust.md#to_ascii)
 
 ---
 
@@ -5988,10 +5820,6 @@ in a real implementation with EarthSciMLBase.
 to_dot(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#to_dot)
-- [Rust](rust.md#to_dot)
-
 ---
 
 ### to_dot
@@ -6005,10 +5833,6 @@ function to_dot(graph::Graph{ComponentNode, CouplingEdge})::String
 
 **Description:**
 Export graph to DOT format for Graphviz rendering.
-
-**Available in other languages:**
-- [Rust](rust.md#to_dot)
-- [Rust](rust.md#to_dot)
 
 ---
 
@@ -6057,10 +5881,6 @@ to_julia_code(...)
 to_mermaid(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#to_mermaid)
-- [Rust](rust.md#to_mermaid)
-
 ---
 
 ### to_mermaid
@@ -6074,10 +5894,6 @@ function to_mermaid(graph::Graph{ComponentNode, CouplingEdge})::String
 
 **Description:**
 Export graph to Mermaid format for markdown embedding.
-
-**Available in other languages:**
-- [Rust](rust.md#to_mermaid)
-- [Rust](rust.md#to_mermaid)
 
 ---
 
@@ -6303,8 +6119,6 @@ validate(...)
 
 **Available in other languages:**
 - [Typescript](typescript.md#validate)
-- [Rust](rust.md#validate)
-- [Rust](rust.md#validate)
 
 ---
 
@@ -6325,8 +6139,6 @@ Returns ValidationResult with all errors and warnings.
 
 **Available in other languages:**
 - [Typescript](typescript.md#validate)
-- [Rust](rust.md#validate)
-- [Rust](rust.md#validate)
 
 ---
 
@@ -6664,9 +6476,6 @@ Validate that a reference string follows proper dot notation syntax.
 validate_schema(...)
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#validate_schema)
-
 ---
 
 ### validate_schema
@@ -6684,9 +6493,6 @@ validate_schema(data::Any) -> Vector{SchemaError}
 Validate data against the ESM schema.
 Returns empty vector if valid, otherwise returns validation errors.
 Each error contains the path, message, and keyword for debugging.
-
-**Available in other languages:**
-- [Rust](rust.md#validate_schema)
 
 ---
 
@@ -6812,7 +6618,6 @@ Assignment equation for discrete events.
 **Available in other languages:**
 - [Python](python.md#affectequation)
 - [Typescript](typescript.md#affectequation)
-- [Rust](rust.md#affectequation)
 
 ---
 
@@ -6831,7 +6636,6 @@ Component-level node representing a model, reaction system, data loader, or oper
 **Available in other languages:**
 - [Python](python.md#componentnode)
 - [Typescript](typescript.md#componentnode)
-- [Rust](rust.md#componentnode)
 
 ---
 
@@ -6868,7 +6672,6 @@ Event triggered by zero-crossing of condition expressions.
 **Available in other languages:**
 - [Python](python.md#continuousevent)
 - [Typescript](typescript.md#continuousevent)
-- [Rust](rust.md#continuousevent)
 
 ---
 
@@ -6927,7 +6730,6 @@ Edge representing coupling between components.
 - [Python](python.md#couplingedge)
 - [Python](python.md#couplingedge)
 - [Typescript](typescript.md#couplingedge)
-- [Rust](rust.md#couplingedge)
 
 ---
 
@@ -7022,7 +6824,6 @@ Runtime-specific data loading functionality.
 **Available in other languages:**
 - [Python](python.md#dataloader)
 - [Typescript](typescript.md#dataloader)
-- [Rust](rust.md#dataloader)
 
 ---
 
@@ -7041,7 +6842,6 @@ Edge representing dependency between variables.
 **Available in other languages:**
 - [Python](python.md#dependencyedge)
 - [Typescript](typescript.md#dependencyedge)
-- [Rust](rust.md#dependencyedge)
 
 ---
 
@@ -7061,7 +6861,6 @@ Event triggered by discrete triggers with functional affects.
 
 **Available in other languages:**
 - [Python](python.md#discreteevent)
-- [Rust](rust.md#discreteevent)
 
 ---
 
@@ -7082,7 +6881,6 @@ Spatial and temporal domain specification.
 **Available in other languages:**
 - [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
-- [Rust](rust.md#domain)
 
 ---
 
@@ -7126,7 +6924,6 @@ Optional _comment field provides human-readable description.
 - [Python](python.md#equation)
 - [Python](python.md#equation)
 - [Typescript](typescript.md#equation)
-- [Rust](rust.md#equation)
 
 ---
 
@@ -7185,7 +6982,6 @@ Main ESM file structure containing all components.
 
 **Available in other languages:**
 - [Python](python.md#esmfile)
-- [Rust](rust.md#esmfile)
 
 ---
 
@@ -7230,7 +7026,6 @@ Metadata about which systems were flattened and what coupling rules were applied
 **Available in other languages:**
 - [Python](python.md#flattenmetadata)
 - [Typescript](typescript.md#flattenmetadata)
-- [Rust](rust.md#flattenmetadata)
 
 ---
 
@@ -7256,7 +7051,6 @@ An equation in the flattened system with namespaced variables.
 **Available in other languages:**
 - [Python](python.md#flattenedequation)
 - [Typescript](typescript.md#flattenedequation)
-- [Rust](rust.md#flattenedequation)
 
 ---
 
@@ -7286,7 +7080,6 @@ namespace using "SystemName.variable" dot notation.
 **Available in other languages:**
 - [Python](python.md#flattenedsystem)
 - [Typescript](typescript.md#flattenedsystem)
-- [Rust](rust.md#flattenedsystem)
 
 ---
 
@@ -7307,7 +7100,6 @@ Functional affect for discrete events.
 **Available in other languages:**
 - [Python](python.md#functionalaffect)
 - [Typescript](typescript.md#functionalaffect)
-- [Rust](rust.md#functionalaffect)
 
 ---
 
@@ -7364,7 +7156,6 @@ Authorship, provenance, and description metadata.
 **Available in other languages:**
 - [Python](python.md#metadata)
 - [Typescript](typescript.md#metadata)
-- [Rust](rust.md#metadata)
 
 ---
 
@@ -7420,7 +7211,6 @@ Supports hierarchical composition through subsystems.
 **Available in other languages:**
 - [Python](python.md#model)
 - [Typescript](typescript.md#model)
-- [Rust](rust.md#model)
 
 ---
 
@@ -7441,7 +7231,6 @@ Structure defining a model variable with its type, default value, and optional e
 **Available in other languages:**
 - [Python](python.md#modelvariable)
 - [Typescript](typescript.md#modelvariable)
-- [Rust](rust.md#modelvariable)
 
 ---
 
@@ -7499,7 +7288,6 @@ Platform-specific computational kernels and operations.
 **Available in other languages:**
 - [Python](python.md#operator)
 - [Typescript](typescript.md#operator)
-- [Rust](rust.md#operator)
 
 ---
 
@@ -7520,7 +7308,6 @@ Model parameter with name, default value, and optional metadata.
 **Available in other languages:**
 - [Python](python.md#parameter)
 - [Typescript](typescript.md#parameter)
-- [Rust](rust.md#parameter)
 
 ---
 
@@ -7537,9 +7324,6 @@ struct ParseError <: Exception
 ParseError
 
 Exception thrown when JSON parsing fails.
-
-**Available in other languages:**
-- [Rust](rust.md#parseerror)
 
 ---
 
@@ -7627,7 +7411,6 @@ Chemical reaction with substrates, products, and rate expression.
 **Available in other languages:**
 - [Python](python.md#reaction)
 - [Typescript](typescript.md#reaction)
-- [Rust](rust.md#reaction)
 
 ---
 
@@ -7648,7 +7431,6 @@ Collection of chemical reactions with associated species, supporting hierarchica
 **Available in other languages:**
 - [Python](python.md#reactionsystem)
 - [Typescript](typescript.md#reactionsystem)
-- [Rust](rust.md#reactionsystem)
 
 ---
 
@@ -7669,7 +7451,6 @@ Academic citation or data source reference.
 **Available in other languages:**
 - [Python](python.md#reference)
 - [Typescript](typescript.md#reference)
-- [Rust](rust.md#reference)
 
 ---
 
@@ -7707,7 +7488,6 @@ Contains path, message, and keyword from JSON Schema validation.
 
 **Available in other languages:**
 - [Typescript](typescript.md#schemaerror)
-- [Rust](rust.md#schemaerror)
 
 ---
 
@@ -7728,7 +7508,6 @@ Contains detailed error information including paths and messages.
 
 **Available in other languages:**
 - [Python](python.md#schemavalidationerror)
-- [Rust](rust.md#schemavalidationerror)
 
 ---
 
@@ -7749,7 +7528,6 @@ Chemical species definition with name and optional properties.
 **Available in other languages:**
 - [Python](python.md#species)
 - [Typescript](typescript.md#species)
-- [Rust](rust.md#species)
 
 ---
 
@@ -7789,7 +7567,6 @@ Contains path, message, and error type for structural issues.
 
 **Available in other languages:**
 - [Typescript](typescript.md#structuralerror)
-- [Rust](rust.md#structuralerror)
 
 ---
 
@@ -7846,7 +7623,6 @@ unit warnings, and overall validation status.
 **Available in other languages:**
 - [Python](python.md#validationresult)
 - [Typescript](typescript.md#validationresult)
-- [Rust](rust.md#validationresult)
 
 ---
 
@@ -7881,7 +7657,6 @@ Variable-level node for expression graphs.
 **Available in other languages:**
 - [Python](python.md#variablenode)
 - [Typescript](typescript.md#variablenode)
-- [Rust](rust.md#variablenode)
 
 ---
 

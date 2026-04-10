@@ -393,22 +393,6 @@ function add_continuous_event(model::Model, event::ContinuousEvent)::Model
 
 Add a continuous event to a model.
 
-**Rust:**
-```rust
-pub fn add_continuous_event(model: &Model, event: ContinuousEvent) -> EditResult<Model> {
-```
-
-> Add a continuous event to a model
-
-# Arguments
-
-* `model` - The model to modify
-* `event` - The continuous event to add
-
-# Returns
-
-* `EditResult<Model>` - New model with the added continuous event.
-
 ---
 
 ### add_coupling
@@ -426,22 +410,6 @@ function add_coupling(file::EsmFile, entry::CouplingEntry)::EsmFile
 > add_coupling(file::EsmFile, entry::CouplingEntry) -> EsmFile
 
 Add a coupling entry to an ESM file.
-
-**Rust:**
-```rust
-pub fn add_coupling(esm_file: &EsmFile, coupling: CouplingEntry) -> EditResult<EsmFile> {
-```
-
-> Add a coupling entry to an ESM file
-
-# Arguments
-
-* `esm_file` - The ESM file to modify
-* `coupling` - The coupling entry to add
-
-# Returns
-
-* `EditResult<EsmFile>` - New ESM file with the added coupling entry.
 
 ---
 
@@ -461,22 +429,6 @@ function add_discrete_event(model::Model, event::DiscreteEvent)::Model
 
 Add a discrete event to a model.
 
-**Rust:**
-```rust
-pub fn add_discrete_event(model: &Model, event: DiscreteEvent) -> EditResult<Model> {
-```
-
-> Add a discrete event to a model
-
-# Arguments
-
-* `model` - The model to modify
-* `event` - The discrete event to add
-
-# Returns
-
-* `EditResult<Model>` - New model with the added discrete event.
-
 ---
 
 ### add_equation
@@ -494,22 +446,6 @@ function add_equation(model::Model, equation::Equation)::Model
 > add_equation(model::Model, equation::Equation) -> Model
 
 Add a new equation to a model.
-
-**Rust:**
-```rust
-pub fn add_equation(model: &Model, equation: Equation) -> EditResult<Model> {
-```
-
-> Add an equation to a model
-
-# Arguments
-
-* `model` - The model to modify
-* `equation` - The equation to add
-
-# Returns
-
-* `EditResult<Model>` - New model with the added equation.
 
 ---
 
@@ -543,22 +479,6 @@ function add_reaction(system::ReactionSystem, reaction::Reaction)::ReactionSyste
 
 Add a new reaction to a reaction system.
 
-**Rust:**
-```rust
-pub fn add_reaction(system: &ReactionSystem, reaction: Reaction) -> EditResult<ReactionSystem> {
-```
-
-> Add a reaction to a reaction system
-
-# Arguments
-
-* `system` - The reaction system to modify
-* `reaction` - The reaction to add
-
-# Returns
-
-* `EditResult<ReactionSystem>` - New reaction system with the added reaction.
-
 ---
 
 ### add_species
@@ -576,22 +496,6 @@ function add_species(system::ReactionSystem, name::String, species::Species)::Re
 > add_species(system::ReactionSystem, name::String, species::Species) -> ReactionSystem
 
 Add a new species to a reaction system.
-
-**Rust:**
-```rust
-pub fn add_species(system: &ReactionSystem, species: Species) -> EditResult<ReactionSystem> {
-```
-
-> Add a species to a reaction system
-
-# Arguments
-
-* `system` - The reaction system to modify
-* `species` - The species to add
-
-# Returns
-
-* `EditResult<ReactionSystem>` - New reaction system with the added species.
 
 ---
 
@@ -611,23 +515,6 @@ function add_variable(model::Model, name::String, variable::ModelVariable)::Mode
 
 Add a new variable to a model.
 
-**Rust:**
-```rust
-pub fn add_variable(model: &Model, var_name: &str, variable: ModelVariable) -> EditResult<Model> {
-```
-
-> Add a variable to a model
-
-# Arguments
-
-* `model` - The model to modify
-* `var_name` - Name of the new variable
-* `variable` - The variable to add
-
-# Returns
-
-* `EditResult<Model>` - New model with the added variable.
-
 ---
 
 ### adjacency
@@ -643,22 +530,6 @@ function adjacency(graph::Graph{N, E}, node::N) where {N, E}
 ```
 
 > Get all adjacent nodes (both predecessors and successors).
-
----
-
-### can_migrate
-
-**Julia:**
-```julia
-can_migrate(...)
-```
-
-**Rust:**
-```rust
-pub fn can_migrate(from_version: &str, to_version: &str) -> bool {
-```
-
-> Check if migration is supported between two versions.
 
 ---
 
@@ -772,26 +643,6 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
 
 Generate component-level graph showing systems and their couplings.
 
-**Rust:**
-```rust
-pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
-```
-
-> Build a component graph from an ESM file
-
-# Arguments
-
-* `esm_file` - The ESM file to analyze
-
-# Returns
-
-* Component graph showing structure and coupling.
-
-**Rust:**
-```rust
-pub fn component_graph(json_str: &str) -> Result<JsValue, JsValue> {
-```
-
 **Typescript:**
 ```typescript
 export function component_graph(esmFile: EsmFile): ComponentGraph {
@@ -846,22 +697,6 @@ function contains(expr::NumExpr, var::String)::Bool
 > contains(expr::Expr, var::String)::Bool
 
 Check if an expression contains a specific variable name.
-
-**Rust:**
-```rust
-pub fn contains(expr: &Expr, var_name: &str) -> bool {
-```
-
-> Check if an expression contains a specific variable
-
-# Arguments
-
-* `expr` - The expression to search
-* `var_name` - The variable name to look for
-
-# Returns
-
-* `true` if the variable is found, `false` otherwise.
 
 **Typescript:**
 ```typescript
@@ -989,25 +824,6 @@ def demonstrate_error_handling():
 
 ---
 
-### derive_odes
-
-**Julia:**
-```julia
-derive_odes(...)
-```
-
-**Rust:**
-```rust
-pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
-```
-
-> Generate ODE model from a reaction system
-
-Converts a reaction system into an ODE model with species as state variables
-and reactions contributing to their derivatives using mass action kinetics.
-
----
-
 ### differentiate
 
 **Python:**
@@ -1071,23 +887,6 @@ function evaluate(expr::NumExpr, bindings::Dict{String,Float64})::Float64
 
 Numerically evaluate an expression using provided variable bindings.
 
-**Rust:**
-```rust
-pub fn evaluate(expr: &Expr, bindings: &HashMap<String, f64>) -> Result<f64, Vec<String>> {
-```
-
-> Evaluate an expression with given variable values
-
-# Arguments
-
-* `expr` - The expression to evaluate
-* `bindings` - Map from variable names to numeric values
-
-# Returns
-
-* `Ok(f64)` if evaluation succeeds
-* `Err(Vec<String>)` with unbound variable names if evaluation fails.
-
 **Typescript:**
 ```typescript
 export function evaluate(expr: Expr, bindings: Map<string, number>): number {
@@ -1123,21 +922,6 @@ function expression_graph(file::EsmFile)::Graph{VariableNode, DependencyEdge}
 
 Generate expression-level dependency graph showing variable relationships.
 
-**Rust:**
-```rust
-pub fn expression_graph<T>(input: &T) -> ExpressionGraph
-```
-
-> Build an expression graph from various ESM components
-
-# Arguments
-
-* `input` - Can be an ESM file, model, reaction system, equation, reaction, or expression
-
-# Returns
-
-* `ExpressionGraph` - Graph showing variable dependencies.
-
 ---
 
 ### extract
@@ -1167,20 +951,6 @@ export function extract(
 @returns New ESM file containing only the specified component
 @throws EntityNotFoundError if component not found
 /.
-
----
-
-### fast_parse
-
-**Rust:**
-```rust
-pub fn fast_parse(json_bytes: &mut [u8]) -> Result<EsmFile, PerformanceError> {
-```
-
-**Rust:**
-```rust
-pub fn fast_parse(json_str: &str) -> Result<EsmFile, PerformanceError> {
-```
 
 ---
 
@@ -1238,13 +1008,6 @@ function flatten(file::EsmFile)::FlattenedSystem
 > flatten(file::EsmFile) -> FlattenedSystem
 
 Flatten coupled systems into a single system with dot-namespaced variables.
-
-**Rust:**
-```rust
-pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, String> {
-```
-
-> Flatten a coupled ESM file into a single unified system.
 
 **Typescript:**
 ```typescript
@@ -1306,21 +1069,6 @@ function free_variables(expr::NumExpr)::Set{String}
 > free_variables(expr::Expr)::Set{String}
 
 Extract all free (unbound) variable names from an expression.
-
-**Rust:**
-```rust
-pub fn free_variables(expr: &Expr) -> HashSet<String> {
-```
-
-> Extract all free variables from an expression
-
-# Arguments
-
-* `expr` - The expression to analyze
-
-# Returns
-
-* Set of variable names referenced in the expression.
 
 ---
 
@@ -1428,22 +1176,6 @@ def get_stats(self):
 
 ---
 
-### get_supported_migration_targets
-
-**Julia:**
-```julia
-get_supported_migration_targets(...)
-```
-
-**Rust:**
-```rust
-pub fn get_supported_migration_targets(from_version: &str) -> Vec<String> {
-```
-
-> Get supported migration paths from a given version.
-
----
-
 ### infer_variable_units
 
 **Julia:**
@@ -1541,20 +1273,6 @@ def load(self):
 ```
 
 > Load CSV data (simplified implementation).
-
-**Rust:**
-```rust
-pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
-```
-
-> Load and parse an ESM file from JSON string
-
-This function performs both JSON parsing and schema validation.
-
-**Rust:**
-```rust
-pub fn load(json_str: &str) -> Result<JsValue, JsValue> {
-```
 
 **Typescript:**
 ```typescript
@@ -1697,11 +1415,6 @@ def main():
 
 > Run all demonstrations.
 
-**Rust:**
-```rust
-pub fn main() {
-```
-
 ---
 
 ### map_variable
@@ -1765,37 +1478,12 @@ def migrate(esm_file, target_version: str):
 
 > Migrate an ESM file to a target version.
 
-**Rust:**
-```rust
-pub fn migrate(file: &EsmFile, target_version: &str) -> Result<EsmFile, MigrationError> {
-```
-
-> Migrate an ESM file to a target version.
-
 **Typescript:**
 ```typescript
 export function migrate(file: EsmFile, targetVersion: string): EsmFile {
 ```
 
 > Migrate an ESM file from its current schema version to the target version.
-
----
-
-### new
-
-**Rust:**
-```rust
-pub fn new(num_threads: Option<usize>) -> Result<Self, PerformanceError> {
-```
-
-> Create a new parallel evaluator with specified number of threads.
-
-**Rust:**
-```rust
-pub fn new() -> Self {
-```
-
-> Create a new model allocator with specified capacity.
 
 ---
 
@@ -1922,22 +1610,6 @@ function remove_coupling(file::EsmFile, index::Int)::EsmFile
 
 Remove a coupling entry by index.
 
-**Rust:**
-```rust
-pub fn remove_coupling(esm_file: &EsmFile, index: usize) -> EditResult<EsmFile> {
-```
-
-> Remove a coupling entry from an ESM file by index
-
-# Arguments
-
-* `esm_file` - The ESM file to modify
-* `index` - Index of the coupling entry to remove
-
-# Returns
-
-* `EditResult<EsmFile>` - New ESM file without the coupling entry.
-
 ---
 
 ### remove_equation
@@ -1956,22 +1628,6 @@ function remove_equation(model::Model, index::Int)::Model
     remove_equation(model::Model, lhs_pattern::Expr) -> Model
 
 Remove an equation from a model.
-
-**Rust:**
-```rust
-pub fn remove_equation(model: &Model, index: usize) -> EditResult<Model> {
-```
-
-> Remove an equation from a model by index
-
-# Arguments
-
-* `model` - The model to modify
-* `index` - Index of the equation to remove
-
-# Returns
-
-* `EditResult<Model>` - New model without the equation.
 
 ---
 
@@ -2009,22 +1665,6 @@ function remove_reaction(system::ReactionSystem, id::String)::ReactionSystem
 
 Remove a reaction by its ID.
 
-**Rust:**
-```rust
-pub fn remove_reaction(system: &ReactionSystem, index: usize) -> EditResult<ReactionSystem> {
-```
-
-> Remove a reaction from a reaction system by index
-
-# Arguments
-
-* `system` - The reaction system to modify
-* `index` - Index of the reaction to remove
-
-# Returns
-
-* `EditResult<ReactionSystem>` - New reaction system without the reaction.
-
 ---
 
 ### remove_species
@@ -2043,22 +1683,6 @@ function remove_species(system::ReactionSystem, name::String)::ReactionSystem
 
 Remove a species from a reaction system.
 
-**Rust:**
-```rust
-pub fn remove_species(system: &ReactionSystem, species_name: &str) -> EditResult<ReactionSystem> {
-```
-
-> Remove a species from a reaction system
-
-# Arguments
-
-* `system` - The reaction system to modify
-* `species_name` - Name of the species to remove
-
-# Returns
-
-* `EditResult<ReactionSystem>` - New reaction system without the species.
-
 ---
 
 ### remove_variable
@@ -2076,22 +1700,6 @@ function remove_variable(model::Model, name::String)::Model
 > remove_variable(model::Model, name::String) -> Model
 
 Remove a variable from a model.
-
-**Rust:**
-```rust
-pub fn remove_variable(model: &Model, var_name: &str) -> EditResult<Model> {
-```
-
-> Remove a variable from a model
-
-# Arguments
-
-* `model` - The model to modify
-* `var_name` - Name of the variable to remove
-
-# Returns
-
-* `EditResult<Model>` - New model without the variable.
 
 ---
 
@@ -2245,20 +1853,6 @@ function save(file::EsmFile, io::IO)
 
 Save an EsmFile object to a JSON stream.
 
-**Rust:**
-```rust
-pub fn save(esm_file_js: &JsValue) -> Result<String, JsValue> {
-```
-
-**Rust:**
-```rust
-pub fn save(esm_file: &EsmFile) -> Result<String, EsmError> {
-```
-
-> Serialize an ESM file to JSON string
-
-This function converts an `EsmFile` struct back to a JSON string.
-
 **Typescript:**
 ```typescript
 export function save(file: EsmFile): string {
@@ -2328,21 +1922,6 @@ function simplify(expr::NumExpr)::Expr
 
 Perform constant folding and algebraic simplification on an expression.
 
-**Rust:**
-```rust
-pub fn simplify(expr: &Expr) -> Expr {
-```
-
-> Simplify an expression (basic symbolic simplification)
-
-# Arguments
-
-* `expr` - The expression to simplify
-
-# Returns
-
-* Simplified expression.
-
 **Typescript:**
 ```typescript
 export function simplify(expr: Expr): Expr {
@@ -2352,24 +1931,6 @@ export function simplify(expr: Expr): Expr {
 @param expr Expression to simplify
 @returns Simplified expression
 /.
-
----
-
-### stoichiometric_matrix
-
-**Julia:**
-```julia
-stoichiometric_matrix(...)
-```
-
-**Rust:**
-```rust
-pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<f64>> {
-```
-
-> Generate stoichiometric matrix from a reaction system
-
-Creates a matrix where rows represent species and columns represent reactions.
 
 ---
 
@@ -2388,27 +1949,6 @@ function substitute(expr::NumExpr, bindings::Dict{String,Expr})::Expr
 > substitute(expr::Expr, bindings::Dict{String,Expr})::Expr
 
 Recursively replace variables in an expression with provided bindings.
-
-**Rust:**
-```rust
-pub fn substitute(expr: &Expr, substitutions: &std::collections::HashMap<String, Expr>) -> Expr {
-```
-
-> Substitute variables in an expression
-
-# Arguments
-
-* `expr` - The expression to modify
-* `substitutions` - Map from variable names to replacement expressions
-
-# Returns
-
-* New expression with substitutions applied.
-
-**Rust:**
-```rust
-pub fn substitute(json_str: &str, bindings_str: &str) -> Result<String, JsValue> {
-```
 
 **Typescript:**
 ```typescript
@@ -2434,60 +1974,6 @@ function substitute_in_equations(model::Model, bindings::Dict{String, EarthSciSe
 > substitute_in_equations(model::Model, bindings::Dict{String, Expr}) -> Model
 
 Apply substitutions across all equations in a model.
-
----
-
-### substitute_in_model
-
-**Python:**
-```python
-def substitute_in_model(model, bindings: Dict[str, Expr]):
-```
-
-> Apply substitutions to all expressions in a model.
-
-**Rust:**
-```rust
-pub fn substitute_in_model(
-```
-
-> Substitute variables in all expressions within a model
-
-# Arguments
-
-* `model` - The model to modify
-* `substitutions` - Map from variable names to replacement expressions
-
-# Returns
-
-* New model with substitutions applied.
-
----
-
-### substitute_in_reaction_system
-
-**Python:**
-```python
-def substitute_in_reaction_system(system, bindings: Dict[str, Expr]):
-```
-
-> Apply substitutions to all expressions in a reaction system.
-
-**Rust:**
-```rust
-pub fn substitute_in_reaction_system(
-```
-
-> Substitute variables in all expressions within a reaction system
-
-# Arguments
-
-* `reaction_system` - The reaction system to modify
-* `substitutions` - Map from variable names to replacement expressions
-
-# Returns
-
-* New reaction system with substitutions applied.
 
 ---
 
@@ -3484,18 +2970,6 @@ function to_ascii(target)
 
 Format target as plain ASCII mathematical notation.
 
-**Rust:**
-```rust
-pub fn to_ascii(expr: &Expr) -> String {
-```
-
-> Convert an expression to ASCII representation.
-
-**Rust:**
-```rust
-pub fn to_ascii(json_str: &str) -> Result<String, JsValue> {
-```
-
 ---
 
 ### to_catalyst_system
@@ -3557,28 +3031,6 @@ function to_dot(graph::Graph{ComponentNode, CouplingEdge})::String
 
 > Export graph to DOT format for Graphviz rendering.
 
-**Rust:**
-```rust
-pub fn to_dot(&self) -> String {
-```
-
-> Export graph to DOT format for Graphviz
-
-# Returns
-
-* `String` - DOT representation of the graph.
-
-**Rust:**
-```rust
-pub fn to_dot(&self) -> String {
-```
-
-> Export graph to DOT format for Graphviz
-
-# Returns
-
-* `String` - DOT representation of the expression graph.
-
 ---
 
 ### to_json
@@ -3597,48 +3049,6 @@ function to_json(graph::Graph{N, E})::String where {N, E}
 
 ---
 
-### to_json_graph
-
-**Rust:**
-```rust
-pub fn to_json_graph(&self) -> String {
-```
-
-> Export graph to JSON format
-
-# Returns
-
-* `String` - JSON representation of the graph.
-
-**Rust:**
-```rust
-pub fn to_json_graph(&self) -> String {
-```
-
-> Export graph to JSON format
-
-# Returns
-
-* `String` - JSON representation of the graph.
-
----
-
-### to_latex
-
-**Rust:**
-```rust
-pub fn to_latex(expr: &Expr) -> String {
-```
-
-> Convert an expression to LaTeX notation.
-
-**Rust:**
-```rust
-pub fn to_latex(json_str: &str) -> Result<String, JsValue> {
-```
-
----
-
 ### to_mermaid
 
 **Julia:**
@@ -3652,28 +3062,6 @@ function to_mermaid(graph::Graph{ComponentNode, CouplingEdge})::String
 ```
 
 > Export graph to Mermaid format for markdown embedding.
-
-**Rust:**
-```rust
-pub fn to_mermaid(&self) -> String {
-```
-
-> Export graph to Mermaid format
-
-# Returns
-
-* `String` - Mermaid representation of the graph.
-
-**Rust:**
-```rust
-pub fn to_mermaid(&self) -> String {
-```
-
-> Export graph to Mermaid format
-
-# Returns
-
-* `String` - Mermaid representation of the expression graph.
 
 ---
 
@@ -3701,29 +3089,6 @@ function to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
 > to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
 
 Convert an ESM Model to a ModelingToolkit ODESystem or MockMTKSystem.
-
----
-
-### to_unicode
-
-**Rust:**
-```rust
-pub fn to_unicode(&self) -> String {
-```
-
-> Convert expression to Unicode mathematical notation.
-
-**Rust:**
-```rust
-pub fn to_unicode(expr: &Expr) -> String {
-```
-
-> Convert an expression to Unicode mathematical notation.
-
-**Rust:**
-```rust
-pub fn to_unicode(json_str: &str) -> Result<String, JsValue> {
-```
 
 ---
 
@@ -3795,20 +3160,6 @@ function validate(file::EsmFile)::ValidationResult
 > validate(file::EsmFile) -> ValidationResult
 
 Complete validation combining schema, structural, and unit validation.
-
-**Rust:**
-```rust
-pub fn validate(esm_file: &EsmFile) -> ValidationResult {
-```
-
-> Perform structural validation on an ESM file
-
-**Note**: This function performs ONLY structural validation, not schema validation.
-
-**Rust:**
-```rust
-pub fn validate(json_str: &str) -> Result<JsValue, JsValue> {
-```
 
 **Typescript:**
 ```typescript
@@ -3917,15 +3268,6 @@ function validate_schema(data::Any)::Vector{SchemaError}
 
 Validate data against the ESM schema.
 
-**Rust:**
-```rust
-pub fn validate_schema(json_value: &Value) -> Result<(), EsmError> {
-```
-
-> Validate a JSON value against the ESM schema
-
-This performs schema validation only.
-
 ---
 
 ### validate_structural
@@ -3980,11 +3322,6 @@ class AffectEquation:
 
 > Equation that affects a variable (assignment-like).
 
-**Rust:**
-```rust
-pub struct AffectEquation {
-```
-
 **Typescript:**
 ```typescript
 export interface AffectEquation {
@@ -4012,20 +3349,6 @@ export interface BoundaryCondition {
 
 ---
 
-### ComponentGraph
-
-**Rust:**
-```rust
-pub struct ComponentGraph {
-```
-
-**Typescript:**
-```typescript
-export interface ComponentGraph {
-```
-
----
-
 ### ComponentNode
 
 **Julia:**
@@ -4041,11 +3364,6 @@ class ComponentNode:
 ```
 
 > A component node representing models or reaction systems.
-
-**Rust:**
-```rust
-pub struct ComponentNode {
-```
 
 **Typescript:**
 ```typescript
@@ -4089,11 +3407,6 @@ class ContinuousEvent:
 ```
 
 > An event that occurs when a condition becomes true during continuous evolution.
-
-**Rust:**
-```rust
-pub struct ContinuousEvent {
-```
 
 **Typescript:**
 ```typescript
@@ -4190,11 +3503,6 @@ class CouplingEdge:
 
 > Represents a labeled edge in the coupling graph.
 
-**Rust:**
-```rust
-pub struct CouplingEdge {
-```
-
 **Typescript:**
 ```typescript
 export interface CouplingEdge {
@@ -4280,11 +3588,6 @@ class DataLoader:
 
 > Configuration for loading external data.
 
-**Rust:**
-```rust
-pub struct DataLoader {
-```
-
 **Typescript:**
 ```typescript
 export interface DataLoader {
@@ -4309,11 +3612,6 @@ class DependencyEdge:
 ```
 
 > An edge representing mathematical dependencies.
-
-**Rust:**
-```rust
-pub struct DependencyEdge {
-```
 
 **Typescript:**
 ```typescript
@@ -4340,11 +3638,6 @@ class DiscreteEvent:
 
 > An event that occurs at discrete time points.
 
-**Rust:**
-```rust
-pub struct DiscreteEvent {
-```
-
 ---
 
 ### Domain
@@ -4364,11 +3657,6 @@ class Domain:
 ```
 
 > Comprehensive computational domain specification.
-
-**Rust:**
-```rust
-pub struct Domain {
-```
 
 **Typescript:**
 ```typescript
@@ -4428,11 +3716,6 @@ class Equation:
 ```
 
 > Mathematical equation with left and right hand sides.
-
-**Rust:**
-```rust
-pub struct Equation {
-```
 
 **Typescript:**
 ```typescript
@@ -4532,11 +3815,6 @@ class EsmFile:
 
 > Root container for an ESM format file.
 
-**Rust:**
-```rust
-pub struct EsmFile {
-```
-
 ---
 
 ### EsmModelEditorProps
@@ -4590,22 +3868,6 @@ class ExprNode:
 
 ---
 
-### ExpressionNode
-
-**Rust:**
-```rust
-pub struct ExpressionNode {
-```
-
-**Typescript:**
-```typescript
-export interface ExpressionNode {
-```
-
-> An operation in the expression AST.
-
----
-
 ### FixSuggestion
 
 **Julia:**
@@ -4649,11 +3911,6 @@ class FlattenMetadata:
 
 > Metadata about which systems were flattened and how.
 
-**Rust:**
-```rust
-pub struct FlattenMetadata {
-```
-
 **Typescript:**
 ```typescript
 export interface FlattenMetadata {
@@ -4681,11 +3938,6 @@ class FlattenedEquation:
 
 > An equation in the flattened system with namespaced variables.
 
-**Rust:**
-```rust
-pub struct FlattenedEquation {
-```
-
 **Typescript:**
 ```typescript
 export interface FlattenedEquation {
@@ -4712,11 +3964,6 @@ class FlattenedSystem:
 ```
 
 > A coupled system flattened to a single system with dot-namespaced variables.
-
-**Rust:**
-```rust
-pub struct FlattenedSystem {
-```
 
 **Typescript:**
 ```typescript
@@ -4762,11 +4009,6 @@ class FunctionalAffect:
 ```
 
 > A functional effect applied during an event.
-
-**Rust:**
-```rust
-pub struct FunctionalAffect {
-```
 
 **Typescript:**
 ```typescript
@@ -4836,33 +4078,12 @@ class Metadata:
 
 > Metadata about the model or dataset.
 
-**Rust:**
-```rust
-pub struct Metadata {
-```
-
 **Typescript:**
 ```typescript
 export interface Metadata {
 ```
 
 > Authorship, provenance, and description.
-
----
-
-### MigrationError
-
-**Python:**
-```python
-class MigrationError:
-```
-
-> Error raised when migration fails.
-
-**Rust:**
-```rust
-pub struct MigrationError {
-```
 
 ---
 
@@ -4883,11 +4104,6 @@ class Model:
 ```
 
 > A mathematical model containing variables and equations.
-
-**Rust:**
-```rust
-pub struct Model {
-```
 
 **Typescript:**
 ```typescript
@@ -4916,11 +4132,6 @@ class ModelVariable:
 
 > A variable in a mathematical model.
 
-**Rust:**
-```rust
-pub struct ModelVariable {
-```
-
 **Typescript:**
 ```typescript
 export interface ModelVariable {
@@ -4947,11 +4158,6 @@ class Operator:
 ```
 
 > A registered runtime operator (e.
-
-**Rust:**
-```rust
-pub struct Operator {
-```
 
 **Typescript:**
 ```typescript
@@ -4980,35 +4186,12 @@ class Parameter:
 
 > A parameter for reaction systems.
 
-**Rust:**
-```rust
-pub struct Parameter {
-```
-
 **Typescript:**
 ```typescript
 export interface Parameter {
 ```
 
 > A parameter in a reaction system.
-
----
-
-### ParseError
-
-**Julia:**
-```julia
-struct ParseError <: Exception
-```
-
-> ParseError
-
-Exception thrown when JSON parsing fails.
-
-**Rust:**
-```rust
-pub struct ParseError {
-```
 
 ---
 
@@ -5029,11 +4212,6 @@ class Reaction:
 ```
 
 > A chemical reaction.
-
-**Rust:**
-```rust
-pub struct Reaction {
-```
 
 **Typescript:**
 ```typescript
@@ -5062,11 +4240,6 @@ class ReactionSystem:
 
 > A system of chemical reactions.
 
-**Rust:**
-```rust
-pub struct ReactionSystem {
-```
-
 **Typescript:**
 ```typescript
 export interface ReactionSystem {
@@ -5094,11 +4267,6 @@ class Reference:
 
 > Bibliographic reference.
 
-**Rust:**
-```rust
-pub struct Reference {
-```
-
 **Typescript:**
 ```typescript
 export interface Reference {
@@ -5118,11 +4286,6 @@ struct SchemaError
 > SchemaError
 
 Represents a validation error with detailed information.
-
-**Rust:**
-```rust
-pub struct SchemaError {
-```
 
 **Typescript:**
 ```typescript
@@ -5151,11 +4314,6 @@ class SchemaValidationError:
 ```
 
 > Exception raised when schema validation fails.
-
-**Rust:**
-```rust
-pub struct SchemaValidationError {
-```
 
 ---
 
@@ -5212,11 +4370,6 @@ class Species:
 ```
 
 > A chemical species in a reaction system.
-
-**Rust:**
-```rust
-pub struct Species {
-```
 
 **Typescript:**
 ```typescript
@@ -5275,11 +4428,6 @@ struct StructuralError
 > StructuralError
 
 Represents a structural validation error with detailed information.
-
-**Rust:**
-```rust
-pub struct StructuralError {
-```
 
 **Typescript:**
 ```typescript
@@ -5607,11 +4755,6 @@ class ValidationResult:
 
 > Represents the result of validation.
 
-**Rust:**
-```rust
-pub struct ValidationResult {
-```
-
 **Typescript:**
 ```typescript
 export interface ValidationResult {
@@ -5637,11 +4780,6 @@ class VariableNode:
 ```
 
 > A variable node representing mathematical variables or expressions.
-
-**Rust:**
-```rust
-pub struct VariableNode {
-```
 
 **Typescript:**
 ```typescript
