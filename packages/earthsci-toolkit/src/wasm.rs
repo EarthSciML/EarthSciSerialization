@@ -1,4 +1,4 @@
-//! WASM bindings for ESM format library
+//! WASM bindings for earthsci-toolkit
 //!
 //! This module provides WebAssembly bindings for use with TypeScript/JavaScript.
 
@@ -310,7 +310,7 @@ pub fn benchmark_parsing(json_str: &str, iterations: u32) -> Result<f64, JsValue
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
 pub fn main() {
-    console_log!("ESM Format Rust WASM module initialized");
+    console_log!("earthsci-toolkit Rust WASM module initialized");
     console_log!(
         "Features enabled: parallel={}, simd={}, zero_copy={}, custom_alloc={}",
         cfg!(feature = "parallel"),

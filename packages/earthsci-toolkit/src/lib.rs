@@ -1,4 +1,4 @@
-//! # ESM Format - Rust Implementation
+//! # earthsci-toolkit - Rust Implementation
 //!
 //! This crate provides Rust types and utilities for the EarthSciML Serialization Format (ESM).
 //!
