@@ -78,7 +78,7 @@ jobs:
 
         if [ "${{ github.event.inputs.force_release }}" = "true" ]; then
           NEEDS_RELEASE="true"
-          CHANGED_PACKAGES='["EarthSciSerialization.jl", "esm-format", "earthsci_toolkit", "earthsci-toolkit"]'
+          CHANGED_PACKAGES='["EarthSciSerialization.jl", "earthsci-toolkit", "earthsci_toolkit", "earthsci-toolkit-rs"]'
         elif git diff --name-only ${LAST_REF}..HEAD | grep -E '^packages/'; then
           echo "Changes detected in packages"
           NEEDS_RELEASE="true"
@@ -303,8 +303,8 @@ jobs:
         fi
 
         # Update TypeScript package.json
-        if [ -f "packages/esm-format/package.json" ]; then
-          cd packages/esm-format
+        if [ -f "packages/earthsci-toolkit/package.json" ]; then
+          cd packages/earthsci-toolkit
           npm version $NEW_VERSION --no-git-tag-version
           cd ../..
         fi
@@ -315,8 +315,8 @@ jobs:
         fi
 
         # Update Rust Cargo.toml
-        if [ -f "packages/earthsci-toolkit/Cargo.toml" ]; then
-          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/earthsci-toolkit/Cargo.toml
+        if [ -f "packages/earthsci-toolkit-rs/Cargo.toml" ]; then
+          sed -i "s/version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/earthsci-toolkit-rs/Cargo.toml
         fi
 
         # Update workspace.json with coordinated release info
@@ -374,9 +374,9 @@ jobs:
       matrix:
         workflow: [
           { name: 'julia-ci.yml', package: 'EarthSciSerialization.jl' },
-          { name: 'npm-publish.yml', package: 'esm-format' },
+          { name: 'npm-publish.yml', package: 'earthsci-toolkit' },
           { name: 'python-package.yml', package: 'earthsci_toolkit' },
-          { name: 'rust-ci.yml', package: 'earthsci-toolkit' }
+          { name: 'rust-ci.yml', package: 'earthsci-toolkit-rs' }
         ]
     steps:
     - name: Check if package changed

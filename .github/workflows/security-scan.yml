@@ -357,9 +357,9 @@ jobs:
         fi
 
         # Node.js SBOM
-        if [ -d "packages/esm-format" ]; then
-          cd packages/esm-format
-          cyclonedx-npm -o ../../sbom-reports/esm-format-sbom.json
+        if [ -d "packages/earthsci-toolkit" ]; then
+          cd packages/earthsci-toolkit
+          cyclonedx-npm -o ../../sbom-reports/earthsci-toolkit-sbom.json
           cd ../..
         fi
 

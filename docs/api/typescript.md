@@ -6,7 +6,7 @@ Complete API reference for the ESM Format Typescript library.
 
 ### addContinuousEvent
 
-**File:** `packages/esm-format/src/edit.ts:387`
+**File:** `packages/earthsci-toolkit/src/edit.ts:387`
 
 ```typescript
 export function addContinuousEvent(
@@ -22,7 +22,7 @@ Add a continuous event to a model
 
 ### addCoupling
 
-**File:** `packages/esm-format/src/edit.ts:464`
+**File:** `packages/earthsci-toolkit/src/edit.ts:464`
 
 ```typescript
 export function addCoupling(
@@ -38,7 +38,7 @@ Add a coupling entry to an ESM file
 
 ### addDiscreteEvent
 
-**File:** `packages/esm-format/src/edit.ts:404`
+**File:** `packages/earthsci-toolkit/src/edit.ts:404`
 
 ```typescript
 export function addDiscreteEvent(
@@ -54,7 +54,7 @@ Add a discrete event to a model
 
 ### addEquation
 
-**File:** `packages/esm-format/src/edit.ts:193`
+**File:** `packages/earthsci-toolkit/src/edit.ts:193`
 
 ```typescript
 export function addEquation(
@@ -70,7 +70,7 @@ Add a new equation to a model
 
 ### addReaction
 
-**File:** `packages/esm-format/src/edit.ts:262`
+**File:** `packages/earthsci-toolkit/src/edit.ts:262`
 
 ```typescript
 export function addReaction(
@@ -86,7 +86,7 @@ Add a new reaction to a reaction system
 
 ### addSpecies
 
-**File:** `packages/esm-format/src/edit.ts:306`
+**File:** `packages/earthsci-toolkit/src/edit.ts:306`
 
 ```typescript
 export function addSpecies(
@@ -103,7 +103,7 @@ Add a new species to a reaction system
 
 ### addVariable
 
-**File:** `packages/esm-format/src/edit.ts:61`
+**File:** `packages/earthsci-toolkit/src/edit.ts:61`
 
 ```typescript
 export function addVariable(
@@ -120,7 +120,7 @@ Add a new variable to a model
 
 ### analyzeComplexity
 
-**File:** `packages/esm-format/src/analysis/complexity.ts:17`
+**File:** `packages/earthsci-toolkit/src/analysis/complexity.ts:17`
 
 ```typescript
 export function analyzeComplexity(expr: Expr): ComplexityMetrics {
@@ -135,7 +135,7 @@ Analyze the complexity of an expression
 
 ### buildDependencyGraph
 
-**File:** `packages/esm-format/src/analysis/dependency-graph.ts:19`
+**File:** `packages/earthsci-toolkit/src/analysis/dependency-graph.ts:19`
 
 ```typescript
 export function buildDependencyGraph(
@@ -151,7 +151,7 @@ Build a dependency graph from an ESM file, model, or expression
 
 ### checkDimensions
 
-**File:** `packages/esm-format/src/units.ts:210`
+**File:** `packages/earthsci-toolkit/src/units.ts:210`
 
 ```typescript
 export function checkDimensions(expr: Expression, unitBindings: Map<string, DimensionalRep>): UnitResult {
@@ -175,7 +175,7 @@ Follows rules from ESM spec Section 3.3.1:
 
 ### classifyComplexity
 
-**File:** `packages/esm-format/src/analysis/complexity.ts:219`
+**File:** `packages/earthsci-toolkit/src/analysis/complexity.ts:219`
 
 ```typescript
 export function classifyComplexity(expr: Expr): 'trivial' | 'simple' | 'moderate' | 'complex' | 'very_complex' {
@@ -190,7 +190,7 @@ Classify expression complexity level
 
 ### compareAnalysis
 
-**File:** `packages/esm-format/src/analysis/index.ts:218`
+**File:** `packages/earthsci-toolkit/src/analysis/index.ts:218`
 
 ```typescript
 export function compareAnalysis(results1: any, results2: any) {
@@ -203,7 +203,7 @@ Compare analysis results between different expressions or models
 
 ### compareComplexity
 
-**File:** `packages/esm-format/src/analysis/complexity.ts:187`
+**File:** `packages/earthsci-toolkit/src/analysis/complexity.ts:187`
 
 ```typescript
 export function compareComplexity(expr1: Expr, expr2: Expr): number {
@@ -219,7 +219,7 @@ Compare complexity of two expressions
 
 ### componentExists
 
-**File:** `packages/esm-format/src/graph.ts:349`
+**File:** `packages/earthsci-toolkit/src/graph.ts:349`
 
 ```typescript
 export function componentExists(esmFile: EsmFile, componentId: string): boolean {
@@ -232,7 +232,7 @@ Utility to check if a component exists in the ESM file
 
 ### componentGraph
 
-**File:** `packages/esm-format/src/graph.ts:290`
+**File:** `packages/earthsci-toolkit/src/graph.ts:290`
 
 ```typescript
 export function componentGraph(file: EsmFile): Graph<ComponentNode, CouplingEdge> {
@@ -247,7 +247,7 @@ Implements the Graph interface with adjacency methods.
 
 ### component_graph
 
-**File:** `packages/esm-format/src/graph.ts:104`
+**File:** `packages/earthsci-toolkit/src/graph.ts:104`
 
 ```typescript
 export function component_graph(esmFile: EsmFile): ComponentGraph {
@@ -261,7 +261,7 @@ Returns a directed graph where nodes are model components and edges are coupling
 
 ### compose
 
-**File:** `packages/esm-format/src/edit.ts:506`
+**File:** `packages/earthsci-toolkit/src/edit.ts:506`
 
 ```typescript
 export function compose(
@@ -278,7 +278,7 @@ Compose two systems using a coupling entry
 
 ### contains
 
-**File:** `packages/esm-format/src/expression.ts:65`
+**File:** `packages/earthsci-toolkit/src/expression.ts:65`
 
 ```typescript
 export function contains(expr: Expr, varName: string): boolean {
@@ -310,7 +310,7 @@ Create a centralized AST store for ESM file management
 
 ### createDemoServer
 
-**File:** `packages/esm-format/src/demo/demo-pages.ts:333`
+**File:** `packages/earthsci-toolkit/src/demo/demo-pages.ts:333`
 
 ```typescript
 export function createDemoServer() {
@@ -352,7 +352,7 @@ Can be used independently of createUndoHistory if needed
 
 ### deriveODEs
 
-**File:** `packages/esm-format/src/reactions.ts:28`
+**File:** `packages/earthsci-toolkit/src/reactions.ts:28`
 
 ```typescript
 export function deriveODEs(system: ReactionSystem): Model {
@@ -379,7 +379,7 @@ Handles:
 
 ### detectStabilityIssues
 
-**File:** `packages/esm-format/src/analysis/complexity.ts:324`
+**File:** `packages/earthsci-toolkit/src/analysis/complexity.ts:324`
 
 ```typescript
 export function detectStabilityIssues(expr: Expr): Array<{
@@ -394,7 +394,7 @@ Detect numerical stability issues in expressions
 
 ### differentiate
 
-**File:** `packages/esm-format/src/analysis/differentiation.ts:19`
+**File:** `packages/earthsci-toolkit/src/analysis/differentiation.ts:19`
 
 ```typescript
 export function differentiate(expr: Expr, variable: string): DerivativeResult {
@@ -410,7 +410,7 @@ Compute the symbolic derivative of an expression with respect to a variable
 
 ### downloadExport
 
-**File:** `packages/esm-format/src/interactive-editor/ModelExportUtils.ts:631`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:631`
 
 ```typescript
 export function downloadExport(content: string, filename: string, mimeType: string = 'text/plain'): void {
@@ -423,7 +423,7 @@ Download exported model as file
 
 ### estimateParallelPotential
 
-**File:** `packages/esm-format/src/analysis/complexity.ts:282`
+**File:** `packages/earthsci-toolkit/src/analysis/complexity.ts:282`
 
 ```typescript
 export function estimateParallelPotential(expr: Expr): number {
@@ -438,7 +438,7 @@ Estimate parallel execution potential
 
 ### estimateSavings
 
-**File:** `packages/esm-format/src/analysis/common-subexpressions.ts:288`
+**File:** `packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:288`
 
 ```typescript
 export function estimateSavings(commonSubexpressions: CommonSubexpression[]): number {
@@ -453,7 +453,7 @@ Estimate the cost savings from factoring out common subexpressions
 
 ### evaluate
 
-**File:** `packages/esm-format/src/expression.ts:85`
+**File:** `packages/earthsci-toolkit/src/expression.ts:85`
 
 ```typescript
 export function evaluate(expr: Expr, bindings: Map<string, number>): number {
@@ -470,7 +470,7 @@ Evaluate an expression numerically with variable bindings
 
 ### exportModel
 
-**File:** `packages/esm-format/src/interactive-editor/ModelExportUtils.ts:33`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:33`
 
 ```typescript
 export function exportModel(model: Model, format: ExportFormat, options: ExportOptions = {}): string {
@@ -483,7 +483,7 @@ Export model to various formats
 
 ### exportResults
 
-**File:** `packages/esm-format/src/analysis/index.ts:203`
+**File:** `packages/earthsci-toolkit/src/analysis/index.ts:203`
 
 ```typescript
 export function exportResults(results: any, format: 'json' | 'yaml' | 'markdown' | 'html') {
@@ -496,7 +496,7 @@ Export analysis results to various formats
 
 ### expressionGraph
 
-**File:** `packages/esm-format/src/graph.ts:377`
+**File:** `packages/earthsci-toolkit/src/graph.ts:377`
 
 ```typescript
 export function expressionGraph(
@@ -514,7 +514,7 @@ Creates a directed graph where nodes are variables/parameters/species and edges 
 
 ### extract
 
-**File:** `packages/esm-format/src/edit.ts:588`
+**File:** `packages/earthsci-toolkit/src/edit.ts:588`
 
 ```typescript
 export function extract(
@@ -531,7 +531,7 @@ Extract a specific component from an ESM file into a new file
 
 ### findCommonSubexpressions
 
-**File:** `packages/esm-format/src/analysis/common-subexpressions.ts:18`
+**File:** `packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:18`
 
 ```typescript
 export function findCommonSubexpressions(expr: Expr, minComplexity: number = 5): CommonSubexpression[] {
@@ -547,7 +547,7 @@ Find common subexpressions in a single expression
 
 ### findCommonSubexpressionsAcrossExpressions
 
-**File:** `packages/esm-format/src/analysis/common-subexpressions.ts:87`
+**File:** `packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:87`
 
 ```typescript
 export function findCommonSubexpressionsAcrossExpressions(
@@ -563,7 +563,7 @@ Find common subexpressions across multiple expressions
 
 ### findCommonSubexpressionsInEsmFile
 
-**File:** `packages/esm-format/src/analysis/common-subexpressions.ts:211`
+**File:** `packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:211`
 
 ```typescript
 export function findCommonSubexpressionsInEsmFile(esmFile: EsmFile, minComplexity: number = 5): CommonSubexpression[] {
@@ -579,7 +579,7 @@ Find common subexpressions across an entire ESM file
 
 ### findCommonSubexpressionsInModel
 
-**File:** `packages/esm-format/src/analysis/common-subexpressions.ts:159`
+**File:** `packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:159`
 
 ```typescript
 export function findCommonSubexpressionsInModel(model: Model, minComplexity: number = 5): CommonSubexpression[] {
@@ -595,7 +595,7 @@ Find common subexpressions in a model
 
 ### findCriticalPoints
 
-**File:** `packages/esm-format/src/analysis/differentiation.ts:544`
+**File:** `packages/earthsci-toolkit/src/analysis/differentiation.ts:544`
 
 ```typescript
 export function findCriticalPoints(expr: Expr, variable: string): {
@@ -612,7 +612,7 @@ This is a symbolic analysis - actual solving would require numerical methods
 
 ### findDeadVariables
 
-**File:** `packages/esm-format/src/analysis/dependency-graph.ts:463`
+**File:** `packages/earthsci-toolkit/src/analysis/dependency-graph.ts:463`
 
 ```typescript
 export function findDeadVariables(graph: DependencyGraph): DependencyNode[] {
@@ -625,7 +625,7 @@ Find dead variables (those that are defined but never used)
 
 ### findDependencyChains
 
-**File:** `packages/esm-format/src/analysis/dependency-graph.ts:480`
+**File:** `packages/earthsci-toolkit/src/analysis/dependency-graph.ts:480`
 
 ```typescript
 export function findDependencyChains(graph: DependencyGraph, startNode: string, maxDepth: number = 10): string[][] {
@@ -638,7 +638,7 @@ Find variable dependency chains (paths from parameters to state variables)
 
 ### findExpensiveSubexpressions
 
-**File:** `packages/esm-format/src/analysis/complexity.ts:242`
+**File:** `packages/earthsci-toolkit/src/analysis/complexity.ts:242`
 
 ```typescript
 export function findExpensiveSubexpressions(expr: Expr, limit: number = 5): Array<{
@@ -654,7 +654,7 @@ Find the most expensive sub-expressions in an expression
 
 ### formatResults
 
-**File:** `packages/esm-format/src/analysis/index.ts:195`
+**File:** `packages/earthsci-toolkit/src/analysis/index.ts:195`
 
 ```typescript
 export function formatResults(results: any): string {
@@ -667,7 +667,7 @@ Format analysis results for display
 
 ### formatUserFriendly
 
-**File:** `packages/esm-format/src/error-handling.ts:195`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:195`
 
 ```typescript
 export function formatUserFriendly(error: ESMError): string {
@@ -677,7 +677,7 @@ export function formatUserFriendly(error: ESMError): string {
 
 ### freeParameters
 
-**File:** `packages/esm-format/src/expression.ts:45`
+**File:** `packages/earthsci-toolkit/src/expression.ts:45`
 
 ```typescript
 export function freeParameters(expr: Expr, model: Model): Set<string> {
@@ -693,7 +693,7 @@ Extract free parameters from an expression within a model context
 
 ### freeVariables
 
-**File:** `packages/esm-format/src/expression.ts:20`
+**File:** `packages/earthsci-toolkit/src/expression.ts:20`
 
 ```typescript
 export function freeVariables(expr: Expr): Set<string> {
@@ -708,7 +708,7 @@ Extract all variable references from an expression
 
 ### generateFactoredVariableNames
 
-**File:** `packages/esm-format/src/analysis/common-subexpressions.ts:298`
+**File:** `packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:298`
 
 ```typescript
 export function generateFactoredVariableNames(
@@ -724,7 +724,7 @@ Generate variable names for factored subexpressions
 
 ### getAvailableFormats
 
-**File:** `packages/esm-format/src/interactive-editor/ModelExportUtils.ts:609`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:609`
 
 ```typescript
 export function getAvailableFormats(): ExportFormat[] {
@@ -737,7 +737,7 @@ Get available export formats
 
 ### getComponentType
 
-**File:** `packages/esm-format/src/graph.ts:361`
+**File:** `packages/earthsci-toolkit/src/graph.ts:361`
 
 ```typescript
 export function getComponentType(esmFile: EsmFile, componentId: string): ComponentNode['type'] | null {
@@ -750,7 +750,7 @@ Get the type of a component by its ID
 
 ### getFileExtension
 
-**File:** `packages/esm-format/src/interactive-editor/ModelExportUtils.ts:616`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:616`
 
 ```typescript
 export function getFileExtension(format: ExportFormat): string {
@@ -763,7 +763,7 @@ Get file extension for export format
 
 ### getProfiler
 
-**File:** `packages/esm-format/src/error-handling.ts:486`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:486`
 
 ```typescript
 export function getProfiler(): PerformanceProfiler {
@@ -773,7 +773,7 @@ export function getProfiler(): PerformanceProfiler {
 
 ### gradient
 
-**File:** `packages/esm-format/src/analysis/differentiation.ts:52`
+**File:** `packages/earthsci-toolkit/src/analysis/differentiation.ts:52`
 
 ```typescript
 export function gradient(expr: Expr, variables?: string[]): DerivativeResult[] {
@@ -789,7 +789,7 @@ Compute the gradient (all first partial derivatives)
 
 ### groupSubexpressionsByType
 
-**File:** `packages/esm-format/src/analysis/common-subexpressions.ts:320`
+**File:** `packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:320`
 
 ```typescript
 export function groupSubexpressionsByType(
@@ -804,7 +804,7 @@ Group common subexpressions by their structure type
 
 ### higherOrderDerivative
 
-**File:** `packages/esm-format/src/analysis/differentiation.ts:494`
+**File:** `packages/earthsci-toolkit/src/analysis/differentiation.ts:494`
 
 ```typescript
 export function higherOrderDerivative(expr: Expr, variable: string, order: number = 1): DerivativeResult {
@@ -821,7 +821,7 @@ Compute higher-order derivatives
 
 ### isDifferentiable
 
-**File:** `packages/esm-format/src/analysis/differentiation.ts:527`
+**File:** `packages/earthsci-toolkit/src/analysis/differentiation.ts:527`
 
 ```typescript
 export function isDifferentiable(expr: Expr, variable: string): boolean {
@@ -837,7 +837,7 @@ Check if an expression is differentiable with respect to a variable
 
 ### load
 
-**File:** `packages/esm-format/src/parse.ts:376`
+**File:** `packages/earthsci-toolkit/src/parse.ts:376`
 
 ```typescript
 export function load(input: string | object): EsmFile {
@@ -855,7 +855,7 @@ Load an ESM file from a JSON string or pre-parsed object
 
 ### mapVariable
 
-**File:** `packages/esm-format/src/edit.ts:527`
+**File:** `packages/earthsci-toolkit/src/edit.ts:527`
 
 ```typescript
 export function mapVariable(
@@ -873,7 +873,7 @@ Map a variable from one system to another with optional transformation
 
 ### merge
 
-**File:** `packages/esm-format/src/edit.ts:552`
+**File:** `packages/earthsci-toolkit/src/edit.ts:552`
 
 ```typescript
 export function merge(
@@ -889,7 +889,7 @@ Merge two ESM files
 
 ### parseUnit
 
-**File:** `packages/esm-format/src/units.ts:65`
+**File:** `packages/earthsci-toolkit/src/units.ts:65`
 
 ```typescript
 export function parseUnit(unitStr: string): DimensionalRep {
@@ -913,7 +913,7 @@ Handles common patterns:
 
 ### partialDerivatives
 
-**File:** `packages/esm-format/src/analysis/differentiation.ts:36`
+**File:** `packages/earthsci-toolkit/src/analysis/differentiation.ts:36`
 
 ```typescript
 export function partialDerivatives(expr: Expr, variables: string[]): Map<string, DerivativeResult> {
@@ -929,7 +929,7 @@ Compute partial derivatives with respect to multiple variables
 
 ### productMatrix
 
-**File:** `packages/esm-format/src/reactions.ts:314`
+**File:** `packages/earthsci-toolkit/src/reactions.ts:314`
 
 ```typescript
 export function productMatrix(system: ReactionSystem): number[][] {
@@ -951,7 +951,7 @@ Returns the product stoichiometric matrix (species × reactions) where:
 
 ### profileOperation
 
-**File:** `packages/esm-format/src/error-handling.ts:491`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:491`
 
 ```typescript
 export function profileOperation(operationName: string) {
@@ -961,7 +961,7 @@ export function profileOperation(operationName: string) {
 
 ### registerWebComponents
 
-**File:** `packages/esm-format/src/web-components.ts:579`
+**File:** `packages/earthsci-toolkit/src/web-components.ts:579`
 
 ```typescript
 export function registerWebComponents() {
@@ -984,7 +984,7 @@ Register all ESM editor web components
 
 ### removeCoupling
 
-**File:** `packages/esm-format/src/edit.ts:482`
+**File:** `packages/earthsci-toolkit/src/edit.ts:482`
 
 ```typescript
 export function removeCoupling(
@@ -1001,7 +1001,7 @@ Remove a coupling entry from an ESM file by index
 
 ### removeEquation
 
-**File:** `packages/esm-format/src/edit.ts:211`
+**File:** `packages/earthsci-toolkit/src/edit.ts:211`
 
 ```typescript
 export function removeEquation(
@@ -1018,7 +1018,7 @@ Remove an equation from a model
 
 ### removeEvent
 
-**File:** `packages/esm-format/src/edit.ts:422`
+**File:** `packages/earthsci-toolkit/src/edit.ts:422`
 
 ```typescript
 export function removeEvent(
@@ -1035,7 +1035,7 @@ Remove an event from a model by name
 
 ### removeReaction
 
-**File:** `packages/esm-format/src/edit.ts:279`
+**File:** `packages/earthsci-toolkit/src/edit.ts:279`
 
 ```typescript
 export function removeReaction(
@@ -1052,7 +1052,7 @@ Remove a reaction from a reaction system
 
 ### removeSpecies
 
-**File:** `packages/esm-format/src/edit.ts:328`
+**File:** `packages/earthsci-toolkit/src/edit.ts:328`
 
 ```typescript
 export function removeSpecies(
@@ -1070,7 +1070,7 @@ Remove a species from a reaction system, with reference checking
 
 ### removeVariable
 
-**File:** `packages/esm-format/src/edit.ts:83`
+**File:** `packages/earthsci-toolkit/src/edit.ts:83`
 
 ```typescript
 export function removeVariable(
@@ -1088,7 +1088,7 @@ Remove a variable from a model, with reference checking
 
 ### renameVariable
 
-**File:** `packages/esm-format/src/edit.ts:155`
+**File:** `packages/earthsci-toolkit/src/edit.ts:155`
 
 ```typescript
 export function renameVariable(
@@ -1106,7 +1106,7 @@ Rename a variable throughout a model
 
 ### save
 
-**File:** `packages/esm-format/src/serialize.ts:15`
+**File:** `packages/earthsci-toolkit/src/serialize.ts:15`
 
 ```typescript
 export function save(file: EsmFile): string {
@@ -1122,7 +1122,7 @@ Serialize an EsmFile object to a formatted JSON string
 
 ### setupErrorLogging
 
-**File:** `packages/esm-format/src/error-handling.ts:628`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:628`
 
 ```typescript
 export function setupErrorLogging(config: ErrorLoggerConfig = { logLevel: 'info', logToConsole: true }) {
@@ -1132,7 +1132,7 @@ export function setupErrorLogging(config: ErrorLoggerConfig = { logLevel: 'info'
 
 ### simplify
 
-**File:** `packages/esm-format/src/expression.ts:210`
+**File:** `packages/earthsci-toolkit/src/expression.ts:210`
 
 ```typescript
 export function simplify(expr: Expr): Expr {
@@ -1147,7 +1147,7 @@ Simplify an expression using basic algebraic rules
 
 ### stoichiometricMatrix
 
-**File:** `packages/esm-format/src/reactions.ts:225`
+**File:** `packages/earthsci-toolkit/src/reactions.ts:225`
 
 ```typescript
 export function stoichiometricMatrix(system: ReactionSystem): {
@@ -1170,7 +1170,7 @@ Returns the net stoichiometric matrix (species × reactions) where:
 
 ### substitute
 
-**File:** `packages/esm-format/src/substitute.ts:19`
+**File:** `packages/earthsci-toolkit/src/substitute.ts:19`
 
 ```typescript
 export function substitute(expr: Expr, bindings: Record<string, Expr>): Expr {
@@ -1189,7 +1189,7 @@ path through system hierarchy per format spec Section 4.3.
 
 ### substituteInEquations
 
-**File:** `packages/esm-format/src/edit.ts:245`
+**File:** `packages/earthsci-toolkit/src/edit.ts:245`
 
 ```typescript
 export function substituteInEquations(
@@ -1205,7 +1205,7 @@ Apply substitutions to all equations in a model
 
 ### substituteInModel
 
-**File:** `packages/esm-format/src/substitute.ts:57`
+**File:** `packages/earthsci-toolkit/src/substitute.ts:57`
 
 ```typescript
 export function substituteInModel(model: Model, bindings: Record<string, Expr>): Model {
@@ -1223,7 +1223,7 @@ Returns a new model with substitutions applied (immutable).
 
 ### substituteInReactionSystem
 
-**File:** `packages/esm-format/src/substitute.ts:104`
+**File:** `packages/earthsci-toolkit/src/substitute.ts:104`
 
 ```typescript
 export function substituteInReactionSystem(
@@ -1241,7 +1241,7 @@ Returns a new reaction system with substitutions applied (immutable).
 
 ### substrateMatrix
 
-**File:** `packages/esm-format/src/reactions.ts:280`
+**File:** `packages/earthsci-toolkit/src/reactions.ts:280`
 
 ```typescript
 export function substrateMatrix(system: ReactionSystem): number[][] {
@@ -1263,7 +1263,7 @@ Returns the substrate stoichiometric matrix (species × reactions) where:
 
 ### toAscii
 
-**File:** `packages/esm-format/src/pretty-print.ts:321`
+**File:** `packages/earthsci-toolkit/src/pretty-print.ts:321`
 
 ```typescript
 export function toAscii(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
@@ -1276,7 +1276,7 @@ Format an expression as plain ASCII text
 
 ### toJuliaCode
 
-**File:** `packages/esm-format/src/codegen.ts:18`
+**File:** `packages/earthsci-toolkit/src/codegen.ts:18`
 
 ```typescript
 export function toJuliaCode(file: EsmFile): string {
@@ -1291,7 +1291,7 @@ Generate a self-contained Julia script from an ESM file
 
 ### toLatex
 
-**File:** `packages/esm-format/src/pretty-print.ts:281`
+**File:** `packages/earthsci-toolkit/src/pretty-print.ts:281`
 
 ```typescript
 export function toLatex(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
@@ -1304,7 +1304,7 @@ Format an expression as LaTeX mathematical notation
 
 ### toPythonCode
 
-**File:** `packages/esm-format/src/codegen.ts:108`
+**File:** `packages/earthsci-toolkit/src/codegen.ts:108`
 
 ```typescript
 export function toPythonCode(file: EsmFile): string {
@@ -1319,7 +1319,7 @@ Generate a self-contained Python script from an ESM file
 
 ### toUnicode
 
-**File:** `packages/esm-format/src/pretty-print.ts:241`
+**File:** `packages/earthsci-toolkit/src/pretty-print.ts:241`
 
 ```typescript
 export function toUnicode(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
@@ -1332,7 +1332,7 @@ Format an expression as Unicode mathematical notation
 
 ### validate
 
-**File:** `packages/esm-format/src/validate.ts:576`
+**File:** `packages/earthsci-toolkit/src/validate.ts:576`
 
 ```typescript
 export function validate(data: string | object): ValidationResult {
@@ -1348,7 +1348,7 @@ Validate ESM data and return structured validation result.
 
 ### validateSchema
 
-**File:** `packages/esm-format/src/parse.ts:77`
+**File:** `packages/earthsci-toolkit/src/parse.ts:77`
 
 ```typescript
 export function validateSchema(data: unknown): SchemaError[] {
@@ -1361,7 +1361,7 @@ Validate data against the ESM schema
 
 ### validateUnits
 
-**File:** `packages/esm-format/src/units.ts:408`
+**File:** `packages/earthsci-toolkit/src/units.ts:408`
 
 ```typescript
 export function validateUnits(file: EsmFile): UnitWarning[] {
@@ -1378,7 +1378,7 @@ Validate dimensional consistency of all equations in an ESM file
 
 ### AffectEquation
 
-**File:** `packages/esm-format/src/generated.ts:351`
+**File:** `packages/earthsci-toolkit/src/generated.ts:351`
 
 ```typescript
 export interface AffectEquation {
@@ -1417,7 +1417,7 @@ Configuration for the AST store
 
 ### BoundaryCondition
 
-**File:** `packages/esm-format/src/generated.ts:744`
+**File:** `packages/earthsci-toolkit/src/generated.ts:744`
 
 ```typescript
 export interface BoundaryCondition {
@@ -1430,7 +1430,7 @@ Boundary condition for one or more dimensions.
 
 ### Change
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:73`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:73`
 
 ```typescript
 export interface Change {
@@ -1440,7 +1440,7 @@ export interface Change {
 
 ### Command
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:56`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:56`
 
 ```typescript
 export interface Command {
@@ -1450,7 +1450,7 @@ export interface Command {
 
 ### CommandResult
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:67`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:67`
 
 ```typescript
 export interface CommandResult {
@@ -1460,7 +1460,7 @@ export interface CommandResult {
 
 ### CommonSubexpression
 
-**File:** `packages/esm-format/src/analysis/types.ts:69`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:69`
 
 ```typescript
 export interface CommonSubexpression {
@@ -1470,7 +1470,7 @@ export interface CommonSubexpression {
 
 ### ComplexityMetrics
 
-**File:** `packages/esm-format/src/analysis/types.ts:51`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:51`
 
 ```typescript
 export interface ComplexityMetrics {
@@ -1480,7 +1480,7 @@ export interface ComplexityMetrics {
 
 ### ComponentGraph
 
-**File:** `packages/esm-format/src/graph.ts:53`
+**File:** `packages/earthsci-toolkit/src/graph.ts:53`
 
 ```typescript
 export interface ComponentGraph {
@@ -1490,7 +1490,7 @@ export interface ComponentGraph {
 
 ### ComponentNode
 
-**File:** `packages/esm-format/src/graph.ts:12`
+**File:** `packages/earthsci-toolkit/src/graph.ts:12`
 
 ```typescript
 export interface ComponentNode {
@@ -1500,7 +1500,7 @@ export interface ComponentNode {
 
 ### ConnectorEquation
 
-**File:** `packages/esm-format/src/generated.ts:626`
+**File:** `packages/earthsci-toolkit/src/generated.ts:626`
 
 ```typescript
 export interface ConnectorEquation {
@@ -1513,7 +1513,7 @@ A single equation in a ConnectorSystem linking two coupled systems.
 
 ### ContinuousEvent
 
-**File:** `packages/esm-format/src/generated.ts:391`
+**File:** `packages/earthsci-toolkit/src/generated.ts:391`
 
 ```typescript
 export interface ContinuousEvent {
@@ -1526,7 +1526,7 @@ Fires when a condition expression crosses zero (root-finding). Maps to MTK Symbo
 
 ### CoordinateTransform
 
-**File:** `packages/esm-format/src/generated.ts:736`
+**File:** `packages/earthsci-toolkit/src/generated.ts:736`
 
 ```typescript
 export interface CoordinateTransform {
@@ -1536,7 +1536,7 @@ export interface CoordinateTransform {
 
 ### CouplingCallback
 
-**File:** `packages/esm-format/src/generated.ts:681`
+**File:** `packages/earthsci-toolkit/src/generated.ts:681`
 
 ```typescript
 export interface CouplingCallback {
@@ -1549,7 +1549,7 @@ Register a callback for simulation events.
 
 ### CouplingCouple
 
-**File:** `packages/esm-format/src/generated.ts:601`
+**File:** `packages/earthsci-toolkit/src/generated.ts:601`
 
 ```typescript
 export interface CouplingCouple {
@@ -1562,7 +1562,7 @@ Bi-directional coupling via explicit ConnectorSystem equations.
 
 ### CouplingEdge
 
-**File:** `packages/esm-format/src/graph.ts:35`
+**File:** `packages/earthsci-toolkit/src/graph.ts:35`
 
 ```typescript
 export interface CouplingEdge {
@@ -1572,7 +1572,7 @@ export interface CouplingEdge {
 
 ### CouplingOperatorApply
 
-**File:** `packages/esm-format/src/generated.ts:670`
+**File:** `packages/earthsci-toolkit/src/generated.ts:670`
 
 ```typescript
 export interface CouplingOperatorApply {
@@ -1585,7 +1585,7 @@ Register an Operator to run during simulation.
 
 ### CouplingOperatorCompose
 
-**File:** `packages/esm-format/src/generated.ts:581`
+**File:** `packages/earthsci-toolkit/src/generated.ts:581`
 
 ```typescript
 export interface CouplingOperatorCompose {
@@ -1598,7 +1598,7 @@ Match LHS time derivatives and add RHS terms together.
 
 ### CouplingVariableMap
 
-**File:** `packages/esm-format/src/generated.ts:647`
+**File:** `packages/earthsci-toolkit/src/generated.ts:647`
 
 ```typescript
 export interface CouplingVariableMap {
@@ -1611,7 +1611,7 @@ Replace a parameter in one system with a variable from another.
 
 ### DataLoader
 
-**File:** `packages/esm-format/src/generated.ts:509`
+**File:** `packages/earthsci-toolkit/src/generated.ts:509`
 
 ```typescript
 export interface DataLoader {
@@ -1624,7 +1624,7 @@ An external data source registration. Runtime-specific; registered by type and l
 
 ### DataLoaderProvides
 
-**File:** `packages/esm-format/src/generated.ts:549`
+**File:** `packages/earthsci-toolkit/src/generated.ts:549`
 
 ```typescript
 export interface DataLoaderProvides {
@@ -1637,7 +1637,7 @@ A variable provided by a data loader.
 
 ### DemoPageConfig
 
-**File:** `packages/esm-format/src/demo/demo-pages.ts:8`
+**File:** `packages/earthsci-toolkit/src/demo/demo-pages.ts:8`
 
 ```typescript
 export interface DemoPageConfig {
@@ -1647,7 +1647,7 @@ export interface DemoPageConfig {
 
 ### DependencyEdge
 
-**File:** `packages/esm-format/src/graph.ts:87`
+**File:** `packages/earthsci-toolkit/src/graph.ts:87`
 
 ```typescript
 export interface DependencyEdge {
@@ -1657,7 +1657,7 @@ export interface DependencyEdge {
 
 ### DependencyGraph
 
-**File:** `packages/esm-format/src/analysis/types.ts:41`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:41`
 
 ```typescript
 export interface DependencyGraph extends Graph<DependencyNode, DependencyRelation> {
@@ -1667,7 +1667,7 @@ export interface DependencyGraph extends Graph<DependencyNode, DependencyRelatio
 
 ### DependencyNode
 
-**File:** `packages/esm-format/src/analysis/types.ts:11`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:11`
 
 ```typescript
 export interface DependencyNode {
@@ -1677,7 +1677,7 @@ export interface DependencyNode {
 
 ### DependencyRelation
 
-**File:** `packages/esm-format/src/analysis/types.ts:27`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:27`
 
 ```typescript
 export interface DependencyRelation {
@@ -1687,7 +1687,7 @@ export interface DependencyRelation {
 
 ### DerivativeResult
 
-**File:** `packages/esm-format/src/analysis/types.ts:125`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:125`
 
 ```typescript
 export interface DerivativeResult {
@@ -1697,7 +1697,7 @@ export interface DerivativeResult {
 
 ### DimensionalRep
 
-**File:** `packages/esm-format/src/units.ts:14`
+**File:** `packages/earthsci-toolkit/src/units.ts:14`
 
 ```typescript
 export interface DimensionalRep {
@@ -1711,7 +1711,7 @@ Maps base dimensions to their powers
 
 ### Domain
 
-**File:** `packages/esm-format/src/generated.ts:695`
+**File:** `packages/earthsci-toolkit/src/generated.ts:695`
 
 ```typescript
 export interface Domain {
@@ -1724,7 +1724,7 @@ Spatiotemporal domain specification (DomainInfo).
 
 ### DragState
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:41`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:41`
 
 ```typescript
 export interface DragState {
@@ -1734,7 +1734,7 @@ export interface DragState {
 
 ### ESMError
 
-**File:** `packages/esm-format/src/error-handling.ts:101`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:101`
 
 ```typescript
 export interface ESMError {
@@ -1744,7 +1744,7 @@ export interface ESMError {
 
 ### EarthSciSerialization2
 
-**File:** `packages/esm-format/src/generated.ts:170`
+**File:** `packages/earthsci-toolkit/src/generated.ts:170`
 
 ```typescript
 export interface EarthSciSerialization2 {
@@ -1754,7 +1754,7 @@ export interface EarthSciSerialization2 {
 
 ### EditorState
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:24`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:24`
 
 ```typescript
 export interface EditorState {
@@ -1764,7 +1764,7 @@ export interface EditorState {
 
 ### Equation
 
-**File:** `packages/esm-format/src/generated.ts:343`
+**File:** `packages/earthsci-toolkit/src/generated.ts:343`
 
 ```typescript
 export interface Equation {
@@ -1777,7 +1777,7 @@ An equation: lhs = rhs (or lhs ~ rhs in MTK notation).
 
 ### ErrorContext
 
-**File:** `packages/esm-format/src/error-handling.ts:80`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:80`
 
 ```typescript
 export interface ErrorContext {
@@ -1787,7 +1787,7 @@ export interface ErrorContext {
 
 ### ErrorLoggerConfig
 
-**File:** `packages/esm-format/src/error-handling.ts:621`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:621`
 
 ```typescript
 export interface ErrorLoggerConfig {
@@ -1797,7 +1797,7 @@ export interface ErrorLoggerConfig {
 
 ### EsmCouplingGraphProps
 
-**File:** `packages/esm-format/src/web-components.ts:84`
+**File:** `packages/earthsci-toolkit/src/web-components.ts:84`
 
 ```typescript
 export interface EsmCouplingGraphProps {
@@ -1860,7 +1860,7 @@ show-palette="true">
 
 ### EsmExpressionNodeProps
 
-**File:** `packages/esm-format/src/web-components.ts:36`
+**File:** `packages/earthsci-toolkit/src/web-components.ts:36`
 
 ```typescript
 export interface EsmExpressionNodeProps {
@@ -1900,7 +1900,7 @@ enable-undo="true">
 
 ### EsmFileSummaryProps
 
-**File:** `packages/esm-format/src/web-components.ts:135`
+**File:** `packages/earthsci-toolkit/src/web-components.ts:135`
 
 ```typescript
 export interface EsmFileSummaryProps {
@@ -1920,7 +1920,7 @@ show-export-options="true">
 
 ### EsmModelEditorProps
 
-**File:** `packages/esm-format/src/web-components.ts:59`
+**File:** `packages/earthsci-toolkit/src/web-components.ts:59`
 
 ```typescript
 export interface EsmModelEditorProps {
@@ -1979,7 +1979,7 @@ show-validation="true">
 
 ### EsmSimulationControlsProps
 
-**File:** `packages/esm-format/src/web-components.ts:157`
+**File:** `packages/earthsci-toolkit/src/web-components.ts:157`
 
 ```typescript
 export interface EsmSimulationControlsProps {
@@ -2000,7 +2000,7 @@ available-backends='["julia", "python"]'>
 
 ### EsmValidationPanelProps
 
-**File:** `packages/esm-format/src/web-components.ts:108`
+**File:** `packages/earthsci-toolkit/src/web-components.ts:108`
 
 ```typescript
 export interface EsmValidationPanelProps {
@@ -2020,7 +2020,7 @@ show-details="true">
 
 ### ExportOptions
 
-**File:** `packages/esm-format/src/interactive-editor/ModelExportUtils.ts:19`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:19`
 
 ```typescript
 export interface ExportOptions {
@@ -2033,7 +2033,7 @@ Export options for different formats
 
 ### ExpressionLocation
 
-**File:** `packages/esm-format/src/analysis/types.ts:81`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:81`
 
 ```typescript
 export interface ExpressionLocation {
@@ -2043,7 +2043,7 @@ export interface ExpressionLocation {
 
 ### ExpressionNode
 
-**File:** `packages/esm-format/src/generated.ts:285`
+**File:** `packages/earthsci-toolkit/src/generated.ts:285`
 
 ```typescript
 export interface ExpressionNode {
@@ -2056,7 +2056,7 @@ An operation in the expression AST.
 
 ### ExpressionPattern
 
-**File:** `packages/esm-format/src/analysis/types.ts:91`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:91`
 
 ```typescript
 export interface ExpressionPattern {
@@ -2066,7 +2066,7 @@ export interface ExpressionPattern {
 
 ### FixSuggestion
 
-**File:** `packages/esm-format/src/error-handling.ts:92`
+**File:** `packages/earthsci-toolkit/src/error-handling.ts:92`
 
 ```typescript
 export interface FixSuggestion {
@@ -2076,7 +2076,7 @@ export interface FixSuggestion {
 
 ### FunctionalAffect
 
-**File:** `packages/esm-format/src/generated.ts:364`
+**File:** `packages/earthsci-toolkit/src/generated.ts:364`
 
 ```typescript
 export interface FunctionalAffect {
@@ -2089,7 +2089,7 @@ Registered functional affect handler (alternative to symbolic affects).
 
 ### Graph
 
-**File:** `packages/esm-format/src/graph.ts:61`
+**File:** `packages/earthsci-toolkit/src/graph.ts:61`
 
 ```typescript
 export interface Graph<N, E> {
@@ -2099,7 +2099,7 @@ export interface Graph<N, E> {
 
 ### GraphExportOptions
 
-**File:** `packages/esm-format/src/analysis/types.ts:161`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:161`
 
 ```typescript
 export interface GraphExportOptions {
@@ -2122,7 +2122,7 @@ History entry representing a state snapshot
 
 ### HoverState
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:79`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:79`
 
 ```typescript
 export interface HoverState {
@@ -2132,7 +2132,7 @@ export interface HoverState {
 
 ### LayoutAlgorithm
 
-**File:** `packages/esm-format/src/analysis/types.ts:140`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:140`
 
 ```typescript
 export interface LayoutAlgorithm {
@@ -2142,7 +2142,7 @@ export interface LayoutAlgorithm {
 
 ### LayoutResult
 
-**File:** `packages/esm-format/src/analysis/types.ts:148`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:148`
 
 ```typescript
 export interface LayoutResult<N> {
@@ -2152,7 +2152,7 @@ export interface LayoutResult<N> {
 
 ### MatchResult
 
-**File:** `packages/esm-format/src/analysis/types.ts:101`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:101`
 
 ```typescript
 export interface MatchResult {
@@ -2162,7 +2162,7 @@ export interface MatchResult {
 
 ### Metadata
 
-**File:** `packages/esm-format/src/generated.ts:210`
+**File:** `packages/earthsci-toolkit/src/generated.ts:210`
 
 ```typescript
 export interface Metadata {
@@ -2175,7 +2175,7 @@ Authorship, provenance, and description.
 
 ### Model
 
-**File:** `packages/esm-format/src/generated.ts:241`
+**File:** `packages/earthsci-toolkit/src/generated.ts:241`
 
 ```typescript
 export interface Model {
@@ -2188,7 +2188,7 @@ An ODE system — a fully specified set of time-dependent equations.
 
 ### ModelVariable
 
-**File:** `packages/esm-format/src/generated.ts:269`
+**File:** `packages/earthsci-toolkit/src/generated.ts:269`
 
 ```typescript
 export interface ModelVariable {
@@ -2201,7 +2201,7 @@ A variable in an ODE model.
 
 ### Operator
 
-**File:** `packages/esm-format/src/generated.ts:556`
+**File:** `packages/earthsci-toolkit/src/generated.ts:556`
 
 ```typescript
 export interface Operator {
@@ -2214,7 +2214,7 @@ A registered runtime operator (e.g., dry deposition, wet scavenging).
 
 ### Optimization
 
-**File:** `packages/esm-format/src/analysis/types.ts:111`
+**File:** `packages/earthsci-toolkit/src/analysis/types.ts:111`
 
 ```typescript
 export interface Optimization {
@@ -2224,7 +2224,7 @@ export interface Optimization {
 
 ### Parameter
 
-**File:** `packages/esm-format/src/generated.ts:471`
+**File:** `packages/earthsci-toolkit/src/generated.ts:471`
 
 ```typescript
 export interface Parameter {
@@ -2237,7 +2237,7 @@ A parameter in a reaction system.
 
 ### Reaction
 
-**File:** `packages/esm-format/src/generated.ts:479`
+**File:** `packages/earthsci-toolkit/src/generated.ts:479`
 
 ```typescript
 export interface Reaction {
@@ -2250,7 +2250,7 @@ A single reaction in a reaction system.
 
 ### ReactionSystem
 
-**File:** `packages/esm-format/src/generated.ts:423`
+**File:** `packages/earthsci-toolkit/src/generated.ts:423`
 
 ```typescript
 export interface ReactionSystem {
@@ -2263,7 +2263,7 @@ A reaction network — declarative representation of chemical or biological reac
 
 ### Reference
 
-**File:** `packages/esm-format/src/generated.ts:232`
+**File:** `packages/earthsci-toolkit/src/generated.ts:232`
 
 ```typescript
 export interface Reference {
@@ -2276,7 +2276,7 @@ Academic citation or data source reference.
 
 ### SchemaError
 
-**File:** `packages/esm-format/src/parse.ts:22`
+**File:** `packages/earthsci-toolkit/src/parse.ts:22`
 
 ```typescript
 export interface SchemaError {
@@ -2289,7 +2289,7 @@ Schema validation error with JSON Pointer path
 
 ### Solver
 
-**File:** `packages/esm-format/src/generated.ts:777`
+**File:** `packages/earthsci-toolkit/src/generated.ts:777`
 
 ```typescript
 export interface Solver {
@@ -2302,7 +2302,7 @@ Solver strategy for time integration.
 
 ### SpatialDimension
 
-**File:** `packages/esm-format/src/generated.ts:730`
+**File:** `packages/earthsci-toolkit/src/generated.ts:730`
 
 ```typescript
 export interface SpatialDimension {
@@ -2315,7 +2315,7 @@ Specification of a single spatial dimension.
 
 ### Species
 
-**File:** `packages/esm-format/src/generated.ts:463`
+**File:** `packages/earthsci-toolkit/src/generated.ts:463`
 
 ```typescript
 export interface Species {
@@ -2328,7 +2328,7 @@ A reactive species in a reaction system.
 
 ### StoichiometryEntry
 
-**File:** `packages/esm-format/src/generated.ts:502`
+**File:** `packages/earthsci-toolkit/src/generated.ts:502`
 
 ```typescript
 export interface StoichiometryEntry {
@@ -2341,7 +2341,7 @@ A species with its stoichiometric coefficient in a reaction.
 
 ### StructuralError
 
-**File:** `packages/esm-format/src/validate.ts:49`
+**File:** `packages/earthsci-toolkit/src/validate.ts:49`
 
 ```typescript
 export interface StructuralError {
@@ -2354,7 +2354,7 @@ Structural error type matching the format specification
 
 ### TooltipData
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:86`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:86`
 
 ```typescript
 export interface TooltipData {
@@ -2390,7 +2390,7 @@ Configuration for undo history behavior
 
 ### UndoRedoState
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:48`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:48`
 
 ```typescript
 export interface UndoRedoState {
@@ -2400,7 +2400,7 @@ export interface UndoRedoState {
 
 ### UnitResult
 
-**File:** `packages/esm-format/src/units.ts:37`
+**File:** `packages/earthsci-toolkit/src/units.ts:37`
 
 ```typescript
 export interface UnitResult {
@@ -2413,7 +2413,7 @@ Result of dimensional analysis
 
 ### UnitWarning
 
-**File:** `packages/esm-format/src/units.ts:45`
+**File:** `packages/earthsci-toolkit/src/units.ts:45`
 
 ```typescript
 export interface UnitWarning {
@@ -2426,7 +2426,7 @@ Unit validation warning
 
 ### ValidationError
 
-**File:** `packages/esm-format/src/validate.ts:30`
+**File:** `packages/earthsci-toolkit/src/validate.ts:30`
 
 ```typescript
 export interface ValidationError {
@@ -2439,7 +2439,7 @@ Validation error with structured details
 
 ### ValidationError
 
-**File:** `packages/esm-format/src/interactive-editor/index.ts:32`
+**File:** `packages/earthsci-toolkit/src/interactive-editor/index.ts:32`
 
 ```typescript
 export interface ValidationError {
@@ -2449,7 +2449,7 @@ export interface ValidationError {
 
 ### ValidationResult
 
-**File:** `packages/esm-format/src/validate.ts:40`
+**File:** `packages/earthsci-toolkit/src/validate.ts:40`
 
 ```typescript
 export interface ValidationResult {
@@ -2462,7 +2462,7 @@ Structured validation result
 
 ### VariableNode
 
-**File:** `packages/esm-format/src/graph.ts:75`
+**File:** `packages/earthsci-toolkit/src/graph.ts:75`
 
 ```typescript
 export interface VariableNode {

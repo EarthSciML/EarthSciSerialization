@@ -415,7 +415,7 @@ esm-julia() {
 }
 
 esm-rust() {
-    cd "$WORKSPACE_ROOT/packages/earthsci-toolkit"
+    cd "$WORKSPACE_ROOT/packages/earthsci-toolkit-rs"
     cargo "\$@"
 }
 
@@ -425,7 +425,7 @@ esm-go() {
 }
 
 esm-typescript() {
-    cd "$WORKSPACE_ROOT/packages/esm-format"
+    cd "$WORKSPACE_ROOT/packages/earthsci-toolkit"
     npm "\$@"
 }
 
