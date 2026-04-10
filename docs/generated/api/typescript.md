@@ -1057,7 +1057,7 @@ Check if an expression is differentiable with respect to a variable
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1439`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1484`
 
 **Signature:**
 ```typescript
@@ -1677,7 +1677,7 @@ Format an expression as Unicode mathematical notation
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:578`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:682`
 
 **Signature:**
 ```typescript
@@ -1701,7 +1701,7 @@ Validate ESM data and return structured validation result.
 
 ### validateSchema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1127`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1185`
 
 **Signature:**
 ```typescript
