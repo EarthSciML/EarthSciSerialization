@@ -833,6 +833,35 @@ Find the most expensive sub-expressions in an expression
 
 ---
 
+### flatten
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:70`
+
+**Signature:**
+```typescript
+export function flatten(file: EsmFile): FlattenedSystem {
+```
+
+**Description:**
+Flatten a multi-system ESM file into a single unified system.
+
+The algorithm:
+1. Iterates over all models and reaction_systems in the file
+2. Namespaces all variables with their system name prefix (dot notation)
+3. Processes coupling entries to produce variable mappings and connector equations
+4. Returns a unified flattened system
+
+@param file - The ESM file to flatten
+@returns A FlattenedSystem with all variables namespaced and equations unified
+/
+
+**Available in other languages:**
+- [Julia](julia.md#flatten)
+- [Julia](julia.md#flatten)
+- [Rust](rust.md#flatten)
+
+---
+
 ### formatResults
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/index.ts:238`
@@ -1971,6 +2000,7 @@ Bi-directional coupling via connector equations.
 
 **Available in other languages:**
 - [Julia](julia.md#couplingcouple)
+- [Python](python.md#couplingcouple)
 
 ---
 
@@ -2594,6 +2624,66 @@ export interface FixSuggestion {
 **Available in other languages:**
 - [Julia](julia.md#fixsuggestion)
 - [Python](python.md#fixsuggestion)
+
+---
+
+### FlattenMetadata
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:35`
+
+**Definition:**
+```typescript
+export interface FlattenMetadata {
+```
+
+**Description:**
+Metadata describing the origin of the flattened system.
+/
+
+**Available in other languages:**
+- [Julia](julia.md#flattenmetadata)
+- [Python](python.md#flattenmetadata)
+- [Rust](rust.md#flattenmetadata)
+
+---
+
+### FlattenedEquation
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:23`
+
+**Definition:**
+```typescript
+export interface FlattenedEquation {
+```
+
+**Description:**
+A single equation in the flattened system, with dot-namespaced variable names.
+/
+
+**Available in other languages:**
+- [Julia](julia.md#flattenedequation)
+- [Python](python.md#flattenedequation)
+- [Rust](rust.md#flattenedequation)
+
+---
+
+### FlattenedSystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:45`
+
+**Definition:**
+```typescript
+export interface FlattenedSystem {
+```
+
+**Description:**
+A fully flattened representation of a coupled ESM system.
+/
+
+**Available in other languages:**
+- [Julia](julia.md#flattenedsystem)
+- [Python](python.md#flattenedsystem)
+- [Rust](rust.md#flattenedsystem)
 
 ---
 
