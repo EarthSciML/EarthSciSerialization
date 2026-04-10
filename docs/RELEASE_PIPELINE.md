@@ -121,7 +121,7 @@ All packages maintain synchronized version numbers:
 using Pkg; Pkg.add("EarthSciSerialization")
 ```
 
-### TypeScript/JavaScript (esm-format)
+### TypeScript/JavaScript (earthsci-toolkit)
 
 - Tests run on Node.js 18, 20, 21
 - Published to NPM registry
@@ -155,7 +155,7 @@ pip install earthsci-toolkit
 **Installation**:
 ```toml
 [dependencies]
-esm-format = "1.2.3"
+earthsci-toolkit = "1.2.3"
 ```
 
 ## Binary Distribution

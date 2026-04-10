@@ -5,7 +5,7 @@
 The EarthSciSerialization project uses an automated release system that manages publishing across five language implementations:
 
 - **Julia**: EarthSciSerialization.jl (Julia General Registry)
-- **TypeScript/JavaScript**: esm-format (npm)
+- **TypeScript/JavaScript**: earthsci-toolkit (npm)
 - **Python**: earthsci-toolkit (PyPI)
 - **Rust**: earthsci-toolkit (crates.io)
 - **Go**: esm-format-go (Go modules)
@@ -151,13 +151,13 @@ packages/
 ├── EarthSciSerialization.jl/          # Julia package
 │   ├── Project.toml       # Julia dependencies
 │   └── src/
-├── esm-format/            # TypeScript package
+├── earthsci-toolkit/       # TypeScript package
 │   ├── package.json       # npm configuration
 │   └── src/
 ├── earthsci_toolkit/            # Python package
 │   ├── pyproject.toml     # Python packaging
 │   └── src/
-├── earthsci-toolkit/       # Rust crate
+├── earthsci-toolkit-rs/    # Rust crate
 │   ├── Cargo.toml         # Rust dependencies
 │   └── src/
 └── esm-format-go/         # Go module

@@ -48,9 +48,9 @@ This repository contains multiple language implementations of the ESM format:
 | Package | Language | Description | Directory |
 |---------|----------|-------------|-----------|
 | **EarthSciSerialization.jl** | Julia | Complete MTK/Catalyst integration | [`packages/EarthSciSerialization.jl/`](packages/EarthSciSerialization.jl/) |
-| **earthsci-toolkit** | TypeScript | Web/Node.js types and utilities | [`packages/esm-format/`](packages/esm-format/) |
+| **earthsci-toolkit** | TypeScript | Web/Node.js types and utilities | [`packages/earthsci-toolkit/`](packages/earthsci-toolkit/) |
 | **earthsci_toolkit** | Python | Scientific Python integration | [`packages/earthsci_toolkit/`](packages/earthsci_toolkit/) |
-| **earthsci-toolkit** | Rust | High-performance implementation | [`packages/earthsci-toolkit/`](packages/earthsci-toolkit/) |
+| **earthsci-toolkit** | Rust | High-performance implementation | [`packages/earthsci-toolkit-rs/`](packages/earthsci-toolkit-rs/) |
 | **esm-format-go** | Go | Lightweight Go implementation | [`packages/esm-format-go/`](packages/esm-format-go/) |
 | **esm-editor** | SolidJS | Interactive web-based editor | [`packages/esm-editor/`](packages/esm-editor/) |
 

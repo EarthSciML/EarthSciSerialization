@@ -48,7 +48,7 @@ build_rust_binary() {
 
     echo "Building Rust binary for $platform ($rust_target)..."
 
-    cd "${PROJECT_ROOT}/packages/earthsci-toolkit"
+    cd "${PROJECT_ROOT}/packages/earthsci-toolkit-rs"
 
     # Install target if needed
     rustup target add "$rust_target" || true
@@ -189,7 +189,7 @@ build_python_wheel() {
 build_typescript_package() {
     echo "Building TypeScript package..."
 
-    cd "${PROJECT_ROOT}/packages/esm-format"
+    cd "${PROJECT_ROOT}/packages/earthsci-toolkit"
 
     if [ -f "package.json" ]; then
         npm ci

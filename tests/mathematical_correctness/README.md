@@ -316,7 +316,7 @@ cd packages/EarthSciSerialization.jl
 julia --project=. -e 'using Pkg; Pkg.test()'
 
 # TypeScript implementation
-cd packages/esm-format
+cd packages/earthsci-toolkit
 npm test
 ```
 

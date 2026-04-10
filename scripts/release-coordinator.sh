@@ -45,9 +45,9 @@ AUTO_APPROVE=false
 # Package directories
 declare -A PACKAGES=(
     ["julia"]="packages/EarthSciSerialization.jl"
-    ["typescript"]="packages/esm-format"
+    ["typescript"]="packages/earthsci-toolkit"
     ["python"]="packages/earthsci_toolkit"
-    ["rust"]="packages/earthsci-toolkit"
+    ["rust"]="packages/earthsci-toolkit-rs"
 )
 
 usage() {

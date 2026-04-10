@@ -185,7 +185,7 @@ cargo install --git https://github.com/EarthSciML/EarthSciSerialization \
 
 # Or clone and install locally
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/earthsci-toolkit
+cd EarthSciSerialization/packages/earthsci-toolkit-rs
 cargo install --path . --features cli
 ```
 
@@ -206,7 +206,7 @@ cargo install wasm-pack
 
 # Clone repository
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/earthsci-toolkit
+cd EarthSciSerialization/packages/earthsci-toolkit-rs
 
 # Build for web
 wasm-pack build --target web --features wasm

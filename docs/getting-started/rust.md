@@ -14,7 +14,7 @@ earthsci-toolkit = "0.1.0"
 ### CLI Tool from Source
 ```bash
 git clone https://github.com/EarthSciML/EarthSciSerialization.git
-cd EarthSciSerialization/packages/earthsci-toolkit
+cd EarthSciSerialization/packages/earthsci-toolkit-rs
 cargo install --path . --features cli
 ```
 
@@ -24,7 +24,7 @@ cargo install --path . --features cli
 cargo install wasm-pack
 
 # Build WASM package
-cd packages/earthsci-toolkit
+cd packages/earthsci-toolkit-rs
 wasm-pack build --target web --features wasm
 ```
 
