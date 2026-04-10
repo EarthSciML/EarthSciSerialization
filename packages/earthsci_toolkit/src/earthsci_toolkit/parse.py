@@ -55,6 +55,16 @@ class UnsupportedVersionError(Exception):
     pass
 
 
+class CircularReferenceError(Exception):
+    """Exception raised when circular subsystem references are detected."""
+    pass
+
+
+class SubsystemRefError(Exception):
+    """Exception raised when a subsystem reference cannot be resolved."""
+    pass
+
+
 # Current library version for compatibility checking
 _CURRENT_VERSION = (0, 1, 0)
 
@@ -288,8 +298,20 @@ def _parse_model(model_data: Dict[str, Any]) -> Model:
         for eq_data in model_data["equations"]:
             equations.append(_parse_equation(eq_data))
 
-    # Create model (name is not in the schema, we'll use empty string)
-    model = Model(name="", variables=variables, equations=equations)
+    # Extract subsystems. Each entry is either a parsed Model or a raw dict
+    # carrying a "ref" field to be resolved later by resolve_subsystem_refs.
+    subsystems: Dict[str, Any] = {}
+    if "subsystems" in model_data:
+        for sub_name, sub_data in model_data["subsystems"].items():
+            if isinstance(sub_data, dict) and "ref" in sub_data:
+                subsystems[sub_name] = sub_data
+            else:
+                sub_model = _parse_model(sub_data)
+                sub_model.name = sub_name
+                subsystems[sub_name] = sub_model
+
+    model = Model(name="", variables=variables, equations=equations,
+                  subsystems=subsystems)
     return model
 
 
@@ -378,12 +400,25 @@ def _parse_reaction_system(rs_data: Dict[str, Any]) -> ReactionSystem:
         for eq_data in rs_data["constraint_equations"]:
             constraint_equations.append(_parse_equation(eq_data))
 
+    # Extract subsystems. Each entry is either a parsed ReactionSystem or a raw
+    # dict with a "ref" field to be resolved later by resolve_subsystem_refs.
+    subsystems: Dict[str, Any] = {}
+    if "subsystems" in rs_data:
+        for sub_name, sub_data in rs_data["subsystems"].items():
+            if isinstance(sub_data, dict) and "ref" in sub_data:
+                subsystems[sub_name] = sub_data
+            else:
+                sub_rs = _parse_reaction_system(sub_data)
+                sub_rs.name = sub_name
+                subsystems[sub_name] = sub_rs
+
     return ReactionSystem(
         name="",  # Name comes from the key
         species=species,
         parameters=parameters,
         reactions=reactions,
-        constraint_equations=constraint_equations
+        constraint_equations=constraint_equations,
+        subsystems=subsystems,
     )
 
 
@@ -850,6 +885,213 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
     )
 
 
+def _fetch_ref_content(ref: str, base_path: str) -> str:
+    """Fetch content from a subsystem ref (URL or file path).
+
+    Args:
+        ref: The reference string (URL or relative file path)
+        base_path: The base directory for resolving relative paths
+
+    Returns:
+        The file content as a string
+
+    Raises:
+        SubsystemRefError: If the reference cannot be fetched or read
+    """
+    if ref.startswith("http://") or ref.startswith("https://"):
+        import urllib.request
+        import urllib.error
+        try:
+            with urllib.request.urlopen(ref) as response:
+                return response.read().decode("utf-8")
+        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+            raise SubsystemRefError(
+                f"Failed to fetch subsystem ref URL '{ref}': {e}"
+            )
+    else:
+        resolved = os.path.normpath(os.path.join(base_path, ref))
+        if not os.path.exists(resolved):
+            raise SubsystemRefError(
+                f"Subsystem ref file not found: '{resolved}' "
+                f"(resolved from '{ref}' relative to '{base_path}')"
+            )
+        with open(resolved, "r") as f:
+            return f.read()
+
+
+def _resolve_model_subsystems(
+    model: Model,
+    base_path: str,
+    seen_refs: set,
+) -> None:
+    """Recursively resolve subsystem refs within a Model.
+
+    Args:
+        model: The model whose subsystems should be resolved
+        base_path: The base directory for resolving relative paths
+        seen_refs: Set of already-seen ref strings for circular detection
+    """
+    if not model.subsystems:
+        return
+
+    resolved_subsystems: Dict[str, Any] = {}
+    for sub_name, sub_value in model.subsystems.items():
+        # During parsing, a ref object comes through as a dict with a "ref" key
+        # before being coerced to a Model.
+        if isinstance(sub_value, dict) and "ref" in sub_value:
+            ref_str = sub_value["ref"]
+
+            # Circular reference detection
+            canonical = os.path.normpath(os.path.join(base_path, ref_str)) \
+                if not ref_str.startswith("http") else ref_str
+            if canonical in seen_refs:
+                raise CircularReferenceError(
+                    f"Circular subsystem reference detected: '{ref_str}' "
+                    f"(chain: {' -> '.join(seen_refs)} -> {canonical})"
+                )
+            new_seen = seen_refs | {canonical}
+
+            content = _fetch_ref_content(ref_str, base_path)
+            ref_data = json.loads(content)
+
+            # Determine the new base_path for nested refs
+            if ref_str.startswith("http://") or ref_str.startswith("https://"):
+                # For URLs, use the URL directory as base
+                new_base = ref_str.rsplit("/", 1)[0] if "/" in ref_str else base_path
+            else:
+                resolved_path = os.path.normpath(os.path.join(base_path, ref_str))
+                new_base = os.path.dirname(resolved_path)
+
+            # Validate and parse the referenced file
+            schema = _get_schema()
+            try:
+                validate(ref_data, schema)
+            except jsonschema.ValidationError as e:
+                raise SubsystemRefError(
+                    f"Schema validation failed for subsystem ref '{ref_str}': {e.message}"
+                )
+
+            parsed = _parse_esm_data(ref_data)
+
+            # Extract the single top-level model
+            if parsed.models:
+                # Take the first (and expected-only) model
+                sub_model = next(iter(parsed.models.values()))
+                sub_model.name = sub_name
+                # Recursively resolve nested subsystem refs
+                _resolve_model_subsystems(sub_model, new_base, new_seen)
+                resolved_subsystems[sub_name] = sub_model
+            else:
+                raise SubsystemRefError(
+                    f"Subsystem ref '{ref_str}' does not contain a model"
+                )
+        else:
+            # Already a Model object, just recurse into it
+            if isinstance(sub_value, Model):
+                _resolve_model_subsystems(sub_value, base_path, seen_refs)
+            resolved_subsystems[sub_name] = sub_value
+
+    model.subsystems = resolved_subsystems
+
+
+def _resolve_reaction_system_subsystems(
+    rs: ReactionSystem,
+    base_path: str,
+    seen_refs: set,
+) -> None:
+    """Recursively resolve subsystem refs within a ReactionSystem.
+
+    Args:
+        rs: The reaction system whose subsystems should be resolved
+        base_path: The base directory for resolving relative paths
+        seen_refs: Set of already-seen ref strings for circular detection
+    """
+    if not rs.subsystems:
+        return
+
+    resolved_subsystems: Dict[str, Any] = {}
+    for sub_name, sub_value in rs.subsystems.items():
+        if isinstance(sub_value, dict) and "ref" in sub_value:
+            ref_str = sub_value["ref"]
+
+            canonical = os.path.normpath(os.path.join(base_path, ref_str)) \
+                if not ref_str.startswith("http") else ref_str
+            if canonical in seen_refs:
+                raise CircularReferenceError(
+                    f"Circular subsystem reference detected: '{ref_str}' "
+                    f"(chain: {' -> '.join(seen_refs)} -> {canonical})"
+                )
+            new_seen = seen_refs | {canonical}
+
+            content = _fetch_ref_content(ref_str, base_path)
+            ref_data = json.loads(content)
+
+            if ref_str.startswith("http://") or ref_str.startswith("https://"):
+                new_base = ref_str.rsplit("/", 1)[0] if "/" in ref_str else base_path
+            else:
+                resolved_path = os.path.normpath(os.path.join(base_path, ref_str))
+                new_base = os.path.dirname(resolved_path)
+
+            schema = _get_schema()
+            try:
+                validate(ref_data, schema)
+            except jsonschema.ValidationError as e:
+                raise SubsystemRefError(
+                    f"Schema validation failed for subsystem ref '{ref_str}': {e.message}"
+                )
+
+            parsed = _parse_esm_data(ref_data)
+
+            # Extract the single top-level reaction system
+            if parsed.reaction_systems:
+                sub_rs = next(iter(parsed.reaction_systems.values()))
+                sub_rs.name = sub_name
+                _resolve_reaction_system_subsystems(sub_rs, new_base, new_seen)
+                resolved_subsystems[sub_name] = sub_rs
+            else:
+                raise SubsystemRefError(
+                    f"Subsystem ref '{ref_str}' does not contain a reaction system"
+                )
+        else:
+            if isinstance(sub_value, ReactionSystem):
+                _resolve_reaction_system_subsystems(sub_value, base_path, seen_refs)
+            resolved_subsystems[sub_name] = sub_value
+
+    rs.subsystems = resolved_subsystems
+
+
+def resolve_subsystem_refs(esm_file: EsmFile, base_path: str) -> None:
+    """Resolve all subsystem references in an ESM file.
+
+    Walks all subsystems in models and reaction_systems. For each subsystem
+    value with a ``ref`` field:
+
+    - If the ref starts with ``http://`` or ``https://``, the content is
+      fetched via urllib.
+    - Otherwise the ref is resolved relative to *base_path* and read from
+      the filesystem.
+
+    The referenced file is parsed, the single top-level model or reaction
+    system is extracted, and the reference is replaced with the resolved
+    content. Resolution is recursive, and circular references are detected.
+
+    Args:
+        esm_file: The parsed ESM file to resolve references in (modified in place)
+        base_path: The base directory for resolving relative file paths
+
+    Raises:
+        CircularReferenceError: If circular subsystem references are detected
+        SubsystemRefError: If a reference cannot be resolved or is invalid
+    """
+    seen: set = set()
+
+    for model in esm_file.models.values():
+        _resolve_model_subsystems(model, base_path, seen)
+
+    for rs in esm_file.reaction_systems.values():
+        _resolve_reaction_system_subsystems(rs, base_path, seen)
+
+
 def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     """
     Load an ESM file from a file path, JSON string, or dict.
@@ -866,10 +1108,13 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
         FileNotFoundError: If the file path doesn't exist
     """
     # Handle dict input directly
+    base_path = os.getcwd()
     if isinstance(path_or_string, dict):
         data = path_or_string
     elif isinstance(path_or_string, Path) or (isinstance(path_or_string, str) and os.path.exists(path_or_string)):
         # It's a file path
+        file_path = Path(path_or_string)
+        base_path = str(file_path.parent.resolve())
         with open(path_or_string, 'r') as f:
             data = json.load(f)
     else:
@@ -887,7 +1132,12 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     _check_version_compatibility(data.get("esm", ""))
 
     # Parse into ESM objects
-    return _parse_esm_data(data)
+    esm_file = _parse_esm_data(data)
+
+    # Resolve subsystem references
+    resolve_subsystem_refs(esm_file, base_path)
+
+    return esm_file
 
 
 def load_with_csv_data(esm_path_or_string: Union[str, Path], csv_data_loaders: List['DataLoader'] = None) -> 'EsmFile':

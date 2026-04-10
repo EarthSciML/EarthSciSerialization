@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -12,7 +13,8 @@ import (
 //go:embed esm-schema.json
 var embeddedSchema []byte
 
-// Load loads an ESM file from the specified path and validates it against the JSON schema
+// Load loads an ESM file from the specified path and validates it against the JSON schema.
+// After parsing, it resolves any subsystem references relative to the file's directory.
 func Load(path string) (*EsmFile, error) {
 	// Read the file
 	data, err := os.ReadFile(path)
@@ -20,7 +22,18 @@ func Load(path string) (*EsmFile, error) {
 		return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 
-	return LoadString(string(data))
+	esmFile, err := LoadString(string(data))
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve subsystem references relative to the file's directory
+	basePath := filepath.Dir(path)
+	if err := ResolveSubsystemRefs(esmFile, basePath); err != nil {
+		return nil, fmt.Errorf("failed to resolve subsystem references: %w", err)
+	}
+
+	return esmFile, nil
 }
 
 // LoadString parses an ESM file from JSON string and validates it against the JSON schema

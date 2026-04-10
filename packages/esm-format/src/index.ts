@@ -67,6 +67,13 @@ export * from './web-components.js'
 // Error handling and diagnostics
 export * from './error-handling.js'
 
+// Coupled system flattening
+export { flatten } from './flatten.js'
+export type { FlattenedEquation, FlattenMetadata, FlattenedSystem } from './flatten.js'
+
+// Subsystem reference loading
+export { resolveSubsystemRefs, CircularReferenceError, RefLoadError } from './ref-loading.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
