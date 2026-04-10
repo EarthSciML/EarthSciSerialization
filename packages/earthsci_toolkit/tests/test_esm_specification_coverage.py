@@ -15,7 +15,7 @@ Sections covered:
 7. Reaction systems - species/parameters/reactions with mass action
 8. Data loaders - by reference with provides validation
 9. Operators - runtime-specific with needed_vars
-10. Coupling - all 6 types including couple2/operator_apply/callback/event
+10. Coupling - all 6 types including couple/operator_apply/callback/event
 11. Domain - spatial/temporal with BCs/ICs
 12. Solver - all strategies with config validation
 13. Complete example validation
@@ -1114,7 +1114,7 @@ class TestSection09Operators:
 
 
 class TestSection10Coupling:
-    """Section 10: Coupling - all 6 types including couple2/operator_apply/callback/event"""
+    """Section 10: Coupling - all 6 types including couple/operator_apply/callback/event"""
 
     def test_operator_compose_coupling(self):
         """Test operator_compose coupling type."""
@@ -1132,8 +1132,8 @@ class TestSection10Coupling:
         }
         jsonschema.validate(valid_data, schema)
 
-    def test_couple2_coupling(self):
-        """Test couple2 coupling with connector system."""
+    def test_couple_coupling(self):
+        """Test couple coupling with connector system."""
         schema = _get_schema()
 
         valid_data = {
@@ -1141,9 +1141,8 @@ class TestSection10Coupling:
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
             "coupling": [{
-                "type": "couple2",
+                "type": "couple",
                 "systems": ["SuperFastReactions", "DryDeposition"],
-                "coupletype_pair": ["SuperFastCoupler", "DryDepositionCoupler"],
                 "connector": {
                     "equations": [{
                         "from": "DryDeposition.v_dep_O3",

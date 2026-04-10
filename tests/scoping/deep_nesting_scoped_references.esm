@@ -327,14 +327,10 @@
       "description": "Event triggering with maximum depth (7-level) scoped references"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "EarthClimateSystem.AtmosphereComponent.TroposphereSubsystem.BoundaryLayerModule.SurfaceChemistryProcess.PhotolysisRateCalculation.WavelengthDependentCalculation",
         "OceanClimateSystem.SurfaceOceanLayer.MicrobialLoop.NitrogenCycle.Denitrification.AnoxicMicroenvironment"
-      ],
-      "coupletype_pair": [
-        "AtmosphericCoupler",
-        "OceanicCoupler"
       ],
       "connector": {
         "equations": [
@@ -353,7 +349,7 @@
           }
         ]
       },
-      "description": "Maximum depth couple2 using 7-level scoped references throughout"
+      "description": "Maximum depth couple using 7-level scoped references throughout"
     }
   ],
   "solver": {

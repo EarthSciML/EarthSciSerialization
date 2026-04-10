@@ -2,7 +2,7 @@
   "esm": "0.1.0",
   "metadata": {
     "name": "Couple2ResolutionFixtures",
-    "description": "Test fixtures for couple2 coupling resolution algorithm (Section 4.7.2)",
+    "description": "Test fixtures for couple coupling resolution algorithm (Section 4.7.2)",
     "authors": [
       "Test Suite"
     ],
@@ -240,14 +240,10 @@
   },
   "coupling": [
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "FluidDynamics",
         "HeatTransfer"
-      ],
-      "coupletype_pair": [
-        "FluidThermalCoupler",
-        "ThermalFluidCoupler"
       ],
       "connector": {
         "equations": [
@@ -277,17 +273,13 @@
           }
         ]
       },
-      "description": "TEST CASE 1: couple2 with additive and multiplicative transforms"
+      "description": "TEST CASE 1: couple with additive and multiplicative transforms"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "HeatTransfer",
         "MassTransfer"
-      ],
-      "coupletype_pair": [
-        "ThermalMassCoupler",
-        "MassThermalCoupler"
       ],
       "connector": {
         "equations": [
@@ -334,17 +326,13 @@
           }
         ]
       },
-      "description": "TEST CASE 2: couple2 with additive and replacement transforms"
+      "description": "TEST CASE 2: couple with additive and replacement transforms"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "FluidDynamics",
         "MassTransfer"
-      ],
-      "coupletype_pair": [
-        "FluidMassCoupler",
-        "MassFluidCoupler"
       ],
       "connector": {
         "equations": [
@@ -386,7 +374,7 @@
           }
         ]
       },
-      "description": "TEST CASE 3: couple2 with complex multi-directional coupling and all transform types"
+      "description": "TEST CASE 3: couple with complex multi-directional coupling and all transform types"
     }
   ]
 }

@@ -19,7 +19,7 @@ def test_parse_coupling_entry(coupling_data):
     # Map schema types to enum values
     type_mapping = {
         'operator_compose': CouplingType.OPERATOR_COMPOSE,
-        'couple2': CouplingType.COUPLE2,
+        'couple': CouplingType.COUPLE2,
         'variable_map': CouplingType.VARIABLE_MAP,
         'operator_apply': CouplingType.OPERATOR_APPLY,
         'callback': CouplingType.CALLBACK,
@@ -44,7 +44,6 @@ def test_parse_coupling_entry(coupling_data):
 
     elif coupling_type == CouplingType.COUPLE2:
         entry.systems = coupling_data.get('systems', [])
-        entry.coupletype_pair = coupling_data.get('coupletype_pair', [])
 
     elif coupling_type == CouplingType.VARIABLE_MAP:
         entry.from_var = coupling_data.get('from')

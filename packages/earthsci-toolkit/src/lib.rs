@@ -136,12 +136,11 @@ mod coupling_field_tests {
     }
 
     #[test]
-    fn test_couple2_new_fields() {
+    fn test_couple_new_fields() {
         // Test Couple2 with new systems field
         let json = r#"{
-            "type": "couple2",
+            "type": "couple",
             "systems": ["system1", "system2"],
-            "coupletype_pair": ["type1", "type2"],
             "connector": {
                 "equations": []
             }
@@ -151,11 +150,9 @@ mod coupling_field_tests {
         match entry {
             CouplingEntry::Couple2 {
                 systems,
-                coupletype_pair,
                 ..
             } => {
                 assert_eq!(systems, vec!["system1", "system2"]);
-                assert_eq!(coupletype_pair, vec!["type1", "type2"]);
             }
             _ => panic!("Expected Couple2 variant"),
         }

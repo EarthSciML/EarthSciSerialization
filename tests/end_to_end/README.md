@@ -19,7 +19,7 @@ This directory contains comprehensive end-to-end test fixtures that exercise the
 
 **Coupling Types Tested**:
 - `operator_compose`: Chemistry + Transport via `_var` placeholder
-- `couple2`: Chemistry ↔ Surface Exchange via connector equations
+- `couple`: Chemistry ↔ Surface Exchange via connector equations
 - `variable_map`: Meteorology → Chemistry, Emissions → Sources (8 mappings)
 - `operator_apply`: Dry deposition, turbulent mixing, photolysis (3 operators)
 - `callback`: Biogenic emission scaling, weekday/weekend factors (2 callbacks)
@@ -38,7 +38,7 @@ This directory contains comprehensive end-to-end test fixtures that exercise the
 - Climate forcing from CESM2
 
 **Coupling Types Tested**:
-- `couple2`: Air-sea gas exchange (CO2, O2) and ocean-ecosystem coupling (4 connector equations)
+- `couple`: Air-sea gas exchange (CO2, O2) and ocean-ecosystem coupling (4 connector equations)
 - `variable_map`: Climate forcing → all systems (4 mappings)
 - `operator_apply`: Carbonate chemistry, gas transfer, biological pump (3 operators)
 - `callback`: Seasonal light and mixed layer depth cycles (2 callbacks)
@@ -57,7 +57,7 @@ This directory contains comprehensive end-to-end test fixtures that exercise the
 - Seasonal cycles and eco-hydrological feedbacks
 
 **Coupling Types Tested**:
-- `couple2`: Atmosphere-surface energy exchange, surface-soil heat transfer, vegetation-soil water coupling (3 couplers)
+- `couple`: Atmosphere-surface energy exchange, surface-soil heat transfer, vegetation-soil water coupling (3 couplers)
 - `variable_map`: Meteorological forcing + soil properties (9 mappings)
 - `operator_apply`: Surface albedo, stomatal conductance, soil thermal properties (3 operators)
 - `callback`: Precipitation infiltration, seasonal phenology (2 callbacks)

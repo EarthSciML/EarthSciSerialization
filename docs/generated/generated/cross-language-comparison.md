@@ -4444,23 +4444,23 @@ export interface CouplingCallback {
 
 ---
 
-### CouplingCouple2
+### CouplingCouple
 
 **Julia:**
 ```julia
-struct CouplingCouple2 <: CouplingEntry
+struct CouplingCouple <: CouplingEntry
 ```
 
-> CouplingCouple2 <: CouplingEntry
+> CouplingCouple <: CouplingEntry
 
-Bi-directional coupling via coupletype dispatch.
+Bi-directional coupling via explicit ConnectorSystem equations.
 
 **Typescript:**
 ```typescript
-export interface CouplingCouple2 {
+export interface CouplingCouple {
 ```
 
-> Bi-directional coupling via coupletype dispatch.
+> Bi-directional coupling via explicit ConnectorSystem equations.
 
 ---
 

@@ -420,11 +420,9 @@ def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
             result["translate"] = coupling.translate
 
     elif isinstance(coupling, Couple2Coupling):
-        result["type"] = "couple2"
+        result["type"] = "couple"
         if coupling.systems:
             result["systems"] = coupling.systems
-        if coupling.coupletype_pair:
-            result["coupletype_pair"] = coupling.coupletype_pair
         if coupling.connector:
             result["connector"] = {
                 "equations": [

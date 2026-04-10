@@ -544,7 +544,7 @@ function extract(file::EsmFile, component_name::String)::EsmFile
 
         if coupling isa CouplingOperatorCompose
             involves_component = (coupling.system_a == component_name || coupling.system_b == component_name)
-        elseif coupling isa CouplingCouple2
+        elseif coupling isa CouplingCouple
             involves_component = (coupling.system_a == component_name || coupling.system_b == component_name)
         elseif coupling isa CouplingVariableMap
             # Check if source or target involves this component

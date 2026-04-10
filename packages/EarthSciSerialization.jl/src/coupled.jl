@@ -7,7 +7,7 @@ providing full coupling resolution as specified in Section 4.7.1 of the ESM spec
 IMPLEMENTATION FEATURES:
 1. operator_compose: Extract dependent variables, apply translations, match equations,
    combine matched RHS terms, preserve unmatched equations
-2. couple2: Read connector equations, resolve scoped references, apply transforms
+2. couple: Read connector equations, resolve scoped references, apply transforms
 3. variable_map: Resolve from/to references, apply transform operations
 4. operator_apply: Register Operator in CoupledSystem.ops
 
@@ -48,12 +48,12 @@ end
 
 Convert an ESM file with coupling rules into a coupled system.
 This implements the Full tier capability for coupled system assembly
-handling operator_compose, couple2, variable_map, and operator_apply.
+handling operator_compose, couple, variable_map, and operator_apply.
 
 The algorithm processes coupling entries in array order for deterministic naming
 and applies the four main coupling operations:
 1. operator_compose - Compose systems by matching equations
-2. couple2 - Bidirectional coupling via connector equations
+2. couple - Bidirectional coupling via connector equations
 3. variable_map - Map variables between systems with transforms
 4. operator_apply - Register operators for runtime
 
@@ -81,8 +81,8 @@ function to_coupled_system(file::EsmFile)::MockCoupledSystem
     for coupling in file.coupling
         if coupling isa CouplingOperatorCompose
             operator_compose(coupled_system, coupling)
-        elseif coupling isa CouplingCouple2
-            couple2(coupled_system, coupling)
+        elseif coupling isa CouplingCouple
+            couple(coupled_system, coupling)
         elseif coupling isa CouplingVariableMap
             variable_map(coupled_system, coupling, file)
         elseif coupling isa CouplingOperatorApply
@@ -324,26 +324,21 @@ end
 # ========================================
 
 """
-    couple2(coupled_system::MockCoupledSystem, coupling::CouplingCouple2)
+    couple(coupled_system::MockCoupledSystem, coupling::CouplingCouple)
 
-Implement bi-directional coupling via coupletype dispatch:
+Implement bi-directional coupling via connector equations:
 1. Read connector equations from the coupling specification
 2. Resolve scoped references in connector equations
 3. Apply transform operations (additive/multiplicative/replacement)
 """
-function couple2(coupled_system::MockCoupledSystem, coupling::CouplingCouple2)
+function couple(coupled_system::MockCoupledSystem, coupling::CouplingCouple)
     if length(coupling.systems) != 2
-        throw(ArgumentError("couple2 requires exactly 2 systems, got $(length(coupling.systems))"))
-    end
-
-    if length(coupling.coupletype_pair) != 2
-        throw(ArgumentError("couple2 requires exactly 2 coupletype names, got $(length(coupling.coupletype_pair))"))
+        throw(ArgumentError("couple requires exactly 2 systems, got $(length(coupling.systems))"))
     end
 
     system1_name, system2_name = coupling.systems
-    coupletype1, coupletype2 = coupling.coupletype_pair
 
-    @info "Couple2 coupling: $(system1_name) ($(coupletype1)) ↔ $(system2_name) ($(coupletype2))"
+    @info "Couple coupling: $(system1_name) ↔ $(system2_name)"
 
     # Process connector equations
     if haskey(coupling.connector, "equations")
@@ -354,7 +349,7 @@ function couple2(coupled_system::MockCoupledSystem, coupling::CouplingCouple2)
             process_connector_equation(coupled_system, eq, coupling.systems)
         end
     else
-        @warn "No connector equations found in couple2 coupling"
+        @warn "No connector equations found in couple coupling"
     end
 
     push!(coupled_system.couplings, coupling)
@@ -396,7 +391,7 @@ function create_connector_constraint(coupled_system, from_ref, to_ref, transform
         "to_system" => to_system,
         "to_variable" => to_var,
         "transform" => transform,
-        "created_by" => "couple2"
+        "created_by" => "couple"
     )
 
     # Apply the transform by modifying the target system

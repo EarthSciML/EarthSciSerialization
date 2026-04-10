@@ -480,8 +480,8 @@ function coerce_coupling_entry(data::Any)::CouplingEntry
 
     if coupling_type == "operator_compose"
         return coerce_operator_compose(data)
-    elseif coupling_type == "couple2"
-        return coerce_couple2(data)
+    elseif coupling_type == "couple"
+        return coerce_couple(data)
     elseif coupling_type == "variable_map"
         return coerce_variable_map(data)
     elseif coupling_type == "operator_apply"
@@ -521,20 +521,19 @@ function coerce_operator_compose(data::AbstractDict)::CouplingOperatorCompose
 end
 
 """
-    coerce_couple2(data::AbstractDict) -> CouplingCouple2
+    coerce_couple(data::AbstractDict) -> CouplingCouple
 
-Parse couple2 coupling entry.
+Parse couple coupling entry.
 """
-function coerce_couple2(data::AbstractDict)::CouplingCouple2
-    required_fields = ["systems", "coupletype_pair", "connector"]
+function coerce_couple(data::AbstractDict)::CouplingCouple
+    required_fields = ["systems", "connector"]
     for field in required_fields
         if !haskey(data, field)
-            throw(ParseError("couple2 requires '$field' field"))
+            throw(ParseError("couple requires '$field' field"))
         end
     end
 
     systems = Vector{String}(data["systems"])
-    coupletype_pair = Vector{String}(data["coupletype_pair"])
     connector = Dict{String,Any}(data["connector"])
     description = get(data, "description", nothing)
     interface = get(data, "interface", nothing)
@@ -546,7 +545,7 @@ function coerce_couple2(data::AbstractDict)::CouplingCouple2
         lifting = String(lifting)
     end
 
-    return CouplingCouple2(systems, coupletype_pair, connector; description=description, interface=interface, lifting=lifting)
+    return CouplingCouple(systems, connector; description=description, interface=interface, lifting=lifting)
 end
 
 """

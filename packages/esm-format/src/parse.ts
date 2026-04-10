@@ -442,7 +442,7 @@ const schema = {
           ]
         },
         "coupletype": {
-          "description": "Coupling type name for couple2 dispatch.",
+          "description": "Coupling type name for couple dispatch.",
           "oneOf": [
             { "type": "string" },
             { "type": "null" }
@@ -559,7 +559,7 @@ const schema = {
       "additionalProperties": false,
       "properties": {
         "coupletype": {
-          "description": "Coupling type name for couple2 dispatch.",
+          "description": "Coupling type name for couple dispatch.",
           "oneOf": [
             { "type": "string" },
             { "type": "null" }
@@ -733,7 +733,7 @@ const schema = {
       "description": "A single coupling rule connecting models, reaction systems, data loaders, or operators.",
       "oneOf": [
         { "$ref": "#/$defs/CouplingOperatorCompose" },
-        { "$ref": "#/$defs/CouplingCouple2" },
+        { "$ref": "#/$defs/CouplingCouple" },
         { "$ref": "#/$defs/CouplingVariableMap" },
         { "$ref": "#/$defs/CouplingOperatorApply" },
         { "$ref": "#/$defs/CouplingCallback" },
@@ -764,25 +764,18 @@ const schema = {
       }
     },
 
-    "CouplingCouple2": {
+    "CouplingCouple": {
       "type": "object",
-      "description": "Bi-directional coupling via coupletype dispatch.",
-      "required": ["type", "systems", "coupletype_pair", "connector"],
+      "description": "Bi-directional coupling via connector equations.",
+      "required": ["type", "systems", "connector"],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "couple2" },
+        "type": { "const": "couple" },
         "systems": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 2,
           "maxItems": 2
-        },
-        "coupletype_pair": {
-          "type": "array",
-          "items": { "type": "string" },
-          "minItems": 2,
-          "maxItems": 2,
-          "description": "The coupletype names for each system."
         },
         "connector": {
           "type": "object",

@@ -357,20 +357,19 @@ struct CouplingOperatorCompose <: CouplingEntry
 end
 
 """
-    CouplingCouple2 <: CouplingEntry
+    CouplingCouple <: CouplingEntry
 
-Bi-directional coupling via coupletype dispatch.
+Bi-directional coupling via connector equations.
 """
-struct CouplingCouple2 <: CouplingEntry
+struct CouplingCouple <: CouplingEntry
     systems::Vector{String}
-    coupletype_pair::Vector{String}
     connector::Dict{String,Any}
     description::Union{String,Nothing}
     interface::Union{String,Nothing}
     lifting::Union{String,Nothing}
 
-    CouplingCouple2(systems::Vector{String}, coupletype_pair::Vector{String}, connector::Dict{String,Any}; description=nothing, interface=nothing, lifting=nothing) =
-        new(systems, coupletype_pair, connector, description, interface, lifting)
+    CouplingCouple(systems::Vector{String}, connector::Dict{String,Any}; description=nothing, interface=nothing, lifting=nothing) =
+        new(systems, connector, description, interface, lifting)
 end
 
 """

@@ -2,7 +2,7 @@
   "esm": "0.1.0",
   "metadata": {
     "name": "CompleteCouplingTests",
-    "description": "Test all 6 coupling types: operator_compose, couple2, variable_map, operator_apply, callback, event",
+    "description": "Test all 6 coupling types: operator_compose, couple, variable_map, operator_apply, callback, event",
     "authors": [
       "ESM Test Suite"
     ],
@@ -242,7 +242,7 @@
     "SurfaceExchange": {
       "coupletype": "SurfaceExchangeCoupler",
       "reference": {
-        "notes": "Surface deposition model for couple2 coupling"
+        "notes": "Surface deposition model for couple coupling"
       },
       "variables": {
         "surface_resistance": {
@@ -497,14 +497,10 @@
       "description": "Add horizontal advection to all chemical species"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphericChemistry",
         "SurfaceExchange"
-      ],
-      "coupletype_pair": [
-        "ChemistryCoupler",
-        "SurfaceExchangeCoupler"
       ],
       "connector": {
         "equations": [

@@ -1359,7 +1359,7 @@
   },
   "coupling": [
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphericBoundaryLayer",
         "SurfaceEnergyBalance"
@@ -1410,14 +1410,10 @@
           }
         ]
       },
-      "description": "Bidirectional atmosphere-surface energy exchange",
-      "coupletype_pair": [
-        "AtmosphericBoundaryLayerCoupler",
-        "SurfaceEnergyBalanceCoupler"
-      ]
+      "description": "Bidirectional atmosphere-surface energy exchange"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "SurfaceEnergyBalance",
         "SoilHydrologyThermal"
@@ -1444,14 +1440,10 @@
           }
         ]
       },
-      "description": "Surface-soil heat exchange coupling",
-      "coupletype_pair": [
-        "SurfaceEnergyBalanceCoupler",
-        "SoilHydrologyThermalCoupler"
-      ]
+      "description": "Surface-soil heat exchange coupling"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "VegetationDynamics",
         "SoilHydrologyThermal"
@@ -1484,11 +1476,7 @@
           }
         ]
       },
-      "description": "Plant root water uptake from soil",
-      "coupletype_pair": [
-        "VegetationDynamicsCoupler",
-        "SoilHydrologyThermalCoupler"
-      ]
+      "description": "Plant root water uptake from soil"
     },
     {
       "type": "variable_map",

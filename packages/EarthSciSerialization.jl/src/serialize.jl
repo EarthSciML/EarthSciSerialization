@@ -403,8 +403,8 @@ Serialize CouplingEntry to JSON-compatible format based on concrete type.
 function serialize_coupling_entry(entry::CouplingEntry)::Dict{String,Any}
     if entry isa CouplingOperatorCompose
         return serialize_operator_compose(entry)
-    elseif entry isa CouplingCouple2
-        return serialize_couple2(entry)
+    elseif entry isa CouplingCouple
+        return serialize_couple(entry)
     elseif entry isa CouplingVariableMap
         return serialize_variable_map(entry)
     elseif entry isa CouplingOperatorApply
@@ -443,15 +443,14 @@ function serialize_operator_compose(entry::CouplingOperatorCompose)::Dict{String
 end
 
 """
-    serialize_couple2(entry::CouplingCouple2) -> Dict{String,Any}
+    serialize_couple(entry::CouplingCouple) -> Dict{String,Any}
 
-Serialize couple2 coupling entry.
+Serialize couple coupling entry.
 """
-function serialize_couple2(entry::CouplingCouple2)::Dict{String,Any}
+function serialize_couple(entry::CouplingCouple)::Dict{String,Any}
     result = Dict{String,Any}(
-        "type" => "couple2",
+        "type" => "couple",
         "systems" => entry.systems,
-        "coupletype_pair" => entry.coupletype_pair,
         "connector" => entry.connector
     )
 

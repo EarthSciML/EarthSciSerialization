@@ -489,8 +489,6 @@ pub enum CouplingEntry {
     Couple2 {
         /// The two systems involved in coupling
         systems: Vec<String>,
-        /// The coupletype names for each system
-        coupletype_pair: Vec<String>,
         /// Connector definition with equations
         connector: serde_json::Value,
         /// Optional description

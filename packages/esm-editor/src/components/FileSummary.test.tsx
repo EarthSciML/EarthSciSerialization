@@ -81,7 +81,7 @@ describe('FileSummary', () => {
         systems: ['TestModel', 'Chemistry']
       },
       {
-        type: 'couple2',
+        type: 'couple',
         systems: ['TestModel', 'Chemistry']
       },
       {

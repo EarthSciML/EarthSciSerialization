@@ -203,14 +203,14 @@ export function component_graph(esmFile: EsmFile): ComponentGraph {
           }
           break;
 
-        case 'couple2':
-          // couple2 connects exactly two systems
+        case 'couple':
+          // couple connects exactly two systems
           if (coupling.systems && coupling.systems.length === 2) {
             edges.push({
               id: edgeId,
               from: coupling.systems[0],
               to: coupling.systems[1],
-              type: 'couple2',
+              type: 'couple',
               label: 'couple',
               description: coupling.description,
               coupling
@@ -758,7 +758,7 @@ export function toDot<N, E>(graph: Graph<N, E>): string {
       const couplingEdge = edge.data as any;
       switch (couplingEdge.type) {
         case 'operator_compose':
-        case 'couple2':
+        case 'couple':
           style = 'solid';
           color = 'blue';
           label = couplingEdge.label || '';
@@ -886,7 +886,7 @@ export function toMermaid<N, E>(graph: Graph<N, E>): string {
           label = formatChemicalSubscripts(couplingEdge.label || '');
           break;
         case 'operator_compose':
-        case 'couple2':
+        case 'couple':
         case 'operator_apply':
         case 'callback':
           arrowStyle = '-->';

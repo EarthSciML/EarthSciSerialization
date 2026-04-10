@@ -160,20 +160,20 @@ describe('CouplingGraph Utilities', () => {
       expect(graph.edges).toHaveLength(0); // No edges
     });
 
-    it('should handle couple2 coupling type', () => {
-      const couple2File: EsmFile = {
+    it('should handle couple coupling type', () => {
+      const coupleFile: EsmFile = {
         ...mockEsmFile,
         coupling: [
           {
-            type: 'couple2',
+            type: 'couple',
             systems: ['Transport', 'Chemistry'],
             description: 'Direct coupling'
           }
         ]
       };
 
-      const graph = component_graph(couple2File);
-      const edge = graph.edges.find(e => e.type === 'couple2');
+      const graph = component_graph(coupleFile);
+      const edge = graph.edges.find(e => e.type === 'couple');
       expect(edge).toBeDefined();
       expect(edge?.from).toBe('Transport');
       expect(edge?.to).toBe('Chemistry');

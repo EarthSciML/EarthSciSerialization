@@ -335,14 +335,10 @@
       "description": "EDGE CASE 12: Map algebraic variable to ODE variable"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "EmptySystem",
         "SingleVariableSystem"
-      ],
-      "coupletype_pair": [
-        "EmptyCoupler",
-        "SingleCoupler"
       ],
       "connector": {
         "equations": [
@@ -353,17 +349,13 @@
           }
         ]
       },
-      "description": "EDGE CASE 13: couple2 with empty connector equations"
+      "description": "EDGE CASE 13: couple with empty connector equations"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "SingleVariableSystem",
         "SingleVariableSystem"
-      ],
-      "coupletype_pair": [
-        "SelfCoupler",
-        "SelfCoupler"
       ],
       "connector": {
         "equations": [
@@ -381,17 +373,13 @@
           }
         ]
       },
-      "description": "EDGE CASE 14: couple2 self-coupling"
+      "description": "EDGE CASE 14: couple self-coupling"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "ConflictingNamesSystem",
         "AlgebraicSystem"
-      ],
-      "coupletype_pair": [
-        "ConflictAlgebraicCoupler",
-        "AlgebraicConflictCoupler"
       ],
       "connector": {
         "equations": [
@@ -415,7 +403,7 @@
           }
         ]
       },
-      "description": "EDGE CASE 15: couple2 with circular dependencies"
+      "description": "EDGE CASE 15: couple with circular dependencies"
     }
   ]
 }

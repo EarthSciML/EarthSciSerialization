@@ -444,14 +444,10 @@
       "description": "Ocean-atmosphere heat exchange using nested scoped references"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphericModel.BoundaryLayer.Chemistry",
         "LandModel.Vegetation.Photosynthesis"
-      ],
-      "coupletype_pair": [
-        "AtmosphericCoupler",
-        "VegetationCoupler"
       ],
       "connector": {
         "equations": [

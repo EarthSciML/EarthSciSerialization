@@ -3,7 +3,9 @@
   "metadata": {
     "name": "CouplingResolutionErrorTests",
     "description": "Error cases for scoped reference resolution algorithm verification",
-    "authors": ["Test Suite"],
+    "authors": [
+      "Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z",
     "notes": [
       "Each coupling entry should produce a specific validation error",
@@ -14,16 +16,25 @@
       "- Type error: Attempting to treat variable as system"
     ]
   },
-
   "models": {
     "ValidModel": {
       "variables": {
-        "valid_var": { "type": "state", "units": "dimensionless", "default": 1.0, "description": "Valid variable" }
+        "valid_var": {
+          "type": "state",
+          "units": "dimensionless",
+          "default": 1.0,
+          "description": "Valid variable"
+        }
       },
       "subsystems": {
         "ValidSubsystem": {
           "variables": {
-            "nested_var": { "type": "parameter", "units": "dimensionless", "default": 2.0, "description": "Nested variable" }
+            "nested_var": {
+              "type": "parameter",
+              "units": "dimensionless",
+              "default": 2.0,
+              "description": "Nested variable"
+            }
           },
           "equations": []
         }
@@ -31,7 +42,6 @@
       "equations": []
     }
   },
-
   "coupling": [
     {
       "type": "variable_map",
@@ -41,7 +51,6 @@
       "description": "ERROR TEST 1: Invalid top-level system - 'NonExistentModel' not found in models/reaction_systems/data_loaders/operators",
       "_expected_error": "undefined_system"
     },
-
     {
       "type": "variable_map",
       "from": "ValidModel.NonExistentSubsystem.valid_var",
@@ -50,7 +59,6 @@
       "description": "ERROR TEST 2: Invalid subsystem - 'NonExistentSubsystem' not found in ValidModel.subsystems",
       "_expected_error": "unresolved_scoped_ref"
     },
-
     {
       "type": "variable_map",
       "from": "ValidModel.ValidSubsystem.nonexistent_var",
@@ -59,7 +67,6 @@
       "description": "ERROR TEST 3: Invalid variable - 'nonexistent_var' not found in ValidSubsystem.variables",
       "_expected_error": "undefined_variable"
     },
-
     {
       "type": "variable_map",
       "from": "ValidModel.valid_var.invalid_deeper_access",
@@ -68,7 +75,6 @@
       "description": "ERROR TEST 4: Type error - 'valid_var' is a variable, not a system with subsystems",
       "_expected_error": "unresolved_scoped_ref"
     },
-
     {
       "type": "variable_map",
       "from": "ValidModel.ValidSubsystem.nested_var.even_deeper_invalid",
@@ -77,61 +83,69 @@
       "description": "ERROR TEST 5: Deep type error - 'nested_var' is a variable, cannot be treated as system",
       "_expected_error": "unresolved_scoped_ref"
     },
-
     {
       "type": "operator_compose",
-      "systems": ["ValidModel", "NonExistentModel"],
+      "systems": [
+        "ValidModel",
+        "NonExistentModel"
+      ],
       "description": "ERROR TEST 6: Operator compose with invalid system reference",
       "_expected_error": "undefined_system"
     },
-
     {
-      "type": "couple2",
-      "systems": ["ValidModel.ValidSubsystem", "NonExistentModel.SomeSubsystem"],
-      "coupletype_pair": ["ValidCoupler", "NonExistentCoupler"],
+      "type": "couple",
+      "systems": [
+        "ValidModel.ValidSubsystem",
+        "NonExistentModel.SomeSubsystem"
+      ],
       "connector": {
         "equations": [
           {
             "from": "ValidModel.ValidSubsystem.nested_var",
             "to": "NonExistentModel.SomeSubsystem.some_var",
             "transform": "additive",
-            "expression": { "op": "+", "args": [1.0, "ValidModel.ValidSubsystem.nested_var"] }
+            "expression": {
+              "op": "+",
+              "args": [
+                1.0,
+                "ValidModel.ValidSubsystem.nested_var"
+              ]
+            }
           }
         ]
       },
-      "description": "ERROR TEST 7: couple2 with invalid target system in both systems list and connector equation",
+      "description": "ERROR TEST 7: couple with invalid target system in both systems list and connector equation",
       "_expected_error": "undefined_system"
     }
   ],
-
   "_error_verification_matrix": {
     "resolution_algorithm_error_points": [
       {
         "error_step": "Step 4: Find top-level system",
         "test_cases": [
-          "NonExistentModel.valid_var → undefined_system",
-          "ValidModel → success (control case)"
+          "NonExistentModel.valid_var \u2192 undefined_system",
+          "ValidModel \u2192 success (control case)"
         ]
       },
       {
         "error_step": "Step 5: Find subsystem in parent",
         "test_cases": [
-          "ValidModel.NonExistentSubsystem.var → unresolved_scoped_ref",
-          "ValidModel.ValidSubsystem → success (control case)"
+          "ValidModel.NonExistentSubsystem.var \u2192 unresolved_scoped_ref",
+          "ValidModel.ValidSubsystem \u2192 success (control case)"
         ]
       },
       {
         "error_step": "Step 6: Find variable in target system",
         "test_cases": [
-          "ValidModel.ValidSubsystem.nonexistent_var → undefined_variable",
-          "ValidModel.ValidSubsystem.nested_var → success (control case)"
+          "ValidModel.ValidSubsystem.nonexistent_var \u2192 undefined_variable",
+          "ValidModel.ValidSubsystem.nested_var \u2192 success (control case)"
         ]
       },
       {
         "error_step": "Type checking: Variable vs System",
         "test_cases": [
-          "ValidModel.valid_var.invalid_access → unresolved_scoped_ref (valid_var is variable, not system)",
-          "ValidModel.ValidSubsystem.nested_var.deeper → unresolved_scoped_ref (nested_var is variable, not system)"
+          "ValidModel.valid_var.invalid_access \u2192 unresolved_scoped_ref (valid_var is variable, not system)",
+          "ValidModel.ValidSubsystem.nested_var.deeper \u2192 unresolved_scoped_ref (nested_var is variable, not system)"
         ]
       }
     ],

@@ -614,14 +614,10 @@
       "description": "STEP 6: Add surface NOx emissions to NO equation"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphereChemistry",
         "OceanBiogeochemistry"
-      ],
-      "coupletype_pair": [
-        "AtmosphereOceanCoupler",
-        "OceanAtmosphereCoupler"
       ],
       "connector": {
         "equations": [
@@ -648,14 +644,10 @@
       "description": "STEP 7: Couple atmosphere and ocean through gas exchange"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphereChemistry",
         "LandVegetation"
-      ],
-      "coupletype_pair": [
-        "AtmosphereLandCoupler",
-        "LandAtmosphereCoupler"
       ],
       "connector": {
         "equations": [

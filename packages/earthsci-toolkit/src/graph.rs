@@ -126,7 +126,7 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
                         (
                             systems[0].clone(),
                             systems[1].clone(),
-                            "couple2".to_string(),
+                            "couple".to_string(),
                         )
                     } else {
                         continue; // Skip invalid coupling
