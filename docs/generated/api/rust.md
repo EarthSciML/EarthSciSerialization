@@ -1,6 +1,6 @@
 # Rust API Reference
 
-Complete API reference for the earthsci-toolkit Rust library.
+Complete API reference for the ESM Format Rust library.
 
 ## Functions
 
