@@ -1235,5 +1235,715 @@
       }
     ],
     "is_valid": false
+  },
+
+  "malformed_json.esm": {
+    "parse_error": true,
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": false,
+    "notes": "File contains invalid JSON (missing comma, JS-style comments, unclosed brace). Validators should reject at the parse stage before schema or structural validation."
+  },
+
+  "negative_stoichiometry.esm": {
+    "schema_errors": [
+      {
+        "path": "/reaction_systems/TestRxns/reactions/0/substrates/0/stoichiometry",
+        "message": "Value -1 is less than the minimum allowed value of 1",
+        "keyword": "minimum"
+      },
+      {
+        "path": "/reaction_systems/TestRxns/reactions/0/products/0/stoichiometry",
+        "message": "Value 0 is less than the minimum allowed value of 1",
+        "keyword": "minimum"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "no_systems.esm": {
+    "schema_errors": [
+      {
+        "path": "",
+        "message": "Must satisfy at least one of: required property 'models' or required property 'reaction_systems'",
+        "keyword": "anyOf"
+      },
+      {
+        "path": "/data_loaders/weather/type",
+        "message": "Value 'netcdf' not in enum: [gridded_data, emissions, timeseries, static, callback]",
+        "keyword": "enum"
+      },
+      {
+        "path": "/data_loaders/weather",
+        "message": "Additional property 'path' is not allowed",
+        "keyword": "additionalProperties"
+      },
+      {
+        "path": "/data_loaders/weather",
+        "message": "Additional property 'provides_vars' is not allowed",
+        "keyword": "additionalProperties"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false
+  },
+
+  "invalid_trigger_type.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/SimpleModel",
+        "message": "Additional property 'events' is not allowed",
+        "keyword": "additionalProperties"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "notes": "The 'events' key is not valid on Model; use 'discrete_events' or 'continuous_events' instead."
+  },
+
+  "reaction_undefined_species.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/reaction_systems/TestRxns/reactions/0",
+        "code": "undefined_species",
+        "message": "Species 'UndefinedSpecies' referenced in reaction substrates is not declared",
+        "details": {
+          "species": "UndefinedSpecies",
+          "reaction_id": "R1",
+          "location": "substrates",
+          "expected_in": "species"
+        }
+      },
+      {
+        "path": "/reaction_systems/TestRxns/reactions/0",
+        "code": "undefined_species",
+        "message": "Species 'NO2' referenced in reaction products is not declared",
+        "details": {
+          "species": "NO2",
+          "reaction_id": "R1",
+          "location": "products",
+          "expected_in": "species"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "subsystem_ref_not_found.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/Atmosphere/subsystems/Missing",
+        "code": "ref_not_found",
+        "message": "Subsystem reference './does_not_exist.esm' could not be resolved — file does not exist",
+        "details": {
+          "ref": "./does_not_exist.esm",
+          "subsystem": "Missing",
+          "parent_model": "Atmosphere"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "subsystem_ref_ambiguous.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ClimateModel/subsystems/Atm",
+        "code": "ref_ambiguous_system",
+        "message": "Subsystem reference '../scoping/nested_subsystems.esm' resolves to a file containing multiple top-level systems; exactly one is required",
+        "details": {
+          "ref": "../scoping/nested_subsystems.esm",
+          "subsystem": "Atm",
+          "parent_model": "ClimateModel"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "bare_reference_errors.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'temperature' cannot be resolved — bare references require a system prefix in coupling context",
+        "details": {
+          "reference": "temperature",
+          "coupling_type": "variable_map",
+          "location": "from"
+        }
+      },
+      {
+        "path": "/coupling/1",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'density' cannot be resolved — bare references require a system prefix in coupling context",
+        "details": {
+          "reference": "density",
+          "coupling_type": "variable_map",
+          "location": "to"
+        }
+      },
+      {
+        "path": "/coupling/2",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'temperature' in operator_compose translate cannot be resolved — must be fully scoped",
+        "details": {
+          "reference": "temperature",
+          "coupling_type": "operator_compose",
+          "location": "translate"
+        }
+      },
+      {
+        "path": "/coupling/3",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'temperature' in coupling event condition cannot be resolved — bare references not allowed in coupling context",
+        "details": {
+          "reference": "temperature",
+          "coupling_type": "event",
+          "event_name": "invalid_bare_condition",
+          "location": "condition"
+        }
+      },
+      {
+        "path": "/coupling/4",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'velocity' in coupling event affects cannot be resolved — bare references not allowed in coupling context",
+        "details": {
+          "reference": "velocity",
+          "coupling_type": "event",
+          "event_name": "invalid_bare_affects",
+          "location": "affects"
+        }
+      },
+      {
+        "path": "/coupling/5",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'pressure' in couple connector expression cannot be resolved — bare references not allowed in coupling context",
+        "details": {
+          "reference": "pressure",
+          "coupling_type": "couple",
+          "location": "connector"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "coupling_resolution_errors.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentModel'",
+        "details": {
+          "system": "NonExistentModel",
+          "coupling_type": "variable_map",
+          "reference": "NonExistentModel.valid_var",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      },
+      {
+        "path": "/coupling/1",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'ValidModel.NonExistentSubsystem.valid_var' cannot be resolved",
+        "details": {
+          "reference": "ValidModel.NonExistentSubsystem.valid_var",
+          "coupling_type": "variable_map",
+          "missing_component": "NonExistentSubsystem"
+        }
+      },
+      {
+        "path": "/coupling/2",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'ValidModel.ValidSubsystem.nonexistent_var' cannot be resolved",
+        "details": {
+          "reference": "ValidModel.ValidSubsystem.nonexistent_var",
+          "coupling_type": "variable_map",
+          "missing_component": "nonexistent_var"
+        }
+      },
+      {
+        "path": "/coupling/3",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'ValidModel.valid_var.invalid_deeper_access' cannot be resolved",
+        "details": {
+          "reference": "ValidModel.valid_var.invalid_deeper_access",
+          "coupling_type": "variable_map",
+          "missing_component": "invalid_deeper_access"
+        }
+      },
+      {
+        "path": "/coupling/4",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'ValidModel.ValidSubsystem.nested_var.even_deeper_invalid' cannot be resolved",
+        "details": {
+          "reference": "ValidModel.ValidSubsystem.nested_var.even_deeper_invalid",
+          "coupling_type": "variable_map",
+          "missing_component": "even_deeper_invalid"
+        }
+      },
+      {
+        "path": "/coupling/5",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentModel'",
+        "details": {
+          "system": "NonExistentModel",
+          "coupling_type": "operator_compose",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      },
+      {
+        "path": "/coupling/6",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentModel'",
+        "details": {
+          "system": "NonExistentModel",
+          "coupling_type": "couple",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "scoped_reference_resolution_errors.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
+        "details": {
+          "system": "NonExistentSystem",
+          "coupling_type": "variable_map",
+          "reference": "NonExistentSystem.some_var",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      },
+      {
+        "path": "/coupling/1",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.NonExistentSubsystem.some_var' cannot be resolved",
+        "details": {
+          "reference": "SystemA.NonExistentSubsystem.some_var",
+          "coupling_type": "variable_map",
+          "missing_component": "NonExistentSubsystem"
+        }
+      },
+      {
+        "path": "/coupling/2",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.nonexistent_var' cannot be resolved",
+        "details": {
+          "reference": "SystemA.nonexistent_var",
+          "coupling_type": "variable_map",
+          "missing_component": "nonexistent_var"
+        }
+      },
+      {
+        "path": "/coupling/3",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.SubsystemB.nonexistent_nested_var' cannot be resolved",
+        "details": {
+          "reference": "SystemA.SubsystemB.nonexistent_nested_var",
+          "coupling_type": "variable_map",
+          "missing_component": "nonexistent_nested_var"
+        }
+      },
+      {
+        "path": "/coupling/4",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.SubsystemB.NonExistentDeeperLevel.some_var' cannot be resolved",
+        "details": {
+          "reference": "SystemA.SubsystemB.NonExistentDeeperLevel.some_var",
+          "coupling_type": "variable_map",
+          "missing_component": "NonExistentDeeperLevel"
+        }
+      },
+      {
+        "path": "/coupling/5",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.SubsystemB.NonExistentVar' in event condition cannot be resolved",
+        "details": {
+          "reference": "SystemA.SubsystemB.NonExistentVar",
+          "coupling_type": "event",
+          "event_name": "invalid_condition_reference",
+          "location": "condition"
+        }
+      },
+      {
+        "path": "/coupling/6",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.SubsystemB.NonExistentTarget' in event affects cannot be resolved",
+        "details": {
+          "reference": "SystemA.SubsystemB.NonExistentTarget",
+          "coupling_type": "event",
+          "event_name": "invalid_affects_reference",
+          "location": "affects"
+        }
+      },
+      {
+        "path": "/coupling/7",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.NonExistentSubsystem' in operator_compose systems cannot be resolved",
+        "details": {
+          "reference": "SystemA.NonExistentSubsystem",
+          "coupling_type": "operator_compose"
+        }
+      },
+      {
+        "path": "/coupling/8",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.NonExistentVar' in operator_compose translate cannot be resolved",
+        "details": {
+          "reference": "SystemA.NonExistentVar",
+          "coupling_type": "operator_compose",
+          "location": "translate"
+        }
+      },
+      {
+        "path": "/coupling/9",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
+        "details": {
+          "system": "NonExistentSystem",
+          "coupling_type": "couple",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      },
+      {
+        "path": "/coupling/10",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'SystemA.NonExistentVar' in couple connector cannot be resolved",
+        "details": {
+          "reference": "SystemA.NonExistentVar",
+          "coupling_type": "couple",
+          "location": "connector"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "event_error_conditions.esm": {
+    "schema_errors": [
+      {
+        "path": "/models/ErrorTestModel/discrete_events/0/trigger/type",
+        "message": "Value 'invalid_trigger_type' is not one of the allowed trigger types",
+        "keyword": "enum"
+      },
+      {
+        "path": "/models/ErrorTestModel/discrete_events/2/trigger",
+        "message": "Periodic trigger is missing required field 'interval'",
+        "keyword": "required"
+      },
+      {
+        "path": "/models/ErrorTestModel/discrete_events/3/trigger/times",
+        "message": "Preset times array must contain at least one time value",
+        "keyword": "minItems"
+      },
+      {
+        "path": "/models/ErrorTestModel/discrete_events/6",
+        "message": "Event must have either 'affects' or 'functional_affect', but not both",
+        "keyword": "oneOf"
+      }
+    ],
+    "structural_errors": [
+      {
+        "path": "/models/ErrorTestModel/continuous_events/0",
+        "code": "event_var_undeclared",
+        "message": "Event condition references undefined variable 'undefined_variable'",
+        "details": {
+          "variable": "undefined_variable",
+          "event_type": "continuous",
+          "location": "condition"
+        }
+      },
+      {
+        "path": "/models/ErrorTestModel/continuous_events/1",
+        "code": "event_var_undeclared",
+        "message": "Event affect targets undefined variable 'undefined_target'",
+        "details": {
+          "variable": "undefined_target",
+          "event_type": "continuous",
+          "location": "affects"
+        }
+      },
+      {
+        "path": "/models/ErrorTestModel/continuous_events/2",
+        "code": "invalid_pre_usage",
+        "message": "Pre() operator is not allowed in event conditions, only in affect equations",
+        "details": {
+          "location": "condition"
+        }
+      },
+      {
+        "path": "/models/ErrorTestModel/continuous_events/3",
+        "code": "undeclared_discrete_parameter",
+        "message": "Event modifies parameter 'valid_param' but parameter is not listed in discrete_parameters",
+        "details": {
+          "parameter": "valid_param"
+        }
+      },
+      {
+        "path": "/models/ErrorTestModel/discrete_events/0",
+        "code": "invalid_discrete_param",
+        "message": "discrete_parameters includes undefined parameter 'nonexistent_param'",
+        "details": {
+          "parameter": "nonexistent_param",
+          "event_type": "discrete"
+        }
+      },
+      {
+        "path": "/models/ErrorTestModel/discrete_events/4",
+        "code": "event_var_undeclared",
+        "message": "Functional affect read_vars includes undefined variable 'undefined_variable'",
+        "details": {
+          "variable": "undefined_variable",
+          "event_type": "discrete",
+          "location": "functional_affect.read_vars"
+        }
+      },
+      {
+        "path": "/models/ErrorTestModel/discrete_events/4",
+        "code": "undefined_parameter",
+        "message": "Functional affect modified_params includes undefined parameter 'another_undefined_param'",
+        "details": {
+          "parameter": "another_undefined_param",
+          "event_type": "discrete",
+          "location": "functional_affect.modified_params"
+        }
+      },
+      {
+        "path": "/coupling/0",
+        "code": "undefined_system",
+        "message": "Cross-system event references nonexistent model 'NonexistentModel'",
+        "details": {
+          "system": "NonexistentModel",
+          "coupling_type": "event"
+        }
+      },
+      {
+        "path": "/coupling/1",
+        "code": "undeclared_discrete_parameter",
+        "message": "Cross-system event modifies parameter but missing discrete_parameters declaration",
+        "details": {
+          "coupling_type": "event"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "scoped_ref_errors.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'TestSystem.ValidSubsystem.non_existent_source' cannot be resolved",
+        "details": {
+          "reference": "TestSystem.ValidSubsystem.non_existent_source",
+          "coupling_type": "variable_map",
+          "missing_component": "non_existent_source"
+        }
+      },
+      {
+        "path": "/coupling/1",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
+        "details": {
+          "system": "NonExistentSystem",
+          "coupling_type": "variable_map",
+          "reference": "NonExistentSystem.some_var",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "This file uses the non-standard 'scoped_ref' expression syntax. Whether that produces schema errors depends on how strict the Expression schema is. The coupling entries contain the canonical structural errors."
+  },
+
+  "comprehensive_coupling_resolution_errors.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
+        "details": {
+          "system": "NonExistentSystem",
+          "coupling_type": "operator_compose",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      },
+      {
+        "path": "/coupling/1",
+        "code": "unresolved_scoped_ref",
+        "message": "Translation target 'nonexistent_variable' not found in ValidDataLoader",
+        "details": {
+          "reference": "nonexistent_variable",
+          "coupling_type": "operator_compose",
+          "location": "translate"
+        }
+      },
+      {
+        "path": "/coupling/3",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'ValidDataLoader.nonexistent_var' cannot be resolved",
+        "details": {
+          "reference": "ValidDataLoader.nonexistent_var",
+          "coupling_type": "variable_map",
+          "missing_component": "nonexistent_var"
+        }
+      },
+      {
+        "path": "/coupling/4",
+        "code": "unresolved_scoped_ref",
+        "message": "Scoped reference 'ValidSystem.nonexistent_param' cannot be resolved",
+        "details": {
+          "reference": "ValidSystem.nonexistent_param",
+          "coupling_type": "variable_map",
+          "missing_component": "nonexistent_param"
+        }
+      },
+      {
+        "path": "/coupling/8",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
+        "details": {
+          "system": "NonExistentSystem",
+          "coupling_type": "couple",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      },
+      {
+        "path": "/coupling/9",
+        "code": "unresolved_scoped_ref",
+        "message": "Connector equation 'from' reference 'ValidSystem.nonexistent_var' cannot be resolved",
+        "details": {
+          "reference": "ValidSystem.nonexistent_var",
+          "coupling_type": "couple",
+          "location": "connector"
+        }
+      },
+      {
+        "path": "/coupling/10",
+        "code": "unresolved_scoped_ref",
+        "message": "Connector equation 'to' reference 'IncompatibleUnitsSystem.nonexistent_target' cannot be resolved",
+        "details": {
+          "reference": "IncompatibleUnitsSystem.nonexistent_target",
+          "coupling_type": "couple",
+          "location": "connector"
+        }
+      },
+      {
+        "path": "/coupling/13",
+        "code": "undefined_operator",
+        "message": "Operator 'NonExistentOperator' referenced in operator_apply coupling is not declared",
+        "details": {
+          "operator": "NonExistentOperator",
+          "coupling_type": "operator_apply",
+          "expected_in": "operators"
+        }
+      },
+      {
+        "path": "/coupling/14",
+        "code": "undefined_system",
+        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
+        "details": {
+          "system": "NonExistentSystem",
+          "coupling_type": "operator_apply",
+          "expected_in": "models, reaction_systems, data_loaders, operators"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "This file contains 20 annotated error cases. Some entries may also produce schema errors (e.g., invalid enum values for transform, invalid coupling types) depending on the validator. The structural errors listed here are the errors that survive schema-valid entries."
+  },
+
+  "units_coupling_mismatch.esm": {
+    "schema_errors": [
+      {
+        "path": "/coupling/0/transform",
+        "message": "Value 'direct_map' not in enum: [param_to_var, identity, additive, multiplicative, conversion_factor]",
+        "keyword": "enum"
+      }
+    ],
+    "structural_errors": [
+      {
+        "path": "/coupling/0",
+        "code": "unit_inconsistency",
+        "message": "Variable mapping between systems has incompatible units",
+        "details": {
+          "coupling_type": "variable_map",
+          "from": "SystemA.pressure",
+          "from_units": "Pa",
+          "to": "SystemB.temperature",
+          "to_units": "K",
+          "transform": "direct_map"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_incompatible_assignment.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Left-hand side has units 'm/s' but right-hand side has units 'kg'",
+        "details": {
+          "lhs_units": "m/s",
+          "rhs_units": "kg",
+          "equation_index": 0
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_inconsistent_addition.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_sum",
+        "code": "unit_inconsistency",
+        "message": "Cannot add quantities with different units: 'm' + 'kg'",
+        "details": {
+          "operation": "addition",
+          "left_units": "m",
+          "right_units": "kg",
+          "variable": "invalid_sum"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_logarithm.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_log",
+        "code": "unit_inconsistency",
+        "message": "Logarithm argument must be dimensionless, got units 'kg'",
+        "details": {
+          "operation": "logarithm",
+          "function": "ln",
+          "argument_units": "kg",
+          "variable": "invalid_log"
+        }
+      }
+    ],
+    "is_valid": false
   }
 }
