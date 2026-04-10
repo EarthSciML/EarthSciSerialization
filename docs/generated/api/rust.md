@@ -362,7 +362,7 @@ Check dimensional consistency of an equation
 
 ### component_exists
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:211`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:207`
 
 **Signature:**
 ```rust
@@ -727,7 +727,7 @@ pub fn evaluate_fast(&self, variables: &HashMap<String, f64>) -> Result<f64, Per
 
 ### expression_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:363`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:359`
 
 **Signature:**
 ```rust
@@ -854,7 +854,7 @@ Create a compact expression from a standard expression
 
 ### get_component_type
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:254`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:250`
 
 **Signature:**
 ```rust
@@ -2035,7 +2035,7 @@ pub fn to_ascii(json_str: &str) -> Result<String, JsValue> {
 
 ### to_dot
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:760`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:756`
 
 **Signature:**
 ```rust
@@ -2057,7 +2057,7 @@ Export graph to DOT format for Graphviz
 
 ### to_dot
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:843`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:839`
 
 **Signature:**
 ```rust
@@ -2079,7 +2079,7 @@ Export graph to DOT format for Graphviz
 
 ### to_json_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:832`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:828`
 
 **Signature:**
 ```rust
@@ -2097,7 +2097,7 @@ Export graph to JSON format
 
 ### to_json_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:919`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:915`
 
 **Signature:**
 ```rust
@@ -2140,7 +2140,7 @@ pub fn to_latex(json_str: &str) -> Result<String, JsValue> {
 
 ### to_mermaid
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:800`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:796`
 
 **Signature:**
 ```rust
@@ -2162,7 +2162,7 @@ Export graph to Mermaid format
 
 ### to_mermaid
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:888`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:884`
 
 **Signature:**
 ```rust
@@ -2553,7 +2553,7 @@ pub struct DataLoader {
 
 ### DependencyEdge
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:325`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:321`
 
 **Definition:**
 ```rust
@@ -2632,7 +2632,7 @@ pub struct EsmFile {
 
 ### ExpressionGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:288`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:284`
 
 **Definition:**
 ```rust
@@ -2983,7 +2983,7 @@ pub struct VariableMapping {
 
 ### VariableNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:297`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.rs:293`
 
 **Definition:**
 ```rust
