@@ -204,14 +204,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "algorithm": "Tsit5",
-      "adaptive": true,
-      "event_handling": "precise_callbacks"
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

@@ -37,10 +37,6 @@ pub struct EsmFile {
     /// Spatial/temporal domain specification
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<Domain>,
-
-    /// Solver strategy and configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub solver: Option<Solver>,
 }
 
 /// Academic citation or data source reference
@@ -588,15 +584,4 @@ pub struct Domain {
     /// Temporal domain
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temporal: Option<serde_json::Value>,
-}
-
-/// Solver configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Solver {
-    /// Solver strategy
-    pub strategy: String,
-
-    /// Strategy-specific configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub config: Option<serde_json::Value>,
 }

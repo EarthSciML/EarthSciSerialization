@@ -448,16 +448,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "base_algorithm": "Tsit5",
-      "event_detection": "root_finding",
-      "event_tolerance": 1e-12,
-      "adaptive": true,
-      "root_finding_method": "Illinois"
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

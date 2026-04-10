@@ -260,22 +260,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "imex",
-    "config": {
-      "stiff_algorithm": "QNDF",
-      "nonstiff_algorithm": "Vern7",
-      "timestep": 10.0,
-      "stiff_kwargs": {
-        "abstol": 1e-09,
-        "reltol": 1e-06
-      },
-      "nonstiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-05
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

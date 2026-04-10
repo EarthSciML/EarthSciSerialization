@@ -5,7 +5,7 @@ import pytest
 
 from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, DataLoader, DataLoaderType, Operator,
-    VariableMapCoupling, CouplingType, Solver, SolverType, ContinuousEvent, AffectEquation
+    VariableMapCoupling, CouplingType, ContinuousEvent, AffectEquation
 )
 from earthsci_toolkit.serialize import save
 
@@ -44,7 +44,6 @@ def test_roundtrip_preserves_data_loaders():
         operators=[],
         coupling=[],
         domains={},
-        solver=None
     )
 
     # Serialize to JSON
@@ -94,7 +93,6 @@ def test_roundtrip_preserves_operators():
         operators=[operator],
         coupling=[],
         domains={},
-        solver=None
     )
 
     # Serialize to JSON
@@ -143,7 +141,6 @@ def test_roundtrip_preserves_couplings():
         operators=[],
         coupling=[coupling],
         domains={},
-        solver=None
     )
 
     # Serialize to JSON
@@ -158,56 +155,6 @@ def test_roundtrip_preserves_couplings():
     assert coupling_data["type"] == "variable_map"
     assert coupling_data["from"] == "model1.x"
     assert coupling_data["to"] == "model2.y"
-
-
-def test_roundtrip_preserves_solvers():
-    """Test that solvers are preserved through serialization."""
-    metadata = Metadata(
-        title="Solver Test",
-        description="Test solver preservation",
-        authors=[],
-        created=None,
-        modified=None,
-        version="1.0",
-        references=[],
-        keywords=[]
-    )
-
-    # Create solver
-    solver = Solver(
-        name="test_solver",
-        type=SolverType.ODE,
-        algorithm="imex",
-        parameters={"max_steps": 1000},
-        tolerances={"absolute": 1e-8, "relative": 1e-6}
-    )
-
-    # Create ESM file
-    esm_file = EsmFile(
-        version="0.1.0",
-        metadata=metadata,
-        models={},
-        reaction_systems={},
-        events=[],
-        data_loaders=[],
-        operators=[],
-        coupling=[],
-        domains={},
-        solver=solver
-    )
-
-    # Serialize to JSON
-    json_str = save(esm_file)
-    data = json.loads(json_str)
-
-    # Verify solver field is present
-    assert "solver" in data
-
-    solver_data = data["solver"]
-    assert solver_data["strategy"] == "imex"
-    assert solver_data["config"]["max_steps"] == 1000
-    assert solver_data["config"]["stiff_kwargs"]["abstol"] == 1e-8
-    assert solver_data["config"]["stiff_kwargs"]["reltol"] == 1e-6
 
 
 def test_roundtrip_preserves_events():
@@ -242,7 +189,6 @@ def test_roundtrip_preserves_events():
         operators=[],
         coupling=[],
         domains={},
-        solver=None
     )
 
     # Serialize to JSON
@@ -294,14 +240,6 @@ def test_roundtrip_preserves_all_missing_fields():
         to_var="m2.b",
     )
 
-    solver = Solver(
-        name="solver",
-        type=SolverType.ODE,
-        algorithm="strang_serial",
-        parameters={},
-        tolerances={}
-    )
-
     event = ContinuousEvent(
         name="event",
         conditions=["t > 10"],  # Changed to array
@@ -320,7 +258,6 @@ def test_roundtrip_preserves_all_missing_fields():
         operators=[operator],
         coupling=[coupling],
         domains={},
-        solver=solver
     )
 
     # Serialize to JSON
@@ -331,12 +268,10 @@ def test_roundtrip_preserves_all_missing_fields():
     assert "data_loaders" in data
     assert "operators" in data
     assert "coupling" in data
-    assert "solver" in data
     assert "continuous_events" in data
 
     # Verify they have the expected content
     assert "loader" in data["data_loaders"]
     assert "operator" in data["operators"]
     assert len(data["coupling"]) == 1
-    assert data["solver"]["strategy"] == "strang_serial"
     assert len(data["continuous_events"]) == 1

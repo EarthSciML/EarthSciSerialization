@@ -1720,26 +1720,6 @@
       "description": "Accelerate leaf senescence in autumn when temperature drops below 5\u00b0C"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "energy_balance_timestep": 300.0,
-      "hydrology_timestep": 1800.0,
-      "vegetation_timestep": 3600.0,
-      "stiff_algorithm": "CVODE_BDF",
-      "nonstiff_algorithm": "Vern7",
-      "stiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-06,
-        "maxord": 5
-      },
-      "adaptive_timestepping": {
-        "enabled": true,
-        "min_timestep": 60.0,
-        "max_timestep": 7200.0
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

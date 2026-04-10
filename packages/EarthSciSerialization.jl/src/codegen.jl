@@ -72,13 +72,6 @@ function to_julia_code(file::EsmFile)
         push!(lines, "")
     end
 
-    # Generate solver as TODO comment
-    if !isnothing(file.solver)
-        push!(lines, "# Solver (TODO)")
-        append!(lines, generate_solver_comment(file.solver))
-        push!(lines, "")
-    end
-
     # Generate data loaders as TODO comments
     if !isnothing(file.data_loaders) && !isempty(file.data_loaders)
         push!(lines, "# Data Loaders (TODO)")
@@ -158,12 +151,6 @@ function to_python_code(file::EsmFile)
     if !isnothing(file.domain)
         push!(lines, "# Domain (TODO)")
         append!(lines, generate_python_domain_comment(file.domain))
-        push!(lines, "")
-    end
-
-    if !isnothing(file.solver)
-        push!(lines, "# Solver (TODO)")
-        append!(lines, generate_python_solver_comment(file.solver))
         push!(lines, "")
     end
 
@@ -295,13 +282,6 @@ function generate_domain_comment(domain::Domain)
         coords = domain.spatial["coordinates"]
         push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
     end
-    return lines
-end
-
-function generate_solver_comment(solver::Solver)
-    lines = String[]
-    push!(lines, "# TODO: Implement solver")
-    push!(lines, "#   Strategy: $(solver.strategy)")
     return lines
 end
 
@@ -622,13 +602,6 @@ function generate_python_domain_comment(domain::Domain)
         coords = domain.spatial["coordinates"]
         push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
     end
-    return lines
-end
-
-function generate_python_solver_comment(solver::Solver)
-    lines = String[]
-    push!(lines, "# TODO: Implement solver")
-    push!(lines, "#   Strategy: $(solver.strategy)")
     return lines
 end
 

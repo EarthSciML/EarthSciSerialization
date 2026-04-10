@@ -209,53 +209,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 6,
-      "stiff_algorithm": "QNDF",
-      "nonstiff_algorithm": "Vern7",
-      "timestep": 1.0,
-      "stiff_kwargs": {
-        "abstol": 1e-12,
-        "reltol": 1e-09,
-        "maxiters": 10000,
-        "dtmax": 0.1
-      },
-      "nonstiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-05,
-        "dtmax": 1.0
-      },
-      "map_algorithm": "threads",
-      "operator_splitting": {
-        "chemistry_timestep": 0.1,
-        "transport_timestep": 1.0
-      },
-      "load_balancing": {
-        "enabled": true,
-        "chunk_size": 50,
-        "dynamic_scheduling": true
-      },
-      "adaptive_timestepping": {
-        "enabled": true,
-        "min_timestep": 1e-06,
-        "max_timestep": 10.0,
-        "safety_factor": 0.8,
-        "error_estimator": "embedded"
-      },
-      "performance_monitoring": {
-        "enabled": true,
-        "log_frequency": 100,
-        "track_metrics": [
-          "walltime",
-          "iterations",
-          "rejections",
-          "function_evaluations"
-        ]
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

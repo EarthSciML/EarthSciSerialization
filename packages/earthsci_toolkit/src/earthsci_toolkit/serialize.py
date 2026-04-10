@@ -14,7 +14,7 @@ from .esm_types import (
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator,
-    CouplingEntry, CouplingType, Domain, Solver, SolverType,
+    CouplingEntry, CouplingType, Domain,
     OperatorComposeCoupling, Couple2Coupling, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
@@ -481,35 +481,6 @@ def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
     return result
 
 
-def _serialize_solver(solver: Solver) -> Dict[str, Any]:
-    """Serialize a solver to JSON-compatible format."""
-    result = {}
-
-    # Schema uses strategy for algorithm
-    if solver.algorithm:
-        result["strategy"] = solver.algorithm
-
-    # Schema uses config for parameters
-    config = {}
-    if solver.parameters:
-        config.update(solver.parameters)
-
-    # Add tolerances to config
-    if solver.tolerances:
-        stiff_kwargs = {}
-        if "absolute" in solver.tolerances:
-            stiff_kwargs["abstol"] = solver.tolerances["absolute"]
-        if "relative" in solver.tolerances:
-            stiff_kwargs["reltol"] = solver.tolerances["relative"]
-        if stiff_kwargs:
-            config["stiff_kwargs"] = stiff_kwargs
-
-    if config:
-        result["config"] = config
-
-    return result
-
-
 def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     """Serialize an ESM file to JSON-compatible format."""
     result = {
@@ -569,10 +540,6 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             _serialize_coupling_entry(coupling)
             for coupling in esm_file.coupling
         ]
-
-    # Serialize solver
-    if esm_file.solver:
-        result["solver"] = _serialize_solver(esm_file.solver)
 
     # Serialize events
     if esm_file.events:

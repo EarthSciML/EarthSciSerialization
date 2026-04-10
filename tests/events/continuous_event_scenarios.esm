@@ -733,13 +733,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 0.01
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

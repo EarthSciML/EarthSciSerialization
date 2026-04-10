@@ -306,14 +306,6 @@
       "description": "Compose chemistry with turbulent mixing"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "timestep": 60.0,
-      "rtol": 1e-06,
-      "atol": 1e-08
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

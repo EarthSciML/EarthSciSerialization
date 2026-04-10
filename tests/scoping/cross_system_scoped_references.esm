@@ -540,14 +540,6 @@
       "description": "Complex cascading coupling using multiple cross-system nested scoped references"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 4,
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 1800.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

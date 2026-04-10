@@ -63,17 +63,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 300.0,
-      "stiff_kwargs": {
-        "abstol": 1e-09,
-        "reltol": 1e-06
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

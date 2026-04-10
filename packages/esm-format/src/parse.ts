@@ -95,8 +95,7 @@ const schema = {
       "type": "object",
       "description": "Named coupling interfaces between domains.",
       "additionalProperties": { "$ref": "#/$defs/Interface" }
-    },
-    "solver": { "$ref": "#/$defs/Solver" }
+    }
   },
 
   "$defs": {
@@ -1114,40 +1113,6 @@ const schema = {
           "type": "string",
           "description": "Array backend (e.g., \"Array\", \"CuArray\").",
           "default": "Array"
-        }
-      }
-    },
-
-    "Solver": {
-      "type": "object",
-      "description": "Solver strategy for time integration.",
-      "required": ["strategy"],
-      "additionalProperties": false,
-      "properties": {
-        "strategy": {
-          "type": "string",
-          "enum": ["strang_threads", "strang_serial", "imex"],
-          "description": "Solver strategy."
-        },
-        "config": {
-          "type": "object",
-          "description": "Strategy-specific configuration.",
-          "additionalProperties": true,
-          "properties": {
-            "threads": { "type": "integer", "minimum": 1 },
-            "stiff_algorithm": { "type": "string" },
-            "nonstiff_algorithm": { "type": "string" },
-            "timestep": { "type": "number", "exclusiveMinimum": 0 },
-            "stiff_kwargs": {
-              "type": "object",
-              "additionalProperties": true,
-              "properties": {
-                "abstol": { "type": "number" },
-                "reltol": { "type": "number" }
-              }
-            },
-            "map_algorithm": { "type": "string" }
-          }
         }
       }
     }

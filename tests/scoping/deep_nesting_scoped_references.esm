@@ -352,18 +352,6 @@
       "description": "Maximum depth couple using 7-level scoped references throughout"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 8,
-      "stiff_algorithm": "Rodas5",
-      "timestep": 300.0,
-      "stiff_kwargs": {
-        "abstol": 1e-12,
-        "reltol": 1e-10
-      }
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

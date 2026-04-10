@@ -192,14 +192,6 @@
       }
     }
   ],
-  "solver": {
-    "strategy": "imex",
-    "config": {
-      "algorithm": "NewtonKrylov",
-      "tolerance": 1e-08,
-      "coupling_iteration": "picard"
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

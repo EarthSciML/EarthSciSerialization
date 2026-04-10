@@ -328,13 +328,6 @@
       "transform": "param_to_var"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "algorithm": "Tsit5",
-      "adaptive": true
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

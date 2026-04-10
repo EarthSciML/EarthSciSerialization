@@ -515,17 +515,6 @@
       "transform": "param_to_var"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "algorithm": "CVODE_BDF",
-      "timestep": 60.0,
-      "tolerances": {
-        "rtol": 1e-06,
-        "atol": 1e-12
-      }
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

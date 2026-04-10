@@ -156,15 +156,6 @@
       "to": "unknown.var"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "nonstiff_algorithm": "Tsit5",
-      "timestep": 0.01,
-      "reltol": 1e-06,
-      "abstol": 1e-08
-    }
-  },
   "domains": {
     "default": {
       "temporal": {},

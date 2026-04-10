@@ -777,20 +777,6 @@
       "operator": "BoundaryInterpolator"
     }
   ],
-  "solver": {
-    "strategy": "imex",
-    "config": {
-      "ode_algorithm": "Tsit5",
-      "pde_discretization": "finite_differences",
-      "spatial_order": 2,
-      "timestep": 10.0,
-      "adaptive": true,
-      "tolerances": {
-        "rtol": 1e-05,
-        "atol": 1e-08
-      }
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

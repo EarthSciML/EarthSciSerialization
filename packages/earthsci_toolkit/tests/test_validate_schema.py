@@ -780,21 +780,9 @@ class TestComplexValidationScenarios:
         with pytest.raises(ValidationError, match="should be non-empty|is too short"):
             jsonschema.validate(invalid_data, schema)
 
-    def test_domain_and_solver_validation_errors(self):
-        """Test domain and solver specific validation errors."""
+    def test_domain_validation_errors(self):
+        """Test domain specific validation errors."""
         schema = _get_schema()
-
-        # Invalid solver strategy
-        invalid_data = {
-            "esm": "0.1.0",
-            "metadata": {"name": "Test"},
-            "models": {"test": {"variables": {}, "equations": []}},
-            "solver": {
-                "strategy": "invalid_strategy"  # Not in enum
-            }
-        }
-        with pytest.raises(ValidationError, match="'invalid_strategy' is not one of"):
-            jsonschema.validate(invalid_data, schema)
 
         # Invalid spatial dimension (missing required fields)
         invalid_data = {

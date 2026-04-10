@@ -300,17 +300,6 @@
       }
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "timestep": 300.0,
-      "threads": 8,
-      "stiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-06
-      }
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

@@ -98,14 +98,6 @@ describe('FileSummary', () => {
       spatial: {
         type: 'grid_2d'
       }
-    },
-    solver: {
-      type: 'rk4',
-      tolerances: {
-        absolute: 1e-8,
-        relative: 1e-6
-      },
-      max_steps: 10000
     }
   };
 
@@ -180,17 +172,6 @@ describe('FileSummary', () => {
     expect(screen.getByText('grid_2d')).toBeInTheDocument();
   });
 
-  it('renders solver configuration summary', () => {
-    render(() => <FileSummary esmFile={complexEsmFile} />);
-
-    expect(screen.getByText(/Solver Configuration/)).toBeInTheDocument();
-    expect(screen.getByText('Type:')).toBeInTheDocument();
-    expect(screen.getByText('rk4')).toBeInTheDocument();
-    expect(screen.getByText('Tolerances:')).toBeInTheDocument();
-    expect(screen.getByText(/Absolute: 1e-8.*Relative:/)).toBeInTheDocument();
-    expect(screen.getByText('Max Steps:')).toBeInTheDocument();
-    expect(screen.getByText('10000')).toBeInTheDocument();
-  });
 
   it('handles section clicks', () => {
     const onSectionClick = vi.fn();

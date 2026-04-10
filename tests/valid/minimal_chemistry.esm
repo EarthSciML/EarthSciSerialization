@@ -237,13 +237,6 @@
       "transform": "param_to_var"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 1.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

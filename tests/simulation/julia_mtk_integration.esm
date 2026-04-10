@@ -351,18 +351,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 1.0,
-      "threads": 2,
-      "stiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-06
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",
