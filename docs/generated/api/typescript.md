@@ -1706,7 +1706,7 @@ Format an expression as Unicode mathematical notation
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:682`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:849`
 
 **Signature:**
 ```typescript
