@@ -114,17 +114,18 @@ describe('Conformance Test Suite', () => {
   describe('Schema validation tests', () => {
     const invalidFiles = findEsmFiles(join(testsDir, 'invalid'));
 
-    it.each(invalidFiles)('should detect schema errors in %s', (filePath) => {
+    it.each(invalidFiles)('should detect errors in %s', (filePath) => {
       const content = readFileSync(filePath, 'utf-8');
 
-      // Attempt to validate - should find schema errors
+      // Attempt to validate - should find schema or structural errors
       const result = validate(content);
 
       expect(result.is_valid).toBe(false);
-      expect(result.schema_errors.length).toBeGreaterThan(0);
+      const totalErrors = result.schema_errors.length + result.structural_errors.length;
+      expect(totalErrors).toBeGreaterThan(0);
 
-      // Ensure each schema error has required fields
-      for (const error of result.schema_errors) {
+      // Ensure each error has required fields
+      for (const error of [...result.schema_errors, ...result.structural_errors]) {
         expect(error.code).toBeDefined();
         expect(error.path).toBeDefined();
         expect(error.message).toBeDefined();

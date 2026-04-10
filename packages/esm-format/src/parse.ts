@@ -57,8 +57,8 @@ const schema = {
   "properties": {
     "esm": {
       "type": "string",
-      "description": "Format version string (semver).",
-      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+      "const": "0.1.0",
+      "description": "Format version string (semver)."
     },
     "metadata": { "$ref": "#/$defs/Metadata" },
     "models": {
@@ -86,7 +86,16 @@ const schema = {
       "description": "Composition and coupling rules.",
       "items": { "$ref": "#/$defs/CouplingEntry" }
     },
-    "domain": { "$ref": "#/$defs/Domain" },
+    "domains": {
+      "type": "object",
+      "description": "Named spatiotemporal domains, keyed by unique identifier.",
+      "additionalProperties": { "$ref": "#/$defs/Domain" }
+    },
+    "interfaces": {
+      "type": "object",
+      "description": "Named coupling interfaces between domains.",
+      "additionalProperties": { "$ref": "#/$defs/Interface" }
+    },
     "solver": { "$ref": "#/$defs/Solver" }
   },
 
@@ -110,13 +119,19 @@ const schema = {
         "license": { "type": "string" },
         "created": {
           "type": "string",
-          "format": "date-time",
-          "description": "ISO 8601 creation timestamp."
+          "description": "ISO 8601 creation timestamp or date.",
+          "anyOf": [
+            { "format": "date-time" },
+            { "format": "date" }
+          ]
         },
         "modified": {
           "type": "string",
-          "format": "date-time",
-          "description": "ISO 8601 last-modified timestamp."
+          "description": "ISO 8601 last-modified timestamp or date.",
+          "anyOf": [
+            { "format": "date-time" },
+            { "format": "date" }
+          ]
         },
         "tags": {
           "type": "array",
@@ -416,6 +431,13 @@ const schema = {
       "required": ["variables", "equations"],
       "additionalProperties": false,
       "properties": {
+        "domain": {
+          "description": "Domain this model belongs to.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
         "coupletype": {
           "description": "Coupling type name for couple2 dispatch.",
           "oneOf": [
@@ -798,6 +820,14 @@ const schema = {
           "type": "number",
           "description": "Conversion factor (for conversion_factor transform)."
         },
+        "interface": {
+          "type": "string",
+          "description": "Name of the interface this mapping uses."
+        },
+        "lifting": {
+          "type": "string",
+          "description": "Lifting strategy (e.g., pointwise, interpolation)."
+        },
         "description": { "type": "string" }
       }
     },
@@ -1012,6 +1042,30 @@ const schema = {
         "robin_gamma": {
           "type": "number",
           "description": "Robin BC RHS value γ in αu + β∂u/∂n = γ."
+        }
+      }
+    },
+
+    "Interface": {
+      "type": "object",
+      "description": "A coupling interface between domains.",
+      "additionalProperties": true,
+      "properties": {
+        "description": { "type": "string" },
+        "domains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Domain names this interface connects."
+        },
+        "dimension_mapping": {
+          "type": "object",
+          "description": "How dimensions map across the interface.",
+          "additionalProperties": true
+        },
+        "regridding": {
+          "type": "object",
+          "description": "Regridding configuration.",
+          "additionalProperties": true
         }
       }
     },
@@ -1272,42 +1326,29 @@ function validateSchemaWithVersionCompatibility(data: any): SchemaError[] {
     return validateSchema(data)
   }
 
-  // For backward/forward compatibility within the same major version,
-  // first check if there are actual compatibility issues that need to be ignored
+  // Same major version: attempt backward/forward compatibility
   if (major === CURRENT_VERSION.major) {
-    // Try validation with original version first to see if version is the only issue
-    const originalErrors = validateSchema(data)
-
-    // If there are no additional properties errors, then version mismatch should fail
-    const hasAdditionalPropsErrors = originalErrors.some(error =>
-      error.keyword === 'additionalProperties'
-    )
-
-    // If only version error and no additional properties, enforce strict version matching
-    if (!hasAdditionalPropsErrors && (minor !== CURRENT_VERSION.minor || patch !== CURRENT_VERSION.patch)) {
-      return originalErrors
-    }
-
-    // Generate forward compatibility warnings for actual compatibility cases
+    // Forward compatibility: newer minor version
     if (minor > CURRENT_VERSION.minor) {
       console.warn(`Forward compatibility: Version ${version} is newer than current ${CURRENT_VERSION.major}.${CURRENT_VERSION.minor}.${CURRENT_VERSION.patch}. Some features may not be fully supported.`)
+
+      // Validate with current version substituted to check structural validity
+      const tempData = { ...data, esm: '0.1.0' }
+      const errors = validateSchema(tempData)
+
+      // Filter out additionalProperties errors (unknown fields from newer versions)
+      return errors.filter(error => {
+        if (error.keyword === 'additionalProperties') {
+          console.warn(`Forward compatibility: Ignoring unknown field at ${error.path}`)
+          return false
+        }
+        return true
+      })
     }
 
+    // Backward compatibility or different patch: validate with current version substituted
     const tempData = { ...data, esm: '0.1.0' }
-    const errors = validateSchema(tempData)
-
-    // Filter out additionalProperties errors for forward compatibility
-    const filteredErrors = errors.filter(error => {
-      // Allow additional properties for newer versions (forward compatibility)
-      if (error.keyword === 'additionalProperties' &&
-          (minor > CURRENT_VERSION.minor || patch > CURRENT_VERSION.patch)) {
-        console.warn(`Forward compatibility: Ignoring unknown field at ${error.path}`)
-        return false
-      }
-      return true
-    })
-
-    return filteredErrors
+    return validateSchema(tempData)
   }
 
   // This shouldn't happen due to checkVersionCompatibility, but fallback to normal validation

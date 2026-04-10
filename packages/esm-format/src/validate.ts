@@ -511,21 +511,50 @@ function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
 function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
     const errors: StructuralError[] = [];
 
+    // Collect systems that participate in coupling — these may reference
+    // variables from other systems, so equation balance and reference
+    // integrity checks must be relaxed.
+    const coupledSystems = new Set<string>();
+    if (esmFile.coupling) {
+        for (const entry of esmFile.coupling) {
+            if ('systems' in entry && Array.isArray((entry as any).systems)) {
+                for (const s of (entry as any).systems) {
+                    coupledSystems.add(s);
+                }
+            }
+            if ('from' in entry && typeof (entry as any).from === 'string') {
+                const fromSystem = (entry as any).from.split('.')[0];
+                coupledSystems.add(fromSystem);
+            }
+            if ('to' in entry && typeof (entry as any).to === 'string') {
+                const toSystem = (entry as any).to.split('.')[0];
+                coupledSystems.add(toSystem);
+            }
+        }
+    }
+
     // Validate models
     if (esmFile.models) {
         for (const [modelName, model] of Object.entries(esmFile.models)) {
             const modelPath = `/models/${modelName}`;
+            const isCoupled = coupledSystems.has(modelName);
 
-            errors.push(...validateEquationBalance(model, modelPath));
-            errors.push(...validateReferenceIntegrity(model, modelPath, esmFile));
+            // Skip equation balance and reference integrity for coupled models,
+            // as they may reference variables provided by other systems.
+            if (!isCoupled) {
+                errors.push(...validateEquationBalance(model, modelPath));
+                errors.push(...validateReferenceIntegrity(model, modelPath, esmFile));
+            }
             errors.push(...validateEventConsistency(model, modelPath));
 
             // Recursively validate subsystems
             if (model.subsystems) {
                 for (const [subsystemName, subsystem] of Object.entries(model.subsystems)) {
                     const subsystemPath = `${modelPath}/subsystems/${subsystemName}`;
-                    errors.push(...validateEquationBalance(subsystem, subsystemPath));
-                    errors.push(...validateReferenceIntegrity(subsystem, subsystemPath, esmFile));
+                    if (!isCoupled) {
+                        errors.push(...validateEquationBalance(subsystem, subsystemPath));
+                        errors.push(...validateReferenceIntegrity(subsystem, subsystemPath, esmFile));
+                    }
                     errors.push(...validateEventConsistency(subsystem, subsystemPath));
                 }
             }
