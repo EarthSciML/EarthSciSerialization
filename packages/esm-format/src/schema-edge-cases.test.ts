@@ -592,7 +592,7 @@ describe('Schema Edge Cases', () => {
             type: "gridded_data",
             loader_id: "test",
             provides: {
-              "temp": { units: "K" }
+              "temp": { units: "K", description: "Temperature" }
             },
             config: {
               // config objects have additionalProperties: true
