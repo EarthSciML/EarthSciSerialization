@@ -9,7 +9,6 @@ The release pipeline provides:
 - **Automated Release Management**: Intelligent version detection and release coordination
 - **Multi-Language Package Publishing**: Synchronized releases across Julia, TypeScript, Python, and Rust
 - **Cross-Platform Binary Distribution**: Native executables for Linux, macOS, and Windows
-- **Container Image Management**: Multi-architecture container images with security scanning
 - **Comprehensive Testing**: Conformance testing and cross-language compatibility validation
 - **Automated Changelog Generation**: Structured changelog based on conventional commits
 
@@ -30,7 +29,6 @@ The release pipeline provides:
 
 3. **Distribution Workflows**
    - `binary-release.yml`: Cross-platform binary compilation and distribution
-   - `container-build-and-publish.yml`: Multi-architecture container image builds
 
 4. **Supporting Tools**
    - `scripts/release-coordinator.sh`: Manual release coordination script
@@ -195,51 +193,6 @@ cd esm-cli-1.2.3-linux-x64/
 ./install.sh
 ```
 
-## Container Images
-
-### Available Images
-
-Multi-architecture container images for each language runtime:
-
-- `ghcr.io/ctessum/esm-format-julia:latest`
-- `ghcr.io/ctessum/esm-format-typescript:latest`
-- `ghcr.io/ctessum/earthsci-toolkit-python:latest`
-- `ghcr.io/ctessum/earthsci-toolkit:latest`
-
-### Architecture Support
-
-- `linux/amd64` (Intel/AMD 64-bit)
-- `linux/arm64` (ARM 64-bit, Apple Silicon compatible)
-
-### Optimization Profiles
-
-- **Development**: Includes debug symbols and development tools
-- **Production**: Optimized for size and performance (default)
-- **Minimal**: Ultra-compact images for deployment
-
-### Usage Examples
-
-```bash
-# Run conformance tests
-docker run --rm ghcr.io/ctessum/esm-format-julia:latest
-
-# Mount local data
-docker run --rm -v $(pwd):/workspace ghcr.io/ctessum/earthsci-toolkit-python:latest
-
-# Docker Compose
-version: '3.8'
-services:
-  conformance-julia:
-    image: ghcr.io/ctessum/esm-format-julia:latest
-    volumes:
-      - ./results:/workspace/results
-
-  conformance-python:
-    image: ghcr.io/ctessum/earthsci-toolkit-python:latest
-    volumes:
-      - ./results:/workspace/results
-```
-
 ## Quality Assurance
 
 ### Testing Strategy
@@ -247,7 +200,7 @@ services:
 1. **Unit Tests**: Language-specific test suites
 2. **Integration Tests**: Cross-language compatibility testing
 3. **Conformance Tests**: ESM specification compliance validation
-4. **Security Scanning**: Container vulnerability assessment with Trivy
+4. **Security Scanning**: Vulnerability assessment with Trivy
 5. **SBOM Generation**: Software Bill of Materials for supply chain security
 
 ### Automated Quality Gates
@@ -280,7 +233,6 @@ Each release maintains status information in `workspace.json`:
     "completed": "2024-02-17T10:30:00Z",
     "workflow_run_id": "123456789",
     "binaries_status": "success",
-    "containers_status": "success",
     "conformance_status": "success"
   }
 }
@@ -300,15 +252,12 @@ Key configuration through GitHub repository settings:
 
 - `NPM_TOKEN`: NPM registry authentication
 - `GITHUB_TOKEN`: Automatically provided for GitHub operations
-- `DOCKERHUB_USERNAME/DOCKERHUB_TOKEN`: Optional Docker Hub publishing
 
 ### Customization Options
 
 - **Version Bump Strategy**: Configurable conventional commit parsing
 - **Package Selection**: Enable/disable specific language packages
 - **Platform Targets**: Customize binary build targets
-- **Container Registries**: Support for multiple container registries
-
 ## Troubleshooting
 
 ### Common Issues
@@ -327,11 +276,6 @@ Key configuration through GitHub repository settings:
    - Check cross-compilation setup for target platforms
    - Verify Rust toolchain installation in CI
    - Review platform-specific build logs
-
-4. **Container Build Issues**
-   - Verify Docker build context and Dockerfile paths
-   - Check multi-architecture build support
-   - Review container registry authentication
 
 ### Support Resources
 
