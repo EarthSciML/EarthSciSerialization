@@ -55,9 +55,9 @@ Cargo.lock
 *.dylib
 *.test
 *.out
-# Project-specific Go binaries
-esm-format-go
-esm-go
+# Project-specific Go binaries (root-level only, not the packages/esm-format-go directory)
+/esm-format-go
+/esm-go
 
 # Claude Code local files
 CLAUDE.local.md

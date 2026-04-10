@@ -27,6 +27,7 @@ include("mtk.jl")
 include("catalyst.jl")
 include("mtk_catalyst.jl")
 include("coupled.jl")  # Include after mtk.jl and catalyst.jl since it uses MockMTKSystem and MockCatalystSystem
+include("flatten.jl")  # Include after coupled.jl since it uses CouplingEntry types
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
@@ -59,10 +60,14 @@ export
     CouplingOperatorApply, CouplingCallback, CouplingEvent,
     # Coupled system
     MockCoupledSystem,
+    # Flattened system
+    FlattenedEquation, FlattenMetadata, FlattenedSystem, flatten,
     # System types
     Domain, Interface, Reference, Metadata, EsmFile,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
+    # Subsystem reference resolution
+    resolve_subsystem_refs!, SubsystemRefError,
     # Coupling serialization functions
     serialize_coupling_entry, coerce_coupling_entry,
     # Structural validation

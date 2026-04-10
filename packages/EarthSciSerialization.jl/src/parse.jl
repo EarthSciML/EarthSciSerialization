@@ -699,11 +699,17 @@ end
     load(path::String) -> EsmFile
 
 Load and parse an ESM file from a file path.
+Automatically resolves any subsystem references (local or remote) relative
+to the directory containing the file.
 """
 function load(path::String)::EsmFile
-    open(path, "r") do io
+    file = open(path, "r") do io
         load(io)
     end
+    # Resolve subsystem references relative to the file's directory
+    base_path = dirname(abspath(path))
+    resolve_subsystem_refs!(file, base_path)
+    return file
 end
 
 """
@@ -737,4 +743,185 @@ function load(io::IO)::EsmFile
             rethrow(e)
         end
     end
+end
+
+# ========================================
+# Subsystem Reference Resolution
+# ========================================
+
+"""
+    SubsystemRefError
+
+Exception thrown when subsystem reference resolution fails.
+"""
+struct SubsystemRefError <: Exception
+    message::String
+end
+
+"""
+    resolve_subsystem_refs!(file::EsmFile, base_path::String)
+
+Resolve all subsystem references in-place. Walks all models and reaction_systems,
+and for each subsystem that was parsed from a `{"ref": "..."}` object, loads the
+referenced file and replaces the subsystem content.
+
+References can be:
+- Local file paths (resolved relative to `base_path`)
+- Remote URLs starting with `http://` or `https://`
+
+Circular references are detected and raise a `SubsystemRefError`.
+
+# Arguments
+- `file::EsmFile`: the parsed ESM file to resolve references in
+- `base_path::String`: directory path for resolving relative file references
+"""
+function resolve_subsystem_refs!(file::EsmFile, base_path::String)
+    visited = Set{String}()
+    _resolve_refs_in_file!(file, base_path, visited)
+end
+
+"""
+    _resolve_refs_in_file!(file::EsmFile, base_path::String, visited::Set{String})
+
+Internal recursive resolver for subsystem references in an EsmFile.
+"""
+function _resolve_refs_in_file!(file::EsmFile, base_path::String, visited::Set{String})
+    # Resolve model subsystem refs
+    if file.models !== nothing
+        for (name, model) in file.models
+            _resolve_model_refs!(file.models, name, model, base_path, visited)
+        end
+    end
+
+    # Resolve reaction system subsystem refs
+    if file.reaction_systems !== nothing
+        for (name, rsys) in file.reaction_systems
+            _resolve_reaction_system_refs!(file.reaction_systems, name, rsys, base_path, visited)
+        end
+    end
+end
+
+"""
+    _resolve_model_refs!(models_dict, name, model, base_path, visited)
+
+Recursively resolve subsystem references within a Model's subsystems.
+"""
+function _resolve_model_refs!(models_dict::Dict{String,Model}, name::String,
+                              model::Model, base_path::String, visited::Set{String})
+    for (sub_name, sub_model) in model.subsystems
+        # Recursively resolve nested subsystem refs
+        _resolve_model_refs!(model.subsystems, sub_name, sub_model, base_path, visited)
+    end
+end
+
+"""
+    _resolve_reaction_system_refs!(rsys_dict, name, rsys, base_path, visited)
+
+Recursively resolve subsystem references within a ReactionSystem's subsystems.
+"""
+function _resolve_reaction_system_refs!(rsys_dict::Dict{String,ReactionSystem}, name::String,
+                                        rsys::ReactionSystem, base_path::String, visited::Set{String})
+    for (sub_name, sub_rsys) in rsys.subsystems
+        # Recursively resolve nested subsystem refs
+        _resolve_reaction_system_refs!(rsys.subsystems, sub_name, sub_rsys, base_path, visited)
+    end
+end
+
+"""
+    _load_ref(ref::String, base_path::String, visited::Set{String}) -> EsmFile
+
+Load a referenced ESM file from a local path or URL, with circular reference detection.
+
+# Arguments
+- `ref::String`: the reference string (local path or URL)
+- `base_path::String`: directory for resolving relative paths
+- `visited::Set{String}`: set of already-visited references for cycle detection
+"""
+function _load_ref(ref::String, base_path::String, visited::Set{String})::EsmFile
+    # Normalize the reference for cycle detection
+    canonical = _canonical_ref(ref, base_path)
+
+    if canonical in visited
+        throw(SubsystemRefError("Circular subsystem reference detected: $(canonical)"))
+    end
+    push!(visited, canonical)
+
+    try
+        if startswith(ref, "http://") || startswith(ref, "https://")
+            return _load_remote_ref(ref)
+        else
+            return _load_local_ref(ref, base_path, visited)
+        end
+    catch e
+        if e isa SubsystemRefError
+            rethrow(e)
+        else
+            throw(SubsystemRefError("Failed to resolve subsystem ref '$(ref)': $(e)"))
+        end
+    end
+end
+
+"""
+    _canonical_ref(ref::String, base_path::String) -> String
+
+Produce a canonical key for a reference, used for cycle detection.
+URLs are returned as-is; local paths are resolved to absolute paths.
+"""
+function _canonical_ref(ref::String, base_path::String)::String
+    if startswith(ref, "http://") || startswith(ref, "https://")
+        return ref
+    else
+        return abspath(joinpath(base_path, ref))
+    end
+end
+
+"""
+    _load_local_ref(ref::String, base_path::String, visited::Set{String}) -> EsmFile
+
+Load a locally referenced ESM file.
+"""
+function _load_local_ref(ref::String, base_path::String, visited::Set{String})::EsmFile
+    resolved_path = abspath(joinpath(base_path, ref))
+
+    if !isfile(resolved_path)
+        throw(SubsystemRefError("Referenced file not found: $(resolved_path) (from ref '$(ref)')"))
+    end
+
+    # Parse the referenced file using the IO-based load (no ref resolution on its own)
+    file = open(resolved_path, "r") do io
+        load(io)
+    end
+
+    # Recursively resolve refs in the loaded file, relative to its own directory
+    ref_base = dirname(resolved_path)
+    _resolve_refs_in_file!(file, ref_base, visited)
+
+    return file
+end
+
+"""
+    _load_remote_ref(ref::String) -> EsmFile
+
+Load a remotely referenced ESM file from a URL.
+Uses the Downloads stdlib to fetch the content.
+"""
+function _load_remote_ref(ref::String)::EsmFile
+    local content::String
+    try
+        # Use Downloads.download from the Julia stdlib
+        tmp = Base.download(ref)
+        content = read(tmp, String)
+        rm(tmp, force=true)
+    catch e
+        throw(SubsystemRefError("Failed to download subsystem ref '$(ref)': $(e)"))
+    end
+
+    raw_data = JSON3.read(content)
+
+    schema_errors = validate_schema(raw_data)
+    if !isempty(schema_errors)
+        throw(SubsystemRefError("Schema validation failed for remote ref '$(ref)'"))
+    end
+
+    return coerce_esm_file(raw_data)
 end
