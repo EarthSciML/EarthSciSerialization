@@ -2585,7 +2585,7 @@ pub struct DiscreteEvent {
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:585`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:583`
 
 **Definition:**
 ```rust
@@ -2904,7 +2904,7 @@ pub struct ScopedContext {
 
 ### Solver
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:597`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:595`
 
 **Definition:**
 ```rust
@@ -2989,7 +2989,7 @@ pub struct ValidationResult {
 
 ### VariableMapping
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:573`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/types.rs:571`
 
 **Definition:**
 ```rust
