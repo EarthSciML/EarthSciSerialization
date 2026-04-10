@@ -43,14 +43,23 @@ describe('Parse and Serialize', () => {
       }).toThrow(SchemaValidationError)
     })
 
-    it('should throw SchemaValidationError on wrong version', () => {
+    it('should throw SchemaValidationError on invalid version string', () => {
       const invalid = {
         ...validMinimalEsm,
-        esm: "0.2.0"
+        esm: "not-a-version"
       }
       expect(() => {
         load(invalid)
       }).toThrow(SchemaValidationError)
+    })
+
+    it('should load forward-compatible minor version (0.2.0) without error', () => {
+      const forwardCompat = {
+        ...validMinimalEsm,
+        esm: "0.2.0"
+      }
+      const result = load(forwardCompat)
+      expect(result.esm).toBe('0.2.0')
     })
 
     it('should handle Expression union types', () => {
