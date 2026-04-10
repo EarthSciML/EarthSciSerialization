@@ -115,7 +115,6 @@ Every library must define typed representations for:
 | Operator | `Operator` | Registered by ID |
 | Coupling entry | `CouplingEntry` | Discriminated union on `type` |
 | Domain | `Domain` | Temporal, spatial, BCs, ICs |
-| Solver | `Solver` | Strategy + config |
 | Reference | `Reference` | doi, citation, url, notes |
 | Metadata | `Metadata` | Name, authors, tags |
 
@@ -1227,7 +1226,7 @@ Beyond individual expressions, `esm-editor` provides composed editors for entire
 
 #### 5.2.8 Code Generation
 
-The pure `earthsci-toolkit` library (not the editor) provides code generation for backend simulation. Code generation covers **models and reaction systems** — their variables, parameters, equations, reactions, and events. Coupling, domain, and solver configuration are emitted as structured comments or stubs that the user can complete manually.
+The pure `earthsci-toolkit` library (not the editor) provides code generation for backend simulation. Code generation covers **models and reaction systems** — their variables, parameters, equations, reactions, and events. Coupling and domain configuration are emitted as structured comments or stubs that the user can complete manually.
 
 **Scope:** Code generation must handle:
 
@@ -1239,7 +1238,7 @@ The pure `earthsci-toolkit` library (not the editor) provides code generation fo
 Code generation does **not** need to handle (these are emitted as TODO comments):
 
 - Coupling resolution (the generated code defines individual systems; the user composes them).
-- Domain and solver setup (emitted as commented-out boilerplate with values from the file).
+- Domain setup (emitted as commented-out boilerplate with values from the file).
 - Data loaders and operators (runtime-specific; emitted as placeholder comments with the loader/operator ID).
 
 ```typescript
@@ -1258,7 +1257,6 @@ const julia: string = toJuliaCode(file);
 //   @named sys = ReactionSystem(rxs, t)
 //   # TODO: Coupling — operator_compose(SimpleOzone, Advection)
 //   # TODO: Domain — lon [-130, -100], 2024-05-01 to 2024-05-03
-//   # TODO: Solver — strang_threads(Rosenbrock23, dt=1.0)
 
 // Generate a self-contained Python script
 const python: string = toPythonCode(file);
@@ -1659,7 +1657,6 @@ ESM v0.1.0: MinimalChemAdvection
     4. variable_map: GEOSFP.v → Advection.v_wind
 
   Domain: lon [−130, −100] (Δ0.3125°), 2024-05-01 to 2024-05-03
-  Solver: strang_threads (Rosenbrock23, dt=1.0)
 ```
 
 ---
