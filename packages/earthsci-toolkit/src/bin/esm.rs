@@ -2020,7 +2020,7 @@ fn analyze_coupling_strength(
 
         for rule in coupling {
             match rule {
-                earthsci_toolkit::CouplingEntry::Couple2 { systems, .. } => {
+                earthsci_toolkit::CouplingEntry::Couple { systems, .. } => {
                     // Bidirectional coupling is stronger
                     strong_couplings += 1;
                     if systems.len() >= 2 {
@@ -2684,10 +2684,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         );
                                     }
                                 }
-                                earthsci_toolkit::CouplingEntry::Couple2 { systems, .. } => {
+                                earthsci_toolkit::CouplingEntry::Couple { systems, .. } => {
                                     if systems.len() >= 2 {
                                         println!(
-                                            "  Rule {}: {} <-> {} (Couple2)",
+                                            "  Rule {}: {} <-> {} (Couple)",
                                             i + 1,
                                             systems[0],
                                             systems[1]

@@ -38,7 +38,7 @@ from .esm_types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain,
-    OperatorComposeCoupling, Couple2Coupling, VariableMapCoupling,
+    OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
     InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionType
@@ -486,7 +486,7 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
     # Map schema types to our enum
     type_mapping = {
         "operator_compose": CouplingType.OPERATOR_COMPOSE,
-        "couple": CouplingType.COUPLE2,
+        "couple": CouplingType.COUPLE,
         "variable_map": CouplingType.VARIABLE_MAP,
         "operator_apply": CouplingType.OPERATOR_APPLY,
         "callback": CouplingType.CALLBACK,
@@ -507,7 +507,7 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
             translate=coupling_data.get("translate", {})
         )
 
-    elif coupling_type == CouplingType.COUPLE2:
+    elif coupling_type == CouplingType.COUPLE:
         # Parse connector if present
         connector = None
         if "connector" in coupling_data:
@@ -523,7 +523,7 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
                 equations.append(equation)
             connector = Connector(equations=equations)
 
-        return Couple2Coupling(
+        return CouplingCouple(
             description=description,
             systems=coupling_data.get("systems", []),
             connector=connector

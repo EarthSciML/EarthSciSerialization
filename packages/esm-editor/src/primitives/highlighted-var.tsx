@@ -142,7 +142,7 @@ function processCouplingEntry(coupling: CouplingEntry, unionFind: UnionFind): vo
       // Process connector equations for equivalence
       if (coupling.connector?.equations) {
         for (const equation of coupling.connector.equations) {
-          // Couple2 connectors create equivalence relationships
+          // Couple connectors create equivalence relationships
           unionFind.union(equation.from, equation.to);
         }
       }

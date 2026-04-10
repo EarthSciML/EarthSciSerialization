@@ -320,7 +320,7 @@ function compose_systems(system1, system2, matched_vars, translate, composed_nam
 end
 
 # ========================================
-# 2. Couple2 Implementation
+# 2. Couple Implementation
 # ========================================
 
 """

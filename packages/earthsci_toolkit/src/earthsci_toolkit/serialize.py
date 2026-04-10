@@ -15,7 +15,7 @@ from .esm_types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderType, Operator,
     CouplingEntry, CouplingType, Domain,
-    OperatorComposeCoupling, Couple2Coupling, VariableMapCoupling,
+    OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
     InitialCondition, BoundaryCondition
@@ -419,7 +419,7 @@ def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
         if coupling.translate:
             result["translate"] = coupling.translate
 
-    elif isinstance(coupling, Couple2Coupling):
+    elif isinstance(coupling, CouplingCouple):
         result["type"] = "couple"
         if coupling.systems:
             result["systems"] = coupling.systems

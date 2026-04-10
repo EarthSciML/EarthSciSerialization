@@ -1023,7 +1023,7 @@ fn validate_coupling(
                     });
                 }
             }
-            crate::CouplingEntry::Couple2 { systems, .. } => {
+            crate::CouplingEntry::Couple { systems, .. } => {
                 if systems.len() >= 2 {
                     for (_i, system) in systems.iter().take(2).enumerate() {
                         if !system_refs.contains_key(system) {
@@ -1043,7 +1043,7 @@ fn validate_coupling(
                     errors.push(StructuralError {
                         path: coupling_path.clone(),
                         code: StructuralErrorCode::UndefinedSystem,
-                        message: "Couple2 coupling requires exactly 2 systems".to_string(),
+                        message: "Couple coupling requires exactly 2 systems".to_string(),
                         details: serde_json::json!({
                             "coupling_type": "couple",
                             "systems_count": systems.len(),

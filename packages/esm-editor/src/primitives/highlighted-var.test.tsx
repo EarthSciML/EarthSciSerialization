@@ -299,7 +299,7 @@ describe('complex equivalence scenarios', () => {
           'ModelB.var1': 'ModelC.var1'
         }
       },
-      // Couple2 linking C -> D
+      // Couple linking C -> D
       {
         type: 'couple',
         systems: ['ModelC', 'ModelD'],

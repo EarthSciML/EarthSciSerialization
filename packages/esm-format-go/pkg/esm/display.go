@@ -630,8 +630,8 @@ func ModelSummary(esm *EsmFile) string {
 				result.WriteString(fmt.Sprintf("operator_compose: %s + %s", c.Systems[0], c.Systems[1]))
 			case VariableMapCoupling:
 				result.WriteString(fmt.Sprintf("variable_map: %s → %s", c.From, c.To))
-			case Couple2Coupling:
-				result.WriteString(fmt.Sprintf("couple2: %s ↔ %s", c.Systems[0], c.Systems[1]))
+			case CouplingCouple:
+				result.WriteString(fmt.Sprintf("couple: %s ↔ %s", c.Systems[0], c.Systems[1]))
 			case OperatorApplyCoupling:
 				result.WriteString(fmt.Sprintf("operator_apply: %s", c.Operator))
 			case CallbackCoupling:
