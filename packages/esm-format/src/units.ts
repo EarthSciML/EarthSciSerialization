@@ -471,7 +471,13 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
             const lhsResult = checkDimensions(equation.lhs, unitBindings)
             const rhsResult = checkDimensions(equation.rhs, unitBindings)
 
-            if (!dimensionsEqual(lhsResult.dimensions, rhsResult.dimensions)) {
+            const allSubWarnings = [...lhsResult.warnings, ...rhsResult.warnings]
+            const hasUnknownVariable = allSubWarnings.some(w => w.includes('Unknown variable'))
+
+            // Only emit mismatch warnings when dimensions are fully known.
+            // Missing unit declarations would otherwise produce false positives
+            // (both sides default to dimensionless in ways that don't round-trip).
+            if (!hasUnknownVariable && !dimensionsEqual(lhsResult.dimensions, rhsResult.dimensions)) {
               warnings.push({
                 message: `Dimensional mismatch in equation: LHS has ${formatDimensions(lhsResult.dimensions)}, RHS has ${formatDimensions(rhsResult.dimensions)}`,
                 location: `models.${modelName}`,
@@ -480,7 +486,7 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
             }
 
             // Add any warnings from dimensional analysis
-            for (const warning of [...lhsResult.warnings, ...rhsResult.warnings]) {
+            for (const warning of allSubWarnings) {
               warnings.push({
                 message: warning,
                 location: `models.${modelName}`
@@ -503,7 +509,9 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
               const exprResult = checkDimensions(variable.expression, unitBindings)
               const varDims = variable.units ? parseUnit(variable.units) : { dimensionless: true }
 
-              if (!dimensionsEqual(exprResult.dimensions, varDims)) {
+              const hasUnknownVariable = exprResult.warnings.some(w => w.includes('Unknown variable'))
+
+              if (!hasUnknownVariable && !dimensionsEqual(exprResult.dimensions, varDims)) {
                 warnings.push({
                   message: `Dimensional mismatch in observed variable ${varName}: declared as ${formatDimensions(varDims)}, expression evaluates to ${formatDimensions(exprResult.dimensions)}`,
                   location: `models.${modelName}.variables.${varName}`
