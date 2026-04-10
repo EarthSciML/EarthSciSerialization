@@ -3,7 +3,6 @@
 //! Tests for component graphs, expression graphs, and graph export functionality.
 
 use earthsci_toolkit::*;
-use serde_json;
 use std::collections::HashMap;
 
 /// Test component graph generation
@@ -73,7 +72,6 @@ fn test_component_graph_generation() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     // Generate component graph
@@ -138,7 +136,6 @@ fn test_component_graph_exports() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let comp_graph = component_graph(&esm_file);
@@ -308,7 +305,7 @@ fn test_reaction_system_expression_graph() {
 
     // Test that graph contains rate expression nodes
     // In the new variable dependency graph format, we only have variable nodes (no operator nodes)
-    let has_variable_nodes = expr_graph.nodes.len() > 0;
+    let has_variable_nodes = !expr_graph.nodes.is_empty();
     assert!(
         has_variable_nodes,
         "Should have variable nodes representing species and rate constants"
@@ -352,7 +349,6 @@ fn test_component_existence() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     // Test component existence
@@ -547,12 +543,10 @@ fn test_coupled_expression_graph() {
     }
 
     if let Some(edges) = fixture_data.get("edges").and_then(|v| v.as_array()) {
-        if !edges.is_empty() {
-            assert!(
-                edges.len() > 0,
-                "Coupled graph should have edges showing relationships"
-            );
-        }
+        assert!(
+            !edges.is_empty(),
+            "Coupled graph should have edges showing relationships"
+        );
     }
 }
 

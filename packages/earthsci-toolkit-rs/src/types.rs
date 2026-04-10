@@ -469,6 +469,7 @@ pub struct Operator {
 /// Coupling entry with discriminated union based on type field
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum CouplingEntry {
     /// Operator composition coupling
     OperatorCompose {

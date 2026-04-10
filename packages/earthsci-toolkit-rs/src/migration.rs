@@ -221,7 +221,7 @@ pub fn can_migrate(from_version: &str, to_version: &str) -> bool {
     }
 
     // Only support forward migration for now
-    compare_versions(from_version, to_version).map_or(false, |cmp| cmp <= 0)
+    compare_versions(from_version, to_version).is_ok_and(|cmp| cmp <= 0)
 }
 
 /// Get supported migration paths from a given version
@@ -251,7 +251,7 @@ pub fn get_supported_migration_targets(from_version: &str) -> Vec<String> {
     // Filter to only include versions that are later than the from version
     targets
         .into_iter()
-        .filter(|target| compare_versions(from_version, target).map_or(false, |cmp| cmp < 0))
+        .filter(|target| compare_versions(from_version, target).is_ok_and(|cmp| cmp < 0))
         .collect()
 }
 

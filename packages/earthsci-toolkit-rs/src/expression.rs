@@ -318,7 +318,7 @@ fn evaluate_operator_with_unbound_tracking(
             let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
             match a_result {
                 Ok(a) => {
-                    if a < -1.0 || a > 1.0 {
+                    if !(-1.0..=1.0).contains(&a) {
                         Err(())
                     } else {
                         Ok(a.asin())
@@ -334,7 +334,7 @@ fn evaluate_operator_with_unbound_tracking(
             let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
             match a_result {
                 Ok(a) => {
-                    if a < -1.0 || a > 1.0 {
+                    if !(-1.0..=1.0).contains(&a) {
                         Err(())
                     } else {
                         Ok(a.acos())

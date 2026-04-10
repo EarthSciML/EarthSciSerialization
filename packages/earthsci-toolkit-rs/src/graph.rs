@@ -85,7 +85,7 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
 
     // Add data loader nodes
     if let Some(ref data_loaders) = esm_file.data_loaders {
-        for (id, _dl) in data_loaders {
+        for id in data_loaders.keys() {
             nodes.push(ComponentNode {
                 id: id.clone(),
                 component_type: ComponentType::DataLoader,
@@ -96,7 +96,7 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
 
     // Add operator nodes
     if let Some(ref operators) = esm_file.operators {
-        for (id, _op) in operators {
+        for id in operators.keys() {
             nodes.push(ComponentNode {
                 id: id.clone(),
                 component_type: ComponentType::Operator,
@@ -774,7 +774,7 @@ impl ComponentGraph {
             ));
         }
 
-        dot.push_str("\n");
+        dot.push('\n');
 
         // Add edges
         for edge in &self.edges {
@@ -856,7 +856,7 @@ impl ExpressionGraph {
             ));
         }
 
-        dot.push_str("\n");
+        dot.push('\n');
 
         // Add edges
         for edge in &self.edges {

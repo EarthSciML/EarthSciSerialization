@@ -1,10 +1,27 @@
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use earthsci_toolkit::{
-    EsmFile, Expr, Metadata, Model, Reaction, ReactionSystem, Species, StoichiometricEntry, load,
-    performance::{CompactExpr, PerformanceError},
-    save, stoichiometric_matrix, validate,
+    EsmFile, Expr, ExpressionNode, Metadata, Model, Reaction, ReactionSystem, Species,
+    StoichiometricEntry, load, performance::CompactExpr, save, stoichiometric_matrix, validate,
 };
 use std::collections::HashMap;
+
+fn bin_op(op: &str, left: Expr, right: Expr) -> Expr {
+    Expr::Operator(ExpressionNode {
+        op: op.to_string(),
+        args: vec![left, right],
+        wrt: None,
+        dim: None,
+    })
+}
+
+fn func_call(name: &str, args: Vec<Expr>) -> Expr {
+    Expr::Operator(ExpressionNode {
+        op: name.to_string(),
+        args,
+        wrt: None,
+        dim: None,
+    })
+}
 
 #[cfg(feature = "parallel")]
 use earthsci_toolkit::performance::ParallelEvaluator;
@@ -26,12 +43,10 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             variables.insert(
                 var_name.clone(),
                 earthsci_toolkit::ModelVariable {
-                    name: Some(var_name.clone()),
-                    var_type: earthsci_toolkit::VariableType::StateVariable,
+                    var_type: earthsci_toolkit::VariableType::State,
                     units: Some("m/s".to_string()),
+                    default: Some(1.0),
                     description: None,
-                    initial_condition: Some(Expr::Number(1.0)),
-                    bounds: None,
                     expression: None,
                 },
             );
@@ -42,15 +57,11 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             let var_name = format!("x{}_{}", i, j);
             equations.push(earthsci_toolkit::Equation {
                 lhs: Expr::Variable(var_name),
-                rhs: Expr::BinaryOp {
-                    op: "*".to_string(),
-                    left: Box::new(Expr::Variable("k".to_string())),
-                    right: Box::new(Expr::Variable(format!(
-                        "x{}_{}",
-                        i,
-                        (j + 1) % equations_per_model
-                    ))),
-                },
+                rhs: bin_op(
+                    "*",
+                    Expr::Variable("k".to_string()),
+                    Expr::Variable(format!("x{}_{}", i, (j + 1) % equations_per_model)),
+                ),
             });
         }
 
@@ -61,6 +72,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             equations,
             description: None,
             discrete_events: None,
+            continuous_events: None,
         };
 
         models.insert(format!("model_{}", i), model);
@@ -72,9 +84,11 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             name: Some("benchmark_test".to_string()),
             description: Some("Benchmark test file".to_string()),
             authors: None,
+            license: None,
             created: None,
             modified: None,
-            version: None,
+            tags: None,
+            references: None,
         },
         models: Some(models),
         reaction_systems: None,
@@ -82,7 +96,6 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     }
 }
 
@@ -95,9 +108,9 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
     for i in 0..num_species {
         species.push(Species {
             name: format!("S{}", i),
-            formula: None,
-            charge: None,
-            phase: None,
+            units: None,
+            default: None,
+            description: None,
         });
     }
 
@@ -116,11 +129,11 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
                 species: format!("S{}", product_idx),
                 coefficient: Some(1.0),
             }],
-            rate_law: Some(Expr::BinaryOp {
-                op: "*".to_string(),
-                left: Box::new(Expr::Number(0.1)),
-                right: Box::new(Expr::Variable(format!("S{}", substrate_idx))),
-            }),
+            rate: bin_op(
+                "*",
+                Expr::Number(0.1),
+                Expr::Variable(format!("S{}", substrate_idx)),
+            ),
             description: None,
         });
     }
@@ -128,6 +141,7 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
     ReactionSystem {
         name: Some("benchmark_system".to_string()),
         species,
+        parameters: HashMap::new(),
         reactions,
         description: None,
     }
@@ -148,7 +162,7 @@ fn benchmark_parsing(c: &mut Criterion) {
 
         #[cfg(feature = "zero_copy")]
         {
-            let mut json_bytes = json_str.clone().into_bytes();
+            let json_bytes = json_str.clone().into_bytes();
             group.bench_with_input(
                 BenchmarkId::new("simd_parse", size),
                 &json_bytes,
@@ -215,31 +229,24 @@ fn benchmark_expression_evaluation(c: &mut Criterion) {
     let mut group = c.benchmark_group("expression_evaluation");
 
     // Create test expressions of varying complexity
-    let simple_expr = Expr::BinaryOp {
-        op: "+".to_string(),
-        left: Box::new(Expr::Variable("x".to_string())),
-        right: Box::new(Expr::Number(1.0)),
-    };
+    let simple_expr = bin_op("+", Expr::Variable("x".to_string()), Expr::Number(1.0));
 
-    let complex_expr = Expr::BinaryOp {
-        op: "+".to_string(),
-        left: Box::new(Expr::BinaryOp {
-            op: "*".to_string(),
-            left: Box::new(Expr::FunctionCall {
-                name: "sin".to_string(),
-                args: vec![Expr::Variable("x".to_string())],
-            }),
-            right: Box::new(Expr::Variable("k".to_string())),
-        }),
-        right: Box::new(Expr::FunctionCall {
-            name: "exp".to_string(),
-            args: vec![Expr::BinaryOp {
-                op: "/".to_string(),
-                left: Box::new(Expr::Variable("y".to_string())),
-                right: Box::new(Expr::Number(2.0)),
-            }],
-        }),
-    };
+    let complex_expr = bin_op(
+        "+",
+        bin_op(
+            "*",
+            func_call("sin", vec![Expr::Variable("x".to_string())]),
+            Expr::Variable("k".to_string()),
+        ),
+        func_call(
+            "exp",
+            vec![bin_op(
+                "/",
+                Expr::Variable("y".to_string()),
+                Expr::Number(2.0),
+            )],
+        ),
+    );
 
     let mut variables = HashMap::new();
     variables.insert("x".to_string(), 1.5);
@@ -421,10 +428,22 @@ criterion_group!(
     benchmark_validation,
     benchmark_stoichiometric_matrix,
     benchmark_expression_evaluation,
-    #[cfg(feature = "simd")]
-    benchmark_simd_operations,
-    #[cfg(feature = "custom_alloc")]
-    benchmark_memory_allocation
 );
 
+#[cfg(feature = "simd")]
+criterion_group!(simd_benches, benchmark_simd_operations);
+
+#[cfg(feature = "custom_alloc")]
+criterion_group!(alloc_benches, benchmark_memory_allocation);
+
+#[cfg(all(feature = "simd", feature = "custom_alloc"))]
+criterion_main!(benches, simd_benches, alloc_benches);
+
+#[cfg(all(feature = "simd", not(feature = "custom_alloc")))]
+criterion_main!(benches, simd_benches);
+
+#[cfg(all(not(feature = "simd"), feature = "custom_alloc"))]
+criterion_main!(benches, alloc_benches);
+
+#[cfg(all(not(feature = "simd"), not(feature = "custom_alloc")))]
 criterion_main!(benches);

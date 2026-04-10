@@ -80,8 +80,7 @@ fn get_schema() -> &'static JSONSchema {
 /// ```
 pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     // First, parse the JSON
-    let mut json_value: Value =
-        serde_json::from_str(json_str).map_err(|e| EsmError::JsonParse(e))?;
+    let mut json_value: Value = serde_json::from_str(json_str).map_err(EsmError::JsonParse)?;
 
     // Resolve any subsystem refs against the current working directory before
     // schema validation, per spec section 2.1b. Callers that load from a known
@@ -95,8 +94,7 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     validate_schema(&json_value)?;
 
     // Deserialize into our types
-    let esm_file: EsmFile =
-        serde_json::from_value(json_value).map_err(|e| EsmError::JsonParse(e))?;
+    let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;
 
     Ok(esm_file)
 }
@@ -112,8 +110,7 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
         EsmError::SchemaValidation(format!("failed to read {}: {e}", path.display()))
     })?;
 
-    let mut json_value: Value =
-        serde_json::from_str(&json_str).map_err(|e| EsmError::JsonParse(e))?;
+    let mut json_value: Value = serde_json::from_str(&json_str).map_err(EsmError::JsonParse)?;
 
     let base = path
         .parent()
@@ -124,8 +121,7 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
 
     validate_schema(&json_value)?;
 
-    let esm_file: EsmFile =
-        serde_json::from_value(json_value).map_err(|e| EsmError::JsonParse(e))?;
+    let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;
 
     Ok(esm_file)
 }
@@ -215,10 +211,10 @@ mod tests {
     }
 
     #[test]
-    fn test_load_wrong_esm_version() {
+    fn test_load_malformed_esm_version() {
         let json = r#"
         {
-          "esm": "0.2.0",
+          "esm": "not-a-version",
           "metadata": {
             "name": "test_model"
           },

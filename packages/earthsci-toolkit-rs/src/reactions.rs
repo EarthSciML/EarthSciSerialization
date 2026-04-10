@@ -77,7 +77,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     for (reaction_idx, reaction) in system.reactions.iter().enumerate() {
         // Check for invalid stoichiometry
         for substrate in &reaction.substrates {
-            if substrate.coefficient.map_or(false, |c| c < 0.0) {
+            if substrate.coefficient.is_some_and(|c| c < 0.0) {
                 return Err(DeriveError::InvalidStoichiometry(format!(
                     "Negative substrate coefficient {} in reaction {}",
                     substrate.coefficient.unwrap(),
@@ -94,7 +94,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         }
 
         for product in &reaction.products {
-            if product.coefficient.map_or(false, |c| c < 0.0) {
+            if product.coefficient.is_some_and(|c| c < 0.0) {
                 return Err(DeriveError::InvalidStoichiometry(format!(
                     "Negative product coefficient {} in reaction {}",
                     product.coefficient.unwrap(),
@@ -124,7 +124,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         let mut rate_terms = Vec::new();
 
         // Check each reaction for contributions to this species
-        for (_reaction_idx, reaction) in system.reactions.iter().enumerate() {
+        for reaction in &system.reactions {
             let mut net_stoichiometry = 0.0;
 
             // Check if species is a substrate (negative contribution)
@@ -678,8 +678,8 @@ fn find_null_space_transpose(matrix: &[Vec<f64>]) -> Vec<Vec<f64>> {
     if num_species == 2 && num_reactions == 2 && invariants.is_empty() {
         // Check if the two reactions are opposite of each other (reversible system)
         let mut is_reversible = true;
-        for species_idx in 0..num_species {
-            let coeff_sum: f64 = matrix[species_idx].iter().sum();
+        for row in matrix.iter().take(num_species) {
+            let coeff_sum: f64 = row.iter().sum();
             if coeff_sum.abs() > 1e-10 {
                 is_reversible = false;
                 break;
@@ -702,8 +702,8 @@ fn find_null_space_transpose(matrix: &[Vec<f64>]) -> Vec<Vec<f64>> {
 
             // Check if this species by itself forms a conservation law
             let mut is_conserved = true;
-            for reaction_col in 0..num_reactions {
-                if matrix[species_idx][reaction_col].abs() > 1e-10 {
+            for val in matrix[species_idx].iter().take(num_reactions) {
+                if val.abs() > 1e-10 {
                     is_conserved = false;
                     break;
                 }
@@ -765,6 +765,7 @@ fn calculate_matrix_rank(matrix: &[Vec<f64>]) -> usize {
         for i in (row + 1)..rows {
             if mat[i][col].abs() > 1e-10 {
                 let factor = mat[i][col] / mat[row][col];
+                #[allow(clippy::needless_range_loop)]
                 for j in col..cols {
                     mat[i][j] -= factor * mat[row][j];
                 }
@@ -1425,12 +1426,12 @@ mod tests {
     fn test_floating_point_precision_fix() {
         // Test that coefficients with floating-point precision issues are handled correctly
         let test_cases = vec![
-            (2.0, true),                     // Exact integer
-            (2.0000000000000004, true),      // Should be treated as 2
-            (1.9999999999999998, true),      // Should be treated as 2
-            (3.0 + std::f64::EPSILON, true), // Should be treated as 3
-            (2.5, false),                    // True fractional, should use pow
-            (1.5, false),                    // True fractional, should use pow
+            (2.0, true),                // Exact integer
+            (2.0000000000000004, true), // Should be treated as 2
+            (1.9999999999999998, true), // Should be treated as 2
+            (3.0 + f64::EPSILON, true), // Should be treated as 3
+            (2.5, false),               // True fractional, should use pow
+            (1.5, false),               // True fractional, should use pow
         ];
 
         for (coeff, should_use_multiplication) in test_cases {
@@ -1463,18 +1464,18 @@ mod tests {
 
             // Check if the result uses multiplication or pow appropriately
             let uses_multiplication = match &b_equation.rhs {
-                Expr::Operator(node) if node.op == "*" => node.args.iter().any(|arg| match arg {
-                    Expr::Operator(inner) if inner.op == "*" => true,
-                    _ => false,
-                }),
+                Expr::Operator(node) if node.op == "*" => node
+                    .args
+                    .iter()
+                    .any(|arg| matches!(arg, Expr::Operator(inner) if inner.op == "*")),
                 _ => false,
             };
 
             let uses_pow = match &b_equation.rhs {
-                Expr::Operator(node) if node.op == "*" => node.args.iter().any(|arg| match arg {
-                    Expr::Operator(inner) if inner.op == "pow" => true,
-                    _ => false,
-                }),
+                Expr::Operator(node) if node.op == "*" => node
+                    .args
+                    .iter()
+                    .any(|arg| matches!(arg, Expr::Operator(inner) if inner.op == "pow")),
                 _ => false,
             };
 
@@ -1600,7 +1601,7 @@ mod tests {
 
         // Should detect total mass conservation (A + B = constant)
         assert!(
-            analysis.linear_invariants.len() > 0,
+            !analysis.linear_invariants.is_empty(),
             "Should detect conservation laws"
         );
         assert_eq!(
@@ -1788,7 +1789,7 @@ mod tests {
         let invariants = find_linear_invariants(&matrix, &system.species);
 
         // Should find that total mass (A + B) is conserved
-        assert!(invariants.len() > 0, "Should find linear invariants");
+        assert!(!invariants.is_empty(), "Should find linear invariants");
 
         // Check that we found the A + B conservation
         let total_mass_invariant = invariants.iter().find(|inv| {

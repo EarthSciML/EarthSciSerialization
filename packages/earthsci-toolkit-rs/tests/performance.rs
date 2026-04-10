@@ -291,14 +291,14 @@ fn test_simd_operations_large_vectors() {
 
     // Test addition
     simd_math::add_vectors_simd(&a, &b, &mut result).unwrap();
-    for i in 0..size {
-        assert_eq!(result[i], (i * 3) as f64);
+    for (i, &val) in result.iter().enumerate().take(size) {
+        assert_eq!(val, (i * 3) as f64);
     }
 
     // Test multiplication
     simd_math::multiply_vectors_simd(&a, &b, &mut result).unwrap();
-    for i in 0..size {
-        assert_eq!(result[i], (i * i * 2) as f64);
+    for (i, &val) in result.iter().enumerate().take(size) {
+        assert_eq!(val, (i * i * 2) as f64);
     }
 
     // Test dot product
@@ -400,7 +400,7 @@ fn test_compact_expr_all_operators() {
         ("sin", 1.0, 1.0_f64.sin()),
         ("cos", 0.0, 1.0),
         ("exp", 1.0, 1.0_f64.exp()),
-        ("log", 2.718281828459045, 1.0),
+        ("log", std::f64::consts::E, 1.0),
     ];
 
     for (op, arg, expected) in unary_test_cases {
@@ -611,7 +611,7 @@ fn test_model_allocator_reset() {
 
     // Allocate memory
     let _slice1 = allocator.alloc_slice::<f64>(50);
-    let bytes_after_first_alloc = allocator.allocated_bytes();
+    let _bytes_after_first_alloc = allocator.allocated_bytes();
 
     // Reset allocator
     allocator.reset();

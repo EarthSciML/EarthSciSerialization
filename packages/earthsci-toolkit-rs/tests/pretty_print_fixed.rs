@@ -3,7 +3,6 @@
 //! Tests the pretty-printing functionality with working examples.
 
 use earthsci_toolkit::*;
-use serde_json;
 
 /// Test basic expression formatting
 #[test]
@@ -166,7 +165,7 @@ fn test_derivative_formatting() {
 /// Test number formatting
 #[test]
 fn test_number_formatting() {
-    let numbers = [1.0, -1.0, 42.0, 3.14159, 1.23e-6, 1.23e15, 0.0];
+    let numbers = [1.0, -1.0, 42.0, 3.15159, 1.23e-6, 1.23e15, 0.0];
 
     for &num in &numbers {
         let expr = Expr::Number(num);

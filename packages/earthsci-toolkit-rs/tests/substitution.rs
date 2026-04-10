@@ -3,7 +3,6 @@
 //! Tests the variable and expression substitution functionality.
 
 use earthsci_toolkit::*;
-use serde_json;
 use std::collections::HashMap;
 
 /// Test simple variable replacement

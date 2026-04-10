@@ -239,7 +239,7 @@ pub mod simd_math {
             let idx = i * 4;
             let va = f64x4::from([a[idx], a[idx + 1], a[idx + 2], a[idx + 3]]);
             let vb = f64x4::from([b[idx], b[idx + 1], b[idx + 2], b[idx + 3]]);
-            sum = sum + (va * vb);
+            sum += va * vb;
         }
 
         let mut result = sum.to_array().iter().sum::<f64>();
@@ -257,6 +257,13 @@ pub mod simd_math {
 #[cfg(feature = "custom_alloc")]
 pub struct ModelAllocator {
     bump: Bump,
+}
+
+#[cfg(feature = "custom_alloc")]
+impl Default for ModelAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(feature = "custom_alloc")]

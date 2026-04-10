@@ -57,7 +57,6 @@ fn test_undefined_variable_in_model() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -142,7 +141,6 @@ fn test_equation_count_mismatch() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -215,7 +213,6 @@ fn test_undefined_species_in_reaction() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -313,7 +310,6 @@ fn test_valid_file_passes() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);

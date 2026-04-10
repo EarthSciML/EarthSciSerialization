@@ -901,7 +901,7 @@ pub fn to_latex(expr: &Expr) -> String {
                 format!("{}", *n as i64)
             } else {
                 let abs_n = n.abs();
-                if abs_n >= 0.0001 && abs_n < 10000.0 {
+                if (0.0001..10000.0).contains(&abs_n) {
                     let formatted = format!("{:.4}", n);
                     formatted
                         .trim_end_matches('0')
@@ -1513,7 +1513,7 @@ pub fn to_ascii(expr: &Expr) -> String {
                 format!("{}", *n as i64)
             } else {
                 let abs_n = n.abs();
-                if abs_n >= 0.0001 && abs_n < 10000.0 {
+                if (0.0001..10000.0).contains(&abs_n) {
                     let formatted = format!("{:.4}", n);
                     formatted
                         .trim_end_matches('0')
@@ -1782,7 +1782,7 @@ fn format_operator_ascii(
         "binomial" => {
             format!(
                 "binomial({}, {})",
-                if args.len() >= 1 {
+                if !args.is_empty() {
                     to_ascii(&args[0])
                 } else {
                     "".to_string()
@@ -2060,7 +2060,7 @@ mod tests {
     #[test]
     fn test_number_formatting_unicode() {
         assert_eq!(format_number_unicode(42.0), "42");
-        assert_eq!(format_number_unicode(3.14), "3.14");
+        assert_eq!(format_number_unicode(3.15), "3.15");
         assert_eq!(format_number_unicode(1.8e-12), "1.80×10⁻¹²");
         assert_eq!(format_number_unicode(2.46e19), "2.46×10¹⁹");
 

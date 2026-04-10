@@ -113,7 +113,6 @@ fn test_structural_validation() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -240,7 +239,6 @@ fn test_component_graph() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let graph = component_graph(&esm_file);

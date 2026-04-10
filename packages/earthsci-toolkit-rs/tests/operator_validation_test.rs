@@ -1,5 +1,4 @@
 use earthsci_toolkit::*;
-use serde_json;
 
 #[test]
 fn test_invalid_operator_without_required_fields() {

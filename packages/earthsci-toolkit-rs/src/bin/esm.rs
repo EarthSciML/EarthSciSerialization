@@ -322,7 +322,7 @@ fn check_energy_conservation(esm_file: &earthsci_toolkit::EsmFile) {
             println!("  Model: {}", model_id);
 
             // Look for energy-related variables
-            for (var_name, var) in &model.variables {
+            for var_name in model.variables.keys() {
                 if var_name.to_lowercase().contains("energy")
                     || var_name.to_lowercase().contains("temperature")
                     || var_name.to_lowercase().contains("heat")
@@ -393,7 +393,7 @@ fn check_species_conservation(esm_file: &earthsci_toolkit::EsmFile) {
 
                 // Check if atom counts balance
                 let mut balanced = true;
-                for (species, balance) in &atom_balance {
+                for balance in atom_balance.values() {
                     if balance.abs() > 1e-6 {
                         balanced = false;
                         break;
@@ -441,7 +441,7 @@ fn analyze_model_units(esm_file: &earthsci_toolkit::EsmFile) {
             );
 
             // Check for dimensional consistency in equations
-            for (i, equation) in model.equations.iter().enumerate() {
+            for (i, _equation) in model.equations.iter().enumerate() {
                 println!("  Equation {}: dimensional analysis needed", i + 1);
                 // Note: Full dimensional analysis would require evaluating expression units
             }
@@ -473,7 +473,7 @@ fn analyze_reaction_system_units(esm_file: &earthsci_toolkit::EsmFile) {
             );
 
             // Check rate expression units
-            for (i, reaction) in rs.reactions.iter().enumerate() {
+            for (i, _reaction) in rs.reactions.iter().enumerate() {
                 println!("  Reaction {} rate: dimensional analysis needed", i + 1);
                 // Rate expressions should have units consistent with d[species]/dt
             }
@@ -521,7 +521,7 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
 
                 // Check if it's a derivative equation
                 if let earthsci_toolkit::Expr::Operator(node) = &equation.lhs {
-                    if node.op == "d" && node.args.len() >= 1 {
+                    if node.op == "d" && !node.args.is_empty() {
                         if let earthsci_toolkit::Expr::Variable(var_name) = &node.args[0] {
                             // Find variable index
                             if let Some(var_idx) =
@@ -686,7 +686,7 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
 
                 // Check if it's a derivative equation
                 if let earthsci_toolkit::Expr::Operator(node) = &equation.lhs {
-                    if node.op == "d" && node.args.len() >= 1 {
+                    if node.op == "d" && !node.args.is_empty() {
                         if let earthsci_toolkit::Expr::Variable(var_name) = &node.args[0] {
                             // Find variable index
                             if let Some(var_idx) =
@@ -949,8 +949,8 @@ fn collect_unit_types(esm_file: &earthsci_toolkit::EsmFile) -> Vec<String> {
     let mut units = std::collections::HashSet::new();
 
     if let Some(ref models) = esm_file.models {
-        for (_, model) in models {
-            for (_, var) in &model.variables {
+        for model in models.values() {
+            for var in model.variables.values() {
                 if let Some(ref unit_str) = var.units {
                     units.insert(unit_str.clone());
                 }
@@ -959,7 +959,7 @@ fn collect_unit_types(esm_file: &earthsci_toolkit::EsmFile) -> Vec<String> {
     }
 
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        for (_, rs) in reaction_systems {
+        for rs in reaction_systems.values() {
             for species in &rs.species {
                 if let Some(ref unit_str) = species.units {
                     units.insert(unit_str.clone());
@@ -1721,8 +1721,8 @@ fn perform_numerical_comparison(
     // Summary statistics
     let mut total_numbers1 = 0;
     let mut total_numbers2 = 0;
-    count_numerical_values(&esm_file1, &mut total_numbers1);
-    count_numerical_values(&esm_file2, &mut total_numbers2);
+    count_numerical_values(esm_file1, &mut total_numbers1);
+    count_numerical_values(esm_file2, &mut total_numbers2);
 
     println!(
         "\nNumerical values compared: {} vs {}",
@@ -1757,9 +1757,9 @@ fn expressions_numerically_equal(
 #[cfg(feature = "cli")]
 fn count_numerical_values(esm_file: &earthsci_toolkit::EsmFile, count: &mut usize) {
     if let Some(ref models) = esm_file.models {
-        for (_, model) in models {
+        for model in models.values() {
             // Count variable defaults
-            for (_, var) in &model.variables {
+            for var in model.variables.values() {
                 if var.default.is_some() {
                     *count += 1;
                 }
@@ -1774,7 +1774,7 @@ fn count_numerical_values(esm_file: &earthsci_toolkit::EsmFile, count: &mut usiz
     }
 
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        for (_, rs) in reaction_systems {
+        for rs in reaction_systems.values() {
             for reaction in &rs.reactions {
                 // Count coefficients
                 for substrate in &reaction.substrates {
@@ -1812,7 +1812,7 @@ fn count_numbers_in_expression(expr: &earthsci_toolkit::Expr, count: &mut usize)
 fn perform_deep_coupling_analysis(esm_file: &earthsci_toolkit::EsmFile) {
     println!("\n=== DEEP COUPLING DEPENDENCY ANALYSIS ===");
 
-    let graph = component_graph(&esm_file);
+    let graph = component_graph(esm_file);
     println!(
         "Analyzing {} components with {} coupling relationships",
         graph.nodes.len(),
@@ -1851,10 +1851,10 @@ fn perform_deep_coupling_analysis(esm_file: &earthsci_toolkit::EsmFile) {
     }
 
     // Analyze coupling strength
-    analyze_coupling_strength(&graph, &esm_file);
+    analyze_coupling_strength(&graph, esm_file);
 
     // Detect coupling anti-patterns
-    detect_coupling_antipatterns(&graph, &esm_file);
+    detect_coupling_antipatterns(&graph, esm_file);
 
     // Generate coupling recommendations
     println!("\n=== COUPLING RECOMMENDATIONS ===");
@@ -1978,7 +1978,7 @@ fn find_strongly_connected_components(
     for node in &graph.nodes {
         if !visited.contains(&node.id) {
             let mut component = Vec::new();
-            dfs_scc(&graph, &node.id, &mut visited, &mut component);
+            dfs_scc(graph, &node.id, &mut visited, &mut component);
             if !component.is_empty() {
                 components.push(component);
             }
@@ -2008,7 +2008,7 @@ fn dfs_scc(
 
 #[cfg(feature = "cli")]
 fn analyze_coupling_strength(
-    graph: &earthsci_toolkit::graph::ComponentGraph,
+    _graph: &earthsci_toolkit::graph::ComponentGraph,
     esm_file: &earthsci_toolkit::EsmFile,
 ) {
     println!("\n=== COUPLING STRENGTH ANALYSIS ===");
@@ -2078,7 +2078,7 @@ fn analyze_coupling_strength(
 #[cfg(feature = "cli")]
 fn detect_coupling_antipatterns(
     graph: &earthsci_toolkit::graph::ComponentGraph,
-    esm_file: &earthsci_toolkit::EsmFile,
+    _esm_file: &earthsci_toolkit::EsmFile,
 ) {
     println!("\n=== COUPLING ANTI-PATTERNS ===");
 
@@ -2992,18 +2992,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
 
                     // Component memory estimation
-                    let model_count = esm_file.models.as_ref().map(|m| m.len()).unwrap_or(0);
-                    let rs_count = esm_file
+                    let _model_count = esm_file.models.as_ref().map(|m| m.len()).unwrap_or(0);
+                    let _rs_count = esm_file
                         .reaction_systems
                         .as_ref()
                         .map(|rs| rs.len())
                         .unwrap_or(0);
-                    let dl_count = esm_file
+                    let _dl_count = esm_file
                         .data_loaders
                         .as_ref()
                         .map(|dl| dl.len())
                         .unwrap_or(0);
-                    let op_count = esm_file.operators.as_ref().map(|op| op.len()).unwrap_or(0);
+                    let _op_count = esm_file.operators.as_ref().map(|op| op.len()).unwrap_or(0);
 
                     // Estimate memory usage
                     let mut estimated_memory = file_size; // Base JSON representation

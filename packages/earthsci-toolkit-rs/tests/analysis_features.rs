@@ -125,7 +125,6 @@ fn test_analysis_features_integration() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     // Test component graph

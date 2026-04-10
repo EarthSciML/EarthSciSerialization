@@ -45,7 +45,7 @@ use crate::{EsmFile, error::EsmError};
 /// assert!(json.contains("\"esm\": \"0.1.0\""));
 /// ```
 pub fn save(esm_file: &EsmFile) -> Result<String, EsmError> {
-    serde_json::to_string_pretty(esm_file).map_err(|e| EsmError::JsonParse(e))
+    serde_json::to_string_pretty(esm_file).map_err(EsmError::JsonParse)
 }
 
 /// Serialize an ESM file to compact JSON string (no pretty printing)
@@ -62,7 +62,7 @@ pub fn save(esm_file: &EsmFile) -> Result<String, EsmError> {
 /// * `Ok(String)` - Successfully serialized compact JSON string
 /// * `Err(EsmError)` - Serialization error
 pub fn save_compact(esm_file: &EsmFile) -> Result<String, EsmError> {
-    serde_json::to_string(esm_file).map_err(|e| EsmError::JsonParse(e))
+    serde_json::to_string(esm_file).map_err(EsmError::JsonParse)
 }
 
 #[cfg(test)]

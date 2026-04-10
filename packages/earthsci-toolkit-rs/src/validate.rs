@@ -329,7 +329,7 @@ fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo>
 
     // Add data loaders (note: current type doesn't have provides field)
     if let Some(ref data_loaders) = esm_file.data_loaders {
-        for (name, _dl) in data_loaders {
+        for name in data_loaders.keys() {
             systems.insert(
                 name.clone(),
                 SystemInfo {
@@ -344,7 +344,7 @@ fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo>
 
     // Add operators
     if let Some(ref operators) = esm_file.operators {
-        for (name, _op) in operators {
+        for name in operators.keys() {
             systems.insert(
                 name.clone(),
                 SystemInfo {
@@ -438,7 +438,6 @@ fn validate_model(
             &defined_vars,
             system_refs,
             &eq_path,
-            "lhs",
             eq_idx,
             errors,
         );
@@ -447,7 +446,6 @@ fn validate_model(
             &defined_vars,
             system_refs,
             &eq_path,
-            "rhs",
             eq_idx,
             errors,
         );
@@ -480,7 +478,6 @@ fn validate_model(
                     &defined_vars,
                     system_refs,
                     &expr_path,
-                    "expression",
                     0,
                     errors,
                 );
@@ -668,31 +665,11 @@ fn validate_rate_expression(
     }
 }
 
-fn validate_expression_references(
-    expr: &crate::Expr,
-    defined_vars: &HashSet<String>,
-    base_path: &str,
-    field: &str,
-    equation_index: usize,
-    errors: &mut Vec<StructuralError>,
-) {
-    validate_expression_references_with_systems(
-        expr,
-        defined_vars,
-        &HashMap::new(),
-        base_path,
-        field,
-        equation_index,
-        errors,
-    );
-}
-
 fn validate_expression_references_with_systems(
     expr: &crate::Expr,
     defined_vars: &HashSet<String>,
     system_refs: &HashMap<String, SystemInfo>,
     base_path: &str,
-    field: &str,
     equation_index: usize,
     errors: &mut Vec<StructuralError>,
 ) {
@@ -770,7 +747,6 @@ fn validate_expression_references_with_systems(
                     defined_vars,
                     system_refs,
                     base_path,
-                    field,
                     equation_index,
                     errors,
                 );
@@ -1018,7 +994,7 @@ fn validate_coupling(
             }
             crate::CouplingEntry::Couple { systems, .. } => {
                 if systems.len() >= 2 {
-                    for (_i, system) in systems.iter().take(2).enumerate() {
+                    for system in systems.iter().take(2) {
                         if !system_refs.contains_key(system) {
                             errors.push(StructuralError {
                                 path: coupling_path.clone(),
@@ -1047,7 +1023,7 @@ fn validate_coupling(
             }
             crate::CouplingEntry::OperatorCompose { systems, .. } => {
                 if systems.len() >= 2 {
-                    for (_i, system) in systems.iter().take(2).enumerate() {
+                    for system in systems.iter().take(2) {
                         if !system_refs.contains_key(system) {
                             errors.push(StructuralError {
                                 path: coupling_path.clone(),
@@ -1440,7 +1416,7 @@ fn check_circular_dependencies_in_models(
             // Find the actual cycle for error reporting
             let cycle = find_cycle(&dependencies, model_name);
             errors.push(StructuralError {
-                path: format!("/models"),
+                path: "/models".to_string(),
                 code: StructuralErrorCode::CircularDependency,
                 message: format!(
                     "Circular dependency detected in model dependencies: {}",

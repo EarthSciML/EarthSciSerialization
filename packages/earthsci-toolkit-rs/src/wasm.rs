@@ -86,7 +86,7 @@ pub fn to_unicode(json_str: &str) -> Result<String, JsValue> {
 
     if let Some(models) = &esm_file.models {
         result.push_str(&format!("\n{} Models:\n", models.len()));
-        for (name, _) in models {
+        for name in models.keys() {
             result.push_str(&format!("• {}\n", name));
         }
     }
@@ -115,7 +115,7 @@ pub fn to_latex(json_str: &str) -> Result<String, JsValue> {
 
     if let Some(models) = &esm_file.models {
         result.push_str(&format!("\n\\textbf{{{} Models:}}\\\\\n", models.len()));
-        for (name, _) in models {
+        for name in models.keys() {
             result.push_str(&format!("$\\bullet$ {}\\\\\n", name));
         }
     }
@@ -144,7 +144,7 @@ pub fn to_ascii(json_str: &str) -> Result<String, JsValue> {
 
     if let Some(models) = &esm_file.models {
         result.push_str(&format!("\n{} Models:\n", models.len()));
-        for (name, _) in models {
+        for name in models.keys() {
             result.push_str(&format!("• {}\n", name));
         }
     }
@@ -331,10 +331,9 @@ mod tests {
             },
             "models": {
                 "SimpleModel": {
-                    "name": "Simple Model",
                     "variables": {
-                        "x": {"type": "state", "units": "m", "initial_value": 1.0},
-                        "k": {"type": "parameter", "value": 0.5}
+                        "x": {"type": "state", "units": "m", "default": 1.0},
+                        "k": {"type": "parameter", "default": 0.5}
                     },
                     "equations": [
                         {"lhs": {"op": "D", "args": ["x"]}, "rhs": {"op": "*", "args": ["k", "x"]}}
