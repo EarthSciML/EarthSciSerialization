@@ -1,15 +1,15 @@
 {
-  "version": "0.0.1",
-  "updated": "2026-04-10T00:37:07+00:00",
+  "version": "0.0.2",
+  "updated": "2026-04-10T00:41:22+00:00",
   "packages": {
-    "julia": "v0.0.1",
-    "typescript": "v0.0.1",
-    "python": "v0.0.1",
-    "rust": "v0.0.1"
+    "julia": "v0.0.2",
+    "typescript": "v0.0.2",
+    "python": "v0.0.2",
+    "rust": "v0.0.2"
   },
   "release_coordination": {
     "status": "releasing",
-    "changed_packages": ["EarthSciSerialization.jl","earthsci-toolkit","earthsci_toolkit","esm-editor","esm-format","esm-format-go"],
-    "workflow_run_id": "24220322817"
+    "changed_packages": ["EarthSciSerialization.jl","earthsci-toolkit","earthsci_toolkit","esm-format","esm-format-go"],
+    "workflow_run_id": "24220442431"
   }
 }
