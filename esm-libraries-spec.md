@@ -23,10 +23,10 @@ Each library implementation is classified into tiers:
 
 | Tier | Capabilities | Required for |
 |---|---|---|
-| **Core** | Parse, serialize, pretty-print, substitute, validate schema | All languages |
+| **Core** | Parse, serialize, pretty-print, substitute, validate schema, flatten coupled systems to single equation system with dot-namespaced variables | All languages |
 | **Analysis** | Unit checking, equation counting, stoichiometric matrix computation, conservation law detection | All languages |
 | **Interactive** | Click-to-edit expressions, structural editing, undo/redo, coupling graph, web component export | `esm-editor` (SolidJS) |
-| **Simulation** | Convert to native ODE system and solve numerically | Julia (MTK), Python (SymPy + SciPy), optionally others |
+| **Simulation** | Convert to native ODE system and solve numerically; Julia converts flattened system to MTK `ODESystem` or `PDESystem` depending on dimensionality | Julia (MTK), Python (SymPy + SciPy), optionally others |
 | **Full** | Bidirectional MTK/Catalyst conversion, coupled system assembly, operator dispatch | Julia only (initially) |
 
 ---
@@ -345,7 +345,9 @@ Beyond expression-level substitution, libraries must support model-level editing
 
 ### 4.7 Coupling Resolution
 
-Libraries that support simulation (Julia, Python) or coupled system assembly must implement coupling resolution — the process of combining individual models, reaction systems, data loaders, and operators into a single system according to the coupling rules. Libraries at the Core tier do not need to resolve coupling but must understand the semantics for validation and graph construction.
+Libraries at **all tiers** (including Core) must implement coupling resolution as a **flattening** operation: transforming a set of coupled component systems into a single flat equation system with dot-namespaced variables. This flattened representation is the canonical intermediate form — it is the output of coupling resolution and the input to simulation backends, graph construction, and validation.
+
+Libraries that support simulation (Julia, Python) additionally convert the flattened system into native solver objects (see Section 4.7.5). Libraries at the Core tier produce the flattened representation but do not convert to solver-specific types.
 
 **Resolution order:** The order of entries in the `coupling` array does not affect the final result. Coupling rules are commutative — the same mathematical system is produced regardless of the order in which rules are applied. (This matches the behavior of EarthSciMLBase.jl, which is tested across all permutations of system ordering.)
 
@@ -416,6 +418,62 @@ In Julia, `couple2` uses multiple dispatch on `coupletype` metadata to select th
 #### 4.7.4 `operator_apply` and `callback` Resolution
 
 These coupling types register runtime-specific components. Libraries record them in the coupled system metadata but cannot resolve their behavior (they are opaque references to runtime implementations). For validation, libraries verify that the referenced operator or callback ID exists in the file's `operators` section or is a known registered ID.
+
+#### 4.7.5 Coupled System Flattening Algorithm
+
+All libraries (including Core tier) must implement the flattening algorithm. Flattening transforms a set of coupled component systems into a single flat equation system where all variables and parameters are uniquely identified by dot-namespaced names.
+
+**Dot-namespacing convention:** Every variable, parameter, and species in the flattened system is prefixed with its owning system's name, using dot notation. For nested subsystems, each level of the hierarchy is included. Examples:
+
+| Original | System | Flattened name |
+|---|---|---|
+| `O3` (species) | `SimpleOzone` | `SimpleOzone.O3` |
+| `u_wind` (parameter) | `Advection` | `Advection.u_wind` |
+| `T` (variable) | `GEOSFP` | `GEOSFP.T` |
+| `NO2` (species) | `Atmosphere.Chemistry` | `Atmosphere.Chemistry.NO2` |
+
+**Algorithm:**
+
+1. **Derive ODEs from reaction systems.** For each reaction system in the file, generate the equivalent ODE equations using the stoichiometry and rate laws (as specified in Section 4.6 `derive_odes`). This converts reaction systems into a uniform equation-based representation.
+
+2. **Namespace all variables.** For each component system (model, derived ODE system from reaction systems, data loader):
+   - Prefix every variable, parameter, and species name with the system name and a dot.
+   - Rewrite all equations so that variable references use the dot-namespaced names.
+   - For nested subsystems, the prefix is the full path: `Parent.Child.variable`.
+
+3. **Apply coupling rules.** Process each coupling entry to merge equations across systems:
+   - **`operator_compose`**: Match equations by dependent variable (applying the `translate` map and `_var` placeholder expansion as described in Section 4.7.1). Combine matched equations by summing their RHS terms. The resulting equation uses the namespaced LHS variable (e.g., `D(SimpleOzone.O3, t) = [chemistry RHS] + [advection RHS]`).
+   - **`couple2`**: Apply connector equations, resolving the `from` and `to` scoped references to their namespaced equivalents.
+   - **`variable_map`**: Substitute the target parameter with the source variable. For `param_to_var`, replace all occurrences of `Target.param` with `Source.var` in the flattened equations and remove the parameter from the target's parameter list.
+   - **`operator_apply` / `callback`**: Record in the flattened system's metadata as opaque runtime references.
+
+4. **Collect the flattened system.** The result is a single flat system containing:
+   - **All equations** from all component systems, with coupling modifications applied, using dot-namespaced variable names.
+   - **All state variables** (dot-namespaced), with duplicates merged where coupling unifies them.
+   - **All parameters** (dot-namespaced), minus any that were promoted to variables by `variable_map`.
+   - **All events** from all component systems, with variable references rewritten to dot-namespaced form.
+   - **Domain** from the file's `domain` section (if present).
+   - **Metadata** recording which component systems were flattened and which coupling rules were applied.
+
+**Example:** Given an ESM file with `SimpleOzone` (reaction system with O₃, NO, NO₂), `Advection` (model with `_var` placeholder), and `GEOSFP` (data loader providing T, u, v), coupled via `operator_compose` and `variable_map`, the flattened system contains:
+
+```
+State variables: SimpleOzone.O3, SimpleOzone.NO, SimpleOzone.NO2
+Parameters:      SimpleOzone.k_NO_O3, SimpleOzone.jNO2 (T, u, v promoted to variables)
+Variables:       GEOSFP.T, GEOSFP.u, GEOSFP.v
+
+Equations:
+  D(SimpleOzone.O3, t)  = -SimpleOzone.k_NO_O3 * SimpleOzone.O3 * SimpleOzone.NO
+                          + SimpleOzone.jNO2 * SimpleOzone.NO2
+                          + (-GEOSFP.u * grad(SimpleOzone.O3, x) - GEOSFP.v * grad(SimpleOzone.O3, y))
+
+  D(SimpleOzone.NO, t)  = [chemistry terms] + [advection terms]
+  D(SimpleOzone.NO2, t) = [chemistry terms] + [advection terms]
+```
+
+**Namespacing preserves identity.** Two systems may both declare a variable named `T` — namespacing ensures `GEOSFP.T` and `Atmosphere.T` remain distinct unless explicitly unified by a coupling rule.
+
+**The flattened system is the API boundary.** All downstream operations — graph construction, validation of the coupled system, export to simulation backends — operate on the flattened representation rather than the individual component systems.
 
 ### 4.8 Graph Representations
 
@@ -639,16 +697,33 @@ model = from_mtk_system(my_ode_system; name="MyModel")
 # Catalyst → ESM
 rxn_sys = from_catalyst_system(my_reaction_system; name="MyReactions")
 
-# Full coupled system
-coupled = to_coupled_system(file)
-# Returns an EarthSciMLBase.CoupledSystem with all coupling rules applied
-# This handles: operator_compose, couple2, variable_map, operator_apply
+# Full coupled system — flatten then convert
+flat = flatten_coupled_system(file)
+# Returns a FlattenedSystem with all coupling rules applied, dot-namespaced variables
+
+# Convert flattened system to a single MTK System
+# Dimensionality determines the system type:
+#   - 0D (ODE-only, no spatial derivatives): returns an ODESystem
+#   - 1D+ (spatial derivatives present): returns a PDESystem
+sys = to_mtk_system(flat)
+# Dot-namespaced variables become MTK symbolic variables:
+#   SimpleOzone.O3 → @variables SimpleOzone₊O3(t)
+# (MTK uses ₊ as the namespace separator internally)
 
 # Simulate
 using OrdinaryDiffEq
-prob = ODEProblem(coupled, file.domain)
+prob = ODEProblem(sys, file.domain)   # or discretize() for PDESystem
 sol = solve(prob, Tsit5())
 ```
+
+**Flattened system to MTK conversion details:**
+
+The `to_mtk_system(::FlattenedSystem)` function converts the flattened representation into a single MTK system. The choice between `ODESystem` and `PDESystem` depends on the presence of spatial derivatives (`grad`, `div`, `laplacian` operators) in the flattened equations:
+
+- **No spatial derivatives** → `ODESystem` with independent variable `t`
+- **Spatial derivatives present** → `PDESystem` with independent variables `t, x, y, z` (as needed), boundary conditions from the domain section, and initial conditions
+
+This replaces the previous `to_coupled_system` approach (which returned an `EarthSciMLBase.CoupledSystem`) with a single-system representation that is directly solvable by MTK's standard problem constructors.
 
 #### 5.1.4 Expression Mapping
 

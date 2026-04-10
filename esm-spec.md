@@ -1252,6 +1252,29 @@ In the first entry, `interface` reduces 3D→2D (extracting at the ground surfac
 
 8. **Multiple interfaces between the same domain pair**: Different interfaces between the same two domains are permitted (e.g., `ground_surface` at `lev=min` and `tropopause` at a specific pressure level). Each coupling entry references the specific interface it uses.
 
+### 10.7 Coupled System Flattening
+
+The coupling section defines relationships between component systems, but simulation and analysis require a single unified equation system. **Flattening** is the process of resolving all coupling rules and producing a single flat system with dot-namespaced variables.
+
+**Dot-namespaced variables:** In the flattened system, every variable, parameter, and species is prefixed with its owning system's name using dot notation. For nested subsystems, each level is included:
+
+```
+SimpleOzone.O3            # species O3 from the SimpleOzone reaction system
+Advection.u_wind          # parameter u_wind from the Advection model
+Atmosphere.Chemistry.NO2  # species NO2 from a nested subsystem
+```
+
+The last dot-separated segment is always the variable name; all preceding segments form the system path. This convention is consistent with the scoped reference notation used in coupling entries (Section 4.3) — the difference is that in the flattened system, **all** variable references are fully qualified, not just cross-system references.
+
+**Flattening is a core operation.** All libraries (not just simulation-tier) must be able to flatten a coupled system. The flattened representation is the input to:
+
+- **Graph construction** — the expression graph (Section 4.8.2 of the library spec) operates on the flattened system to produce cross-system dependency edges.
+- **Coupled system validation** — checking that all coupling references resolve, no variables are orphaned, and equation–unknown balance holds across the full system.
+- **Simulation** — Julia libraries convert the flattened system to a single MTK `ODESystem` (for 0D/ODE-only systems) or `PDESystem` (for systems with spatial derivatives), using MTK's native namespace separator (`₊`) in place of dots.
+- **Export and display** — pretty-printing the full coupled system as a single set of equations.
+
+The flattening algorithm is specified in detail in the ESM Library Specification (Section 4.7.5).
+
 ---
 
 ## 11. Domains
@@ -2141,6 +2164,10 @@ Cross-domain coupling requires two distinct concerns: the *geometric relationshi
 ### 0D systems are first-class coupling intermediaries
 
 Many physical parameterizations are algebraic or ODE systems with no intrinsic spatial dimensions — they compute pointwise relationships (e.g., wind speed → fire spread rate, bulk surface fluxes). Rather than embedding these calculations in the spatial model's equations, they are declared as separate 0D models with explicit coupling. This preserves modularity: the same 0D parameterization can be swapped, tested independently, or coupled to different spatial domains.
+
+### Coupled systems flatten to a single equation system
+
+The composition of multiple models, reaction systems, and data loaders resolves to a **single flat equation system** with dot-namespaced variables (`Atmosphere.Chemistry.O3`). This is not merely a convenience — it is the canonical intermediate representation that all downstream operations (simulation, validation, graph construction) consume. Dot-namespacing preserves provenance (you can always trace a variable back to its originating component) while producing a system that maps directly to a single solver object (MTK `ODESystem` or `PDESystem` in Julia, a single ODE integrator call in Python). The separation between modular component definitions (in the `.esm` file) and the unified flat system (produced by flattening) mirrors the distinction between source code and compiled output: the file is for humans and version control, the flattened system is for machines and solvers.
 
 ---
 
