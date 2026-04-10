@@ -219,9 +219,13 @@ def _parse_continuous_event(event_data: Dict[str, Any]) -> ContinuousEvent:
     conditions = [_parse_expression(cond) for cond in event_data["conditions"]]
     affects = []
 
-    # Parse affects (AffectEquation objects)
+    # Parse affects: distinguish AffectEquation from FunctionalAffect
     if "affects" in event_data:
-        affects = [_parse_affect_equation(affect) for affect in event_data["affects"]]
+        for affect in event_data["affects"]:
+            if isinstance(affect, dict) and "handler_id" in affect:
+                affects.append(_parse_functional_affect(affect))
+            else:
+                affects.append(_parse_affect_equation(affect))
 
     # Parse functional_affect (FunctionalAffect object)
     if "functional_affect" in event_data:
@@ -265,9 +269,13 @@ def _parse_discrete_event(event_data: Dict[str, Any]) -> DiscreteEvent:
     trigger = _parse_discrete_event_trigger(event_data["trigger"])
     affects = []
 
-    # Parse affects (AffectEquation objects)
+    # Parse affects: distinguish AffectEquation from FunctionalAffect
     if "affects" in event_data:
-        affects = [_parse_affect_equation(affect) for affect in event_data["affects"]]
+        for affect in event_data["affects"]:
+            if isinstance(affect, dict) and "handler_id" in affect:
+                affects.append(_parse_functional_affect(affect))
+            else:
+                affects.append(_parse_affect_equation(affect))
 
     # Parse functional_affect (FunctionalAffect object)
     if "functional_affect" in event_data:
@@ -658,7 +666,7 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
             domain.spatial[dim_name] = SpatialDimension(
                 min=dim_data["min"],
                 max=dim_data["max"],
-                units=dim_data["units"],
+                units=dim_data.get("units"),
                 grid_spacing=dim_data.get("grid_spacing")
             )
 
@@ -1092,6 +1100,696 @@ def resolve_subsystem_refs(esm_file: EsmFile, base_path: str) -> None:
         _resolve_reaction_system_subsystems(rs, base_path, seen)
 
 
+# Operator arity requirements: (min_args, max_args). None = unlimited.
+_OPERATOR_ARITY = {
+    "+": (2, None), "-": (1, None), "*": (2, None), "/": (2, 2),
+    "^": (2, 2), "D": (1, 1), "grad": (1, 1), "div": (1, 1),
+    "laplacian": (1, 1), "exp": (1, 1), "log": (1, 1), "log10": (1, 1),
+    "sqrt": (1, 1), "abs": (1, 1), "sin": (1, 1), "cos": (1, 1),
+    "tan": (1, 1), "asin": (1, 1), "acos": (1, 1), "atan": (1, 1),
+    "atan2": (2, 2), "min": (2, None), "max": (2, None),
+    "floor": (1, 1), "ceil": (1, 1), "ifelse": (3, 3),
+    ">": (2, 2), "<": (2, 2), ">=": (2, 2), "<=": (2, 2),
+    "==": (2, 2), "!=": (2, 2), "and": (2, None), "or": (2, None),
+    "not": (1, 1), "Pre": (1, 1), "sign": (1, 1),
+}
+
+# Built-in symbols always available in expressions
+_BUILTIN_SYMBOLS = frozenset({
+    "t", "pi", "e", "true", "false",
+    "x", "y", "z", "lon", "lat", "lev", "longitude", "latitude", "level",
+})
+
+# Pint-compatible unit aliases for normalizing
+_UNIT_ALIASES = {
+    "1": "dimensionless", "": "dimensionless", "dimensionless": "dimensionless",
+}
+
+
+def _walk_expression_strings(expr) -> List[str]:
+    """Recursively collect string args from inside op-expression nodes only."""
+    result = []
+    if isinstance(expr, dict) and "op" in expr and "args" in expr:
+        for arg in expr["args"]:
+            if isinstance(arg, str):
+                result.append(arg)
+            elif isinstance(arg, dict):
+                result.extend(_walk_expression_strings(arg))
+    return result
+
+
+def _check_expression_arity(expr, errors: List[str], path: str) -> None:
+    """Walk an expression tree and check operator arity."""
+    if isinstance(expr, dict) and "op" in expr and "args" in expr:
+        op = expr["op"]
+        args = expr["args"]
+        if op in _OPERATOR_ARITY:
+            min_args, max_args = _OPERATOR_ARITY[op]
+            n = len(args)
+            if n < min_args:
+                errors.append(
+                    f"{path}: operator '{op}' requires at least {min_args} args, got {n}"
+                )
+            elif max_args is not None and n > max_args:
+                errors.append(
+                    f"{path}: operator '{op}' accepts at most {max_args} args, got {n}"
+                )
+        for i, arg in enumerate(args):
+            _check_expression_arity(arg, errors, f"{path}/args[{i}]")
+
+
+def _normalize_unit(unit: str) -> str:
+    """Normalize a unit string for compatibility comparison."""
+    if unit is None:
+        return "dimensionless"
+    return _UNIT_ALIASES.get(unit.strip(), unit.strip())
+
+
+def _units_compatible(u1: str, u2: str) -> bool:
+    """Check if two unit strings represent compatible (same dimension) quantities."""
+    n1 = _normalize_unit(u1)
+    n2 = _normalize_unit(u2)
+    if n1 == n2:
+        return True
+    try:
+        import pint
+        ureg = pint.UnitRegistry()
+        q1 = ureg(n1) if n1 != "dimensionless" else ureg("dimensionless")
+        q2 = ureg(n2) if n2 != "dimensionless" else ureg("dimensionless")
+        return q1.dimensionality == q2.dimensionality
+    except Exception:
+        return n1 == n2
+
+
+def _build_symbol_tables(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Build symbol tables for all systems and global symbols in the file."""
+    models = {}
+    for mname, m in data.get("models", {}).items():
+        var_info = {}
+        for vname, vdef in m.get("variables", {}).items():
+            var_info[vname] = vdef
+        models[mname] = var_info
+
+    reaction_systems = {}
+    for rsname, rs in data.get("reaction_systems", {}).items():
+        sym_info = {}
+        for sname, sdef in rs.get("species", {}).items():
+            sym_info[sname] = {"type": "species", **sdef}
+        for pname, pdef in rs.get("parameters", {}).items():
+            sym_info[pname] = {"type": "parameter", **pdef}
+        reaction_systems[rsname] = sym_info
+
+    data_loaders = {}
+    for dname, d in data.get("data_loaders", {}).items():
+        loader_info = {}
+        for vname, vdef in d.get("provides", {}).items():
+            loader_info[vname] = vdef
+        data_loaders[dname] = loader_info
+
+    # Global symbol set: all variable/species/parameter names anywhere
+    global_symbols = set(_BUILTIN_SYMBOLS)
+    for m in models.values():
+        global_symbols.update(m.keys())
+    for rs in reaction_systems.values():
+        global_symbols.update(rs.keys())
+    for d in data_loaders.values():
+        global_symbols.update(d.keys())
+    # Add spatial dim names from domains
+    for dom in data.get("domains", {}).values():
+        global_symbols.update(dom.get("spatial", {}).keys())
+
+    return {
+        "models": models,
+        "reaction_systems": reaction_systems,
+        "data_loaders": data_loaders,
+        "global_symbols": global_symbols,
+        "all_systems": set(models.keys()) | set(reaction_systems.keys()) | set(data_loaders.keys()),
+    }
+
+
+def _resolve_scoped_ref(ref: str, tables: Dict[str, Any]) -> tuple:
+    """
+    Try to resolve a 'System.var' style reference.
+    Returns (system_name, var_name, status) where status is one of:
+    - 'ok': resolved successfully
+    - 'no_system': system not found
+    - 'no_var': system found but variable not in it
+    - 'not_scoped': ref doesn't have a dot
+    """
+    if "." not in ref:
+        return (None, None, "not_scoped")
+    parts = ref.split(".")
+    system = parts[0]
+    var = parts[-1]
+    if system not in tables["all_systems"]:
+        return (system, var, "no_system")
+    # Check if var exists in that system
+    if system in tables["models"]:
+        if var in tables["models"][system]:
+            return (system, var, "ok")
+    if system in tables["reaction_systems"]:
+        if var in tables["reaction_systems"][system]:
+            return (system, var, "ok")
+    if system in tables["data_loaders"]:
+        if var in tables["data_loaders"][system]:
+            return (system, var, "ok")
+    return (system, var, "no_var")
+
+
+def _check_variable_references(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
+    """
+    Check variable references in equations.
+
+    Two flavors of check:
+    1. Scoped refs (Model.var): system must exist; for 2-part refs the var must exist
+       in the named system.
+    2. Bare-string refs in the RHS of D() (derivative) equations: every ref must
+       resolve to a symbol declared somewhere in the file. Plain assignment-style
+       equations are not checked because they often use coupled-in vars.
+    """
+    global_symbols = tables["global_symbols"]
+    for mname, m in data.get("models", {}).items():
+        for i, eq in enumerate(m.get("equations", [])):
+            lhs_is_derivative = (
+                isinstance(eq.get("lhs"), dict) and eq["lhs"].get("op") == "D"
+            )
+            for side in ("lhs", "rhs"):
+                if side not in eq:
+                    continue
+                refs = _walk_expression_strings(eq[side])
+                for ref in refs:
+                    if "." in ref:
+                        # 3+ part refs may use subsystem nesting; only check top-level system
+                        if ref.count(".") > 1:
+                            top_system = ref.split(".")[0]
+                            if top_system not in tables["all_systems"]:
+                                errors.append(
+                                    f"models/{mname}/equations[{i}]: reference '{ref}' to undefined system '{top_system}'"
+                                )
+                            continue
+                        system, var, status = _resolve_scoped_ref(ref, tables)
+                        if status == "no_system":
+                            errors.append(
+                                f"models/{mname}/equations[{i}]: reference '{ref}' to undefined system '{system}'"
+                            )
+                        elif status == "no_var":
+                            errors.append(
+                                f"models/{mname}/equations[{i}]: reference '{ref}' — variable '{var}' not found in system '{system}'"
+                            )
+                    else:
+                        # Bare-string refs only checked inside derivative equations
+                        if lhs_is_derivative and side == "rhs":
+                            if ref not in global_symbols:
+                                errors.append(
+                                    f"models/{mname}/equations[{i}]: undefined variable reference '{ref}'"
+                                )
+
+
+def _check_coupling_references(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check that coupling 'from' references resolve to valid scoped refs.
+    'to' is intentionally lenient since variable_map can introduce new target vars."""
+    for i, c in enumerate(data.get("coupling", [])):
+        ref = c.get("from")
+        if not isinstance(ref, str) or "." not in ref:
+            continue
+        # For 3+ part refs (subsystem nesting), only verify the top-level system exists
+        if ref.count(".") > 1:
+            top_system = ref.split(".")[0]
+            if top_system not in tables["all_systems"]:
+                errors.append(
+                    f"coupling[{i}]/from: reference '{ref}' to undefined system '{top_system}'"
+                )
+            continue
+        system, var, status = _resolve_scoped_ref(ref, tables)
+        if status == "no_system":
+            errors.append(
+                f"coupling[{i}]/from: reference '{ref}' to undefined system '{system}'"
+            )
+        elif status == "no_var":
+            errors.append(
+                f"coupling[{i}]/from: reference '{ref}' — variable '{var}' not provided by '{system}'"
+            )
+
+
+def _check_circular_references(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
+    """Detect cycles in cross-system dependencies introduced by equation references."""
+    # Build system -> set of systems it depends on
+    deps = {name: set() for name in data.get("models", {})}
+    for mname, m in data.get("models", {}).items():
+        for eq in m.get("equations", []):
+            for side in ("lhs", "rhs"):
+                if side not in eq:
+                    continue
+                for ref in _walk_expression_strings(eq[side]):
+                    if "." in ref:
+                        target_system = ref.split(".")[0]
+                        if target_system != mname and target_system in deps:
+                            deps[mname].add(target_system)
+
+    # DFS cycle detection
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {n: WHITE for n in deps}
+
+    def dfs(node, path):
+        color[node] = GRAY
+        for nxt in deps.get(node, ()):
+            if color.get(nxt) == GRAY:
+                cycle_start = path.index(nxt) if nxt in path else 0
+                cycle = path[cycle_start:] + [nxt]
+                errors.append(f"circular reference (cycle) detected: {' -> '.join(cycle)}")
+                return True
+            elif color.get(nxt) == WHITE:
+                if dfs(nxt, path + [nxt]):
+                    return True
+        color[node] = BLACK
+        return False
+
+    for n in deps:
+        if color[n] == WHITE:
+            if dfs(n, [n]):
+                break
+
+
+def _check_data_loader_provides(data: Dict[str, Any], errors: List[str]) -> None:
+    """Each variable in data_loader.provides must have units and description."""
+    for dname, d in data.get("data_loaders", {}).items():
+        for vname, vdef in d.get("provides", {}).items():
+            if "units" not in vdef:
+                errors.append(f"data_loaders/{dname}/provides/{vname}: missing required 'units' field")
+            if "description" not in vdef:
+                errors.append(f"data_loaders/{dname}/provides/{vname}: missing required 'description' field")
+
+
+def _check_discrete_parameters(data: Dict[str, Any], errors: List[str]) -> None:
+    """discrete_parameters list must reference variables of type 'parameter'."""
+    for mname, m in data.get("models", {}).items():
+        var_types = {n: v.get("type") for n, v in m.get("variables", {}).items()}
+        for ei, event in enumerate(m.get("discrete_events", [])):
+            for dp in event.get("discrete_parameters", []) or []:
+                if dp not in var_types:
+                    errors.append(
+                        f"models/{mname}/discrete_events[{ei}]: discrete_parameter '{dp}' not declared in model"
+                    )
+                elif var_types[dp] != "parameter":
+                    errors.append(
+                        f"models/{mname}/discrete_events[{ei}]: discrete_parameter '{dp}' references variable of type '{var_types[dp]}', expected 'parameter'"
+                    )
+
+
+_DATE_RE = __import__("re").compile(
+    r'^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$'
+)
+_URL_RE = __import__("re").compile(r'^https?://[^\s/$.?#].[^\s]*$')
+_DOI_RE = __import__("re").compile(r'^10\.\d{4,9}/[^\s]+$')
+_DURATION_RE = __import__("re").compile(
+    r'^P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$'
+)
+
+
+def _check_metadata_formats(data: Dict[str, Any], errors: List[str]) -> None:
+    """Validate ISO 8601 dates, URLs, and DOIs in metadata."""
+    md = data.get("metadata", {})
+    for field in ("created", "modified"):
+        val = md.get(field)
+        if isinstance(val, str) and not _DATE_RE.match(val):
+            errors.append(f"metadata/{field}: '{val}' is not a valid ISO 8601 date")
+    for ri, ref in enumerate(md.get("references", []) or []):
+        url = ref.get("url")
+        if isinstance(url, str) and not _URL_RE.match(url):
+            errors.append(f"metadata/references[{ri}]/url: '{url}' is not a valid URL")
+        doi = ref.get("doi")
+        if isinstance(doi, str) and not _DOI_RE.match(doi):
+            errors.append(f"metadata/references[{ri}]/doi: '{doi}' is not a valid DOI format")
+
+
+def _check_temporal_resolution(data: Dict[str, Any], errors: List[str]) -> None:
+    """Validate ISO 8601 duration in data_loader temporal_resolution fields."""
+    for dname, d in data.get("data_loaders", {}).items():
+        res = d.get("temporal_resolution")
+        if isinstance(res, str) and res and not _DURATION_RE.match(res):
+            errors.append(
+                f"data_loaders/{dname}/temporal_resolution: '{res}' is not a valid ISO 8601 duration"
+            )
+
+
+def _check_subsystem_refs(data: Dict[str, Any], errors: List[str], file_path) -> None:
+    """Check that subsystem ref points to an existing file with a single top-level system."""
+    base_dirs = []
+    if file_path is not None:
+        base = Path(file_path).parent if not isinstance(file_path, Path) else file_path.parent
+        base_dirs.append(base)
+    # Always include CWD as a fallback
+    base_dirs.append(Path.cwd())
+
+    def check_subsystems(parent_path, subsystems):
+        for sname, sub in subsystems.items():
+            ref = sub.get("ref") if isinstance(sub, dict) else None
+            if not ref:
+                continue
+            # Try to resolve against any base dir
+            target = None
+            for bd in base_dirs:
+                candidate = (bd / ref).resolve()
+                if candidate.exists():
+                    target = candidate
+                    break
+            if target is None:
+                errors.append(
+                    f"{parent_path}/subsystems/{sname}: ref '{ref}' file not found"
+                )
+                continue
+            try:
+                with open(target) as f:
+                    sub_data = json.load(f)
+            except Exception as e:
+                errors.append(f"{parent_path}/subsystems/{sname}: cannot parse ref '{ref}': {e}")
+                continue
+            top_systems = list(sub_data.get("models", {}).keys()) + list(
+                sub_data.get("reaction_systems", {}).keys()
+            )
+            if len(top_systems) != 1:
+                errors.append(
+                    f"{parent_path}/subsystems/{sname}: ref '{ref}' is ambiguous — expected exactly one top-level system, found {len(top_systems)}"
+                )
+
+    for mname, m in data.get("models", {}).items():
+        if "subsystems" in m:
+            check_subsystems(f"models/{mname}", m["subsystems"])
+    for rsname, rs in data.get("reaction_systems", {}).items():
+        if "subsystems" in rs:
+            check_subsystems(f"reaction_systems/{rsname}", rs["subsystems"])
+
+
+def _collect_var_units(tables: Dict[str, Any]) -> Dict[str, str]:
+    """Build {var_name: units} map for plain (unscoped) variable refs."""
+    var_units = {}
+    for m in tables["models"].values():
+        for vname, vdef in m.items():
+            if vdef.get("units") is not None:
+                var_units[vname] = vdef["units"]
+    for rs in tables["reaction_systems"].values():
+        for vname, vdef in rs.items():
+            if vdef.get("units") is not None:
+                var_units[vname] = vdef["units"]
+    for d in tables["data_loaders"].values():
+        for vname, vdef in d.items():
+            if vdef.get("units") is not None:
+                var_units[vname] = vdef["units"]
+    return var_units
+
+
+def _infer_expression_units(expr, var_units: Dict[str, str]):
+    """
+    Best-effort inference of expression units. Returns the unit string,
+    None if can't infer, or special tag '<incompatible>' if a unit conflict was found inside.
+    """
+    if isinstance(expr, (int, float)):
+        return "dimensionless"
+    if isinstance(expr, str):
+        return var_units.get(expr)
+    if not isinstance(expr, dict):
+        return None
+    op = expr.get("op")
+    args = expr.get("args", [])
+    if op in ("+", "-"):
+        # All args must share units
+        sub_units = [_infer_expression_units(a, var_units) for a in args]
+        non_none = [u for u in sub_units if u is not None]
+        if len(non_none) >= 2:
+            ref = non_none[0]
+            for u in non_none[1:]:
+                if not _units_compatible(ref, u):
+                    return "<incompatible>"
+        return non_none[0] if non_none else None
+    if op == "*":
+        return None  # multiplication can have varied units
+    return None
+
+
+def _is_derivative_compatible(lhs_var_units: str, rhs_units: str) -> bool:
+    """
+    Check whether rhs_units could be the time derivative of lhs_var_units.
+    True if (rhs * second) is dimensionally equal to lhs_var.
+    Also accepts the case where both are dimensionless (decay-style equations).
+    """
+    n_lhs = _normalize_unit(lhs_var_units)
+    n_rhs = _normalize_unit(rhs_units)
+    if n_lhs == "dimensionless" and n_rhs == "dimensionless":
+        return True
+    try:
+        import pint
+        ureg = pint.UnitRegistry()
+        lhs_q = ureg(n_lhs)
+        rhs_q = ureg(n_rhs)
+        ratio = (rhs_q * ureg("second")) / lhs_q
+        return ratio.dimensionless
+    except Exception:
+        return True  # If pint can't parse, don't flag
+
+
+def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
+    """
+    Check unit compatibility in equations.
+
+    Conservative: only flags
+    1. Equations of the form D(x)/dt = bare_var where bare_var has dimensions
+       clearly incompatible with x/time (e.g., velocity-rate set to mass).
+    2. Observed variable expressions whose top-level + or - has incompatible operands.
+    """
+    var_units = _collect_var_units(tables)
+
+    for mname, m in data.get("models", {}).items():
+        # Observed variables: check direct addition/subtraction operand compatibility
+        for vname, vdef in m.get("variables", {}).items():
+            if vdef.get("type") == "observed" and "expression" in vdef:
+                expr = vdef["expression"]
+                if isinstance(expr, dict) and expr.get("op") in ("+", "-"):
+                    sub_units = []
+                    for arg in expr.get("args", []):
+                        if isinstance(arg, str):
+                            sub_units.append(var_units.get(arg))
+                    non_none = [u for u in sub_units if u is not None]
+                    if len(non_none) >= 2:
+                        ref = non_none[0]
+                        for u in non_none[1:]:
+                            if not _units_compatible(ref, u):
+                                errors.append(
+                                    f"models/{mname}/variables/{vname}: expression has incompatible units in addition/subtraction"
+                                )
+                                break
+
+        # Equations: only check D(x)/dt = bare_var case
+        for i, eq in enumerate(m.get("equations", [])):
+            lhs = eq.get("lhs")
+            rhs = eq.get("rhs")
+            if not (isinstance(lhs, dict) and lhs.get("op") == "D"):
+                continue
+            inner = lhs.get("args", [None])[0]
+            if not isinstance(inner, str):
+                continue
+            lhs_var_units = var_units.get(inner)
+            if not lhs_var_units:
+                continue
+            if not isinstance(rhs, str):
+                continue
+            rhs_units = var_units.get(rhs)
+            if not rhs_units:
+                continue
+            if not _is_derivative_compatible(lhs_var_units, rhs_units):
+                errors.append(
+                    f"models/{mname}/equations[{i}]: rhs '{rhs}' units '{rhs_units}' incompatible with time derivative of '{lhs_var_units}'"
+                )
+
+
+def _check_equation_balance(data: Dict[str, Any], errors: List[str]) -> None:
+    """
+    Check for clearly broken equation/state-variable patterns.
+
+    Flags only the unambiguous cases (no operators/coupling/data_loaders to disambiguate):
+    1. Model has state variables but zero equations.
+    2. Total equations < state variables AND no observed variables provide algebraic
+       relations (under-determined with no compensating relations).
+    3. ODE equations > state variables (over-determined).
+    """
+    has_operators = bool(data.get("operators"))
+    has_coupling = bool(data.get("coupling"))
+    has_loaders = bool(data.get("data_loaders"))
+    has_external = has_operators or has_coupling or has_loaders
+
+    for mname, m in data.get("models", {}).items():
+        state_vars = {n for n, v in m.get("variables", {}).items() if v.get("type") == "state"}
+        observed_vars = {n for n, v in m.get("variables", {}).items() if v.get("type") == "observed"}
+        eqs = m.get("equations", [])
+        ode_lhs_vars = []
+        for eq in eqs:
+            lhs = eq.get("lhs")
+            if isinstance(lhs, dict) and lhs.get("op") == "D":
+                args = lhs.get("args", [])
+                if args and isinstance(args[0], str):
+                    ode_lhs_vars.append(args[0])
+
+        if has_external:
+            continue
+
+        # Case 1: state vars but zero equations
+        if state_vars and not eqs:
+            errors.append(
+                f"models/{mname}: has {len(state_vars)} state variables but no equations"
+            )
+            continue
+
+        # Case 2: more ODE equations than state variables (over-determined)
+        if len(ode_lhs_vars) > len(state_vars):
+            errors.append(
+                f"models/{mname}: equation count mismatch — {len(ode_lhs_vars)} ODE equations for {len(state_vars)} state variables (over-determined)"
+            )
+            continue
+
+        # Case 3: total equations less than state variables AND no observed vars
+        # to provide algebraic relations
+        if len(eqs) < len(state_vars) and not observed_vars:
+            errors.append(
+                f"models/{mname}: equation count mismatch — {len(eqs)} equations for {len(state_vars)} state variables (under-determined, no algebraic relations)"
+            )
+
+
+def _check_operator_state_coverage(data: Dict[str, Any], errors: List[str]) -> None:
+    """
+    When a file declares operators, every state variable in each model must be
+    covered by either an equation (ODE or assignment) or an operator's modifies list.
+    """
+    if not data.get("operators"):
+        return
+    op_modifies = set()
+    for op in data.get("operators", {}).values():
+        op_modifies.update(op.get("modifies", []) or [])
+    for mname, m in data.get("models", {}).items():
+        state_vars = [n for n, v in m.get("variables", {}).items() if v.get("type") == "state"]
+        eq_lhs_vars = set()
+        for eq in m.get("equations", []):
+            lhs = eq.get("lhs")
+            if isinstance(lhs, dict) and lhs.get("op") == "D":
+                args = lhs.get("args", [])
+                if args and isinstance(args[0], str):
+                    eq_lhs_vars.add(args[0])
+            elif isinstance(lhs, str):
+                eq_lhs_vars.add(lhs)
+        uncovered = [s for s in state_vars if s not in eq_lhs_vars and s not in op_modifies]
+        if uncovered:
+            errors.append(
+                f"models/{mname}: state variables {uncovered} are not covered by any equation or operator's modifies list"
+            )
+
+
+def _check_reaction_systems(data: Dict[str, Any], errors: List[str]) -> None:
+    """Validate reaction system: substrates/products are declared species, rate refs valid."""
+    for rsname, rs in data.get("reaction_systems", {}).items():
+        species = set(rs.get("species", {}).keys())
+        params = set(rs.get("parameters", {}).keys())
+        valid_rate_syms = species | params | _BUILTIN_SYMBOLS
+        for ri, reaction in enumerate(rs.get("reactions", [])):
+            substrates = reaction.get("substrates")
+            products = reaction.get("products")
+            # Reaction has both substrates and products explicitly null is invalid
+            if "substrates" in reaction and "products" in reaction \
+                    and substrates is None and products is None:
+                errors.append(
+                    f"reaction_systems/{rsname}/reactions[{ri}]: reaction has both substrates and products as null"
+                )
+                continue
+            # Check substrate/product species are declared
+            for s in substrates or []:
+                if isinstance(s, dict):
+                    sp = s.get("species")
+                    if sp and sp not in species:
+                        errors.append(
+                            f"reaction_systems/{rsname}/reactions[{ri}]: substrate species '{sp}' not declared"
+                        )
+            for p in products or []:
+                if isinstance(p, dict):
+                    sp = p.get("species")
+                    if sp and sp not in species:
+                        errors.append(
+                            f"reaction_systems/{rsname}/reactions[{ri}]: product species '{sp}' not declared"
+                        )
+            # Check rate expression references valid symbols
+            rate = reaction.get("rate")
+            if rate is not None:
+                refs = []
+                if isinstance(rate, str):
+                    refs = [rate]
+                elif isinstance(rate, dict):
+                    refs = _walk_expression_strings(rate)
+                for ref in refs:
+                    if "." in ref:
+                        continue  # Scoped refs handled elsewhere
+                    if ref not in valid_rate_syms:
+                        errors.append(
+                            f"reaction_systems/{rsname}/reactions[{ri}]/rate: undefined reference '{ref}'"
+                        )
+
+
+def _check_event_references(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check that event affects/conditions reference declared variables."""
+    for mname, m in data.get("models", {}).items():
+        local_vars = set(m.get("variables", {}).keys())
+        for ei, event in enumerate(m.get("discrete_events", []) + m.get("continuous_events", [])):
+            for ai, affect in enumerate(event.get("affects", []) or []):
+                if isinstance(affect, dict) and "lhs" in affect and isinstance(affect["lhs"], str):
+                    name = affect["lhs"]
+                    # Underscore-prefixed names are conventional placeholders
+                    if name.startswith("_"):
+                        continue
+                    if name not in local_vars and name not in tables["global_symbols"]:
+                        errors.append(
+                            f"models/{mname}/events[{ei}]/affects[{ai}]: undefined variable '{name}'"
+                        )
+
+
+def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
+    """
+    Perform post-schema structural validation.
+
+    Raises SchemaValidationError if any structural problems are found.
+    """
+    errors: List[str] = []
+
+    # Operator arity check (walk all expressions)
+    def walk_for_arity(obj, path):
+        if isinstance(obj, dict):
+            if "op" in obj and "args" in obj:
+                _check_expression_arity(obj, errors, path)
+                return
+            for k, v in obj.items():
+                walk_for_arity(v, f"{path}/{k}")
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                walk_for_arity(v, f"{path}[{i}]")
+
+    walk_for_arity(data, "")
+
+    tables = _build_symbol_tables(data)
+
+    _check_variable_references(data, tables, errors)
+    _check_coupling_references(data, tables, errors)
+    _check_circular_references(data, tables, errors)
+    _check_data_loader_provides(data, errors)
+    _check_discrete_parameters(data, errors)
+    _check_metadata_formats(data, errors)
+    _check_temporal_resolution(data, errors)
+    _check_subsystem_refs(data, errors, file_path)
+    _check_unit_consistency(data, tables, errors)
+    _check_event_references(data, tables, errors)
+    _check_equation_balance(data, errors)
+    _check_operator_state_coverage(data, errors)
+    _check_reaction_systems(data, errors)
+
+    if errors:
+        raise SchemaValidationError(
+            "Structural validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        )
+
+
 def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     """
     Load an ESM file from a file path, JSON string, or dict.
@@ -1109,6 +1807,7 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     """
     # Handle dict input directly
     base_path = os.getcwd()
+    file_path = None
     if isinstance(path_or_string, dict):
         data = path_or_string
     elif isinstance(path_or_string, Path) or (isinstance(path_or_string, str) and os.path.exists(path_or_string)):
@@ -1121,6 +1820,10 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
         # It's a JSON string
         data = json.loads(path_or_string)
 
+    # Strip top-level events (not allowed by schema, but accepted for tooling roundtrip)
+    top_continuous_events = data.pop("continuous_events", None) if isinstance(data, dict) else None
+    top_discrete_events = data.pop("discrete_events", None) if isinstance(data, dict) else None
+
     # Load and validate against schema
     schema = _get_schema()
     try:
@@ -1131,11 +1834,22 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     # Check version compatibility
     _check_version_compatibility(data.get("esm", ""))
 
+    # Structural validation
+    _validate_structural(data, file_path=file_path)
+
     # Parse into ESM objects
     esm_file = _parse_esm_data(data)
 
     # Resolve subsystem references
     resolve_subsystem_refs(esm_file, base_path)
+
+    # Append top-level events that were stripped earlier
+    if top_continuous_events:
+        for ev in top_continuous_events:
+            esm_file.events.append(_parse_continuous_event(ev))
+    if top_discrete_events:
+        for ev in top_discrete_events:
+            esm_file.events.append(_parse_discrete_event(ev))
 
     return esm_file
 
