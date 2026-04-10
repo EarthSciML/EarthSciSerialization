@@ -6,9 +6,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    transformMode: {
-      web: [/\.[jt]sx?$/]
-    },
     deps: {
       optimizer: {
         web: {
