@@ -84,6 +84,7 @@ jobs:
       should_push: ${{ steps.config.outputs.should_push }}
       languages: ${{ steps.config.outputs.languages }}
       changed_packages: ${{ steps.changes.outputs.changed_packages }}
+      namespace: ${{ steps.namespace.outputs.namespace }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -141,6 +142,12 @@ jobs:
           echo "changed_packages=$CHANGED_PACKAGES" >> $GITHUB_OUTPUT
           echo "Changed packages: $CHANGED_PACKAGES"
 
+      - name: Lowercase namespace
+        id: namespace
+        run: |
+          echo "namespace=${NAMESPACE,,}" >> $GITHUB_OUTPUT
+          echo "Namespace: ${NAMESPACE,,}"
+
   # Build and push container images
   build-and-push:
     runs-on: ubuntu-latest
@@ -153,9 +160,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Lowercase registry namespace
-        run: echo "NAMESPACE=${NAMESPACE,,}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -218,7 +222,7 @@ jobs:
         env:
           ESM_VERSION: ${{ needs.build-config.outputs.version }}
           ESM_REGISTRY: ${{ env.REGISTRY }}
-          ESM_NAMESPACE: ${{ env.NAMESPACE }}
+          ESM_NAMESPACE: ${{ needs.build-config.outputs.namespace }}
           ESM_PLATFORMS: ${{ env.TARGET_PLATFORMS }}
           ESM_OPTIMIZATION: ${{ env.OPTIMIZATION_PROFILE }}
           ESM_PUSH_IMAGES: ${{ needs.build-config.outputs.should_push }}
@@ -236,6 +240,8 @@ jobs:
 
       - name: Test container image
         if: steps.package_changed.outputs.should_build == 'true' && needs.build-config.outputs.should_push == 'false'
+        env:
+          NAMESPACE: ${{ needs.build-config.outputs.namespace }}
         run: |
           LANGUAGE="${{ matrix.language }}"
           IMAGE_NAME="$REGISTRY/$NAMESPACE/$PROJECT_NAME-$LANGUAGE:${{ needs.build-config.outputs.version }}"
@@ -260,6 +266,8 @@ jobs:
 
       - name: Generate SBOM (Software Bill of Materials)
         if: steps.package_changed.outputs.should_build == 'true'
+        env:
+          NAMESPACE: ${{ needs.build-config.outputs.namespace }}
         run: |
           LANGUAGE="${{ matrix.language }}"
           IMAGE_NAME="$REGISTRY/$NAMESPACE/$PROJECT_NAME-$LANGUAGE:${{ needs.build-config.outputs.version }}"
@@ -276,7 +284,7 @@ jobs:
         if: steps.package_changed.outputs.should_build == 'true'
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.PROJECT_NAME }}-${{ matrix.language }}:${{ needs.build-config.outputs.version }}'
+          image-ref: '${{ env.REGISTRY }}/${{ needs.build-config.outputs.namespace }}/${{ env.PROJECT_NAME }}-${{ matrix.language }}:${{ needs.build-config.outputs.version }}'
           format: 'sarif'
           output: 'trivy-results-${{ matrix.language }}.sarif'
         continue-on-error: true
@@ -308,9 +316,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Lowercase registry namespace
-        run: echo "NAMESPACE=${NAMESPACE,,}" >> $GITHUB_ENV
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -322,6 +327,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create multi-architecture manifests
+        env:
+          NAMESPACE: ${{ needs.build-config.outputs.namespace }}
         run: |
           VERSION="${{ needs.build-config.outputs.version }}"
           LANGUAGES=("julia" "typescript" "python" "rust")
@@ -343,6 +350,8 @@ jobs:
           done
 
       - name: Generate deployment documentation
+        env:
+          NAMESPACE: ${{ needs.build-config.outputs.namespace }}
         run: |
           mkdir -p dist/containers/docs
 
