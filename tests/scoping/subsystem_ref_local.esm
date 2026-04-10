@@ -1,0 +1,66 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SubsystemRefLocalTest",
+    "description": "Test subsystem inclusion by local file path reference. The Atmosphere model includes a Chemistry subsystem from an external file and a Physics subsystem defined inline.",
+    "authors": ["Test Suite"],
+    "created": "2026-04-10T00:00:00Z"
+  },
+  "models": {
+    "Atmosphere": {
+      "variables": {
+        "pressure": {
+          "type": "parameter",
+          "units": "Pa",
+          "default": 101325,
+          "description": "Surface pressure"
+        },
+        "temperature": {
+          "type": "parameter",
+          "units": "K",
+          "default": 298.15,
+          "description": "Ambient temperature"
+        }
+      },
+      "equations": [],
+      "subsystems": {
+        "Chemistry": { "ref": "./chemistry_subsystem.esm" },
+        "Physics": {
+          "variables": {
+            "wind_speed": {
+              "type": "state",
+              "units": "m/s",
+              "default": 5.0,
+              "description": "Wind speed"
+            },
+            "drag": {
+              "type": "parameter",
+              "units": "1/s",
+              "default": 0.001,
+              "description": "Drag coefficient"
+            }
+          },
+          "equations": [
+            {
+              "lhs": { "op": "D", "args": ["wind_speed"], "wrt": "t" },
+              "rhs": {
+                "op": "*",
+                "args": [
+                  { "op": "-", "args": ["drag"] },
+                  "wind_speed"
+                ]
+              },
+              "_comment": "Wind deceleration: dv/dt = -drag * v"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["Atmosphere", "Atmosphere.Chemistry"]
+    }
+  ]
+}

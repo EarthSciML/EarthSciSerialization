@@ -1,0 +1,24 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SubsystemRefAmbiguous",
+    "description": "Invalid: referenced file contains multiple top-level systems. The ref mechanism requires exactly one. Expected error: ref_ambiguous_system.",
+    "authors": ["Test Suite"],
+    "created": "2026-04-10T00:00:00Z"
+  },
+  "models": {
+    "ClimateModel": {
+      "variables": {
+        "temp": {
+          "type": "parameter",
+          "units": "K",
+          "default": 300
+        }
+      },
+      "equations": [],
+      "subsystems": {
+        "Atm": { "ref": "../scoping/nested_subsystems.esm" }
+      }
+    }
+  }
+}
