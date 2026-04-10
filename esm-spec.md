@@ -32,8 +32,7 @@ The two exceptions to full specification are **data loaders** and **registered o
   "operators": { ... },
   "coupling": [ ... ],
   "domains": { ... },
-  "interfaces": { ... },
-  "solver": { ... }
+  "interfaces": { ... }
 }
 ```
 
@@ -48,7 +47,6 @@ The two exceptions to full specification are **data loaders** and **registered o
 | `coupling` | | Composition and coupling rules |
 | `domains` | | Named spatial/temporal domain specifications (see Section 11) |
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
-| `solver` | | Solver strategy and configuration |
 
 At least one of `models` or `reaction_systems` must be present.
 
@@ -1471,7 +1469,7 @@ Each named domain supports the following fields:
 
 ### 11.6 Shared Temporal Domain
 
-All domains in a coupled system must have compatible temporal extents. The solver (Section 13) advances the entire coupled system in time; individual domains may use different spatial discretizations but share the same simulation time window. If temporal extents differ, the solver uses the intersection of all domain temporal ranges.
+All domains in a coupled system must have compatible temporal extents. Individual domains may use different spatial discretizations but share the same simulation time window. If temporal extents differ, the runtime uses the intersection of all domain temporal ranges.
 
 ---
 
@@ -1664,42 +1662,9 @@ A 1D column model (e.g., vertical turbulence parameterization) coupled to a 3D a
 
 ---
 
-## 13. Solver
+## 13. Complete Examples
 
-The solver section specifies the `SolverStrategy` for time integration. In multi-domain configurations, the solver advances the entire coupled system; operator splitting (Strang or IMEX) handles the interaction between domains at each time step.
-
-```json
-{
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 8,
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 1800.0,
-      "stiff_kwargs": {
-        "abstol": 1e-6,
-        "reltol": 1e-3
-      },
-      "nonstiff_algorithm": "Euler",
-      "map_algorithm": "broadcast"
-    }
-  }
-}
-```
-
-### 13.1 Solver Strategies
-
-| Strategy | EarthSciML Type | Description |
-|---|---|---|
-| `strang_threads` | `SolverStrangThreads` | Strang splitting, parallelized |
-| `strang_serial` | `SolverStrangSerial` | Strang splitting, serial |
-| `imex` | `SolverIMEX` | Implicit-explicit time integration |
-
----
-
-## 14. Complete Examples
-
-### 14.1 Single-Domain: Atmospheric Chemistry with Advection
+### 13.1 Single-Domain: Atmospheric Chemistry with Advection
 
 A minimal but complete `.esm` file representing atmospheric chemistry with advection:
 
@@ -1810,18 +1775,13 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
       ],
       "element_type": "Float32"
     }
-  },
-
-  "solver": {
-    "strategy": "strang_threads",
-    "config": { "stiff_algorithm": "Rosenbrock23", "timestep": 1.0 }
   }
 }
 ```
 
 **Note:** When all models share a single domain, `"domain"` fields on individual models may be omitted — all models default to the sole domain.
 
-### 14.2 Multi-Domain: Wildfire–Atmosphere–Ocean Coupling
+### 13.2 Multi-Domain: Wildfire–Atmosphere–Ocean Coupling
 
 A coupled system with a 3D atmospheric dynamics PDE, a 2D wildfire propagation PDE, a 3D ocean dynamics PDE, and 0D algebraic intermediaries. This example demonstrates mixed-dimension coupling through interfaces and pointwise lifting of 0D systems.
 
@@ -2135,16 +2095,7 @@ A coupled system with a 3D atmospheric dynamics PDE, a 2D wildfire propagation P
       "lifting": "pointwise",
       "description": "Calculated heat flux drives ocean surface temperature"
     }
-  ],
-
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 60.0,
-      "nonstiff_algorithm": "Euler"
-    }
-  }
+  ]
 }
 ```
 
@@ -2157,7 +2108,7 @@ This example demonstrates:
 
 ---
 
-## 15. Design Principles
+## 14. Design Principles
 
 ### Full specification is mandatory for models and reactions
 
@@ -2207,7 +2158,7 @@ The composition of multiple models, reaction systems, and data loaders resolves 
 
 ---
 
-## 16. Future Considerations
+## 15. Future Considerations
 
 - **Formal JSON Schema** — A `.json` schema file for automated validation
 - **Binary variant** — MessagePack or CBOR for large mechanisms (hundreds of species/reactions)
