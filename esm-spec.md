@@ -159,6 +159,43 @@ The **last** segment is always the variable (or species/parameter) name. All pre
 
 **Bare references** (no dot) refer to a variable within the current system context. In coupling entries, all references must be fully qualified from the top-level system name.
 
+### 4.4 Subsystem Inclusion by Reference
+
+Subsystems can be defined inline (as described in Sections 6 and 7) or included by reference from an external ESM file. A reference is an object with a single `ref` field containing a local file path or URL:
+
+```json
+{
+  "subsystems": {
+    "Atmosphere": { "ref": "./atmosphere.esm" },
+    "Ocean": { "ref": "https://example.com/models/ocean.esm" },
+    "Land": {
+      "variables": { ... },
+      "equations": [ ... ]
+    }
+  }
+}
+```
+
+In the example above, `Atmosphere` and `Ocean` are included by reference while `Land` is defined inline. Both forms can be freely mixed within the same `subsystems` map.
+
+**Reference format:**
+
+| Form | Example | Resolution |
+|---|---|---|
+| Relative path | `"./atmosphere.esm"` | Resolved relative to the directory of the referencing file |
+| Absolute path | `"/models/atmosphere.esm"` | Used as-is |
+| HTTP/HTTPS URL | `"https://example.com/models/atmosphere.esm"` | Fetched from the network |
+
+**Referenced file requirements:**
+
+- The referenced file must be a valid ESM file (with `esm` version and `metadata` fields).
+- It must contain exactly one top-level model or reaction system. The single model or reaction system defined in the file is used as the subsystem definition.
+- The subsystem key in the parent file determines the subsystem's name, not any name in the referenced file.
+
+**Scoped references** work identically for referenced subsystems as for inline subsystems. After resolution, `"Parent.RefSubsystem.variable"` works the same regardless of whether `RefSubsystem` was defined inline or loaded from a reference.
+
+**Resolution timing:** Libraries must resolve all references at load time, before validation or any other processing. After resolution, the in-memory representation is identical to a file with all subsystems defined inline.
+
 ---
 
 ## 5. Events
@@ -567,7 +604,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `equations` | ✓ | Array of `{lhs, rhs}` equation objects |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
-| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
+| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.4). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
 
 ### 6.3 Variable Types
 
@@ -869,7 +906,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `constraint_equations` | | Additional algebraic or ODE constraints (in expression AST form) |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
-| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
+| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.4). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
 
 ### 7.3 Reaction Fields
 
