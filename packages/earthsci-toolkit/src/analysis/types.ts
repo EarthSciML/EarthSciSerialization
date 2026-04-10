@@ -5,7 +5,8 @@
  * including dependency graphs, complexity metrics, and manipulation utilities.
  */
 
-import type { Expr, Model, EsmFile, ComponentNode, VariableNode, Graph } from '../types.js';
+import type { Expr, Model, EsmFile } from '../types.js';
+import type { ComponentNode, VariableNode, Graph } from '../graph.js';
 
 /** Node representing a variable in a dependency graph */
 export interface DependencyNode {

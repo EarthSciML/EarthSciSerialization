@@ -1,8 +1,8 @@
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
+import typescript from '@rollup/plugin-typescript';
 import dts from 'rollup-plugin-dts';
-import { readFileSync } from 'fs';
 
 const external = [
   'ajv',
@@ -12,10 +12,18 @@ const external = [
   'solid-js/web'
 ];
 
+const tsPlugin = () =>
+  typescript({
+    tsconfig: './tsconfig.rollup.json',
+    declaration: false,
+    declarationMap: false,
+    sourceMap: true
+  });
+
 export default [
-  // ESM Build - core functionality only
+  // ESM Build - core functionality only (no JSX)
   {
-    input: 'dist/core.js',
+    input: 'src/core.ts',
     output: {
       file: 'dist/esm/index.js',
       format: 'esm',
@@ -23,14 +31,15 @@ export default [
     },
     external,
     plugins: [
+      tsPlugin(),
       resolve({ preferBuiltins: true }),
       commonjs(),
       json()
     ]
   },
-  // CommonJS Build - core functionality only
+  // CommonJS Build - core functionality only (no JSX)
   {
-    input: 'dist/core.js',
+    input: 'src/core.ts',
     output: {
       file: 'dist/cjs/index.js',
       format: 'cjs',
@@ -39,9 +48,20 @@ export default [
     },
     external,
     plugins: [
+      tsPlugin(),
       resolve({ preferBuiltins: true }),
       commonjs(),
       json()
     ]
+  },
+  // Bundled type declarations
+  {
+    input: 'src/core.ts',
+    output: {
+      file: 'dist/core.d.ts',
+      format: 'esm'
+    },
+    external,
+    plugins: [dts({ tsconfig: './tsconfig.rollup.json' })]
   }
 ];

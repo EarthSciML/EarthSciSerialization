@@ -15,10 +15,11 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "npm run build:rollup && npm run build:copy-types",
-    "build:clean": "rm -rf dist/esm dist/cjs dist/bundled.d.ts",
+    "build": "npm run build:rollup && npm run build:copy-types && npm run build:pkg-markers",
+    "build:clean": "rm -rf dist/esm dist/cjs dist/bundled.d.ts dist/core.d.ts dist/core.d.ts.map dist/index.d.ts",
     "build:rollup": "rollup -c",
-    "build:copy-types": "cp dist/core.d.ts dist/esm/index.d.ts && cp dist/core.d.ts dist/cjs/index.d.ts",
+    "build:copy-types": "mkdir -p dist/esm dist/cjs && cp dist/core.d.ts dist/index.d.ts && cp dist/core.d.ts dist/esm/index.d.ts && cp dist/core.d.ts dist/cjs/index.d.ts",
+    "build:pkg-markers": "node -e \"require('fs').writeFileSync('dist/cjs/package.json', JSON.stringify({type:'commonjs'})+'\\n'); require('fs').writeFileSync('dist/esm/package.json', JSON.stringify({type:'module'})+'\\n')\"",
     "build:types": "tsc --project tsconfig.build.json",
     "build:legacy": "tsc",
     "test": "vitest",
