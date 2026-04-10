@@ -1,0 +1,28 @@
+name: Schema Sync Check
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'esm-schema.json'
+      - 'packages/*/src/esm-schema.json'
+      - 'packages/*/data/esm-schema.json'
+      - 'packages/*/src/*/data/esm-schema.json'
+      - 'packages/*/pkg/*/esm-schema.json'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'esm-schema.json'
+      - 'packages/*/src/esm-schema.json'
+      - 'packages/*/data/esm-schema.json'
+      - 'packages/*/src/*/data/esm-schema.json'
+      - 'packages/*/pkg/*/esm-schema.json'
+
+jobs:
+  check-schema-sync:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check schema copies are in sync
+      run: scripts/sync-schema.sh --check

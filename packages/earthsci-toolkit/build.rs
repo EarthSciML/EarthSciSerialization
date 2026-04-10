@@ -8,7 +8,7 @@ use std::env;
 fn main() {
     // Re-run the build script if Cargo.toml changes
     println!("cargo:rerun-if-changed=Cargo.toml");
-    println!("cargo:rerun-if-changed=../../esm-schema.json");
+    println!("cargo:rerun-if-changed=src/esm-schema.json");
 
     // Set version info from Cargo
     let version = env!("CARGO_PKG_VERSION");
