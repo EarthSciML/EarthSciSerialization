@@ -66,11 +66,11 @@ pub use graph::{
     component_exists, component_graph, expression_graph, get_component_type,
 };
 pub use parse::{ParseError, SchemaValidationError, load, load_path};
-pub use ref_loading::resolve_subsystem_refs;
 pub use reactions::{
     ConservationAnalysis, ConservationLawType, ConservationViolation, DeriveError, LinearInvariant,
     derive_odes, detect_conservation_violations, stoichiometric_matrix,
 };
+pub use ref_loading::resolve_subsystem_refs;
 pub use serialize::{save, save_compact};
 pub use substitute::{
     ScopedContext, substitute, substitute_in_model, substitute_in_model_with_context,

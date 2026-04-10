@@ -156,15 +156,13 @@ fn extract_single_system(value: Value, source: &Path) -> Result<Value, String> {
         .ok_or_else(|| format!("ref {} did not parse to a JSON object", source.display()))?;
 
     let pick_single = |key: &str| -> Option<Value> {
-        obj.get(key)
-            .and_then(|v| v.as_object())
-            .and_then(|m| {
-                if m.len() == 1 {
-                    m.values().next().cloned()
-                } else {
-                    None
-                }
-            })
+        obj.get(key).and_then(|v| v.as_object()).and_then(|m| {
+            if m.len() == 1 {
+                m.values().next().cloned()
+            } else {
+                None
+            }
+        })
     };
 
     pick_single("models")
@@ -282,8 +280,16 @@ mod tests {
                 }
             }
         });
-        std::fs::write(dir.path().join("a.json"), serde_json::to_string(&a).unwrap()).unwrap();
-        std::fs::write(dir.path().join("b.json"), serde_json::to_string(&b).unwrap()).unwrap();
+        std::fs::write(
+            dir.path().join("a.json"),
+            serde_json::to_string(&a).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("b.json"),
+            serde_json::to_string(&b).unwrap(),
+        )
+        .unwrap();
 
         let mut value = json!({
             "esm": "0.1.0",

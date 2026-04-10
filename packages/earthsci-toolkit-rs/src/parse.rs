@@ -108,8 +108,9 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
 /// [`EsmFile`].
 pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError> {
     let path = path.as_ref();
-    let json_str = std::fs::read_to_string(path)
-        .map_err(|e| EsmError::SchemaValidation(format!("failed to read {}: {e}", path.display())))?;
+    let json_str = std::fs::read_to_string(path).map_err(|e| {
+        EsmError::SchemaValidation(format!("failed to read {}: {e}", path.display()))
+    })?;
 
     let mut json_value: Value =
         serde_json::from_str(&json_str).map_err(|e| EsmError::JsonParse(e))?;

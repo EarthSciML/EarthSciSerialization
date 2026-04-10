@@ -199,10 +199,7 @@ fn flatten_model(
         let var = &model.variables[var_name];
         let namespaced = format!("{}.{}", system_name, var_name);
 
-        let description = var
-            .description
-            .clone()
-            .unwrap_or_default();
+        let description = var.description.clone().unwrap_or_default();
         let units = var.units.as_deref().unwrap_or("dimensionless");
         let info = format!("{} [{}]", description, units).trim().to_string();
         variables.insert(namespaced.clone(), info);
@@ -263,10 +260,7 @@ fn flatten_reaction_system(
     // Convert reactions to equations: for each reaction produce a rate equation
     for reaction in &rs.reactions {
         let rate_str = expr_to_string(&namespace_expr(&reaction.rate, system_name));
-        let reaction_name = reaction
-            .name
-            .as_deref()
-            .unwrap_or("unnamed_reaction");
+        let reaction_name = reaction.name.as_deref().unwrap_or("unnamed_reaction");
 
         // Build a description of the reaction as an equation
         let substrates: Vec<String> = reaction
@@ -331,16 +325,13 @@ fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
             Expr::Operator(ExpressionNode {
                 op: op_node.op.clone(),
                 args: namespaced_args,
-                wrt: op_node
-                    .wrt
-                    .as_ref()
-                    .map(|w| {
-                        if w.contains('.') {
-                            w.clone()
-                        } else {
-                            format!("{}.{}", system_name, w)
-                        }
-                    }),
+                wrt: op_node.wrt.as_ref().map(|w| {
+                    if w.contains('.') {
+                        w.clone()
+                    } else {
+                        format!("{}.{}", system_name, w)
+                    }
+                }),
                 dim: op_node.dim.clone(),
             })
         }
@@ -407,9 +398,7 @@ fn process_coupling(
             } => {
                 let desc = description
                     .clone()
-                    .unwrap_or_else(|| {
-                        format!("Operator compose: {}", systems.join(" + "))
-                    });
+                    .unwrap_or_else(|| format!("Operator compose: {}", systems.join(" + ")));
                 rules.push(desc);
             }
             CouplingEntry::Couple {
@@ -426,9 +415,7 @@ fn process_coupling(
                 // If the connector has equations, add them to the flattened system
                 if let Some(eqs) = connector.get("equations").and_then(|e| e.as_array()) {
                     for eq_val in eqs {
-                        if let (Some(lhs), Some(rhs)) =
-                            (eq_val.get("lhs"), eq_val.get("rhs"))
-                        {
+                        if let (Some(lhs), Some(rhs)) = (eq_val.get("lhs"), eq_val.get("rhs")) {
                             equations.push(FlattenedEquation {
                                 lhs: serde_json::to_string(lhs).unwrap_or_default(),
                                 rhs: serde_json::to_string(rhs).unwrap_or_default(),
@@ -764,20 +751,18 @@ mod tests {
         assert!(flat.metadata.coupling_rules.len() == 1);
         assert!(flat.metadata.coupling_rules[0].contains("VariableMap"));
         // Should have an extra equation from the coupling
-        assert!(flat
-            .equations
-            .iter()
-            .any(|e| e.source_system == "coupling(variable_map)"));
+        assert!(
+            flat.equations
+                .iter()
+                .any(|e| e.source_system == "coupling(variable_map)")
+        );
     }
 
     #[test]
     fn test_namespace_expr() {
         let expr = Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            args: vec![
-                Expr::Variable("x".to_string()),
-                Expr::Number(1.0),
-            ],
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
         });
