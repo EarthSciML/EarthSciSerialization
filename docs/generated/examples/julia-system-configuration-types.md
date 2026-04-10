@@ -25,13 +25,6 @@
         @test domain.spatial isa Dict
         @test domain.temporal isa Dict
 
-        # Test Solver (new format)
-        solver = Solver("imex", stiff_algorithm="Tsit5")
-        solver.config.stiff_kwargs["rtol"] = 1e-8
-        @test solver.strategy == IMEX
-        @test solver.config.stiff_algorithm == "Tsit5"
-        @test solver.config.stiff_kwargs["rtol"] == 1e-8
-
         # Test EsmFile
         esm_file = EsmFile("0.1.0", metadata)
         @test esm_file.esm == "0.1.0"

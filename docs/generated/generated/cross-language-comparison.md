@@ -155,30 +155,6 @@ Section(...)
 
 ---
 
-### Solver
-
-**Julia:**
-```julia
-Solver(...)
-```
-
-**Julia:**
-```julia
-Solver(...)
-```
-
-**Julia:**
-```julia
-Solver(...)
-```
-
-**Julia:**
-```julia
-Solver(...)
-```
-
----
-
 ### __init__
 
 **Python:**
@@ -670,44 +646,6 @@ function adjacency(graph::Graph{N, E}, node::N) where {N, E}
 
 ---
 
-### and
-
-**Julia:**
-```julia
-and(...)
-```
-
-**Julia:**
-```julia
-and(...)
-```
-
-**Julia:**
-```julia
-and(...)
-```
-
----
-
-### auto_tune_solver
-
-**Julia:**
-```julia
-auto_tune_solver(...)
-```
-
-**Julia:**
-```julia
-function auto_tune_solver(base_solver::Solver, problem_characteristics::ProblemCharacteristics;
-```
-
-> auto_tune_solver(base_solver::Solver, problem_characteristics::ProblemCharacteristics;
-                    max_iterations=20) -> Solver
-
-Automatically tune solver parameters based on problem characteristics.
-
----
-
 ### can_migrate
 
 **Julia:**
@@ -815,42 +753,6 @@ function coerce_event(data::AbstractDict)::CouplingEvent
 > coerce_event(data::AbstractDict) -> CouplingEvent
 
 Parse event coupling entry.
-
----
-
-### coerce_solver
-
-**Julia:**
-```julia
-coerce_solver(...)
-```
-
-**Julia:**
-```julia
-function coerce_solver(data::Any)::Solver
-```
-
-> coerce_solver(data::Any) -> Solver
-
-Coerce JSON data into Solver type.
-
----
-
-### coerce_solver_configuration
-
-**Julia:**
-```julia
-coerce_solver_configuration(...)
-```
-
-**Julia:**
-```julia
-function coerce_solver_configuration(data)::SolverConfiguration
-```
-
-> coerce_solver_configuration(data::Any) -> SolverConfiguration
-
-Coerce JSON data into SolverConfiguration type.
 
 ---
 
@@ -993,24 +895,6 @@ conversion(...)
 
 ---
 
-### create_auto_tuning_optimizer
-
-**Julia:**
-```julia
-create_auto_tuning_optimizer(...)
-```
-
-**Julia:**
-```julia
-function create_auto_tuning_optimizer(; strategy="adaptive", max_evaluations=50)::SolverOptimizer
-```
-
-> create_auto_tuning_optimizer(;strategy="adaptive", max_evaluations=50) -> SolverOptimizer
-
-Create a solver optimizer with sensible defaults for auto-tuning.
-
----
-
 ### create_mock_catalyst_system
 
 **Julia:**
@@ -1066,22 +950,6 @@ function create_real_catalyst_system(rs::ReactionSystem)
 > create_real_catalyst_system(rs::ReactionSystem) -> ReactionSystem
 
 Create a real Catalyst.
-
----
-
-### create_solver_with_method
-
-**Julia:**
-```julia
-create_solver_with_method(...)
-```
-
-**Julia:**
-```julia
-function create_solver_with_method(strategy_str::String, method_str::String; kwargs...)::Solver
-```
-
-> create_solver_with_method(strategy_str::String, method_str::String; kwargs.
 
 ---
 
@@ -1355,20 +1223,6 @@ def fixtures_dir(self):
 
 ---
 
-### for
-
-**Julia:**
-```julia
-for(...)
-```
-
-**Julia:**
-```julia
-for(...)
-```
-
----
-
 ### format_expression_ascii
 
 **Julia:**
@@ -1510,39 +1364,6 @@ functions(...)
 functions(...)
 ```
 
-**Julia:**
-```julia
-functions(...)
-```
-
-**Julia:**
-```julia
-functions(...)
-```
-
-**Julia:**
-```julia
-functions(...)
-```
-
----
-
-### get_best_configuration
-
-**Julia:**
-```julia
-get_best_configuration(...)
-```
-
-**Julia:**
-```julia
-function get_best_configuration(optimizer::SolverOptimizer)
-```
-
-> get_best_configuration(optimizer::SolverOptimizer) -> Union{SolverConfiguration, Nothing}
-
-Get the current best solver configuration.
-
 ---
 
 ### get_expression_dimensions
@@ -1558,24 +1379,6 @@ function get_expression_dimensions(expr::EarthSciSerialization.Expr, var_units::
 ```
 
 > Get the dimensions of an expression by propagating units through operations.
-
----
-
-### get_recommended_algorithms
-
-**Julia:**
-```julia
-get_recommended_algorithms(...)
-```
-
-**Julia:**
-```julia
-function get_recommended_algorithms(strategy::SolverStrategy, method::NumericalMethod)::Dict{String,String}
-```
-
-> get_recommended_algorithms(strategy::SolverStrategy, method::NumericalMethod) -> Dict{String,String}
-
-Get recommended algorithm combinations for a given strategy and numerical method.
 
 ---
 
@@ -1964,24 +1767,6 @@ pub fn new() -> Self {
 
 ---
 
-### numerical_method_to_string
-
-**Julia:**
-```julia
-numerical_method_to_string(...)
-```
-
-**Julia:**
-```julia
-function numerical_method_to_string(method::NumericalMethod)::String
-```
-
-> numerical_method_to_string(method::NumericalMethod) -> String
-
-Convert numerical method enum to string representation.
-
----
-
 ### objective
 
 **Python:**
@@ -2009,42 +1794,6 @@ operations(...)
 ```julia
 operations(...)
 ```
-
----
-
-### parse_numerical_method
-
-**Julia:**
-```julia
-parse_numerical_method(...)
-```
-
-**Julia:**
-```julia
-function parse_numerical_method(method_str::String)::NumericalMethod
-```
-
-> parse_numerical_method(method_str::String) -> NumericalMethod
-
-Parse numerical method string to enum value.
-
----
-
-### parse_solver_strategy
-
-**Julia:**
-```julia
-parse_solver_strategy(...)
-```
-
-**Julia:**
-```julia
-function parse_solver_strategy(strategy_str::String)::SolverStrategy
-```
-
-> parse_solver_strategy(strategy_str::String) -> SolverStrategy
-
-Parse solver strategy string to enum value.
 
 ---
 
@@ -2091,24 +1840,6 @@ def put(self, key: str, value: Any):
 ```python
 def put(self, key, value):
 ```
-
----
-
-### record_performance!
-
-**Julia:**
-```julia
-record_performance!(...)
-```
-
-**Julia:**
-```julia
-function record_performance!(optimizer::SolverOptimizer, config::SolverConfiguration, metrics::PerformanceMetrics)
-```
-
-> record_performance!(optimizer::SolverOptimizer, config::SolverConfiguration, metrics::PerformanceMetrics)
-
-Record a performance measurement for a given configuration.
 
 ---
 
@@ -2503,60 +2234,6 @@ Serialize event coupling entry.
 
 ---
 
-### serialize_solver
-
-**Julia:**
-```julia
-serialize_solver(...)
-```
-
-**Julia:**
-```julia
-function serialize_solver(solver::Solver)::Dict{String,Any}
-```
-
-> serialize_solver(solver::Solver) -> Dict{String,Any}
-
-Serialize Solver to JSON-compatible format matching the ESM schema.
-
----
-
-### serialize_solver_configuration
-
-**Julia:**
-```julia
-serialize_solver_configuration(...)
-```
-
-**Julia:**
-```julia
-function serialize_solver_configuration(config::SolverConfiguration)::Dict{String,Any}
-```
-
-> serialize_solver_configuration(config::SolverConfiguration) -> Dict{String,Any}
-
-Serialize SolverConfiguration to JSON-compatible format.
-
----
-
-### set_problem_characteristics!
-
-**Julia:**
-```julia
-set_problem_characteristics!(...)
-```
-
-**Julia:**
-```julia
-function set_problem_characteristics!(optimizer::SolverOptimizer, characteristics::ProblemCharacteristics)
-```
-
-> set_problem_characteristics!(optimizer::SolverOptimizer, characteristics::ProblemCharacteristics)
-
-Set the problem characteristics for the optimizer to use in parameter selection.
-
----
-
 ### simplify
 
 **Julia:**
@@ -2597,24 +2274,6 @@ export function simplify(expr: Expr): Expr {
 @param expr Expression to simplify
 @returns Simplified expression
 /.
-
----
-
-### solver_strategy_to_string
-
-**Julia:**
-```julia
-solver_strategy_to_string(...)
-```
-
-**Julia:**
-```julia
-function solver_strategy_to_string(strategy::SolverStrategy)::String
-```
-
-> solver_strategy_to_string(strategy::SolverStrategy) -> String
-
-Convert solver strategy enum to string representation.
 
 ---
 
@@ -2767,24 +2426,6 @@ function successors(graph::Graph{N, E}, node::N) where {N, E}
 ```
 
 > Get nodes that this node points to.
-
----
-
-### suggest_next_configuration
-
-**Julia:**
-```julia
-suggest_next_configuration(...)
-```
-
-**Julia:**
-```julia
-function suggest_next_configuration(optimizer::SolverOptimizer, base_solver::Solver)::SolverConfiguration
-```
-
-> suggest_next_configuration(optimizer::SolverOptimizer, base_solver::Solver) -> SolverConfiguration
-
-Suggest the next configuration to try based on optimization strategy and history.
 
 ---
 
@@ -3016,21 +2657,21 @@ def test_discrete_event_requires_affects_or_functional_affect(self):
 
 ---
 
-### test_domain_and_solver_validation_errors
+### test_domain_validation_errors
 
 **Python:**
 ```python
-def test_domain_and_solver_validation_errors(self):
+def test_domain_validation_errors(self):
 ```
 
-> Test domain and solver specific validation errors.
+> Test domain specific validation errors.
 
 **Python:**
 ```python
-def test_domain_and_solver_validation_errors(self):
+def test_domain_validation_errors(self):
 ```
 
-> Test domain and solver specific validation errors.
+> Test domain specific validation errors.
 
 ---
 
@@ -4040,16 +3681,6 @@ types(...)
 types(...)
 ```
 
-**Julia:**
-```julia
-types(...)
-```
-
-**Julia:**
-```julia
-types(...)
-```
-
 ---
 
 ### update_worker_performance
@@ -4211,24 +3842,6 @@ pub fn validate_schema(json_value: &Value) -> Result<(), EsmError> {
 > Validate a JSON value against the ESM schema
 
 This performs schema validation only.
-
----
-
-### validate_solver_compatibility
-
-**Julia:**
-```julia
-validate_solver_compatibility(...)
-```
-
-**Julia:**
-```julia
-function validate_solver_compatibility(solver::Solver)::Bool
-```
-
-> validate_solver_compatibility(solver::Solver) -> Bool
-
-Check compatibility between solver strategy and configuration.
 
 ---
 
@@ -5213,24 +4826,6 @@ pub struct ParseError {
 
 ---
 
-### PerformanceMetrics
-
-**Julia:**
-```julia
-struct PerformanceMetrics
-```
-
-> PerformanceMetrics
-
-Stores performance metrics from solver execution.
-
-**Python:**
-```python
-class PerformanceMetrics:
-```
-
----
-
 ### Reaction
 
 **Julia:**
@@ -5393,39 +4988,6 @@ class SimulationResult:
 ```
 
 > Simulation result with rich display methods.
-
----
-
-### Solver
-
-**Julia:**
-```julia
-struct Solver
-```
-
-> Solver
-
-Enhanced solver strategy and configuration supporting different numerical methods,
-solver parameters, convergence criteria, and method compatibility checking.
-
-**Python:**
-```python
-class Solver:
-```
-
-> Numerical solver configuration.
-
-**Rust:**
-```rust
-pub struct Solver {
-```
-
-**Typescript:**
-```typescript
-export interface Solver {
-```
-
-> Solver strategy for time integration.
 
 ---
 
