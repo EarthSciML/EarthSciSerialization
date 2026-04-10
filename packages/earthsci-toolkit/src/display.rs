@@ -2040,7 +2040,6 @@ impl fmt::Display for EsmFile {
             }
         }
 
-
         Ok(())
     }
 }

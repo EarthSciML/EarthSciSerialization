@@ -123,11 +123,7 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
                 }
                 CouplingEntry::Couple2 { systems, .. } => {
                     if systems.len() >= 2 {
-                        (
-                            systems[0].clone(),
-                            systems[1].clone(),
-                            "couple".to_string(),
-                        )
+                        (systems[0].clone(), systems[1].clone(), "couple".to_string())
                     } else {
                         continue; // Skip invalid coupling
                     }

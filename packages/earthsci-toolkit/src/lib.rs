@@ -148,10 +148,7 @@ mod coupling_field_tests {
 
         let entry: CouplingEntry = serde_json::from_str(json).unwrap();
         match entry {
-            CouplingEntry::Couple2 {
-                systems,
-                ..
-            } => {
+            CouplingEntry::Couple2 { systems, .. } => {
                 assert_eq!(systems, vec!["system1", "system2"]);
             }
             _ => panic!("Expected Couple2 variant"),
