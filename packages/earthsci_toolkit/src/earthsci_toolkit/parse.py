@@ -1777,7 +1777,8 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     _check_discrete_parameters(data, errors)
     _check_metadata_formats(data, errors)
     _check_temporal_resolution(data, errors)
-    _check_subsystem_refs(data, errors, file_path)
+    # Subsystem ref existence/parse is checked by resolve_subsystem_refs after
+    # structural validation, which raises SubsystemRefError with richer context.
     _check_unit_consistency(data, tables, errors)
     _check_event_references(data, tables, errors)
     _check_equation_balance(data, errors)
