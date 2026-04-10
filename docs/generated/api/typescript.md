@@ -1583,7 +1583,7 @@ Returns the substrate stoichiometric matrix (species × reactions) where:
 
 ### toAscii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:482`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:577`
 
 **Signature:**
 ```typescript
@@ -1615,7 +1615,7 @@ Generate a self-contained Julia script from an ESM file
 
 ### toLatex
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:441`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:536`
 
 **Signature:**
 ```typescript
@@ -1630,7 +1630,7 @@ Format an expression as LaTeX mathematical notation
 
 ### toMathML
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:522`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:617`
 
 **Signature:**
 ```typescript
@@ -1662,7 +1662,7 @@ Generate a self-contained Python script from an ESM file
 
 ### toUnicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:401`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:496`
 
 **Signature:**
 ```typescript
