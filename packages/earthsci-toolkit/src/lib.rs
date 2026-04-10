@@ -65,7 +65,8 @@ pub use graph::{
     DependencyRelationship, ExpressionGraph, ExpressionGraphInput, VariableKind, VariableNode,
     component_exists, component_graph, expression_graph, get_component_type,
 };
-pub use parse::{ParseError, SchemaValidationError, load};
+pub use parse::{ParseError, SchemaValidationError, load, load_path};
+pub use ref_loading::resolve_subsystem_refs;
 pub use reactions::{
     ConservationAnalysis, ConservationLawType, ConservationViolation, DeriveError, LinearInvariant,
     derive_odes, detect_conservation_violations, stoichiometric_matrix,
