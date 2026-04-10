@@ -1,460 +1,367 @@
-//! Subsystem reference loading and resolution
+//! Subsystem reference loading and resolution.
 //!
-//! This module provides functionality to resolve `$ref` references in
-//! subsystem definitions. Local file references are resolved relative
-//! to a base path, and circular references are detected.
+//! Implements ESM library spec section 2.1b: walks all `subsystems` maps in
+//! models and reaction systems, and replaces any `{ "ref": "..." }` reference
+//! object with the resolved content of the referenced ESM file. Local file
+//! references are resolved relative to a base path and cycles are detected.
+//!
+//! HTTP(S) URL references are recognised but not fetched in the Rust loader,
+//! since this crate does not depend on an HTTP client. Callers that need
+//! remote refs should download the file first and rewrite the ref to a local
+//! path. URL refs raise a clear error rather than being silently ignored.
+//!
+//! Resolution operates on raw [`serde_json::Value`] before typed coercion to
+//! [`crate::EsmFile`], because the typed model intentionally does not store
+//! the `subsystems` map (it would force every consumer of `Model` /
+//! `ReactionSystem` to handle nested-by-default systems). Resolving at the
+//! JSON layer means refs are inlined into the parsed value, and the typed
+//! model only ever sees fully resolved input.
 
-use crate::types::EsmFile;
+use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-/// Resolve all subsystem `$ref` references in an ESM file.
+/// Resolve all subsystem references in a parsed JSON value representing an
+/// ESM file.
 ///
-/// Walks all models and reaction systems looking for subsystem entries
-/// that contain a `$ref` field. For each reference found:
-///
-/// - If it starts with `http://` or `https://`, an error is returned
-///   (remote references are not supported).
-/// - Otherwise, the path is resolved relative to `base_path`, the
-///   referenced file is read and parsed, and the reference object is
-///   replaced with the resolved content.
-/// - Circular references are detected and reported as errors.
-/// - Resolution is recursive: resolved content may itself contain refs.
+/// Walks every `subsystems` map in models and reaction systems and inlines
+/// the referenced content. Resolution is recursive (referenced files may
+/// contain their own refs) and circular references are detected.
 ///
 /// # Arguments
 ///
-/// * `file` - The ESM file to resolve references in (modified in place)
-/// * `base_path` - Directory to resolve relative file paths against
-///
-/// # Returns
-///
-/// * `Ok(())` on success
-/// * `Err(String)` if a reference cannot be resolved
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// use earthsci_toolkit::ref_loading::resolve_subsystem_refs;
-/// use earthsci_toolkit::load;
-/// use std::path::Path;
-///
-/// let json = r#"{
-///   "esm": "0.1.0",
-///   "metadata": { "name": "test" },
-///   "models": {
-///     "main": {
-///       "variables": {},
-///       "equations": []
-///     }
-///   }
-/// }"#;
-/// let mut file = load(json).unwrap();
-/// resolve_subsystem_refs(&mut file, Path::new("/some/dir")).unwrap();
-/// ```
-pub fn resolve_subsystem_refs(file: &mut EsmFile, base_path: &Path) -> Result<(), String> {
+/// * `value` - the parsed ESM JSON to resolve (modified in place)
+/// * `base_path` - directory to resolve relative file paths against
+pub fn resolve_subsystem_refs(value: &mut Value, base_path: &Path) -> Result<(), String> {
     let mut visited = HashSet::new();
-    resolve_refs_in_file(file, base_path, &mut visited)
+    walk_top_level(value, base_path, &mut visited)
 }
 
-/// Internal recursive resolver that tracks visited paths to detect cycles.
-fn resolve_refs_in_file(
-    file: &mut EsmFile,
+fn walk_top_level(
+    value: &mut Value,
     base_path: &Path,
     visited: &mut HashSet<PathBuf>,
 ) -> Result<(), String> {
-    // Resolve refs in models
-    if let Some(ref mut models) = file.models {
-        let model_names: Vec<String> = models.keys().cloned().collect();
-        for name in model_names {
-            let model = models.get_mut(&name).unwrap();
-            // Models don't have a built-in subsystems field in the current types,
-            // but equations or variables may contain $ref patterns in their
-            // serde_json::Value content. We check the raw JSON representation
-            // for any embedded refs.
-            resolve_refs_in_equations(&mut model.equations, base_path, visited)?;
-        }
-    }
+    let obj = match value.as_object_mut() {
+        Some(o) => o,
+        None => return Ok(()),
+    };
 
-    // Resolve refs in reaction systems
-    if let Some(ref mut reaction_systems) = file.reaction_systems {
-        let rs_names: Vec<String> = reaction_systems.keys().cloned().collect();
-        for name in rs_names {
-            let rs = reaction_systems.get_mut(&name).unwrap();
-            // Resolve refs in reaction rate expressions
-            for reaction in &mut rs.reactions {
-                resolve_refs_in_expr(&mut reaction.rate, base_path, visited)?;
+    for section in ["models", "reaction_systems"] {
+        if let Some(section_val) = obj.get_mut(section) {
+            if let Some(map) = section_val.as_object_mut() {
+                for (_name, system) in map.iter_mut() {
+                    walk_subsystems(system, base_path, visited)?;
+                }
             }
-        }
-    }
-
-    // Resolve refs in coupling entries
-    if let Some(ref mut coupling) = file.coupling {
-        for entry in coupling.iter_mut() {
-            resolve_refs_in_coupling_entry(entry, base_path, visited)?;
         }
     }
 
     Ok(())
 }
 
-/// Resolve `$ref` in a serde_json::Value, replacing the ref object with loaded content.
-fn resolve_ref_value(
-    value: &mut serde_json::Value,
+/// Walk a model or reaction system value and resolve any refs in its
+/// `subsystems` map.
+fn walk_subsystems(
+    value: &mut Value,
     base_path: &Path,
     visited: &mut HashSet<PathBuf>,
 ) -> Result<(), String> {
-    match value {
-        serde_json::Value::Object(map) => {
-            if let Some(ref_val) = map.get("$ref").cloned() {
-                let ref_str = ref_val
-                    .as_str()
-                    .ok_or_else(|| "$ref must be a string".to_string())?;
+    let obj = match value.as_object_mut() {
+        Some(o) => o,
+        None => return Ok(()),
+    };
 
-                // Reject remote references
-                if ref_str.starts_with("http://") || ref_str.starts_with("https://") {
-                    return Err(format!(
-                        "Remote references are not supported: {}",
-                        ref_str
-                    ));
-                }
+    let subs_val = match obj.get_mut("subsystems") {
+        Some(v) => v,
+        None => return Ok(()),
+    };
 
-                // Resolve path relative to base
-                let resolved_path = base_path.join(ref_str);
-                let canonical = resolved_path
-                    .canonicalize()
-                    .map_err(|e| {
-                        format!(
-                            "Failed to resolve reference path '{}': {}",
-                            resolved_path.display(),
-                            e
-                        )
-                    })?;
+    let subs = match subs_val.as_object_mut() {
+        Some(m) => m,
+        None => return Ok(()),
+    };
 
-                // Circular reference detection
-                if visited.contains(&canonical) {
-                    return Err(format!(
-                        "Circular reference detected: {}",
-                        canonical.display()
-                    ));
-                }
-                visited.insert(canonical.clone());
-
-                // Read and parse the referenced file
-                let content = std::fs::read_to_string(&canonical).map_err(|e| {
-                    format!(
-                        "Failed to read referenced file '{}': {}",
-                        canonical.display(),
-                        e
-                    )
-                })?;
-
-                let mut parsed: serde_json::Value =
-                    serde_json::from_str(&content).map_err(|e| {
-                        format!(
-                            "Failed to parse referenced file '{}': {}",
-                            canonical.display(),
-                            e
-                        )
-                    })?;
-
-                // Recursively resolve refs in the loaded content
-                let parent_dir = canonical
-                    .parent()
-                    .unwrap_or(base_path);
-                resolve_ref_value(&mut parsed, parent_dir, visited)?;
-
-                // Remove from visited after successful resolution (allow the same
-                // file to be referenced from independent branches, just not cycles)
-                visited.remove(&canonical);
-
-                // Replace the ref object with the resolved content
-                *value = parsed;
-            } else {
-                // Recursively check all values in the object
-                let keys: Vec<String> = map.keys().cloned().collect();
-                for key in keys {
-                    if let Some(v) = map.get_mut(&key) {
-                        resolve_ref_value(v, base_path, visited)?;
-                    }
-                }
-            }
-        }
-        serde_json::Value::Array(arr) => {
-            for item in arr.iter_mut() {
-                resolve_ref_value(item, base_path, visited)?;
-            }
-        }
-        _ => {
-            // Primitives have no refs to resolve
-        }
+    let names: Vec<String> = subs.keys().cloned().collect();
+    for name in names {
+        let entry = subs.remove(&name).unwrap_or(Value::Null);
+        let resolved = resolve_value(entry, base_path, visited)?;
+        subs.insert(name, resolved);
     }
-    Ok(())
-}
-
-/// Resolve refs within Expr values by converting to serde_json::Value,
-/// resolving, and converting back.
-fn resolve_refs_in_expr(
-    expr: &mut crate::types::Expr,
-    base_path: &Path,
-    visited: &mut HashSet<PathBuf>,
-) -> Result<(), String> {
-    // Serialize the expression to a JSON value
-    let mut json_val = serde_json::to_value(&*expr)
-        .map_err(|e| format!("Failed to serialize expression: {}", e))?;
-
-    // Check if there are any $ref patterns before doing work
-    let json_str = serde_json::to_string(&json_val).unwrap_or_default();
-    if !json_str.contains("$ref") {
-        return Ok(());
-    }
-
-    resolve_ref_value(&mut json_val, base_path, visited)?;
-
-    // Deserialize back
-    *expr = serde_json::from_value(json_val)
-        .map_err(|e| format!("Failed to deserialize resolved expression: {}", e))?;
 
     Ok(())
 }
 
-/// Resolve refs within equation lists
-fn resolve_refs_in_equations(
-    equations: &mut Vec<crate::types::Equation>,
+/// If `value` is a `{ "ref": "..." }` object, load the referenced file and
+/// inline the single top-level system from it. Otherwise recurse into the
+/// value's own `subsystems` map.
+fn resolve_value(
+    value: Value,
     base_path: &Path,
     visited: &mut HashSet<PathBuf>,
-) -> Result<(), String> {
-    for eq in equations.iter_mut() {
-        resolve_refs_in_expr(&mut eq.lhs, base_path, visited)?;
-        resolve_refs_in_expr(&mut eq.rhs, base_path, visited)?;
+) -> Result<Value, String> {
+    if let Some(obj) = value.as_object() {
+        if let Some(ref_val) = obj.get("ref") {
+            let ref_str = ref_val
+                .as_str()
+                .ok_or_else(|| "subsystem ref must be a string".to_string())?;
+
+            if ref_str.starts_with("http://") || ref_str.starts_with("https://") {
+                return Err(format!(
+                    "Remote subsystem refs are not supported in the Rust loader; \
+                     download {ref_str:?} to a local file first"
+                ));
+            }
+
+            let resolved_path = base_path.join(ref_str);
+            let canonical = resolved_path
+                .canonicalize()
+                .map_err(|e| format!("failed to resolve ref {ref_str:?}: {e}"))?;
+
+            if visited.contains(&canonical) {
+                return Err(format!(
+                    "circular subsystem reference detected: {}",
+                    canonical.display()
+                ));
+            }
+            visited.insert(canonical.clone());
+
+            let content = std::fs::read_to_string(&canonical)
+                .map_err(|e| format!("failed to read ref {}: {}", canonical.display(), e))?;
+            let mut parsed: Value = serde_json::from_str(&content)
+                .map_err(|e| format!("failed to parse ref {}: {}", canonical.display(), e))?;
+
+            // Recursively resolve any refs inside the loaded file before we
+            // pluck out the single top-level system to inline.
+            let parent_dir = canonical.parent().unwrap_or(base_path).to_path_buf();
+            walk_top_level(&mut parsed, &parent_dir, visited)?;
+
+            visited.remove(&canonical);
+
+            return extract_single_system(parsed, &canonical);
+        }
     }
-    Ok(())
+
+    let mut value = value;
+    walk_subsystems(&mut value, base_path, visited)?;
+    Ok(value)
 }
 
-/// Resolve refs within coupling entries that contain serde_json::Value fields
-fn resolve_refs_in_coupling_entry(
-    entry: &mut crate::types::CouplingEntry,
-    base_path: &Path,
-    visited: &mut HashSet<PathBuf>,
-) -> Result<(), String> {
-    use crate::types::CouplingEntry;
+/// A referenced file must contain exactly one top-level model or reaction
+/// system. Extract that single entry as a JSON value to inline into the
+/// caller's subsystem slot.
+fn extract_single_system(value: Value, source: &Path) -> Result<Value, String> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| format!("ref {} did not parse to a JSON object", source.display()))?;
 
-    match entry {
-        CouplingEntry::OperatorCompose {
-            translate, ..
-        } => {
-            if let Some(val) = translate {
-                resolve_ref_value(val, base_path, visited)?;
-            }
-        }
-        CouplingEntry::Couple {
-            connector, ..
-        } => {
-            resolve_ref_value(connector, base_path, visited)?;
-        }
-        CouplingEntry::Callback {
-            config, ..
-        } => {
-            if let Some(val) = config {
-                resolve_ref_value(val, base_path, visited)?;
-            }
-        }
-        CouplingEntry::Event {
-            conditions,
-            affects,
-            functional_affect,
-            ..
-        } => {
-            if let Some(conds) = conditions {
-                for cond in conds.iter_mut() {
-                    resolve_refs_in_expr(cond, base_path, visited)?;
+    let pick_single = |key: &str| -> Option<Value> {
+        obj.get(key)
+            .and_then(|v| v.as_object())
+            .and_then(|m| {
+                if m.len() == 1 {
+                    m.values().next().cloned()
+                } else {
+                    None
                 }
-            }
-            if let Some(affs) = affects {
-                for aff in affs.iter_mut() {
-                    resolve_refs_in_expr(&mut aff.rhs, base_path, visited)?;
-                }
-            }
-            if let Some(fa) = functional_affect {
-                if let Some(config) = &mut fa.config {
-                    resolve_ref_value(config, base_path, visited)?;
-                }
-            }
-        }
-        // VariableMap and OperatorApply don't contain Value fields that could have refs
-        CouplingEntry::VariableMap { .. } | CouplingEntry::OperatorApply { .. } => {}
-    }
-    Ok(())
+            })
+    };
+
+    pick_single("models")
+        .or_else(|| pick_single("reaction_systems"))
+        .ok_or_else(|| {
+            format!(
+                "ref {} must contain exactly one top-level model or reaction system",
+                source.display()
+            )
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Metadata, Model};
-    use std::collections::HashMap;
-    use std::io::Write;
+    use serde_json::json;
     use tempfile::TempDir;
-
-    fn make_metadata() -> Metadata {
-        Metadata {
-            name: Some("test".to_string()),
-            description: None,
-            authors: None,
-            license: None,
-            created: None,
-            modified: None,
-            tags: None,
-            references: None,
-        }
-    }
-
-    fn make_minimal_file() -> EsmFile {
-        let mut models = HashMap::new();
-        models.insert(
-            "main".to_string(),
-            Model {
-                name: None,
-                reference: None,
-                variables: HashMap::new(),
-                equations: vec![],
-                discrete_events: None,
-                continuous_events: None,
-                description: None,
-            },
-        );
-        EsmFile {
-            esm: "0.1.0".to_string(),
-            metadata: make_metadata(),
-            models: Some(models),
-            reaction_systems: None,
-            data_loaders: None,
-            operators: None,
-            coupling: None,
-            domain: None,
-        }
-    }
 
     #[test]
     fn test_resolve_no_refs() {
-        let mut file = make_minimal_file();
-        let result = resolve_subsystem_refs(&mut file, Path::new("/tmp"));
+        let mut value = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "test" },
+            "models": {
+                "Main": { "variables": {}, "equations": [] }
+            }
+        });
+        let result = resolve_subsystem_refs(&mut value, Path::new("/tmp"));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_local_subsystem_ref() {
+        let dir = TempDir::new().unwrap();
+        let inner = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "inner" },
+            "models": {
+                "Inner": {
+                    "variables": {},
+                    "equations": []
+                }
+            }
+        });
+        std::fs::write(
+            dir.path().join("inner.json"),
+            serde_json::to_string(&inner).unwrap(),
+        )
+        .unwrap();
+
+        let mut value = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "main" },
+            "models": {
+                "Outer": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": {
+                        "Inner": { "ref": "inner.json" }
+                    }
+                }
+            }
+        });
+
+        resolve_subsystem_refs(&mut value, dir.path()).unwrap();
+
+        let inner_resolved = &value["models"]["Outer"]["subsystems"]["Inner"];
+        assert!(inner_resolved.get("variables").is_some());
+        assert!(inner_resolved.get("ref").is_none());
     }
 
     #[test]
     fn test_reject_remote_ref() {
-        let mut value = serde_json::json!({
-            "$ref": "https://example.com/model.json"
+        let mut value = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "main" },
+            "models": {
+                "Outer": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": {
+                        "Remote": { "ref": "https://example.com/inner.json" }
+                    }
+                }
+            }
         });
-        let mut visited = HashSet::new();
-        let result = resolve_ref_value(&mut value, Path::new("/tmp"), &mut visited);
+
+        let result = resolve_subsystem_refs(&mut value, Path::new("/tmp"));
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Remote references are not supported"));
-    }
-
-    #[test]
-    fn test_reject_http_ref() {
-        let mut value = serde_json::json!({
-            "$ref": "http://example.com/model.json"
-        });
-        let mut visited = HashSet::new();
-        let result = resolve_ref_value(&mut value, Path::new("/tmp"), &mut visited);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Remote references are not supported"));
-    }
-
-    #[test]
-    fn test_resolve_local_ref() {
-        // Create a temporary directory with a referenced file
-        let dir = TempDir::new().unwrap();
-        let ref_path = dir.path().join("sub.json");
-        let mut ref_file = std::fs::File::create(&ref_path).unwrap();
-        writeln!(ref_file, r#"{{"name": "resolved_subsystem"}}"#).unwrap();
-
-        let mut value = serde_json::json!({
-            "$ref": "sub.json"
-        });
-
-        let mut visited = HashSet::new();
-        let result = resolve_ref_value(&mut value, dir.path(), &mut visited);
-        assert!(result.is_ok());
-        assert_eq!(value["name"], "resolved_subsystem");
+        assert!(result.unwrap_err().contains("Remote subsystem refs"));
     }
 
     #[test]
     fn test_circular_ref_detection() {
-        // Create two files that reference each other
         let dir = TempDir::new().unwrap();
+        let a = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "a" },
+            "models": {
+                "A": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": { "Cycle": { "ref": "b.json" } }
+                }
+            }
+        });
+        let b = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "b" },
+            "models": {
+                "B": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": { "Cycle": { "ref": "a.json" } }
+                }
+            }
+        });
+        std::fs::write(dir.path().join("a.json"), serde_json::to_string(&a).unwrap()).unwrap();
+        std::fs::write(dir.path().join("b.json"), serde_json::to_string(&b).unwrap()).unwrap();
 
-        let a_path = dir.path().join("a.json");
-        let b_path = dir.path().join("b.json");
-
-        std::fs::write(&a_path, r#"{"$ref": "b.json"}"#).unwrap();
-        std::fs::write(&b_path, r#"{"$ref": "a.json"}"#).unwrap();
-
-        let mut value = serde_json::json!({
-            "$ref": "a.json"
+        let mut value = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "main" },
+            "models": {
+                "Root": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": { "Start": { "ref": "a.json" } }
+                }
+            }
         });
 
-        let mut visited = HashSet::new();
-        let result = resolve_ref_value(&mut value, dir.path(), &mut visited);
+        let result = resolve_subsystem_refs(&mut value, dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Circular reference detected"));
-    }
-
-    #[test]
-    fn test_recursive_resolution() {
-        // Create a chain: main -> sub1 -> sub2 (no cycle)
-        let dir = TempDir::new().unwrap();
-
-        let sub2_path = dir.path().join("sub2.json");
-        std::fs::write(&sub2_path, r#"{"value": "leaf"}"#).unwrap();
-
-        let sub1_path = dir.path().join("sub1.json");
-        std::fs::write(&sub1_path, r#"{"nested": {"$ref": "sub2.json"}}"#).unwrap();
-
-        let mut value = serde_json::json!({
-            "$ref": "sub1.json"
-        });
-
-        let mut visited = HashSet::new();
-        let result = resolve_ref_value(&mut value, dir.path(), &mut visited);
-        assert!(result.is_ok());
-        assert_eq!(value["nested"]["value"], "leaf");
-    }
-
-    #[test]
-    fn test_ref_in_array() {
-        let dir = TempDir::new().unwrap();
-        let ref_path = dir.path().join("item.json");
-        std::fs::write(&ref_path, r#"{"resolved": true}"#).unwrap();
-
-        let mut value = serde_json::json!([
-            {"$ref": "item.json"},
-            {"normal": "value"}
-        ]);
-
-        let mut visited = HashSet::new();
-        let result = resolve_ref_value(&mut value, dir.path(), &mut visited);
-        assert!(result.is_ok());
-        assert_eq!(value[0]["resolved"], true);
-        assert_eq!(value[1]["normal"], "value");
+        assert!(result.unwrap_err().contains("circular"));
     }
 
     #[test]
     fn test_nonexistent_ref() {
         let dir = TempDir::new().unwrap();
-        let mut value = serde_json::json!({
-            "$ref": "nonexistent.json"
+        let mut value = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "main" },
+            "models": {
+                "Outer": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": {
+                        "Missing": { "ref": "does-not-exist.json" }
+                    }
+                }
+            }
         });
 
-        let mut visited = HashSet::new();
-        let result = resolve_ref_value(&mut value, dir.path(), &mut visited);
+        let result = resolve_subsystem_refs(&mut value, dir.path());
         assert!(result.is_err());
-        // Should fail during canonicalize or read
-        let err = result.unwrap_err();
-        assert!(
-            err.contains("Failed to resolve reference path")
-                || err.contains("Failed to read referenced file")
-        );
+        assert!(result.unwrap_err().contains("failed to resolve ref"));
+    }
+
+    #[test]
+    fn test_resolves_inside_reaction_systems() {
+        let dir = TempDir::new().unwrap();
+        let sub = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "sub" },
+            "reaction_systems": {
+                "Sub": {
+                    "species": {},
+                    "parameters": {},
+                    "reactions": []
+                }
+            }
+        });
+        std::fs::write(
+            dir.path().join("sub.json"),
+            serde_json::to_string(&sub).unwrap(),
+        )
+        .unwrap();
+
+        let mut value = json!({
+            "esm": "0.1.0",
+            "metadata": { "name": "main" },
+            "reaction_systems": {
+                "Main": {
+                    "species": {},
+                    "parameters": {},
+                    "reactions": [],
+                    "subsystems": {
+                        "SubKey": { "ref": "sub.json" }
+                    }
+                }
+            }
+        });
+
+        resolve_subsystem_refs(&mut value, dir.path()).unwrap();
+        let resolved = &value["reaction_systems"]["Main"]["subsystems"]["SubKey"];
+        assert!(resolved.get("species").is_some());
+        assert!(resolved.get("ref").is_none());
     }
 }
