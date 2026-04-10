@@ -6,7 +6,7 @@ Complete API reference for the ESM Format Typescript library.
 
 ### addContinuousEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:387`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:387`
 
 **Signature:**
 ```typescript
@@ -24,7 +24,7 @@ Add a continuous event to a model
 
 ### addCoupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:464`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:464`
 
 **Signature:**
 ```typescript
@@ -42,7 +42,7 @@ Add a coupling entry to an ESM file
 
 ### addDiscreteEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:404`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:404`
 
 **Signature:**
 ```typescript
@@ -60,7 +60,7 @@ Add a discrete event to a model
 
 ### addEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:193`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:193`
 
 **Signature:**
 ```typescript
@@ -78,7 +78,7 @@ Add a new equation to a model
 
 ### addReaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:262`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:262`
 
 **Signature:**
 ```typescript
@@ -96,7 +96,7 @@ Add a new reaction to a reaction system
 
 ### addSpecies
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:306`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:306`
 
 **Signature:**
 ```typescript
@@ -115,7 +115,7 @@ Add a new species to a reaction system
 
 ### addVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:61`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:61`
 
 **Signature:**
 ```typescript
@@ -134,7 +134,7 @@ Add a new variable to a model
 
 ### analyzeComplexity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/complexity.ts:17`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:17`
 
 **Signature:**
 ```typescript
@@ -151,7 +151,7 @@ Analyze the complexity of an expression
 
 ### buildDependencyGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/dependency-graph.ts:19`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/dependency-graph.ts:19`
 
 **Signature:**
 ```typescript
@@ -169,7 +169,7 @@ Build a dependency graph from an ESM file, model, or expression
 
 ### canMigrate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/migration.ts:22`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.ts:22`
 
 **Signature:**
 ```typescript
@@ -184,7 +184,7 @@ Check if migration is possible from the source version to target version.
 
 ### checkDimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/units.ts:210`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:210`
 
 **Signature:**
 ```typescript
@@ -210,7 +210,7 @@ Follows rules from ESM spec Section 3.3.1:
 
 ### classifyComplexity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/complexity.ts:219`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:219`
 
 **Signature:**
 ```typescript
@@ -227,7 +227,7 @@ Classify expression complexity level
 
 ### compareAnalysis
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/index.ts:261`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:261`
 
 **Signature:**
 ```typescript
@@ -242,7 +242,7 @@ Compare analysis results between different expressions or models
 
 ### compareComplexity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/complexity.ts:187`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:187`
 
 **Signature:**
 ```typescript
@@ -260,7 +260,7 @@ Compare complexity of two expressions
 
 ### componentExists
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:349`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:349`
 
 **Signature:**
 ```typescript
@@ -275,7 +275,7 @@ Utility to check if a component exists in the ESM file
 
 ### componentGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:290`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:290`
 
 **Signature:**
 ```typescript
@@ -292,7 +292,7 @@ Implements the Graph interface with adjacency methods.
 
 ### component_graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:104`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:104`
 
 **Signature:**
 ```typescript
@@ -307,14 +307,12 @@ Returns a directed graph where nodes are model components and edges are coupling
 **Available in other languages:**
 - [Julia](julia.md#component_graph)
 - [Julia](julia.md#component_graph)
-- [Rust](rust.md#component_graph)
-- [Rust](rust.md#component_graph)
 
 ---
 
 ### compose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:506`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:506`
 
 **Signature:**
 ```typescript
@@ -337,7 +335,7 @@ Compose two systems using a coupling entry
 
 ### contains
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/expression.ts:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:65`
 
 **Signature:**
 ```typescript
@@ -354,7 +352,6 @@ Check if an expression contains a specific variable
 **Available in other languages:**
 - [Julia](julia.md#contains)
 - [Julia](julia.md#contains)
-- [Rust](rust.md#contains)
 
 ---
 
@@ -397,7 +394,7 @@ Debounced validation hook for use in components that trigger validation
 
 ### createDemoServer
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/demo/demo-pages.ts:333`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/demo/demo-pages.ts:333`
 
 **Signature:**
 ```typescript
@@ -482,7 +479,7 @@ Create reactive validation signals for an ESM file
 
 ### deriveODEs
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/reactions.ts:28`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.ts:28`
 
 **Signature:**
 ```typescript
@@ -511,7 +508,7 @@ Handles:
 
 ### detectStabilityIssues
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/complexity.ts:324`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:324`
 
 **Signature:**
 ```typescript
@@ -528,7 +525,7 @@ Detect numerical stability issues in expressions
 
 ### differentiate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/differentiation.ts:19`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:19`
 
 **Signature:**
 ```typescript
@@ -550,7 +547,7 @@ Compute the symbolic derivative of an expression with respect to a variable
 
 ### downloadExport
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/ModelExportUtils.ts:631`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:631`
 
 **Signature:**
 ```typescript
@@ -565,7 +562,7 @@ Download exported model as file
 
 ### estimateParallelPotential
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/complexity.ts:282`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:282`
 
 **Signature:**
 ```typescript
@@ -582,7 +579,7 @@ Estimate parallel execution potential
 
 ### estimateSavings
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/common-subexpressions.ts:288`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:288`
 
 **Signature:**
 ```typescript
@@ -599,7 +596,7 @@ Estimate the cost savings from factoring out common subexpressions
 
 ### evaluate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/expression.ts:85`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:85`
 
 **Signature:**
 ```typescript
@@ -617,13 +614,12 @@ Evaluate an expression numerically with variable bindings
 **Available in other languages:**
 - [Julia](julia.md#evaluate)
 - [Julia](julia.md#evaluate)
-- [Rust](rust.md#evaluate)
 
 ---
 
 ### exportModel
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/ModelExportUtils.ts:33`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:33`
 
 **Signature:**
 ```typescript
@@ -638,7 +634,7 @@ Export model to various formats
 
 ### exportResults
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/index.ts:246`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:246`
 
 **Signature:**
 ```typescript
@@ -653,7 +649,7 @@ Export analysis results to various formats
 
 ### expressionGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:377`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:377`
 
 **Signature:**
 ```typescript
@@ -673,7 +669,7 @@ Creates a directed graph where nodes are variables/parameters/species and edges 
 
 ### extract
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:589`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:589`
 
 **Signature:**
 ```typescript
@@ -696,7 +692,7 @@ Extract a specific component from an ESM file into a new file
 
 ### findCommonSubexpressions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/common-subexpressions.ts:18`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:18`
 
 **Signature:**
 ```typescript
@@ -714,7 +710,7 @@ Find common subexpressions in a single expression
 
 ### findCommonSubexpressionsAcrossExpressions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/common-subexpressions.ts:87`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:87`
 
 **Signature:**
 ```typescript
@@ -732,7 +728,7 @@ Find common subexpressions across multiple expressions
 
 ### findCommonSubexpressionsInEsmFile
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/common-subexpressions.ts:211`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:211`
 
 **Signature:**
 ```typescript
@@ -750,7 +746,7 @@ Find common subexpressions across an entire ESM file
 
 ### findCommonSubexpressionsInModel
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/common-subexpressions.ts:159`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:159`
 
 **Signature:**
 ```typescript
@@ -768,7 +764,7 @@ Find common subexpressions in a model
 
 ### findCriticalPoints
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/differentiation.ts:544`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:544`
 
 **Signature:**
 ```typescript
@@ -787,7 +783,7 @@ This is a symbolic analysis - actual solving would require numerical methods
 
 ### findDeadVariables
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/dependency-graph.ts:463`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/dependency-graph.ts:463`
 
 **Signature:**
 ```typescript
@@ -802,7 +798,7 @@ Find dead variables (those that are defined but never used)
 
 ### findDependencyChains
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/dependency-graph.ts:480`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/dependency-graph.ts:480`
 
 **Signature:**
 ```typescript
@@ -817,7 +813,7 @@ Find variable dependency chains (paths from parameters to state variables)
 
 ### findExpensiveSubexpressions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/complexity.ts:242`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:242`
 
 **Signature:**
 ```typescript
@@ -835,7 +831,7 @@ Find the most expensive sub-expressions in an expression
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:70`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.ts:70`
 
 **Signature:**
 ```typescript
@@ -858,13 +854,12 @@ The algorithm:
 **Available in other languages:**
 - [Julia](julia.md#flatten)
 - [Julia](julia.md#flatten)
-- [Rust](rust.md#flatten)
 
 ---
 
 ### formatResults
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/index.ts:238`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:238`
 
 **Signature:**
 ```typescript
@@ -879,7 +874,7 @@ Format analysis results for display
 
 ### formatUserFriendly
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:195`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:195`
 
 **Signature:**
 ```typescript
@@ -890,7 +885,7 @@ export function formatUserFriendly(error: ESMError): string {
 
 ### freeParameters
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/expression.ts:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:45`
 
 **Signature:**
 ```typescript
@@ -908,7 +903,7 @@ Extract free parameters from an expression within a model context
 
 ### freeVariables
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/expression.ts:20`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:20`
 
 **Signature:**
 ```typescript
@@ -925,7 +920,7 @@ Extract all variable references from an expression
 
 ### generateFactoredVariableNames
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/common-subexpressions.ts:298`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:298`
 
 **Signature:**
 ```typescript
@@ -943,7 +938,7 @@ Generate variable names for factored subexpressions
 
 ### getAvailableFormats
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/ModelExportUtils.ts:609`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:609`
 
 **Signature:**
 ```typescript
@@ -958,7 +953,7 @@ Get available export formats
 
 ### getComponentType
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:361`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:361`
 
 **Signature:**
 ```typescript
@@ -973,7 +968,7 @@ Get the type of a component by its ID
 
 ### getFileExtension
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/ModelExportUtils.ts:616`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:616`
 
 **Signature:**
 ```typescript
@@ -988,7 +983,7 @@ Get file extension for export format
 
 ### getProfiler
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:486`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:486`
 
 **Signature:**
 ```typescript
@@ -999,7 +994,7 @@ export function getProfiler(): PerformanceProfiler {
 
 ### getSupportedMigrationTargets
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/migration.ts:30`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.ts:30`
 
 **Signature:**
 ```typescript
@@ -1014,7 +1009,7 @@ Get the list of schema versions that a given source version can migrate to.
 
 ### gradient
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/differentiation.ts:52`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:52`
 
 **Signature:**
 ```typescript
@@ -1032,7 +1027,7 @@ Compute the gradient (all first partial derivatives)
 
 ### groupSubexpressionsByType
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/common-subexpressions.ts:320`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/common-subexpressions.ts:320`
 
 **Signature:**
 ```typescript
@@ -1049,7 +1044,7 @@ Group common subexpressions by their structure type
 
 ### higherOrderDerivative
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/differentiation.ts:494`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:494`
 
 **Signature:**
 ```typescript
@@ -1068,7 +1063,7 @@ Compute higher-order derivatives
 
 ### isDifferentiable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/differentiation.ts:527`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:527`
 
 **Signature:**
 ```typescript
@@ -1086,7 +1081,7 @@ Check if an expression is differentiable with respect to a variable
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1442`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1442`
 
 **Signature:**
 ```typescript
@@ -1107,14 +1102,12 @@ Load an ESM file from a JSON string or pre-parsed object
 - [Julia](julia.md#load)
 - [Julia](julia.md#load)
 - [Python](python.md#load)
-- [Rust](rust.md#load)
-- [Rust](rust.md#load)
 
 ---
 
 ### mapVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:527`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:527`
 
 **Signature:**
 ```typescript
@@ -1134,7 +1127,7 @@ Map a variable from one system to another with optional transformation
 
 ### merge
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:553`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:553`
 
 **Signature:**
 ```typescript
@@ -1156,7 +1149,7 @@ Merge two ESM files
 
 ### migrate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/migration.ts:40`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/migration.ts:40`
 
 **Signature:**
 ```typescript
@@ -1170,13 +1163,12 @@ Migrate an ESM file from its current schema version to the target version.
 **Available in other languages:**
 - [Julia](julia.md#migrate)
 - [Python](python.md#migrate)
-- [Rust](rust.md#migrate)
 
 ---
 
 ### parseUnit
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/units.ts:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:65`
 
 **Signature:**
 ```typescript
@@ -1202,7 +1194,7 @@ Handles common patterns:
 
 ### partialDerivatives
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/differentiation.ts:36`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:36`
 
 **Signature:**
 ```typescript
@@ -1220,7 +1212,7 @@ Compute partial derivatives with respect to multiple variables
 
 ### productMatrix
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/reactions.ts:314`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.ts:314`
 
 **Signature:**
 ```typescript
@@ -1244,7 +1236,7 @@ Returns the product stoichiometric matrix (species × reactions) where:
 
 ### profileOperation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:491`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:491`
 
 **Signature:**
 ```typescript
@@ -1255,7 +1247,7 @@ export function profileOperation(operationName: string) {
 
 ### registerWebComponents
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/web-components.ts:565`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/web-components.ts:565`
 
 **Signature:**
 ```typescript
@@ -1281,7 +1273,7 @@ Register all ESM editor web components
 
 ### removeCoupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:482`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:482`
 
 **Signature:**
 ```typescript
@@ -1300,7 +1292,7 @@ Remove a coupling entry from an ESM file by index
 
 ### removeEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:211`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:211`
 
 **Signature:**
 ```typescript
@@ -1319,7 +1311,7 @@ Remove an equation from a model
 
 ### removeEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:422`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:422`
 
 **Signature:**
 ```typescript
@@ -1338,7 +1330,7 @@ Remove an event from a model by name
 
 ### removeReaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:279`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:279`
 
 **Signature:**
 ```typescript
@@ -1357,7 +1349,7 @@ Remove a reaction from a reaction system
 
 ### removeSpecies
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:328`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:328`
 
 **Signature:**
 ```typescript
@@ -1377,7 +1369,7 @@ Remove a species from a reaction system, with reference checking
 
 ### removeVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:83`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:83`
 
 **Signature:**
 ```typescript
@@ -1397,7 +1389,7 @@ Remove a variable from a model, with reference checking
 
 ### renameVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:155`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:155`
 
 **Signature:**
 ```typescript
@@ -1417,7 +1409,7 @@ Rename a variable throughout a model
 
 ### save
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/serialize.ts:15`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/serialize.ts:15`
 
 **Signature:**
 ```typescript
@@ -1435,14 +1427,12 @@ Serialize an EsmFile object to a formatted JSON string
 - [Julia](julia.md#save)
 - [Julia](julia.md#save)
 - [Julia](julia.md#save)
-- [Rust](rust.md#save)
-- [Rust](rust.md#save)
 
 ---
 
 ### setupErrorLogging
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:628`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:628`
 
 **Signature:**
 ```typescript
@@ -1453,7 +1443,7 @@ export function setupErrorLogging(config: ErrorLoggerConfig = { logLevel: 'info'
 
 ### simplify
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/expression.ts:210`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:210`
 
 **Signature:**
 ```typescript
@@ -1469,13 +1459,12 @@ Simplify an expression using basic algebraic rules
 **Available in other languages:**
 - [Julia](julia.md#simplify)
 - [Julia](julia.md#simplify)
-- [Rust](rust.md#simplify)
 
 ---
 
 ### stoichiometricMatrix
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/reactions.ts:225`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.ts:225`
 
 **Signature:**
 ```typescript
@@ -1500,7 +1489,7 @@ Returns the net stoichiometric matrix (species × reactions) where:
 
 ### substitute
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/substitute.ts:27`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.ts:27`
 
 **Signature:**
 ```typescript
@@ -1521,14 +1510,12 @@ path through system hierarchy per format spec Section 4.3.
 **Available in other languages:**
 - [Julia](julia.md#substitute)
 - [Julia](julia.md#substitute)
-- [Rust](rust.md#substitute)
-- [Rust](rust.md#substitute)
 
 ---
 
 ### substituteInEquations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/edit.ts:245`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:245`
 
 **Signature:**
 ```typescript
@@ -1546,7 +1533,7 @@ Apply substitutions to all equations in a model
 
 ### substituteInModel
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/substitute.ts:148`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.ts:148`
 
 **Signature:**
 ```typescript
@@ -1567,7 +1554,7 @@ Returns a new model with substitutions applied (immutable).
 
 ### substituteInReactionSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/substitute.ts:200`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.ts:200`
 
 **Signature:**
 ```typescript
@@ -1588,7 +1575,7 @@ Returns a new reaction system with substitutions applied (immutable).
 
 ### substrateMatrix
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/reactions.ts:280`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/reactions.ts:280`
 
 **Signature:**
 ```typescript
@@ -1612,7 +1599,7 @@ Returns the substrate stoichiometric matrix (species × reactions) where:
 
 ### toAscii
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:577`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/pretty-print.ts:577`
 
 **Signature:**
 ```typescript
@@ -1627,7 +1614,7 @@ Format an expression as plain ASCII text
 
 ### toJuliaCode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/codegen.ts:18`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/codegen.ts:18`
 
 **Signature:**
 ```typescript
@@ -1644,7 +1631,7 @@ Generate a self-contained Julia script from an ESM file
 
 ### toLatex
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:536`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/pretty-print.ts:536`
 
 **Signature:**
 ```typescript
@@ -1659,7 +1646,7 @@ Format an expression as LaTeX mathematical notation
 
 ### toMathML
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:617`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/pretty-print.ts:617`
 
 **Signature:**
 ```typescript
@@ -1674,7 +1661,7 @@ Format an expression as MathML markup for web/academic publishing
 
 ### toPythonCode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/codegen.ts:101`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/codegen.ts:101`
 
 **Signature:**
 ```typescript
@@ -1691,7 +1678,7 @@ Generate a self-contained Python script from an ESM file
 
 ### toUnicode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/pretty-print.ts:496`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/pretty-print.ts:496`
 
 **Signature:**
 ```typescript
@@ -1706,7 +1693,7 @@ Format an expression as Unicode mathematical notation
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:849`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:849`
 
 **Signature:**
 ```typescript
@@ -1723,14 +1710,12 @@ Validate ESM data and return structured validation result.
 **Available in other languages:**
 - [Julia](julia.md#validate)
 - [Julia](julia.md#validate)
-- [Rust](rust.md#validate)
-- [Rust](rust.md#validate)
 
 ---
 
 ### validateSchema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1143`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1143`
 
 **Signature:**
 ```typescript
@@ -1745,7 +1730,7 @@ Validate data against the ESM schema
 
 ### validateUnits
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/units.ts:408`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:408`
 
 **Signature:**
 ```typescript
@@ -1764,7 +1749,7 @@ Validate dimensional consistency of all equations in an ESM file
 
 ### AffectEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:365`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:365`
 
 **Definition:**
 ```typescript
@@ -1778,7 +1763,6 @@ An affect equation in an event: lhs is the target variable (string), rhs is an e
 **Available in other languages:**
 - [Julia](julia.md#affectequation)
 - [Python](python.md#affectequation)
-- [Rust](rust.md#affectequation)
 
 ---
 
@@ -1814,7 +1798,7 @@ Configuration for the AST store
 
 ### BoundaryCondition
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:778`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:778`
 
 **Definition:**
 ```typescript
@@ -1832,7 +1816,7 @@ Boundary condition for one or more dimensions.
 
 ### Change
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:73`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:73`
 
 **Definition:**
 ```typescript
@@ -1843,7 +1827,7 @@ export interface Change {
 
 ### Command
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:56`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:56`
 
 **Definition:**
 ```typescript
@@ -1854,7 +1838,7 @@ export interface Command {
 
 ### CommandResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:67`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:67`
 
 **Definition:**
 ```typescript
@@ -1865,7 +1849,7 @@ export interface CommandResult {
 
 ### CommonSubexpression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:69`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:69`
 
 **Definition:**
 ```typescript
@@ -1876,7 +1860,7 @@ export interface CommonSubexpression {
 
 ### ComplexityMetrics
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:51`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:51`
 
 **Definition:**
 ```typescript
@@ -1887,21 +1871,18 @@ export interface ComplexityMetrics {
 
 ### ComponentGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:53`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:53`
 
 **Definition:**
 ```typescript
 export interface ComponentGraph {
 ```
 
-**Available in other languages:**
-- [Rust](rust.md#componentgraph)
-
 ---
 
 ### ComponentNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:12`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:12`
 
 **Definition:**
 ```typescript
@@ -1911,13 +1892,12 @@ export interface ComponentNode {
 **Available in other languages:**
 - [Julia](julia.md#componentnode)
 - [Python](python.md#componentnode)
-- [Rust](rust.md#componentnode)
 
 ---
 
 ### ConnectorEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:633`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:633`
 
 **Definition:**
 ```typescript
@@ -1935,7 +1915,7 @@ A single equation in a ConnectorSystem linking two coupled systems.
 
 ### ContinuousEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:405`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:405`
 
 **Definition:**
 ```typescript
@@ -1949,13 +1929,12 @@ Fires when a condition expression crosses zero (root-finding). Maps to MTK Symbo
 **Available in other languages:**
 - [Julia](julia.md#continuousevent)
 - [Python](python.md#continuousevent)
-- [Rust](rust.md#continuousevent)
 
 ---
 
 ### CoordinateTransform
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:770`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:770`
 
 **Definition:**
 ```typescript
@@ -1969,7 +1948,7 @@ export interface CoordinateTransform {
 
 ### CouplingCallback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:688`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:688`
 
 **Definition:**
 ```typescript
@@ -1987,7 +1966,7 @@ Register a callback for simulation events.
 
 ### CouplingCouple
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:615`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:615`
 
 **Definition:**
 ```typescript
@@ -2006,7 +1985,7 @@ Bi-directional coupling via connector equations.
 
 ### CouplingEdge
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:35`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:35`
 
 **Definition:**
 ```typescript
@@ -2017,13 +1996,12 @@ export interface CouplingEdge {
 - [Julia](julia.md#couplingedge)
 - [Python](python.md#couplingedge)
 - [Python](python.md#couplingedge)
-- [Rust](rust.md#couplingedge)
 
 ---
 
 ### CouplingOperatorApply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:677`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:677`
 
 **Definition:**
 ```typescript
@@ -2041,7 +2019,7 @@ Register an Operator to run during simulation.
 
 ### CouplingOperatorCompose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:595`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:595`
 
 **Definition:**
 ```typescript
@@ -2059,7 +2037,7 @@ Match LHS time derivatives and add RHS terms together.
 
 ### CouplingVariableMap
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:654`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:654`
 
 **Definition:**
 ```typescript
@@ -2077,7 +2055,7 @@ Replace a parameter in one system with a variable from another.
 
 ### DataLoader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:523`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:523`
 
 **Definition:**
 ```typescript
@@ -2091,13 +2069,12 @@ An external data source registration. Runtime-specific; registered by type and l
 **Available in other languages:**
 - [Julia](julia.md#dataloader)
 - [Python](python.md#dataloader)
-- [Rust](rust.md#dataloader)
 
 ---
 
 ### DataLoaderProvides
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:563`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:563`
 
 **Definition:**
 ```typescript
@@ -2112,7 +2089,7 @@ A variable provided by a data loader.
 
 ### DemoPageConfig
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/demo/demo-pages.ts:8`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/demo/demo-pages.ts:8`
 
 **Definition:**
 ```typescript
@@ -2123,7 +2100,7 @@ export interface DemoPageConfig {
 
 ### DependencyEdge
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:87`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:87`
 
 **Definition:**
 ```typescript
@@ -2133,13 +2110,12 @@ export interface DependencyEdge {
 **Available in other languages:**
 - [Julia](julia.md#dependencyedge)
 - [Python](python.md#dependencyedge)
-- [Rust](rust.md#dependencyedge)
 
 ---
 
 ### DependencyGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:41`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:41`
 
 **Definition:**
 ```typescript
@@ -2150,7 +2126,7 @@ export interface DependencyGraph extends Graph<DependencyNode, DependencyRelatio
 
 ### DependencyNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:11`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:11`
 
 **Definition:**
 ```typescript
@@ -2161,7 +2137,7 @@ export interface DependencyNode {
 
 ### DependencyRelation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:27`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:27`
 
 **Definition:**
 ```typescript
@@ -2172,7 +2148,7 @@ export interface DependencyRelation {
 
 ### DerivativeResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:125`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:125`
 
 **Definition:**
 ```typescript
@@ -2183,7 +2159,7 @@ export interface DerivativeResult {
 
 ### DimensionalRep
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/units.ts:14`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:14`
 
 **Definition:**
 ```typescript
@@ -2199,7 +2175,7 @@ Maps base dimensions to their powers
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:729`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:729`
 
 **Definition:**
 ```typescript
@@ -2213,13 +2189,12 @@ Spatiotemporal domain specification (DomainInfo).
 **Available in other languages:**
 - [Julia](julia.md#domain)
 - [Python](python.md#domain)
-- [Rust](rust.md#domain)
 
 ---
 
 ### DragState
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:41`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:41`
 
 **Definition:**
 ```typescript
@@ -2230,7 +2205,7 @@ export interface DragState {
 
 ### ESMError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:101`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:101`
 
 **Definition:**
 ```typescript
@@ -2245,7 +2220,7 @@ export interface ESMError {
 
 ### ESMFormat2
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:185`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:185`
 
 **Definition:**
 ```typescript
@@ -2256,7 +2231,7 @@ export interface ESMFormat2 {
 
 ### EditorState
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:24`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:24`
 
 **Definition:**
 ```typescript
@@ -2267,7 +2242,7 @@ export interface EditorState {
 
 ### Equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:357`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:357`
 
 **Definition:**
 ```typescript
@@ -2282,13 +2257,12 @@ An equation: lhs = rhs (or lhs ~ rhs in MTK notation).
 - [Julia](julia.md#equation)
 - [Python](python.md#equation)
 - [Python](python.md#equation)
-- [Rust](rust.md#equation)
 
 ---
 
 ### ErrorContext
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:80`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:80`
 
 **Definition:**
 ```typescript
@@ -2303,7 +2277,7 @@ export interface ErrorContext {
 
 ### ErrorLoggerConfig
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:621`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:621`
 
 **Definition:**
 ```typescript
@@ -2314,7 +2288,7 @@ export interface ErrorLoggerConfig {
 
 ### EsmCouplingGraphProps
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/web-components.ts:84`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/web-components.ts:84`
 
 **Definition:**
 ```typescript
@@ -2383,7 +2357,7 @@ show-palette="true">
 
 ### EsmExpressionNodeProps
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/web-components.ts:36`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/web-components.ts:36`
 
 **Definition:**
 ```typescript
@@ -2427,7 +2401,7 @@ enable-undo="true">
 
 ### EsmFileSummaryProps
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/web-components.ts:135`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/web-components.ts:135`
 
 **Definition:**
 ```typescript
@@ -2449,7 +2423,7 @@ show-export-options="true">
 
 ### EsmModelEditorProps
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/web-components.ts:59`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/web-components.ts:59`
 
 **Definition:**
 ```typescript
@@ -2514,7 +2488,7 @@ show-validation="true">
 
 ### EsmSimulationControlsProps
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/web-components.ts:157`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/web-components.ts:157`
 
 **Definition:**
 ```typescript
@@ -2537,7 +2511,7 @@ available-backends='["julia", "python"]'>
 
 ### EsmValidationPanelProps
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/web-components.ts:108`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/web-components.ts:108`
 
 **Definition:**
 ```typescript
@@ -2559,7 +2533,7 @@ show-details="true">
 
 ### ExportOptions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/ModelExportUtils.ts:19`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:19`
 
 **Definition:**
 ```typescript
@@ -2574,7 +2548,7 @@ Export options for different formats
 
 ### ExpressionLocation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:81`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:81`
 
 **Definition:**
 ```typescript
@@ -2585,7 +2559,7 @@ export interface ExpressionLocation {
 
 ### ExpressionNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:299`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:299`
 
 **Definition:**
 ```typescript
@@ -2596,14 +2570,11 @@ export interface ExpressionNode {
 An operation in the expression AST.
 /
 
-**Available in other languages:**
-- [Rust](rust.md#expressionnode)
-
 ---
 
 ### ExpressionPattern
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:91`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:91`
 
 **Definition:**
 ```typescript
@@ -2614,7 +2585,7 @@ export interface ExpressionPattern {
 
 ### FixSuggestion
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/error-handling.ts:92`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:92`
 
 **Definition:**
 ```typescript
@@ -2629,7 +2600,7 @@ export interface FixSuggestion {
 
 ### FlattenMetadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:35`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.ts:35`
 
 **Definition:**
 ```typescript
@@ -2643,13 +2614,12 @@ Metadata describing the origin of the flattened system.
 **Available in other languages:**
 - [Julia](julia.md#flattenmetadata)
 - [Python](python.md#flattenmetadata)
-- [Rust](rust.md#flattenmetadata)
 
 ---
 
 ### FlattenedEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:23`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.ts:23`
 
 **Definition:**
 ```typescript
@@ -2663,13 +2633,12 @@ A single equation in the flattened system, with dot-namespaced variable names.
 **Available in other languages:**
 - [Julia](julia.md#flattenedequation)
 - [Python](python.md#flattenedequation)
-- [Rust](rust.md#flattenedequation)
 
 ---
 
 ### FlattenedSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/flatten.ts:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.ts:45`
 
 **Definition:**
 ```typescript
@@ -2683,13 +2652,12 @@ A fully flattened representation of a coupled ESM system.
 **Available in other languages:**
 - [Julia](julia.md#flattenedsystem)
 - [Python](python.md#flattenedsystem)
-- [Rust](rust.md#flattenedsystem)
 
 ---
 
 ### FunctionalAffect
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:378`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:378`
 
 **Definition:**
 ```typescript
@@ -2703,13 +2671,12 @@ Registered functional affect handler (alternative to symbolic affects).
 **Available in other languages:**
 - [Julia](julia.md#functionalaffect)
 - [Python](python.md#functionalaffect)
-- [Rust](rust.md#functionalaffect)
 
 ---
 
 ### FunctionalAffect1
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:702`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:702`
 
 **Definition:**
 ```typescript
@@ -2724,7 +2691,7 @@ Registered functional affect handler (alternative to symbolic affects).
 
 ### Graph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:61`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:61`
 
 **Definition:**
 ```typescript
@@ -2739,7 +2706,7 @@ export interface Graph<N, E> {
 
 ### GraphExportOptions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:161`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:161`
 
 **Definition:**
 ```typescript
@@ -2765,7 +2732,7 @@ History entry representing a state snapshot
 
 ### HoverState
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:79`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:79`
 
 **Definition:**
 ```typescript
@@ -2776,7 +2743,7 @@ export interface HoverState {
 
 ### LayoutAlgorithm
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:140`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:140`
 
 **Definition:**
 ```typescript
@@ -2787,7 +2754,7 @@ export interface LayoutAlgorithm {
 
 ### LayoutResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:148`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:148`
 
 **Definition:**
 ```typescript
@@ -2798,7 +2765,7 @@ export interface LayoutResult<N> {
 
 ### MatchResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:101`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:101`
 
 **Definition:**
 ```typescript
@@ -2809,7 +2776,7 @@ export interface MatchResult {
 
 ### Metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:224`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:224`
 
 **Definition:**
 ```typescript
@@ -2823,13 +2790,12 @@ Authorship, provenance, and description.
 **Available in other languages:**
 - [Julia](julia.md#metadata)
 - [Python](python.md#metadata)
-- [Rust](rust.md#metadata)
 
 ---
 
 ### Model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:255`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:255`
 
 **Definition:**
 ```typescript
@@ -2843,13 +2809,12 @@ An ODE system — a fully specified set of time-dependent equations.
 **Available in other languages:**
 - [Julia](julia.md#model)
 - [Python](python.md#model)
-- [Rust](rust.md#model)
 
 ---
 
 ### ModelVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:283`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:283`
 
 **Definition:**
 ```typescript
@@ -2863,13 +2828,12 @@ A variable in an ODE model.
 **Available in other languages:**
 - [Julia](julia.md#modelvariable)
 - [Python](python.md#modelvariable)
-- [Rust](rust.md#modelvariable)
 
 ---
 
 ### Operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:570`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:570`
 
 **Definition:**
 ```typescript
@@ -2883,13 +2847,12 @@ A registered runtime operator (e.g., dry deposition, wet scavenging).
 **Available in other languages:**
 - [Julia](julia.md#operator)
 - [Python](python.md#operator)
-- [Rust](rust.md#operator)
 
 ---
 
 ### Optimization
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/analysis/types.ts:111`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:111`
 
 **Definition:**
 ```typescript
@@ -2900,7 +2863,7 @@ export interface Optimization {
 
 ### Parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:485`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:485`
 
 **Definition:**
 ```typescript
@@ -2914,13 +2877,12 @@ A parameter in a reaction system.
 **Available in other languages:**
 - [Julia](julia.md#parameter)
 - [Python](python.md#parameter)
-- [Rust](rust.md#parameter)
 
 ---
 
 ### Reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:493`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:493`
 
 **Definition:**
 ```typescript
@@ -2934,13 +2896,12 @@ A single reaction in a reaction system.
 **Available in other languages:**
 - [Julia](julia.md#reaction)
 - [Python](python.md#reaction)
-- [Rust](rust.md#reaction)
 
 ---
 
 ### ReactionSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:437`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:437`
 
 **Definition:**
 ```typescript
@@ -2954,13 +2915,12 @@ A reaction network — declarative representation of chemical or biological reac
 **Available in other languages:**
 - [Julia](julia.md#reactionsystem)
 - [Python](python.md#reactionsystem)
-- [Rust](rust.md#reactionsystem)
 
 ---
 
 ### Reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:246`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:246`
 
 **Definition:**
 ```typescript
@@ -2974,13 +2934,12 @@ Academic citation or data source reference.
 **Available in other languages:**
 - [Julia](julia.md#reference)
 - [Python](python.md#reference)
-- [Rust](rust.md#reference)
 
 ---
 
 ### SchemaError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:15`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:15`
 
 **Definition:**
 ```typescript
@@ -2993,13 +2952,12 @@ Schema validation error with JSON Pointer path
 
 **Available in other languages:**
 - [Julia](julia.md#schemaerror)
-- [Rust](rust.md#schemaerror)
 
 ---
 
 ### SpatialDimension
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:764`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:764`
 
 **Definition:**
 ```typescript
@@ -3017,7 +2975,7 @@ Specification of a single spatial dimension.
 
 ### Species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:477`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:477`
 
 **Definition:**
 ```typescript
@@ -3031,13 +2989,12 @@ A reactive species in a reaction system.
 **Available in other languages:**
 - [Julia](julia.md#species)
 - [Python](python.md#species)
-- [Rust](rust.md#species)
 
 ---
 
 ### StoichiometryEntry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:516`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:516`
 
 **Definition:**
 ```typescript
@@ -3055,7 +3012,7 @@ A species with its stoichiometric coefficient in a reaction.
 
 ### StructuralError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:51`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:51`
 
 **Definition:**
 ```typescript
@@ -3068,13 +3025,12 @@ Structural error type matching the format specification
 
 **Available in other languages:**
 - [Julia](julia.md#structuralerror)
-- [Rust](rust.md#structuralerror)
 
 ---
 
 ### SubstitutionContext
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/substitute.ts:13`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/substitute.ts:13`
 
 **Definition:**
 ```typescript
@@ -3089,7 +3045,7 @@ Context for resolving scoped references during substitution
 
 ### TooltipData
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:86`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:86`
 
 **Definition:**
 ```typescript
@@ -3130,7 +3086,7 @@ Configuration for undo history behavior
 
 ### UndoRedoState
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:48`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:48`
 
 **Definition:**
 ```typescript
@@ -3141,7 +3097,7 @@ export interface UndoRedoState {
 
 ### UnitResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/units.ts:37`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:37`
 
 **Definition:**
 ```typescript
@@ -3156,7 +3112,7 @@ Result of dimensional analysis
 
 ### UnitWarning
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/units.ts:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:45`
 
 **Definition:**
 ```typescript
@@ -3189,7 +3145,7 @@ Configuration for validation behavior
 
 ### ValidationError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:31`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:31`
 
 **Definition:**
 ```typescript
@@ -3208,7 +3164,7 @@ Validation error with structured details
 
 ### ValidationError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/interactive-editor/index.ts:32`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/index.ts:32`
 
 **Definition:**
 ```typescript
@@ -3238,7 +3194,7 @@ Extended validation error with UI-specific metadata
 
 ### ValidationResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/validate.ts:41`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:41`
 
 **Definition:**
 ```typescript
@@ -3252,7 +3208,6 @@ Structured validation result
 **Available in other languages:**
 - [Julia](julia.md#validationresult)
 - [Python](python.md#validationresult)
-- [Rust](rust.md#validationresult)
 
 ---
 
@@ -3273,7 +3228,7 @@ Validation signals interface providing reactive validation state
 
 ### VariableNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/graph.ts:75`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:75`
 
 **Definition:**
 ```typescript
@@ -3283,7 +3238,6 @@ export interface VariableNode {
 **Available in other languages:**
 - [Julia](julia.md#variablenode)
 - [Python](python.md#variablenode)
-- [Rust](rust.md#variablenode)
 
 ---
 
