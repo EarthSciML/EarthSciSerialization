@@ -1848,7 +1848,7 @@ export interface CommandResult {
 
 ### CommonSubexpression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:69`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:70`
 
 **Definition:**
 ```typescript
@@ -1859,7 +1859,7 @@ export interface CommonSubexpression {
 
 ### ComplexityMetrics
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:51`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:52`
 
 **Definition:**
 ```typescript
@@ -2114,7 +2114,7 @@ export interface DependencyEdge {
 
 ### DependencyGraph
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:41`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:42`
 
 **Definition:**
 ```typescript
@@ -2125,7 +2125,7 @@ export interface DependencyGraph extends Graph<DependencyNode, DependencyRelatio
 
 ### DependencyNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:11`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:12`
 
 **Definition:**
 ```typescript
@@ -2136,7 +2136,7 @@ export interface DependencyNode {
 
 ### DependencyRelation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:27`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:28`
 
 **Definition:**
 ```typescript
@@ -2147,7 +2147,7 @@ export interface DependencyRelation {
 
 ### DerivativeResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:125`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:126`
 
 **Definition:**
 ```typescript
@@ -2547,7 +2547,7 @@ Export options for different formats
 
 ### ExpressionLocation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:81`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:82`
 
 **Definition:**
 ```typescript
@@ -2573,7 +2573,7 @@ An operation in the expression AST.
 
 ### ExpressionPattern
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:91`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:92`
 
 **Definition:**
 ```typescript
@@ -2705,7 +2705,7 @@ export interface Graph<N, E> {
 
 ### GraphExportOptions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:161`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:162`
 
 **Definition:**
 ```typescript
@@ -2742,7 +2742,7 @@ export interface HoverState {
 
 ### LayoutAlgorithm
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:140`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:141`
 
 **Definition:**
 ```typescript
@@ -2753,7 +2753,7 @@ export interface LayoutAlgorithm {
 
 ### LayoutResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:148`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:149`
 
 **Definition:**
 ```typescript
@@ -2764,7 +2764,7 @@ export interface LayoutResult<N> {
 
 ### MatchResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:101`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:102`
 
 **Definition:**
 ```typescript
@@ -2851,7 +2851,7 @@ A registered runtime operator (e.g., dry deposition, wet scavenging).
 
 ### Optimization
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:111`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:112`
 
 **Definition:**
 ```typescript
