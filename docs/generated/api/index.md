@@ -11,8 +11,8 @@ Complete API documentation for all ESM Format language implementations.
 - 221 types
 
 ## [Rust](rust.md)
-- 117 functions
-- 44 types
+- 0 functions
+- 0 types
 
 ## [Typescript](typescript.md)
 - 95 functions
