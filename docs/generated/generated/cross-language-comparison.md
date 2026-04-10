@@ -4453,14 +4453,14 @@ struct CouplingCouple <: CouplingEntry
 
 > CouplingCouple <: CouplingEntry
 
-Bi-directional coupling via explicit ConnectorSystem equations.
+Bi-directional coupling via connector equations.
 
 **Typescript:**
 ```typescript
 export interface CouplingCouple {
 ```
 
-> Bi-directional coupling via explicit ConnectorSystem equations.
+> Bi-directional coupling via connector equations.
 
 ---
 

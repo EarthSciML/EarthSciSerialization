@@ -1057,7 +1057,7 @@ Check if an expression is differentiable with respect to a variable
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1484`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1477`
 
 **Signature:**
 ```typescript
@@ -1701,7 +1701,7 @@ Validate ESM data and return structured validation result.
 
 ### validateSchema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1185`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/parse.ts:1178`
 
 **Signature:**
 ```typescript
@@ -1785,7 +1785,7 @@ Configuration for the AST store
 
 ### BoundaryCondition
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:786`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:779`
 
 **Definition:**
 ```typescript
@@ -1888,7 +1888,7 @@ export interface ComponentNode {
 
 ### ConnectorEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:641`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:634`
 
 **Definition:**
 ```typescript
@@ -1926,7 +1926,7 @@ Fires when a condition expression crosses zero (root-finding). Maps to MTK Symbo
 
 ### CoordinateTransform
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:778`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:771`
 
 **Definition:**
 ```typescript
@@ -1940,7 +1940,7 @@ export interface CoordinateTransform {
 
 ### CouplingCallback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:696`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:689`
 
 **Definition:**
 ```typescript
@@ -1966,7 +1966,7 @@ export interface CouplingCouple {
 ```
 
 **Description:**
-Bi-directional coupling via explicit ConnectorSystem equations.
+Bi-directional coupling via connector equations.
 /
 
 **Available in other languages:**
@@ -1993,7 +1993,7 @@ export interface CouplingEdge {
 
 ### CouplingOperatorApply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:685`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:678`
 
 **Definition:**
 ```typescript
@@ -2029,7 +2029,7 @@ Match LHS time derivatives and add RHS terms together.
 
 ### CouplingVariableMap
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:662`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:655`
 
 **Definition:**
 ```typescript
@@ -2169,7 +2169,7 @@ Maps base dimensions to their powers
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:737`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:730`
 
 **Definition:**
 ```typescript
@@ -2619,7 +2619,7 @@ Registered functional affect handler (alternative to symbolic affects).
 
 ### FunctionalAffect1
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:710`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:703`
 
 **Definition:**
 ```typescript
@@ -2909,7 +2909,7 @@ Schema validation error with JSON Pointer path
 
 ### Solver
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:819`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:812`
 
 **Definition:**
 ```typescript
@@ -2929,7 +2929,7 @@ Solver strategy for time integration.
 
 ### SpatialDimension
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:772`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-format/src/generated.ts:765`
 
 **Definition:**
 ```typescript

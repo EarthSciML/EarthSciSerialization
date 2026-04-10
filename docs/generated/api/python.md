@@ -254,7 +254,7 @@ Initialize gridded data loader with DataLoader configuration.
 
 ### __init__
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/coupling_graph.py:259`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/coupling_graph.py:257`
 
 **Signature:**
 ```python
@@ -508,7 +508,7 @@ Check unit consistency between different systems in the ESM file.
 
 ### _collect_references_recursive
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/coupling_graph.py:369`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/coupling_graph.py:367`
 
 **Signature:**
 ```python
@@ -889,7 +889,7 @@ Create example models for demonstration.
 
 ### create_nested_expr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1023`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1022`
 
 **Signature:**
 ```python
@@ -900,7 +900,7 @@ def create_nested_expr(depth):
 
 ### create_nested_expr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1023`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1022`
 
 **Signature:**
 ```python
@@ -3329,7 +3329,7 @@ Test display formatting for all operators.
 
 ### test_all_solver_strategies
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1405`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1404`
 
 **Signature:**
 ```python
@@ -3665,7 +3665,7 @@ Test loading binary gridded data.
 
 ### test_boundary_condition_types
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1364`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1363`
 
 **Signature:**
 ```python
@@ -3679,7 +3679,7 @@ Test all boundary condition types.
 
 ### test_boundary_condition_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:887`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:886`
 
 **Signature:**
 ```python
@@ -3693,7 +3693,7 @@ Test boundary condition specific validation errors.
 
 ### test_boundary_condition_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:887`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:886`
 
 **Signature:**
 ```python
@@ -3763,7 +3763,7 @@ Test loading data from callable source.
 
 ### test_callback_coupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1209`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1208`
 
 **Signature:**
 ```python
@@ -3959,7 +3959,7 @@ Test identification of compatible units.
 
 ### test_complete_domain_structure
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1305`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1304`
 
 **Signature:**
 ```python
@@ -4057,7 +4057,7 @@ Test complete reaction system based on SuperFast mechanism.
 
 ### test_complete_solver_configuration
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1420`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1419`
 
 **Signature:**
 ```python
@@ -4071,7 +4071,7 @@ Test complete solver configuration from spec.
 
 ### test_complete_specification_coverage
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:2045`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:2044`
 
 **Signature:**
 ```python
@@ -4099,7 +4099,7 @@ Test that generated code includes all necessary components.
 
 ### test_complex_atmospheric_chemistry_example
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1564`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1563`
 
 **Signature:**
 ```python
@@ -4208,7 +4208,7 @@ Test conversions of compound units.
 
 ### test_comprehensive_integration_example
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1915`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1914`
 
 **Signature:**
 ```python
@@ -4222,7 +4222,7 @@ Test comprehensive example integrating all major sections.
 
 ### test_comprehensive_invalid_esm_file
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:935`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:934`
 
 **Signature:**
 ```python
@@ -4236,7 +4236,7 @@ Test a comprehensively invalid ESM file with multiple errors.
 
 ### test_comprehensive_invalid_esm_file
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:935`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:934`
 
 **Signature:**
 ```python
@@ -4516,7 +4516,7 @@ Test CouplingEntry discriminated union creation.
 
 ### test_coupling_first_class_principle
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1737`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1736`
 
 **Signature:**
 ```python
@@ -4530,7 +4530,7 @@ Test that coupling is explicitly specified and inspectable.
 
 ### test_coupling_translate_field
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1259`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1258`
 
 **Signature:**
 ```python
@@ -4572,7 +4572,7 @@ Test coupling validation with various error combinations.
 
 ### test_cross_section_violations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:2028`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:2027`
 
 **Signature:**
 ```python
@@ -4698,7 +4698,7 @@ Test that all data loaders can be used together.
 
 ### test_data_loaders_by_reference_principle
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1664`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1663`
 
 **Signature:**
 ```python
@@ -4712,7 +4712,7 @@ Test that data loaders are by reference, not fully specified.
 
 ### test_deeply_nested_expression_validation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1018`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1017`
 
 **Signature:**
 ```python
@@ -4726,7 +4726,7 @@ Test validation performance with deeply nested expressions.
 
 ### test_deeply_nested_expression_validation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1018`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1017`
 
 **Signature:**
 ```python
@@ -5020,7 +5020,7 @@ Test Domain creation.
 
 ### test_domain_and_solver_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:785`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:784`
 
 **Signature:**
 ```python
@@ -5034,7 +5034,7 @@ Test domain and solver specific validation errors.
 
 ### test_domain_and_solver_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:785`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:784`
 
 **Signature:**
 ```python
@@ -5160,7 +5160,7 @@ Test emissions-specific data loader.
 
 ### test_empty_arrays_where_not_allowed
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:849`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:848`
 
 **Signature:**
 ```python
@@ -5174,7 +5174,7 @@ Test empty arrays where they should have minimum items.
 
 ### test_empty_arrays_where_not_allowed
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:849`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:848`
 
 **Signature:**
 ```python
@@ -5451,7 +5451,7 @@ Test evaluate handles unsupported operations.
 
 ### test_event_coupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1225`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1224`
 
 **Signature:**
 ```python
@@ -5479,7 +5479,7 @@ Test Pre operator for event affects.
 
 ### test_event_system_integration
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1884`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1883`
 
 **Signature:**
 ```python
@@ -5574,7 +5574,7 @@ Test ExprNode creation.
 
 ### test_expression_ast_over_string_math_principle
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1683`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1682`
 
 **Signature:**
 ```python
@@ -5686,7 +5686,7 @@ Test parsing expressions with wrt and dim metadata.
 
 ### test_extensibility_through_config_fields
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1767`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1766`
 
 **Signature:**
 ```python
@@ -5994,7 +5994,7 @@ Test from_sympy with variables.
 
 ### test_full_specification_principle
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1642`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1641`
 
 **Signature:**
 ```python
@@ -6008,7 +6008,7 @@ Test that models and reactions must be fully specified.
 
 ### test_functional_affect_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:906`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:905`
 
 **Signature:**
 ```python
@@ -6022,7 +6022,7 @@ Test functional affect specific validation errors.
 
 ### test_functional_affect_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:906`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:905`
 
 **Signature:**
 ```python
@@ -6299,7 +6299,7 @@ Test validation when top-level fields have incorrect types.
 
 ### test_initial_condition_types
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1342`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1341`
 
 **Signature:**
 ```python
@@ -6747,7 +6747,7 @@ Should handle large patch version numbers.
 
 ### test_large_reaction_system_validation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1048`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1047`
 
 **Signature:**
 ```python
@@ -6761,7 +6761,7 @@ Test validation with large reaction systems.
 
 ### test_large_reaction_system_validation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1048`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1047`
 
 **Signature:**
 ```python
@@ -6845,7 +6845,7 @@ Test loading ESM file with events, data_loaders, operators, coupling, and solver
 
 ### test_load_function_with_schema_violations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:956`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:955`
 
 **Signature:**
 ```python
@@ -6859,7 +6859,7 @@ Test the load function with various schema violations.
 
 ### test_load_function_with_schema_violations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:956`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:955`
 
 **Signature:**
 ```python
@@ -7097,7 +7097,7 @@ Test minimal display functionality.
 
 ### test_minimal_complete_example_from_spec
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1458`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1457`
 
 **Signature:**
 ```python
@@ -7111,7 +7111,7 @@ Test the minimal complete example from Section 13 of the spec.
 
 ### test_minimal_domain_structure
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1288`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1287`
 
 **Signature:**
 ```python
@@ -7707,7 +7707,7 @@ Test proper formatting of cell outputs.
 
 ### test_null_values_where_not_allowed
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:874`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:873`
 
 **Signature:**
 ```python
@@ -7721,7 +7721,7 @@ Test null values in fields that don't allow null.
 
 ### test_null_values_where_not_allowed
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:874`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:873`
 
 **Signature:**
 ```python
@@ -7889,7 +7889,7 @@ Test Operator creation.
 
 ### test_operator_apply_coupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1186`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1185`
 
 **Signature:**
 ```python
@@ -8351,7 +8351,7 @@ Test ReactionSystem creation.
 
 ### test_reaction_system_complex_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:766`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:765`
 
 **Signature:**
 ```python
@@ -8365,7 +8365,7 @@ Test complex reaction system validation errors.
 
 ### test_reaction_system_complex_validation_errors
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:766`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:765`
 
 **Signature:**
 ```python
@@ -8463,7 +8463,7 @@ Test unit consistency across a reaction system.
 
 ### test_reaction_systems_distinct_from_ode_models_principle
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1709`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1708`
 
 **Signature:**
 ```python
@@ -8519,7 +8519,7 @@ Test Reference creation.
 
 ### test_reference_fields_for_provenance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1821`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1820`
 
 **Signature:**
 ```python
@@ -8855,7 +8855,7 @@ Test scoped reference substitution using fixture.
 
 ### test_scoped_references_across_systems
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1855`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1854`
 
 **Signature:**
 ```python
@@ -8869,7 +8869,7 @@ Test scoped reference resolution across different system types.
 
 ### test_section_specific_violations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1984`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1983`
 
 **Signature:**
 ```python
@@ -9177,7 +9177,7 @@ Test Solver creation.
 
 ### test_solver_strategy_validation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1442`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1441`
 
 **Signature:**
 ```python
@@ -9219,7 +9219,7 @@ Test reactions with no reactants (source) or no products (sink).
 
 ### test_spatial_dimension_validation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1386`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1385`
 
 **Signature:**
 ```python
@@ -10140,7 +10140,7 @@ Test valid chemical species variables with units.
 
 ### test_valid_minimal_examples_for_regression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:977`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:976`
 
 **Signature:**
 ```python
@@ -10154,7 +10154,7 @@ Test minimal valid examples to ensure they still work.
 
 ### test_valid_minimal_examples_for_regression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:977`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:976`
 
 **Signature:**
 ```python
@@ -10196,7 +10196,7 @@ Test that validation errors have specific error codes.
 
 ### test_variable_map_coupling_all_transforms
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1164`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1163`
 
 **Signature:**
 ```python
@@ -10238,7 +10238,7 @@ Test vectorized mathematical operations.
 
 ### test_version_const_constraint
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:822`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:821`
 
 **Signature:**
 ```python
@@ -10252,7 +10252,7 @@ Test that version must match semver pattern and library rejects incompatible ver
 
 ### test_version_const_constraint
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:822`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:821`
 
 **Signature:**
 ```python
@@ -10266,7 +10266,7 @@ Test that version must match semver pattern and library rejects incompatible ver
 
 ### test_version_constraint_for_current_spec
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1801`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1800`
 
 **Signature:**
 ```python
@@ -10490,7 +10490,7 @@ Base class for all coupling entry types.
 
 ### BoundaryCondition
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:345`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:344`
 
 **Definition:**
 ```python
@@ -10507,7 +10507,7 @@ Boundary condition specification.
 
 ### BoundaryConditionType
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:334`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:333`
 
 **Definition:**
 ```python
@@ -10571,7 +10571,7 @@ class CachingStrategy:
 
 ### CallbackCoupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:255`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:254`
 
 **Definition:**
 ```python
@@ -10707,7 +10707,7 @@ An event that occurs when a condition becomes true during continuous evolution.
 
 ### CoordinateTransform
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:309`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:308`
 
 **Definition:**
 ```python
@@ -10930,7 +10930,7 @@ Trigger condition for a discrete event.
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:358`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:357`
 
 **Definition:**
 ```python
@@ -11130,7 +11130,7 @@ Context information for errors.
 
 ### EsmFile
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:429`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:428`
 
 **Definition:**
 ```python
@@ -11148,7 +11148,7 @@ Root container for an ESM format file.
 
 ### EventCoupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:263`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:262`
 
 **Definition:**
 ```python
@@ -11368,7 +11368,7 @@ Minimal hierarchical scope resolver for scoped references.
 
 ### InitialCondition
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:325`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:324`
 
 **Definition:**
 ```python
@@ -11382,7 +11382,7 @@ Initial condition specification.
 
 ### InitialConditionType
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:316`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:315`
 
 **Definition:**
 ```python
@@ -11460,7 +11460,7 @@ class LoadBalancingMethod:
 
 ### Metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:410`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:409`
 
 **Definition:**
 ```python
@@ -11597,7 +11597,7 @@ A registered runtime operator (e.g., dry deposition, wet scavenging).
 
 ### OperatorApplyCoupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:248`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:247`
 
 **Definition:**
 ```python
@@ -11791,7 +11791,7 @@ class Rectangle:
 
 ### Reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:399`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:398`
 
 **Definition:**
 ```python
@@ -11905,7 +11905,7 @@ Comprehensive scope validation system with detailed error reporting.
 
 ### ScopedReferenceResolver
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/coupling_graph.py:256`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/coupling_graph.py:254`
 
 **Definition:**
 ```python
@@ -12000,7 +12000,7 @@ Simulation result with rich display methods.
 
 ### Solver
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:385`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:384`
 
 **Definition:**
 ```python
@@ -12019,7 +12019,7 @@ Numerical solver configuration.
 
 ### SolverType
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:375`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:374`
 
 **Definition:**
 ```python
@@ -12033,7 +12033,7 @@ Types of numerical solvers.
 
 ### SpatialDimension
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:300`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:299`
 
 **Definition:**
 ```python
@@ -12097,7 +12097,7 @@ Example spline interpolation operator (newer version).
 
 ### TemporalDomain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:292`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:291`
 
 **Definition:**
 ```python
@@ -12279,7 +12279,7 @@ Test dimensional consistency in model coupling scenarios.
 
 ### TestCrossSectionValidation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1852`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1851`
 
 **Definition:**
 ```python
@@ -12377,7 +12377,7 @@ Test integration of simulation capabilities with ESM format.
 
 ### TestEdgeCaseValidation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:846`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:845`
 
 **Definition:**
 ```python
@@ -12391,7 +12391,7 @@ Test edge cases and corner cases for comprehensive coverage.
 
 ### TestEdgeCaseValidation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:846`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:845`
 
 **Definition:**
 ```python
@@ -12559,7 +12559,7 @@ Integration tests combining multiple aspects of unit validation.
 
 ### TestIntegrationValidationScenarios
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:932`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:931`
 
 **Definition:**
 ```python
@@ -12573,7 +12573,7 @@ Integration tests combining multiple validation aspects.
 
 ### TestIntegrationValidationScenarios
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:932`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:931`
 
 **Definition:**
 ```python
@@ -12685,7 +12685,7 @@ Test unit validation for ESM format model variables.
 
 ### TestNegativeValidationCases
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1981`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1980`
 
 **Definition:**
 ```python
@@ -13021,7 +13021,7 @@ Section 10: Coupling - all 6 types including couple/operator_apply/callback/even
 
 ### TestSection11Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1285`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1284`
 
 **Definition:**
 ```python
@@ -13035,7 +13035,7 @@ Section 11: Domain - spatial/temporal with BCs/ICs
 
 ### TestSection12Solver
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1402`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1401`
 
 **Definition:**
 ```python
@@ -13049,7 +13049,7 @@ Section 12: Solver - all strategies with config validation
 
 ### TestSection13CompleteExamples
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1455`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1454`
 
 **Definition:**
 ```python
@@ -13063,7 +13063,7 @@ Section 13: Complete example validation
 
 ### TestSection14DesignPrinciples
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1639`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1638`
 
 **Definition:**
 ```python
@@ -13077,7 +13077,7 @@ Section 14: Design principles adherence testing
 
 ### TestSection15FutureConsiderations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1764`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_esm_specification_coverage.py:1763`
 
 **Definition:**
 ```python
@@ -13357,7 +13357,7 @@ Test error cases for incompatible unit operations.
 
 ### TestValidationPerformance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1015`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:1014`
 
 **Definition:**
 ```python
@@ -13371,7 +13371,7 @@ Test validation performance with complex documents.
 
 ### TestValidationPerformance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1015`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:1014`
 
 **Definition:**
 ```python
@@ -13413,7 +13413,7 @@ Test version compatibility handling.
 
 ### TestVersionConstraintValidation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:819`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_json_schema_validation.py:818`
 
 **Definition:**
 ```python
@@ -13427,7 +13427,7 @@ Test validation of version constraint violations.
 
 ### TestVersionConstraintValidation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:819`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/tests/test_validate_schema.py:818`
 
 **Definition:**
 ```python
@@ -13593,7 +13593,7 @@ Represents the result of validation.
 
 ### VariableMapCoupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:238`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci_toolkit/src/earthsci_toolkit/esm_types.py:237`
 
 **Definition:**
 ```python
