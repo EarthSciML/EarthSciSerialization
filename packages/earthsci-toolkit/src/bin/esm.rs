@@ -1342,7 +1342,10 @@ fn contains_redundant_operations(expr: &earthsci_toolkit::Expr) -> bool {
 }
 
 #[cfg(feature = "cli")]
-fn contains_common_subexpressions(lhs: &earthsci_toolkit::Expr, rhs: &earthsci_toolkit::Expr) -> bool {
+fn contains_common_subexpressions(
+    lhs: &earthsci_toolkit::Expr,
+    rhs: &earthsci_toolkit::Expr,
+) -> bool {
     let mut lhs_subexprs = Vec::new();
     let mut rhs_subexprs = Vec::new();
 
@@ -1362,7 +1365,10 @@ fn contains_common_subexpressions(lhs: &earthsci_toolkit::Expr, rhs: &earthsci_t
 }
 
 #[cfg(feature = "cli")]
-fn collect_subexpressions(expr: &earthsci_toolkit::Expr, subexprs: &mut Vec<earthsci_toolkit::Expr>) {
+fn collect_subexpressions(
+    expr: &earthsci_toolkit::Expr,
+    subexprs: &mut Vec<earthsci_toolkit::Expr>,
+) {
     subexprs.push(expr.clone());
     if let earthsci_toolkit::Expr::Operator(node) = expr {
         for arg in &node.args {
@@ -1375,7 +1381,9 @@ fn collect_subexpressions(expr: &earthsci_toolkit::Expr, subexprs: &mut Vec<eart
 fn expressions_equal(expr1: &earthsci_toolkit::Expr, expr2: &earthsci_toolkit::Expr) -> bool {
     // Simple structural equality check
     match (expr1, expr2) {
-        (earthsci_toolkit::Expr::Number(n1), earthsci_toolkit::Expr::Number(n2)) => (n1 - n2).abs() < 1e-10,
+        (earthsci_toolkit::Expr::Number(n1), earthsci_toolkit::Expr::Number(n2)) => {
+            (n1 - n2).abs() < 1e-10
+        }
         (earthsci_toolkit::Expr::Variable(v1), earthsci_toolkit::Expr::Variable(v2)) => v1 == v2,
         (earthsci_toolkit::Expr::Operator(op1), earthsci_toolkit::Expr::Operator(op2)) => {
             op1.op == op2.op
@@ -1427,7 +1435,10 @@ fn contains_expensive_operations(expr: &earthsci_toolkit::Expr) -> bool {
 }
 
 #[cfg(feature = "cli")]
-fn perform_structural_comparison(esm_file1: &earthsci_toolkit::EsmFile, esm_file2: &earthsci_toolkit::EsmFile) {
+fn perform_structural_comparison(
+    esm_file1: &earthsci_toolkit::EsmFile,
+    esm_file2: &earthsci_toolkit::EsmFile,
+) {
     println!("\n=== STRUCTURAL COMPARISON ===");
 
     let mut differences = Vec::new();
@@ -1589,7 +1600,10 @@ fn perform_structural_comparison(esm_file1: &earthsci_toolkit::EsmFile, esm_file
 }
 
 #[cfg(feature = "cli")]
-fn perform_numerical_comparison(esm_file1: &earthsci_toolkit::EsmFile, esm_file2: &earthsci_toolkit::EsmFile) {
+fn perform_numerical_comparison(
+    esm_file1: &earthsci_toolkit::EsmFile,
+    esm_file2: &earthsci_toolkit::EsmFile,
+) {
     println!("\n=== NUMERICAL COMPARISON ===");
 
     let tolerance = 1e-10;
@@ -2666,7 +2680,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("Coupling rules: {}", coupling.len());
                         for (i, rule) in coupling.iter().enumerate() {
                             match rule {
-                                earthsci_toolkit::CouplingEntry::OperatorCompose { systems, .. } => {
+                                earthsci_toolkit::CouplingEntry::OperatorCompose {
+                                    systems,
+                                    ..
+                                } => {
                                     if systems.len() >= 2 {
                                         println!(
                                             "  Rule {}: {} -> {} (OperatorCompose)",
@@ -2686,16 +2703,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         );
                                     }
                                 }
-                                earthsci_toolkit::CouplingEntry::VariableMap { from, to, .. } => {
+                                earthsci_toolkit::CouplingEntry::VariableMap {
+                                    from, to, ..
+                                } => {
                                     println!("  Rule {}: {} -> {} (VariableMap)", i + 1, from, to);
                                 }
-                                earthsci_toolkit::CouplingEntry::OperatorApply { operator, .. } => {
+                                earthsci_toolkit::CouplingEntry::OperatorApply {
+                                    operator, ..
+                                } => {
                                     println!("  Rule {}: {} (OperatorApply)", i + 1, operator);
                                 }
-                                earthsci_toolkit::CouplingEntry::Callback { callback_id, .. } => {
+                                earthsci_toolkit::CouplingEntry::Callback {
+                                    callback_id, ..
+                                } => {
                                     println!("  Rule {}: {} (Callback)", i + 1, callback_id);
                                 }
-                                earthsci_toolkit::CouplingEntry::Event { name, affects, .. } => {
+                                earthsci_toolkit::CouplingEntry::Event {
+                                    name, affects, ..
+                                } => {
                                     let event_name = name.as_deref().unwrap_or("unnamed_event");
                                     let systems: Vec<String> = affects
                                         .as_ref()
