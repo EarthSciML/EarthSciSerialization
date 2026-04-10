@@ -149,7 +149,10 @@ const schema = {
       "description": "Academic citation or data source reference.",
       "additionalProperties": false,
       "properties": {
-        "doi": { "type": "string" },
+        "doi": {
+          "type": "string",
+          "pattern": "^10\\.\\d{4,}/"
+        },
         "citation": { "type": "string" },
         "url": { "type": "string", "format": "uri" },
         "notes": { "type": "string" }
@@ -603,6 +606,7 @@ const schema = {
     "DataLoaderProvides": {
       "type": "object",
       "description": "A variable provided by a data loader.",
+      "required": ["units", "description"],
       "additionalProperties": false,
       "properties": {
         "units": { "type": "string" },
