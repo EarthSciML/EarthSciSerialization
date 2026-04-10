@@ -38,8 +38,6 @@ include("units.jl")
 include("edit.jl")
 # Code generation
 include("codegen.jl")
-# Migration functionality
-include("migration.jl")
 
 # Export main types
 export
@@ -111,8 +109,6 @@ export
     # Code generation
     to_julia_code, to_python_code,
     # ASCII display format
-    to_ascii, format_expression_ascii,
-    # Migration functionality
-    migrate, can_migrate, get_supported_migration_targets, MigrationError
+    to_ascii, format_expression_ascii
 
 end # module EarthSciSerialization
