@@ -773,6 +773,93 @@ pub fn fast_parse(json_str: &str) -> Result<EsmFile, PerformanceError> {
 
 ---
 
+### flatten
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.rs:115`
+
+**Signature:**
+```rust
+pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, String> {
+```
+
+**Description:**
+Flatten a coupled ESM file into a single unified system.
+
+The algorithm:
+1. Iterates over all models and reaction systems in the file
+2. Namespaces all variables with a "SystemName." prefix
+3. Processes coupling entries to produce mapping/merge descriptions
+4. Returns a unified flattened system
+
+# Arguments
+
+* `file` - The ESM file containing models, reaction systems, and coupling
+
+# Returns
+
+* `Ok(FlattenedSystem)` on success
+* `Err(String)` if the file has no models or reaction systems to flatten
+
+# Examples
+
+```rust
+use earthsci_toolkit::types::{EsmFile, Metadata, Model, ModelVariable, VariableType, Equation, Expr};
+use earthsci_toolkit::flatten::flatten;
+use std::collections::HashMap;
+
+let mut models = HashMap::new();
+let mut vars = HashMap::new();
+vars.insert("x".to_string(), ModelVariable {
+var_type: VariableType::State,
+units: Some("m".to_string()),
+default: Some(0.0),
+description: None,
+expression: None,
+});
+models.insert("sys".to_string(), Model {
+name: Some("System".to_string()),
+reference: None,
+variables: vars,
+equations: vec![Equation {
+lhs: Expr::Variable("d(x)/dt".to_string()),
+rhs: Expr::Number(1.0),
+}],
+discrete_events: None,
+continuous_events: None,
+description: None,
+});
+
+let file = EsmFile {
+esm: "0.1.0".to_string(),
+metadata: Metadata {
+name: Some("test".to_string()),
+description: None,
+authors: None,
+license: None,
+created: None,
+modified: None,
+tags: None,
+references: None,
+},
+models: Some(models),
+reaction_systems: None,
+data_loaders: None,
+operators: None,
+coupling: None,
+domain: None,
+};
+
+let flat = flatten(&file).unwrap();
+assert_eq!(flat.state_variables, vec!["sys.x"]);
+```
+
+**Available in other languages:**
+- [Julia](julia.md#flatten)
+- [Julia](julia.md#flatten)
+- [Typescript](typescript.md#flatten)
+
+---
+
 ### free_parameters
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.rs:33`
@@ -1018,6 +1105,24 @@ pub fn load(json_str: &str) -> Result<JsValue, JsValue> {
 - [Julia](julia.md#load)
 - [Python](python.md#load)
 - [Typescript](typescript.md#load)
+
+---
+
+### load_path
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.rs:109`
+
+**Signature:**
+```rust
+pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError> {
+```
+
+**Description:**
+Load an ESM file from a filesystem path.
+
+Reads the file, resolves any subsystem references relative to the file's
+directory, validates against the schema, and deserializes into an
+[`EsmFile`].
 
 ---
 
@@ -1447,6 +1552,30 @@ pub fn resolve_scoped_reference(&self, scoped_ref: &str) -> Option<String> {
 **Description:**
 Resolve a scoped reference to its full path
 Handles hierarchical resolution according to ESM Spec Section 2.3.3
+
+---
+
+### resolve_subsystem_refs
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/ref_loading.rs:35`
+
+**Signature:**
+```rust
+pub fn resolve_subsystem_refs(value: &mut Value, base_path: &Path) -> Result<(), String> {
+```
+
+**Description:**
+Resolve all subsystem references in a parsed JSON value representing an
+ESM file.
+
+Walks every `subsystems` map in models and reaction systems and inlines
+the referenced content. Resolution is recursive (referenced files may
+contain their own refs) and circular references are detected.
+
+# Arguments
+
+* `value` - the parsed ESM JSON to resolve (modified in place)
+* `base_path` - directory to resolve relative file paths against
 
 ---
 
@@ -2349,7 +2478,7 @@ Most users should use this function instead of the lower-level `validate()`.
 
 ### validate_schema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.rs:107`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.rs:144`
 
 **Signature:**
 ```rust
@@ -2652,6 +2781,54 @@ pub struct ExpressionNode {
 
 **Available in other languages:**
 - [Typescript](typescript.md#expressionnode)
+
+---
+
+### FlattenMetadata
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.rs:39`
+
+**Definition:**
+```rust
+pub struct FlattenMetadata {
+```
+
+**Available in other languages:**
+- [Julia](julia.md#flattenmetadata)
+- [Python](python.md#flattenmetadata)
+- [Typescript](typescript.md#flattenmetadata)
+
+---
+
+### FlattenedEquation
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.rs:28`
+
+**Definition:**
+```rust
+pub struct FlattenedEquation {
+```
+
+**Available in other languages:**
+- [Julia](julia.md#flattenedequation)
+- [Python](python.md#flattenedequation)
+- [Typescript](typescript.md#flattenedequation)
+
+---
+
+### FlattenedSystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/flatten.rs:13`
+
+**Definition:**
+```rust
+pub struct FlattenedSystem {
+```
+
+**Available in other languages:**
+- [Julia](julia.md#flattenedsystem)
+- [Python](python.md#flattenedsystem)
+- [Typescript](typescript.md#flattenedsystem)
 
 ---
 
