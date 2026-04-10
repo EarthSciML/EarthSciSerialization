@@ -583,6 +583,164 @@ function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
 /**
  * Main structural validation function
  */
+/**
+ * Check for circular cross-model variable references (without explicit coupling)
+ */
+function validateCircularReferences(esmFile: EsmFile): StructuralError[] {
+    const errors: StructuralError[] = [];
+    if (!esmFile.models) return errors;
+
+    // Build dependency graph: which models reference which other models
+    const modelDeps = new Map<string, Set<string>>();
+
+    for (const [modelName, model] of Object.entries(esmFile.models)) {
+        const deps = new Set<string>();
+        // Check all equations for cross-model references
+        for (const equation of model.equations || []) {
+            const refs = [
+                ...extractVariableReferences(equation.lhs),
+                ...extractVariableReferences(equation.rhs)
+            ];
+            for (const ref of refs) {
+                if (ref.includes('.')) {
+                    const targetModel = ref.split('.')[0];
+                    if (targetModel !== modelName && esmFile.models[targetModel]) {
+                        deps.add(targetModel);
+                    }
+                }
+            }
+        }
+        modelDeps.set(modelName, deps);
+    }
+
+    // Detect cycles using DFS
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+
+    function dfs(node: string, path: string[]): boolean {
+        if (inStack.has(node)) {
+            const cycleStart = path.indexOf(node);
+            const cycle = path.slice(cycleStart).concat(node);
+            errors.push({
+                path: '/models',
+                message: `Circular dependency detected: ${cycle.join(' → ')}`,
+                code: 'circular_dependency',
+                details: { cycle }
+            });
+            return true;
+        }
+        if (visited.has(node)) return false;
+
+        visited.add(node);
+        inStack.add(node);
+        path.push(node);
+
+        for (const dep of modelDeps.get(node) || []) {
+            dfs(dep, [...path]);
+        }
+
+        inStack.delete(node);
+        return false;
+    }
+
+    for (const modelName of modelDeps.keys()) {
+        if (!visited.has(modelName)) {
+            dfs(modelName, []);
+        }
+    }
+
+    return errors;
+}
+
+/**
+ * Validate data loader variable references in coupling entries
+ */
+function validateDataLoaderReferences(esmFile: EsmFile): StructuralError[] {
+    const errors: StructuralError[] = [];
+    if (!esmFile.coupling || !esmFile.data_loaders) return errors;
+
+    for (let i = 0; i < esmFile.coupling.length; i++) {
+        const coupling = esmFile.coupling[i];
+        const couplingPath = `/coupling/${i}`;
+
+        if (coupling.type === 'variable_map' && 'from' in coupling) {
+            const from = (coupling as any).from as string;
+            if (from && from.includes('.')) {
+                const [sourceName, varName] = from.split('.', 2);
+                // Check if source is a data loader
+                if (esmFile.data_loaders[sourceName]) {
+                    const loader = esmFile.data_loaders[sourceName];
+                    const provides = (loader as any).provides || {};
+                    if (!(varName in provides)) {
+                        errors.push({
+                            path: `${couplingPath}/from`,
+                            message: `Data loader '${sourceName}' does not provide variable '${varName}'`,
+                            code: 'undefined_data_loader_variable',
+                            details: { data_loader: sourceName, variable: varName, available: Object.keys(provides) }
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    return errors;
+}
+
+/**
+ * Validate temporal_resolution fields in data loaders are valid ISO 8601 durations
+ */
+function validateTemporalResolution(esmFile: EsmFile): StructuralError[] {
+    const errors: StructuralError[] = [];
+    if (!esmFile.data_loaders) return errors;
+
+    // ISO 8601 duration pattern: P[nY][nM][nD][T[nH][nM][nS]]
+    const iso8601DurationPattern = /^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$/;
+
+    for (const [loaderName, loader] of Object.entries(esmFile.data_loaders)) {
+        const temporalResolution = (loader as any).temporal_resolution;
+        if (temporalResolution && typeof temporalResolution === 'string') {
+            if (!iso8601DurationPattern.test(temporalResolution) || temporalResolution === 'P' || temporalResolution === 'PT') {
+                errors.push({
+                    path: `/data_loaders/${loaderName}/temporal_resolution`,
+                    message: `Invalid ISO 8601 duration: '${temporalResolution}'`,
+                    code: 'invalid_temporal_resolution',
+                    details: { value: temporalResolution }
+                });
+            }
+        }
+    }
+
+    return errors;
+}
+
+/**
+ * Promote unit validation errors to structural errors for invalid files.
+ * Units warnings become errors when they indicate incompatible assignments or additions.
+ */
+function promoteUnitWarningsToErrors(warnings: UnitWarning[]): StructuralError[] {
+    const errors: StructuralError[] = [];
+    for (const warning of warnings) {
+        const msg = warning.message?.toLowerCase() || '';
+        // Promote dimensional mismatches and incompatible operations
+        if (
+            msg.includes('mismatch') ||
+            msg.includes('incompatible') ||
+            msg.includes('inconsistent') ||
+            msg.includes('requires same dimensions') ||
+            msg.includes('same dimensions')
+        ) {
+            errors.push({
+                path: warning.location ? `/${warning.location.replace(/\./g, '/')}` : '$',
+                message: warning.message,
+                code: 'unit_error',
+                details: { equation: warning.equation || '' }
+            });
+        }
+    }
+    return errors;
+}
+
 function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
     const errors: StructuralError[] = [];
 
@@ -656,6 +814,15 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
     // Validate coupling integrity
     errors.push(...validateCouplingIntegrity(esmFile));
 
+    // Check for circular cross-model references
+    errors.push(...validateCircularReferences(esmFile));
+
+    // Validate data loader variable references in coupling
+    errors.push(...validateDataLoaderReferences(esmFile));
+
+    // Validate temporal resolution in data loaders
+    errors.push(...validateTemporalResolution(esmFile));
+
     return errors;
 }
 
@@ -728,6 +895,9 @@ export function validate(data: string | object): ValidationResult {
 
                 // Perform unit validation
                 unit_warnings = validateUnits(esmFile);
+
+                // Promote unit incompatibility warnings to structural errors
+                structural_errors.push(...promoteUnitWarningsToErrors(unit_warnings));
             } catch (e: unknown) {
                 const error = e as Error;
                 structural_errors.push({
