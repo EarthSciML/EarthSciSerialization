@@ -293,7 +293,7 @@ impl ModelAllocator {
 }
 
 /// Compact node representation for stack-based evaluation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum CompactNode {
     /// Numeric constant
     Number(f64),
@@ -304,7 +304,7 @@ pub enum CompactNode {
 }
 
 /// High-performance expression tree with compact representation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CompactExpr {
     /// Flattened expression tree using small vectors for cache efficiency
     pub nodes: smallvec::SmallVec<[CompactNode; 8]>,

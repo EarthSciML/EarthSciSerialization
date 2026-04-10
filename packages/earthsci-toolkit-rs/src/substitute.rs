@@ -286,10 +286,8 @@ impl ScopedContext {
         let components: Vec<&str> = scoped_ref.split('.').collect();
 
         // If it's already a fully qualified name with at least 2 components, try direct lookup
-        if components.len() >= 2 {
-            if self.can_resolve_full_path(&components) {
-                return Some(scoped_ref.to_string());
-            }
+        if components.len() >= 2 && self.can_resolve_full_path(&components) {
+            return Some(scoped_ref.to_string());
         }
 
         // Try resolving relative to current scope

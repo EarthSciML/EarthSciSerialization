@@ -185,13 +185,7 @@ pub fn validate(esm_file: &EsmFile) -> ValidationResult {
     // Validate reaction systems
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (rs_name, rs) in reaction_systems {
-            validate_reaction_system(
-                rs_name,
-                rs,
-                &system_refs,
-                &mut structural_errors,
-                &mut unit_warnings,
-            );
+            validate_reaction_system(rs_name, rs, &system_refs, &mut structural_errors);
         }
     }
 
@@ -547,7 +541,6 @@ fn validate_reaction_system(
     rs: &crate::ReactionSystem,
     _system_refs: &HashMap<String, SystemInfo>,
     errors: &mut Vec<StructuralError>,
-    warnings: &mut Vec<String>,
 ) {
     let rs_path = format!("/reaction_systems/{}", rs_name);
 
@@ -1441,24 +1434,24 @@ fn check_circular_dependencies_in_models(
     let mut rec_stack = HashSet::new();
 
     for model_name in models.keys() {
-        if !visited.contains(model_name) {
-            if has_cycle_dfs(model_name, &dependencies, &mut visited, &mut rec_stack) {
-                // Find the actual cycle for error reporting
-                let cycle = find_cycle(&dependencies, model_name);
-                errors.push(StructuralError {
-                    path: format!("/models"),
-                    code: StructuralErrorCode::CircularDependency,
-                    message: format!(
-                        "Circular dependency detected in model dependencies: {}",
-                        cycle.join(" -> ")
-                    ),
-                    details: serde_json::json!({
-                        "cycle": cycle,
-                        "dependency_type": "model_references"
-                    }),
-                });
-                break; // Report only the first cycle found
-            }
+        if !visited.contains(model_name)
+            && has_cycle_dfs(model_name, &dependencies, &mut visited, &mut rec_stack)
+        {
+            // Find the actual cycle for error reporting
+            let cycle = find_cycle(&dependencies, model_name);
+            errors.push(StructuralError {
+                path: format!("/models"),
+                code: StructuralErrorCode::CircularDependency,
+                message: format!(
+                    "Circular dependency detected in model dependencies: {}",
+                    cycle.join(" -> ")
+                ),
+                details: serde_json::json!({
+                    "cycle": cycle,
+                    "dependency_type": "model_references"
+                }),
+            });
+            break; // Report only the first cycle found
         }
     }
 }

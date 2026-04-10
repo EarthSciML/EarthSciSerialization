@@ -119,7 +119,6 @@ pub const SCHEMA_VERSION: &str = "0.1.0";
 #[cfg(test)]
 mod coupling_field_tests {
     use super::*;
-    use serde_json;
 
     #[test]
     fn test_operator_compose_new_fields() {
@@ -208,7 +207,6 @@ mod coupling_field_tests {
 #[cfg(test)]
 mod discrete_event_test {
     use super::*;
-    use serde_json;
 
     #[test]
     fn test_discrete_event_fields_present() {

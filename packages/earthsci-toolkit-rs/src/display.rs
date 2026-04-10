@@ -2047,7 +2047,6 @@ impl fmt::Display for EsmFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::*;
 
     #[test]
     fn test_chemical_subscripts() {
