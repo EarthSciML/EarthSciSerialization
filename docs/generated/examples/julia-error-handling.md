@@ -1,14 +1,16 @@
 # Error Handling (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/solver_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/parse_test.jl`
 
 ```julia
-# Test missing strategy field
-        invalid_data = Dict(:config => Dict(:threads => 4))
-        @test_throws ArgumentError coerce_solver(invalid_data)
+# Test invalid JSON
+        @test_throws ParseError load(IOBuffer("invalid json"))
 
-        # Test invalid strategy
-        invalid_data2 = Dict(:strategy => "unknown_strategy")
-        @test_throws ArgumentError coerce_solver(invalid_data2)
+        # Test missing required fields
+        invalid_esm = """{"esm": "0.1.0"}"""  # Missing metadata
+        @test_throws SchemaValidationError load(IOBuffer(invalid_esm))
+
+        # Test invalid expression format
+        @test_throws ParseError EarthSciSerialization.parse_expression(Dict("invalid" => "data"))
 ```
 
