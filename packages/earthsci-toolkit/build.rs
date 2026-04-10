@@ -12,7 +12,7 @@ fn main() {
 
     // Set version info from Cargo
     let version = env!("CARGO_PKG_VERSION");
-    println!("cargo:rustc-env=ESM_FORMAT_VERSION={}", version);
+    println!("cargo:rustc-env=EARTHSCI_TOOLKIT_VERSION={}", version);
 
     // TODO: In a more complete implementation, we could:
     // - Generate types from the JSON schema automatically
