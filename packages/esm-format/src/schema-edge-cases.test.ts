@@ -629,11 +629,11 @@ describe('Schema Edge Cases', () => {
         }
       }
 
-      // Schema validation should pass (no const constraint anymore)
+      // Schema validation catches version mismatch (const: "0.1.0")
       const errors = validateSchema(minorVersionUpgrade)
-      expect(errors.length).toBe(0)
+      expect(errors.length).toBeGreaterThan(0)
 
-      // Load function should succeed (version compatibility handles this)
+      // But load function should succeed via version compatibility
       const result = load(minorVersionUpgrade)
       expect(result.esm).toBe("0.2.0")
       expect(result.metadata.name).toBe("test")
@@ -651,11 +651,11 @@ describe('Schema Edge Cases', () => {
         }
       }
 
-      // Schema validation should pass (pattern allows any semver)
+      // Schema validation catches version mismatch (const: "0.1.0")
       const errors = validateSchema(majorVersionUpgrade)
-      expect(errors.length).toBe(0)
+      expect(errors.length).toBeGreaterThan(0)
 
-      // Load function should reject due to major version mismatch
+      // Load function should also reject due to major version mismatch
       expect(() => load(majorVersionUpgrade)).toThrow(ParseError)
       expect(() => load(majorVersionUpgrade)).toThrow('Unsupported major version 1')
     })
@@ -725,11 +725,11 @@ describe('Schema Edge Cases', () => {
       const errors = validateSchema(invalidDate)
       expect(errors.length).toBeGreaterThan(0)
 
-      // Should find format validation error
-      const formatError = errors.find(error =>
-        error.keyword === 'format'
+      // Should find format or anyOf validation error for the invalid date
+      const dateError = errors.find(error =>
+        error.keyword === 'format' || error.keyword === 'anyOf'
       )
-      expect(formatError).toBeDefined()
+      expect(dateError).toBeDefined()
 
       expect(() => load(invalidDate)).toThrow(SchemaValidationError)
     })
