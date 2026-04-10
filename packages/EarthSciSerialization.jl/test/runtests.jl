@@ -16,6 +16,8 @@ using JSON3
     include("real_mtk_integration_test.jl")
     include("reference_resolution_test.jl")
     include("test_codegen.jl")
+    include("flatten_test.jl")
+    include("subsystem_ref_test.jl")
 
     # Comprehensive test suite for full verification
     @testset "Comprehensive Test Suite" begin

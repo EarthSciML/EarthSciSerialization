@@ -39,8 +39,23 @@ from .esm_types import (
 )
 
 # Core parsing and serialization
-from .parse import load, SchemaValidationError, UnsupportedVersionError
+from .parse import (
+    load,
+    SchemaValidationError,
+    UnsupportedVersionError,
+    CircularReferenceError,
+    SubsystemRefError,
+    resolve_subsystem_refs,
+)
 from .serialize import save
+
+# Coupled system flattening
+from .flatten import (
+    flatten,
+    FlattenedSystem,
+    FlattenedEquation,
+    FlattenMetadata,
+)
 
 # Enhanced parsing with CSV integration (optional - requires pandas)
 try:
@@ -268,6 +283,7 @@ __all__ = [
     # Core parsing and serialization
     "load",
     "save",
+    "resolve_subsystem_refs",
 
     # Validation
     "validate",
@@ -275,6 +291,14 @@ __all__ = [
     "ValidationError",
     "SchemaValidationError",
     "UnsupportedVersionError",
+    "CircularReferenceError",
+    "SubsystemRefError",
+
+    # Coupled system flattening
+    "flatten",
+    "FlattenedSystem",
+    "FlattenedEquation",
+    "FlattenMetadata",
 
     # Expression engine
     "free_variables",
