@@ -350,6 +350,42 @@ function validateEventConsistency(model: Model, modelPath: string): StructuralEr
         }
     }
 
+    // Check continuous events
+    for (let i = 0; i < (model.continuous_events || []).length; i++) {
+        const event = model.continuous_events![i];
+        const eventPath = `${modelPath}/continuous_events/${i}`;
+
+        // Check affects variables
+        if (event.affects) {
+            for (let j = 0; j < event.affects.length; j++) {
+                const affect = event.affects[j];
+                if (!declaredVariables.has(affect.lhs)) {
+                    errors.push({
+                        path: `${eventPath}/affects/${j}/lhs`,
+                        code: 'event_var_undeclared',
+                        message: `Variable "${affect.lhs}" in continuous event affects is not declared`,
+                        details: { variable: affect.lhs }
+                    });
+                }
+            }
+        }
+
+        // Check affect_neg variables
+        if (event.affect_neg) {
+            for (let j = 0; j < event.affect_neg.length; j++) {
+                const affect = event.affect_neg[j];
+                if (!declaredVariables.has(affect.lhs)) {
+                    errors.push({
+                        path: `${eventPath}/affect_neg/${j}/lhs`,
+                        code: 'event_var_undeclared',
+                        message: `Variable "${affect.lhs}" in continuous event affect_neg is not declared`,
+                        details: { variable: affect.lhs }
+                    });
+                }
+            }
+        }
+    }
+
     return errors;
 }
 
@@ -486,6 +522,45 @@ function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
                         message: `Coupling entry references nonexistent system "${systemName}"`,
                         details: { system: systemName }
                     });
+                }
+            }
+        } else if (coupling.type === 'variable_map') {
+            // Check from/to system references exist
+            const vmEntry = coupling as any;
+            for (const field of ['from', 'to'] as const) {
+                const ref = vmEntry[field];
+                if (typeof ref === 'string' && ref.includes('.')) {
+                    const systemName = ref.split('.')[0];
+                    if (!availableSystems.has(systemName)) {
+                        errors.push({
+                            path: `${couplingPath}/${field}`,
+                            code: 'unresolved_scoped_ref',
+                            message: `Scoped reference "${ref}" references nonexistent system "${systemName}"`,
+                            details: { reference: ref, system: systemName }
+                        });
+                    } else {
+                        // Check variable exists in the system
+                        const varName = ref.split('.').slice(1).join('.');
+                        const system = (esmFile.models || {})[systemName]
+                            || (esmFile.reaction_systems || {})[systemName];
+                        if (system) {
+                            const vars = (system as any).variables || (system as any).species || {};
+                            const params = (system as any).parameters || {};
+                            if (!vars[varName] && !params[varName]) {
+                                // Check data loaders
+                                const dataLoader = (esmFile.data_loaders || {})[systemName];
+                                const provides = dataLoader?.provides || {};
+                                if (!provides[varName]) {
+                                    errors.push({
+                                        path: `${couplingPath}/${field}`,
+                                        code: 'unresolved_scoped_ref',
+                                        message: `Variable "${varName}" not found in system "${systemName}"`,
+                                        details: { reference: ref, system: systemName, variable: varName }
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
         } else if (coupling.type === 'operator_apply') {
