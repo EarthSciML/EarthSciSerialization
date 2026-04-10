@@ -1223,6 +1223,38 @@ def fixtures_dir(self):
 
 ---
 
+### flatten
+
+**Julia:**
+```julia
+flatten(...)
+```
+
+**Julia:**
+```julia
+function flatten(file::EsmFile)::FlattenedSystem
+```
+
+> flatten(file::EsmFile) -> FlattenedSystem
+
+Flatten coupled systems into a single system with dot-namespaced variables.
+
+**Rust:**
+```rust
+pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, String> {
+```
+
+> Flatten a coupled ESM file into a single unified system.
+
+**Typescript:**
+```typescript
+export function flatten(file: EsmFile): FlattenedSystem {
+```
+
+> Flatten a multi-system ESM file into a single unified system.
+
+---
+
 ### format_expression_ascii
 
 **Julia:**
@@ -1843,6 +1875,20 @@ def put(self, key, value):
 
 ---
 
+### reference
+
+**Julia:**
+```julia
+reference(...)
+```
+
+**Julia:**
+```julia
+reference(...)
+```
+
+---
+
 ### registerWebComponents
 
 **Typescript:**
@@ -2085,6 +2131,20 @@ Convert chemical formula to format with subscripts for visualization.
 
 ---
 
+### resolution
+
+**Julia:**
+```julia
+resolution(...)
+```
+
+**Julia:**
+```julia
+resolution(...)
+```
+
+---
+
 ### resolve_qualified_reference
 
 **Julia:**
@@ -2100,6 +2160,24 @@ function resolve_qualified_reference(esm_file::EsmFile, reference::String)::Refe
 > resolve_qualified_reference(esm_file::EsmFile, reference::String) -> ReferenceResolution
 
 Resolve a qualified reference string using hierarchical dot notation.
+
+---
+
+### resolve_subsystem_refs!
+
+**Julia:**
+```julia
+resolve_subsystem_refs!(...)
+```
+
+**Julia:**
+```julia
+function resolve_subsystem_refs!(file::EsmFile, base_path::String)
+```
+
+> resolve_subsystem_refs!(file::EsmFile, base_path::String)
+
+Resolve all subsystem references in-place.
 
 ---
 
@@ -2448,6 +2526,11 @@ Convert Symbolics/MTK symbolic expression back to ESM form.
 ---
 
 ### system
+
+**Julia:**
+```julia
+system(...)
+```
 
 **Julia:**
 ```julia
@@ -4068,6 +4151,13 @@ struct CouplingCouple <: CouplingEntry
 
 Bi-directional coupling via connector equations.
 
+**Python:**
+```python
+class CouplingCouple:
+```
+
+> Coupling entry for couple type.
+
 **Typescript:**
 ```typescript
 export interface CouplingCouple {
@@ -4538,6 +4628,102 @@ class FixSuggestion:
 ```typescript
 export interface FixSuggestion {
 ```
+
+---
+
+### FlattenMetadata
+
+**Julia:**
+```julia
+struct FlattenMetadata
+```
+
+> FlattenMetadata
+
+Metadata about which systems were flattened and what coupling rules were applied.
+
+**Python:**
+```python
+class FlattenMetadata:
+```
+
+> Metadata about which systems were flattened and how.
+
+**Rust:**
+```rust
+pub struct FlattenMetadata {
+```
+
+**Typescript:**
+```typescript
+export interface FlattenMetadata {
+```
+
+> Metadata describing the origin of the flattened system.
+
+---
+
+### FlattenedEquation
+
+**Julia:**
+```julia
+struct FlattenedEquation
+```
+
+> FlattenedEquation
+
+An equation in the flattened system with namespaced variables.
+
+**Python:**
+```python
+class FlattenedEquation:
+```
+
+> An equation in the flattened system with namespaced variables.
+
+**Rust:**
+```rust
+pub struct FlattenedEquation {
+```
+
+**Typescript:**
+```typescript
+export interface FlattenedEquation {
+```
+
+> A single equation in the flattened system, with dot-namespaced variable names.
+
+---
+
+### FlattenedSystem
+
+**Julia:**
+```julia
+struct FlattenedSystem
+```
+
+> FlattenedSystem
+
+A coupled system flattened into a single system with dot-namespaced variables.
+
+**Python:**
+```python
+class FlattenedSystem:
+```
+
+> A coupled system flattened to a single system with dot-namespaced variables.
+
+**Rust:**
+```rust
+pub struct FlattenedSystem {
+```
+
+**Typescript:**
+```typescript
+export interface FlattenedSystem {
+```
+
+> A fully flattened representation of a coupled ESM system.
 
 ---
 
@@ -5102,6 +5288,26 @@ export interface StructuralError {
 
 > Structural error type matching the format specification
 /.
+
+---
+
+### SubsystemRefError
+
+**Julia:**
+```julia
+struct SubsystemRefError <: Exception
+```
+
+> SubsystemRefError
+
+Exception thrown when subsystem reference resolution fails.
+
+**Python:**
+```python
+class SubsystemRefError:
+```
+
+> Exception raised when a subsystem reference cannot be resolved.
 
 ---
 

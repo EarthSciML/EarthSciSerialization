@@ -288,6 +288,7 @@ CouplingCouple(...)
 ```
 
 **Available in other languages:**
+- [Python](python.md#couplingcouple)
 - [Typescript](typescript.md#couplingcouple)
 
 ---
@@ -581,6 +582,65 @@ Expression(...)
 ```julia
 Expression(...)
 ```
+
+---
+
+### FlattenMetadata
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+FlattenMetadata(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#flattenmetadata)
+- [Typescript](typescript.md#flattenmetadata)
+- [Rust](rust.md#flattenmetadata)
+
+---
+
+### Flattened
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Flattened(...)
+```
+
+---
+
+### FlattenedEquation
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+FlattenedEquation(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#flattenedequation)
+- [Typescript](typescript.md#flattenedequation)
+- [Rust](rust.md#flattenedequation)
+
+---
+
+### FlattenedSystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+FlattenedSystem(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#flattenedsystem)
+- [Typescript](typescript.md#flattenedsystem)
+- [Rust](rust.md#flattenedsystem)
 
 ---
 
@@ -1150,6 +1210,31 @@ StructuralError(...)
 
 ---
 
+### Subsystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Subsystem(...)
+```
+
+---
+
+### SubsystemRefError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+SubsystemRefError(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#subsystemreferror)
+
+---
+
 ### System
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1223,6 +1308,125 @@ VariableNode(...)
 - [Python](python.md#variablenode)
 - [Typescript](typescript.md#variablenode)
 - [Rust](rust.md#variablenode)
+
+---
+
+### _canonical_ref
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:870`
+
+**Signature:**
+```julia
+function _canonical_ref(ref::String, base_path::String)::String
+```
+
+**Description:**
+_canonical_ref(ref::String, base_path::String) -> String
+
+Produce a canonical key for a reference, used for cycle detection.
+URLs are returned as-is; local paths are resolved to absolute paths.
+
+---
+
+### _load_local_ref
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:883`
+
+**Signature:**
+```julia
+function _load_local_ref(ref::String, base_path::String, visited::Set{String})::EsmFile
+```
+
+**Description:**
+_load_local_ref(ref::String, base_path::String, visited::Set{String}) -> EsmFile
+
+Load a locally referenced ESM file.
+
+---
+
+### _load_ref
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:840`
+
+**Signature:**
+```julia
+function _load_ref(ref::String, base_path::String, visited::Set{String})::EsmFile
+```
+
+**Description:**
+_load_ref(ref::String, base_path::String, visited::Set{String}) -> EsmFile
+
+Load a referenced ESM file from a local path or URL, with circular reference detection.
+
+# Arguments
+- `ref::String`: the reference string (local path or URL)
+- `base_path::String`: directory for resolving relative paths
+- `visited::Set{String}`: set of already-visited references for cycle detection
+
+---
+
+### _load_remote_ref
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:908`
+
+**Signature:**
+```julia
+function _load_remote_ref(ref::String)::EsmFile
+```
+
+**Description:**
+_load_remote_ref(ref::String) -> EsmFile
+
+Load a remotely referenced ESM file from a URL.
+Uses the Downloads stdlib to fetch the content.
+
+---
+
+### _resolve_model_refs!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:809`
+
+**Signature:**
+```julia
+function _resolve_model_refs!(models_dict::Dict{String,Model}, name::String,
+```
+
+**Description:**
+_resolve_model_refs!(models_dict, name, model, base_path, visited)
+
+Recursively resolve subsystem references within a Model's subsystems.
+
+---
+
+### _resolve_reaction_system_refs!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:822`
+
+**Signature:**
+```julia
+function _resolve_reaction_system_refs!(rsys_dict::Dict{String,ReactionSystem}, name::String,
+```
+
+**Description:**
+_resolve_reaction_system_refs!(rsys_dict, name, rsys, base_path, visited)
+
+Recursively resolve subsystem references within a ReactionSystem's subsystems.
+
+---
+
+### _resolve_refs_in_file!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:788`
+
+**Signature:**
+```julia
+function _resolve_refs_in_file!(file::EsmFile, base_path::String, visited::Set{String})
+```
+
+**Description:**
+_resolve_refs_in_file!(file::EsmFile, base_path::String, visited::Set{String})
+
+Internal recursive resolver for subsystem references in an EsmFile.
 
 ---
 
@@ -2740,6 +2944,22 @@ derive_odes(...)
 
 ---
 
+### describe_coupling_entry
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:305`
+
+**Signature:**
+```julia
+function describe_coupling_entry(entry::CouplingEntry)::String
+```
+
+**Description:**
+describe_coupling_entry(entry::CouplingEntry) -> String
+
+Produce a human-readable description of a coupling entry.
+
+---
+
 ### dict_to_stoichiometry_entries
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:880`
@@ -3069,6 +3289,91 @@ Returns the system and its type, or (nothing, :none) if not found.
 
 ---
 
+### flatten
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+flatten(...)
+```
+
+**Available in other languages:**
+- [Typescript](typescript.md#flatten)
+- [Rust](rust.md#flatten)
+
+---
+
+### flatten
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:96`
+
+**Signature:**
+```julia
+function flatten(file::EsmFile)::FlattenedSystem
+```
+
+**Description:**
+flatten(file::EsmFile) -> FlattenedSystem
+
+Flatten coupled systems into a single system with dot-namespaced variables.
+
+The algorithm:
+1. Iterates over all models and reaction_systems in the EsmFile
+2. Namespaces all variables by prefixing with "SystemName."
+3. Recursively flattens subsystems using nested dot notation (e.g., "System.Sub.var")
+4. Processes coupling entries to produce human-readable rule descriptions
+5. Returns a unified FlattenedSystem
+
+# Examples
+```julia
+file = load("coupled_model.esm")
+flat = flatten(file)
+println(flat.state_variables)  # ["Atmosphere.T", "Ocean.SST", ...]
+println(flat.equations[1].lhs) # "Atmosphere.T"
+```
+
+**Available in other languages:**
+- [Typescript](typescript.md#flatten)
+- [Rust](rust.md#flatten)
+
+---
+
+### flatten_model!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:140`
+
+**Signature:**
+```julia
+function flatten_model!(state_variables::Vector{String},
+```
+
+**Description:**
+flatten_model!(state_variables, parameters, variables, equations, model, prefix)
+
+Flatten a Model into the accumulator vectors, prefixing all variable names with `prefix.`.
+Recursively processes subsystems.
+
+---
+
+### flatten_reaction_system!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:185`
+
+**Signature:**
+```julia
+function flatten_reaction_system!(state_variables::Vector{String},
+```
+
+**Description:**
+flatten_reaction_system!(state_variables, parameters, variables, equations, rsys, prefix)
+
+Flatten a ReactionSystem into the accumulator vectors, prefixing all names with `prefix.`.
+Species become state variables and reaction rate laws become equations.
+Recursively processes subsystems.
+
+---
+
 ### for
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -3212,6 +3517,22 @@ function format_number(num::Real, format::Symbol)
 format_number(num::Real, format::Symbol) -> String
 
 Format a number in scientific notation with appropriate formatting.
+
+---
+
+### format_number_plain
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:288`
+
+**Signature:**
+```julia
+function format_number_plain(value::Float64)::String
+```
+
+**Description:**
+format_number_plain(value::Float64) -> String
+
+Format a floating-point number as a plain string, using integer notation for whole numbers.
 
 ---
 
@@ -3700,7 +4021,7 @@ load(...)
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:703`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:705`
 
 **Signature:**
 ```julia
@@ -3711,6 +4032,8 @@ function load(path::String)::EsmFile
 load(path::String) -> EsmFile
 
 Load and parse an ESM file from a file path.
+Automatically resolves any subsystem references (local or remote) relative
+to the directory containing the file.
 
 **Available in other languages:**
 - [Python](python.md#load)
@@ -3722,7 +4045,7 @@ Load and parse an ESM file from a file path.
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:714`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:720`
 
 **Signature:**
 ```julia
@@ -3840,6 +4163,39 @@ migrate(...)
 ```julia
 mock_symbolic_to_esm(...)
 ```
+
+---
+
+### namespace_expression
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:229`
+
+**Signature:**
+```julia
+function namespace_expression(expr::Expr, prefix::String)::String
+```
+
+**Description:**
+namespace_expression(expr::Expr, prefix::String) -> String
+
+Convert an ESM expression to a string with all variable references prefixed by `prefix.`.
+Numeric literals and operators are preserved as-is.
+
+---
+
+### namespace_op_expression
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:251`
+
+**Signature:**
+```julia
+function namespace_op_expression(expr::OpExpr, prefix::String)::String
+```
+
+**Description:**
+namespace_op_expression(expr::OpExpr, prefix::String) -> String
+
+Convert an operator expression to a string with namespaced variable references.
 
 ---
 
@@ -4157,6 +4513,17 @@ reference(...)
 
 ---
 
+### reference
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+reference(...)
+```
+
+---
+
 ### remove_coupling
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4448,6 +4815,17 @@ resolution(...)
 
 ---
 
+### resolution
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+resolution(...)
+```
+
+---
+
 ### resolve_qualified_reference
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4490,6 +4868,45 @@ form a path through the subsystem hierarchy.
 
 ## Throws
 - `QualifiedReferenceError` if reference cannot be resolved
+
+---
+
+### resolve_subsystem_refs!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+resolve_subsystem_refs!(...)
+```
+
+---
+
+### resolve_subsystem_refs!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:778`
+
+**Signature:**
+```julia
+function resolve_subsystem_refs!(file::EsmFile, base_path::String)
+```
+
+**Description:**
+resolve_subsystem_refs!(file::EsmFile, base_path::String)
+
+Resolve all subsystem references in-place. Walks all models and reaction_systems,
+and for each subsystem that was parsed from a `{"ref": "..."}` object, loads the
+referenced file and replaces the subsystem content.
+
+References can be:
+- Local file paths (resolved relative to `base_path`)
+- Remote URLs starting with `http://` or `https://`
+
+Circular references are detected and raise a `SubsystemRefError`.
+
+# Arguments
+- `file::EsmFile`: the parsed ESM file to resolve references in
+- `base_path::String`: directory path for resolving relative file references
 
 ---
 
@@ -5318,6 +5735,17 @@ function symbolic_to_esm(symbolic_expr)
 symbolic_to_esm(symbolic_expr) -> Expr
 
 Convert Symbolics/MTK symbolic expression back to ESM form.
+
+---
+
+### system
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+system(...)
+```
 
 ---
 
@@ -6478,6 +6906,7 @@ CouplingCouple <: CouplingEntry
 Bi-directional coupling via connector equations.
 
 **Available in other languages:**
+- [Python](python.md#couplingcouple)
 - [Typescript](typescript.md#couplingcouple)
 
 ---
@@ -6777,6 +7206,87 @@ Actionable suggestion for fixing an error.
 **Available in other languages:**
 - [Python](python.md#fixsuggestion)
 - [Typescript](typescript.md#fixsuggestion)
+
+---
+
+### FlattenMetadata
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:45`
+
+**Definition:**
+```julia
+struct FlattenMetadata
+```
+
+**Description:**
+FlattenMetadata
+
+Metadata about which systems were flattened and what coupling rules were applied.
+
+# Fields
+- `source_systems::Vector{String}`: names of all systems that were flattened
+- `coupling_rules::Vector{String}`: human-readable descriptions of coupling rules
+
+**Available in other languages:**
+- [Python](python.md#flattenmetadata)
+- [Typescript](typescript.md#flattenmetadata)
+- [Rust](rust.md#flattenmetadata)
+
+---
+
+### FlattenedEquation
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:30`
+
+**Definition:**
+```julia
+struct FlattenedEquation
+```
+
+**Description:**
+FlattenedEquation
+
+An equation in the flattened system with namespaced variables.
+
+# Fields
+- `lhs::String`: dot-namespaced variable name (e.g., "Atmosphere.T")
+- `rhs::String`: expression string with namespaced references
+- `source_system::String`: name of the system this equation originated from
+
+**Available in other languages:**
+- [Python](python.md#flattenedequation)
+- [Typescript](typescript.md#flattenedequation)
+- [Rust](rust.md#flattenedequation)
+
+---
+
+### FlattenedSystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:64`
+
+**Definition:**
+```julia
+struct FlattenedSystem
+```
+
+**Description:**
+FlattenedSystem
+
+A coupled system flattened into a single system with dot-namespaced variables.
+All variables from individual models and reaction systems are unified into a single
+namespace using "SystemName.variable" dot notation.
+
+# Fields
+- `state_variables::Vector{String}`: all state variables with system prefixes
+- `parameters::Vector{String}`: all parameters with system prefixes
+- `variables::Dict{String, String}`: map from namespaced variable name to its type ("state", "parameter", "observed", "species")
+- `equations::Vector{FlattenedEquation}`: all equations with namespaced references
+- `metadata::FlattenMetadata`: provenance information about the flattening
+
+**Available in other languages:**
+- [Python](python.md#flattenedsystem)
+- [Typescript](typescript.md#flattenedsystem)
+- [Rust](rust.md#flattenedsystem)
 
 ---
 
@@ -7280,6 +7790,25 @@ Contains path, message, and error type for structural issues.
 **Available in other languages:**
 - [Typescript](typescript.md#structuralerror)
 - [Rust](rust.md#structuralerror)
+
+---
+
+### SubsystemRefError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:757`
+
+**Definition:**
+```julia
+struct SubsystemRefError <: Exception
+```
+
+**Description:**
+SubsystemRefError
+
+Exception thrown when subsystem reference resolution fails.
+
+**Available in other languages:**
+- [Python](python.md#subsystemreferror)
 
 ---
 
