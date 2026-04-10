@@ -322,6 +322,8 @@ def _validate_domain_enhanced(esm_file: EsmFile, error_collector: ErrorCollector
     if not esm_file.domains:
         return  # No domains to validate
 
+    transforms = []
+    spatial_dims = set()
     for domain_name, domain in esm_file.domains.items():
         if not domain.coordinate_transforms:
             continue

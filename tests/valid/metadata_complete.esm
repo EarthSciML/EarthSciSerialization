@@ -253,7 +253,7 @@
           "type": "dirichlet",
           "value": 4e-08,
           "dimensions": [
-            "x"
+            "lon"
           ]
         }
       ],

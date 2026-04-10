@@ -382,7 +382,9 @@ def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
         result["config"] = loader.format_options
 
     # Schema uses provides for variables
-    if loader.variables:
+    if getattr(loader, "provides", None):
+        result["provides"] = loader.provides
+    elif loader.variables:
         result["provides"] = {var: {} for var in loader.variables}
 
     return result
@@ -552,10 +554,21 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for coupling in esm_file.coupling
         ]
 
-    # Note: Events are parsed from within models/reaction_systems and stored
-    # in esm_file.events, but the schema only allows them inside
-    # models/reaction_systems, not at the top level. Top-level serialization
-    # is skipped to maintain schema validity during round-trip.
+    # Serialize events at the top level. The schema only allows events nested
+    # inside models/reaction_systems, but EsmFile.events stores them flat after
+    # parsing. load() strips and reattaches top-level events on round-trip.
+    if esm_file.events:
+        continuous_events = []
+        discrete_events = []
+        for event in esm_file.events:
+            if isinstance(event, ContinuousEvent):
+                continuous_events.append(_serialize_continuous_event(event))
+            elif isinstance(event, DiscreteEvent):
+                discrete_events.append(_serialize_discrete_event(event))
+        if continuous_events:
+            result["continuous_events"] = continuous_events
+        if discrete_events:
+            result["discrete_events"] = discrete_events
 
     return result
 

@@ -925,21 +925,16 @@
             "wrt": "t"
           },
           "rhs": {
-            "op": "+",
+            "op": "*",
             "args": [
               {
                 "op": "*",
                 "args": [
-                  {
-                    "op": "*",
-                    "args": [
-                      "k_bimolecular",
-                      "A"
-                    ]
-                  },
-                  "B"
+                  "k_bimolecular",
+                  "A"
                 ]
-              }
+              },
+              "B"
             ]
           }
         }

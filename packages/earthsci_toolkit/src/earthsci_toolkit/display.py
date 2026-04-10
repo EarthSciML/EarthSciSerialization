@@ -637,7 +637,7 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
             if format_type == 'unicode':
                 return f"¬{format_arg(arg)}"
             elif format_type == 'latex':
-                return f"\\lnot {format_arg(arg)}"
+                return f"\\neg {format_arg(arg)}"
             else:
                 return f"!({format_arg(arg)})"
 
@@ -651,9 +651,9 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
         elif op in ('asin', 'acos', 'atan'):
             base = op[1:]  # sin, cos, tan
             if format_type == 'unicode':
-                return f"{base}⁻¹({fa})"
+                return f"arc{base}({fa})"
             elif format_type == 'latex':
-                return f"\\{base}^{{-1}}({to_latex(arg)})"
+                return f"\\arc{base}({to_latex(arg)})"
             else:
                 return f"{op}({fa})"
 
@@ -763,7 +763,14 @@ def _format_expression_node(node: ExprNode, format_type: str) -> str:
             else:
                 return f"D({fa})/D{wrt_var}"
 
-        elif op in ('sign', 'erf', 'erfc', 'Pre'):
+        elif op == 'sign':
+            if format_type == 'unicode':
+                return f"sgn({fa})"
+            elif format_type == 'latex':
+                return f"\\mathrm{{sgn}}({to_latex(arg)})"
+            return f"sign({fa})"
+
+        elif op in ('erf', 'erfc', 'Pre'):
             if format_type == 'latex':
                 return f"\\mathrm{{{op}}}({to_latex(arg)})"
             return f"{op}({fa})"
