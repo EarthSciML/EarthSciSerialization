@@ -11,20 +11,20 @@
 
   "coupling_verification": {
     "description": "Verification of land-atmosphere coupling mechanisms",
-    "couple2_atmosphere_surface": {
+    "couple_atmosphere_surface": {
       "systems": ["AtmosphericBoundaryLayer", "SurfaceEnergyBalance"],
       "bidirectional_fluxes": ["sensible_heat", "latent_heat"],
       "connector_equations": 2,
       "energy_closure": "Surface energy balance: Rn = H + LE + G (within 5% residual)",
       "feedback_strength": "Strong coupling during daytime, weaker at night"
     },
-    "couple2_surface_soil": {
+    "couple_surface_soil": {
       "systems": ["SurfaceEnergyBalance", "SoilHydrologyThermal"],
       "heat_transfer": "Ground heat flux G couples surface and soil layer 1",
       "conductive_coupling": "Multi-layer soil heat conduction",
       "thermal_inertia": "Soil provides thermal memory, dampens temperature oscillations"
     },
-    "couple2_vegetation_soil": {
+    "couple_vegetation_soil": {
       "systems": ["VegetationDynamics", "SoilHydrologyThermal"],
       "water_coupling": "Root water uptake from soil layer 2 (main rooting zone)",
       "feedback_mechanism": "Soil moisture → water stress → photosynthesis → transpiration",

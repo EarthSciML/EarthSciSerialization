@@ -598,7 +598,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | Field | Required | Description |
 |---|---|---|
 | `domain` | | Name of a domain from the `domains` section that this model is defined on. Omit or set to `null` for 0D (non-spatial) models — ODE or algebraic systems with no spatial dimensions. |
-| `coupletype` | | Coupling type name (maps to EarthSciML `:coupletype` metadata). Used by `couple2` dispatch. |
+| `coupletype` | | Coupling type name (maps to EarthSciML `:coupletype` metadata). Informational label identifying this system's role in coupling. |
 | `reference` | | Academic citation: `doi`, `citation`, `url`, `notes` |
 | `variables` | ✓ | All variables, keyed by name |
 | `equations` | ✓ | Array of `{lhs, rhs}` equation objects |
@@ -656,7 +656,7 @@ The special variable `"_var"` is a placeholder used in operator-style models. Wh
 
 ### 6.5 Dry Deposition Model Example
 
-A model that computes deposition velocities from surface resistance parameters. This model is coupled to a chemistry system via `couple2` to provide deposition loss terms, while a separate operator (see Section 9) handles grid-level application.
+A model that computes deposition velocities from surface resistance parameters. This model is coupled to a chemistry system via `couple` to provide deposition loss terms, while a separate operator (see Section 9) handles grid-level application.
 
 ```json
 {
@@ -898,7 +898,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | Field | Required | Description |
 |---|---|---|
 | `domain` | | Name of a domain from the `domains` section that this reaction system is defined on. Omit or set to `null` for 0D (non-spatial) systems. |
-| `coupletype` | | Coupling type name for `couple2` dispatch |
+| `coupletype` | | Coupling type name. Informational label identifying this system's role in coupling. |
 | `reference` | | Academic citation |
 | `species` | ✓ | Named reactive species with units, defaults, descriptions |
 | `parameters` | ✓ | Named parameters (rate constants, temperature, photolysis rates, etc.) |
@@ -1070,9 +1070,8 @@ The coupling section defines how models, reaction systems, data loaders, and ope
     },
 
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": ["SuperFastReactions", "DryDeposition"],
-      "coupletype_pair": ["SuperFastCoupler", "DryDepositionCoupler"],
       "connector": {
         "equations": [
           {
@@ -1141,7 +1140,7 @@ The coupling section defines how models, reaction systems, data loaders, and ope
 | Type | EarthSciML Mechanism | Description |
 |---|---|---|
 | `operator_compose` | `operator_compose(a, b)` | Match LHS time derivatives and add RHS terms together |
-| `couple2` | `couple2(::ACoupler, ::BCoupler)` | Bi-directional coupling via coupletype dispatch. `connector` specifies the `ConnectorSystem` equations. |
+| `couple` | `couple(a, b, connector)` | Bi-directional coupling via explicit `ConnectorSystem` equations. The `connector` field specifies the equations that link the two systems. |
 | `variable_map` | `param_to_var` + connection | Replace a parameter in one system with a variable from another |
 | `operator_apply` | `Operator` in `CoupledSystem.ops` | Register an Operator to run during simulation |
 | `callback` | `init_callback` | Register a callback for simulation events |
@@ -1167,7 +1166,7 @@ Optionally with a conversion factor:
 
 ### 10.3 The `connector` Field
 
-For `couple2`, `connector` defines the `ConnectorSystem` — the set of equations that link two systems. Each equation specifies which variable is affected and how:
+For `couple`, `connector` defines the `ConnectorSystem` — the set of equations that link two systems. Each equation is explicitly provided by the user and specifies which variable is affected and how:
 
 | Transform | Description |
 |---|---|
@@ -1208,7 +1207,7 @@ For coupling between spatial domains of different dimensionality, reference a na
 
 The interface handles both dimension reduction (e.g., extracting a 2D slice from a 3D field) and regridding (when shared dimensions have different resolutions across domains). The coupling entry only needs to name the interface — the dimensional details are defined once in the interface specification.
 
-For `operator_compose` and `couple2`, the `interface` field works similarly:
+For `operator_compose` and `couple`, the `interface` field works similarly:
 
 ```json
 {

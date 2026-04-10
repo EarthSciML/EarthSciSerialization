@@ -352,14 +352,10 @@
       "description": "TEST CASE 7: Operator subsystem resolution - BiogenicEmissions.TemperatureDependence.beta. Tests resolution in operators section."
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphereModel.Chemistry",
         "SurfaceModel"
-      ],
-      "coupletype_pair": [
-        "ChemistryCoupler",
-        "SurfaceCoupler"
       ],
       "connector": {
         "equations": [
@@ -383,7 +379,7 @@
           }
         ]
       },
-      "description": "TEST CASE 8: couple2 with scoped references in connector expressions"
+      "description": "TEST CASE 8: couple with scoped references in connector expressions"
     }
   ],
   "domains": {

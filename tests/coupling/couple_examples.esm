@@ -2,7 +2,7 @@
   "esm": "0.1.0",
   "metadata": {
     "name": "Couple2Examples",
-    "description": "Test fixtures for couple2 coupling type with connector equations",
+    "description": "Test fixtures for couple coupling type with connector equations",
     "authors": [
       "Claude Sonnet 4"
     ],
@@ -139,7 +139,7 @@
   },
   "coupling": [
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "FluidFlow",
         "HeatTransfer"
@@ -189,11 +189,7 @@
             }
           }
         ]
-      },
-      "coupletype_pair": [
-        "FluidFlowCoupler",
-        "HeatTransferCoupler"
-      ]
+      }
     }
   ],
   "solver": {

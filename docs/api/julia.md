@@ -359,17 +359,17 @@ Parse callback coupling entry.
 
 ---
 
-### coerce_couple2
+### coerce_couple
 
 **File:** `packages/EarthSciSerialization.jl/src/parse.jl:420`
 
 ```julia
-function coerce_couple2(data::AbstractDict)::CouplingCouple2
+function coerce_couple(data::AbstractDict)::CouplingCouple
 ```
 
-coerce_couple2(data::AbstractDict) -> CouplingCouple2
+coerce_couple(data::AbstractDict) -> CouplingCouple
 
-Parse couple2 coupling entry.
+Parse couple coupling entry.
 
 ---
 
@@ -769,17 +769,17 @@ Enhanced operator conversion supporting more functions and advanced features.
 
 ---
 
-### couple2
+### couple
 
 **File:** `packages/EarthSciSerialization.jl/src/coupled.jl:341`
 
 ```julia
-function couple2(coupled_system::MockCoupledSystem, coupling::CouplingCouple2)
+function couple(coupled_system::MockCoupledSystem, coupling::CouplingCouple)
 ```
 
-couple2(coupled_system::MockCoupledSystem, coupling::CouplingCouple2)
+couple(coupled_system::MockCoupledSystem, coupling::CouplingCouple)
 
-Implement bi-directional coupling via coupletype dispatch:
+Implement bi-directional coupling via explicit ConnectorSystem equations:
 1. Read connector equations from the coupling specification
 2. Resolve scoped references in connector equations
 3. Apply transform operations (additive/multiplicative/replacement)
@@ -2103,17 +2103,17 @@ Serialize callback coupling entry.
 
 ---
 
-### serialize_couple2
+### serialize_couple
 
 **File:** `packages/EarthSciSerialization.jl/src/serialize.jl:333`
 
 ```julia
-function serialize_couple2(entry::CouplingCouple2)::Dict{String,Any}
+function serialize_couple(entry::CouplingCouple)::Dict{String,Any}
 ```
 
-serialize_couple2(entry::CouplingCouple2) -> Dict{String,Any}
+serialize_couple(entry::CouplingCouple) -> Dict{String,Any}
 
-Serialize couple2 coupling entry.
+Serialize couple coupling entry.
 
 ---
 
@@ -2802,12 +2802,12 @@ to_coupled_system(file::EsmFile)::MockCoupledSystem
 
 Convert an ESM file with coupling rules into a coupled system.
 This implements the Full tier capability for coupled system assembly
-handling operator_compose, couple2, variable_map, and operator_apply.
+handling operator_compose, couple, variable_map, and operator_apply.
 
 The algorithm processes coupling entries in array order for deterministic naming
 and applies the four main coupling operations:
 1. operator_compose - Compose systems by matching equations
-2. couple2 - Bidirectional coupling via connector equations
+2. couple - Bidirectional coupling via connector equations
 3. variable_map - Map variables between systems with transforms
 4. operator_apply - Register operators for runtime
 
@@ -3337,17 +3337,17 @@ Register a callback for simulation events.
 
 ---
 
-### CouplingCouple2
+### CouplingCouple
 
 **File:** `packages/EarthSciSerialization.jl/src/coupled.jl:44`
 
 ```julia
-struct CouplingCouple2 <: CouplingEntry
+struct CouplingCouple <: CouplingEntry
 ```
 
-CouplingCouple2 <: CouplingEntry
+CouplingCouple <: CouplingEntry
 
-Bi-directional coupling via coupletype dispatch.
+Bi-directional coupling via explicit ConnectorSystem equations.
 
 ---
 

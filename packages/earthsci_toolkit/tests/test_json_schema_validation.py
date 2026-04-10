@@ -747,15 +747,14 @@ class TestComplexValidationScenarios:
         with pytest.raises(ValidationError, match="is not valid under any of the given schemas|should be non-empty|is too short|should not be longer than|is too long"):
             jsonschema.validate(invalid_data, schema)
 
-        # couple2 missing required connector
+        # couple missing required connector
         invalid_data = {
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
             "coupling": [{
-                "type": "couple2",
-                "systems": ["sys1", "sys2"],
-                "coupletype_pair": ["type1", "type2"]
+                "type": "couple",
+                "systems": ["sys1", "sys2"]
                 # Missing required "connector" field
             }]
         }

@@ -185,7 +185,7 @@ const sampleEsmFile: EsmFile = {
       description: 'Apply vertical mixing in boundary layer'
     },
     {
-      type: 'couple2',
+      type: 'couple',
       systems: ['TroposphericChemistry', 'StratosphericChemistry'],
       description: 'Exchange species between troposphere and stratosphere'
     }

@@ -138,7 +138,7 @@ function processCouplingEntry(coupling: CouplingEntry, unionFind: UnionFind): vo
       }
       break;
 
-    case 'couple2':
+    case 'couple':
       // Process connector equations for equivalence
       if (coupling.connector?.equations) {
         for (const equation of coupling.connector.equations) {

@@ -450,7 +450,7 @@ class ESMEditor:
                     # Check if coupling involves the extracted component
                     should_include = False
 
-                    # Check systems field (for operator_compose, couple2)
+                    # Check systems field (for operator_compose, couple)
                     if coupling.systems and component_name in coupling.systems:
                         should_include = True
 

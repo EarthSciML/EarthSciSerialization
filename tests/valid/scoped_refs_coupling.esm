@@ -531,7 +531,7 @@
       "operator": "unknown"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "AtmosphericChemistry.Aerosols",
         "EmissionSources.Biogenic.Forest"
@@ -549,11 +549,7 @@
             "transform": "additive"
           }
         ]
-      },
-      "coupletype_pair": [
-        "AtmosphericChemistry.AerosolsCoupler",
-        "EmissionSources.Biogenic.ForestCoupler"
-      ]
+      }
     },
     {
       "type": "callback",

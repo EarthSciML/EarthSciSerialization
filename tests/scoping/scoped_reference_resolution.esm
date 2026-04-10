@@ -490,14 +490,10 @@
       "description": "Temperature profile affects reaction rate coefficient"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "EarthSystem.Atmosphere.Chemistry.TroposphericChemistry",
         "EarthSystem.Atmosphere.Chemistry.StratosphericChemistry"
-      ],
-      "coupletype_pair": [
-        "TroposphericCoupler",
-        "StratosphericCoupler"
       ],
       "connector": {
         "equations": [

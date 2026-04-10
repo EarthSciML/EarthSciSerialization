@@ -57,7 +57,7 @@ export
     # Data and operator types
     DataLoader, Operator, CouplingEntry,
     # Concrete coupling types
-    CouplingOperatorCompose, CouplingCouple2, CouplingVariableMap,
+    CouplingOperatorCompose, CouplingCouple, CouplingVariableMap,
     CouplingOperatorApply, CouplingCallback, CouplingEvent,
     # Coupled system
     MockCoupledSystem,

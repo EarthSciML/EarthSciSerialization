@@ -330,14 +330,10 @@
       "description": "Couple ocean SST to atmospheric temperature"
     },
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "Atmosphere.Chemistry.FastChem",
         "Atmosphere.Chemistry.SlowChem"
-      ],
-      "coupletype_pair": [
-        "FastChemCoupler",
-        "SlowChemCoupler"
       ],
       "connector": {
         "equations": [

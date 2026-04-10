@@ -2,7 +2,7 @@
   "esm": "0.1.0",
   "metadata": {
     "name": "AdvancedCouplingTests",
-    "description": "Test all coupling types: couple2, operator_apply, callback",
+    "description": "Test all coupling types: couple, operator_apply, callback",
     "authors": [
       "Test Suite"
     ],
@@ -232,14 +232,10 @@
   },
   "coupling": [
     {
-      "type": "couple2",
+      "type": "couple",
       "systems": [
         "Chemistry",
         "Surface"
-      ],
-      "coupletype_pair": [
-        "ChemistryCoupler",
-        "SurfaceCoupler"
       ],
       "connector": {
         "equations": [

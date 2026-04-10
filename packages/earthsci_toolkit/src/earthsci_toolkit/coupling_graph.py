@@ -46,7 +46,7 @@ class CouplingGraph:
     def get_cross_system_edges(self) -> List[CouplingEdge]:
         """Return edges that represent cross-system interactions."""
         return [edge for edge in self.labeled_edges
-                if edge.coupling_type in ['variable_map', 'operator_compose', 'couple2', 'event']]
+                if edge.coupling_type in ['variable_map', 'operator_compose', 'couple', 'event']]
 
 
 def construct_coupling_graph(esm_file: EsmFile) -> CouplingGraph:
@@ -84,7 +84,7 @@ def construct_coupling_graph(esm_file: EsmFile) -> CouplingGraph:
             coupling_type_str = entry.coupling_type.value if hasattr(entry.coupling_type, 'value') else str(entry.coupling_type)
 
             if hasattr(entry, 'systems') and entry.systems:
-                # operator_compose, couple2
+                # operator_compose, couple
                 if len(entry.systems) >= 2:
                     for i in range(len(entry.systems) - 1):
                         from_system = entry.systems[i]
@@ -97,8 +97,6 @@ def construct_coupling_graph(esm_file: EsmFile) -> CouplingGraph:
                             metadata['translate'] = entry.translate
                         if hasattr(entry, 'connector') and entry.connector:
                             metadata['connector'] = True
-                        if hasattr(entry, 'coupletype_pair') and entry.coupletype_pair:
-                            metadata['coupletype_pair'] = entry.coupletype_pair
 
                         labeled_edges.append(CouplingEdge(
                             from_node=from_system,

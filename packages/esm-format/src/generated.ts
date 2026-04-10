@@ -80,7 +80,7 @@ export type DiscreteEvent1 =
  */
 export type CouplingEntry =
   | CouplingOperatorCompose
-  | CouplingCouple2
+  | CouplingCouple
   | CouplingVariableMap
   | CouplingOperatorApply
   | CouplingCallback
@@ -255,7 +255,7 @@ export interface Reference {
  */
 export interface Model {
   /**
-   * Coupling type name for couple2 dispatch.
+   * Coupling type name for couple dispatch.
    */
   coupletype?: string | null;
   reference?: Reference;
@@ -437,7 +437,7 @@ export interface ContinuousEvent {
  */
 export interface ReactionSystem {
   /**
-   * Coupling type name for couple2 dispatch.
+   * Coupling type name for couple dispatch.
    */
   coupletype?: string | null;
   reference?: Reference;
@@ -611,22 +611,15 @@ export interface CouplingOperatorCompose {
   description?: string;
 }
 /**
- * Bi-directional coupling via coupletype dispatch.
+ * Bi-directional coupling via connector equations.
  */
-export interface CouplingCouple2 {
-  type: "couple2";
+export interface CouplingCouple {
+  type: "couple";
   /**
    * @minItems 2
    * @maxItems 2
    */
   systems: [string, string];
-  /**
-   * The coupletype names for each system.
-   *
-   * @minItems 2
-   * @maxItems 2
-   */
-  coupletype_pair: [string, string];
   connector: {
     /**
      * @minItems 1

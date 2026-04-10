@@ -1102,7 +1102,7 @@
                   "$ref": "#/$defs/CouplingOperatorCompose"
                 },
                 {
-                  "$ref": "#/$defs/CouplingCouple2"
+                  "$ref": "#/$defs/CouplingCouple"
                 },
                 {
                   "$ref": "#/$defs/CouplingVariableMap"
@@ -1141,7 +1141,7 @@
                   "$ref": "#/$defs/CouplingOperatorCompose"
                 },
                 {
-                  "$ref": "#/$defs/CouplingCouple2"
+                  "$ref": "#/$defs/CouplingCouple"
                 },
                 {
                   "$ref": "#/$defs/CouplingVariableMap"
@@ -1182,7 +1182,7 @@
                   "$ref": "#/$defs/CouplingOperatorCompose"
                 },
                 {
-                  "$ref": "#/$defs/CouplingCouple2"
+                  "$ref": "#/$defs/CouplingCouple"
                 },
                 {
                   "$ref": "#/$defs/CouplingVariableMap"

@@ -1033,7 +1033,7 @@ fn validate_coupling(
                                 message: format!("Coupling entry references nonexistent system '{}'", system),
                                 details: serde_json::json!({
                                     "system": system,
-                                    "coupling_type": "couple2",
+                                    "coupling_type": "couple",
                                     "expected_in": "models, reaction_systems, data_loaders, operators"
                                 }),
                             });
@@ -1045,7 +1045,7 @@ fn validate_coupling(
                         code: StructuralErrorCode::UndefinedSystem,
                         message: "Couple2 coupling requires exactly 2 systems".to_string(),
                         details: serde_json::json!({
-                            "coupling_type": "couple2",
+                            "coupling_type": "couple",
                             "systems_count": systems.len(),
                             "expected_count": 2
                         }),

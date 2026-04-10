@@ -327,13 +327,13 @@ function validate_coupling_references(file::EsmFile, coupling_entry::CouplingEnt
             end
         end
 
-    elseif isa(coupling_entry, CouplingCouple2)
+    elseif isa(coupling_entry, CouplingCouple)
         # Validate that all referenced systems exist
         for (i, system_name) in enumerate(coupling_entry.systems)
             if !system_exists_in_file(file, system_name)
                 push!(errors, StructuralError(
                     "$path.systems[$i]",
-                    "System '$system_name' referenced in couple2 coupling not found",
+                    "System '$system_name' referenced in couple coupling not found",
                     "undefined_system"
                 ))
             end
@@ -897,7 +897,7 @@ function validate_coupling_multi_domain(file::EsmFile, coupling_entry::CouplingE
         iface_field = coupling_entry.interface
         lifting_field = coupling_entry.lifting
         system_names = coupling_entry.systems
-    elseif isa(coupling_entry, CouplingCouple2)
+    elseif isa(coupling_entry, CouplingCouple)
         iface_field = coupling_entry.interface
         lifting_field = coupling_entry.lifting
         system_names = coupling_entry.systems

@@ -318,7 +318,7 @@ describe('edit', () => {
   describe('Coupling Operations', () => {
     it('should add a coupling entry', () => {
       const coupling = {
-        type: 'couple2' as const,
+        type: 'couple' as const,
         systems: ['TestModel', 'TestSystem'],
         vars: [['TestModel.x', 'TestSystem.A']]
       }
@@ -332,7 +332,7 @@ describe('edit', () => {
 
     it('should remove a coupling entry by index', () => {
       const fileWithCoupling = addCoupling(esmFile, {
-        type: 'couple2' as const,
+        type: 'couple' as const,
         systems: ['TestModel', 'TestSystem'],
         vars: [['TestModel.x', 'TestSystem.A']]
       })

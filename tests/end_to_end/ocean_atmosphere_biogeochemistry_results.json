@@ -11,14 +11,14 @@
 
   "coupling_verification": {
     "description": "Verification that all coupling types function correctly in biogeochemical context",
-    "couple2_air_sea_exchange": {
+    "couple_air_sea_exchange": {
       "systems": ["AtmosphericCarbon", "OceanCarbon"],
       "bidirectional_fluxes": ["CO2", "O2"],
       "connector_equations": 4,
       "flux_direction": "CO2 typically ocean→atmosphere, O2 typically atmosphere→ocean",
       "equilibrium_timescale": "months to years"
     },
-    "couple2_ocean_ecosystem": {
+    "couple_ocean_ecosystem": {
       "systems": ["OceanCarbon", "MarineEcosystem"],
       "biogeochemical_fluxes": ["DIC", "O2_dissolved"],
       "connector_equations": 4,

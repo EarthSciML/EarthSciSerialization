@@ -18,7 +18,7 @@
       "transport_terms_per_species": 5,
       "coupling_mechanism": "_var placeholder expansion"
     },
-    "couple2": {
+    "couple": {
       "systems": ["AtmosphericChemistry", "SurfaceExchange"],
       "verification": "Bidirectional coupling via connector equations",
       "connector_equations": 2,
@@ -137,7 +137,7 @@
       "concentrations": {
         "source": "AtmosphericChemistry.{O3,NO2}",
         "destination": "SurfaceExchange connector equations",
-        "coupling_type": "couple2",
+        "coupling_type": "couple",
         "effect": "Concentration-dependent deposition fluxes"
       }
     },
@@ -145,7 +145,7 @@
       "deposition_fluxes": {
         "source": "SurfaceExchange.{deposition_velocity_O3,deposition_velocity_NO2}",
         "destination": "AtmosphericChemistry.{O3,NO2} equations",
-        "coupling_type": "couple2",
+        "coupling_type": "couple",
         "effect": "Surface loss terms for species"
       }
     }
