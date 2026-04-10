@@ -22,27 +22,27 @@ name = "earthsci_toolkit"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde = { version = "0.0.2", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 jsonschema = "0.19"
 thiserror = "2.0"
-clap = { version = "0.0.2", features = ["derive"], optional = true }
-wasm-bindgen = { version = "0.0.2", optional = true }
-serde-wasm-bindgen = { version = "0.0.2", optional = true }
-js-sys = { version = "0.0.2", optional = true }
-web-sys = { version = "0.0.2", optional = true }
+clap = { version = "4.0", features = ["derive"], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true }
 # Performance dependencies
-rayon = { version = "0.0.2", optional = true }
-simd-json = { version = "0.0.2", optional = true }
-smallvec = { version = "0.0.2", features = ["serde"] }
-bumpalo = { version = "0.0.2", optional = true }
-wide = { version = "0.0.2", optional = true }
-bytemuck = { version = "0.0.2", optional = true }
-criterion = { version = "0.0.2", optional = true }
+rayon = { version = "1.8", optional = true }
+simd-json = { version = "0.13", optional = true }
+smallvec = { version = "1.11", features = ["serde"] }
+bumpalo = { version = "3.14", optional = true }
+wide = { version = "0.7", optional = true }
+bytemuck = { version = "1.14", optional = true }
+criterion = { version = "0.5", optional = true }
 
 [dev-dependencies]
 serde_test = "1.0"
-criterion = { version = "0.0.2", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.4"
 
 [[bench]]
