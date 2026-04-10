@@ -355,15 +355,6 @@
       }
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "algorithm": "Tsit5",
-      "adaptive": true,
-      "callback_handling": "precise_callbacks",
-      "callback_tolerance": 1e-08
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

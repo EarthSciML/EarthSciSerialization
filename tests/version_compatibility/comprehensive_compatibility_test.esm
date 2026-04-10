@@ -542,19 +542,6 @@
       "description": "Apply wet deposition to all chemical species"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "chemistry_solver": "rosenbrock",
-      "transport_solver": "tvd_advection",
-      "timestep": 60.0,
-      "max_timestep": 300.0,
-      "tolerances": {
-        "relative": 1e-06,
-        "absolute": 1e-12
-      }
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

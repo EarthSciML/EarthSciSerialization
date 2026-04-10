@@ -399,8 +399,7 @@ function add_coupling(file::EsmFile, entry::CouplingEntry)::EsmFile
         data_loaders=file.data_loaders,
         operators=file.operators,
         coupling=new_coupling,
-        domain=file.domain,
-        solver=file.solver
+        domain=file.domain
     )
 end
 
@@ -426,8 +425,7 @@ function remove_coupling(file::EsmFile, index::Int)::EsmFile
         data_loaders=file.data_loaders,
         operators=file.operators,
         coupling=new_coupling,
-        domain=file.domain,
-        solver=file.solver
+        domain=file.domain
     )
 end
 
@@ -484,7 +482,6 @@ function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
 
     # Merge other fields (file_b takes precedence)
     merged_domain = file_b.domain !== nothing ? file_b.domain : file_a.domain
-    merged_solver = file_b.solver !== nothing ? file_b.solver : file_a.solver
     merged_metadata = file_b.metadata
 
     return EsmFile(
@@ -495,8 +492,7 @@ function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
         data_loaders=merged_data_loaders,
         operators=merged_operators,
         coupling=merged_coupling,
-        domain=merged_domain,
-        solver=merged_solver
+        domain=merged_domain
     )
 end
 
@@ -569,7 +565,6 @@ function extract(file::EsmFile, component_name::String)::EsmFile
         data_loaders=extracted_data_loaders,
         operators=extracted_operators,
         coupling=relevant_coupling,
-        domain=file.domain,
-        solver=file.solver
+        domain=file.domain
     )
 end

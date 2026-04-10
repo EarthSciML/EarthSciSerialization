@@ -37,8 +37,6 @@ include("units.jl")
 include("edit.jl")
 # Code generation
 include("codegen.jl")
-# Solver optimization
-include("solver_optimization.jl")
 # Migration functionality
 include("migration.jl")
 
@@ -62,22 +60,7 @@ export
     # Coupled system
     MockCoupledSystem,
     # System types
-    Domain, Interface, Solver, Reference, Metadata, EsmFile,
-    # Solver types and enums
-    SolverStrategy, StrangThreads, StrangSerial, IMEX,
-    NumericalMethod, FiniteDifferenceMethod, FiniteElementMethod, FiniteVolumeMethod,
-    SolverConfiguration,
-    # Solver utility functions
-    parse_solver_strategy, solver_strategy_to_string,
-    parse_numerical_method, numerical_method_to_string,
-    validate_solver_compatibility, get_recommended_algorithms, create_solver_with_method,
-    # Solver optimization types and functions
-    PerformanceMetrics, ProblemCharacteristics, OptimizationStrategy,
-    GridSearchStrategy, AdaptiveStrategy, SolverOptimizer,
-    set_problem_characteristics!, record_performance!, get_best_configuration,
-    suggest_next_configuration, create_auto_tuning_optimizer, auto_tune_solver,
-    # Serialization functions for solver (internal)
-    serialize_solver, serialize_solver_configuration, coerce_solver, coerce_solver_configuration,
+    Domain, Interface, Reference, Metadata, EsmFile,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
     # Coupling serialization functions

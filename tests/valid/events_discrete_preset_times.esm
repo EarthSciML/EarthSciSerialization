@@ -901,15 +901,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "base_algorithm": "Tsit5",
-      "event_detection": "precise_callbacks",
-      "adaptive": true,
-      "preset_time_tolerance": 1e-10
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

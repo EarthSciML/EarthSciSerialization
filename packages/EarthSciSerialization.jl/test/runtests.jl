@@ -15,8 +15,6 @@ using JSON3
     include("mtk_catalyst_test.jl")
     include("real_mtk_integration_test.jl")
     include("reference_resolution_test.jl")
-    include("solver_test.jl")
-    include("solver_optimization_test.jl")
     include("test_codegen.jl")
 
     # Comprehensive test suite for full verification
@@ -344,13 +342,6 @@ using JSON3
         domain = Domain(spatial=Dict("x" => [0.0, 1.0]), temporal=Dict("t" => [0.0, 100.0]))
         @test domain.spatial isa Dict
         @test domain.temporal isa Dict
-
-        # Test Solver (new format)
-        solver = Solver("imex", stiff_algorithm="Tsit5")
-        solver.config.stiff_kwargs["rtol"] = 1e-8
-        @test solver.strategy == IMEX
-        @test solver.config.stiff_algorithm == "Tsit5"
-        @test solver.config.stiff_kwargs["rtol"] == 1e-8
 
         # Test EsmFile
         esm_file = EsmFile("0.1.0", metadata)

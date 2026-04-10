@@ -98,15 +98,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "algorithm": "Rodas4P",
-      "rtol": 1e-06,
-      "atol": 1e-09,
-      "max_iters": 10000
-    }
-  },
   "domains": {
     "default": {
       "temporal": {},

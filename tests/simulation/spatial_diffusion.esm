@@ -59,15 +59,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "spatial_discretization": "finite_difference_2nd_order",
-      "time_algorithm": "CVODE_BDF",
-      "rtol": 1e-06,
-      "atol": 1e-08
-    }
-  },
   "domains": {
     "default": {
       "spatial": {

@@ -951,15 +951,6 @@
       "description": "Complex cross-system discrete event with compound conditions"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 1e-06,
-      "abstol": 1e-12,
-      "reltol": 1e-09
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

@@ -77,7 +77,7 @@ pub use substitute::{
 pub use types::{
     AffectEquation, ContinuousEvent, CouplingEntry, DataLoader, DiscreteEvent,
     DiscreteEventTrigger, Domain, Equation, EsmFile, Expr, ExpressionNode, FunctionalAffect,
-    Metadata, Model, ModelVariable, Operator, Reaction, ReactionSystem, Solver, Species,
+    Metadata, Model, ModelVariable, Operator, Reaction, ReactionSystem, Species,
     StoichiometricEntry, VariableType,
 };
 pub use validate::{

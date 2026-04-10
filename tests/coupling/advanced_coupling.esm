@@ -330,14 +330,6 @@
       "description": "Write diagnostic output every 10 minutes"
     }
   ],
-  "solver": {
-    "strategy": "imex",
-    "config": {
-      "stiff_algorithm": "CVODE_BDF",
-      "nonstiff_algorithm": "Euler",
-      "timestep": 60.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

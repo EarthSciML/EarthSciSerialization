@@ -436,16 +436,6 @@
       ]
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "base_algorithm": "Tsit5",
-      "event_detection": "root_finding",
-      "event_tolerance": 1e-10,
-      "adaptive": true,
-      "coupling_method": "operator_splitting"
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

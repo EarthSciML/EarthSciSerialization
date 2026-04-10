@@ -333,30 +333,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 4,
-      "stiff_algorithm": "QNDF",
-      "nonstiff_algorithm": "Vern7",
-      "timestep": 60.0,
-      "stiff_kwargs": {
-        "abstol": 1e-10,
-        "reltol": 1e-07,
-        "maxiters": 1000
-      },
-      "nonstiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-05
-      },
-      "adaptive_timestepping": {
-        "enabled": true,
-        "min_timestep": 1.0,
-        "max_timestep": 300.0,
-        "safety_factor": 0.9
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

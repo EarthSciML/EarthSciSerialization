@@ -228,7 +228,7 @@ def test_operator_field_requirements():
 
 
 def test_load_comprehensive_fields():
-    """Test loading ESM file with events, data_loaders, operators, coupling, and solver."""
+    """Test loading ESM file with events, data_loaders, operators, and coupling."""
     comprehensive_esm = {
         "esm": "0.1.0",
         "metadata": {"name": "Comprehensive Test"},
@@ -282,14 +282,7 @@ def test_load_comprehensive_fields():
                 "transform": "param_to_var",
                 "description": "Map temperature"
             }
-        ],
-        "solver": {
-            "strategy": "strang_threads",
-            "config": {
-                "timestep": 60.0,
-                "stiff_kwargs": {"abstol": 1e-8, "reltol": 1e-6}
-            }
-        }
+        ]
     }
 
     json_str = json.dumps(comprehensive_esm)
@@ -300,7 +293,6 @@ def test_load_comprehensive_fields():
     assert len(esm_file.data_loaders) == 1
     assert len(esm_file.operators) == 1
     assert len(esm_file.coupling) == 2
-    assert esm_file.solver is not None
 
     # Check events
     event_names = {event.name for event in esm_file.events}
@@ -321,9 +313,3 @@ def test_load_comprehensive_fields():
 
     # Check coupling
     assert len(esm_file.coupling) == 2
-
-    # Check solver
-    solver = esm_file.solver
-    assert solver.algorithm == "strang_threads"
-    assert "absolute" in solver.tolerances
-    assert "relative" in solver.tolerances

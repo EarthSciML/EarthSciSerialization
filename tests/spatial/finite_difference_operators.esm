@@ -367,20 +367,6 @@
       "equations": []
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 4,
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 60.0,
-      "stiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-06
-      },
-      "spatial_discretization": "finite_difference",
-      "upwind_bias": 0.1
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",

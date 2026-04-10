@@ -948,7 +948,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let graph = component_graph(&esm_file);
@@ -1002,7 +1001,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let graph = component_graph(&esm_file);
@@ -1051,7 +1049,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         assert!(component_exists(&esm_file, "test_model"));
@@ -1104,7 +1101,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         assert_eq!(
@@ -1245,7 +1241,6 @@ mod tests {
             operators: None,
             coupling: Some(coupling_entries),
             domain: None,
-            solver: None,
         };
 
         let graph = component_graph(&esm_file);

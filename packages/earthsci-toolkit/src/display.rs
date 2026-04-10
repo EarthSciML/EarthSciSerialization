@@ -2040,37 +2040,6 @@ impl fmt::Display for EsmFile {
             }
         }
 
-        // Display solver information
-        if let Some(ref solver) = self.solver {
-            write!(f, "  Solver: {}", solver.strategy)?;
-
-            // Add additional config if available
-            if let Some(ref config) = solver.config {
-                if let Ok(pretty) = serde_json::to_string_pretty(config) {
-                    // Try to extract common fields if it's an object
-                    if let Ok(obj) = serde_json::from_value::<
-                        serde_json::Map<String, serde_json::Value>,
-                    >(config.clone())
-                    {
-                        let mut details = Vec::new();
-                        if let Some(method) = obj.get("method") {
-                            if let Some(method_str) = method.as_str() {
-                                details.push(method_str.to_string());
-                            }
-                        }
-                        if let Some(dt) = obj.get("dt") {
-                            if let Some(dt_num) = dt.as_f64() {
-                                details.push(format!("dt={}", dt_num));
-                            }
-                        }
-                        if !details.is_empty() {
-                            write!(f, " ({})", details.join(", "))?;
-                        }
-                    }
-                }
-            }
-            writeln!(f)?;
-        }
 
         Ok(())
     }
@@ -2262,7 +2231,6 @@ mod tests {
             data_loaders: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         // Test the display output

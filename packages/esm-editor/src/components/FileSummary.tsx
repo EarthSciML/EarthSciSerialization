@@ -426,43 +426,6 @@ export const FileSummary: Component<FileSummaryProps> = (props) => {
             </div>
           </Show>
 
-          {/* Solver Summary */}
-          <Show when={props.esmFile.solver}>
-            <div class="summary-section">
-              <h4
-                class="section-title clickable-section"
-                onClick={() => handleSectionClick('solver')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleSectionClick('solver');
-                  }
-                }}
-              >
-                Solver Configuration →
-              </h4>
-              <div class="section-content">
-                <div class="info-item">
-                  <strong>Type:</strong> {props.esmFile.solver!.type || 'Not specified'}
-                </div>
-                <Show when={props.esmFile.solver!.tolerances}>
-                  <div class="info-item">
-                    <strong>Tolerances:</strong>
-                    {props.esmFile.solver!.tolerances!.absolute && ` Absolute: ${props.esmFile.solver!.tolerances!.absolute}`}
-                    {props.esmFile.solver!.tolerances!.relative && ` Relative: ${props.esmFile.solver!.tolerances!.relative}`}
-                  </div>
-                </Show>
-                <Show when={props.esmFile.solver!.max_steps}>
-                  <div class="info-item">
-                    <strong>Max Steps:</strong> {props.esmFile.solver!.max_steps}
-                  </div>
-                </Show>
-              </div>
-            </div>
-          </Show>
-
           {/* Empty state message */}
           <Show when={modelCount() === 0 && reactionSystemCount() === 0 && dataLoaderCount() === 0 && couplingCount() === 0}>
             <div class="empty-state">

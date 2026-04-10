@@ -753,11 +753,6 @@ function Base.show(io::IO, esm_file::EsmFile)
         println(io, "Components: $(join(components, ", "))")
     end
 
-    if !isnothing(esm_file.solver)
-        strategy_str = solver_strategy_to_string(esm_file.solver.strategy)
-        println(io, "Solver: $strategy_str")
-    end
-
     if !isnothing(esm_file.domain)
         println(io, "Domain: configured")
     end

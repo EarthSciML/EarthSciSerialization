@@ -75,12 +75,6 @@ def to_julia_code(file: Dict[str, Any]) -> str:
             lines.extend(_generate_domain_comment(domain_data))
         lines.append("")
 
-    # Generate solver as TODO comment
-    if file.get('solver'):
-        lines.append("# Solver (TODO)")
-        lines.extend(_generate_solver_comment(file['solver']))
-        lines.append("")
-
     # Generate data loaders as TODO comments
     if file.get('data_loaders'):
         lines.append("# Data Loaders (TODO)")
@@ -153,11 +147,6 @@ def to_python_code(file: Dict[str, Any]) -> str:
         for domain_name, domain_data in file['domains'].items():
             lines.append(f"# Domain '{domain_name}' (TODO)")
             lines.extend(_generate_python_domain_comment(domain_data))
-        lines.append("")
-
-    if file.get('solver'):
-        lines.append("# Solver (TODO)")
-        lines.extend(_generate_python_solver_comment(file['solver']))
         lines.append("")
 
     return "\n".join(lines)
@@ -276,14 +265,6 @@ def _generate_domain_comment(domain: Dict[str, Any]) -> List[str]:
     if domain.get('spatial', {}).get('coordinates'):
         coords = domain['spatial']['coordinates']
         lines.append(f"#   Spatial coordinates: {', '.join(coords)}")
-    return lines
-
-
-def _generate_solver_comment(solver: Dict[str, Any]) -> List[str]:
-    lines = []
-    lines.append("# TODO: Implement solver")
-    if solver.get('strategy'):
-        lines.append(f"#   Strategy: {solver['strategy']}")
     return lines
 
 
@@ -569,14 +550,6 @@ def _generate_python_domain_comment(domain: Dict[str, Any]) -> List[str]:
     if domain.get('spatial', {}).get('coordinates'):
         coords = domain['spatial']['coordinates']
         lines.append(f"#   Spatial coordinates: {', '.join(coords)}")
-    return lines
-
-
-def _generate_python_solver_comment(solver: Dict[str, Any]) -> List[str]:
-    lines = []
-    lines.append("# TODO: Implement solver")
-    if solver.get('strategy'):
-        lines.append(f"#   Strategy: {solver['strategy']}")
     return lines
 
 

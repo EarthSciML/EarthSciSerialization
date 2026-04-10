@@ -1581,7 +1581,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -1644,7 +1643,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -1730,7 +1728,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -1770,7 +1767,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -1830,7 +1826,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -1936,7 +1931,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -2085,7 +2079,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -2173,7 +2166,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -2260,7 +2252,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -2339,7 +2330,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         let result = validate(&esm_file);
@@ -2386,7 +2376,6 @@ mod tests {
             operators: None,
             coupling: None,
             domain: None,
-            solver: None,
         };
 
         // JSON that should fail schema validation (has invalid variable type)

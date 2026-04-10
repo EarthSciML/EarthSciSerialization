@@ -566,15 +566,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "imex",
-    "config": {
-      "algorithm": "Tsit5",
-      "adaptive": true,
-      "reltol": 1e-06,
-      "abstol": 1e-08
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

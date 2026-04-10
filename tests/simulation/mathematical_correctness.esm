@@ -445,16 +445,6 @@
       ]
     }
   },
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "stiff_algorithm": "Rosenbrock23",
-      "nonstiff_algorithm": "Tsit5",
-      "timestep": 0.001,
-      "abstol": 1e-08,
-      "reltol": 1e-06
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

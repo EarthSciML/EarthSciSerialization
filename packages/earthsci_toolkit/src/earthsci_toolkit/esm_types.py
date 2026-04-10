@@ -370,25 +370,6 @@ class Domain:
     boundaries: Dict[str, Any] = field(default_factory=dict)
 
 
-class SolverType(Enum):
-    """Types of numerical solvers."""
-    ODE = "ode"
-    PDE = "pde"
-    ALGEBRAIC = "algebraic"
-    STOCHASTIC = "stochastic"
-    HYBRID = "hybrid"
-
-
-@dataclass
-class Solver:
-    """Numerical solver configuration."""
-    name: str
-    type: SolverType
-    algorithm: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    tolerances: Dict[str, float] = field(default_factory=dict)
-
-
 # ========================================
 # 6. Metadata and File Structure
 # ========================================
@@ -435,7 +416,6 @@ class EsmFile:
     operators: List[Operator] = field(default_factory=list)
     coupling: List[CouplingEntry] = field(default_factory=list)
     domains: Dict[str, Domain] = field(default_factory=dict)
-    solver: Optional[Solver] = None
 
     @property
     def esm(self) -> str:

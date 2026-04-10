@@ -493,13 +493,6 @@ func TestModelSummary(t *testing.T) {
 				},
 			},
 		},
-		Solver: &Solver{
-			Strategy: "strang_threads",
-			Config: map[string]interface{}{
-				"stiff_algorithm": "Rosenbrock23",
-				"timestep":        1.0,
-			},
-		},
 	}
 
 	result := ModelSummary(esm)

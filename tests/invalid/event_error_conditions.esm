@@ -3,33 +3,77 @@
   "metadata": {
     "name": "EventErrorConditions",
     "description": "Invalid event configurations for testing error handling",
-    "authors": ["Test Suite"],
+    "authors": [
+      "Test Suite"
+    ],
     "created": "2026-02-14T00:00:00Z"
   },
-
   "models": {
     "ErrorTestModel": {
       "variables": {
-        "x": { "type": "state", "units": "m", "default": 1.0, "description": "State variable" },
-        "y": { "type": "state", "units": "m", "default": 2.0, "description": "Another state variable" },
-        "valid_param": { "type": "parameter", "units": "1", "default": 1.0, "description": "Valid parameter" }
+        "x": {
+          "type": "state",
+          "units": "m",
+          "default": 1.0,
+          "description": "State variable"
+        },
+        "y": {
+          "type": "state",
+          "units": "m",
+          "default": 2.0,
+          "description": "Another state variable"
+        },
+        "valid_param": {
+          "type": "parameter",
+          "units": "1",
+          "default": 1.0,
+          "description": "Valid parameter"
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
-          "rhs": { "op": "*", "args": ["valid_param", "x"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "valid_param",
+              "x"
+            ]
+          }
         },
         {
-          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
-          "rhs": { "op": "-", "args": ["y"] }
+          "lhs": {
+            "op": "D",
+            "args": [
+              "y"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "-",
+            "args": [
+              "y"
+            ]
+          }
         }
       ],
-
       "continuous_events": [
         {
           "name": "undefined_variable_in_condition",
           "conditions": [
-            { "op": "-", "args": ["undefined_variable", 0.5] }
+            {
+              "op": "-",
+              "args": [
+                "undefined_variable",
+                0.5
+              ]
+            }
           ],
           "affects": [
             {
@@ -42,12 +86,23 @@
         {
           "name": "undefined_variable_in_affect",
           "conditions": [
-            { "op": "-", "args": ["x", 0.5] }
+            {
+              "op": "-",
+              "args": [
+                "x",
+                0.5
+              ]
+            }
           ],
           "affects": [
             {
               "lhs": "undefined_target",
-              "rhs": { "op": "Pre", "args": ["x"] }
+              "rhs": {
+                "op": "Pre",
+                "args": [
+                  "x"
+                ]
+              }
             }
           ],
           "description": "ERROR: Affect targets undefined variable 'undefined_target'"
@@ -55,7 +110,18 @@
         {
           "name": "invalid_pre_in_condition",
           "conditions": [
-            { "op": "-", "args": [{ "op": "Pre", "args": ["x"] }, 0.5] }
+            {
+              "op": "-",
+              "args": [
+                {
+                  "op": "Pre",
+                  "args": [
+                    "x"
+                  ]
+                },
+                0.5
+              ]
+            }
           ],
           "affects": [
             {
@@ -68,7 +134,13 @@
         {
           "name": "parameter_not_declared_discrete",
           "conditions": [
-            { "op": "-", "args": ["y", 1.0] }
+            {
+              "op": "-",
+              "args": [
+                "y",
+                1.0
+              ]
+            }
           ],
           "affects": [
             {
@@ -79,13 +151,18 @@
           "description": "ERROR: Modifies parameter 'valid_param' but not declared in discrete_parameters"
         }
       ],
-
       "discrete_events": [
         {
           "name": "conflicting_discrete_parameters",
           "trigger": {
             "type": "condition",
-            "expression": { "op": ">", "args": ["x", 5.0] }
+            "expression": {
+              "op": ">",
+              "args": [
+                "x",
+                5.0
+              ]
+            }
           },
           "affects": [
             {
@@ -93,14 +170,23 @@
               "rhs": 1.0
             }
           ],
-          "discrete_parameters": ["valid_param", "nonexistent_param"],
+          "discrete_parameters": [
+            "valid_param",
+            "nonexistent_param"
+          ],
           "description": "ERROR: discrete_parameters includes undeclared 'nonexistent_param'"
         },
         {
           "name": "invalid_trigger_type",
           "trigger": {
             "type": "invalid_trigger_type",
-            "expression": { "op": ">", "args": ["y", 3.0] }
+            "expression": {
+              "op": ">",
+              "args": [
+                "y",
+                3.0
+              ]
+            }
           },
           "affects": [
             {
@@ -145,9 +231,16 @@
           },
           "functional_affect": {
             "handler_id": "NonexistentHandler",
-            "read_vars": ["x", "undefined_variable"],
-            "read_params": ["valid_param"],
-            "modified_params": ["another_undefined_param"]
+            "read_vars": [
+              "x",
+              "undefined_variable"
+            ],
+            "read_params": [
+              "valid_param"
+            ],
+            "modified_params": [
+              "another_undefined_param"
+            ]
           },
           "description": "ERROR: Multiple issues - undefined variables in read_vars and modified_params"
         },
@@ -155,7 +248,13 @@
           "name": "both_affects_and_functional",
           "trigger": {
             "type": "condition",
-            "expression": { "op": "<", "args": ["x", 0.1] }
+            "expression": {
+              "op": "<",
+              "args": [
+                "x",
+                0.1
+              ]
+            }
           },
           "affects": [
             {
@@ -165,7 +264,9 @@
           ],
           "functional_affect": {
             "handler_id": "SomeHandler",
-            "read_vars": ["x"],
+            "read_vars": [
+              "x"
+            ],
             "read_params": [],
             "modified_params": []
           },
@@ -174,13 +275,18 @@
       ]
     }
   },
-
   "coupling": [
     {
       "type": "event",
       "event_type": "continuous",
       "conditions": [
-        { "op": "-", "args": ["ErrorTestModel.x", "NonexistentModel.some_variable"] }
+        {
+          "op": "-",
+          "args": [
+            "ErrorTestModel.x",
+            "NonexistentModel.some_variable"
+          ]
+        }
       ],
       "affects": [
         {
@@ -195,7 +301,13 @@
       "event_type": "discrete",
       "trigger": {
         "type": "condition",
-        "expression": { "op": ">", "args": ["ErrorTestModel.x", 10.0] }
+        "expression": {
+          "op": ">",
+          "args": [
+            "ErrorTestModel.x",
+            10.0
+          ]
+        }
       },
       "affects": [
         {
@@ -206,13 +318,10 @@
       "description": "ERROR: Cross-system event modifies parameter but missing discrete_parameters declaration"
     }
   ],
-
   "domain": {
-    "temporal": { "start": "2024-01-01T00:00:00Z", "end": "2024-01-01T00:01:00Z" }
-  },
-
-  "solver": {
-    "strategy": "strang_threads",
-    "config": { "timestep": 0.01 }
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T00:01:00Z"
+    }
   }
 }

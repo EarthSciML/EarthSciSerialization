@@ -229,12 +229,6 @@
       "description": "Map wind data to chemistry model"
     }
   ],
-  "solver": {
-    "strategy": "strang_serial",
-    "config": {
-      "timestep": 300.0
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

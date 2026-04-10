@@ -134,12 +134,6 @@
       "description": "Cross-system control using functional affect"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "timestep": 0.1
-    }
-  },
   "domains": {
     "default": {
       "temporal": {

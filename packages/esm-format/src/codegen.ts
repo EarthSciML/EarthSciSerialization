@@ -7,7 +7,7 @@
  * - Python: compatible with SymPy, earthsci_toolkit, and SciPy
  */
 
-import type { EsmFile, Model, ReactionSystem, Expression, ExpressionNode, Equation, ModelVariable, Species, Reaction, ContinuousEvent, DiscreteEvent, CouplingEntry, Domain, Solver, DataLoader } from './types.js'
+import type { EsmFile, Model, ReactionSystem, Expression, ExpressionNode, Equation, ModelVariable, Species, Reaction, ContinuousEvent, DiscreteEvent, CouplingEntry, Domain, DataLoader } from './types.js'
 import { toAscii } from './pretty-print.js'
 
 /**
@@ -78,13 +78,6 @@ export function toJuliaCode(file: EsmFile): string {
   if (file.domain) {
     lines.push('# Domain')
     lines.push(...generateDomainCode(file.domain))
-    lines.push('')
-  }
-
-  // Generate solver code
-  if (file.solver) {
-    lines.push('# Solver')
-    lines.push(...generateSolverCode(file.solver))
     lines.push('')
   }
 
@@ -209,7 +202,7 @@ export function toPythonCode(file: EsmFile): string {
   lines.push('# result = esm.simulate(tspan=tspan, parameters=parameters, initial_conditions=initial_conditions)')
   lines.push('')
 
-  // Generate coupling, domain, and solver code
+  // Generate coupling, domain, and data loader code
   if (file.coupling && file.coupling.length > 0) {
     lines.push('# Coupling')
     for (const coupling of file.coupling) {
@@ -221,12 +214,6 @@ export function toPythonCode(file: EsmFile): string {
   if (file.domain) {
     lines.push('# Domain')
     lines.push(...generatePythonDomainCode(file.domain))
-    lines.push('')
-  }
-
-  if (file.solver) {
-    lines.push('# Solver')
-    lines.push(...generatePythonSolverCode(file.solver))
     lines.push('')
   }
 
@@ -429,53 +416,6 @@ function generateDomainCode(domain: Domain): string[] {
     lines.push(`# Domain discretization`)
     for (const [dim, disc] of Object.entries(domain.discretization)) {
       lines.push(`${dim}_discretization = Discretization(${JSON.stringify(disc)})`)
-    }
-  }
-
-  return lines
-}
-
-/**
- * Generate solver code for Julia
- */
-function generateSolverCode(solver: Solver): string[] {
-  const lines: string[] = []
-
-  lines.push(`# Solver configuration`)
-
-  // Solver strategy mapping
-  const strategyMapping: { [key: string]: string } = {
-    'strang_threads': 'OperatorSplittingIntegrator',
-    'strang_serial': 'OperatorSplittingIntegrator',
-    'imex': 'IMEXIntegrator'
-  }
-
-  const juliaStrategy = strategyMapping[solver.strategy] || 'ODESolver'
-  lines.push(`solver_strategy = ${juliaStrategy}()`)
-
-  // Strategy-specific configuration
-  if (solver.config) {
-    lines.push(`# Solver configuration`)
-    for (const [key, value] of Object.entries(solver.config)) {
-      if (key === 'stiff_algorithm') {
-        lines.push(`alg = ${value}()`)
-      } else if (key === 'threads') {
-        lines.push(`set_threads(${value})`)
-      } else {
-        lines.push(`${key} = ${JSON.stringify(value)}`)
-      }
-    }
-  }
-
-  // Tolerances
-  if (solver.config?.tolerances) {
-    const tol = solver.config.tolerances as any
-    lines.push(`# Tolerance settings`)
-    if (tol.abstol) {
-      lines.push(`abstol = ${tol.abstol}`)
-    }
-    if (tol.reltol) {
-      lines.push(`reltol = ${tol.reltol}`)
     }
   }
 
@@ -959,50 +899,6 @@ function generatePythonDomainCode(domain: Domain): string[] {
     lines.push(`        end=${domain.temporal.end || '1.0'}`)
     lines.push(`    )`)
   }
-  lines.push(`)`)
-
-  return lines
-}
-
-/**
- * Generate solver code for Python
- */
-function generatePythonSolverCode(solver: Solver): string[] {
-  const lines: string[] = []
-
-  lines.push(`# Solver configuration`)
-
-  // Solver strategy mapping
-  const strategyMapping: { [key: string]: string } = {
-    'strang_threads': 'OperatorSplittingSolver',
-    'strang_serial': 'OperatorSplittingSolver',
-    'imex': 'IMEXSolver'
-  }
-
-  const pythonStrategy = strategyMapping[solver.strategy] || 'ODESolver'
-  lines.push(`solver = esm.${pythonStrategy}(`)
-
-  // Strategy-specific configuration
-  if (solver.config) {
-    const configItems = []
-    for (const [key, value] of Object.entries(solver.config)) {
-      if (key === 'stiff_algorithm') {
-        configItems.push(`    algorithm="${value}"`)
-      } else if (key === 'threads') {
-        configItems.push(`    threads=${value}`)
-      } else if (key === 'tolerances' && typeof value === 'object') {
-        const tol = value as any
-        if (tol.abstol) configItems.push(`    abstol=${tol.abstol}`)
-        if (tol.reltol) configItems.push(`    reltol=${tol.reltol}`)
-      } else {
-        configItems.push(`    ${key}=${JSON.stringify(value)}`)
-      }
-    }
-    if (configItems.length > 0) {
-      lines[lines.length - 1] += configItems.join(',\n')
-    }
-  }
-
   lines.push(`)`)
 
   return lines

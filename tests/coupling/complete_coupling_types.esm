@@ -700,18 +700,6 @@
       "description": "Reduce emissions on weekends (days 5-6 of week)"
     }
   ],
-  "solver": {
-    "strategy": "strang_threads",
-    "config": {
-      "threads": 4,
-      "stiff_algorithm": "Rosenbrock23",
-      "timestep": 300.0,
-      "stiff_kwargs": {
-        "abstol": 1e-08,
-        "reltol": 1e-06
-      }
-    }
-  },
   "domains": {
     "default": {
       "independent_variable": "t",
