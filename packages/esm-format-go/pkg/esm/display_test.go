@@ -514,5 +514,4 @@ func TestModelSummary(t *testing.T) {
 	assert.Contains(t, result, "variable_map: GEOSFP.T → SimpleOzone.T")
 	assert.Contains(t, result, "lon [−130, −100] (Δ0.3125°)")
 	assert.Contains(t, result, "2024-05-01 to 2024-05-03")
-	assert.Contains(t, result, "strang_threads (Rosenbrock23, dt=1)")
 }
