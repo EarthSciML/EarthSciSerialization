@@ -420,9 +420,8 @@ class TestFormatValidation:
     def test_invalid_datetime_format(self):
         """Test validation of invalid date-time format strings."""
         schema = _get_schema()
+        format_checker = jsonschema.FormatChecker()
 
-        # Note: Format validation depends on jsonschema configuration
-        # Test with obviously invalid datetime
         invalid_data = {
             "esm": "0.1.0",
             "metadata": {
@@ -431,14 +430,8 @@ class TestFormatValidation:
             },
             "models": {"test": {"variables": {}, "equations": []}}
         }
-        # Many jsonschema validators don't validate formats by default
-        # This test documents the expected behavior if format validation is enabled
-        try:
-            jsonschema.validate(invalid_data, schema)
-            # If no exception, format validation is not enabled
-            pytest.skip("Format validation not enabled in current jsonschema configuration")
-        except ValidationError as e:
-            assert "date-time" in str(e) or "format" in str(e)
+        with pytest.raises(ValidationError, match="date-time|format"):
+            jsonschema.validate(invalid_data, schema, format_checker=format_checker)
 
         # Test modified field as well
         invalid_data = {
@@ -449,15 +442,13 @@ class TestFormatValidation:
             },
             "models": {"test": {"variables": {}, "equations": []}}
         }
-        try:
-            jsonschema.validate(invalid_data, schema)
-            pytest.skip("Format validation not enabled in current jsonschema configuration")
-        except ValidationError as e:
-            assert "date-time" in str(e) or "format" in str(e)
+        with pytest.raises(ValidationError, match="date-time|format"):
+            jsonschema.validate(invalid_data, schema, format_checker=format_checker)
 
     def test_invalid_uri_format(self):
         """Test validation of invalid URI format strings."""
         schema = _get_schema()
+        format_checker = jsonschema.FormatChecker()
 
         invalid_data = {
             "esm": "0.1.0",
@@ -469,12 +460,8 @@ class TestFormatValidation:
             },
             "models": {"test": {"variables": {}, "equations": []}}
         }
-        # URI format validation may not be enabled by default
-        try:
-            jsonschema.validate(invalid_data, schema)
-            pytest.skip("URI format validation not enabled in current jsonschema configuration")
-        except ValidationError as e:
-            assert "uri" in str(e) or "format" in str(e)
+        with pytest.raises(ValidationError, match="uri|format"):
+            jsonschema.validate(invalid_data, schema, format_checker=format_checker)
 
 
 class TestConstraintValidation:

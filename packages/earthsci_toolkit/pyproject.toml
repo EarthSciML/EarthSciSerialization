@@ -56,6 +56,9 @@ dev = [
 test = [
     "pytest>=6.0",
     "pytest-cov>=3.0",
+    # Required for jsonschema FormatChecker to validate date-time and uri formats
+    "rfc3339-validator",
+    "rfc3986-validator",
 ]
 simulation = [
     "jupyter",
