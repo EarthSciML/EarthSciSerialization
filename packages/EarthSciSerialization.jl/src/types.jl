@@ -55,6 +55,18 @@ struct OpExpr <: Expr
         new(op, args, wrt, dim)
 end
 
+# Accept any AbstractVector of Expr-subtypes (e.g. Vector{VarExpr},
+# Vector{OpExpr}, mixed Any arrays) and widen to Vector{Expr}. This keeps
+# call sites terse — callers don't need to annotate `Expr[...]` when they
+# construct a homogeneous argument list.
+function OpExpr(op::String, args::AbstractVector; wrt=nothing, dim=nothing)
+    widened = Vector{Expr}(undef, length(args))
+    for (i, a) in enumerate(args)
+        widened[i] = a
+    end
+    return OpExpr(op, widened; wrt=wrt, dim=dim)
+end
+
 # ========================================
 # 2. Equation Types
 # ========================================
@@ -246,11 +258,31 @@ struct Model
           subsystems::Dict{String,Model}; domain=nothing) =
         new(variables, equations, discrete_events, continuous_events, subsystems, domain)
 
-    # Convenience constructor with optional events and subsystems
-    Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation};
-          discrete_events=DiscreteEvent[], continuous_events=ContinuousEvent[],
-          subsystems=Dict{String,Model}(), domain=nothing) =
-        new(variables, equations, discrete_events, continuous_events, subsystems, domain)
+    # Convenience constructor with optional events and subsystems.
+    # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
+    # it into discrete/continuous. `events` takes precedence over the typed
+    # `discrete_events`/`continuous_events` kwargs if both are supplied.
+    function Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation};
+                   discrete_events=DiscreteEvent[],
+                   continuous_events=ContinuousEvent[],
+                   events=nothing,
+                   subsystems=Dict{String,Model}(),
+                   domain=nothing)
+        if events !== nothing
+            discrete_events = DiscreteEvent[]
+            continuous_events = ContinuousEvent[]
+            for event in events
+                if event isa DiscreteEvent
+                    push!(discrete_events, event)
+                elseif event isa ContinuousEvent
+                    push!(continuous_events, event)
+                else
+                    error("Unknown event type: $(typeof(event))")
+                end
+            end
+        end
+        return new(variables, equations, discrete_events, continuous_events, subsystems, domain)
+    end
 end
 
 """
@@ -463,6 +495,15 @@ struct DataLoader
                spatial_resolution=nothing,
                interpolation=nothing) =
         new(type, loader_id, config, reference, provides, temporal_resolution, spatial_resolution, interpolation)
+
+    # Convenience overload that accepts any AbstractDict and widens the value
+    # type to Any — tests/library consumers frequently build Dict{String,String}
+    # or similar homogeneous dicts.
+    DataLoader(type::String, loader_id::String, provides::AbstractDict;
+               kwargs...) =
+        DataLoader(type, loader_id,
+                   Dict{String,Any}(string(k) => v for (k, v) in provides);
+                   kwargs...)
 end
 
 """

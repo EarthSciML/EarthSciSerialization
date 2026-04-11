@@ -72,23 +72,82 @@ function parse_model_variable_type(data::String)::ModelVariableType
 end
 
 """
-    parse_trigger(data::Dict) -> DiscreteEventTrigger
+    parse_trigger(data) -> DiscreteEventTrigger
 
-Parse JSON data into a DiscreteEventTrigger based on discriminator fields.
+Parse JSON data into a DiscreteEventTrigger based on the schema discriminator.
+
+Accepts Dict or JSON3.Object. Uses the "type" field (preferred, per current schema)
+with fallback to field-based discrimination for backward compatibility.
+
+Schema-defined variants:
+- {"type": "condition", "expression": ...} -> ConditionTrigger
+- {"type": "periodic", "interval": ..., "initial_offset": ...} -> PeriodicTrigger
+- {"type": "preset_times", "times": [...]} -> PresetTimesTrigger
 """
-function parse_trigger(data::Dict)::DiscreteEventTrigger
-    if haskey(data, "expression")
-        return ConditionTrigger(parse_expression(data["expression"]))
-    elseif haskey(data, "period")
-        period = Float64(data["period"])
-        phase = get(data, "phase", 0.0)
+function parse_trigger(data)::DiscreteEventTrigger
+    trigger_type = _get_field(data, :type, nothing)
+    trigger_type_str = trigger_type === nothing ? nothing : string(trigger_type)
+
+    if trigger_type_str == "condition" || (trigger_type_str === nothing && _has_field(data, :expression))
+        expression = _get_field(data, :expression, nothing)
+        if expression === nothing
+            throw(ParseError("Condition trigger requires 'expression' field"))
+        end
+        return ConditionTrigger(parse_expression(expression))
+    elseif trigger_type_str == "periodic" || (trigger_type_str === nothing && (_has_field(data, :interval) || _has_field(data, :period)))
+        interval_val = _get_field(data, :interval, nothing)
+        if interval_val === nothing
+            interval_val = _get_field(data, :period, nothing)
+        end
+        if interval_val === nothing
+            throw(ParseError("Periodic trigger requires 'interval' field"))
+        end
+        period = Float64(interval_val)
+        phase_val = _get_field(data, :initial_offset, nothing)
+        if phase_val === nothing
+            phase_val = _get_field(data, :phase, 0.0)
+        end
+        phase = Float64(phase_val)
         return PeriodicTrigger(period, phase=phase)
-    elseif haskey(data, "times")
-        times = [Float64(t) for t in data["times"]]
+    elseif trigger_type_str == "preset_times" || (trigger_type_str === nothing && _has_field(data, :times))
+        times_val = _get_field(data, :times, nothing)
+        if times_val === nothing
+            throw(ParseError("Preset times trigger requires 'times' field"))
+        end
+        times = [Float64(t) for t in times_val]
         return PresetTimesTrigger(times)
     else
-        throw(ParseError("Invalid DiscreteEventTrigger: no recognized discriminator field"))
+        throw(ParseError("Invalid DiscreteEventTrigger: unknown type '$(trigger_type_str)' and no recognized discriminator field"))
     end
+end
+
+# Field access helpers that work uniformly across Dict and JSON3.Object.
+# JSON3.Object haskey only works with Symbol keys; Dict haskey works with either.
+function _has_field(data, key::Symbol)
+    try
+        return haskey(data, key)
+    catch
+        try
+            return haskey(data, string(key))
+        catch
+            return false
+        end
+    end
+end
+
+function _get_field(data, key::Symbol, default)
+    if _has_field(data, key)
+        try
+            return data[key]
+        catch
+            try
+                return data[string(key)]
+            catch
+                return default
+            end
+        end
+    end
+    return default
 end
 
 """
@@ -265,18 +324,10 @@ end
 Coerce JSON data into EventType (ContinuousEvent or DiscreteEvent).
 """
 function coerce_event(data::Any)::EventType
-    if haskey(data, :conditions)
-        # ContinuousEvent
-        conditions = [parse_expression(c) for c in data.conditions]
-        affects = [coerce_affect_equation(a) for a in data.affects]
-        description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
-        return ContinuousEvent(conditions, affects, description=description)
-    elseif haskey(data, :trigger)
-        # DiscreteEvent
-        trigger = parse_trigger(data.trigger)
-        affects = [coerce_functional_affect(a) for a in data.affects]
-        description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
-        return DiscreteEvent(trigger, affects, description=description)
+    if _has_field(data, :conditions)
+        return coerce_continuous_event(data)
+    elseif _has_field(data, :trigger)
+        return coerce_discrete_event(data)
     else
         throw(ParseError("Invalid EventType: missing 'conditions' or 'trigger' field"))
     end
@@ -286,31 +337,86 @@ end
     coerce_discrete_event(data::Any) -> DiscreteEvent
 
 Coerce JSON data specifically into DiscreteEvent.
+
+Schema: DiscreteEvent must have a trigger, and either 'affects' (array of
+AffectEquation) or 'functional_affect' (a registered handler). The Julia
+DiscreteEvent type stores affects as a Vector{FunctionalAffect} where each
+FunctionalAffect represents an assignment (target, expression, operation).
+Schema AffectEquation entries {lhs, rhs} are converted to that form with
+operation="set". The schema's 'functional_affect' (handler_id + metadata) is
+currently collapsed to an empty affects list — the handler cannot be executed
+symbolically, but parsing does not fail.
 """
 function coerce_discrete_event(data::Any)::DiscreteEvent
-    if !haskey(data, :trigger)
+    if !_has_field(data, :trigger)
         throw(ParseError("DiscreteEvent requires 'trigger' field"))
     end
 
-    trigger = parse_trigger(data.trigger)
-    affects = [coerce_functional_affect(a) for a in data.affects]
-    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    trigger = parse_trigger(_get_field(data, :trigger, nothing))
+
+    affects = FunctionalAffect[]
+    if _has_field(data, :affects)
+        raw_affects = _get_field(data, :affects, [])
+        for a in raw_affects
+            push!(affects, _affect_equation_to_functional_affect(a))
+        end
+    end
+
+    # Schema functional_affect is a registered handler descriptor; preserve
+    # whatever we can so display/serialization doesn't choke.
+    if isempty(affects) && _has_field(data, :functional_affect)
+        fa = _get_field(data, :functional_affect, nothing)
+        if fa !== nothing
+            handler_id = _has_field(fa, :handler_id) ? string(_get_field(fa, :handler_id, "")) : "handler"
+            push!(affects, FunctionalAffect(handler_id, NumExpr(0.0), operation="handler"))
+        end
+    end
+
+    description = nothing
+    if _has_field(data, :description)
+        desc_val = _get_field(data, :description, nothing)
+        description = desc_val === nothing ? nothing : string(desc_val)
+    end
     return DiscreteEvent(trigger, affects, description=description)
+end
+
+# Convert a schema AffectEquation JSON object ({lhs, rhs}) into the Julia
+# internal FunctionalAffect representation (target, expression, operation).
+function _affect_equation_to_functional_affect(data)::FunctionalAffect
+    if !_has_field(data, :lhs) || !_has_field(data, :rhs)
+        throw(ParseError("AffectEquation requires 'lhs' and 'rhs' fields"))
+    end
+    target = string(_get_field(data, :lhs, ""))
+    expression = parse_expression(_get_field(data, :rhs, nothing))
+    return FunctionalAffect(target, expression, operation="set")
 end
 
 """
     coerce_continuous_event(data::Any) -> ContinuousEvent
 
 Coerce JSON data specifically into ContinuousEvent.
+
+Handles optional schema fields (affect_neg, root_find, name, discrete_parameters)
+by ignoring them — the current Julia ContinuousEvent type does not model them,
+but their presence must not cause load to fail.
 """
 function coerce_continuous_event(data::Any)::ContinuousEvent
-    if !haskey(data, :conditions)
+    if !_has_field(data, :conditions)
         throw(ParseError("ContinuousEvent requires 'conditions' field"))
     end
 
-    conditions = [parse_expression(c) for c in data.conditions]
-    affects = [coerce_affect_equation(a) for a in data.affects]
-    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    raw_conditions = _get_field(data, :conditions, [])
+    conditions = Expr[parse_expression(c) for c in raw_conditions]
+
+    raw_affects = _has_field(data, :affects) ? _get_field(data, :affects, []) : []
+    affects = AffectEquation[coerce_affect_equation(a) for a in raw_affects]
+
+    description = nothing
+    if _has_field(data, :description)
+        desc_val = _get_field(data, :description, nothing)
+        description = desc_val === nothing ? nothing : string(desc_val)
+    end
+
     return ContinuousEvent(conditions, affects, description=description)
 end
 
@@ -527,7 +633,10 @@ function coerce_couple(data::AbstractDict)::CouplingCouple
     end
 
     systems = Vector{String}(data["systems"])
-    connector = Dict{String,Any}(data["connector"])
+    # JSON3.Object keys are Symbols — convert to String explicitly so the
+    # Dict{String,Any} constructor doesn't choke on Symbol→String conversion.
+    connector_raw = data["connector"]
+    connector = Dict{String,Any}(string(k) => v for (k, v) in pairs(connector_raw))
     description = get(data, "description", nothing)
     interface = get(data, "interface", nothing)
     if interface !== nothing
@@ -601,9 +710,12 @@ function coerce_callback(data::AbstractDict)::CouplingCallback
     end
 
     callback_id = String(data["callback_id"])
-    config = get(data, "config", nothing)
-    if config !== nothing
-        config = Dict{String,Any}(config)
+    config_raw = get(data, "config", nothing)
+    config = if config_raw === nothing
+        nothing
+    else
+        # JSON3.Object keys are Symbols; stringify explicitly.
+        Dict{String,Any}(string(k) => v for (k, v) in pairs(config_raw))
     end
     description = get(data, "description", nothing)
 

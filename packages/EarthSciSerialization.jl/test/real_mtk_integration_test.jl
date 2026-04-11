@@ -28,8 +28,10 @@ using EarthSciSerialization
 
         model = Model(vars, [eq])
 
-        # Test that real MTK system is created when MTK is available
-        mtk_sys = to_mtk_system(model, "RealMTKTest")
+        # Call the real-MTK helper directly. `to_mtk_system` returns a
+        # MockMTKSystem by default because most of the suite is written
+        # against the mock API; this test drives the real path explicitly.
+        mtk_sys = EarthSciSerialization.create_real_mtk_system(model, "RealMTKTest", false)
 
         # This should NOT be a MockMTKSystem when MTK is available
         @test !(mtk_sys isa EarthSciSerialization.MockMTKSystem)
@@ -66,7 +68,7 @@ using EarthSciSerialization
         )
 
         model = Model(vars, [eq])
-        mtk_sys = to_mtk_system(model, "ObservedTest")
+        mtk_sys = EarthSciSerialization.create_real_mtk_system(model, "ObservedTest", false)
 
         @test !(mtk_sys isa EarthSciSerialization.MockMTKSystem)
         @info "✅ Real MTK system with observed variables created successfully"
@@ -97,7 +99,7 @@ using EarthSciSerialization
         event = DiscreteEvent(trigger, [affect])
 
         model = Model(vars, [eq]; events=EventType[event])
-        mtk_sys = to_mtk_system(model, "EventTest")
+        mtk_sys = EarthSciSerialization.create_real_mtk_system(model, "EventTest", false)
 
         @test !(mtk_sys isa EarthSciSerialization.MockMTKSystem)
         @info "✅ Real MTK system with events created successfully"

@@ -152,22 +152,25 @@ function stoichiometric_matrix(rxn_sys::ReactionSystem)::Matrix{Int}
     S = zeros(Int, n_species, n_reactions)
 
     for (j, reaction) in enumerate(rxn_sys.reactions)
-        # Handle substrates (negative stoichiometry)
-        if reaction.substrates !== nothing
-            for entry in reaction.substrates
-                if haskey(species_idx, entry.first)
-                    i = species_idx[entry.first]
-                    S[i, j] -= entry.second
+        # Use getfield to bypass the backward-compat getproperty overrides that
+        # would convert :products into a Dict of Pairs — StoichiometryEntry has
+        # .species/.stoichiometry and does not match the Pair API.
+        substrates = getfield(reaction, :substrates)
+        if substrates !== nothing
+            for entry in substrates
+                if haskey(species_idx, entry.species)
+                    i = species_idx[entry.species]
+                    S[i, j] -= entry.stoichiometry
                 end
             end
         end
 
-        # Handle products (positive stoichiometry)
-        if reaction.products !== nothing
-            for entry in reaction.products
-                if haskey(species_idx, entry.first)
-                    i = species_idx[entry.first]
-                    S[i, j] += entry.second
+        products = getfield(reaction, :products)
+        if products !== nothing
+            for entry in products
+                if haskey(species_idx, entry.species)
+                    i = species_idx[entry.species]
+                    S[i, j] += entry.stoichiometry
                 end
             end
         end
