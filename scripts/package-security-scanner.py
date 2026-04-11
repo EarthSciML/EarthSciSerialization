@@ -543,8 +543,9 @@ class PackageVerifier:
             'EarthSciSerialization.jl': 'julia',
             'earthsci_toolkit': 'python',
             'earthsci-toolkit': 'npm',
+            'earthsci-toolkit-rs': 'rust',
             'esm-editor': 'npm',
-            'earthsci-toolkit': 'rust'
+            # 'esm-format-go': 'go',  # TODO: scanner lacks _scan_go_package; add when Go support lands
         }
 
         for package_name, package_type in package_mapping.items():
