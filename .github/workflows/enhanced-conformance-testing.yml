@@ -22,7 +22,6 @@ on:
         required: false
         default: 'true'
         type: boolean
-        type: boolean
 
 env:
   # Consistent versions across jobs
