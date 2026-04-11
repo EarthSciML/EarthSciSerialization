@@ -542,6 +542,201 @@ function _collect_reaction_species!(acc::Set{String}, rsys::ReactionSystem, pref
 end
 
 # ========================================
+# Hybrid-flattening preflight checks (§4.7.6)
+# ========================================
+
+const _SUPPORTED_REGRIDDING_METHODS = Set{String}(["identity"])
+
+"""
+Validate that every declared `Interface` names a dimension mapping and
+regridding strategy that the Julia flatten pipeline actually implements.
+
+§4.7.6 defines five canonical mapping types: `broadcast`, `identity`, `slice`,
+`project`, `regrid`. The Julia library's flatten pipeline currently wires only
+`broadcast` and `identity` (the Core-tier minimum). Interfaces that declare
+`slice` or `project` raise `DimensionPromotionError`; interfaces that declare
+a regridding method outside the supported set raise `UnsupportedRegriddingError`.
+"""
+function _check_interfaces!(file::EsmFile)
+    file.interfaces === nothing && return
+    for (iface_name, iface) in file.interfaces
+        dm = iface.dimension_mapping
+        dm_type = get(dm, "type", nothing)
+        if dm_type !== nothing
+            t = String(dm_type)
+            if t == "regrid"
+                method = iface.regridding === nothing ? "unspecified" :
+                         String(get(iface.regridding, "method", "unspecified"))
+                throw(UnsupportedRegriddingError(method))
+            elseif t in ("slice", "project")
+                throw(DimensionPromotionError(
+                    "interface '$(iface_name)': dimension_mapping type '$(t)' " *
+                    "is Analysis-tier and not yet implemented by the Julia flatten pipeline"))
+            end
+        end
+
+        if iface.regridding !== nothing
+            method_val = get(iface.regridding, "method", nothing)
+            if method_val !== nothing
+                method = String(method_val)
+                if !(method in _SUPPORTED_REGRIDDING_METHODS)
+                    throw(UnsupportedRegriddingError(method))
+                end
+            end
+        end
+    end
+    return
+end
+
+"""
+Build a mapping `system_name => domain_name` from a file's models and
+reaction systems. Systems without a declared domain are omitted.
+"""
+function _collect_system_domains(file::EsmFile)::Dict{String, String}
+    sysdom = Dict{String, String}()
+    if file.models !== nothing
+        for (name, model) in file.models
+            if model.domain !== nothing
+                sysdom[name] = model.domain
+            end
+        end
+    end
+    if file.reaction_systems !== nothing
+        for (name, rsys) in file.reaction_systems
+            if rsys.domain !== nothing
+                sysdom[name] = rsys.domain
+            end
+        end
+    end
+    return sysdom
+end
+
+"""
+True if `file.interfaces` contains an Interface whose `domains` vector covers
+both `d_a` and `d_b` (order-insensitive).
+"""
+function _interface_covers(file::EsmFile, d_a::String, d_b::String)::Bool
+    file.interfaces === nothing && return false
+    for (_, iface) in file.interfaces
+        if d_a in iface.domains && d_b in iface.domains
+            return true
+        end
+    end
+    return false
+end
+
+"""
+For every coupling entry that references two or more systems (`operator_compose`,
+`couple`), raise `UnmappedDomainError` if any pair of referenced systems lives
+on distinct, non-null domains and no declared `Interface` covers both domains.
+
+§4.7.6: "Any other hybrid coupling (N-D ↔ M-D with N ≠ M, or different grids
+of the same dimensionality) requires an explicit Interface in the file's
+interfaces section; its absence raises `UnmappedDomainError`."
+"""
+function _check_coupling_domain_coverage!(file::EsmFile)
+    isempty(file.coupling) && return
+    sysdom = _collect_system_domains(file)
+    isempty(sysdom) && return
+
+    for entry in file.coupling
+        systems = if entry isa CouplingOperatorCompose || entry isa CouplingCouple
+            entry.systems
+        else
+            continue
+        end
+        length(systems) < 2 && continue
+        for i in 1:length(systems), j in (i+1):length(systems)
+            a, b = systems[i], systems[j]
+            (haskey(sysdom, a) && haskey(sysdom, b)) || continue
+            da, db = sysdom[a], sysdom[b]
+            da == db && continue
+            if !_interface_covers(file, da, db)
+                throw(UnmappedDomainError(da, db))
+            end
+        end
+    end
+    return
+end
+
+"""
+Walk every `variable_map` coupling entry with `transform == "identity"` and
+raise `DomainUnitMismatchError` when the source and target variables carry
+non-empty, declared-different units. `param_to_var` and `conversion_factor`
+transforms are exempt: `conversion_factor` declares the conversion explicitly;
+`param_to_var` replaces a parameter with a variable and does not imply unit
+equivalence at the mapping site (units are still validated elsewhere).
+"""
+function _check_variable_map_units!(file::EsmFile)
+    isempty(file.coupling) && return
+    for entry in file.coupling
+        entry isa CouplingVariableMap || continue
+        entry.transform == "identity" || continue
+        src_units = _lookup_variable_units(file, entry.from)
+        tgt_units = _lookup_variable_units(file, entry.to)
+        (src_units === nothing || tgt_units === nothing) && continue
+        if src_units != tgt_units
+            throw(DomainUnitMismatchError(entry.from, src_units, tgt_units))
+        end
+    end
+    return
+end
+
+"""
+Look up a dot-qualified variable's declared units across models, subsystems,
+and reaction systems (species + parameters). Returns `nothing` when the
+variable is missing or carries no declared units.
+"""
+function _lookup_variable_units(file::EsmFile, qualified::String)::Union{String, Nothing}
+    parts = split(qualified, ".")
+    length(parts) >= 2 || return nothing
+    root = String(parts[1])
+    tail = String(join(parts[2:end], "."))
+
+    if file.models !== nothing && haskey(file.models, root)
+        return _lookup_model_units(file.models[root], tail)
+    end
+    if file.reaction_systems !== nothing && haskey(file.reaction_systems, root)
+        return _lookup_rsys_units(file.reaction_systems[root], tail)
+    end
+    return nothing
+end
+
+function _lookup_model_units(model::Model, name::String)::Union{String, Nothing}
+    if haskey(model.variables, name)
+        return model.variables[name].units
+    end
+    # Recurse into subsystems for nested names like "Inner.T".
+    dot = findfirst('.', name)
+    if dot !== nothing
+        head = String(SubString(name, 1, dot - 1))
+        rest = String(SubString(name, dot + 1))
+        if haskey(model.subsystems, head)
+            return _lookup_model_units(model.subsystems[head], rest)
+        end
+    end
+    return nothing
+end
+
+function _lookup_rsys_units(rsys::ReactionSystem, name::String)::Union{String, Nothing}
+    for sp in rsys.species
+        sp.name == name && return sp.units
+    end
+    for p in rsys.parameters
+        p.name == name && return p.units
+    end
+    dot = findfirst('.', name)
+    if dot !== nothing
+        head = String(SubString(name, 1, dot - 1))
+        rest = String(SubString(name, dot + 1))
+        if haskey(rsys.subsystems, head)
+            return _lookup_rsys_units(rsys.subsystems[head], rest)
+        end
+    end
+    return nothing
+end
+
+# ========================================
 # Coupling rule application (§4.7.5 step 3)
 # ========================================
 
@@ -817,6 +1012,11 @@ function flatten(file::EsmFile)::FlattenedSystem
     if !isempty(conflicting)
         throw(ConflictingDerivativeError(conflicting))
     end
+
+    # Step 0b: Hybrid-flattening preflight checks (§4.7.6 error taxonomy).
+    _check_interfaces!(file)
+    _check_coupling_domain_coverage!(file)
+    _check_variable_map_units!(file)
 
     states = OrderedDict{String, ModelVariable}()
     params = OrderedDict{String, ModelVariable}()
