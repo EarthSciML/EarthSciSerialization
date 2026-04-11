@@ -1674,7 +1674,7 @@ Create an additive coupling between two variables.
 
 ### apply_advanced_mtk_features
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1203`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1165`
 
 **Signature:**
 ```julia
@@ -2542,7 +2542,7 @@ conversion(...)
 
 ### convert_operator_enhanced
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1021`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:983`
 
 **Signature:**
 ```julia
@@ -2935,7 +2935,7 @@ Handles the expression mapping required for rate expressions.
 
 ### esm_to_symbolic_enhanced
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:989`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:951`
 
 **Signature:**
 ```julia
@@ -3124,7 +3124,7 @@ Extract dependent variables (LHS of differential equations) from a system.
 
 ### extract_variable_name
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1334`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1296`
 
 **Signature:**
 ```julia
@@ -3501,7 +3501,7 @@ from_catalyst_system(...)
 
 ### from_catalyst_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:680`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:670`
 
 **Signature:**
 ```julia
@@ -3523,7 +3523,7 @@ stoichiometry and rate expressions.
 
 ### from_mock_catalyst_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1287`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1249`
 
 **Signature:**
 ```julia
@@ -3540,7 +3540,7 @@ This handles the case when Catalyst is not available but we have mock systems.
 
 ### from_mock_mtk_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1224`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1186`
 
 **Signature:**
 ```julia
@@ -4132,7 +4132,7 @@ Handles the oneOf discriminated union based on JSON structure.
 
 ### parse_mock_expression
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1359`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1321`
 
 **Signature:**
 ```julia
@@ -4149,7 +4149,7 @@ This is a simple parser for mock system string representations.
 
 ### parse_mock_reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1411`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1373`
 
 **Signature:**
 ```julia
@@ -4182,7 +4182,7 @@ Parse string into ModelVariableType enum.
 
 ### parse_species_list
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1476`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1438`
 
 **Signature:**
 ```julia
@@ -4291,7 +4291,7 @@ Process a single connector equation, resolving scoped references and applying tr
 
 ### process_event_affects
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1159`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1121`
 
 **Signature:**
 ```julia
@@ -4307,7 +4307,7 @@ Process event affects for MTK callbacks.
 
 ### process_events_enhanced
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1104`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1066`
 
 **Signature:**
 ```julia
@@ -5520,7 +5520,7 @@ symbolic_to_esm(...)
 
 ### symbolic_to_esm
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:887`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:854`
 
 **Signature:**
 ```julia
