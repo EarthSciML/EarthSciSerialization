@@ -563,7 +563,7 @@ A single `.esm` file may combine systems living on different spatial dimensions:
 | `project` | N-D → M-D, M<N | Integrate or average out `N-M` axes. Requires metadata declaring the reduction (`"integrate"` vs `"average"`) and the axes to reduce. |
 | `regrid` | N-D → N-D (different grid) | Same axes but different discretization; requires a `regridding` strategy (`nearest`, `linear`, `bilinear`, `trilinear`, `conservative`). |
 
-**Tier requirements.** Core-tier libraries MUST support `broadcast` and `identity` — they are the minimum needed for any hybrid ODE/PDE flatten. `slice`, `project`, and `regrid` are Analysis-tier or Advanced-tier; a library that receives an Interface specifying a mapping it does not support MUST raise `UnsupportedRegriddingError` (for `regrid` strategies) or `DimensionPromotionError` (for other mappings).
+**Tier requirements.** Core-tier libraries MUST support `broadcast` and `identity` — they are the minimum needed for any hybrid ODE/PDE flatten. `slice`, `project`, and `regrid` are Analysis-tier or Advanced-tier; a library that receives an Interface specifying a mapping it does not support — `slice`, `project`, `regrid`, or a spatial operator — MUST raise `UnsupportedMappingError`.
 
 **Implicit broadcast.** When a 0D system is coupled to an N-D system without an explicit Interface, libraries MUST apply `broadcast` promotion implicitly — this is the only unambiguous default. Any other hybrid coupling (N-D ↔ M-D with `N ≠ M`, or different grids of the same dimensionality) requires an explicit `Interface` in the file's `interfaces` section; its absence raises `UnmappedDomainError`.
 
@@ -582,16 +582,26 @@ A single `.esm` file may combine systems living on different spatial dimensions:
 
 The result is `[:t]` for purely 0D systems and `[:t, :x, :y, …]` for PDE systems. This is what determines whether the downstream constructor produces an `ODESystem` or a `PDESystem`.
 
-**Error taxonomy.** The hybrid flattening path defines four errors in addition to `ConflictingDerivativeError` from §4.7.5:
+##### 4.7.6.6 Slice ODE-to-PDE Coupling Interpretation
+
+When a `slice` mapping bridges a 0D source ODE (e.g. a surface deposition velocity) to an N-D diffusive PDE on the same axis, Core-/Analysis-tier implementations MAY interpret the source equation as either a pointwise volumetric source at the slice coordinate OR a flux boundary condition on the diffusive variable at that coordinate. The choice is an implementation detail that MUST be documented by each library.
+
+##### 4.7.6.10 Error Taxonomy
+
+The hybrid flattening path defines eight named errors that every implementation MUST expose for cross-language error-name parity:
 
 | Error | Raised when |
 |---|---|
-| `DimensionPromotionError` | A variable or equation cannot be promoted given the available Interfaces (ambiguous target, missing dimension metadata, cyclic promotion). |
-| `UnmappedDomainError` | Two systems on different domains are coupled with no Interface declaring their mapping. |
-| `UnsupportedRegriddingError` | The requested regridding strategy is not implemented by this library tier. |
-| `DomainUnitMismatchError` | Coupling across an Interface requires a unit conversion that was not declared. |
+| `ConflictingDerivativeError` | Two systems define non-additive equations for the same dependent variable (also raised by §4.7.5 flatten). |
+| `DimensionPromotionError` | A variable or equation cannot be promoted given the available `Interface`s. |
+| `UnmappedDomainError` | A coupling references a variable whose domain has no mapping rule. |
+| `UnsupportedMappingError` | A `dimension_mapping` type that the library does not implement (`slice`, `project`, `regrid`, or a spatial operator) is encountered. |
+| `DomainUnitMismatchError` | A coupling across an `Interface` requires an undeclared unit conversion. |
+| `DomainExtentMismatchError` | An `identity` mapping is asked to bridge domains with incompatible extents. |
+| `SliceOutOfDomainError` | A `slice` mapping reaches outside the source variable's domain. |
+| `CyclicPromotionError` | Promotion rules form a cycle. |
 
-All four types are exported by library implementations that support simulation.
+All 8 types MUST be defined as named exception classes in every implementation for cross-language error-name parity. Core-tier libraries MAY leave variants that cover Analysis/Advanced-tier failure modes (`DomainExtentMismatchError`, `SliceOutOfDomainError`, `CyclicPromotionError`, and the slice/project/regrid sub-cases of `UnsupportedMappingError`) as reserved types they never raise.
 
 **Worked example: 0D chemistry + 2D transport.** A file containing `Chem` (a `ReactionSystem` on the 2D grid `grid2d = {x, y}`) and no explicit `Advection` model, coupled only by the presence of a shared domain, flattens to:
 
