@@ -277,16 +277,20 @@ function create_real_mtk_system_basic(model::Model, name::String)
         end
     end
 
-    # Create ODESystem with events if any exist
-    system_kwargs = Dict(:name => Symbol(name))
-    if !isempty(continuous_callbacks)
-        system_kwargs[:continuous_events] = continuous_callbacks
+    # Create ODESystem. Pass kwargs explicitly (Dict splat produces invalid
+    # syntax inside @eval on Julia 1.12).
+    system = if !isempty(continuous_callbacks) && !isempty(discrete_callbacks)
+        @eval ODESystem($eqs, $t_sym, $states, $parameters; name=Symbol($name),
+            continuous_events=$continuous_callbacks, discrete_events=$discrete_callbacks)
+    elseif !isempty(continuous_callbacks)
+        @eval ODESystem($eqs, $t_sym, $states, $parameters; name=Symbol($name),
+            continuous_events=$continuous_callbacks)
+    elseif !isempty(discrete_callbacks)
+        @eval ODESystem($eqs, $t_sym, $states, $parameters; name=Symbol($name),
+            discrete_events=$discrete_callbacks)
+    else
+        @eval ODESystem($eqs, $t_sym, $states, $parameters; name=Symbol($name))
     end
-    if !isempty(discrete_callbacks)
-        system_kwargs[:discrete_events] = discrete_callbacks
-    end
-
-    system = @eval ODESystem($eqs, $t_sym, $states, $parameters; $(system_kwargs...))
 
     return system
 end
