@@ -65,10 +65,12 @@ function to_julia_code(file::EsmFile)
         push!(lines, "")
     end
 
-    # Generate domain as TODO comment
-    if !isnothing(file.domain)
-        push!(lines, "# Domain (TODO)")
-        append!(lines, generate_domain_comment(file.domain))
+    # Generate domains as TODO comments
+    if !isnothing(file.domains) && !isempty(file.domains)
+        push!(lines, "# Domains (TODO)")
+        for (_, domain) in file.domains
+            append!(lines, generate_domain_comment(domain))
+        end
         push!(lines, "")
     end
 
@@ -148,9 +150,11 @@ function to_python_code(file::EsmFile)
         push!(lines, "")
     end
 
-    if !isnothing(file.domain)
-        push!(lines, "# Domain (TODO)")
-        append!(lines, generate_python_domain_comment(file.domain))
+    if !isnothing(file.domains) && !isempty(file.domains)
+        push!(lines, "# Domains (TODO)")
+        for (_, domain) in file.domains
+            append!(lines, generate_python_domain_comment(domain))
+        end
         push!(lines, "")
     end
 

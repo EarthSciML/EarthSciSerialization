@@ -753,8 +753,8 @@ function Base.show(io::IO, esm_file::EsmFile)
         println(io, "Components: $(join(components, ", "))")
     end
 
-    if !isnothing(esm_file.domain)
-        println(io, "Domain: configured")
+    if !isnothing(esm_file.domains) && !isempty(esm_file.domains)
+        println(io, "Domains: $(length(esm_file.domains)) configured")
     end
 end
 

@@ -97,14 +97,7 @@ function serialize_event(event::EventType)::Dict{String,Any}
         end
         return result
     elseif isa(event, DiscreteEvent)
-        result = Dict{String,Any}(
-            "trigger" => serialize_trigger(event.trigger),
-            "affects" => [serialize_functional_affect(a) for a in event.affects]
-        )
-        if event.description !== nothing
-            result["description"] = event.description
-        end
-        return result
+        return serialize_discrete_event(event)
     else
         throw(ArgumentError("Unknown EventType: $(typeof(event))"))
     end
@@ -113,12 +106,18 @@ end
 """
     serialize_discrete_event(event::DiscreteEvent) -> Dict{String,Any}
 
-Serialize DiscreteEvent to JSON-compatible format.
+Serialize DiscreteEvent to the schema shape. Julia stores event affects as a
+Vector{FunctionalAffect}(target, expression, operation) for legacy reasons,
+but the schema requires discrete_events[].affects to be an array of
+AffectEquation objects ({lhs, rhs}). Emit the schema shape.
 """
 function serialize_discrete_event(event::DiscreteEvent)::Dict{String,Any}
     result = Dict{String,Any}(
         "trigger" => serialize_trigger(event.trigger),
-        "affects" => [serialize_functional_affect(a) for a in event.affects]
+        "affects" => [Dict{String,Any}(
+            "lhs" => a.target,
+            "rhs" => serialize_expression(a.expression),
+        ) for a in event.affects]
     )
     if event.description !== nothing
         result["description"] = event.description
@@ -295,21 +294,25 @@ function serialize_reaction(reaction::Reaction)::Dict{String,Any}
         result["name"] = reaction.name
     end
 
-    # Handle substrates (can be null for source reactions)
-    if reaction.substrates !== nothing
+    # Use getfield to bypass the legacy getproperty override that converts
+    # :products into a Dict{String,Int}. We want the raw
+    # Vector{StoichiometryEntry} so serialization can emit schema-compliant
+    # {species, stoichiometry} objects.
+    substrates_raw = getfield(reaction, :substrates)
+    if substrates_raw !== nothing
         result["substrates"] = [
             Dict("species" => entry.species, "stoichiometry" => entry.stoichiometry)
-            for entry in reaction.substrates
+            for entry in substrates_raw
         ]
     else
         result["substrates"] = nothing
     end
 
-    # Handle products (can be null for sink reactions)
-    if reaction.products !== nothing
+    products_raw = getfield(reaction, :products)
+    if products_raw !== nothing
         result["products"] = [
             Dict("species" => entry.species, "stoichiometry" => entry.stoichiometry)
-            for entry in reaction.products
+            for entry in products_raw
         ]
     else
         result["products"] = nothing
@@ -694,14 +697,18 @@ end
 
 """
     save(file::EsmFile, path::String)
+    save(path::String, file::EsmFile)
 
 Save an EsmFile object to a JSON file at the specified path.
+Accepts either argument order for ergonomics (file, path) or (path, file).
 """
 function save(file::EsmFile, path::String)
     open(path, "w") do io
         save(file, io)
     end
 end
+
+save(path::String, file::EsmFile) = save(file, path)
 
 """
     save(file::EsmFile, io::IO)
