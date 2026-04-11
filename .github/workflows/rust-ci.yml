@@ -49,6 +49,10 @@ jobs:
       working-directory: packages/earthsci-toolkit-rs
       run: cargo build --bin esm --verbose
 
+    - name: Install wasm32 target
+      run: rustup target add wasm32-unknown-unknown
+      if: matrix.rust == 'stable'
+
     - name: Build WASM
       working-directory: packages/earthsci-toolkit-rs
       run: cargo build --target wasm32-unknown-unknown --features wasm --verbose
