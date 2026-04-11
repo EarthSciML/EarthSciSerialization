@@ -40,17 +40,34 @@ esm_file = load("model.esm")
 model = esm_file.models["atmosphere"]
 println("Model has $(length(model.variables)) variables")
 
-# Convert to ModelingToolkit (if available)
-mtk_system = to_mtk_system(model, "AtmosphereModel")
+# Convert to ModelingToolkit via package extension (1.9+)
+using ModelingToolkit
+sys = ModelingToolkit.System(model; name=:AtmosphereModel)
+# Or, for models with spatial derivatives:
+# pde = ModelingToolkit.PDESystem(model; name=:AtmosphereModel)
 
 # Validate the model
 result = validate(esm_file)
-if result.valid
+if result.is_valid
     println("Model is valid!")
 else
-    println("Validation errors: ", result.errors)
+    println("Validation errors: ", result.structural_errors)
 end
 ```
+
+## ModelingToolkit / Catalyst integration
+
+ModelingToolkit and Catalyst are **weak dependencies**. They are loaded only
+when the user `using`s them directly. The constructors for `ModelingToolkit.
+System`, `ModelingToolkit.PDESystem`, and `Catalyst.ReactionSystem` on ESM
+types are defined in package extensions (`EarthSciSerializationMTKExt`,
+`EarthSciSerializationCatalystExt`) that activate automatically.
+
+Without these packages loaded, the `MockMTKSystem`, `MockPDESystem`, and
+`MockCatalystSystem` types provide pure-Julia fallbacks with the same
+ODE-vs-PDE dispatch semantics — calling `MockMTKSystem(model)` on a model
+that flattens to a PDE throws an `ArgumentError` pointing at `MockPDESystem`
+(and vice versa).
 
 ```@index
 ```

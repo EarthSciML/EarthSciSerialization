@@ -6,40 +6,34 @@ EarthSciML Serialization Format Julia library.
 This module provides Julia types and functions for working with ESM format files,
 which are JSON-based serialization format for EarthSciML model components,
 their composition, and runtime configuration.
+
+Deep ModelingToolkit/Catalyst integration is provided by package extensions
+(`EarthSciSerializationMTKExt`, `EarthSciSerializationCatalystExt`) that load
+automatically when the user imports `ModelingToolkit` or `Catalyst`. Without
+those packages loaded, `MockMTKSystem`, `MockPDESystem`, and `MockCatalystSystem`
+give plain-Julia snapshots of the flattened system with the same ODE/PDE split.
 """
 module EarthSciSerialization
 
-# Disable precompilation to avoid method overwriting errors with dependencies
-__precompile__(false)
-
-# Import required dependencies
+using Dates
 using JSON3
 using JSONSchema
 
-# Include type definitions and functionality
-include("availability.jl")  # Include before other modules that need availability checking
 include("types.jl")
 include("error_handling.jl")
 include("validate.jl")
 include("reactions.jl")
-# MTK and Catalyst modules - need to be loaded before coupled.jl since it uses their mock systems
-include("mtk.jl")
-include("catalyst.jl")
-include("mtk_catalyst.jl")
-include("coupled.jl")  # Include after mtk.jl and catalyst.jl since it uses MockMTKSystem and MockCatalystSystem
-include("flatten.jl")  # Include after coupled.jl since it uses CouplingEntry types
+include("flatten.jl")
+include("mock_systems.jl")
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
 include("display.jl")
-# Analysis features
 include("graph.jl")
 include("units.jl")
 include("edit.jl")
-# Code generation
 include("codegen.jl")
 
-# Export main types
 export
     # Expression types
     Expr, NumExpr, VarExpr, OpExpr,
@@ -56,8 +50,6 @@ export
     # Concrete coupling types
     CouplingOperatorCompose, CouplingCouple, CouplingVariableMap,
     CouplingOperatorApply, CouplingCallback, CouplingEvent,
-    # Coupled system
-    MockCoupledSystem,
     # Flattened system (§4.7.5 / §4.7.6)
     FlattenMetadata, FlattenedSystem, flatten, lower_reactions_to_equations,
     # Flatten error taxonomy
@@ -80,13 +72,8 @@ export
     validate_reference_syntax, is_valid_identifier,
     # Reaction system ODE derivation
     derive_odes, stoichiometric_matrix, mass_action_rate,
-    # Catalyst conversion functions
-    to_catalyst_system, MockCatalystSystem,
-    # MTK conversion functions
-    to_mtk_system, from_mtk_system, from_catalyst_system,
-    to_coupled_system,
-    # Expression conversion utilities
-    esm_to_symbolic, symbolic_to_esm,
+    # Mock systems (no-MTK / no-Catalyst fallbacks)
+    MockMTKSystem, MockPDESystem, MockCatalystSystem,
     # Graph analysis (Section 4.8)
     Graph, ComponentNode, CouplingEdge, VariableNode, DependencyEdge,
     component_graph, expression_graph, adjacency, predecessors, successors,
@@ -104,11 +91,6 @@ export
     add_continuous_event, add_discrete_event, remove_event,
     add_coupling, remove_coupling, compose, map_variable,
     merge, extract,
-    # Legacy compatibility aliases (for tests)
-    MockMTKSystem,
-    esm_to_mock_symbolic, mock_symbolic_to_esm,
-    # Availability checking functions
-    check_mtk_availability, check_catalyst_availability, check_mtk_catalyst_availability,
     # Code generation
     to_julia_code, to_python_code,
     # ASCII display format

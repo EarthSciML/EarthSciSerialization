@@ -779,36 +779,38 @@ S = stoichiometric_matrix(file.reaction_systems["SimpleOzone"])
 
 #### 5.1.3 MTK/Catalyst Conversion (Full Tier)
 
-The key capability unique to Julia: bidirectional conversion between ESM and live MTK/Catalyst objects.
+The key capability unique to Julia: bidirectional conversion between ESM and live MTK/Catalyst objects. As of v0.0.2 this is delivered via **Julia package extensions** (the `EarthSciSerializationMTKExt` and `EarthSciSerializationCatalystExt` submodules). Users do not need to call any availability-check function — they simply `using` `ModelingToolkit` and/or `Catalyst` and the constructors below become defined.
+
+**Weak dependencies.** `ModelingToolkit`, `Catalyst`, and `Symbolics` are declared in `[weakdeps]` of `EarthSciSerialization.jl`'s `Project.toml`. Loading `EarthSciSerialization` alone does **not** force the solver stack to load — precompilation of the main package is fast and side-effect free.
+
+**Public API.** The public API is constructor dispatch on the foreign system types:
 
 ```julia
-# ESM → MTK
-sys = to_mtk_system(file.models["SuperFast"])
-# Returns an ODESystem with symbolic variables, equations, and events
+using EarthSciSerialization, ModelingToolkit, Catalyst
 
-# ESM → Catalyst
-rsys = to_catalyst_system(file.reaction_systems["SimpleOzone"])
-# Returns a ReactionSystem with species, parameters, reactions
+# ESM → FlattenedSystem (single intermediate, always-first step)
+flat = flatten(file)
 
-# MTK → ESM
-model = from_mtk_system(my_ode_system; name="MyModel")
-# Extracts equations, variables, parameters, events from an ODESystem
+# FlattenedSystem → MTK System (pure-ODE path)
+sys = ModelingToolkit.System(flat; name=:SuperFast)
+# ArgumentError if flat.independent_variables includes spatial dims — the
+# error message explicitly redirects the user to ModelingToolkit.PDESystem.
 
-# Catalyst → ESM
-rxn_sys = from_catalyst_system(my_reaction_system; name="MyReactions")
+# FlattenedSystem → MTK PDESystem (PDE path)
+pde = ModelingToolkit.PDESystem(flat; name=:SuperFast)
+# ArgumentError if flat is a pure ODE (independent_variables == [:t]) —
+# the error message explicitly redirects the user to ModelingToolkit.System.
 
-# Full coupled system — flatten then convert
-flat = flatten_coupled_system(file)
-# Returns a FlattenedSystem with all coupling rules applied, dot-namespaced variables
+# Convenience forms that flatten first:
+sys = ModelingToolkit.System(file.models["SuperFast"];    name=:SuperFast)
+pde = ModelingToolkit.PDESystem(file.models["Atmosphere"]; name=:Atmosphere)
 
-# Convert flattened system to a single MTK System
-# Dimensionality determines the system type:
-#   - 0D (ODE-only, no spatial derivatives): returns an ODESystem
-#   - 1D+ (spatial derivatives present): returns a PDESystem
-sys = to_mtk_system(flat)
-# Dot-namespaced variables become MTK symbolic variables:
-#   SimpleOzone.O3 → @variables SimpleOzone₊O3(t)
-# (MTK uses ₊ as the namespace separator internally)
+# Catalyst
+rxn = Catalyst.ReactionSystem(file.reaction_systems["SimpleOzone"]; name=:Ozone)
+
+# Reverse direction (round-trip for tests and tooling)
+model = EarthSciSerialization.Model(sys)
+rxn_m = EarthSciSerialization.ReactionSystem(rxn)
 
 # Simulate
 using OrdinaryDiffEq
@@ -816,14 +818,47 @@ prob = ODEProblem(sys, file.domain)   # or discretize() for PDESystem
 sol = solve(prob, Tsit5())
 ```
 
-**Flattened system to MTK conversion details:**
+**Fallback without MTK/Catalyst.** If the user has not imported `ModelingToolkit` or `Catalyst`, the same constructor pattern is available via `MockMTKSystem`, `MockPDESystem`, and `MockCatalystSystem` — plain-Julia struct types exported from the main package:
 
-The `to_mtk_system(::FlattenedSystem)` function converts the flattened representation into a single MTK system. The choice between `ODESystem` and `PDESystem` depends on the presence of spatial derivatives (`grad`, `div`, `laplacian` operators) in the flattened equations:
+```julia
+using EarthSciSerialization   # no MTK, no Catalyst
 
-- **No spatial derivatives** → `ODESystem` with independent variable `t`
-- **Spatial derivatives present** → `PDESystem` with independent variables `t, x, y, z` (as needed), boundary conditions from the domain section, and initial conditions
+mock_sys = MockMTKSystem(file.models["SuperFast"];    name=:SuperFast)
+mock_pde = MockPDESystem(file.models["Atmosphere"];   name=:Atmosphere)
+mock_cat = MockCatalystSystem(file.reaction_systems["SimpleOzone"]; name=:Ozone)
+```
 
-This replaces the previous `to_coupled_system` approach (which returned an `EarthSciMLBase.CoupledSystem`) with a single-system representation that is directly solvable by MTK's standard problem constructors.
+`MockMTKSystem(::Model)` on a PDE-shaped model raises the same `ArgumentError` that redirects the user to `MockPDESystem`, and vice versa — the dispatch semantics mirror the real constructors. These mocks are the no-MTK fallbacks called out by the §1.2 capability tiers; tier detection uses `Base.get_extension(EarthSciSerialization, :EarthSciSerializationMTKExt)` rather than an ad-hoc `check_mtk_availability` helper.
+
+**Flattened system to MTK conversion details.**
+
+The constructor `ModelingToolkit.System(::FlattenedSystem)` handles the pure-ODE path; `ModelingToolkit.PDESystem(::FlattenedSystem)` handles the PDE path. The dispatch split is determined by `flat.independent_variables` (which is populated by `flatten` based on the hybrid-flattening rules in §4.7.6):
+
+- `independent_variables == [:t]` → ODE path. Build an `ODESystem`/`System` with state variables depending on `t`, equations, continuous/discrete events.
+- `independent_variables` contains spatial dims (`:x`, `:y`, `:z`, ...) → PDE path. Build a `PDESystem` with state variables depending on `t` and the spatial dims, equations, boundary conditions, and initial conditions.
+
+The constructors always call `flatten` internally when invoked on a `Model` or `EsmFile`, so users do not need to flatten themselves unless they want to inspect the intermediate. There is a single source of truth for dimension and coupling resolution — the `flatten` step — and the extension code only deals with the already-canonical FlattenedSystem.
+
+**Surface-source → flux BC lowering (Julia-specific convention).**
+
+When the flattened system includes a state variable of the form `V.at_<dim>` that is produced by a `slice_variable` primitive and has a standalone ODE `D(V.at_<dim>, t) = f(...)`, AND the base variable `V` has a diffusive equation on the same spatial dimension, the Julia extension **lowers the slice-ODE to a flux boundary condition** on the base variable:
+
+```
+D_coeff * Differential(<dim>)(V)(t, <dim>_0) ~ f(...)
+```
+
+rather than emitting the slice-ODE as a pointwise source term in the lowest grid cell. This is the physically correct interpretation for surface deposition of a diffusing tracer (the surface deposition velocity has units of length/time and acts as a flux, not a volumetric source). §4.7.6.6 permits either interpretation at the spec level; the Julia library's choice is flux BC. Substitution rewrites references to `V.at_<dim>` in `f(...)` to reference the base variable `V` at the slice coordinate, so the resulting BC is self-contained.
+
+This lowering is implemented inside `EarthSciSerializationMTKExt`; the `EarthSciMLBase.slice_variable` primitive itself remains interpretation-agnostic.
+
+**Removed APIs (v0.0.2 breaking change, acceptable at pre-1.0).** The following names that existed in earlier pre-release versions have been deleted:
+
+- `to_mtk_system`, `to_catalyst_system`
+- `from_mtk_system`, `from_catalyst_system`
+- `check_mtk_availability`, `check_catalyst_availability`, `check_mtk_catalyst_availability`
+- `src/availability.jl` (the runtime availability-check module)
+
+Callers must migrate to the constructor-dispatch API above.
 
 #### 5.1.4 Expression Mapping
 

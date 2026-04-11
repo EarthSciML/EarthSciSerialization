@@ -2,6 +2,41 @@
 
 Complete API reference for the ESM Format Julia library.
 
+## ModelingToolkit / Catalyst Integration (v0.0.2+)
+
+ModelingToolkit and Catalyst integration is provided via **package extensions**.
+The public API is **constructor dispatch** on the foreign types:
+
+```julia
+using EarthSciSerialization, ModelingToolkit, Catalyst
+
+# Flatten first (always) — then dispatch on FlattenedSystem
+flat = flatten(esm_file)
+
+# Pure-ODE path
+sys = ModelingToolkit.System(flat; name=:Atmosphere)
+
+# PDE path (when flat.independent_variables includes spatial dims)
+pde = ModelingToolkit.PDESystem(flat; name=:Atmosphere)
+
+# Reaction system → Catalyst
+cat = Catalyst.ReactionSystem(esm_file.reaction_systems["Chem"]; name=:Chem)
+
+# Reverse direction
+model = EarthSciSerialization.Model(sys)
+```
+
+Calling `ModelingToolkit.System` on a PDE-shaped flattened system throws
+`ArgumentError` pointing at `ModelingToolkit.PDESystem`, and vice versa.
+
+Without `ModelingToolkit`/`Catalyst` loaded, the same pattern works via
+`MockMTKSystem`, `MockPDESystem`, and `MockCatalystSystem` from the main
+package — no availability check needed.
+
+**Removed** (breaking change): `to_mtk_system`, `to_catalyst_system`,
+`from_mtk_system`, `from_catalyst_system`, `check_mtk_availability`,
+`check_catalyst_availability`. Use the constructor API above instead.
+
 ## Functions
 
 ### Base

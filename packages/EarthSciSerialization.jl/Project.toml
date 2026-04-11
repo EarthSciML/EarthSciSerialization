@@ -1,21 +1,28 @@
 name = "EarthSciSerialization"
 uuid = "c7bf5e87-b31b-4281-bdce-ffb8a46ec87c"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["EarthSciML Authors and Contributors"]
 
 [deps]
-# Full dependencies for complete Julia EarthSciML ecosystem support
-Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
-ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[weakdeps]
+Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+
+[extensions]
+EarthSciSerializationCatalystExt = ["Catalyst", "ModelingToolkit", "Symbolics"]
+EarthSciSerializationMTKExt = ["DomainSets", "ModelingToolkit", "Symbolics"]
 
 [compat]
 Catalyst = "16"
+DomainSets = "0.7"
 ModelingToolkit = "11"
 Symbolics = "7"
 Unitful = "1.28.0"
@@ -23,7 +30,11 @@ julia = "1.10"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "BenchmarkTools"]
+test = ["Test", "BenchmarkTools", "DomainSets", "ModelingToolkit", "Catalyst", "Symbolics"]
