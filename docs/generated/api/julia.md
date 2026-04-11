@@ -224,6 +224,17 @@ ConditionTrigger(...)
 
 ---
 
+### ConflictingDerivativeError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+ConflictingDerivativeError(...)
+```
+
+---
+
 ### ContinuousEvent
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -411,6 +422,17 @@ DependencyEdge(...)
 
 ---
 
+### DimensionPromotionError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+DimensionPromotionError(...)
+```
+
+---
+
 ### DiscreteEvent
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -448,6 +470,17 @@ Domain(...)
 **Available in other languages:**
 - [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
+
+---
+
+### DomainUnitMismatchError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+DomainUnitMismatchError(...)
+```
 
 ---
 
@@ -574,6 +607,17 @@ Expression(...)
 
 ---
 
+### Flatten
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Flatten(...)
+```
+
+---
+
 ### FlattenMetadata
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -597,21 +641,6 @@ FlattenMetadata(...)
 ```julia
 Flattened(...)
 ```
-
----
-
-### FlattenedEquation
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-FlattenedEquation(...)
-```
-
-**Available in other languages:**
-- [Python](python.md#flattenedequation)
-- [Typescript](typescript.md#flattenedequation)
 
 ---
 
@@ -1213,6 +1242,28 @@ Unit(...)
 
 ---
 
+### UnmappedDomainError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+UnmappedDomainError(...)
+```
+
+---
+
+### UnsupportedRegriddingError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+UnsupportedRegriddingError(...)
+```
+
+---
+
 ### ValidationResult
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1254,6 +1305,56 @@ VariableNode(...)
 
 ---
 
+### _apply_couple!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:689`
+
+**Signature:**
+```julia
+function _apply_couple!(equations::Vector{Equation},
+```
+
+**Description:**
+Apply a `CouplingCouple` entry: attach the connector equations to the
+flattened equation list. The connector.equations field may contain full
+equation structures; we accept both raw Equation objects and dict-shaped
+connector entries.
+
+---
+
+### _apply_operator_compose!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:554`
+
+**Signature:**
+```julia
+function _apply_operator_compose!(equations::Vector{Equation},
+```
+
+**Description:**
+Apply a `CouplingOperatorCompose` entry: for each equation LHS dependent
+variable (with `translate` and `_var` placeholder expansion), find matching
+equations across the listed systems and sum their RHS terms. In the flattened
+representation, "matching" means "has the same namespaced dependent variable".
+
+---
+
+### _apply_variable_map!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:730`
+
+**Signature:**
+```julia
+function _apply_variable_map!(equations::Vector{Equation},
+```
+
+**Description:**
+Apply a `CouplingVariableMap` entry: substitute the `to` parameter/variable
+with the `from` variable in every flattened equation. For `param_to_var` and
+`conversion_factor`, also promote `to` out of the parameters map.
+
+---
+
 ### _canonical_ref
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:982`
@@ -1268,6 +1369,60 @@ _canonical_ref(ref::String, base_path::String) -> String
 
 Produce a canonical key for a reference, used for cycle detection.
 URLs are returned as-is; local paths are resolved to absolute paths.
+
+---
+
+### _collect_model!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:357`
+
+**Signature:**
+```julia
+function _collect_model!(states::OrderedDict{String, ModelVariable},
+```
+
+**Description:**
+Collect a Model's variables and equations into the flattener accumulators,
+recursing through subsystems. All names are rewritten to `prefix.local_name`.
+
+---
+
+### _collect_reaction_system!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:429`
+
+**Signature:**
+```julia
+function _collect_reaction_system!(states::OrderedDict{String, ModelVariable},
+```
+
+**Description:**
+Lower a ReactionSystem into the flattener accumulators. Species become state
+variables, rate constants become parameters, and reactions are converted to
+ODE equations via `lower_reactions_to_equations`. Both species and equation
+variables are then namespaced by `prefix`.
+
+---
+
+### _find_conflicting_derivatives
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:491`
+
+**Signature:**
+```julia
+function _find_conflicting_derivatives(file::EsmFile)::Vector{String}
+```
+
+**Description:**
+_find_conflicting_derivatives(file) -> Vector{String}
+
+Return the sorted list of fully-qualified species names that appear both as
+the LHS dependent variable of an explicit `D(X, t) = ...` equation in any
+`models[*]` (including subsystems) AND as a substrate or product of a
+reaction in any `reaction_systems[*]` (after namespacing).
+
+Used by `flatten` to throw `ConflictingDerivativeError` before any lowering,
+and by `validate_structural` to catch the same class of error at load time.
 
 ---
 
@@ -2837,7 +2992,7 @@ derive_odes(...)
 
 ### describe_coupling_entry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:305`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:931`
 
 **Signature:**
 ```julia
@@ -2847,7 +3002,8 @@ function describe_coupling_entry(entry::CouplingEntry)::String
 **Description:**
 describe_coupling_entry(entry::CouplingEntry) -> String
 
-Produce a human-readable description of a coupling entry.
+Produce a human-readable description of a coupling entry for the flattened
+system's metadata.
 
 ---
 
@@ -2891,6 +3047,17 @@ function end_timer!(profiler::PerformanceProfiler, operation::String)
 end_timer!(profiler, operation)
 
 End timing an operation and return duration.
+
+---
+
+### error
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+error(...)
+```
 
 ---
 
@@ -3188,7 +3355,7 @@ flatten(...)
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:96`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:814`
 
 **Signature:**
 ```julia
@@ -3198,60 +3365,55 @@ function flatten(file::EsmFile)::FlattenedSystem
 **Description:**
 flatten(file::EsmFile) -> FlattenedSystem
 
-Flatten coupled systems into a single system with dot-namespaced variables.
+Flatten the coupled systems in `file` into a single symbolic representation
+per spec §4.7.5 (+ §4.7.6 for hybrid dimension-promoted cases).
 
-The algorithm:
-1. Iterates over all models and reaction_systems in the EsmFile
-2. Namespaces all variables by prefixing with "SystemName."
-3. Recursively flattens subsystems using nested dot notation (e.g., "System.Sub.var")
-4. Processes coupling entries to produce human-readable rule descriptions
-5. Returns a unified FlattenedSystem
-
-# Examples
-```julia
-file = load("coupled_model.esm")
-flat = flatten(file)
-println(flat.state_variables)  # ["Atmosphere.T", "Ocean.SST", ...]
-println(flat.equations[1].lhs) # "Atmosphere.T"
-```
+Throws `ConflictingDerivativeError` if any species is both the LHS of an
+explicit `D(X, t) = ...` equation and a reactant/product of a reaction — such
+a system is over-determined.
 
 **Available in other languages:**
 - [Typescript](typescript.md#flatten)
 
 ---
 
-### flatten_model!
+### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:140`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:904`
 
 **Signature:**
 ```julia
-function flatten_model!(state_variables::Vector{String},
+function flatten(model::Model; name::String="anonymous")::FlattenedSystem
 ```
 
 **Description:**
-flatten_model!(state_variables, parameters, variables, equations, model, prefix)
+flatten(model::Model; name::String="anonymous") -> FlattenedSystem
 
-Flatten a Model into the accumulator vectors, prefixing all variable names with `prefix.`.
-Recursively processes subsystems.
+Convenience: wrap a single Model in a synthetic EsmFile (with a default system
+name) and run the full flattener. This is the call path used by
+`ModelingToolkit.System(::Model)` in the Julia extension (see gt-fpw).
+
+**Available in other languages:**
+- [Typescript](typescript.md#flatten)
 
 ---
 
-### flatten_reaction_system!
+### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:185`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:915`
 
 **Signature:**
 ```julia
-function flatten_reaction_system!(state_variables::Vector{String},
+function flatten(rsys::ReactionSystem; name::String="anonymous")::FlattenedSystem
 ```
 
 **Description:**
-flatten_reaction_system!(state_variables, parameters, variables, equations, rsys, prefix)
+flatten(rsys::ReactionSystem; name::String="anonymous") -> FlattenedSystem
 
-Flatten a ReactionSystem into the accumulator vectors, prefixing all names with `prefix.`.
-Species become state variables and reaction rate laws become equations.
-Recursively processes subsystems.
+Convenience: wrap a ReactionSystem in a synthetic EsmFile and flatten.
+
+**Available in other languages:**
+- [Typescript](typescript.md#flatten)
 
 ---
 
@@ -3398,22 +3560,6 @@ function format_number(num::Real, format::Symbol)
 format_number(num::Real, format::Symbol) -> String
 
 Format a number in scientific notation with appropriate formatting.
-
----
-
-### format_number_plain
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:288`
-
-**Signature:**
-```julia
-function format_number_plain(value::Float64)::String
-```
-
-**Description:**
-format_number_plain(value::Float64) -> String
-
-Format a floating-point number as a plain string, using integer notation for whole numbers.
 
 ---
 
@@ -3764,7 +3910,7 @@ Get a summary of all collected errors and warnings.
 
 ### get_system_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:869`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:881`
 
 **Signature:**
 ```julia
@@ -3795,6 +3941,23 @@ has_element_pattern(variable::String) -> Bool
 
 Check if a variable has element patterns (for chemical formula detection).
 Uses greedy matching algorithm per spec Section 6.1.
+
+---
+
+### has_spatial_operator
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:304`
+
+**Signature:**
+```julia
+function has_spatial_operator(expr::EarthSciSerialization.Expr)::Bool
+```
+
+**Description:**
+has_spatial_operator(expr) -> Bool
+
+True if the expression contains any spatial operator (`grad`, `div`,
+`laplacian`, or `D` with `wrt != "t"`).
 
 ---
 
@@ -3852,6 +4015,23 @@ Check if a string is a valid identifier (letters, numbers, underscores, no leadi
 
 ---
 
+### lhs_dependent_variable
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:289`
+
+**Signature:**
+```julia
+function lhs_dependent_variable(expr::EarthSciSerialization.Expr)::Union{String, Nothing}
+```
+
+**Description:**
+lhs_dependent_variable(expr) -> Union{String, Nothing}
+
+Extract the dependent variable name from an equation LHS. For `D(x, t)`, returns
+`"x"`. For a bare `VarExpr("x")`, returns `"x"`. Otherwise returns `nothing`.
+
+---
+
 ### load
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -3906,6 +4086,42 @@ Load and parse an ESM file from an IO stream.
 **Available in other languages:**
 - [Python](python.md#load)
 - [Typescript](typescript.md#load)
+
+---
+
+### lower_reactions_to_equations
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+lower_reactions_to_equations(...)
+```
+
+---
+
+### lower_reactions_to_equations
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:190`
+
+**Signature:**
+```julia
+function lower_reactions_to_equations(reactions::Vector{Reaction},
+```
+
+**Description:**
+lower_reactions_to_equations(reactions, species, domain=nothing) -> Vector{Equation}
+
+Produce the ODE equations induced by a set of reactions using standard
+mass-action kinetics: `d[X]/dt = Σ (stoich_ij * rate_j)`.
+
+Shared by `derive_odes` (reaction → Model) and `flatten` (EsmFile → FlattenedSystem)
+so there is exactly one place that turns stoichiometry into equations.
+
+On a 0D domain (`domain === nothing`), the LHS is `D(X, t)`. On a PDE domain,
+the LHS is still `D(X, t)` symbolically — dimension promotion (§4.7.6) is
+applied by `flatten`, not here. The resulting equation lives on the caller's
+domain; spatial operators are added downstream when coupling adds them.
 
 ---
 
@@ -3994,36 +4210,21 @@ mock_symbolic_to_esm(...)
 
 ---
 
-### namespace_expression
+### namespace_expr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:229`
-
-**Signature:**
-```julia
-function namespace_expression(expr::Expr, prefix::String)::String
-```
-
-**Description:**
-namespace_expression(expr::Expr, prefix::String) -> String
-
-Convert an ESM expression to a string with all variable references prefixed by `prefix.`.
-Numeric literals and operators are preserved as-is.
-
----
-
-### namespace_op_expression
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:251`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:264`
 
 **Signature:**
 ```julia
-function namespace_op_expression(expr::OpExpr, prefix::String)::String
+function namespace_expr(expr::NumExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
 ```
 
 **Description:**
-namespace_op_expression(expr::OpExpr, prefix::String) -> String
+namespace_expr(expr, prefix, local_names) -> Expr
 
-Convert an operator expression to a string with namespaced variable references.
+Return a new Expr tree with every VarExpr referencing a name in `local_names`
+rewritten as `"<prefix>.<name>"`. Variables whose name already contains a dot
+(already qualified) are left unchanged. Numeric literals are unchanged.
 
 ---
 
@@ -5330,6 +5531,22 @@ result = simplify(expr)  # VarExpr("x")
 
 ---
 
+### spatial_dims_in_expr
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:327`
+
+**Signature:**
+```julia
+function spatial_dims_in_expr(expr::EarthSciSerialization.Expr)::Set{Symbol}
+```
+
+**Description:**
+spatial_dims_in_expr(expr) -> Set{Symbol}
+
+Collect all spatial dimension names referenced by spatial operators in `expr`.
+
+---
+
 ### start_timer!
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/error_handling.jl:302`
@@ -5569,7 +5786,7 @@ system(...)
 
 ### system_exists_in_file
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:606`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:618`
 
 **Signature:**
 ```julia
@@ -5580,6 +5797,17 @@ function system_exists_in_file(file::EsmFile, system_name::String)::Bool
 system_exists_in_file(file::EsmFile, system_name::String) -> Bool
 
 Check if a system (model, reaction_system, data_loader, or operator) exists in the ESM file.
+
+---
+
+### taxonomy
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+taxonomy(...)
+```
 
 ---
 
@@ -6080,7 +6308,7 @@ validate(...)
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:151`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:163`
 
 **Signature:**
 ```julia
@@ -6100,7 +6328,7 @@ Returns ValidationResult with all errors and warnings.
 
 ### validate_coupling_multi_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:886`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:898`
 
 **Signature:**
 ```julia
@@ -6118,7 +6346,7 @@ Validate coupling interface and lifting fields:
 
 ### validate_coupling_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:315`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:327`
 
 **Signature:**
 ```julia
@@ -6162,7 +6390,7 @@ Checks that the left-hand side and right-hand side have the same dimensions.
 
 ### validate_event_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:637`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:649`
 
 **Signature:**
 ```julia
@@ -6180,7 +6408,7 @@ functional affect refs valid.
 
 ### validate_event_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:469`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:481`
 
 **Signature:**
 ```julia
@@ -6196,7 +6424,7 @@ Validate event variable references.
 
 ### validate_expression_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:276`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:288`
 
 **Signature:**
 ```julia
@@ -6239,7 +6467,7 @@ Returns true if all models and reaction systems pass dimensional validation.
 
 ### validate_interface_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:799`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:811`
 
 **Signature:**
 ```julia
@@ -6256,7 +6484,7 @@ valid dimensions from the domains they belong to.
 
 ### validate_model_balance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:173`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:185`
 
 **Signature:**
 ```julia
@@ -6300,7 +6528,7 @@ Returns true if all equations are dimensionally consistent.
 
 ### validate_model_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:244`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:256`
 
 **Signature:**
 ```julia
@@ -6316,7 +6544,7 @@ Validate variable references within a model.
 
 ### validate_multi_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:719`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:731`
 
 **Signature:**
 ```julia
@@ -6337,7 +6565,7 @@ Validate multi-domain consistency:
 
 ### validate_reaction_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:506`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:518`
 
 **Signature:**
 ```julia
@@ -6382,7 +6610,7 @@ For reactions, validates that rate expressions have appropriate dimensions
 
 ### validate_reference_integrity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:221`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:233`
 
 **Signature:**
 ```julia
@@ -6454,7 +6682,7 @@ Each error contains the path, message, and keyword for debugging.
 
 ### validate_single_event_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:665`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:677`
 
 **Signature:**
 ```julia
@@ -6608,6 +6836,29 @@ struct ConditionTrigger <: DiscreteEventTrigger
 ConditionTrigger(expression::Expr)
 
 Trigger based on boolean condition expression.
+
+---
+
+### ConflictingDerivativeError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:31`
+
+**Definition:**
+```julia
+struct ConflictingDerivativeError <: Exception
+```
+
+**Description:**
+ConflictingDerivativeError
+
+Raised when a species appears both as the left-hand side of an explicit
+differential equation (`D(X, t) = ...`) and as a substrate or product of any
+reaction in the same flattened file. Such a system is over-determined: the
+reaction contribution to `d[X]/dt` would silently shadow the user's equation.
+
+Fields:
+- `species::Vector{String}`: fully-qualified (dot-namespaced) names of every
+  offending species.
 
 ---
 
@@ -6801,6 +7052,24 @@ Edge representing dependency between variables.
 
 ---
 
+### DimensionPromotionError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:48`
+
+**Definition:**
+```julia
+struct DimensionPromotionError <: Exception
+```
+
+**Description:**
+DimensionPromotionError
+
+Raised during flatten when a variable or equation cannot be promoted from
+its source domain to the target domain given the available `Interface` rules
+(§4.7.6).
+
+---
+
 ### DiscreteEvent
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:192`
@@ -6837,6 +7106,23 @@ Spatial and temporal domain specification.
 **Available in other languages:**
 - [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
+
+---
+
+### DomainUnitMismatchError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:87`
+
+**Definition:**
+```julia
+struct DomainUnitMismatchError <: Exception
+```
+
+**Description:**
+DomainUnitMismatchError
+
+Raised when coupling across an `Interface` requires a unit conversion that
+was not declared by the user (§4.7.6).
 
 ---
 
@@ -6963,7 +7249,7 @@ Actionable suggestion for fixing an error.
 
 ### FlattenMetadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:116`
 
 **Definition:**
 ```julia
@@ -6973,11 +7259,17 @@ struct FlattenMetadata
 **Description:**
 FlattenMetadata
 
-Metadata about which systems were flattened and what coupling rules were applied.
+Provenance metadata for a flattened system.
 
-# Fields
-- `source_systems::Vector{String}`: names of all systems that were flattened
-- `coupling_rules::Vector{String}`: human-readable descriptions of coupling rules
+Fields:
+- `source_systems::Vector{String}`: names of the component systems that were
+  flattened (sorted for determinism).
+- `coupling_rules_applied::Vector{String}`: human-readable summary of each
+  coupling entry applied.
+- `dimension_promotions_applied::Vector{NamedTuple}`: records of each dimension
+  promotion — e.g. `(variable="Chem.O3", source_domain=nothing, target_domain="grid2d", kind=:broadcast)`.
+- `opaque_coupling_refs::Vector{String}`: opaque runtime references recorded
+  for `operator_apply` and `callback` couplings.
 
 **Available in other languages:**
 - [Python](python.md#flattenmetadata)
@@ -6985,34 +7277,9 @@ Metadata about which systems were flattened and what coupling rules were applied
 
 ---
 
-### FlattenedEquation
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:30`
-
-**Definition:**
-```julia
-struct FlattenedEquation
-```
-
-**Description:**
-FlattenedEquation
-
-An equation in the flattened system with namespaced variables.
-
-# Fields
-- `lhs::String`: dot-namespaced variable name (e.g., "Atmosphere.T")
-- `rhs::String`: expression string with namespaced references
-- `source_system::String`: name of the system this equation originated from
-
-**Available in other languages:**
-- [Python](python.md#flattenedequation)
-- [Typescript](typescript.md#flattenedequation)
-
----
-
 ### FlattenedSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:64`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:160`
 
 **Definition:**
 ```julia
@@ -7022,16 +7289,31 @@ struct FlattenedSystem
 **Description:**
 FlattenedSystem
 
-A coupled system flattened into a single system with dot-namespaced variables.
-All variables from individual models and reaction systems are unified into a single
-namespace using "SystemName.variable" dot notation.
+A coupled ESM file flattened into a single symbolic representation.
 
-# Fields
-- `state_variables::Vector{String}`: all state variables with system prefixes
-- `parameters::Vector{String}`: all parameters with system prefixes
-- `variables::Dict{String, String}`: map from namespaced variable name to its type ("state", "parameter", "observed", "species")
-- `equations::Vector{FlattenedEquation}`: all equations with namespaced references
-- `metadata::FlattenMetadata`: provenance information about the flattening
+All variables, parameters, and species are dot-namespaced (e.g.
+`"SimpleOzone.O3"`, `"Atmosphere.Chemistry.NO2"`). Equations are real
+`Equation` objects whose Expr trees reference namespaced names via `VarExpr`.
+This is the canonical intermediate form consumed by MTK/PDESystem constructors
+(in the Julia extension) and by cross-language code generators.
+
+Fields:
+- `independent_variables::Vector{Symbol}`: `[:t]` for pure-ODE systems, or
+  `[:t, :x, :y, ...]` when spatial operators are present.
+- `state_variables::OrderedDict{String, ModelVariable}`: namespaced state
+  variables and (former-reaction) species.
+- `parameters::OrderedDict{String, ModelVariable}`: namespaced parameters,
+  minus any promoted to variables by `variable_map`.
+- `observed_variables::OrderedDict{String, ModelVariable}`: namespaced
+  observed variables.
+- `equations::Vector{Equation}`: all equations after reaction lowering and
+  coupling, with variable references rewritten to namespaced form.
+- `continuous_events::Vector{ContinuousEvent}`: collected from every source
+  model with references rewritten.
+- `discrete_events::Vector{DiscreteEvent}`: ditto.
+- `domain::Union{Domain, Nothing}`: the target domain after any dimension
+  promotion (§4.7.6), or `nothing` for purely 0D systems.
+- `metadata::FlattenMetadata`: provenance.
 
 **Available in other languages:**
 - [Python](python.md#flattenedsystem)
@@ -7558,6 +7840,40 @@ struct UnboundVariableError <: Exception
 UnboundVariableError
 
 Exception thrown when trying to evaluate an expression with unbound variables.
+
+---
+
+### UnmappedDomainError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:60`
+
+**Definition:**
+```julia
+struct UnmappedDomainError <: Exception
+```
+
+**Description:**
+UnmappedDomainError
+
+Raised when two systems on different domains are coupled without an `Interface`
+that defines their dimension mapping (§4.7.6).
+
+---
+
+### UnsupportedRegriddingError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:74`
+
+**Definition:**
+```julia
+struct UnsupportedRegriddingError <: Exception
+```
+
+**Description:**
+UnsupportedRegriddingError
+
+Raised when an `Interface` requests a regridding strategy not supported by
+the current library tier (§4.7.6).
 
 ---
 

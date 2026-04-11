@@ -1007,7 +1007,27 @@ function flatten(file::EsmFile)::FlattenedSystem
 
 > flatten(file::EsmFile) -> FlattenedSystem
 
-Flatten coupled systems into a single system with dot-namespaced variables.
+Flatten the coupled systems in `file` into a single symbolic representation
+per spec §4.
+
+**Julia:**
+```julia
+function flatten(model::Model; name::String="anonymous")::FlattenedSystem
+```
+
+> flatten(model::Model; name::String="anonymous") -> FlattenedSystem
+
+Convenience: wrap a single Model in a synthetic EsmFile (with a default system
+name) and run the full flattener.
+
+**Julia:**
+```julia
+function flatten(rsys::ReactionSystem; name::String="anonymous")::FlattenedSystem
+```
+
+> flatten(rsys::ReactionSystem; name::String="anonymous") -> FlattenedSystem
+
+Convenience: wrap a ReactionSystem in a synthetic EsmFile and flatten.
 
 **Typescript:**
 ```typescript
@@ -1272,6 +1292,25 @@ export function load(input: string | object): EsmFile {
 @throws {ParseError} When JSON parsing fails or version is incompatible
 @throws {SchemaValidationError} When schema validation fails
 /.
+
+---
+
+### lower_reactions_to_equations
+
+**Julia:**
+```julia
+lower_reactions_to_equations(...)
+```
+
+**Julia:**
+```julia
+function lower_reactions_to_equations(reactions::Vector{Reaction},
+```
+
+> lower_reactions_to_equations(reactions, species, domain=nothing) -> Vector{Equation}
+
+Produce the ODE equations induced by a set of reactions using standard
+mass-action kinetics: `d[X]/dt = Σ (stoich_ij * rate_j)`.
 
 ---
 
@@ -3884,7 +3923,7 @@ struct FlattenMetadata
 
 > FlattenMetadata
 
-Metadata about which systems were flattened and what coupling rules were applied.
+Provenance metadata for a flattened system.
 
 **Python:**
 ```python
@@ -3903,15 +3942,6 @@ export interface FlattenMetadata {
 ---
 
 ### FlattenedEquation
-
-**Julia:**
-```julia
-struct FlattenedEquation
-```
-
-> FlattenedEquation
-
-An equation in the flattened system with namespaced variables.
 
 **Python:**
 ```python
@@ -3938,7 +3968,7 @@ struct FlattenedSystem
 
 > FlattenedSystem
 
-A coupled system flattened into a single system with dot-namespaced variables.
+A coupled ESM file flattened into a single symbolic representation.
 
 **Python:**
 ```python

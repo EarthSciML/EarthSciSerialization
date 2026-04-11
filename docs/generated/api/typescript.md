@@ -854,6 +854,8 @@ The algorithm:
 **Available in other languages:**
 - [Julia](julia.md#flatten)
 - [Julia](julia.md#flatten)
+- [Julia](julia.md#flatten)
+- [Julia](julia.md#flatten)
 
 ---
 
@@ -2630,7 +2632,6 @@ A single equation in the flattened system, with dot-namespaced variable names.
 /
 
 **Available in other languages:**
-- [Julia](julia.md#flattenedequation)
 - [Python](python.md#flattenedequation)
 
 ---
