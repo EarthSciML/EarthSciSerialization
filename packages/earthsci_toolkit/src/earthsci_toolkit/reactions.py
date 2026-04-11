@@ -15,13 +15,87 @@ from .esm_types import ReactionSystem, Reaction, Species, Model, ModelVariable, 
 from .expression import to_sympy, from_sympy
 
 
+def lower_reactions_to_equations(
+    reactions: List[Reaction],
+    species: List[Species],
+) -> List[Equation]:
+    """
+    Lower a list of reactions into ODE equations using mass-action kinetics.
+
+    Canonical mass-action helper shared by :func:`derive_odes` (which wraps the
+    result in a :class:`Model`) and the SciPy simulation path in
+    ``simulation.py`` (which converts these equations to SymPy for lambdify).
+    Mirrors the single-implementation pattern used by the Rust and Julia
+    toolkits — there is exactly one mass-action lowering in Python.
+
+    Builds ``d[species]/dt = sum_r net_stoich(species, r) * rate(r)`` expressions
+    using ESM :class:`ExprNode` trees (not SymPy), so the output is directly
+    usable by any consumer that handles the ESM expression AST.
+
+    Args:
+        reactions: List of reactions in the system.
+        species: List of species in the system. Used for both ordering and
+            validation (reactants referencing unknown species are rejected).
+
+    Returns:
+        List of :class:`Equation` objects of the form
+        ``D(species, t) = rhs``. Only species with non-zero net rates are
+        included; species that don't participate in any reaction are omitted.
+
+    Raises:
+        ValueError: If any reaction has no rate_constant, or references a
+            reactant that isn't in the species list.
+    """
+    species_names = [s.name for s in species]
+    species_rates: Dict[str, Expr] = {name: 0 for name in species_names}
+
+    for reaction in reactions:
+        if reaction.rate_constant is None:
+            raise ValueError(f"Reaction {reaction.name} must have a rate constant")
+
+        # Build mass-action rate: k * [reactant1]^coeff1 * [reactant2]^coeff2 * ...
+        rate_expr: Expr = reaction.rate_constant
+        for reactant, coeff in reaction.reactants.items():
+            if reactant not in species_names:
+                raise ValueError(f"Reactant {reactant} not found in species list")
+
+            if coeff == 1:
+                rate_expr = _multiply_expressions(rate_expr, reactant)
+            else:
+                power_expr = _power_expression(reactant, coeff)
+                rate_expr = _multiply_expressions(rate_expr, power_expr)
+
+        # Apply net stoichiometry (product_coeff - reactant_coeff) to species rates.
+        for species_name in species_names:
+            net_stoich_coeff = 0
+            if species_name in reaction.reactants:
+                net_stoich_coeff -= reaction.reactants[species_name]
+            if species_name in reaction.products:
+                net_stoich_coeff += reaction.products[species_name]
+
+            if net_stoich_coeff != 0:
+                contribution = _multiply_expressions(net_stoich_coeff, rate_expr)
+                species_rates[species_name] = _add_expressions(
+                    species_rates[species_name], contribution
+                )
+
+    equations: List[Equation] = []
+    for species_name in species_names:
+        if species_rates[species_name] != 0:
+            lhs = ExprNode(op="D", args=[species_name], wrt="t")
+            equations.append(Equation(lhs=lhs, rhs=species_rates[species_name]))
+
+    return equations
+
+
 def derive_odes(system: ReactionSystem) -> Model:
     """
     Derive ODEs from a reaction system using mass action kinetics.
 
-    Generates a system of ordinary differential equations from a reaction network
-    based on the stoichiometry and rate laws. Handles source reactions (null
-    substrates) and sink reactions (null products).
+    Thin wrapper around :func:`lower_reactions_to_equations` that bundles the
+    resulting equations with a ``variables`` dict (state variables for species,
+    parameter variables for rate constants) into a :class:`Model`. Handles
+    source reactions (null substrates) and sink reactions (null products).
 
     Args:
         system: ReactionSystem containing species, reactions, and parameters
@@ -38,11 +112,8 @@ def derive_odes(system: ReactionSystem) -> Model:
     if not system.reactions:
         raise ValueError("ReactionSystem must contain at least one reaction")
 
-    # Create species concentration variables
-    species_names = [species.name for species in system.species]
-    variables = {}
+    variables: Dict[str, ModelVariable] = {}
 
-    # Add state variables for species concentrations
     for species in system.species:
         variables[species.name] = ModelVariable(
             type='state',
@@ -50,7 +121,6 @@ def derive_odes(system: ReactionSystem) -> Model:
             description=f"Concentration of {species.name}",
         )
 
-    # Add parameter variables
     for param in system.parameters:
         variables[param.name] = ModelVariable(
             type='parameter',
@@ -60,65 +130,7 @@ def derive_odes(system: ReactionSystem) -> Model:
             expression=param.value if not isinstance(param.value, (int, float)) else None,
         )
 
-    # Generate ODE equations using mass action kinetics
-    equations = []
-
-    # Initialize rate of change for each species
-    species_rates = {name: 0 for name in species_names}
-
-    for reaction in system.reactions:
-        # Build rate expression using mass action kinetics
-        # Rate = k * [reactant1]^coeff1 * [reactant2]^coeff2 * ...
-
-        if reaction.rate_constant is None:
-            raise ValueError(f"Reaction {reaction.name} must have a rate constant")
-
-        rate_expr = reaction.rate_constant
-
-        # Add reactant terms (mass action kinetics)
-        for reactant, coeff in reaction.reactants.items():
-            if reactant not in species_names:
-                raise ValueError(f"Reactant {reactant} not found in species list")
-
-            # For mass action: rate *= [reactant]^coeff
-            if coeff == 1:
-                # Simple multiplication
-                rate_expr = _multiply_expressions(rate_expr, reactant)
-            else:
-                # Power term
-                power_expr = _power_expression(reactant, coeff)
-                rate_expr = _multiply_expressions(rate_expr, power_expr)
-
-        # Apply stoichiometric coefficients to species rates
-        # For each species, d[species]/dt += (product_coeff - reactant_coeff) * rate
-
-        for species_name in species_names:
-            net_stoich_coeff = 0
-
-            # Subtract reactant coefficient (consumed)
-            if species_name in reaction.reactants:
-                net_stoich_coeff -= reaction.reactants[species_name]
-
-            # Add product coefficient (produced)
-            if species_name in reaction.products:
-                net_stoich_coeff += reaction.products[species_name]
-
-            if net_stoich_coeff != 0:
-                # Add this reaction's contribution to species rate
-                contribution = _multiply_expressions(net_stoich_coeff, rate_expr)
-                species_rates[species_name] = _add_expressions(species_rates[species_name], contribution)
-
-    # Create differential equations
-    for species_name in species_names:
-        if species_rates[species_name] != 0:  # Only create equations for species with non-zero rates
-            # d[species]/dt = rate_expression
-            lhs = ExprNode(op="D", args=[species_name], wrt="t")
-            equations.append(Equation(lhs=lhs, rhs=species_rates[species_name]))
-
-    # Handle constraint equations (algebraic equations)
-    # These would be derived from conservation laws or equilibrium assumptions
-    # For now, we don't add any constraint equations - they would be handled
-    # separately based on the specific system requirements
+    equations = lower_reactions_to_equations(system.reactions, system.species)
 
     return Model(
         name=f"{system.name}_odes",

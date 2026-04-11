@@ -39,6 +39,7 @@ from .flatten import (
     _lhs_dependent_var,
     flatten,
 )
+from .reactions import lower_reactions_to_equations
 
 
 @dataclass
@@ -280,47 +281,35 @@ def _flat_to_sympy_rhs(
 
 def _generate_mass_action_odes(reaction_system: ReactionSystem) -> Tuple[List[str], List[sp.Expr]]:
     """
-    Generate mass-action ODEs from reaction system.
+    Adapter that lowers a reaction system into ``(species_names, sympy_odes)``
+    for SciPy's lambdify pipeline.
 
-    Args:
-        reaction_system: The reaction system to convert
+    Delegates the actual mass-action lowering to
+    :func:`earthsci_toolkit.reactions.lower_reactions_to_equations` — the
+    single canonical implementation shared with :func:`derive_odes`. This
+    function only (a) supplies a graceful empty-system path for simulate()
+    and (b) converts the resulting ESM ExprNode equations into SymPy
+    expressions aligned with the species index used by the RHS function.
 
-    Returns:
-        Tuple of (species_names, ode_expressions)
+    Species that don't appear in any reaction get a constant ``sp.Float(0)``
+    expression so the returned list stays aligned with ``species_names``.
     """
-    # Get all species names
     species_names = [species.name for species in reaction_system.species]
-    species_symbols = {name: sp.Symbol(name) for name in species_names}
+    symbol_map = {name: sp.Symbol(name) for name in species_names}
+    species_rates: Dict[str, sp.Expr] = {name: sp.Float(0) for name in species_names}
 
-    # Initialize ODE expressions (all start at 0)
-    ode_exprs = [sp.Float(0) for _ in species_names]
-    species_indices = {name: i for i, name in enumerate(species_names)}
+    if species_names and reaction_system.reactions:
+        equations = lower_reactions_to_equations(
+            reaction_system.reactions, reaction_system.species
+        )
+        for eq in equations:
+            lhs = eq.lhs
+            if isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args:
+                species_name = lhs.args[0]
+                if species_name in species_rates:
+                    species_rates[species_name] = _expr_to_sympy(eq.rhs, symbol_map)
 
-    # Process each reaction
-    for reaction in reaction_system.reactions:
-        # Convert rate constant to SymPy
-        if reaction.rate_constant is None:
-            continue
-
-        rate_expr = _expr_to_sympy(reaction.rate_constant, species_symbols)
-
-        # Mass action kinetics: rate = k * product(reactant concentrations)
-        for reactant, coefficient in reaction.reactants.items():
-            if reactant in species_symbols:
-                rate_expr *= species_symbols[reactant] ** coefficient
-
-        # Add/subtract from species ODEs based on stoichiometry
-        for reactant, coefficient in reaction.reactants.items():
-            if reactant in species_indices:
-                idx = species_indices[reactant]
-                ode_exprs[idx] -= coefficient * rate_expr
-
-        for product, coefficient in reaction.products.items():
-            if product in species_indices:
-                idx = species_indices[product]
-                ode_exprs[idx] += coefficient * rate_expr
-
-    return species_names, ode_exprs
+    return species_names, [species_rates[name] for name in species_names]
 
 
 def _create_event_functions(events: List[ContinuousEvent], symbol_map: Dict[str, sp.Symbol]) -> List[Callable]:
