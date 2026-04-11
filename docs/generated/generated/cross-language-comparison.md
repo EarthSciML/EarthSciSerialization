@@ -228,26 +228,6 @@ Section(...)
 
 **Python:**
 ```python
-def __init__(self, config: Operator):
-```
-
-**Python:**
-```python
-def __init__(self, config: Operator):
-```
-
-**Python:**
-```python
-def __init__(self, config: Operator):
-```
-
-**Python:**
-```python
-def __init__(self, wrong_param_name):
-```
-
-**Python:**
-```python
 def __init__(self):
 ```
 
@@ -415,35 +395,6 @@ def __str__(self):
 def __str__(self):
 ```
 
-**Python:**
-```python
-def __str__(self):
-```
-
-**Python:**
-```python
-def __str__(self):
-```
-
-**Python:**
-```python
-def __str__(self):
-```
-
----
-
-### add_component_time
-
-**Python:**
-```python
-def add_component_time(self, component: str, duration: float):
-```
-
-**Python:**
-```python
-def add_component_time(self, component, duration):
-```
-
 ---
 
 ### add_continuous_event
@@ -515,20 +466,6 @@ function add_equation(model::Model, equation::Equation)::Model
 > add_equation(model::Model, equation::Equation) -> Model
 
 Add a new equation to a model.
-
----
-
-### add_iteration_time
-
-**Python:**
-```python
-def add_iteration_time(self, duration: float):
-```
-
-**Python:**
-```python
-def add_iteration_time(self, duration):
-```
 
 ---
 
@@ -726,24 +663,6 @@ export function contains(expr: Expr, varName: string): boolean {
 
 ---
 
-### create_test_esm_file
-
-**Python:**
-```python
-def create_test_esm_file():
-```
-
-> Create a test ESM file with models and reaction systems for testing.
-
-**Python:**
-```python
-def create_test_esm_file():
-```
-
-> Create a simple test ESM file.
-
----
-
 ### demonstrate_error_handling
 
 **Python:**
@@ -763,13 +682,6 @@ def demonstrate_error_handling():
 ---
 
 ### differentiate
-
-**Python:**
-```python
-def differentiate(self, x_values, y_values):
-```
-
-> Forward difference implementation.
 
 **Python:**
 ```python
@@ -1074,20 +986,6 @@ def interpolate(self, x_values, y_values, x_new):
 
 > Spline interpolation implementation.
 
-**Python:**
-```python
-def interpolate(self, x_values, y_values, x_new):
-```
-
-> Simple linear interpolation implementation.
-
-**Python:**
-```python
-def interpolate(self, x_values, y_values, x_new):
-```
-
-> Spline interpolation implementation.
-
 ---
 
 ### is_valid_identifier
@@ -1175,53 +1073,6 @@ mass-action kinetics: `d[X]/dt = Σ (stoich_ij * rate_j)`.
 ---
 
 ### main
-
-**Python:**
-```python
-def main():
-```
-
-> Run all demos.
-
-**Python:**
-```python
-def main():
-```
-
-> Run all coupling iteration tests.
-
-**Python:**
-```python
-def main():
-```
-
-> Run all coupling error handling tests.
-
-**Python:**
-```python
-def main():
-```
-
-> Run all graph export tests.
-
-**Python:**
-```python
-def main():
-```
-
-> Run all tests.
-
-**Python:**
-```python
-def main():
-```
-
-**Python:**
-```python
-def main():
-```
-
-> Run all tests.
 
 **Python:**
 ```python
@@ -1440,20 +1291,6 @@ function predecessors(graph::Graph{N, E}, node::N) where {N, E}
 ```
 
 > Get nodes that point to this node.
-
----
-
-### put
-
-**Python:**
-```python
-def put(self, key: str, value: Any):
-```
-
-**Python:**
-```python
-def put(self, key, value):
-```
 
 ---
 
@@ -1683,45 +1520,6 @@ Resolve all subsystem references in-place.
 
 ---
 
-### run_tests
-
-**Python:**
-```python
-def run_tests():
-```
-
-> Run all CSV loader tests.
-
-**Python:**
-```python
-def run_tests():
-```
-
-> Run all gridded loader tests.
-
-**Python:**
-```python
-def run_tests():
-```
-
-> Run all callback loader tests.
-
-**Python:**
-```python
-def run_tests():
-```
-
-> Run basic tests to validate the package.
-
-**Python:**
-```python
-def run_tests():
-```
-
-> Run all integration tests.
-
----
-
 ### save
 
 **Julia:**
@@ -1902,76 +1700,6 @@ system(...)
 
 ---
 
-### test_basic_functionality
-
-**Python:**
-```python
-def test_basic_functionality():
-```
-
-> Test basic functionality of display module.
-
-**Python:**
-```python
-def test_basic_functionality():
-```
-
-> Test basic functionality of display module.
-
----
-
-### test_basic_structure
-
-**Python:**
-```python
-def test_basic_structure(self):
-```
-
-> Test that Julia code has required structural elements.
-
-**Python:**
-```python
-def test_basic_structure(self):
-```
-
-> Test that Python code has required structural elements.
-
----
-
-### test_complex_expression
-
-**Python:**
-```python
-def test_complex_expression():
-```
-
-**Python:**
-```python
-def test_complex_expression():
-```
-
-> Test complex nested expression.
-
----
-
-### test_convenience_function
-
-**Python:**
-```python
-def test_convenience_function():
-```
-
-> Test the convenience function.
-
-**Python:**
-```python
-def test_convenience_function():
-```
-
-> Test the convenience function.
-
----
-
 ### test_empty_system
 
 **Python:**
@@ -1987,106 +1715,6 @@ def test_empty_system(self):
 ```
 
 > Test empty reaction system returns empty matrix.
-
----
-
-### test_esm_file
-
-**Python:**
-```python
-def test_esm_file():
-```
-
-**Python:**
-```python
-def test_esm_file():
-```
-
-> Test EsmFile creation.
-
----
-
-### test_expr_node
-
-**Python:**
-```python
-def test_expr_node():
-```
-
-**Python:**
-```python
-def test_expr_node():
-```
-
-> Test ExprNode creation.
-
----
-
-### test_model
-
-**Python:**
-```python
-def test_model():
-```
-
-**Python:**
-```python
-def test_model():
-```
-
-> Test Model creation.
-
----
-
-### test_model_generation
-
-**Python:**
-```python
-def test_model_generation(self):
-```
-
-> Test model code generation quality.
-
-**Python:**
-```python
-def test_model_generation(self):
-```
-
-> Test Python model code generation quality.
-
----
-
-### test_model_variable
-
-**Python:**
-```python
-def test_model_variable():
-```
-
-**Python:**
-```python
-def test_model_variable():
-```
-
-> Test ModelVariable creation.
-
----
-
-### test_reaction_system_generation
-
-**Python:**
-```python
-def test_reaction_system_generation(self):
-```
-
-> Test reaction system code generation quality.
-
-**Python:**
-```python
-def test_reaction_system_generation(self):
-```
-
-> Test Python reaction system code generation quality.
 
 ---
 
@@ -2123,40 +1751,6 @@ def test_source_and_sink_reactions(self):
 ```
 
 > Test reactions with no reactants (source) or no products (sink).
-
----
-
-### test_species
-
-**Python:**
-```python
-def test_species():
-```
-
-**Python:**
-```python
-def test_species():
-```
-
-> Test Species creation.
-
----
-
-### test_syntactic_correctness
-
-**Python:**
-```python
-def test_syntactic_correctness(self):
-```
-
-> Test that generated Julia code would be syntactically correct.
-
-**Python:**
-```python
-def test_syntactic_correctness(self):
-```
-
-> Test that generated Python code is syntactically correct.
 
 ---
 
@@ -2261,20 +1855,6 @@ types(...)
 **Julia:**
 ```julia
 types(...)
-```
-
----
-
-### update_worker_performance
-
-**Python:**
-```python
-def update_worker_performance(self, worker_id: int, task_duration: float, task_cost: float = 1.0):
-```
-
-**Python:**
-```python
-def update_worker_performance(self, worker_id, task_duration, task_cost=1.0):
 ```
 
 ---
@@ -3057,13 +2637,6 @@ class ExprNode:
 
 > A node in an expression tree.
 
-**Python:**
-```python
-class ExprNode:
-```
-
-> A node in an expression tree.
-
 ---
 
 ### FixSuggestion
@@ -3163,24 +2736,6 @@ export interface FlattenedSystem {
 
 ---
 
-### ForwardDifferenceOperator
-
-**Python:**
-```python
-class ForwardDifferenceOperator:
-```
-
-> Example differentiation operator.
-
-**Python:**
-```python
-class ForwardDifferenceOperator:
-```
-
-> Example differentiation operator.
-
----
-
 ### FunctionalAffect
 
 **Julia:**
@@ -3228,24 +2783,6 @@ class Graph:
 ```typescript
 export interface Graph<N, E> {
 ```
-
----
-
-### LinearInterpolationOperator
-
-**Python:**
-```python
-class LinearInterpolationOperator:
-```
-
-> Example linear interpolation operator.
-
-**Python:**
-```python
-class LinearInterpolationOperator:
-```
-
-> Example linear interpolation operator.
 
 ---
 
@@ -3566,24 +3103,6 @@ export interface Species {
 ```
 
 > A reactive species in a reaction system.
-
----
-
-### SplineInterpolationOperator
-
-**Python:**
-```python
-class SplineInterpolationOperator:
-```
-
-> Example spline interpolation operator (newer version).
-
-**Python:**
-```python
-class SplineInterpolationOperator:
-```
-
-> Example spline interpolation operator (newer version).
 
 ---
 

@@ -541,7 +541,6 @@ Compute the symbolic derivative of an expression with respect to a variable
 
 **Available in other languages:**
 - [Python](python.md#differentiate)
-- [Python](python.md#differentiate)
 
 ---
 
