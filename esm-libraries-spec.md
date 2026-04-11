@@ -508,6 +508,59 @@ Equations:
 
 **The flattened system is the API boundary.** All downstream operations — graph construction, validation of the coupled system, export to simulation backends — operate on the flattened representation rather than the individual component systems.
 
+#### 4.7.6 Dimension Promotion and Hybrid Systems
+
+Hybrid systems mix component systems with different independent-variable signatures (e.g. a 0D box model coupled to a 1D advection model). When flattening such a system, libraries must promote the lower-dimensional component to match the higher-dimensional one before merging equations.
+
+##### 4.7.6.1 Independent Variables
+
+After flattening, the `FlattenedSystem` exposes an `independent_variables` field listing the independent variables of the merged system, in canonical order. By convention:
+
+- Time is always present and always listed first as `"t"`.
+- Spatial dimensions (`"x"`, `"y"`, `"z"`) appear when the equation set contains spatial derivative operators (`grad`, `div`, `laplacian`, `curl`) referencing them.
+
+Libraries derive `independent_variables` from the equation set (not from a separate declaration), so the flattened system's dimensionality is always consistent with its equations.
+
+##### 4.7.6.2 Promotion Mappings
+
+When two coupled systems have different independent variables, each variable in the lower-dimensional system must be promoted to live on the higher-dimensional grid. Libraries support a small set of mapping rules:
+
+| Mapping | Effect |
+|---|---|
+| `identity` | The lower-dim variable is reused as-is (must match the higher-dim grid). |
+| `broadcast` | A scalar (0D) value is broadcast across all spatial cells. |
+| `slice` | A higher-dim variable is restricted to a subset of indices. |
+| `project` | A lower-dim variable is projected onto a higher-dim grid (e.g. zonal mean). |
+| `regrid` | Interpolation between grids. |
+
+##### 4.7.6.3 Tiering
+
+Each library implementation declares which mappings it supports:
+
+- **Core tier:** `identity` and `broadcast` only. Other mappings raise `UnsupportedMappingError`. Sufficient for 0D box-model use cases.
+- **Analysis tier:** Adds `slice` and `project`.
+- **Full tier:** Adds `regrid` (typically by deferring to a domain-specific regridding library).
+
+The Python library is currently **Core tier**.
+
+##### 4.7.6.10 Errors
+
+Libraries report dimension-promotion failures with these uniform error names so validators and tooling can interoperate across languages:
+
+| Error | Meaning |
+|---|---|
+| `UnsupportedDimensionalityError` | The flattened system has a dimensionality the consumer cannot handle (e.g. an ODE-only simulator given a system with spatial independent variables). |
+| `UnsupportedMappingError` | A required dimension-promotion mapping is not supported by the library's tier. |
+| `ConflictingDerivativeError` | Two systems define non-additive equations for the same dependent variable after coupling resolution. |
+| `UnmappedDomainError` | A coupling references a variable whose domain has no mapping rule. |
+| `SliceOutOfDomainError` | A `slice` mapping reaches outside the source variable's domain. |
+
+##### 4.7.6.12 Backend Rejection
+
+Backends that cannot integrate over a particular set of independent variables MUST raise `UnsupportedDimensionalityError` immediately when called on a flattened system whose dimensionality they do not support, with a message that names a backend capable of handling the system.
+
+For ODE-only simulators (e.g. Python's SciPy `solve_ivp` path) this means rejecting any flattened system with `len(independent_variables) > 1` and directing the user to a PDE-capable backend such as Julia EarthSciSerialization.
+
 ### 4.8 Graph Representations
 
 Every library must be able to produce two distinct graph representations of an `.esm` file. These graphs are **data-only**: libraries return language-idiomatic adjacency structures (nodes, edges, connectivity) but do **not** render, lay out, or visualize the graph. Rendering is the sole concern of downstream consumers (`esm-editor`'s `<CouplingGraph>` component, CLI export to DOT/Mermaid, or user code).
@@ -1374,35 +1427,54 @@ J = esm.jacobian(file.models["SuperFast"])  # returns SymPy Matrix
 
 #### 5.3.5 Simulation via SciPy
 
-For ODE models and reaction systems, the Python library can generate a numerical RHS function and solve:
+The Python `simulate()` function consumes a `FlattenedSystem` as its canonical input (per spec §4.7.5 — the flattened representation is the API boundary between coupling resolution and any downstream backend). The `EsmFile` overload is a thin convenience wrapper that calls `flatten()` internally.
 
 ```python
-# Simulate a model
+# Simulate from a FlattenedSystem (canonical path)
+flat = esm.flatten(file)
 solution = esm.simulate(
-    file,
-    tspan=(0, 86400),      # 1 day in seconds
-    parameters={"T": 298.15, "jNO2": 0.005},
-    initial_conditions={"O3": 40e-9, "NO": 0.1e-9, "NO2": 1e-9},
-    method="BDF",           # scipy.integrate.solve_ivp method
+    flat,
+    tspan=(0, 86400),       # 1 day in seconds
+    parameters={"SimpleOzone.T": 298.15, "SimpleOzone.jNO2": 0.005},
+    initial_conditions={"SimpleOzone.O3": 40e-9, "SimpleOzone.NO": 0.1e-9},
+    method="BDF",
 )
 
-# solution is a scipy OdeResult-like object
-print(solution.t)     # time points
-print(solution.y)     # state trajectories
-print(solution.vars)  # ["O3", "NO", "NO2"]
+# Convenience overload — flattens internally
+solution = esm.simulate(
+    file,
+    tspan=(0, 86400),
+    parameters={"T": 298.15, "jNO2": 0.005},  # bare names also accepted
+    initial_conditions={"O3": 40e-9, "NO": 0.1e-9, "NO2": 1e-9},
+    method="BDF",
+)
 
-# Plot
-solution.plot()  # matplotlib integration
+# solution is a SimulationResult
+print(solution.t)     # time points
+print(solution.y)     # state trajectories (rows in solution.vars order)
+print(solution.vars)  # ["SimpleOzone.O3", "SimpleOzone.NO", "SimpleOzone.NO2"]
+solution.plot()       # matplotlib integration
 ```
+
+**Parameter and initial condition lookup.** Both dot-namespaced (`"SimpleOzone.k"`) and bare names (`"k"`) are accepted. The dot-namespaced form takes precedence; the bare name acts as an unambiguous fallback. Parameters not provided fall back to the variable's `default` (or `0`).
 
 **Implementation approach:**
 
-1. Resolve all coupling (`variable_map`, `operator_compose`) to produce a single combined ODE system.
-2. Convert all expressions to SymPy.
-3. For reaction systems, generate mass-action ODEs from stoichiometry.
-4. Use `sympy.lambdify()` to create a fast NumPy-callable RHS function.
-5. Optionally generate a symbolic Jacobian and lambdify it for stiff solvers.
-6. Call `scipy.integrate.solve_ivp()`.
+1. Call `flatten(file)` to obtain the canonical `FlattenedSystem`. This pre-resolves all coupling rules — `operator_compose` (LHS-match + sum, with `_var` placeholder expansion), `couple` connectors, and `variable_map` substitutions — and lowers reaction systems to ODEs via `derive_odes()`.
+2. Reject PDE inputs: if `len(flat.independent_variables) > 1`, raise `UnsupportedDimensionalityError` per §4.7.6.12.
+3. Convert each flattened equation's RHS to a SymPy expression using the dot-namespaced symbol map.
+4. Substitute parameter values, then `sympy.lambdify()` to create a fast NumPy-callable RHS function.
+5. Call `scipy.integrate.solve_ivp()`.
+
+**Dimension promotion tier (§4.7.6).** The Python library is **Core tier** for dimension promotion: it handles broadcast and identity mappings (a flattened system whose independent variables are exactly `["t"]`). Slice, project, and regrid mappings raise `UnsupportedMappingError`. PDE inputs (any spatial independent variable in the flattened system) raise `UnsupportedDimensionalityError`, with a message directing users to a PDE-capable backend such as Julia EarthSciSerialization.
+
+**Conflict and validation errors.** `flatten()` raises:
+
+- `ConflictingDerivativeError` when two systems define non-additive equations for the same dependent variable;
+- `UnmappedDomainError` when a coupling references a variable whose domain has no mapping rule;
+- `SliceOutOfDomainError` when a slice mapping reaches outside the source variable's domain.
+
+These mirror the names defined in §4.7.6.10 so cross-language validators can interoperate.
 
 **Event handling in SciPy:**
 
@@ -1418,7 +1490,7 @@ Since SciPy's event handling is less sophisticated than DifferentialEquations.jl
 - Direction-dependent affects (`affect_neg`) require custom zero-crossing direction detection.
 - Discrete events with complex triggers require manual integration loop management.
 - Functional affects are not supported (they are runtime-specific).
-- Spatial operators (grad, laplacian) are not supported — simulation is limited to 0D (box model) ODE systems.
+- Spatial operators (`grad`, `div`, `laplacian`) cause `simulate()` to raise `UnsupportedDimensionalityError` — simulation is limited to 0D (box model) ODE systems. Use Julia for PDE work.
 
 #### 5.3.6 Jupyter Integration
 
