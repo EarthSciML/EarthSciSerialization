@@ -1822,6 +1822,7 @@ function save(file::EsmFile, path::String)
 ```
 
 > save(file::EsmFile, path::String)
+    save(path::String, file::EsmFile)
 
 Save an EsmFile object to a JSON file at the specified path.
 
