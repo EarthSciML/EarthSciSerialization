@@ -57,7 +57,6 @@ fn test_undefined_variable_in_model() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -142,7 +141,6 @@ fn test_equation_count_mismatch() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -165,34 +163,42 @@ fn test_equation_count_mismatch() {
 /// Test undefined species in reaction system
 #[test]
 fn test_undefined_species_in_reaction() {
-    let species = vec![Species {
-        name: "A".to_string(),
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert("A".to_string(), Species {
         units: Some("mol/L".to_string()),
         default: Some(1.0),
         description: None,
-    }];
+    });
+        m
+    };
 
     let reactions = vec![Reaction {
-        name: None,
-        substrates: vec![StoichiometricEntry {
+            id: None,
+            name: None,
+            substrates: Some(vec![StoichiometricEntry {
             species: "B".to_string(), // 'B' is not defined
-            coefficient: Some(1.0),
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1,
+        }]),
+            products: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: Some(1.0),
-        }],
-        rate: Expr::Variable("k".to_string()),
-        description: None,
-    }];
+            coefficient: 1,
+        }]),
+            rate: Expr::Variable("k".to_string()),
+            reference: None,
+        }];
 
     let rs = ReactionSystem {
-        name: Some("Test RS".to_string()),
-        species,
-        parameters: HashMap::new(),
-        reactions,
-        description: None,
-    };
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: species,
+            parameters: HashMap::new(),
+            reactions: reactions,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
+        };
 
     let mut reaction_systems = HashMap::new();
     reaction_systems.insert("test".to_string(), rs);
@@ -215,7 +221,6 @@ fn test_undefined_species_in_reaction() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -313,7 +318,6 @@ fn test_valid_file_passes() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     let validation_result = validate(&esm_file);

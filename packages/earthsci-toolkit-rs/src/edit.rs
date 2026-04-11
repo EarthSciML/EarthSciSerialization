@@ -262,23 +262,28 @@ pub fn add_reaction_system(
 /// # Arguments
 ///
 /// * `system` - The reaction system to modify
-/// * `species` - The species to add
+/// * `name` - Species name (key)
+/// * `species` - The species value to add
 ///
 /// # Returns
 ///
 /// * `EditResult<ReactionSystem>` - New reaction system with the added species
-pub fn add_species(system: &ReactionSystem, species: Species) -> EditResult<ReactionSystem> {
+pub fn add_species(
+    system: &ReactionSystem,
+    name: &str,
+    species: Species,
+) -> EditResult<ReactionSystem> {
     let mut new_system = system.clone();
 
     // Check if species already exists
-    if new_system.species.iter().any(|s| s.name == species.name) {
+    if new_system.species.contains_key(name) {
         return Err(EditError::InvalidOperation(format!(
             "Species '{}' already exists",
-            species.name
+            name
         )));
     }
 
-    new_system.species.push(species);
+    new_system.species.insert(name.to_string(), species);
     Ok(new_system)
 }
 
@@ -295,10 +300,7 @@ pub fn add_species(system: &ReactionSystem, species: Species) -> EditResult<Reac
 pub fn remove_species(system: &ReactionSystem, species_name: &str) -> EditResult<ReactionSystem> {
     let mut new_system = system.clone();
 
-    let initial_len = new_system.species.len();
-    new_system.species.retain(|s| s.name != species_name);
-
-    if new_system.species.len() == initial_len {
+    if new_system.species.remove(species_name).is_none() {
         return Err(EditError::SpeciesNotFound(species_name.to_string()));
     }
 

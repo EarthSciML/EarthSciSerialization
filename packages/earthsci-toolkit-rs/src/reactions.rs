@@ -60,9 +60,9 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     }
 
     // Create state variables for each species
-    for species in &system.species {
+    for (species_name, species) in &system.species {
         variables.insert(
-            species.name.clone(),
+            species_name.clone(),
             ModelVariable {
                 var_type: VariableType::State,
                 units: species.units.clone(),
@@ -76,16 +76,9 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     // Validate reactions and their stoichiometry
     for (reaction_idx, reaction) in system.reactions.iter().enumerate() {
         // Check for invalid stoichiometry
-        for substrate in &reaction.substrates {
-            if substrate.coefficient.map_or(false, |c| c < 0.0) {
-                return Err(DeriveError::InvalidStoichiometry(format!(
-                    "Negative substrate coefficient {} in reaction {}",
-                    substrate.coefficient.unwrap(),
-                    reaction_idx
-                )));
-            }
-            // Verify substrate species exists
-            if !system.species.iter().any(|s| s.name == substrate.species) {
+        for substrate in reaction.substrates.iter().flatten() {
+            // u32 cannot be negative; only verify substrate species exists
+            if !system.species.contains_key(&substrate.species) {
                 return Err(DeriveError::InvalidStoichiometry(format!(
                     "Unknown substrate species '{}' in reaction {}",
                     substrate.species, reaction_idx
@@ -93,16 +86,8 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
             }
         }
 
-        for product in &reaction.products {
-            if product.coefficient.map_or(false, |c| c < 0.0) {
-                return Err(DeriveError::InvalidStoichiometry(format!(
-                    "Negative product coefficient {} in reaction {}",
-                    product.coefficient.unwrap(),
-                    reaction_idx
-                )));
-            }
-            // Verify product species exists
-            if !system.species.iter().any(|s| s.name == product.species) {
+        for product in reaction.products.iter().flatten() {
+            if !system.species.contains_key(&product.species) {
                 return Err(DeriveError::InvalidStoichiometry(format!(
                     "Unknown product species '{}' in reaction {}",
                     product.species, reaction_idx
@@ -111,7 +96,12 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         }
 
         // Check for source/sink reactions (no substrates or no products)
-        if reaction.substrates.is_empty() && reaction.products.is_empty() {
+        let no_substrates = reaction
+            .substrates
+            .as_ref()
+            .map_or(true, |v| v.is_empty());
+        let no_products = reaction.products.as_ref().map_or(true, |v| v.is_empty());
+        if no_substrates && no_products {
             return Err(DeriveError::InvalidStoichiometry(format!(
                 "Reaction {} has no substrates or products",
                 reaction_idx
@@ -120,37 +110,41 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     }
 
     // Generate ODE equations for each species
-    for species in &system.species {
+    for (species_name, _species) in &system.species {
         let mut rate_terms = Vec::new();
 
         // Check each reaction for contributions to this species
         for (_reaction_idx, reaction) in system.reactions.iter().enumerate() {
-            let mut net_stoichiometry = 0.0;
+            let mut net_stoichiometry: i64 = 0;
 
             // Check if species is a substrate (negative contribution)
-            for substrate in &reaction.substrates {
-                if substrate.species == species.name {
-                    net_stoichiometry -= substrate.coefficient.unwrap_or(1.0);
+            for substrate in reaction.substrates.iter().flatten() {
+                if substrate.species == *species_name {
+                    net_stoichiometry -= substrate.coefficient as i64;
                 }
             }
 
             // Check if species is a product (positive contribution)
-            for product in &reaction.products {
-                if product.species == species.name {
-                    net_stoichiometry += product.coefficient.unwrap_or(1.0);
+            for product in reaction.products.iter().flatten() {
+                if product.species == *species_name {
+                    net_stoichiometry += product.coefficient as i64;
                 }
             }
 
             // If species participates in this reaction, add rate term
-            if net_stoichiometry != 0.0 {
+            if net_stoichiometry != 0 {
+                let empty_subs: Vec<crate::StoichiometricEntry> = Vec::new();
+                let subs_slice: &[crate::StoichiometricEntry] = reaction
+                    .substrates
+                    .as_deref()
+                    .unwrap_or(&empty_subs);
                 // For mass action kinetics, we need to multiply the base rate by concentration terms
-                let enhanced_rate =
-                    enhance_rate_with_mass_action(&reaction.rate, &reaction.substrates)?;
+                let enhanced_rate = enhance_rate_with_mass_action(&reaction.rate, subs_slice)?;
 
-                if net_stoichiometry == 1.0 {
+                if net_stoichiometry == 1 {
                     // Direct rate contribution
                     rate_terms.push(enhanced_rate);
-                } else if net_stoichiometry == -1.0 {
+                } else if net_stoichiometry == -1 {
                     // Negative rate contribution
                     rate_terms.push(Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
@@ -162,7 +156,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
                     // Scaled rate contribution
                     rate_terms.push(Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
-                        args: vec![Expr::Number(net_stoichiometry), enhanced_rate],
+                        args: vec![Expr::Number(net_stoichiometry as f64), enhanced_rate],
                         wrt: None,
                         dim: None,
                     }));
@@ -187,7 +181,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         // Create the ODE equation: D[species] (wrt t) = rhs
         let lhs = Expr::Operator(ExpressionNode {
             op: "D".to_string(),
-            args: vec![Expr::Variable(species.name.clone())],
+            args: vec![Expr::Variable(species_name.clone())],
             wrt: Some("t".to_string()),
             dim: None,
         });
@@ -196,13 +190,13 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     }
 
     Ok(Model {
-        name: system.name.clone(),
+        name: None,
         reference: None,
         variables,
         equations,
         discrete_events: None,
         continuous_events: None,
-        description: system.description.clone(),
+        description: None,
     })
 }
 
@@ -234,40 +228,24 @@ fn enhance_rate_with_mass_action(
     let mut concentration_factors = Vec::new();
 
     for substrate in substrates {
-        let coeff = substrate.coefficient.unwrap_or(1.0);
+        let coeff = substrate.coefficient;
         let species_var = Expr::Variable(substrate.species.clone());
 
-        if coeff == 1.0 {
+        if coeff == 1 {
             // Simple concentration factor
             concentration_factors.push(species_var);
         } else {
-            // Check if coefficient is close to an integer (handle floating-point precision issues)
-            const TOLERANCE: f64 = 1e-10;
-            let rounded_coeff = coeff.round();
-            let is_close_to_integer = (coeff - rounded_coeff).abs() < TOLERANCE;
-
-            if is_close_to_integer && rounded_coeff > 1.0 {
-                // Integer power > 1 - create explicit multiplication
-                let int_coeff = rounded_coeff as i32;
-                let mut power_terms = Vec::new();
-                for _ in 0..int_coeff {
-                    power_terms.push(species_var.clone());
-                }
-                if power_terms.len() == 1 {
-                    concentration_factors.push(power_terms.into_iter().next().unwrap());
-                } else {
-                    concentration_factors.push(Expr::Operator(ExpressionNode {
-                        op: "*".to_string(),
-                        args: power_terms,
-                        wrt: None,
-                        dim: None,
-                    }));
-                }
+            // Integer power > 1 - create explicit multiplication
+            let mut power_terms = Vec::new();
+            for _ in 0..coeff {
+                power_terms.push(species_var.clone());
+            }
+            if power_terms.len() == 1 {
+                concentration_factors.push(power_terms.into_iter().next().unwrap());
             } else {
-                // Non-integer power or fractional power - use pow operator
                 concentration_factors.push(Expr::Operator(ExpressionNode {
-                    op: "pow".to_string(),
-                    args: vec![species_var, Expr::Number(coeff)],
+                    op: "*".to_string(),
+                    args: power_terms,
                     wrt: None,
                     dim: None,
                 }));
@@ -320,28 +298,29 @@ pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<f64>> {
     // Initialize matrix with zeros
     let mut matrix = vec![vec![0.0f64; num_reactions]; num_species];
 
-    // Create mapping from species name to index
-    let species_index: HashMap<String, usize> = system
-        .species
+    // Create mapping from species name to index (sort for stable ordering)
+    let mut species_names: Vec<&String> = system.species.keys().collect();
+    species_names.sort();
+    let species_index: HashMap<String, usize> = species_names
         .iter()
         .enumerate()
-        .map(|(idx, species)| (species.name.clone(), idx))
+        .map(|(idx, name)| ((*name).clone(), idx))
         .collect();
 
     // Fill in the matrix
     for (reaction_idx, reaction) in system.reactions.iter().enumerate() {
         // Process substrates (negative coefficients)
-        for substrate in &reaction.substrates {
+        for substrate in reaction.substrates.iter().flatten() {
             if let Some(&species_idx) = species_index.get(&substrate.species) {
-                let coeff = substrate.coefficient.unwrap_or(1.0);
+                let coeff = substrate.coefficient as f64;
                 matrix[species_idx][reaction_idx] -= coeff;
             }
         }
 
         // Process products (positive coefficients)
-        for product in &reaction.products {
+        for product in reaction.products.iter().flatten() {
             if let Some(&species_idx) = species_index.get(&product.species) {
-                let coeff = product.coefficient.unwrap_or(1.0);
+                let coeff = product.coefficient as f64;
                 matrix[species_idx][reaction_idx] += coeff;
             }
         }
@@ -466,11 +445,15 @@ pub struct LinearInvariant {
 ///
 /// // Create a simple reaction system
 /// let system = ReactionSystem {
-///     name: Some("Test System".to_string()),
-///     species: vec![],
+///     domain: None,
+///     coupletype: None,
+///     reference: None,
+///     species: std::collections::HashMap::new(),
 ///     parameters: std::collections::HashMap::new(),
 ///     reactions: vec![],
-///     description: None,
+///     constraint_equations: None,
+///     discrete_events: None,
+///     continuous_events: None,
 /// };
 ///
 /// let analysis = detect_conservation_violations(&system);
@@ -484,7 +467,9 @@ pub fn detect_conservation_violations(system: &ReactionSystem) -> ConservationAn
 
     // Analyze stoichiometric matrix for linear invariants
     let matrix = stoichiometric_matrix(system);
-    let linear_invariants = find_linear_invariants(&matrix, &system.species);
+    let mut sorted_species_names: Vec<String> = system.species.keys().cloned().collect();
+    sorted_species_names.sort();
+    let linear_invariants = find_linear_invariants(&matrix, &sorted_species_names);
     let stoichiometric_rank = calculate_matrix_rank(&matrix);
     let conservation_laws_count = system.species.len().saturating_sub(stoichiometric_rank);
 
@@ -493,7 +478,7 @@ pub fn detect_conservation_violations(system: &ReactionSystem) -> ConservationAn
         violations.push(ConservationViolation {
             violation_type: ConservationLawType::StoichiometricRank,
             reaction_index: None,
-            species: system.species.iter().map(|s| s.name.clone()).collect(),
+            species: sorted_species_names.clone(),
             magnitude: stoichiometric_rank as f64,
             description: "System has full rank stoichiometric matrix with no conservation laws, which may indicate missing constraints".to_string(),
         });
@@ -514,7 +499,12 @@ fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationVi
     for (reaction_idx, reaction) in system.reactions.iter().enumerate() {
         // Skip source reactions (no substrates) and sink reactions (no products)
         // These represent exchange with environment and don't need to be mass balanced
-        if reaction.substrates.is_empty() || reaction.products.is_empty() {
+        let no_substrates = reaction
+            .substrates
+            .as_ref()
+            .map_or(true, |v| v.is_empty());
+        let no_products = reaction.products.as_ref().map_or(true, |v| v.is_empty());
+        if no_substrates || no_products {
             continue;
         }
 
@@ -522,13 +512,15 @@ fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationVi
         let substrate_sum: f64 = reaction
             .substrates
             .iter()
-            .map(|s| s.coefficient.unwrap_or(1.0))
+            .flatten()
+            .map(|s| s.coefficient as f64)
             .sum();
 
         let product_sum: f64 = reaction
             .products
             .iter()
-            .map(|p| p.coefficient.unwrap_or(1.0))
+            .flatten()
+            .map(|p| p.coefficient as f64)
             .sum();
 
         // Check if mass is conserved (allowing for small numerical errors)
@@ -537,8 +529,20 @@ fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationVi
 
         if imbalance > BALANCE_TOLERANCE {
             let mut species_involved = Vec::new();
-            species_involved.extend(reaction.substrates.iter().map(|s| s.species.clone()));
-            species_involved.extend(reaction.products.iter().map(|p| p.species.clone()));
+            species_involved.extend(
+                reaction
+                    .substrates
+                    .iter()
+                    .flatten()
+                    .map(|s| s.species.clone()),
+            );
+            species_involved.extend(
+                reaction
+                    .products
+                    .iter()
+                    .flatten()
+                    .map(|p| p.species.clone()),
+            );
 
             violations.push(ConservationViolation {
                 violation_type: ConservationLawType::MassBalance,
@@ -557,7 +561,7 @@ fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationVi
 }
 
 /// Find linear invariants (conservation laws) from the stoichiometric matrix
-fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Vec<LinearInvariant> {
+fn find_linear_invariants(matrix: &[Vec<f64>], species: &[String]) -> Vec<LinearInvariant> {
     if matrix.is_empty() || species.is_empty() {
         return Vec::new();
     }
@@ -570,13 +574,13 @@ fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Ve
         return species
             .iter()
             .enumerate()
-            .map(|(i, species)| {
+            .map(|(i, species_name)| {
                 let mut coefficients = vec![0.0; num_species];
                 coefficients[i] = 1.0;
                 LinearInvariant {
                     coefficients,
-                    species_names: vec![species.name.clone()],
-                    description: format!("Conservation of {}", species.name),
+                    species_names: vec![species_name.clone()],
+                    description: format!("Conservation of {}", species_name),
                 }
             })
             .collect();
@@ -595,7 +599,7 @@ fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Ve
                 .enumerate()
                 .filter_map(|(i, &coeff)| {
                     if coeff.abs() > 1e-10 {
-                        Some(species[i].name.clone())
+                        Some(species[i].clone())
                     } else {
                         None
                     }
@@ -609,7 +613,7 @@ fn find_linear_invariants(matrix: &[Vec<f64>], species: &[crate::Species]) -> Ve
                         .iter()
                         .enumerate()
                         .filter(|(_, coeff)| coeff.abs() > 1e-10)
-                        .map(|(i, coeff)| format!("{:.3}*{}", coeff, species[i].name))
+                        .map(|(i, coeff)| format!("{:.3}*{}", coeff, species[i]))
                         .collect::<Vec<_>>()
                         .join(" + ")
                 )
@@ -902,51 +906,61 @@ mod tests {
     use super::*;
     use crate::{Reaction, Species, StoichiometricEntry};
 
-    fn create_test_species(name: &str) -> Species {
-        Species {
-            name: name.to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        }
+    fn create_test_species(name: &str) -> (String, Species) {
+        (
+            name.to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        )
     }
 
     fn create_test_reaction(
-        substrates: Vec<(&str, Option<f64>)>,
-        products: Vec<(&str, Option<f64>)>,
+        substrates: Vec<(&str, u32)>,
+        products: Vec<(&str, u32)>,
         rate: Expr,
     ) -> Reaction {
         Reaction {
+            id: None,
             name: None,
-            substrates: substrates
-                .into_iter()
-                .map(|(species, coeff)| StoichiometricEntry {
-                    species: species.to_string(),
-                    coefficient: coeff,
-                })
-                .collect(),
-            products: products
-                .into_iter()
-                .map(|(species, coeff)| StoichiometricEntry {
-                    species: species.to_string(),
-                    coefficient: coeff,
-                })
-                .collect(),
+            substrates: Some(
+                substrates
+                    .into_iter()
+                    .map(|(species, coeff)| StoichiometricEntry {
+                        species: species.to_string(),
+                        coefficient: coeff,
+                    })
+                    .collect(),
+            ),
+            products: Some(
+                products
+                    .into_iter()
+                    .map(|(species, coeff)| StoichiometricEntry {
+                        species: species.to_string(),
+                        coefficient: coeff,
+                    })
+                    .collect(),
+            ),
             rate,
-            description: None,
+            reference: None,
         }
     }
 
     #[test]
     fn test_derive_odes_simple() {
         let system = ReactionSystem {
-            name: Some("Simple System".to_string()),
-            species: vec![create_test_species("A"), create_test_species("B")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"), create_test_species("B")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // A -> B with rate k1 * A
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("A", 1)],
+                    vec![("B", 1)],
                     Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
                         args: vec![
@@ -958,8 +972,9 @@ mod tests {
                     }),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let model = derive_odes(&system).expect("Should derive ODEs successfully");
@@ -990,34 +1005,36 @@ mod tests {
     #[test]
     fn test_stoichiometric_matrix() {
         let system = ReactionSystem {
-            name: Some("Test System".to_string()),
-            species: vec![
-                create_test_species("A"),
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"),
                 create_test_species("B"),
-                create_test_species("C"),
-            ],
+                create_test_species("C"),].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // Reaction 1: A -> B
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("A", 1)],
+                    vec![("B", 1)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // Reaction 2: B -> C
                 create_test_reaction(
-                    vec![("B", Some(1.0))],
-                    vec![("C", Some(1.0))],
+                    vec![("B", 1)],
+                    vec![("C", 1)],
                     Expr::Variable("k2".to_string()),
                 ),
                 // Reaction 3: 2A -> C
                 create_test_reaction(
-                    vec![("A", Some(2.0))],
-                    vec![("C", Some(1.0))],
+                    vec![("A", 2)],
+                    vec![("C", 1)],
                     Expr::Variable("k3".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let matrix = stoichiometric_matrix(&system);
@@ -1042,11 +1059,15 @@ mod tests {
     #[test]
     fn test_stoichiometric_matrix_empty() {
         let system = ReactionSystem {
-            name: Some("Empty System".to_string()),
-            species: vec![],
-            reactions: vec![],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: std::collections::HashMap::new(),
             parameters: HashMap::new(),
-            description: None,
+            reactions: vec![],
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let matrix = stoichiometric_matrix(&system);
@@ -1056,11 +1077,15 @@ mod tests {
     #[test]
     fn test_derive_odes_empty_system() {
         let system = ReactionSystem {
-            name: Some("Empty System".to_string()),
-            species: vec![],
-            reactions: vec![],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: std::collections::HashMap::new(),
             parameters: HashMap::new(),
-            description: None,
+            reactions: vec![],
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let model = derive_odes(&system).expect("Should handle empty system");
@@ -1071,15 +1096,19 @@ mod tests {
     #[test]
     fn test_derive_odes_unknown_species_error() {
         let system = ReactionSystem {
-            name: Some("Invalid System".to_string()),
-            species: vec![create_test_species("A")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![create_test_reaction(
-                vec![("B", Some(1.0))], // B is not defined in species
-                vec![("A", Some(1.0))],
+                vec![("B", 1)], // B is not defined in species
+                vec![("A", 1)],
                 Expr::Variable("k1".to_string()),
             )],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let result = derive_odes(&system);
@@ -1092,49 +1121,28 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_derive_odes_negative_coefficient_error() {
-        let system = ReactionSystem {
-            name: Some("Invalid System".to_string()),
-            species: vec![create_test_species("A"), create_test_species("B")],
-            reactions: vec![create_test_reaction(
-                vec![("A", Some(-1.0))], // Negative coefficient
-                vec![("B", Some(1.0))],
-                Expr::Variable("k1".to_string()),
-            )],
-            parameters: HashMap::new(),
-            description: None,
-        };
-
-        let result = derive_odes(&system);
-        assert!(result.is_err());
-        match result {
-            Err(DeriveError::InvalidStoichiometry(msg)) => {
-                assert!(msg.contains("Negative substrate coefficient"));
-            }
-            _ => panic!("Expected InvalidStoichiometry error"),
-        }
-    }
 
     #[test]
     fn test_derive_odes_mass_action_kinetics() {
         let system = ReactionSystem {
-            name: Some("Mass Action System".to_string()),
-            species: vec![
-                create_test_species("A"),
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"),
                 create_test_species("B"),
-                create_test_species("C"),
-            ],
+                create_test_species("C"),].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // A + B -> C with rate coefficient k1 (should become k1*A*B)
                 create_test_reaction(
-                    vec![("A", Some(1.0)), ("B", Some(1.0))],
-                    vec![("C", Some(1.0))],
+                    vec![("A", 1), ("B", 1)],
+                    vec![("C", 1)],
                     Expr::Variable("k1".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let model = derive_odes(&system).expect("Should derive ODEs successfully");
@@ -1168,18 +1176,22 @@ mod tests {
     #[test]
     fn test_derive_odes_source_reaction() {
         let system = ReactionSystem {
-            name: Some("Source System".to_string()),
-            species: vec![create_test_species("A")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // Source reaction: -> A with rate k0 (no substrates)
                 create_test_reaction(
                     vec![],
-                    vec![("A", Some(1.0))],
+                    vec![("A", 1)],
                     Expr::Variable("k0".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let model = derive_odes(&system).expect("Should handle source reactions");
@@ -1197,18 +1209,22 @@ mod tests {
     #[test]
     fn test_derive_odes_sink_reaction() {
         let system = ReactionSystem {
-            name: Some("Sink System".to_string()),
-            species: vec![create_test_species("A")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // Sink reaction: A -> with rate k_deg (no products)
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
+                    vec![("A", 1)],
                     vec![],
                     Expr::Variable("k_deg".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let model = derive_odes(&system).expect("Should handle sink reactions");
@@ -1237,18 +1253,22 @@ mod tests {
     #[test]
     fn test_derive_odes_higher_order_reaction() {
         let system = ReactionSystem {
-            name: Some("Higher Order System".to_string()),
-            species: vec![create_test_species("A"), create_test_species("B")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"), create_test_species("B")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // 2A -> B with rate k1 (second order in A)
                 create_test_reaction(
-                    vec![("A", Some(2.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("A", 2)],
+                    vec![("B", 1)],
                     Expr::Variable("k1".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let model = derive_odes(&system).expect("Should handle higher order reactions");
@@ -1281,15 +1301,19 @@ mod tests {
     #[test]
     fn test_derive_odes_reactions_with_no_substrates_and_products() {
         let system = ReactionSystem {
-            name: Some("Invalid System".to_string()),
-            species: vec![create_test_species("A")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![create_test_reaction(
                 vec![], // No substrates
                 vec![], // No products
                 Expr::Variable("k1".to_string()),
             )],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let result = derive_odes(&system);
@@ -1302,82 +1326,41 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_derive_odes_fractional_coefficients() {
-        let system = ReactionSystem {
-            name: Some("Fractional System".to_string()),
-            species: vec![create_test_species("A"), create_test_species("B")],
-            reactions: vec![
-                // 0.5A -> B with rate k1
-                create_test_reaction(
-                    vec![("A", Some(0.5))],
-                    vec![("B", Some(1.0))],
-                    Expr::Variable("k1".to_string()),
-                ),
-            ],
-            parameters: HashMap::new(),
-            description: None,
-        };
-
-        let model = derive_odes(&system).expect("Should handle fractional coefficients");
-        assert_eq!(model.variables.len(), 2);
-        assert_eq!(model.equations.len(), 2);
-
-        // Check that fractional stoichiometry is handled correctly
-        let b_equation = model
-            .equations
-            .iter()
-            .find(|eq| match &eq.lhs {
-                Expr::Operator(node) if node.op == "D" => match &node.args[0] {
-                    Expr::Variable(name) => name == "B",
-                    _ => false,
-                },
-                _ => false,
-            })
-            .expect("Should find B equation");
-
-        // The RHS should involve k1 and pow(A, 0.5)
-        match &b_equation.rhs {
-            Expr::Operator(node) if node.op == "*" => {
-                assert!(node.args.len() >= 2);
-                // Should contain k1 and pow(A, 0.5)
-            }
-            _ => panic!("Expected multiplication for fractional coefficient kinetics"),
-        }
-    }
 
     #[test]
     fn test_derive_odes_complex_reaction_network() {
         let system = ReactionSystem {
-            name: Some("Complex Network".to_string()),
-            species: vec![
-                create_test_species("A"),
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"),
                 create_test_species("B"),
                 create_test_species("C"),
-                create_test_species("D"),
-            ],
+                create_test_species("D"),].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // A + B -> C + D (rate k1)
                 create_test_reaction(
-                    vec![("A", Some(1.0)), ("B", Some(1.0))],
-                    vec![("C", Some(1.0)), ("D", Some(1.0))],
+                    vec![("A", 1), ("B", 1)],
+                    vec![("C", 1), ("D", 1)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // C -> A (rate k2)
                 create_test_reaction(
-                    vec![("C", Some(1.0))],
-                    vec![("A", Some(1.0))],
+                    vec![("C", 1)],
+                    vec![("A", 1)],
                     Expr::Variable("k2".to_string()),
                 ),
                 // D -> B (rate k3)
                 create_test_reaction(
-                    vec![("D", Some(1.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("D", 1)],
+                    vec![("B", 1)],
                     Expr::Variable("k3".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let model = derive_odes(&system).expect("Should handle complex networks");
@@ -1421,88 +1404,6 @@ mod tests {
         assert!(!contains_variable(&expr3, "B"));
     }
 
-    #[test]
-    fn test_floating_point_precision_fix() {
-        // Test that coefficients with floating-point precision issues are handled correctly
-        let test_cases = vec![
-            (2.0, true),                     // Exact integer
-            (2.0000000000000004, true),      // Should be treated as 2
-            (1.9999999999999998, true),      // Should be treated as 2
-            (3.0 + std::f64::EPSILON, true), // Should be treated as 3
-            (2.5, false),                    // True fractional, should use pow
-            (1.5, false),                    // True fractional, should use pow
-        ];
-
-        for (coeff, should_use_multiplication) in test_cases {
-            let system = ReactionSystem {
-                name: Some("Floating Point Test".to_string()),
-                species: vec![create_test_species("A"), create_test_species("B")],
-                reactions: vec![create_test_reaction(
-                    vec![("A", Some(coeff))],
-                    vec![("B", Some(1.0))],
-                    Expr::Variable("k1".to_string()),
-                )],
-                parameters: HashMap::new(),
-                description: None,
-            };
-
-            let model = derive_odes(&system).expect("Should derive ODEs successfully");
-
-            // Find the equation for species B
-            let b_equation = model
-                .equations
-                .iter()
-                .find(|eq| match &eq.lhs {
-                    Expr::Operator(node) if node.op == "D" => match &node.args[0] {
-                        Expr::Variable(name) => name == "B",
-                        _ => false,
-                    },
-                    _ => false,
-                })
-                .expect("Should find B equation");
-
-            // Check if the result uses multiplication or pow appropriately
-            let uses_multiplication = match &b_equation.rhs {
-                Expr::Operator(node) if node.op == "*" => node.args.iter().any(|arg| match arg {
-                    Expr::Operator(inner) if inner.op == "*" => true,
-                    _ => false,
-                }),
-                _ => false,
-            };
-
-            let uses_pow = match &b_equation.rhs {
-                Expr::Operator(node) if node.op == "*" => node.args.iter().any(|arg| match arg {
-                    Expr::Operator(inner) if inner.op == "pow" => true,
-                    _ => false,
-                }),
-                _ => false,
-            };
-
-            if should_use_multiplication {
-                assert!(
-                    uses_multiplication,
-                    "Coefficient {:.17} should use multiplication but uses pow",
-                    coeff
-                );
-                assert!(
-                    !uses_pow,
-                    "Coefficient {:.17} should not use pow but does",
-                    coeff
-                );
-            } else {
-                assert!(
-                    uses_pow,
-                    "Coefficient {:.17} should use pow but doesn't",
-                    coeff
-                );
-                assert!(
-                    !uses_multiplication,
-                    "Coefficient {:.17} should not use multiplication but does",
-                    coeff
-                );
-            }
-        }
-    }
 
     #[test]
     #[cfg(feature = "parallel")]
@@ -1510,28 +1411,30 @@ mod tests {
         use std::collections::HashMap;
 
         let system = ReactionSystem {
-            name: Some("Parallel Test System".to_string()),
-            species: vec![
-                create_test_species("A"),
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"),
                 create_test_species("B"),
-                create_test_species("C"),
-            ],
+                create_test_species("C"),].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // A -> B
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("A", 1)],
+                    vec![("B", 1)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // B -> C
                 create_test_reaction(
-                    vec![("B", Some(1.0))],
-                    vec![("C", Some(1.0))],
+                    vec![("B", 1)],
+                    vec![("C", 1)],
                     Expr::Variable("k2".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         // Test the parallel version
@@ -1565,23 +1468,27 @@ mod tests {
     #[test]
     fn test_conservation_detection_balanced_system() {
         let system = ReactionSystem {
-            name: Some("Balanced System".to_string()),
-            species: vec![create_test_species("A"), create_test_species("B")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"), create_test_species("B")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // A <-> B (reversible)
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("A", 1)],
+                    vec![("B", 1)],
                     Expr::Variable("kf".to_string()),
                 ),
                 create_test_reaction(
-                    vec![("B", Some(1.0))],
-                    vec![("A", Some(1.0))],
+                    vec![("B", 1)],
+                    vec![("A", 1)],
                     Expr::Variable("kr".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let analysis = detect_conservation_violations(&system);
@@ -1612,18 +1519,22 @@ mod tests {
     #[test]
     fn test_conservation_detection_unbalanced_reaction() {
         let system = ReactionSystem {
-            name: Some("Unbalanced System".to_string()),
-            species: vec![create_test_species("A"), create_test_species("B")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"), create_test_species("B")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // Unbalanced: 2A -> B (mass not conserved)
                 create_test_reaction(
-                    vec![("A", Some(2.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("A", 2)],
+                    vec![("B", 1)],
                     Expr::Variable("k".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let analysis = detect_conservation_violations(&system);
@@ -1650,28 +1561,30 @@ mod tests {
     #[test]
     fn test_conservation_detection_complex_network() {
         let system = ReactionSystem {
-            name: Some("Complex Network".to_string()),
-            species: vec![
-                create_test_species("A"),
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"),
                 create_test_species("B"),
-                create_test_species("C"),
-            ],
+                create_test_species("C"),].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
-                // A -> B + C (total mass conserved)
+                // 2A -> B + C (total mass conserved)
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
-                    vec![("B", Some(0.5)), ("C", Some(0.5))],
+                    vec![("A", 2)],
+                    vec![("B", 1), ("C", 1)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // B -> A (mass conserved)
                 create_test_reaction(
-                    vec![("B", Some(1.0))],
-                    vec![("A", Some(1.0))],
+                    vec![("B", 1)],
+                    vec![("A", 1)],
                     Expr::Variable("k2".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let analysis = detect_conservation_violations(&system);
@@ -1698,11 +1611,15 @@ mod tests {
     #[test]
     fn test_conservation_detection_empty_system() {
         let system = ReactionSystem {
-            name: Some("Empty System".to_string()),
-            species: vec![],
-            reactions: vec![],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: std::collections::HashMap::new(),
             parameters: HashMap::new(),
-            description: None,
+            reactions: vec![],
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let analysis = detect_conservation_violations(&system);
@@ -1730,24 +1647,28 @@ mod tests {
     #[test]
     fn test_conservation_detection_source_sink() {
         let system = ReactionSystem {
-            name: Some("Source-Sink System".to_string()),
-            species: vec![create_test_species("A")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // Source: -> A
                 create_test_reaction(
                     vec![],
-                    vec![("A", Some(1.0))],
+                    vec![("A", 1)],
                     Expr::Variable("k_source".to_string()),
                 ),
                 // Sink: A ->
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
+                    vec![("A", 1)],
                     vec![],
                     Expr::Variable("k_sink".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let analysis = detect_conservation_violations(&system);
@@ -1770,22 +1691,28 @@ mod tests {
     fn test_linear_invariant_calculation() {
         // Test system where A + B = constant
         let system = ReactionSystem {
-            name: Some("Conservation Test".to_string()),
-            species: vec![create_test_species("A"), create_test_species("B")],
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: [create_test_species("A"), create_test_species("B")].into_iter().collect::<std::collections::HashMap<_, _>>(),
+            parameters: HashMap::new(),
             reactions: vec![
                 // A <-> B
                 create_test_reaction(
-                    vec![("A", Some(1.0))],
-                    vec![("B", Some(1.0))],
+                    vec![("A", 1)],
+                    vec![("B", 1)],
                     Expr::Variable("k".to_string()),
                 ),
             ],
-            parameters: HashMap::new(),
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let matrix = stoichiometric_matrix(&system);
-        let invariants = find_linear_invariants(&matrix, &system.species);
+        let mut sorted_names: Vec<String> = system.species.keys().cloned().collect();
+        sorted_names.sort();
+        let invariants = find_linear_invariants(&matrix, &sorted_names);
 
         // Should find that total mass (A + B) is conserved
         assert!(invariants.len() > 0, "Should find linear invariants");

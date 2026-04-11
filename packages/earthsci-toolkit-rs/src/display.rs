@@ -1857,18 +1857,13 @@ impl fmt::Display for Model {
 
 impl fmt::Display for ReactionSystem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = self.name.as_deref().unwrap_or("Unnamed");
         let species_count = self.species.len();
-
-        // Count parameters
         let param_count = self.parameters.len();
-
         let reaction_count = self.reactions.len();
 
         writeln!(
             f,
-            "    {} ({} species, {} parameters, {} reaction{})",
-            name,
+            "    ({} species, {} parameters, {} reaction{})",
             species_count,
             param_count,
             reaction_count,
@@ -1884,19 +1879,17 @@ impl fmt::Display for ReactionSystem {
             let substrates = reaction
                 .substrates
                 .iter()
+                .flatten()
                 .map(|s| {
-                    if let Some(coeff) = s.coefficient {
-                        if coeff == 1.0 {
-                            format_chemical_subscripts(&s.species)
-                        } else {
-                            format!(
-                                "{}·{}",
-                                format_number_unicode(coeff),
-                                format_chemical_subscripts(&s.species)
-                            )
-                        }
-                    } else {
+                    let coeff = s.coefficient;
+                    if coeff == 1 {
                         format_chemical_subscripts(&s.species)
+                    } else {
+                        format!(
+                            "{}·{}",
+                            format_number_unicode(coeff as f64),
+                            format_chemical_subscripts(&s.species)
+                        )
                     }
                 })
                 .collect::<Vec<_>>()
@@ -1906,19 +1899,17 @@ impl fmt::Display for ReactionSystem {
             let products = reaction
                 .products
                 .iter()
+                .flatten()
                 .map(|p| {
-                    if let Some(coeff) = p.coefficient {
-                        if coeff == 1.0 {
-                            format_chemical_subscripts(&p.species)
-                        } else {
-                            format!(
-                                "{}·{}",
-                                format_number_unicode(coeff),
-                                format_chemical_subscripts(&p.species)
-                            )
-                        }
-                    } else {
+                    let coeff = p.coefficient;
+                    if coeff == 1 {
                         format_chemical_subscripts(&p.species)
+                    } else {
+                        format!(
+                            "{}·{}",
+                            format_number_unicode(coeff as f64),
+                            format_chemical_subscripts(&p.species)
+                        )
                     }
                 })
                 .collect::<Vec<_>>()
@@ -2183,40 +2174,48 @@ mod tests {
         );
 
         let reactions = vec![Reaction {
+            id: Some("R1".to_string()),
             name: Some("R1".to_string()),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
+                coefficient: 1,
+            }]),
+            products: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: Expr::Variable("k1".to_string()),
-            description: None,
+            reference: None,
         }];
 
-        let species = vec![
+        let mut species = HashMap::new();
+        species.insert(
+            "A".to_string(),
             Species {
-                name: "A".to_string(),
                 default: Some(1e-9),
                 units: Some("molec/cm3".to_string()),
                 description: None,
             },
+        );
+        species.insert(
+            "B".to_string(),
             Species {
-                name: "B".to_string(),
                 default: Some(0.0),
                 units: Some("molec/cm3".to_string()),
                 description: None,
             },
-        ];
+        );
 
         let reaction_system = ReactionSystem {
-            name: Some("TestReactions".to_string()),
+            domain: None,
+            coupletype: None,
+            reference: None,
             species,
             parameters,
             reactions,
-            description: None,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
         };
 
         let mut reaction_systems = HashMap::new();
@@ -2242,7 +2241,7 @@ mod tests {
         assert!(output.contains("\"Test description\""));
         assert!(output.contains("Authors: Test Author"));
         assert!(output.contains("Reaction Systems:"));
-        assert!(output.contains("TestReactions (2 species, 1 parameters, 1 reaction)"));
+        assert!(output.contains("(2 species, 1 parameters, 1 reaction)"));
         assert!(output.contains("R1: A → B    rate: k1"));
     }
 

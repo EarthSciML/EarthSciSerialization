@@ -237,9 +237,12 @@ fn flatten_reaction_system(
     variables: &mut HashMap<String, String>,
     equations: &mut Vec<FlattenedEquation>,
 ) {
-    // Species become state variables
-    for species in &rs.species {
-        let namespaced = format!("{}.{}", system_name, species.name);
+    // Species become state variables (sorted for stable ordering)
+    let mut species_names: Vec<&String> = rs.species.keys().collect();
+    species_names.sort();
+    for species_name in species_names {
+        let species = &rs.species[species_name];
+        let namespaced = format!("{}.{}", system_name, species_name);
         let description = species.description.clone().unwrap_or_default();
         let units = species.units.as_deref().unwrap_or("dimensionless");
         let info = format!("{} [{}]", description, units).trim().to_string();
@@ -272,9 +275,10 @@ fn flatten_reaction_system(
         let substrates: Vec<String> = reaction
             .substrates
             .iter()
+            .flatten()
             .map(|s| {
-                let coeff = s.coefficient.unwrap_or(1.0);
-                if (coeff - 1.0).abs() < f64::EPSILON {
+                let coeff = s.coefficient;
+                if coeff == 1 {
                     format!("{}.{}", system_name, s.species)
                 } else {
                     format!("{}*{}.{}", coeff, system_name, s.species)
@@ -284,9 +288,10 @@ fn flatten_reaction_system(
         let products: Vec<String> = reaction
             .products
             .iter()
+            .flatten()
             .map(|p| {
-                let coeff = p.coefficient.unwrap_or(1.0);
-                if (coeff - 1.0).abs() < f64::EPSILON {
+                let coeff = p.coefficient;
+                if coeff == 1 {
                     format!("{}.{}", system_name, p.species)
                 } else {
                     format!("{}*{}.{}", coeff, system_name, p.species)
@@ -625,36 +630,44 @@ mod tests {
             },
         );
 
+        let mut species_map = HashMap::new();
+        species_map.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        species_map.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+
         let mut reaction_systems = HashMap::new();
         reaction_systems.insert(
             "chem".to_string(),
             ReactionSystem {
-                name: Some("Chemistry".to_string()),
-                species: vec![
-                    Species {
-                        name: "A".to_string(),
-                        units: Some("mol/L".to_string()),
-                        default: Some(1.0),
-                        description: None,
-                    },
-                    Species {
-                        name: "B".to_string(),
-                        units: Some("mol/L".to_string()),
-                        default: Some(0.0),
-                        description: None,
-                    },
-                ],
+                domain: None,
+                coupletype: None,
+                reference: None,
+                species: species_map,
                 parameters: params,
                 reactions: vec![Reaction {
+                    id: Some("r1".to_string()),
                     name: Some("r1".to_string()),
-                    substrates: vec![StoichiometricEntry {
+                    substrates: Some(vec![StoichiometricEntry {
                         species: "A".to_string(),
-                        coefficient: Some(1.0),
-                    }],
-                    products: vec![StoichiometricEntry {
+                        coefficient: 1,
+                    }]),
+                    products: Some(vec![StoichiometricEntry {
                         species: "B".to_string(),
-                        coefficient: Some(1.0),
-                    }],
+                        coefficient: 1,
+                    }]),
                     rate: Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
                         args: vec![
@@ -664,9 +677,11 @@ mod tests {
                         wrt: None,
                         dim: None,
                     }),
-                    description: None,
+                    reference: None,
                 }],
-                description: None,
+                constraint_equations: None,
+                discrete_events: None,
+                continuous_events: None,
             },
         );
 

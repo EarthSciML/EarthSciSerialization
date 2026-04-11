@@ -233,20 +233,25 @@ pub fn substitute_in_reaction_system(
         .reactions
         .iter()
         .map(|rxn| Reaction {
+            id: rxn.id.clone(),
             name: rxn.name.clone(),
             substrates: rxn.substrates.clone(),
             products: rxn.products.clone(),
             rate: substitute(&rxn.rate, substitutions),
-            description: rxn.description.clone(),
+            reference: rxn.reference.clone(),
         })
         .collect();
 
     ReactionSystem {
-        name: reaction_system.name.clone(),
+        domain: reaction_system.domain.clone(),
+        coupletype: reaction_system.coupletype.clone(),
+        reference: reaction_system.reference.clone(),
         species: reaction_system.species.clone(),
         parameters: reaction_system.parameters.clone(),
         reactions: new_reactions,
-        description: reaction_system.description.clone(),
+        constraint_equations: reaction_system.constraint_equations.clone(),
+        discrete_events: reaction_system.discrete_events.clone(),
+        continuous_events: reaction_system.continuous_events.clone(),
     }
 }
 
@@ -353,7 +358,7 @@ impl ScopedContext {
 
         if remaining.len() == 1 {
             // Check species
-            if rs.species.iter().any(|s| s.name == remaining[0]) {
+            if rs.species.contains_key(remaining[0]) {
                 return true;
             }
             // Check parameters
@@ -385,7 +390,7 @@ impl ScopedContext {
         // Search in reaction systems
         for (rs_name, rs) in &self.reaction_systems {
             if components.len() == 1 {
-                if rs.species.iter().any(|s| s.name == components[0]) {
+                if rs.species.contains_key(components[0]) {
                     return Some(format!("{}.{}", rs_name, components[0]));
                 }
                 if rs.parameters.contains_key(components[0]) {
@@ -666,20 +671,25 @@ pub fn substitute_in_reaction_system_with_context(
         .reactions
         .iter()
         .map(|rxn| Reaction {
+            id: rxn.id.clone(),
             name: rxn.name.clone(),
             substrates: rxn.substrates.clone(),
             products: rxn.products.clone(),
             rate: substitute_with_context(&rxn.rate, substitutions, context),
-            description: rxn.description.clone(),
+            reference: rxn.reference.clone(),
         })
         .collect();
 
     ReactionSystem {
-        name: reaction_system.name.clone(),
+        domain: reaction_system.domain.clone(),
+        coupletype: reaction_system.coupletype.clone(),
+        reference: reaction_system.reference.clone(),
         species: reaction_system.species.clone(),
         parameters: reaction_system.parameters.clone(),
         reactions: new_reactions,
-        description: reaction_system.description.clone(),
+        constraint_equations: reaction_system.constraint_equations.clone(),
+        discrete_events: reaction_system.discrete_events.clone(),
+        continuous_events: reaction_system.continuous_events.clone(),
     }
 }
 

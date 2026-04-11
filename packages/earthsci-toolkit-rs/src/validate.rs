@@ -314,8 +314,8 @@ fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo>
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (name, rs) in reaction_systems {
             let mut species = HashSet::new();
-            for spec in &rs.species {
-                species.insert(spec.name.clone());
+            for spec_name in rs.species.keys() {
+                species.insert(spec_name.clone());
             }
 
             // Note: parameters field would be added here when ReactionSystem supports it
@@ -553,8 +553,8 @@ fn validate_reaction_system(
 
     // Create a map of defined species
     let mut defined_species = HashSet::new();
-    for species in &rs.species {
-        defined_species.insert(species.name.clone());
+    for species_name in rs.species.keys() {
+        defined_species.insert(species_name.clone());
     }
 
     // Note: ReactionSystem currently doesn't have parameters field
@@ -566,8 +566,11 @@ fn validate_reaction_system(
         let rxn_path = format!("{}/reactions/{}", rs_path, rxn_idx);
 
         // Check for null reaction (both substrates and products are null/empty)
-        let substrates_empty = reaction.substrates.is_empty();
-        let products_empty = reaction.products.is_empty();
+        let substrates_empty = reaction
+            .substrates
+            .as_ref()
+            .map_or(true, |v| v.is_empty());
+        let products_empty = reaction.products.as_ref().map_or(true, |v| v.is_empty());
 
         if substrates_empty && products_empty {
             errors.push(StructuralError {
@@ -581,7 +584,7 @@ fn validate_reaction_system(
         }
 
         // Check substrate references
-        for substrate in &reaction.substrates {
+        for substrate in reaction.substrates.iter().flatten() {
             if !defined_species.contains(&substrate.species) {
                 errors.push(StructuralError {
                     path: rxn_path.clone(),
@@ -601,7 +604,7 @@ fn validate_reaction_system(
         }
 
         // Check product references
-        for product in &reaction.products {
+        for product in reaction.products.iter().flatten() {
             if !defined_species.contains(&product.species) {
                 errors.push(StructuralError {
                     path: rxn_path.clone(),

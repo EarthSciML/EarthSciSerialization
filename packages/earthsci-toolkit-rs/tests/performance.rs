@@ -492,19 +492,16 @@ fn test_parallel_stoichiometric_matrix_computation() {
     // Create a simple reaction system: A + B -> C
     let species = vec![
         Species {
-            name: "A".to_string(),
             units: Some("mol".to_string()),
             default: Some(1.0),
             description: None,
         },
         Species {
-            name: "B".to_string(),
             units: Some("mol".to_string()),
             default: Some(1.0),
             description: None,
         },
         Species {
-            name: "C".to_string(),
             units: Some("mol".to_string()),
             default: Some(0.0),
             description: None,
@@ -512,24 +509,25 @@ fn test_parallel_stoichiometric_matrix_computation() {
     ];
 
     let reactions = vec![Reaction {
-        name: Some("R1".to_string()),
-        substrates: vec![
+            id: None,
+            name: Some("R1".to_string()),
+            substrates: Some(vec![
             StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: Some(1.0),
+                coefficient: 1,
             },
             StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: Some(1.0),
+                coefficient: 1,
             },
-        ],
-        products: vec![StoichiometricEntry {
+        ]),
+            products: Some(vec![StoichiometricEntry {
             species: "C".to_string(),
-            coefficient: Some(1.0),
-        }],
-        rate: Expr::Number(1.0),
-        description: None,
-    }];
+            coefficient: 1,
+        }]),
+            rate: Expr::Number(1.0),
+            reference: None,
+        }];
 
     let mut parameters = HashMap::new();
     // Add a simple parameter if needed
@@ -543,12 +541,16 @@ fn test_parallel_stoichiometric_matrix_computation() {
     );
 
     let system = ReactionSystem {
-        name: Some("test_system".to_string()),
-        species,
-        parameters,
-        reactions,
-        description: None,
-    };
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: species,
+            parameters: parameters,
+            reactions: reactions,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
+        };
 
     let matrix = evaluator
         .compute_stoichiometric_matrix_parallel(&system)

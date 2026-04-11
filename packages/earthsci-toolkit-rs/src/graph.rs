@@ -74,11 +74,11 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
 
     // Add reaction system nodes
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        for (id, rs) in reaction_systems {
+        for (id, _rs) in reaction_systems {
             nodes.push(ComponentNode {
                 id: id.clone(),
                 component_type: ComponentType::ReactionSystem,
-                name: rs.name.clone(),
+                name: None,
             });
         }
     }
@@ -490,7 +490,7 @@ impl ExpressionGraphInput for crate::Reaction {
         }
 
         // Add substrate and product species as nodes
-        for species in &self.substrates {
+        for species in self.substrates.iter().flatten() {
             if !nodes.iter().any(|n| n.name == species.species) {
                 nodes.push(VariableNode {
                     name: species.species.clone(),
@@ -501,7 +501,7 @@ impl ExpressionGraphInput for crate::Reaction {
             }
         }
 
-        for species in &self.products {
+        for species in self.products.iter().flatten() {
             if !nodes.iter().any(|n| n.name == species.species) {
                 nodes.push(VariableNode {
                     name: species.species.clone(),
@@ -514,7 +514,7 @@ impl ExpressionGraphInput for crate::Reaction {
 
         // Create rate dependencies: rate variables influence product concentrations
         for rate_var in &rate_vars {
-            for product in &self.products {
+            for product in self.products.iter().flatten() {
                 edges.push(DependencyEdge {
                     source: rate_var.clone(),
                     target: product.species.clone(),
@@ -524,7 +524,7 @@ impl ExpressionGraphInput for crate::Reaction {
                 });
             }
             // Rate variables also influence substrate depletion
-            for substrate in &self.substrates {
+            for substrate in self.substrates.iter().flatten() {
                 edges.push(DependencyEdge {
                     source: rate_var.clone(),
                     target: substrate.species.clone(),
@@ -536,8 +536,8 @@ impl ExpressionGraphInput for crate::Reaction {
         }
 
         // Stoichiometric dependencies: substrates influence products
-        for substrate in &self.substrates {
-            for product in &self.products {
+        for substrate in self.substrates.iter().flatten() {
+            for product in self.products.iter().flatten() {
                 edges.push(DependencyEdge {
                     source: substrate.species.clone(),
                     target: product.species.clone(),
@@ -645,9 +645,9 @@ fn extract_from_reaction_system(
     let mut edges = Vec::new();
 
     // Add species as nodes
-    for species in &rs.species {
+    for (species_name, species) in &rs.species {
         nodes.push(VariableNode {
-            name: species.name.clone(),
+            name: species_name.clone(),
             kind: VariableKind::Species,
             units: species.units.clone(),
             system: system_id.to_string(),
@@ -672,7 +672,7 @@ fn extract_from_reaction_system(
 
         // Create rate dependencies: rate variables influence concentrations
         for rate_var in &rate_vars {
-            for product in &reaction.products {
+            for product in reaction.products.iter().flatten() {
                 edges.push(DependencyEdge {
                     source: rate_var.clone(),
                     target: product.species.clone(),
@@ -681,7 +681,7 @@ fn extract_from_reaction_system(
                     expression: Some(reaction.rate.clone()),
                 });
             }
-            for substrate in &reaction.substrates {
+            for substrate in reaction.substrates.iter().flatten() {
                 edges.push(DependencyEdge {
                     source: rate_var.clone(),
                     target: substrate.species.clone(),
@@ -693,8 +693,8 @@ fn extract_from_reaction_system(
         }
 
         // Stoichiometric dependencies: substrates -> products
-        for substrate in &reaction.substrates {
-            for product in &reaction.products {
+        for substrate in reaction.substrates.iter().flatten() {
+            for product in reaction.products.iter().flatten() {
                 edges.push(DependencyEdge {
                     source: substrate.species.clone(),
                     target: product.species.clone(),
@@ -1071,11 +1071,15 @@ mod tests {
         reaction_systems.insert(
             "test_rs".to_string(),
             ReactionSystem {
-                name: Some("Test RS".to_string()),
-                species: vec![],
+                domain: None,
+                coupletype: None,
+                reference: None,
+                species: HashMap::new(),
                 parameters: HashMap::new(),
                 reactions: vec![],
-                description: None,
+                constraint_equations: None,
+                discrete_events: None,
+                continuous_events: None,
             },
         );
 

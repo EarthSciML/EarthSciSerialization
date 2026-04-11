@@ -68,32 +68,33 @@ fn test_analysis_features_integration() {
     models.insert("simple".to_string(), model);
 
     // Create reaction system
-    let species = vec![
-        Species {
-            name: "A".to_string(),
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert("A".to_string(), Species {
             units: Some("mol/L".to_string()),
             default: Some(1.0),
             description: None,
-        },
-        Species {
-            name: "B".to_string(),
+        });
+        m.insert("B".to_string(), Species {
             units: Some("mol/L".to_string()),
             default: Some(0.0),
             description: None,
-        },
-    ];
+        });
+        m
+    };
 
     let reactions = vec![Reaction {
-        name: None,
-        substrates: vec![StoichiometricEntry {
+            id: None,
+            name: None,
+            substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: Some(1.0),
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1,
+        }]),
+            products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: Some(1.0),
-        }],
-        rate: Expr::Operator(ExpressionNode {
+            coefficient: 1,
+        }]),
+            rate: Expr::Operator(ExpressionNode {
             op: "*".to_string(),
             args: vec![
                 Expr::Variable("k".to_string()),
@@ -102,16 +103,20 @@ fn test_analysis_features_integration() {
             wrt: None,
             dim: None,
         }),
-        description: None,
-    }];
+            reference: None,
+        }];
 
     let rs = ReactionSystem {
-        name: Some("Simple RS".to_string()),
-        species,
-        parameters: HashMap::new(),
-        reactions,
-        description: None,
-    };
+            domain: None,
+            coupletype: None,
+            reference: None,
+            species: species,
+            parameters: HashMap::new(),
+            reactions: reactions,
+            constraint_equations: None,
+            discrete_events: None,
+            continuous_events: None,
+        };
 
     let mut reaction_systems = HashMap::new();
     reaction_systems.insert("simple_rs".to_string(), rs);
@@ -125,7 +130,6 @@ fn test_analysis_features_integration() {
         operators: None,
         coupling: None,
         domain: None,
-        solver: None,
     };
 
     // Test component graph
