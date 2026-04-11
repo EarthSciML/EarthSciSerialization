@@ -98,7 +98,7 @@ function rename_variable(model::Model, old_name::String, new_name::String)::Mode
     new_variables[new_name] = variable
 
     # Update equations
-    substitution = Dict(old_name => VarExpr(new_name))
+    substitution = Dict{String, EarthSciSerialization.Expr}(old_name => VarExpr(new_name))
     new_equations = [
         Equation(
             substitute(eq.lhs, substitution),
@@ -399,7 +399,8 @@ function add_coupling(file::EsmFile, entry::CouplingEntry)::EsmFile
         data_loaders=file.data_loaders,
         operators=file.operators,
         coupling=new_coupling,
-        domain=file.domain
+        domains=file.domains,
+        interfaces=file.interfaces
     )
 end
 
@@ -425,26 +426,29 @@ function remove_coupling(file::EsmFile, index::Int)::EsmFile
         data_loaders=file.data_loaders,
         operators=file.operators,
         coupling=new_coupling,
-        domain=file.domain
+        domains=file.domains,
+        interfaces=file.interfaces
     )
 end
 
 """
     compose(file::EsmFile, system_a::String, system_b::String) -> EsmFile
 
-Convenience function to create an operator_compose coupling entry.
+Convenience function to create an operator_compose coupling entry linking two systems.
 """
 function compose(file::EsmFile, system_a::String, system_b::String)::EsmFile
-    coupling_entry = CouplingOperatorCompose(system_a, system_b)
+    coupling_entry = CouplingOperatorCompose([system_a, system_b])
     return add_coupling(file, coupling_entry)
 end
 
 """
-    map_variable(file::EsmFile, from::String, to::String, transform::Union{Expr,Nothing}=nothing) -> EsmFile
+    map_variable(file::EsmFile, from::String, to::String; transform::String="identity") -> EsmFile
 
-Convenience function to create a variable_map coupling entry.
+Convenience function to create a variable_map coupling entry that forwards a
+variable reference `from` into `to`. `transform` names the transform function
+(e.g. `"identity"`, `"affine"`).
 """
-function map_variable(file::EsmFile, from::String, to::String, transform::Union{EarthSciSerialization.Expr,Nothing}=nothing)::EsmFile
+function map_variable(file::EsmFile, from::String, to::String; transform::String="identity")::EsmFile
     coupling_entry = CouplingVariableMap(from, to, transform)
     return add_coupling(file, coupling_entry)
 end
@@ -477,11 +481,18 @@ function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
                       file_b.operators === nothing ? file_a.operators :
                       Base.merge(file_a.operators, file_b.operators)
 
+    merged_domains = file_a.domains === nothing ? file_b.domains :
+                    file_b.domains === nothing ? file_a.domains :
+                    Base.merge(file_a.domains, file_b.domains)
+
+    merged_interfaces = file_a.interfaces === nothing ? file_b.interfaces :
+                       file_b.interfaces === nothing ? file_a.interfaces :
+                       Base.merge(file_a.interfaces, file_b.interfaces)
+
     # Combine coupling arrays
     merged_coupling = vcat(file_a.coupling, file_b.coupling)
 
     # Merge other fields (file_b takes precedence)
-    merged_domain = file_b.domain !== nothing ? file_b.domain : file_a.domain
     merged_metadata = file_b.metadata
 
     return EsmFile(
@@ -492,7 +503,8 @@ function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
         data_loaders=merged_data_loaders,
         operators=merged_operators,
         coupling=merged_coupling,
-        domain=merged_domain
+        domains=merged_domains,
+        interfaces=merged_interfaces
     )
 end
 
@@ -505,24 +517,30 @@ Creates a new file containing only the specified component and any
 coupling entries that reference it.
 """
 function extract(file::EsmFile, component_name::String)::EsmFile
-    # Find the component
     extracted_models = Dict{String,Model}()
     extracted_reaction_systems = Dict{String,ReactionSystem}()
     extracted_data_loaders = Dict{String,DataLoader}()
     extracted_operators = Dict{String,Operator}()
 
-    if haskey(file.models, component_name)
+    found = false
+    if file.models !== nothing && haskey(file.models, component_name)
         extracted_models[component_name] = file.models[component_name]
-    elseif haskey(file.reaction_systems, component_name)
+        found = true
+    elseif file.reaction_systems !== nothing && haskey(file.reaction_systems, component_name)
         extracted_reaction_systems[component_name] = file.reaction_systems[component_name]
-    elseif haskey(file.data_loaders, component_name)
+        found = true
+    elseif file.data_loaders !== nothing && haskey(file.data_loaders, component_name)
         extracted_data_loaders[component_name] = file.data_loaders[component_name]
-    elseif haskey(file.operators, component_name)
+        found = true
+    elseif file.operators !== nothing && haskey(file.operators, component_name)
         extracted_operators[component_name] = file.operators[component_name]
-    else
+        found = true
+    end
+
+    if !found
         @warn "Component '$component_name' not found"
         return EsmFile(
-            "1.0.0",
+            file.esm,
             Metadata("empty");
             models=Dict{String,Model}(),
             reaction_systems=Dict{String,ReactionSystem}(),
@@ -535,21 +553,20 @@ function extract(file::EsmFile, component_name::String)::EsmFile
     # Find relevant coupling entries
     relevant_coupling = CouplingEntry[]
     for coupling in file.coupling
-        # Check if this coupling involves the extracted component
         involves_component = false
 
         if coupling isa CouplingOperatorCompose
-            involves_component = (coupling.system_a == component_name || coupling.system_b == component_name)
+            involves_component = component_name in coupling.systems
         elseif coupling isa CouplingCouple
-            involves_component = (coupling.system_a == component_name || coupling.system_b == component_name)
+            involves_component = component_name in coupling.systems
         elseif coupling isa CouplingVariableMap
-            # Check if source or target involves this component
-            source_parts = split(coupling.source, ".")
-            target_parts = split(coupling.target, ".")
-            involves_component = (length(source_parts) > 0 && source_parts[1] == component_name) ||
-                                (length(target_parts) > 0 && target_parts[1] == component_name)
+            # The from/to strings use dotted refs like "SystemName.var"
+            from_parts = split(coupling.from, ".")
+            to_parts = split(coupling.to, ".")
+            involves_component = (length(from_parts) > 0 && from_parts[1] == component_name) ||
+                                (length(to_parts) > 0 && to_parts[1] == component_name)
         elseif coupling isa CouplingOperatorApply
-            involves_component = (coupling.operator == component_name || component_name in coupling.systems)
+            involves_component = (coupling.operator == component_name)
         end
 
         if involves_component
@@ -565,6 +582,7 @@ function extract(file::EsmFile, component_name::String)::EsmFile
         data_loaders=extracted_data_loaders,
         operators=extracted_operators,
         coupling=relevant_coupling,
-        domain=file.domain
+        domains=file.domains,
+        interfaces=file.interfaces
     )
 end
