@@ -49,12 +49,23 @@ from .parse import (
 )
 from .serialize import save
 
-# Coupled system flattening
+# Coupled system flattening (spec §4.7.5 + §4.7.6)
 from .flatten import (
     flatten,
     FlattenedSystem,
     FlattenedEquation,
+    FlattenedVariable,
     FlattenMetadata,
+    FlattenError,
+    ConflictingDerivativeError,
+    DimensionPromotionError,
+    UnmappedDomainError,
+    UnsupportedMappingError,
+    DomainUnitMismatchError,
+    DomainExtentMismatchError,
+    SliceOutOfDomainError,
+    CyclicPromotionError,
+    UnsupportedDimensionalityError,
 )
 
 # Enhanced parsing with CSV integration (optional - requires pandas)
@@ -294,11 +305,22 @@ __all__ = [
     "CircularReferenceError",
     "SubsystemRefError",
 
-    # Coupled system flattening
+    # Coupled system flattening (spec §4.7.5 + §4.7.6)
     "flatten",
     "FlattenedSystem",
     "FlattenedEquation",
+    "FlattenedVariable",
     "FlattenMetadata",
+    "FlattenError",
+    "ConflictingDerivativeError",
+    "DimensionPromotionError",
+    "UnmappedDomainError",
+    "UnsupportedMappingError",
+    "DomainUnitMismatchError",
+    "DomainExtentMismatchError",
+    "SliceOutOfDomainError",
+    "CyclicPromotionError",
+    "UnsupportedDimensionalityError",
 
     # Expression engine
     "free_variables",

@@ -1441,35 +1441,59 @@ J = esm.jacobian(file.models["SuperFast"])  # returns SymPy Matrix
 
 #### 5.3.5 Simulation via SciPy
 
-For ODE models and reaction systems, the Python library can generate a numerical RHS function and solve:
+The Python `simulate()` function consumes a `FlattenedSystem` as its canonical input (per spec §4.7.5 — the flattened representation is the API boundary between coupling resolution and any downstream backend). The `EsmFile` overload is a thin convenience wrapper that calls `flatten()` internally.
 
 ```python
-# Simulate a model
+# Simulate from a FlattenedSystem (canonical path)
+flat = esm.flatten(file)
 solution = esm.simulate(
-    file,
-    tspan=(0, 86400),      # 1 day in seconds
-    parameters={"T": 298.15, "jNO2": 0.005},
-    initial_conditions={"O3": 40e-9, "NO": 0.1e-9, "NO2": 1e-9},
-    method="BDF",           # scipy.integrate.solve_ivp method
+    flat,
+    tspan=(0, 86400),       # 1 day in seconds
+    parameters={"SimpleOzone.T": 298.15, "SimpleOzone.jNO2": 0.005},
+    initial_conditions={"SimpleOzone.O3": 40e-9, "SimpleOzone.NO": 0.1e-9},
+    method="BDF",
 )
 
-# solution is a scipy OdeResult-like object
-print(solution.t)     # time points
-print(solution.y)     # state trajectories
-print(solution.vars)  # ["O3", "NO", "NO2"]
+# Convenience overload — flattens internally
+solution = esm.simulate(
+    file,
+    tspan=(0, 86400),
+    parameters={"T": 298.15, "jNO2": 0.005},  # bare names also accepted
+    initial_conditions={"O3": 40e-9, "NO": 0.1e-9, "NO2": 1e-9},
+    method="BDF",
+)
 
-# Plot
-solution.plot()  # matplotlib integration
+# solution is a SimulationResult
+print(solution.t)     # time points
+print(solution.y)     # state trajectories (rows in solution.vars order)
+print(solution.vars)  # ["SimpleOzone.O3", "SimpleOzone.NO", "SimpleOzone.NO2"]
+solution.plot()       # matplotlib integration
 ```
+
+**Parameter and initial condition lookup.** Both dot-namespaced (`"SimpleOzone.k"`) and bare names (`"k"`) are accepted. The dot-namespaced form takes precedence; the bare name acts as an unambiguous fallback. Parameters not provided fall back to the variable's `default` (or `0`).
 
 **Implementation approach:**
 
-1. Resolve all coupling (`variable_map`, `operator_compose`) to produce a single combined ODE system.
-2. Convert all expressions to SymPy.
-3. For reaction systems, generate mass-action ODEs from stoichiometry.
-4. Use `sympy.lambdify()` to create a fast NumPy-callable RHS function.
-5. Optionally generate a symbolic Jacobian and lambdify it for stiff solvers.
-6. Call `scipy.integrate.solve_ivp()`.
+1. Call `flatten(file)` to obtain the canonical `FlattenedSystem`. This pre-resolves all coupling rules — `operator_compose` (LHS-match + sum, with `_var` placeholder expansion), `couple` connectors, and `variable_map` substitutions — and lowers reaction systems to ODEs via `derive_odes()`.
+2. Reject PDE inputs: if `len(flat.independent_variables) > 1`, raise `UnsupportedDimensionalityError` (see §5.4.6 for the cross-language origin of this error name in the Rust simulator). The Python ODE-only path is not capable of integrating systems with spatial independent variables.
+3. Convert each flattened equation's RHS to a SymPy expression using the dot-namespaced symbol map.
+4. Substitute parameter values, then `sympy.lambdify()` to create a fast NumPy-callable RHS function.
+5. Call `scipy.integrate.solve_ivp()`.
+
+**Dimension promotion tier (§4.7.6).** The Python library is **Core tier** for dimension promotion: it handles broadcast and identity mappings (a flattened system whose independent variables are exactly `["t"]`). Slice, project, and regrid mappings raise `UnsupportedMappingError`. PDE inputs (any spatial independent variable in the flattened system) raise `UnsupportedDimensionalityError`, with a message directing users to a PDE-capable backend such as Julia EarthSciSerialization.
+
+**Conflict and validation errors.** `flatten()` exposes the full Rust `FlattenError` taxonomy as Python exception classes (cross-language error-name parity per §4.7.5 and §4.7.6):
+
+- `ConflictingDerivativeError` (§4.7.5) when two systems define non-additive equations for the same dependent variable;
+- `DimensionPromotionError` (§4.7.6) when a variable or equation cannot be promoted given the available `Interface`s;
+- `UnmappedDomainError` (§4.7.6) when a coupling references a variable whose domain has no mapping rule;
+- `UnsupportedMappingError` when a `dimension_mapping` type that the Core tier does not implement (`slice`, `project`, `regrid`, or a spatial operator) is encountered;
+- `DomainUnitMismatchError` (§4.7.6) when a coupling across an `Interface` requires an undeclared unit conversion;
+- `DomainExtentMismatchError` when an `identity` mapping is asked to bridge domains with incompatible extents;
+- `SliceOutOfDomainError` when a `slice` mapping reaches outside the source variable's domain;
+- `CyclicPromotionError` when promotion rules form a cycle.
+
+`simulate()` additionally raises `UnsupportedDimensionalityError` (§5.4.6) when given a flattened system whose `independent_variables` is not exactly `["t"]`. All names match the Rust `FlattenError` enum variants and Rust `CompileError::UnsupportedDimensionalityError` so cross-language validators can interoperate.
 
 **Event handling in SciPy:**
 
@@ -1485,7 +1509,7 @@ Since SciPy's event handling is less sophisticated than DifferentialEquations.jl
 - Direction-dependent affects (`affect_neg`) require custom zero-crossing direction detection.
 - Discrete events with complex triggers require manual integration loop management.
 - Functional affects are not supported (they are runtime-specific).
-- Spatial operators (grad, laplacian) are not supported — simulation is limited to 0D (box model) ODE systems.
+- Spatial operators (`grad`, `div`, `laplacian`) cause `simulate()` to raise `UnsupportedDimensionalityError` — simulation is limited to 0D (box model) ODE systems. Use Julia for PDE work.
 
 #### 5.3.6 Jupyter Integration
 

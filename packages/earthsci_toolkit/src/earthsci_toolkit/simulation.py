@@ -29,13 +29,16 @@ except (ImportError, ValueError):
     solve_ivp = None
 
 from .esm_types import (
-    Model, ModelVariable, ReactionSystem, Reaction, Species, Parameter,
+    Model, ReactionSystem, Reaction, Parameter,
     ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile,
-    AffectEquation, FunctionalAffect, CouplingType
+    AffectEquation, FunctionalAffect,
 )
-from .reactions import derive_odes, stoichiometric_matrix
-from .expression import to_sympy
-from .coupling_graph import construct_coupling_graph, CouplingGraph
+from .flatten import (
+    FlattenedSystem,
+    UnsupportedDimensionalityError,
+    _lhs_dependent_var,
+    flatten,
+)
 
 
 @dataclass
@@ -215,137 +218,64 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
         raise SimulationError(f"Unsupported expression type: {type(expr)}")
 
 
-def _resolve_coupled_systems(file: EsmFile, parameters: Dict[str, float]) -> Tuple[List[str], List[sp.Expr]]:
+def _flat_to_sympy_rhs(
+    flat: FlattenedSystem,
+    parameter_overrides: Dict[str, float],
+) -> Tuple[List[str], List[sp.Expr], Dict[str, sp.Symbol]]:
+    """Build the SymPy ODE RHS expressions from a FlattenedSystem.
+
+    Returns
+    -------
+    state_names:
+        Dot-namespaced state variable names in the order they appear in the
+        result vector.
+    rhs_exprs:
+        Per-state SymPy expression for ``dy_i/dt``. State variables without an
+        equation default to ``0``.
+    symbol_map:
+        Mapping from namespaced variable name to SymPy symbol (for use by event
+        functions and parameter substitution).
     """
-    Resolve coupling between multiple reaction systems and generate combined ODE system.
+    state_names = list(flat.state_variables.keys())
+    parameter_names = list(flat.parameters.keys())
 
-    Args:
-        file: ESM file containing multiple reaction systems and coupling rules
-        parameters: Parameter values to substitute
+    symbol_map: Dict[str, sp.Symbol] = {}
+    for name in state_names + parameter_names:
+        symbol_map[name] = sp.Symbol(name)
 
-    Returns:
-        Tuple of (species_names, ode_expressions) for the coupled system
+    state_to_rhs: Dict[str, sp.Expr] = {}
+    for eq in flat.equations:
+        dep = _lhs_dependent_var(eq.lhs)
+        if dep is None:
+            continue
+        if dep in flat.state_variables:
+            state_to_rhs[dep] = _expr_to_sympy(eq.rhs, dict(symbol_map))
 
-    Raises:
-        SimulationError: If coupling cannot be resolved or spatial operators are present
-    """
-    try:
-        # Construct coupling graph to analyze dependencies
-        coupling_graph = construct_coupling_graph(file)
+    rhs_exprs: List[sp.Expr] = []
+    for name in state_names:
+        rhs_exprs.append(state_to_rhs.get(name, sp.Float(0)))
 
-        # Get execution order based on coupling dependencies
-        execution_order = coupling_graph.get_execution_order()
+    # Resolve parameter values: caller overrides win, then defaults from the
+    # flattened parameter metadata, then 0.
+    param_subs: Dict[sp.Symbol, float] = {}
+    for pname in parameter_names:
+        bare = pname.rsplit(".", 1)[-1]
+        if pname in parameter_overrides:
+            value = parameter_overrides[pname]
+        elif bare in parameter_overrides:
+            value = parameter_overrides[bare]
+        else:
+            default = flat.parameters[pname].default
+            value = float(default) if isinstance(default, (int, float)) else 0.0
+        param_subs[symbol_map[pname]] = sp.Float(value)
 
-        # Collect all species from all reaction systems
-        all_species = {}  # name -> species object
-        all_species_names = []
-        species_to_system = {}  # species name -> system name
+    if param_subs:
+        rhs_exprs = [
+            (expr.subs(param_subs) if hasattr(expr, "subs") else expr)
+            for expr in rhs_exprs
+        ]
 
-        for system_name, system in file.reaction_systems.items():
-            for species in system.species:
-                if species.name not in all_species:
-                    all_species[species.name] = species
-                    all_species_names.append(species.name)
-                species_to_system[species.name] = system_name
-
-        # Initialize combined ODE expressions (all start at 0)
-        combined_ode_exprs = [sp.Float(0) for _ in all_species_names]
-        species_indices = {name: i for i, name in enumerate(all_species_names)}
-
-        # Process each reaction system
-        for system_name, system in file.reaction_systems.items():
-            # Update system parameters
-            updated_reactions = []
-            for reaction in system.reactions:
-                updated_reaction = Reaction(
-                    name=reaction.name,
-                    reactants=reaction.reactants.copy(),
-                    products=reaction.products.copy(),
-                    rate_constant=parameters.get(str(reaction.rate_constant), reaction.rate_constant),
-                    conditions=reaction.conditions.copy()
-                )
-                updated_reactions.append(updated_reaction)
-
-            updated_system = ReactionSystem(
-                name=system.name,
-                species=system.species.copy(),
-                parameters=system.parameters.copy(),
-                reactions=updated_reactions
-            )
-
-            # Generate ODEs for this system
-            system_species_names, system_ode_exprs = _generate_mass_action_odes(updated_system)
-
-            # Add system's contributions to the combined ODEs
-            for i, species_name in enumerate(system_species_names):
-                if species_name in species_indices:
-                    global_idx = species_indices[species_name]
-                    combined_ode_exprs[global_idx] += system_ode_exprs[i]
-
-        # Apply coupling rules
-        _apply_coupling_rules(file, coupling_graph, all_species_names, combined_ode_exprs, species_indices)
-
-        return all_species_names, combined_ode_exprs
-
-    except Exception as e:
-        raise SimulationError(f"Failed to resolve coupled systems: {e}")
-
-
-def _apply_coupling_rules(
-    file: EsmFile,
-    coupling_graph: CouplingGraph,
-    species_names: List[str],
-    ode_exprs: List[sp.Expr],
-    species_indices: Dict[str, int]
-) -> None:
-    """
-    Apply coupling rules from the ESM file to modify ODE expressions.
-
-    Args:
-        file: ESM file containing coupling rules
-        coupling_graph: Constructed coupling graph
-        species_names: List of all species names
-        ode_exprs: List of ODE expressions to modify (modified in-place)
-        species_indices: Mapping from species names to indices
-    """
-    if not hasattr(file, 'coupling') or not file.coupling:
-        return
-
-    # Create symbol map for all species
-    symbol_map = {name: sp.Symbol(name) for name in species_names}
-
-    # Process each coupling entry
-    for coupling in file.coupling:
-        if coupling.coupling_type == CouplingType.VARIABLE_MAP:
-            # Handle variable mapping coupling
-            if coupling.from_var and coupling.to_var:
-                # Extract species names from variable references
-                # For now, assume direct species name mapping
-                from_species = coupling.from_var.split('.')[-1]  # Get last part of scoped reference
-                to_species = coupling.to_var.split('.')[-1]
-
-                # Apply transformation if specified
-                if coupling.transform and from_species in species_indices and to_species in species_indices:
-                    from_idx = species_indices[from_species]
-                    to_idx = species_indices[to_species]
-
-                    # Simple linear transformation: apply factor
-                    if coupling.factor and coupling.factor != 1.0:
-                        # Add coupling term to target species
-                        coupling_term = coupling.factor * symbol_map[from_species]
-                        ode_exprs[to_idx] += coupling_term
-                        # Subtract from source species to conserve mass
-                        ode_exprs[from_idx] -= coupling_term
-
-        elif coupling.coupling_type == CouplingType.COUPLE:
-            # Handle bidirectional coupling between systems
-            if coupling.systems and len(coupling.systems) == 2:
-                # For now, implement simple exchange coupling
-                # This would need more sophisticated implementation based on connector equations
-                pass
-
-        # Other coupling types (OPERATOR_COMPOSE, etc.) would be implemented here
-        # For now, focus on VARIABLE_MAP which is most common
+    return state_names, rhs_exprs, symbol_map
 
 
 def _generate_mass_action_odes(reaction_system: ReactionSystem) -> Tuple[List[str], List[sp.Expr]]:
@@ -612,162 +542,140 @@ def simulate_legacy(
 
 
 def simulate(
-    file: EsmFile,
+    file_or_flat: Union[EsmFile, FlattenedSystem],
     tspan: Tuple[float, float],
-    parameters: Dict[str, float],
-    initial_conditions: Dict[str, float],
-    method: str = 'BDF'
+    parameters: Optional[Dict[str, float]] = None,
+    initial_conditions: Optional[Dict[str, float]] = None,
+    method: str = 'BDF',
+    file: Optional[EsmFile] = None,
 ) -> SimulationResult:
+    """Simulate an ESM model via the flattened representation (spec §4.7.5).
+
+    The flattened system is the canonical input. As a convenience, ``simulate``
+    also accepts a raw :class:`EsmFile`; in that case it routes through
+    :func:`flatten` internally so user-facing behaviour is unchanged.
+
+    Parameters
+    ----------
+    file_or_flat:
+        Either an :class:`EsmFile` (which is flattened internally) or an
+        already-flattened :class:`FlattenedSystem`. The legacy ``file=`` keyword
+        argument is still accepted for backwards compatibility.
+    tspan:
+        ``(t_start, t_end)``.
+    parameters:
+        Parameter overrides keyed by either the dot-namespaced name
+        (e.g. ``"Chem.k1"``) or the bare name (``"k1"``).
+    initial_conditions:
+        Initial values keyed by either the dot-namespaced or bare name. Falls
+        back to the variable's default when not provided.
+    method:
+        SciPy ODE solver method (default ``'BDF'``).
+
+    Raises
+    ------
+    UnsupportedDimensionalityError
+        If the flattened system has any spatial independent variable. ODE-only
+        backends must reject PDE inputs per spec §4.7.6.12.
+
+    Notes
+    -----
+    Other failures (SciPy errors, missing scipy, malformed expressions) are
+    captured and reported via ``SimulationResult.success = False`` so the
+    function remains usable from interactive workflows that prefer error codes
+    over exceptions.
     """
-    Simulate an ESM file using SciPy's solve_ivp.
+    # Backwards-compatible kwarg: simulate(file=..., tspan=..., ...)
+    if file is not None and file_or_flat is None:
+        file_or_flat = file
 
-    This is the main simulation function that:
-    1. Resolves coupling to single ODE system
-    2. Converts expressions to SymPy
-    3. Generates mass-action ODEs from reaction systems
-    4. Lambdifies for fast NumPy RHS function
-    5. Calls scipy.integrate.solve_ivp()
+    if isinstance(file_or_flat, FlattenedSystem):
+        flat = file_or_flat
+    else:
+        flat = flatten(file_or_flat)
 
-    Args:
-        file: ESM file containing models and reaction systems
-        tspan: Tuple of (t_start, t_end)
-        parameters: Parameter values {param_name: value}
-        initial_conditions: Initial concentrations {species_name: concentration}
-        method: Integration method (default 'BDF')
+    # Spec §4.7.6.12: ODE backends MUST reject systems with spatial dims.
+    if len(flat.independent_variables) > 1:
+        spatial = [v for v in flat.independent_variables if v != "t"]
+        raise UnsupportedDimensionalityError(
+            f"Python's simulate() backend handles ODE-only systems "
+            f"(independent variables: ['t']), but the flattened system has "
+            f"spatial independent variables {spatial}. Use a PDE-capable "
+            f"backend such as Julia EarthSciSerialization."
+        )
 
-    Returns:
-        SimulationResult: Results of the simulation
+    parameters = parameters or {}
+    initial_conditions = initial_conditions or {}
 
-    Limitations:
-        - 0D box model only (no spatial operators)
-        - Limited event support
-        - Mass-action kinetics only
+    if not SCIPY_AVAILABLE:
+        return SimulationResult(
+            t=np.array([]), y=np.array([[]]), vars=[],
+            success=False,
+            message="SciPy is required for simulation but not available.",
+            nfev=0, njev=0, nlu=0,
+        )
 
-    Raises:
-        SimulationError: If spatial operators are present or other simulation issues occur
-    """
     try:
-        # Check for spatial operators - raise error if present
-        for operator in file.operators:
-            if operator.type.value in ['spatial', 'differentiation', 'integration']:
-                raise SimulationError(f"Spatial operators not supported in 0D simulation. Found: {operator.name}")
+        state_names, rhs_exprs, symbol_map = _flat_to_sympy_rhs(flat, parameters)
 
-        # Variable mapping and operator composition for 0D only
-        # For now, we'll focus on reaction systems as they are well-defined
-        if not file.reaction_systems:
-            raise SimulationError("No reaction systems found in ESM file")
-
-        # Handle multiple reaction systems with coupling resolution
-        if len(file.reaction_systems) == 1:
-            # Single system case - existing behavior
-            reaction_system = list(file.reaction_systems.values())[0]
-
-            # Update reaction system parameters with provided values
-            updated_reactions = []
-            for reaction in reaction_system.reactions:
-                updated_reaction = Reaction(
-                    name=reaction.name,
-                    reactants=reaction.reactants.copy(),
-                    products=reaction.products.copy(),
-                    rate_constant=parameters.get(str(reaction.rate_constant), reaction.rate_constant),
-                    conditions=reaction.conditions.copy()
-                )
-                updated_reactions.append(updated_reaction)
-
-            updated_system = ReactionSystem(
-                name=reaction_system.name,
-                species=reaction_system.species.copy(),
-                parameters=reaction_system.parameters.copy(),
-                reactions=updated_reactions
+        if not state_names:
+            raise SimulationError(
+                "Flattened system has no state variables to integrate"
             )
 
-            # Generate mass-action ODEs using the dependency
-            species_names, ode_exprs = _generate_mass_action_odes(updated_system)
-        else:
-            # Multiple systems case - resolve coupling
-            species_names, ode_exprs = _resolve_coupled_systems(file, parameters)
+        # Initial conditions: dot-namespaced wins, then bare name, then default.
+        y0_list: List[float] = []
+        for name in state_names:
+            bare = name.rsplit(".", 1)[-1]
+            if name in initial_conditions:
+                y0_list.append(float(initial_conditions[name]))
+            elif bare in initial_conditions:
+                y0_list.append(float(initial_conditions[bare]))
+            else:
+                default = flat.state_variables[name].default
+                y0_list.append(float(default) if isinstance(default, (int, float)) else 0.0)
+        y0 = np.array(y0_list)
 
-        if not species_names:
-            raise SimulationError("No species found in reaction system")
+        state_symbols = [symbol_map[name] for name in state_names]
+        rhs_funcs = [sp.lambdify(state_symbols, expr, "numpy") for expr in rhs_exprs]
 
-        # Create symbol map
-        symbol_map = {name: sp.Symbol(name) for name in species_names}
+        def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
+            y_clipped = np.maximum(y, 0.0)
+            dydt = np.array([func(*y_clipped) for func in rhs_funcs])
+            if not np.all(np.isfinite(dydt)):
+                raise SimulationError("Non-finite derivatives encountered")
+            return dydt
 
-        # Extract continuous events from the ESM file
-        continuous_events = [event for event in file.events if isinstance(event, ContinuousEvent)]
+        event_functions: List[Callable] = []
+        if flat.continuous_events:
+            event_functions = _create_event_functions(flat.continuous_events, symbol_map)
 
-        # Create initial condition vector
-        y0 = np.array([initial_conditions.get(name, 0.0) for name in species_names])
-
-        # Lambdify ODEs for fast evaluation
-        variables = [symbol_map[name] for name in species_names]
-
-        # Create RHS function
-        if variables and ode_exprs:
-            rhs_funcs = [sp.lambdify(variables, expr, 'numpy') for expr in ode_exprs]
-
-            def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
-                """Right-hand side function for the ODE system."""
-                try:
-                    # Ensure y has the right shape and no negative concentrations
-                    y_clipped = np.maximum(y, 0.0)  # Clip to prevent negative concentrations
-
-                    # Evaluate each ODE expression
-                    dydt = np.array([func(*y_clipped) for func in rhs_funcs])
-
-                    # Ensure result is finite
-                    if not np.all(np.isfinite(dydt)):
-                        raise SimulationError("Non-finite derivatives encountered")
-
-                    return dydt
-
-                except Exception as e:
-                    raise SimulationError(f"Error in RHS evaluation: {e}")
-        else:
-            def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
-                return np.zeros_like(y)
-
-        # Create event functions for continuous events
-        event_functions = []
-        if continuous_events:
-            event_functions = _create_event_functions(continuous_events, symbol_map)
-
-        # Set solver options based on method
-        solver_options = {
-            'method': method,
-            'rtol': 1e-6,
-            'atol': 1e-8,
-            'dense_output': False,
+        solver_options: Dict[str, Any] = {
+            "method": method,
+            "rtol": 1e-6,
+            "atol": 1e-8,
+            "dense_output": False,
         }
-
-        # Add events to solver options if present
         if event_functions:
-            solver_options['events'] = event_functions
+            solver_options["events"] = event_functions
 
-        # Check scipy availability
-        if not SCIPY_AVAILABLE:
-            raise SimulationError("SciPy is required for simulation but not available. Please install scipy.")
-
-        # Solve the ODE system
-        sol = solve_ivp(
-            fun=rhs_function,
-            t_span=tspan,
-            y0=y0,
-            **solver_options
-        )
+        sol = solve_ivp(fun=rhs_function, t_span=tspan, y0=y0, **solver_options)
 
         return SimulationResult(
             t=sol.t,
             y=sol.y,
-            vars=species_names,  # Add variable names
+            vars=state_names,
             success=sol.success,
             message=sol.message,
             nfev=sol.nfev,
             njev=sol.njev,
             nlu=sol.nlu,
-            events=sol.t_events if sol.t_events is not None and len(sol.t_events) > 0 else None
+            events=sol.t_events if sol.t_events is not None and len(sol.t_events) > 0 else None,
         )
 
+    except UnsupportedDimensionalityError:
+        # Spec contract: PDE rejection is a hard error, never a result code.
+        raise
     except Exception as e:
         return SimulationResult(
             t=np.array([]),
@@ -777,7 +685,7 @@ def simulate(
             message=f"Simulation failed: {e}",
             nfev=0,
             njev=0,
-            nlu=0
+            nlu=0,
         )
 
 
