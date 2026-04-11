@@ -1980,9 +1980,11 @@ impl fmt::Display for EsmFile {
             if !data_loaders.is_empty() {
                 writeln!(f, "  Data Loaders:")?;
                 for (name, loader) in data_loaders {
-                    // Format description and loader type
-                    let description = loader.description.as_deref().unwrap_or("No description");
-                    writeln!(f, "    {}: {} ({})", name, description, loader.loader_type)?;
+                    writeln!(
+                        f,
+                        "    {}: {} ({})",
+                        name, loader.loader_id, loader.loader_type
+                    )?;
                 }
                 writeln!(f)?;
             }
