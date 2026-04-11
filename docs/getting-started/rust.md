@@ -477,7 +477,7 @@ jobs:
         tar -czf earthsci-toolkit-${{ matrix.name }}.tar.gz -C dist .
 
     - name: Upload
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: earthsci-toolkit-${{ matrix.name }}
         path: earthsci-toolkit-${{ matrix.name }}.tar.gz
