@@ -139,6 +139,18 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
     # 5. Validate multi-domain consistency
     append!(errors, validate_multi_domain(file))
 
+    # 6. Conflicting derivative detection (§4.7.5 item E). A species cannot
+    # have both an explicit D(X, t) = ... equation and a reaction contribution.
+    # `_find_conflicting_derivatives` is defined in flatten.jl.
+    conflicting = _find_conflicting_derivatives(file)
+    for name in conflicting
+        push!(errors, StructuralError(
+            "models/reaction_systems",
+            "Species '$name' has both an explicit derivative equation and a reaction contribution",
+            "conflicting_derivative",
+        ))
+    end
+
     return errors
 end
 

@@ -58,8 +58,11 @@ export
     CouplingOperatorApply, CouplingCallback, CouplingEvent,
     # Coupled system
     MockCoupledSystem,
-    # Flattened system
-    FlattenedEquation, FlattenMetadata, FlattenedSystem, flatten,
+    # Flattened system (§4.7.5 / §4.7.6)
+    FlattenMetadata, FlattenedSystem, flatten, lower_reactions_to_equations,
+    # Flatten error taxonomy
+    ConflictingDerivativeError, DimensionPromotionError, UnmappedDomainError,
+    UnsupportedRegriddingError, DomainUnitMismatchError,
     # System types
     Domain, Interface, Reference, Metadata, EsmFile,
     # JSON functionality

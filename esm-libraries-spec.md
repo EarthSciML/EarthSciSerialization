@@ -508,6 +508,73 @@ Equations:
 
 **The flattened system is the API boundary.** All downstream operations — graph construction, validation of the coupled system, export to simulation backends — operate on the flattened representation rather than the individual component systems.
 
+**Conflict detection.** Before flattening, libraries MUST check that no species is both the LHS of an explicit `D(X, t) = …` equation (in any `models` entry) and a reactant or product of any reaction (in any `reaction_systems` entry). Such a system is over-determined: the reaction contribution to `d[X]/dt` would silently shadow the user's equation. Libraries raise `ConflictingDerivativeError` naming every offending (fully namespaced) species. The same check fires from `validate` / `validate_structural` so load-time validation catches the conflict before flattening is attempted.
+
+#### 4.7.6 Dimension Promotion for Hybrid Flattening
+
+A single `.esm` file may combine systems living on different spatial dimensions: a 0D box-model reaction system, a 1D vertical-diffusion PDE, a 2D horizontal transport PDE, a 3D atmospheric tracer PDE. Flattening a hybrid file requires a well-defined rule for how state variables, reactions, and equations from lower-dimensional systems are **promoted** onto higher-dimensional domains so that coupling operators can combine their RHS terms pointwise.
+
+**Terminology.**
+- A **domain** is a spatial/temporal specification (see `Domain` in Section 2.2). A system's domain is either `null` (0D — box model) or a reference to a `domains` entry that declares one or more spatial axes (e.g. `{x, y}` or `{x, y, z}`).
+- **Promotion** is the act of rewriting a variable or equation so it lives on a higher-dimensional target domain while preserving its mathematical meaning.
+- An **Interface** (Section 2.2) specifies how variables cross between two domains of different dimensionality. Its `dimension_mapping` field names the kind of promotion to use, and its `regridding` field selects the numerical strategy when source and target live on different grids of the same dimensionality.
+
+**Canonical dimension mapping types.**
+
+| Type | Source → Target | Meaning |
+|---|---|---|
+| `broadcast` | 0D → N-D | The source value is spatially uniform on the target domain. A 0D variable `v` becomes a field `v(x, y, …)` whose value is identical at every target grid point. |
+| `identity` | N-D → N-D (same grid) | Source and target share axes and grid; no interpolation is needed. |
+| `slice` | N-D → (N-k)-D | Evaluate the source at fixed coordinate values along `k` of its axes (e.g. project a 3D field onto its surface `z=0`). |
+| `project` | N-D → M-D, M<N | Integrate or average out `N-M` axes. Requires metadata declaring the reduction (`"integrate"` vs `"average"`) and the axes to reduce. |
+| `regrid` | N-D → N-D (different grid) | Same axes but different discretization; requires a `regridding` strategy (`nearest`, `linear`, `bilinear`, `trilinear`, `conservative`). |
+
+**Tier requirements.** Core-tier libraries MUST support `broadcast` and `identity` — they are the minimum needed for any hybrid ODE/PDE flatten. `slice`, `project`, and `regrid` are Analysis-tier or Advanced-tier; a library that receives an Interface specifying a mapping it does not support MUST raise `UnsupportedRegriddingError` (for `regrid` strategies) or `DimensionPromotionError` (for other mappings).
+
+**Implicit broadcast.** When a 0D system is coupled to an N-D system without an explicit Interface, libraries MUST apply `broadcast` promotion implicitly — this is the only unambiguous default. Any other hybrid coupling (N-D ↔ M-D with `N ≠ M`, or different grids of the same dimensionality) requires an explicit `Interface` in the file's `interfaces` section; its absence raises `UnmappedDomainError`.
+
+**Reaction systems on PDE domains.** When a `ReactionSystem` lives on a PDE domain (its `domain` field references a domain with spatial axes), `lower_reactions_to_equations` still emits `D(species, t) = Σ stoich·rate` equations. The rate expressions are evaluated pointwise on the target domain: each grid point sees the local species concentrations and the local values of any parameters. Spatial derivatives (advection, diffusion) are added in a later pass by `operator_compose` — the reaction lowering itself is dimension-agnostic.
+
+**Hybrid operator semantics.** Section 4.7.5 step 3 describes how `operator_compose`, `couple`, and `variable_map` combine equations. For hybrid flattening:
+
+1. **`operator_compose`:** Before summing matched equations, apply dimension promotion so that both RHS terms live on the target (highest-dimensional) domain. The resulting equation uses the target domain's independent variables. Example: composing a 0D chemistry RHS with a 2D advection RHS produces a 2D reaction-advection equation whose chemistry term is implicitly broadcast onto the 2D grid.
+2. **`couple`:** The connector equations' `from` and `to` references are resolved after promotion; a connector equation that ties a 0D source value to a PDE field produces a boundary-condition-like term at the point(s) specified by the Interface.
+3. **`variable_map`:** The source variable is promoted to the target domain before substitution, so `param_to_var` on a 0D parameter with a PDE-domain replacement produces a field that varies across the target grid.
+
+**Independent-variable computation.** After coupling, libraries compute the flattened system's `independent_variables` by:
+1. Starting with `[:t]`.
+2. Scanning every equation for spatial operators (`grad`, `div`, `laplacian`, or `D` with `wrt ≠ "t"`) and adding each referenced spatial dimension.
+3. Scanning every `domains` entry in the file for spatial axes and adding them.
+
+The result is `[:t]` for purely 0D systems and `[:t, :x, :y, …]` for PDE systems. This is what determines whether the downstream constructor produces an `ODESystem` or a `PDESystem`.
+
+**Error taxonomy.** The hybrid flattening path defines four errors in addition to `ConflictingDerivativeError` from §4.7.5:
+
+| Error | Raised when |
+|---|---|
+| `DimensionPromotionError` | A variable or equation cannot be promoted given the available Interfaces (ambiguous target, missing dimension metadata, cyclic promotion). |
+| `UnmappedDomainError` | Two systems on different domains are coupled with no Interface declaring their mapping. |
+| `UnsupportedRegriddingError` | The requested regridding strategy is not implemented by this library tier. |
+| `DomainUnitMismatchError` | Coupling across an Interface requires a unit conversion that was not declared. |
+
+All four types are exported by library implementations that support simulation.
+
+**Worked example: 0D chemistry + 2D transport.** A file containing `Chem` (a `ReactionSystem` on the 2D grid `grid2d = {x, y}`) and no explicit `Advection` model, coupled only by the presence of a shared domain, flattens to:
+
+```
+State variables: Chem.O3, Chem.NO, Chem.NO2     (each a field on {x, y})
+Parameters:      Chem.k_NO_O3, Chem.jNO2
+Equations (pointwise on grid2d):
+  D(Chem.O3, t)  = -Chem.k_NO_O3 * Chem.O3 * Chem.NO + Chem.jNO2 * Chem.NO2
+  D(Chem.NO, t)  = [chemistry terms]
+  D(Chem.NO2, t) = [chemistry terms]
+Independent variables: [:t, :x, :y]
+```
+
+Adding an explicit `Advection` model on the same grid with `_var` placeholder equations and coupling them via `operator_compose` sums an advection term onto each of the three equations — the placeholder expansion rule from §4.7.1 is unchanged for hybrid cases.
+
+**Follow-up work.** The full set of hybrid tests — 1D vertical diffusion + 0D surface deposition, 3D PDE + 2D reaction subsystem via `slice` — and the `project`/`regrid` mapping implementations are Analysis-tier and Advanced-tier follow-up work, tracked in successor beads.
+
 ### 4.8 Graph Representations
 
 Every library must be able to produce two distinct graph representations of an `.esm` file. These graphs are **data-only**: libraries return language-idiomatic adjacency structures (nodes, edges, connectivity) but do **not** render, lay out, or visualize the graph. Rendering is the sole concern of downstream consumers (`esm-editor`'s `<CouplingGraph>` component, CLI export to DOT/Mermaid, or user code).

@@ -43,9 +43,6 @@ model = derive_odes(rxn_sys)
 ```
 """
 function derive_odes(rxn_sys::ReactionSystem)::Model
-    # Collect all species names
-    species_names = [species.name for species in rxn_sys.species]
-
     # Create state variables for all species
     variables = Dict{String,ModelVariable}()
     for species in rxn_sys.species
@@ -67,46 +64,8 @@ function derive_odes(rxn_sys::ReactionSystem)::Model
         )
     end
 
-    # Compute stoichiometric matrix
-    S = stoichiometric_matrix(rxn_sys)
-
-    # Create differential equations for each species
-    equations = Equation[]
-
-    for (i, species_name) in enumerate(species_names)
-        # Create left-hand side: d[species]/dt
-        lhs = OpExpr("D", EarthSciSerialization.Expr[VarExpr(species_name)], wrt="t")
-
-        # Create right-hand side: sum of (stoichiometry * reaction_rate) for all reactions
-        rate_terms = EarthSciSerialization.Expr[]
-
-        for (j, reaction) in enumerate(rxn_sys.reactions)
-            stoich = S[i, j]
-            if stoich != 0
-                # Get mass action rate for this reaction
-                rate_expr = mass_action_rate(reaction, rxn_sys.species)
-
-                if stoich == 1
-                    push!(rate_terms, rate_expr)
-                elseif stoich == -1
-                    push!(rate_terms, OpExpr("-", EarthSciSerialization.Expr[rate_expr]))
-                else
-                    push!(rate_terms, OpExpr("*", EarthSciSerialization.Expr[NumExpr(Float64(stoich)), rate_expr]))
-                end
-            end
-        end
-
-        # Combine all rate terms
-        rhs = if isempty(rate_terms)
-            NumExpr(0.0)
-        elseif length(rate_terms) == 1
-            rate_terms[1]
-        else
-            OpExpr("+", rate_terms)
-        end
-
-        push!(equations, Equation(lhs, rhs))
-    end
+    # Equations come from the shared lowering helper used by flatten.
+    equations = lower_reactions_to_equations(rxn_sys.reactions, rxn_sys.species)
 
     # Handle subsystems recursively
     subsystems = Dict{String,Model}()
