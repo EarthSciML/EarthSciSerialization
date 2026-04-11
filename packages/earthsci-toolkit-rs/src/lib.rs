@@ -57,6 +57,9 @@ pub mod wasm;
 
 pub mod performance;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod simulate;
+
 // Re-export main types
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};
@@ -101,11 +104,17 @@ pub use edit::{
 };
 pub use error::EsmError;
 pub use migration::{MigrationError, can_migrate, get_supported_migration_targets, migrate};
+
 pub use performance::{CompactExpr, PerformanceError};
 #[cfg(feature = "simd")]
 pub use reactions::compute_conservation_weights_simd;
 #[cfg(feature = "parallel")]
 pub use reactions::stoichiometric_matrix_parallel;
+#[cfg(not(target_arch = "wasm32"))]
+pub use simulate::{
+    CompileError, Compiled, ResolvedExpr, SimulateError, SimulateOptions, Solution,
+    SolutionMetadata, SolverChoice, interpret, simulate,
+};
 pub use units::{
     Dimension, Unit, UnitError, check_dimensional_consistency, convert_units, parse_unit,
 };

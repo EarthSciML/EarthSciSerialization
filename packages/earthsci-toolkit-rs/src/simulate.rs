@@ -1,0 +1,1196 @@
+//! Native ODE simulation via [`diffsol`] (gt-5ws, v1).
+//!
+//! This module provides a *correctness-first* simulation API for the Rust
+//! Core tier. It consumes a [`FlattenedSystem`] (the canonical output of
+//! [`crate::flatten`]) and runs it through diffsol's BDF / SDIRK / explicit
+//! Runge-Kutta solvers.
+//!
+//! ## Scope
+//!
+//! - **ODE only.** [`FlattenedSystem::independent_variables`] must equal `["t"]`.
+//!   Hybrid PDE / spatial systems return [`CompileError::UnsupportedDimensionalityError`].
+//! - **No event handling.** Models with non-empty `continuous_events` /
+//!   `discrete_events` return [`CompileError::UnsupportedFeatureError`].
+//! - **Native only.** The module is gated behind `#[cfg(not(target_arch = "wasm32"))]`
+//!   so the WASM build does not pull in diffsol. WASM exposure is a follow-up bead.
+//!
+//! ## Usage
+//!
+//! ```no_run
+//! use earthsci_toolkit::{load, simulate, SimulateOptions};
+//! use std::collections::HashMap;
+//!
+//! let file = load(r#"{"esm":"0.1.0","metadata":{},"models":{}}"#).unwrap();
+//! let params = HashMap::new();
+//! let ic = HashMap::new();
+//! let opts = SimulateOptions::default();
+//! let _ = simulate(&file, (0.0, 1.0), &params, &ic, &opts);
+//! ```
+
+#![cfg(not(target_arch = "wasm32"))]
+
+use crate::flatten::{FlattenError, FlattenedSystem, flatten, flatten_model};
+use crate::types::{EsmFile, Expr, Model};
+use std::collections::{HashMap, HashSet};
+use thiserror::Error;
+
+use diffsol::{
+    Bdf, FaerLU, FaerMat, NewtonNonlinearSolver, OdeBuilder, OdeSolverMethod, Sdirk, VectorHost,
+};
+
+// ============================================================================
+// Errors
+// ============================================================================
+
+/// Errors raised when building a [`Compiled`] model from a flattened system.
+#[derive(Error, Debug)]
+pub enum CompileError {
+    /// The flattened system contains a feature the v1 simulator does not support
+    /// (e.g. continuous or discrete events).
+    #[error("Unsupported feature '{feature}': {message}")]
+    UnsupportedFeatureError {
+        /// Feature name (e.g. `"continuous_events"`).
+        feature: String,
+        /// Why this is rejected and what to do about it.
+        message: String,
+    },
+
+    /// The flattened system has independent variables other than `["t"]`
+    /// (i.e. is a hybrid spatial / temporal system, not a pure ODE).
+    #[error(
+        "Unsupported dimensionality {independent_variables:?}: v1 only supports pure ODEs (independent_variables == [\"t\"]). Spatial / hybrid systems require the future Rust PDE bead."
+    )]
+    UnsupportedDimensionalityError {
+        /// The actual independent variables found.
+        independent_variables: Vec<String>,
+    },
+
+    /// The interpreter could not build a callable representation of the
+    /// flattened equations.
+    #[error("Interpreter build failed: {details}")]
+    InterpreterBuildError {
+        /// Human-readable failure description.
+        details: String,
+    },
+
+    /// The convenience constructors flattened the input first; that step
+    /// failed.
+    #[error("Flatten failed: {0}")]
+    Flatten(#[from] FlattenError),
+}
+
+/// Errors raised when running [`Compiled::simulate`] or the convenience
+/// [`simulate`] free function.
+#[derive(Error, Debug)]
+pub enum SimulateError {
+    /// Wraps a CompileError raised by the convenience [`simulate`] function
+    /// before solving even starts.
+    #[error("Compile failed: {0}")]
+    Compile(#[from] CompileError),
+
+    /// diffsol returned a solver-internal error (build failure, step failure,
+    /// etc.).
+    #[error("diffsol error: {details}")]
+    DiffsolError {
+        /// The underlying diffsol error message.
+        details: String,
+    },
+
+    /// The integrator could not satisfy the requested tolerances.
+    #[error("Tolerance not met")]
+    ToleranceNotMet,
+
+    /// The integrator hit the configured `max_steps` cap before reaching the
+    /// end of the integration interval.
+    #[error("Maximum steps ({max_steps}) exceeded")]
+    MaxStepsExceeded {
+        /// The configured cap.
+        max_steps: usize,
+    },
+
+    /// The user supplied a parameter name that does not appear in the
+    /// flattened system.
+    #[error("Invalid parameter '{name}'")]
+    InvalidParameter {
+        /// The unknown parameter name.
+        name: String,
+    },
+
+    /// The user supplied an initial condition for a name that is not a state
+    /// variable, or a state variable has no initial value (no entry in
+    /// `initial_conditions` and no `default` on the `ModelVariable`).
+    #[error("Invalid initial condition '{name}'")]
+    InvalidInitialCondition {
+        /// The variable name.
+        name: String,
+    },
+}
+
+// ============================================================================
+// Public API surface (per gt-5ws design)
+// ============================================================================
+
+/// Which solver family to use inside diffsol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SolverChoice {
+    /// Backward Differentiation Formulas — implicit, default for stiff ODEs.
+    Bdf,
+    /// Singly Diagonally Implicit Runge-Kutta (TR-BDF2 tableau) — implicit,
+    /// alternative stiff solver.
+    Sdirk,
+    /// Explicit Runge-Kutta (Tsitouras 5(4)) — non-stiff.
+    Erk,
+}
+
+/// Tunable options for [`Compiled::simulate`] / [`simulate`].
+#[derive(Debug, Clone)]
+pub struct SimulateOptions {
+    /// Which solver family to use. Defaults to [`SolverChoice::Bdf`].
+    pub solver: SolverChoice,
+    /// Absolute tolerance. Defaults to `1e-8`.
+    pub abstol: f64,
+    /// Relative tolerance. Defaults to `1e-6`.
+    pub reltol: f64,
+    /// Maximum number of integrator steps before bailing out. Defaults to `10_000`.
+    pub max_steps: usize,
+    /// If `Some`, the solution is sampled (via dense output / interpolation)
+    /// at exactly these times. If `None`, the natural step times are
+    /// returned.
+    pub output_times: Option<Vec<f64>>,
+}
+
+impl Default for SimulateOptions {
+    fn default() -> Self {
+        Self {
+            solver: SolverChoice::Bdf,
+            abstol: 1e-8,
+            reltol: 1e-6,
+            max_steps: 10_000,
+            output_times: None,
+        }
+    }
+}
+
+/// A simulation result.
+///
+/// `state[i][k]` is the value of state variable `state_variable_names[i]` at
+/// time `time[k]`.
+#[derive(Debug, Clone)]
+pub struct Solution {
+    /// Output time grid.
+    pub time: Vec<f64>,
+    /// State trajectories, indexed `[variable_index][time_index]`.
+    pub state: Vec<Vec<f64>>,
+    /// Names of the state variables, parallel to the rows of `state`.
+    pub state_variable_names: Vec<String>,
+    /// Solver provenance and step counts.
+    pub metadata: SolutionMetadata,
+}
+
+/// Provenance metadata for a [`Solution`].
+#[derive(Debug, Clone, Default)]
+pub struct SolutionMetadata {
+    /// Solver name (e.g. `"Bdf"`, `"Sdirk"`, `"Erk"`).
+    pub solver: String,
+    /// Number of RHS function evaluations performed (best-effort, may be
+    /// zero in v1 if diffsol does not expose it).
+    pub n_rhs_calls: usize,
+    /// Number of Jacobian evaluations performed (best-effort).
+    pub n_jacobian_calls: usize,
+    /// Number of accepted integrator steps (best-effort).
+    pub n_accepted_steps: usize,
+    /// Number of rejected integrator steps (best-effort).
+    pub n_rejected_steps: usize,
+}
+
+// ============================================================================
+// Compiled model: pre-resolved expression interpreter
+// ============================================================================
+
+/// A compiled, parameter-sweep-ready ODE model.
+///
+/// Built once via [`Compiled::from_flattened`] / [`Compiled::from_model`] /
+/// [`Compiled::from_file`], then reused across many [`Compiled::simulate`]
+/// calls with different parameters and initial conditions.
+#[derive(Debug, Clone)]
+pub struct Compiled {
+    state_names: Vec<String>,
+    state_index: HashMap<String, usize>,
+    state_defaults: Vec<Option<f64>>,
+    param_names: Vec<String>,
+    param_index: HashMap<String, usize>,
+    param_defaults: Vec<Option<f64>>,
+    /// Observed variable names in topological order (each obs only references
+    /// state, params, time, or earlier-indexed observed variables).
+    observed_names: Vec<String>,
+    /// Defining expressions for observed variables, parallel to
+    /// `observed_names`.
+    observed_exprs: Vec<ResolvedExpr>,
+    /// Right-hand sides of state derivatives, indexed by state position.
+    state_rhs_exprs: Vec<ResolvedExpr>,
+}
+
+impl Compiled {
+    /// Build from a [`FlattenedSystem`] (the spec-compliant flattening output).
+    pub fn from_flattened(flat: &FlattenedSystem) -> Result<Self, CompileError> {
+        // (1) Reject hybrid dimensionality.
+        if flat.independent_variables != ["t"] {
+            return Err(CompileError::UnsupportedDimensionalityError {
+                independent_variables: flat.independent_variables.clone(),
+            });
+        }
+
+        // (2) Reject events.
+        if !flat.continuous_events.is_empty() {
+            return Err(CompileError::UnsupportedFeatureError {
+                feature: "continuous_events".to_string(),
+                message: "v1 does not support continuous (root-finding) events. \
+                          Track the future Rust events bead for support."
+                    .to_string(),
+            });
+        }
+        if !flat.discrete_events.is_empty() {
+            return Err(CompileError::UnsupportedFeatureError {
+                feature: "discrete_events".to_string(),
+                message: "v1 does not support discrete events. \
+                          Track the future Rust events bead for support."
+                    .to_string(),
+            });
+        }
+
+        // (3) Build name -> index tables for state, params, observed.
+        let state_names: Vec<String> = flat.state_variables.keys().cloned().collect();
+        let state_index: HashMap<String, usize> = state_names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i))
+            .collect();
+        let state_defaults: Vec<Option<f64>> =
+            flat.state_variables.values().map(|mv| mv.default).collect();
+
+        let param_names: Vec<String> = flat.parameters.keys().cloned().collect();
+        let param_index: HashMap<String, usize> = param_names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i))
+            .collect();
+        let param_defaults: Vec<Option<f64>> =
+            flat.parameters.values().map(|mv| mv.default).collect();
+
+        let observed_names_raw: Vec<String> = flat.observed_variables.keys().cloned().collect();
+        let observed_index_raw: HashMap<String, usize> = observed_names_raw
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i))
+            .collect();
+
+        // (4) Walk equations: classify each as state derivative or observed
+        // assignment.
+        let mut state_rhs_raw: Vec<Option<Expr>> = vec![None; state_names.len()];
+        let mut observed_rhs_raw: Vec<Option<Expr>> = vec![None; observed_names_raw.len()];
+
+        // Pull observed defining expressions out of the variable struct as a
+        // fallback (some flattening pipelines store the expression there
+        // rather than as an algebraic equation).
+        for (idx, (_name, mv)) in flat.observed_variables.iter().enumerate() {
+            if let Some(expr) = &mv.expression {
+                observed_rhs_raw[idx] = Some(expr.clone());
+            }
+        }
+
+        for eq in &flat.equations {
+            if let Some(state_name) = state_lhs_name(&eq.lhs) {
+                let idx = state_index.get(&state_name).ok_or_else(|| {
+                    CompileError::InterpreterBuildError {
+                        details: format!(
+                            "Equation defines D({state_name}, t) but '{state_name}' \
+                             is not in flat.state_variables"
+                        ),
+                    }
+                })?;
+                state_rhs_raw[*idx] = Some(eq.rhs.clone());
+            } else if let Some(name) = observed_lhs_name(&eq.lhs)
+                && let Some(idx) = observed_index_raw.get(&name)
+            {
+                observed_rhs_raw[*idx] = Some(eq.rhs.clone());
+            }
+            // Equations whose LHS is neither D(state, t) nor a Variable
+            // matching an observed variable are ignored at v1. They'd be
+            // algebraic constraints (DAE territory), which is out of scope.
+        }
+
+        // (5) Every state must have a defining derivative.
+        for (idx, name) in state_names.iter().enumerate() {
+            if state_rhs_raw[idx].is_none() {
+                return Err(CompileError::InterpreterBuildError {
+                    details: format!(
+                        "State variable '{name}' has no D({name}, t) = ... equation in \
+                         flat.equations. Cannot simulate."
+                    ),
+                });
+            }
+        }
+
+        // (6) Topologically sort observed variables. Each observed expression
+        // may only reference state, params, time, or *earlier* observed
+        // variables. We compute the dependency set per observed variable,
+        // restricted to other observed names.
+        let mut obs_deps: Vec<HashSet<usize>> = vec![HashSet::new(); observed_names_raw.len()];
+        for (i, raw) in observed_rhs_raw.iter().enumerate() {
+            if let Some(expr) = raw {
+                collect_observed_refs(expr, &observed_index_raw, &mut obs_deps[i]);
+            }
+        }
+
+        let order = topo_sort(&obs_deps).map_err(|cycle| CompileError::InterpreterBuildError {
+            details: format!(
+                "Cyclic observed-variable dependency: {:?}",
+                cycle
+                    .into_iter()
+                    .map(|i| observed_names_raw[i].clone())
+                    .collect::<Vec<_>>()
+            ),
+        })?;
+
+        let observed_names: Vec<String> = order
+            .iter()
+            .map(|&i| observed_names_raw[i].clone())
+            .collect();
+        let observed_index: HashMap<String, usize> = observed_names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i))
+            .collect();
+        let observed_raw_in_order: Vec<Option<Expr>> =
+            order.iter().map(|&i| observed_rhs_raw[i].clone()).collect();
+
+        // (7) Resolve every expression to ResolvedExpr (variable refs become
+        // typed indices).
+        let observed_exprs: Vec<ResolvedExpr> = observed_raw_in_order
+            .iter()
+            .enumerate()
+            .map(|(i, raw)| {
+                let expr = raw.as_ref().unwrap_or(&Expr::Number(0.0));
+                resolve_expr(expr, &state_index, &param_index, &observed_index, Some(i))
+            })
+            .collect::<Result<_, _>>()?;
+
+        let state_rhs_exprs: Vec<ResolvedExpr> = state_rhs_raw
+            .into_iter()
+            .map(|raw| {
+                let expr = raw.expect("checked above that every state has an equation");
+                resolve_expr(&expr, &state_index, &param_index, &observed_index, None)
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            state_names,
+            state_index,
+            state_defaults,
+            param_names,
+            param_index,
+            param_defaults,
+            observed_names,
+            observed_exprs,
+            state_rhs_exprs,
+        })
+    }
+
+    /// Convenience: flatten the model first, then build.
+    pub fn from_model(model: &Model) -> Result<Self, CompileError> {
+        let flat = flatten_model(model)?;
+        Self::from_flattened(&flat)
+    }
+
+    /// Convenience: flatten the file first, then build.
+    pub fn from_file(file: &EsmFile) -> Result<Self, CompileError> {
+        let flat = flatten(file)?;
+        Self::from_flattened(&flat)
+    }
+
+    /// State variable names in fixed order. Index `i` corresponds to row `i`
+    /// of [`Solution::state`].
+    pub fn state_variable_names(&self) -> &[String] {
+        &self.state_names
+    }
+
+    /// Parameter names in fixed order. Match these against the keys of the
+    /// `params` HashMap passed to [`Self::simulate`].
+    pub fn parameter_names(&self) -> &[String] {
+        &self.param_names
+    }
+
+    /// Observed variable names in topological-evaluation order.
+    pub fn observed_variable_names(&self) -> &[String] {
+        &self.observed_names
+    }
+
+    /// Run the simulation.
+    pub fn simulate(
+        &self,
+        tspan: (f64, f64),
+        params: &HashMap<String, f64>,
+        initial_conditions: &HashMap<String, f64>,
+        opts: &SimulateOptions,
+    ) -> Result<Solution, SimulateError> {
+        let (t0, t_end) = tspan;
+        let n_states = self.state_names.len();
+        let n_params = self.param_names.len();
+
+        // Validate user-supplied parameters: every key must be a known param.
+        for key in params.keys() {
+            if !self.param_index.contains_key(key) {
+                return Err(SimulateError::InvalidParameter { name: key.clone() });
+            }
+        }
+
+        // Build the parameter vector in canonical order: user value > default.
+        let mut param_vec = vec![0.0f64; n_params];
+        for (i, name) in self.param_names.iter().enumerate() {
+            if let Some(&v) = params.get(name) {
+                param_vec[i] = v;
+            } else if let Some(d) = self.param_defaults[i] {
+                param_vec[i] = d;
+            } else {
+                return Err(SimulateError::InvalidParameter { name: name.clone() });
+            }
+        }
+
+        // Validate user-supplied initial conditions.
+        for key in initial_conditions.keys() {
+            if !self.state_index.contains_key(key) {
+                return Err(SimulateError::InvalidInitialCondition { name: key.clone() });
+            }
+        }
+
+        // Build the initial state vector.
+        let mut ic_vec = vec![0.0f64; n_states];
+        for (i, name) in self.state_names.iter().enumerate() {
+            if let Some(&v) = initial_conditions.get(name) {
+                ic_vec[i] = v;
+            } else if let Some(d) = self.state_defaults[i] {
+                ic_vec[i] = d;
+            } else {
+                return Err(SimulateError::InvalidInitialCondition { name: name.clone() });
+            }
+        }
+
+        // Capture-friendly clones for the closures.
+        let state_rhs_exprs = self.state_rhs_exprs.clone();
+        let observed_exprs = self.observed_exprs.clone();
+        let state_rhs_exprs_jac = state_rhs_exprs.clone();
+        let observed_exprs_jac = observed_exprs.clone();
+
+        let n_obs = observed_exprs.len();
+
+        // RHS closure: y is current state, p is param vector, t is time, dy
+        // is the derivative output.
+        let rhs_closure = move |y: &diffsol::FaerVec<f64>,
+                                p: &diffsol::FaerVec<f64>,
+                                t: f64,
+                                dy: &mut diffsol::FaerVec<f64>| {
+            let y_s = y.as_slice();
+            let p_s = p.as_slice();
+            let mut obs_buf = vec![0.0f64; n_obs];
+            for (i, e) in observed_exprs.iter().enumerate() {
+                obs_buf[i] = interpret(e, y_s, p_s, &obs_buf, t);
+            }
+            let dy_s = dy.as_mut_slice();
+            for (i, e) in state_rhs_exprs.iter().enumerate() {
+                dy_s[i] = interpret(e, y_s, p_s, &obs_buf, t);
+            }
+        };
+
+        // Jacobian-vector product closure (finite differences).
+        let jac_closure = move |y: &diffsol::FaerVec<f64>,
+                                p: &diffsol::FaerVec<f64>,
+                                t: f64,
+                                v: &diffsol::FaerVec<f64>,
+                                jv: &mut diffsol::FaerVec<f64>| {
+            let n = y.as_slice().len();
+            let v_s = v.as_slice();
+            let p_s = p.as_slice();
+            let y_s = y.as_slice();
+
+            // Choose step proportional to ||y|| as is conventional for forward
+            // finite differences. Bound below to avoid catastrophic cancellation.
+            let mut y_norm = 0.0f64;
+            for &yi in y_s {
+                y_norm += yi * yi;
+            }
+            let y_norm = y_norm.sqrt().max(1.0);
+            let eps = (f64::EPSILON.sqrt()) * y_norm;
+
+            // Allocate scratch.
+            let mut y_perturbed = vec![0.0f64; n];
+            for i in 0..n {
+                y_perturbed[i] = y_s[i] + eps * v_s[i];
+            }
+
+            let mut obs_a = vec![0.0f64; n_obs];
+            let mut obs_b = vec![0.0f64; n_obs];
+            for (i, e) in observed_exprs_jac.iter().enumerate() {
+                obs_a[i] = interpret(e, y_s, p_s, &obs_a, t);
+            }
+            for (i, e) in observed_exprs_jac.iter().enumerate() {
+                obs_b[i] = interpret(e, &y_perturbed, p_s, &obs_b, t);
+            }
+            let jv_s = jv.as_mut_slice();
+            for (i, e) in state_rhs_exprs_jac.iter().enumerate() {
+                let f_y = interpret(e, y_s, p_s, &obs_a, t);
+                let f_yp = interpret(e, &y_perturbed, p_s, &obs_b, t);
+                jv_s[i] = (f_yp - f_y) / eps;
+            }
+        };
+
+        // ----- Build the OdeBuilder -----
+        let abstol = opts.abstol;
+        let reltol = opts.reltol;
+        let ic_for_init = ic_vec.clone();
+
+        let builder = OdeBuilder::<FaerMat<f64>>::new()
+            .t0(t0)
+            .rtol(reltol)
+            .atol(vec![abstol; n_states])
+            .p(param_vec.clone())
+            .rhs_implicit(rhs_closure, jac_closure)
+            .init(
+                move |_p: &diffsol::FaerVec<f64>, _t: f64, y: &mut diffsol::FaerVec<f64>| {
+                    let y_s = y.as_mut_slice();
+                    for (i, &v) in ic_for_init.iter().enumerate() {
+                        y_s[i] = v;
+                    }
+                },
+                n_states,
+            );
+
+        let problem = builder.build().map_err(|e| SimulateError::DiffsolError {
+            details: e.to_string(),
+        })?;
+
+        // ----- Solver dispatch -----
+        let solver_name = match opts.solver {
+            SolverChoice::Bdf => "Bdf",
+            SolverChoice::Sdirk => "Sdirk",
+            SolverChoice::Erk => "Erk",
+        };
+
+        let (time, state) = match opts.solver {
+            SolverChoice::Bdf => {
+                let mut solver: Bdf<'_, _, NewtonNonlinearSolver<_, FaerLU<f64>, _>> = problem
+                    .bdf::<FaerLU<f64>>()
+                    .map_err(|e| SimulateError::DiffsolError {
+                        details: e.to_string(),
+                    })?;
+                run_solver(&mut solver, t_end, opts)?
+            }
+            SolverChoice::Sdirk => {
+                let mut solver: Sdirk<'_, _, FaerLU<f64>> = problem
+                    .tr_bdf2::<FaerLU<f64>>()
+                    .map_err(|e| SimulateError::DiffsolError {
+                        details: e.to_string(),
+                    })?;
+                run_solver(&mut solver, t_end, opts)?
+            }
+            SolverChoice::Erk => {
+                let mut solver = problem.tsit45().map_err(|e| SimulateError::DiffsolError {
+                    details: e.to_string(),
+                })?;
+                run_solver(&mut solver, t_end, opts)?
+            }
+        };
+
+        Ok(Solution {
+            time,
+            state,
+            state_variable_names: self.state_names.clone(),
+            metadata: SolutionMetadata {
+                solver: solver_name.to_string(),
+                ..Default::default()
+            },
+        })
+    }
+}
+
+/// Run the configured solver from `t0` to `t_end`, honoring `opts.max_steps`
+/// and `opts.output_times`. Returns `(time_vec, state_matrix_rows)` where
+/// `state_matrix_rows[i]` is the trajectory of state variable `i`.
+///
+/// If `opts.output_times` is `Some`, the solver advances natively but the
+/// returned grid is interpolated to exactly those times. We watch each step's
+/// `[t_prev, t_curr]` interval and interpolate any user time inside it before
+/// moving on, since `interpolate()` is only valid for times within the
+/// solver's current dense output window (calling it backwards on a stiff
+/// solver returns garbage).
+fn run_solver<'a, S, Eqn>(
+    solver: &mut S,
+    t_end: f64,
+    opts: &SimulateOptions,
+) -> Result<(Vec<f64>, Vec<Vec<f64>>), SimulateError>
+where
+    S: OdeSolverMethod<'a, Eqn>,
+    Eqn: diffsol::OdeEquations<T = f64, V = diffsol::FaerVec<f64>>,
+    Eqn: 'a,
+{
+    use diffsol::OdeSolverStopReason;
+
+    let t0 = solver.state().t;
+    let n_states = solver.state().y.as_slice().len();
+    let initial_state: Vec<f64> = solver.state().y.as_slice().to_vec();
+
+    let mut times: Vec<f64> = Vec::new();
+    let mut state_rows: Vec<Vec<f64>> = vec![Vec::new(); n_states];
+
+    let push_state = |times: &mut Vec<f64>, state_rows: &mut [Vec<f64>], t: f64, y: &[f64]| {
+        times.push(t);
+        for (i, &v) in y.iter().enumerate() {
+            state_rows[i].push(v);
+        }
+    };
+
+    solver
+        .set_stop_time(t_end)
+        .map_err(|e| SimulateError::DiffsolError {
+            details: e.to_string(),
+        })?;
+
+    let mut step_count: usize = 0;
+
+    if let Some(t_eval) = &opts.output_times {
+        // Cursor into the user's evaluation grid. Each step we drain any
+        // requested times that now lie inside the solver's [t_prev, t_curr]
+        // window.
+        let mut next_idx: usize = 0;
+
+        // Handle requested times at or before t0 directly from the initial
+        // state — interpolating at t0 on a solver that has not stepped yet
+        // is undefined behaviour for some methods.
+        while next_idx < t_eval.len() && t_eval[next_idx] <= t0 {
+            push_state(
+                &mut times,
+                &mut state_rows,
+                t_eval[next_idx],
+                &initial_state,
+            );
+            next_idx += 1;
+        }
+
+        let mut t_prev = t0;
+        loop {
+            if next_idx >= t_eval.len() {
+                break;
+            }
+            if step_count >= opts.max_steps {
+                return Err(SimulateError::MaxStepsExceeded {
+                    max_steps: opts.max_steps,
+                });
+            }
+            let stop = solver.step().map_err(|e| SimulateError::DiffsolError {
+                details: e.to_string(),
+            })?;
+            step_count += 1;
+            let t_curr = solver.state().t;
+
+            // Drain user grid points inside (t_prev, t_curr].
+            while next_idx < t_eval.len() && t_eval[next_idx] <= t_curr {
+                let t = t_eval[next_idx];
+                let y = solver
+                    .interpolate(t)
+                    .map_err(|e| SimulateError::DiffsolError {
+                        details: e.to_string(),
+                    })?;
+                let y_s = y.as_slice();
+                push_state(&mut times, &mut state_rows, t, y_s);
+                next_idx += 1;
+            }
+
+            t_prev = t_curr;
+            if matches!(stop, OdeSolverStopReason::TstopReached) {
+                break;
+            }
+        }
+        // Anything after the solver's tstop is interpolated by extrapolation
+        // — strictly speaking out-of-range, but accept it as a courtesy if
+        // the user asked for it.
+        while next_idx < t_eval.len() {
+            let t = t_eval[next_idx];
+            let y = solver
+                .interpolate(t)
+                .map_err(|e| SimulateError::DiffsolError {
+                    details: e.to_string(),
+                })?;
+            push_state(&mut times, &mut state_rows, t, y.as_slice());
+            next_idx += 1;
+        }
+        let _ = t_prev;
+    } else {
+        // Native step grid: record the initial point, then every step.
+        push_state(&mut times, &mut state_rows, t0, &initial_state);
+        loop {
+            if step_count >= opts.max_steps {
+                return Err(SimulateError::MaxStepsExceeded {
+                    max_steps: opts.max_steps,
+                });
+            }
+            let stop = solver.step().map_err(|e| SimulateError::DiffsolError {
+                details: e.to_string(),
+            })?;
+            step_count += 1;
+            let t_curr = solver.state().t;
+            let y_owned: Vec<f64> = solver.state().y.as_slice().to_vec();
+            push_state(&mut times, &mut state_rows, t_curr, &y_owned);
+            if matches!(stop, OdeSolverStopReason::TstopReached) {
+                break;
+            }
+        }
+    }
+
+    Ok((times, state_rows))
+}
+
+/// One-shot convenience: flatten -> compile -> simulate.
+pub fn simulate(
+    file: &EsmFile,
+    tspan: (f64, f64),
+    params: &HashMap<String, f64>,
+    initial_conditions: &HashMap<String, f64>,
+    opts: &SimulateOptions,
+) -> Result<Solution, SimulateError> {
+    let compiled = Compiled::from_file(file)?;
+    compiled.simulate(tspan, params, initial_conditions, opts)
+}
+
+// ============================================================================
+// Resolved expression: precomputed indices for the hot interpreter loop
+// ============================================================================
+
+/// Internal: an Expr with variable references replaced by typed integer
+/// indices into the state / parameter / observed buffers.
+#[derive(Debug, Clone)]
+pub enum ResolvedExpr {
+    /// Constant.
+    Number(f64),
+    /// `state[i]`
+    State(usize),
+    /// `param[i]`
+    Param(usize),
+    /// `observed[i]`
+    Observed(usize),
+    /// The independent variable `t`.
+    Time,
+    /// Operator node.
+    Op {
+        /// Operator name (string-tagged for v1; cheap to dispatch on).
+        op: String,
+        /// Resolved children.
+        args: Vec<ResolvedExpr>,
+    },
+}
+
+/// Resolve an `Expr` against name -> index tables. If `obs_limit` is `Some(i)`,
+/// observed-variable references must be to indices `< i` (forward-only
+/// dependency check during topo-resolution of observed expressions).
+fn resolve_expr(
+    expr: &Expr,
+    state_index: &HashMap<String, usize>,
+    param_index: &HashMap<String, usize>,
+    observed_index: &HashMap<String, usize>,
+    obs_limit: Option<usize>,
+) -> Result<ResolvedExpr, CompileError> {
+    match expr {
+        Expr::Number(n) => Ok(ResolvedExpr::Number(*n)),
+        Expr::Variable(name) => {
+            if name == "t" {
+                Ok(ResolvedExpr::Time)
+            } else if let Some(&i) = state_index.get(name) {
+                Ok(ResolvedExpr::State(i))
+            } else if let Some(&i) = param_index.get(name) {
+                Ok(ResolvedExpr::Param(i))
+            } else if let Some(&i) = observed_index.get(name) {
+                if let Some(limit) = obs_limit
+                    && i >= limit
+                {
+                    return Err(CompileError::InterpreterBuildError {
+                        details: format!(
+                            "Observed variable references not-yet-defined observed '{name}' \
+                             (forward dependency)"
+                        ),
+                    });
+                }
+                Ok(ResolvedExpr::Observed(i))
+            } else {
+                Err(CompileError::InterpreterBuildError {
+                    details: format!("Unknown variable '{name}' referenced in expression"),
+                })
+            }
+        }
+        Expr::Operator(node) => {
+            let args = node
+                .args
+                .iter()
+                .map(|a| resolve_expr(a, state_index, param_index, observed_index, obs_limit))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(ResolvedExpr::Op {
+                op: node.op.clone(),
+                args,
+            })
+        }
+    }
+}
+
+/// Walk an expression and collect the indices of any observed variables it
+/// references. Used by the topological sort.
+fn collect_observed_refs(
+    expr: &Expr,
+    observed_index: &HashMap<String, usize>,
+    out: &mut HashSet<usize>,
+) {
+    match expr {
+        Expr::Number(_) => {}
+        Expr::Variable(name) => {
+            if let Some(&i) = observed_index.get(name) {
+                out.insert(i);
+            }
+        }
+        Expr::Operator(node) => {
+            for a in &node.args {
+                collect_observed_refs(a, observed_index, out);
+            }
+        }
+    }
+}
+
+/// Topological sort over a per-node dependency set. Returns nodes in
+/// dependency-respecting order (each node appears after its deps). On a
+/// cycle, returns Err containing the (arbitrary) cycle node ids.
+fn topo_sort(deps: &[HashSet<usize>]) -> Result<Vec<usize>, Vec<usize>> {
+    let n = deps.len();
+    let mut order = Vec::with_capacity(n);
+    let mut visited = vec![false; n];
+    let mut on_stack = vec![false; n];
+
+    fn visit(
+        i: usize,
+        deps: &[HashSet<usize>],
+        visited: &mut [bool],
+        on_stack: &mut [bool],
+        order: &mut Vec<usize>,
+    ) -> Result<(), Vec<usize>> {
+        if visited[i] {
+            return Ok(());
+        }
+        if on_stack[i] {
+            return Err(vec![i]);
+        }
+        on_stack[i] = true;
+        for &d in &deps[i] {
+            visit(d, deps, visited, on_stack, order)?;
+        }
+        on_stack[i] = false;
+        visited[i] = true;
+        order.push(i);
+        Ok(())
+    }
+
+    for i in 0..n {
+        visit(i, deps, &mut visited, &mut on_stack, &mut order)?;
+    }
+    Ok(order)
+}
+
+// ============================================================================
+// Interpreter
+// ============================================================================
+
+/// Walk a [`ResolvedExpr`] tree given current state, parameter, observed
+/// vectors and time. Returns a finite f64 on success, or NaN / ±inf on
+/// runtime math errors (the solver detects these as a step failure).
+pub fn interpret(
+    expr: &ResolvedExpr,
+    state: &[f64],
+    params: &[f64],
+    observed: &[f64],
+    t: f64,
+) -> f64 {
+    match expr {
+        ResolvedExpr::Number(n) => *n,
+        ResolvedExpr::State(i) => state[*i],
+        ResolvedExpr::Param(i) => params[*i],
+        ResolvedExpr::Observed(i) => observed[*i],
+        ResolvedExpr::Time => t,
+        ResolvedExpr::Op { op, args } => eval_op(op, args, state, params, observed, t),
+    }
+}
+
+fn eval_op(
+    op: &str,
+    args: &[ResolvedExpr],
+    state: &[f64],
+    params: &[f64],
+    observed: &[f64],
+    t: f64,
+) -> f64 {
+    let v = |i: usize| interpret(&args[i], state, params, observed, t);
+    match op {
+        // n-ary arithmetic
+        "+" => args
+            .iter()
+            .map(|a| interpret(a, state, params, observed, t))
+            .sum(),
+        "*" => args
+            .iter()
+            .map(|a| interpret(a, state, params, observed, t))
+            .product(),
+        "-" => match args.len() {
+            1 => -v(0),
+            2 => v(0) - v(1),
+            _ => f64::NAN,
+        },
+        "/" => v(0) / v(1),
+        "^" => v(0).powf(v(1)),
+
+        // unary transcendentals
+        "exp" => v(0).exp(),
+        "log" | "ln" => v(0).ln(),
+        "log10" => v(0).log10(),
+        "sqrt" => v(0).sqrt(),
+        "abs" => v(0).abs(),
+        "sign" => {
+            // Mathematical sign convention (sign(0) = 0), matching the
+            // existing `crate::expression::evaluate` implementation. This
+            // differs from `f64::signum`, which returns ±1 for ±0.
+            let x = v(0);
+            if x > 0.0 {
+                1.0
+            } else if x < 0.0 {
+                -1.0
+            } else {
+                0.0
+            }
+        }
+        "floor" => v(0).floor(),
+        "ceil" => v(0).ceil(),
+
+        // trig
+        "sin" => v(0).sin(),
+        "cos" => v(0).cos(),
+        "tan" => v(0).tan(),
+        "asin" => v(0).asin(),
+        "acos" => v(0).acos(),
+        "atan" => v(0).atan(),
+        "atan2" => v(0).atan2(v(1)),
+        "sinh" => v(0).sinh(),
+        "cosh" => v(0).cosh(),
+        "tanh" => v(0).tanh(),
+
+        // min / max
+        "min" => v(0).min(v(1)),
+        "max" => v(0).max(v(1)),
+
+        // conditional
+        "ifelse" => {
+            if v(0) != 0.0 {
+                v(1)
+            } else {
+                v(2)
+            }
+        }
+
+        // relational (return 0/1)
+        "<" => f64::from(v(0) < v(1)),
+        ">" => f64::from(v(0) > v(1)),
+        "<=" => f64::from(v(0) <= v(1)),
+        ">=" => f64::from(v(0) >= v(1)),
+        "==" => {
+            if (v(0) - v(1)).abs() < f64::EPSILON {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "!=" => {
+            if (v(0) - v(1)).abs() >= f64::EPSILON {
+                1.0
+            } else {
+                0.0
+            }
+        }
+
+        // logical
+        "and" => {
+            if v(0) != 0.0 && v(1) != 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "or" => {
+            if v(0) != 0.0 || v(1) != 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "not" => {
+            if v(0) == 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        }
+
+        // Differential operators: D appears on the LHS of state equations
+        // (rewritten elsewhere). On the RHS we treat them as 0 — matching
+        // the existing convention in `crate::expression::evaluate`. Spatial
+        // operators are filtered out by flatten() before reaching this
+        // module.
+        "D" | "grad" | "div" | "laplacian" => 0.0,
+
+        // Pre is the previous-value operator (used by event handling). With
+        // events disallowed in v1 it should never appear, but if it does we
+        // pass through the argument unchanged.
+        "Pre" => v(0),
+
+        _ => f64::NAN,
+    }
+}
+
+// ============================================================================
+// LHS classification helpers
+// ============================================================================
+
+/// If `lhs` is `D(state_var, t)`, return the state variable name.
+fn state_lhs_name(lhs: &Expr) -> Option<String> {
+    let Expr::Operator(node) = lhs else {
+        return None;
+    };
+    if node.op != "D" {
+        return None;
+    }
+    if node.args.len() != 1 {
+        return None;
+    }
+    match (&node.args[0], &node.wrt) {
+        (Expr::Variable(name), Some(wrt)) if wrt == "t" => Some(name.clone()),
+        // Also accept `D(x, t)` encoded as a 2-arg form (some pipelines do this).
+        _ => None,
+    }
+}
+
+/// If `lhs` is a plain variable reference, return its name (used for
+/// observed-variable algebraic equations).
+fn observed_lhs_name(lhs: &Expr) -> Option<String> {
+    if let Expr::Variable(name) = lhs {
+        Some(name.clone())
+    } else {
+        None
+    }
+}
+
+// ============================================================================
+// Inline unit tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interpret_arithmetic() {
+        // 2 * (3 + 4) = 14
+        let e = ResolvedExpr::Op {
+            op: "*".to_string(),
+            args: vec![
+                ResolvedExpr::Number(2.0),
+                ResolvedExpr::Op {
+                    op: "+".to_string(),
+                    args: vec![ResolvedExpr::Number(3.0), ResolvedExpr::Number(4.0)],
+                },
+            ],
+        };
+        assert!((interpret(&e, &[], &[], &[], 0.0) - 14.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn interpret_state_param_time() {
+        // state[0] * param[0] + t  with state=[2], params=[3], t=10 -> 16
+        let e = ResolvedExpr::Op {
+            op: "+".to_string(),
+            args: vec![
+                ResolvedExpr::Op {
+                    op: "*".to_string(),
+                    args: vec![ResolvedExpr::State(0), ResolvedExpr::Param(0)],
+                },
+                ResolvedExpr::Time,
+            ],
+        };
+        assert!((interpret(&e, &[2.0], &[3.0], &[], 10.0) - 16.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn interpret_unary_minus_and_pow() {
+        // (-x)^2 with x=4 -> 16
+        let e = ResolvedExpr::Op {
+            op: "^".to_string(),
+            args: vec![
+                ResolvedExpr::Op {
+                    op: "-".to_string(),
+                    args: vec![ResolvedExpr::State(0)],
+                },
+                ResolvedExpr::Number(2.0),
+            ],
+        };
+        assert!((interpret(&e, &[4.0], &[], &[], 0.0) - 16.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn interpret_transcendentals_and_relational() {
+        // ifelse(x > 0, log(x), 0)
+        let e = ResolvedExpr::Op {
+            op: "ifelse".to_string(),
+            args: vec![
+                ResolvedExpr::Op {
+                    op: ">".to_string(),
+                    args: vec![ResolvedExpr::State(0), ResolvedExpr::Number(0.0)],
+                },
+                ResolvedExpr::Op {
+                    op: "log".to_string(),
+                    args: vec![ResolvedExpr::State(0)],
+                },
+                ResolvedExpr::Number(0.0),
+            ],
+        };
+        let x_pos = std::f64::consts::E;
+        // ifelse(true, log(e^1), 0) = 1
+        assert!((interpret(&e, &[x_pos], &[], &[], 0.0) - 1.0).abs() < 1e-12);
+        assert_eq!(interpret(&e, &[-1.0], &[], &[], 0.0), 0.0);
+    }
+
+    #[test]
+    fn topo_sort_empty_and_simple() {
+        // No deps -> any order is fine, but length matches.
+        let deps = vec![HashSet::new(), HashSet::new(), HashSet::new()];
+        let order = topo_sort(&deps).unwrap();
+        assert_eq!(order.len(), 3);
+
+        // 0 -> 1 -> 2 (2 depends on 1, 1 depends on 0)
+        let mut s1 = HashSet::new();
+        s1.insert(0);
+        let mut s2 = HashSet::new();
+        s2.insert(1);
+        let deps = vec![HashSet::new(), s1, s2];
+        let order = topo_sort(&deps).unwrap();
+        assert_eq!(order, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn topo_sort_cycle_detected() {
+        // 0 -> 1 -> 0
+        let mut s0 = HashSet::new();
+        s0.insert(1);
+        let mut s1 = HashSet::new();
+        s1.insert(0);
+        let deps = vec![s0, s1];
+        assert!(topo_sort(&deps).is_err());
+    }
+}

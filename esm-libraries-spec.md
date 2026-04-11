@@ -1512,6 +1512,7 @@ Rust provides a high-performance, memory-safe implementation suitable for CLI to
 - `serde` + `serde_json` — serialization
 - `jsonschema` — schema validation
 - `wasm-bindgen` — optional, for WASM target
+- `diffsol` (0.11) — native-only ODE solver, used by `simulate()` (gated to non-wasm targets via `cfg(not(target_arch = "wasm32"))`); pulls in `faer` for the linear-algebra backend used at the call site
 
 #### 5.4.2 Crate Structure
 
@@ -1612,6 +1613,39 @@ esm graph model.esm --level=expression --format=mermaid
 # Convert between formats
 esm convert model.esm --to=messagepack  # future binary format
 ```
+
+#### 5.4.6 Native Simulation (`simulate()`, gt-5ws)
+
+The Rust crate exposes a native, correctness-first ODE simulator built on `diffsol`. v1 is intentionally limited:
+
+- **0D ODE only.** The simulator consumes a `FlattenedSystem` whose `independent_variables` is exactly `["t"]`. Hybrid spatial / temporal systems return `CompileError::UnsupportedDimensionalityError` and are routed to the future Rust PDE bead.
+- **No event handling.** Models with non-empty `continuous_events` or `discrete_events` return `CompileError::UnsupportedFeatureError` and are routed to the future Rust events bead.
+- **No coupling beyond Core flatten.** Anything `flatten()` itself rejects (`slice` / `project` / `regrid`, spatial operators, mismatched dimension mappings) is rejected upstream and never reaches the simulator.
+- **Native only.** The whole `simulate` module is gated behind `cfg(not(target_arch = "wasm32"))`, so the WASM build (which has a separate follow-up bead for simulator exposure) does not pull in `diffsol`.
+- **Compiled API for parameter sweeps.** A `Compiled` value is built once via `Compiled::from_flattened` / `from_model` / `from_file` and then reused across many `Compiled::simulate(...)` calls with different `params` and `initial_conditions` HashMaps. A one-shot `simulate(file, tspan, params, ic, opts)` convenience wrapper exists for the common single-run case.
+- **Solver options.** `SimulateOptions` selects between `SolverChoice::Bdf` (default — implicit BDF, the canonical stiff solver), `SolverChoice::Sdirk` (TR-BDF2 SDIRK), and `SolverChoice::Erk` (explicit Tsitouras 5(4) for non-stiff problems), plus tolerances (`abstol` / `reltol`), `max_steps`, and an optional dense `output_times` grid.
+- **Interpreted RHS, finite-difference Jacobian.** The interpreter walks an internal `ResolvedExpr` tree (variable references resolved to typed indices into the state, parameter, observed, and `t` slots). The Jacobian-vector product handed to diffsol is forward-difference; v1 deliberately does not generate symbolic or compiled-WASM Jacobians, since the bead is correctness-focused.
+
+```rust
+use earthsci_toolkit::{Compiled, SimulateOptions, SolverChoice, simulate};
+use std::collections::HashMap;
+
+let compiled = Compiled::from_file(&file)?;
+let mut params = HashMap::new();
+params.insert("Decay.k".to_string(), 0.1);
+let mut ic = HashMap::new();
+ic.insert("Decay.N".to_string(), 1.0);
+let opts = SimulateOptions {
+    solver: SolverChoice::Bdf,
+    abstol: 1e-10,
+    reltol: 1e-8,
+    max_steps: 10_000,
+    output_times: Some(vec![0.0, 1.0, 10.0, 100.0]),
+};
+let solution = compiled.simulate((0.0, 100.0), &params, &ic, &opts)?;
+```
+
+The v1 acceptance harness includes the Robertson stiff problem (verified against Hairer & Wanner Table 1.4 reference values), an exponential-decay analytical comparison, mass-conservation invariants for autocatalysis, and round-trips from the canonical `tests/simulation/*.esm` fixtures. WASM exposure, event handling, hybrid PDE coupling, symbolic Jacobians, and sensitivity analysis are all explicit follow-up beads.
 
 ---
 
@@ -1912,7 +1946,7 @@ The following items are acknowledged gaps in this specification. They do not blo
 | MTK ↔ ESM conversion | ✓ | — | — | — | — | — |
 | Catalyst ↔ ESM conversion | ✓ | — | — | — | — | — |
 | Coupled system assembly | ✓ | — | — | — | — | — |
-| 0D simulation (box model) | ✓ | — | — | ✓ | — | — |
+| 0D simulation (box model) | ✓ | — | — | ✓ | 0D stiff ODEs (diffsol backend; events and coupling deferred) | — |
 | Spatial simulation | ✓ | — | — | — | — | — |
 | Event simulation | ✓ | — | — | partial | — | — |
 | WASM target | — | — | — | — | ✓ | — |
