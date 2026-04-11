@@ -1,7 +1,7 @@
 name = "EarthSciSerialization"
 uuid = "c7bf5e87-b31b-4281-bdce-ffb8a46ec87c"
 version = "0.0.2"
-authors = ["Chris Tessum with Claude <noreply@anthropic.com>"]
+authors = ["EarthSciML Authors and Contributors"]
 
 [deps]
 # Full dependencies for complete Julia EarthSciML ecosystem support
