@@ -233,6 +233,9 @@ ConditionTrigger(...)
 ConflictingDerivativeError(...)
 ```
 
+**Available in other languages:**
+- [Python](python.md#conflictingderivativeerror)
+
 ---
 
 ### ContinuousEvent
@@ -431,6 +434,9 @@ DependencyEdge(...)
 DimensionPromotionError(...)
 ```
 
+**Available in other languages:**
+- [Python](python.md#dimensionpromotionerror)
+
 ---
 
 ### DiscreteEvent
@@ -481,6 +487,9 @@ Domain(...)
 ```julia
 DomainUnitMismatchError(...)
 ```
+
+**Available in other languages:**
+- [Python](python.md#domainunitmismatcherror)
 
 ---
 
@@ -1250,6 +1259,9 @@ Unit(...)
 ```julia
 UnmappedDomainError(...)
 ```
+
+**Available in other languages:**
+- [Python](python.md#unmappeddomainerror)
 
 ---
 
@@ -6860,6 +6872,9 @@ Fields:
 - `species::Vector{String}`: fully-qualified (dot-namespaced) names of every
   offending species.
 
+**Available in other languages:**
+- [Python](python.md#conflictingderivativeerror)
+
 ---
 
 ### ContinuousEvent
@@ -7068,6 +7083,9 @@ Raised during flatten when a variable or equation cannot be promoted from
 its source domain to the target domain given the available `Interface` rules
 (§4.7.6).
 
+**Available in other languages:**
+- [Python](python.md#dimensionpromotionerror)
+
 ---
 
 ### DiscreteEvent
@@ -7123,6 +7141,9 @@ DomainUnitMismatchError
 
 Raised when coupling across an `Interface` requires a unit conversion that
 was not declared by the user (§4.7.6).
+
+**Available in other languages:**
+- [Python](python.md#domainunitmismatcherror)
 
 ---
 
@@ -7857,6 +7878,9 @@ UnmappedDomainError
 
 Raised when two systems on different domains are coupled without an `Interface`
 that defines their dimension mapping (§4.7.6).
+
+**Available in other languages:**
+- [Python](python.md#unmappeddomainerror)
 
 ---
 

@@ -3393,6 +3393,27 @@ export interface ComponentNode {
 
 ---
 
+### ConflictingDerivativeError
+
+**Julia:**
+```julia
+struct ConflictingDerivativeError <: Exception
+```
+
+> ConflictingDerivativeError
+
+Raised when a species appears both as the left-hand side of an explicit
+differential equation (`D(X, t) = .
+
+**Python:**
+```python
+class ConflictingDerivativeError:
+```
+
+> Two systems define non-additive equations for the same dependent variable.
+
+---
+
 ### ConnectorEquation
 
 **Python:**
@@ -3641,6 +3662,28 @@ export interface DependencyEdge {
 
 ---
 
+### DimensionPromotionError
+
+**Julia:**
+```julia
+struct DimensionPromotionError <: Exception
+```
+
+> DimensionPromotionError
+
+Raised during flatten when a variable or equation cannot be promoted from
+its source domain to the target domain given the available `Interface` rules
+(§4.
+
+**Python:**
+```python
+class DimensionPromotionError:
+```
+
+> A variable or equation cannot be promoted given the available Interfaces.
+
+---
+
 ### DiscreteEvent
 
 **Julia:**
@@ -3685,6 +3728,27 @@ export interface Domain {
 ```
 
 > Spatiotemporal domain specification (DomainInfo).
+
+---
+
+### DomainUnitMismatchError
+
+**Julia:**
+```julia
+struct DomainUnitMismatchError <: Exception
+```
+
+> DomainUnitMismatchError
+
+Raised when coupling across an `Interface` requires a unit conversion that
+was not declared by the user (§4.
+
+**Python:**
+```python
+class DomainUnitMismatchError:
+```
+
+> An Interface coupling requires a unit conversion that was not declared.
 
 ---
 
@@ -3930,7 +3994,7 @@ Provenance metadata for a flattened system.
 class FlattenMetadata:
 ```
 
-> Metadata about which systems were flattened and how.
+> Provenance metadata for a FlattenedSystem.
 
 **Typescript:**
 ```typescript
@@ -3948,7 +4012,7 @@ export interface FlattenMetadata {
 class FlattenedEquation:
 ```
 
-> An equation in the flattened system with namespaced variables.
+> An equation in the flattened system, with namespaced Expr trees.
 
 **Typescript:**
 ```typescript
@@ -3975,7 +4039,7 @@ A coupled ESM file flattened into a single symbolic representation.
 class FlattenedSystem:
 ```
 
-> A coupled system flattened to a single system with dot-namespaced variables.
+> The result of flattening an EsmFile per spec §4.
 
 **Typescript:**
 ```typescript
@@ -4721,6 +4785,27 @@ export interface UnitWarning {
 
 > Unit validation warning
 /.
+
+---
+
+### UnmappedDomainError
+
+**Julia:**
+```julia
+struct UnmappedDomainError <: Exception
+```
+
+> UnmappedDomainError
+
+Raised when two systems on different domains are coupled without an `Interface`
+that defines their dimension mapping (§4.
+
+**Python:**
+```python
+class UnmappedDomainError:
+```
+
+> A coupling references a variable whose domain has no mapping rule.
 
 ---
 
