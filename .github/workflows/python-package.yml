@@ -97,7 +97,11 @@ jobs:
     name: Publish to TestPyPI
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Disabled (2026-04-11, gt-0w4): not ready to publish anything yet. TestPyPI
+    # trusted publisher is not configured for this repo, so the job fails with
+    # invalid-publisher on every push. Re-enable by restoring the original
+    # condition once we're ready to publish and the trusted publisher is set up.
+    if: false
     environment:
       name: testpypi
       url: https://test.pypi.org/p/earthsci-toolkit
@@ -120,7 +124,10 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
+    # Disabled (2026-04-11, gt-0w4): not ready to publish anything yet. Re-enable
+    # by restoring the original condition once we're ready to release to PyPI and
+    # the trusted publisher is configured.
+    if: false
     environment:
       name: pypi
       url: https://pypi.org/p/earthsci-toolkit
