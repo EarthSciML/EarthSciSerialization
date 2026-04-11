@@ -362,14 +362,14 @@ end
 Create a real Catalyst ReactionSystem from an ESM reaction system.
 """
 function create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
-    t = Symbolics.variable(:t, T=Symbolics.Real)  # Time variable
+    t = Symbolics.variable(:t, T=Real)  # Time variable
 
     # Build symbolic species
     species_symbols = []
     species_dict = Dict{String, Any}()
 
     for species in rsys.species
-        spec_sym = Symbolics.variable(Symbol(species.name), T=Symbolics.Real)  # Simplified species creation
+        spec_sym = Symbolics.variable(Symbol(species.name), T=Real)  # Simplified species creation
         species_symbols = [species_symbols..., spec_sym]
         species_dict[species.name] = spec_sym
     end
@@ -379,7 +379,7 @@ function create_real_catalyst_system(rsys::ReactionSystem, name::String, advance
     param_dict = Dict{String, Any}()
 
     for param in rsys.parameters
-        param_sym = Symbolics.variable(Symbol(param.name), T=Symbolics.Real)  # Simplified parameter creation
+        param_sym = Symbolics.variable(Symbol(param.name), T=Real)  # Simplified parameter creation
         parameter_symbols = [parameter_symbols..., param_sym]
         param_dict[param.name] = param_sym
     end
@@ -537,25 +537,15 @@ function from_mtk_system(sys, name::String)
 
     variables = Dict{String, ModelVariable}()
 
-    # MTK 9.x renamed `states(sys)` to `unknowns(sys)`. Try both so we keep
-    # working across versions.
-    _get_states = if isdefined(ModelingToolkit, :unknowns)
-        ModelingToolkit.unknowns
-    elseif isdefined(ModelingToolkit, :states)
-        ModelingToolkit.states
-    else
-        error("ModelingToolkit has neither `unknowns` nor `states` — unsupported version")
-    end
-
-    # Extract states from real MTK system
-    for state in _get_states(sys)
+    # Extract unknowns (formerly "states") from real MTK system.
+    # MTK v10 removed `states`; use `unknowns`. MTK v11 keeps it.
+    for state in ModelingToolkit.unknowns(sys)
         var_name = string(ModelingToolkit.getname(state))
         # Remove the (t) suffix if present for time-dependent variables
         if endswith(var_name, "(t)")
             var_name = var_name[1:end-3]
         end
 
-        # Try to extract default value from the symbolic variable metadata
         default_val = try
             ModelingToolkit.getdefault(state)
         catch
@@ -702,15 +692,10 @@ function from_catalyst_system(rs, name::String)
             spec_name = spec_name[1:end-3]
         end
 
-        # Try to extract initial concentration or other metadata
         initial_conc = try
-            if haskey(ModelingToolkit.get_metadata(spec), :initial_concentration)
-                ModelingToolkit.get_metadata(spec)[:initial_concentration]
-            else
-                0.0  # Default fallback
-            end
+            Symbolics.getmetadata(Symbolics.unwrap(spec), Symbolics.VariableDefaultValue, 0.0)
         catch
-            0.0  # Fallback if metadata access fails
+            0.0
         end
 
         push!(species, Species(spec_name; initial_concentration=initial_conc))
@@ -721,31 +706,13 @@ function from_catalyst_system(rs, name::String)
     for param in Catalyst.parameters(rs)
         param_name = string(Catalyst.getname(param))
 
-        # Try to extract default value and metadata from parameter
         default_val = try
-            if haskey(ModelingToolkit.get_metadata(param), ModelingToolkit.VariableDefaultValue)
-                ModelingToolkit.get_metadata(param)[ModelingToolkit.VariableDefaultValue]
-            else
-                1.0  # Default fallback for parameters
-            end
+            Symbolics.getmetadata(Symbolics.unwrap(param), Symbolics.VariableDefaultValue, 1.0)
         catch
-            1.0  # Fallback if metadata access fails
+            1.0
         end
 
-        # Extract units and description if available
-        units = try
-            get(ModelingToolkit.get_metadata(param), :units, "")
-        catch
-            ""
-        end
-
-        description = try
-            get(ModelingToolkit.get_metadata(param), :description, "")
-        catch
-            ""
-        end
-
-        push!(parameters, Parameter(param_name, default_val; units=units, description=description))
+        push!(parameters, Parameter(param_name, default_val))
     end
 
     # Extract reactions from real Catalyst system
@@ -890,9 +857,12 @@ function symbolic_to_esm(symbolic_expr)
         return NumExpr(Float64(symbolic_expr))
     end
 
+    # Unwrap Symbolics Num wrapper for TermInterface calls (Symbolics v7)
+    raw_expr = Symbolics.unwrap(symbolic_expr)
+
     # Check if it's a symbolic variable
-    if Symbolics.issym(symbolic_expr)
-        var_name = string(Symbolics.getname(symbolic_expr))
+    if Symbolics.issym(raw_expr)
+        var_name = string(Symbolics.getname(raw_expr))
         # Remove (t) suffix if present
         if endswith(var_name, "(t)")
             var_name = var_name[1:end-3]
@@ -900,30 +870,22 @@ function symbolic_to_esm(symbolic_expr)
         return VarExpr(var_name)
     end
 
-    # Handle differential terms. ModelingToolkit.isdiffeq reaches into internal
-    # Unityper fields that moved in MTK 9.x and can throw; guard it.
+    # Handle differential terms. Symbolics v7 renamed `isdifferential` →
+    # `is_derivative` and returns false for Num wrappers, so unwrap first.
     is_diff = try
-        ModelingToolkit.isdiffeq(symbolic_expr)
+        Symbolics.is_derivative(raw_expr)
     catch
         false
     end
-    if !is_diff
-        is_diff = try
-            Symbolics.isdifferential(symbolic_expr)
-        catch
-            false
-        end
-    end
     if is_diff
-        # This is a differential D(x)/Dt
-        var_expr = symbolic_to_esm(Symbolics.arguments(symbolic_expr)[1])
+        var_expr = symbolic_to_esm(Symbolics.arguments(raw_expr)[1])
         return OpExpr("D", EarthSciSerialization.Expr[var_expr], wrt="t")
     end
 
-    # Handle composite expressions
-    if Symbolics.isexpr(symbolic_expr)
-        op = Symbolics.operation(symbolic_expr)
-        args = Symbolics.arguments(symbolic_expr)
+    # Handle composite expressions (Symbolics v7: isexpr → iscall)
+    if Symbolics.iscall(raw_expr)
+        op = Symbolics.operation(raw_expr)
+        args = Symbolics.arguments(raw_expr)
 
         # Convert arguments recursively
         esm_args = [symbolic_to_esm(arg) for arg in args]
@@ -996,7 +958,7 @@ function esm_to_symbolic_enhanced(expr::Expr, var_dict::Dict, advanced_features:
             # Enhanced variable creation with better error handling
             @warn "Variable $(expr.name) not found in dictionary, creating new symbolic variable"
             if check_mtk_availability()
-                var_sym = Symbolics.variable(Symbol(expr.name), T=Symbolics.Real)
+                var_sym = Symbolics.variable(Symbol(expr.name), T=Real)
                 var_dict[expr.name] = var_sym
                 return var_sym
             else
@@ -1023,10 +985,10 @@ function convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,N
     if op == "D" && wrt !== nothing
         if check_mtk_availability()
             if wrt == "t"
-                t_var = Symbolics.variable(:t, T=Symbolics.Real)
+                t_var = Symbolics.variable(:t, T=Real)
                 return Symbolics.Differential(t_var)(args[1])
             else
-                wrt_var = Symbolics.variable(Symbol(wrt), T=Symbolics.Real)
+                wrt_var = Symbolics.variable(Symbol(wrt), T=Real)
                 return Symbolics.Differential(wrt_var)(args[1])
             end
         else

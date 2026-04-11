@@ -78,7 +78,7 @@ Handles the full conversion pipeline with proper symbolic mathematics.
 """
 function create_real_catalyst_system(rs::ReactionSystem)
     # Independent time variable
-    t = Symbolics.variable(:t, T=Symbolics.Real)
+    t = Symbolics.variable(:t, T=Real)
 
     # Convert species to @species declarations
     species_symbols = []
@@ -86,7 +86,7 @@ function create_real_catalyst_system(rs::ReactionSystem)
 
     for species in rs.species
         # Create symbolic species variable
-        spec_sym = Symbolics.variable(Symbol(species.name), T=Symbolics.Real)
+        spec_sym = Symbolics.variable(Symbol(species.name), T=Real)
         push!(species_symbols, spec_sym)
         species_dict[species.name] = spec_sym
     end
@@ -97,7 +97,7 @@ function create_real_catalyst_system(rs::ReactionSystem)
 
     for param in rs.parameters
         # Create symbolic parameter
-        param_sym = Symbolics.variable(Symbol(param.name), T=Symbolics.Real)
+        param_sym = Symbolics.variable(Symbol(param.name), T=Real)
         push!(parameter_symbols, param_sym)
         param_dict[param.name] = param_sym
     end
@@ -316,7 +316,7 @@ function esm_to_symbolic(expr::Expr, var_dict::Dict)
             # Create new symbolic variable if not found
             # Check if Symbolics was loaded when Catalyst was checked
             if SYMBOLICS_AVAILABLE[]
-                var_sym = Symbolics.variable(Symbol(expr.name), T=Symbolics.Real)
+                var_sym = Symbolics.variable(Symbol(expr.name), T=Real)
                 var_dict[expr.name] = var_sym  # Cache for future use
                 return var_sym
             else
