@@ -28,6 +28,137 @@ pub enum DeriveError {
     Other(String),
 }
 
+/// Lower a reaction network to an ODE equation list.
+///
+/// Produces one `D(species, t) = Σ(net_stoichiometry · rate)` equation per species
+/// per spec §4.7.5 step 1. Reusable from both [`derive_odes`] and
+/// [`crate::flatten::flatten`] so the reaction-to-equation core lives in one place.
+///
+/// Each reaction's base rate is enhanced with mass-action concentration factors
+/// (unless the rate expression already references substrate names). Net
+/// stoichiometry combines substrate and product contributions for each species.
+pub fn lower_reactions_to_equations(
+    reactions: &[crate::Reaction],
+    species: &[crate::Species],
+) -> Result<Vec<Equation>, DeriveError> {
+    // Validate system has species if there are reactions
+    if species.is_empty() && !reactions.is_empty() {
+        return Err(DeriveError::InvalidStoichiometry(
+            "Reaction system has reactions but no species defined".to_string(),
+        ));
+    }
+
+    // Validate reactions and their stoichiometry
+    for (reaction_idx, reaction) in reactions.iter().enumerate() {
+        for substrate in &reaction.substrates {
+            if substrate.coefficient.is_some_and(|c| c < 0.0) {
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Negative substrate coefficient {} in reaction {}",
+                    substrate.coefficient.unwrap(),
+                    reaction_idx
+                )));
+            }
+            if !species.iter().any(|s| s.name == substrate.species) {
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Unknown substrate species '{}' in reaction {}",
+                    substrate.species, reaction_idx
+                )));
+            }
+        }
+
+        for product in &reaction.products {
+            if product.coefficient.is_some_and(|c| c < 0.0) {
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Negative product coefficient {} in reaction {}",
+                    product.coefficient.unwrap(),
+                    reaction_idx
+                )));
+            }
+            if !species.iter().any(|s| s.name == product.species) {
+                return Err(DeriveError::InvalidStoichiometry(format!(
+                    "Unknown product species '{}' in reaction {}",
+                    product.species, reaction_idx
+                )));
+            }
+        }
+
+        if reaction.substrates.is_empty() && reaction.products.is_empty() {
+            return Err(DeriveError::InvalidStoichiometry(format!(
+                "Reaction {} has no substrates or products",
+                reaction_idx
+            )));
+        }
+    }
+
+    let mut equations = Vec::with_capacity(species.len());
+
+    for sp in species {
+        let mut rate_terms = Vec::new();
+
+        for reaction in reactions {
+            let mut net_stoichiometry = 0.0;
+
+            for substrate in &reaction.substrates {
+                if substrate.species == sp.name {
+                    net_stoichiometry -= substrate.coefficient.unwrap_or(1.0);
+                }
+            }
+            for product in &reaction.products {
+                if product.species == sp.name {
+                    net_stoichiometry += product.coefficient.unwrap_or(1.0);
+                }
+            }
+
+            if net_stoichiometry != 0.0 {
+                let enhanced_rate =
+                    enhance_rate_with_mass_action(&reaction.rate, &reaction.substrates)?;
+
+                if net_stoichiometry == 1.0 {
+                    rate_terms.push(enhanced_rate);
+                } else if net_stoichiometry == -1.0 {
+                    rate_terms.push(Expr::Operator(ExpressionNode {
+                        op: "*".to_string(),
+                        args: vec![Expr::Number(-1.0), enhanced_rate],
+                        wrt: None,
+                        dim: None,
+                    }));
+                } else {
+                    rate_terms.push(Expr::Operator(ExpressionNode {
+                        op: "*".to_string(),
+                        args: vec![Expr::Number(net_stoichiometry), enhanced_rate],
+                        wrt: None,
+                        dim: None,
+                    }));
+                }
+            }
+        }
+
+        let rhs = if rate_terms.is_empty() {
+            Expr::Number(0.0)
+        } else if rate_terms.len() == 1 {
+            rate_terms.into_iter().next().unwrap()
+        } else {
+            Expr::Operator(ExpressionNode {
+                op: "+".to_string(),
+                args: rate_terms,
+                wrt: None,
+                dim: None,
+            })
+        };
+
+        let lhs = Expr::Operator(ExpressionNode {
+            op: "D".to_string(),
+            args: vec![Expr::Variable(sp.name.clone())],
+            wrt: Some("t".to_string()),
+            dim: None,
+        });
+
+        equations.push(Equation { lhs, rhs });
+    }
+
+    Ok(equations)
+}
+
 /// Generate ODE model from a reaction system
 ///
 /// Converts a reaction system into an ODE model with species as state variables
@@ -50,16 +181,7 @@ pub enum DeriveError {
 /// Returns `DeriveError` for invalid stoichiometry, missing rate laws, or unit conversion issues.
 pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     let mut variables = HashMap::new();
-    let mut equations = Vec::new();
 
-    // Validate system has species and reactions
-    if system.species.is_empty() && !system.reactions.is_empty() {
-        return Err(DeriveError::InvalidStoichiometry(
-            "Reaction system has reactions but no species defined".to_string(),
-        ));
-    }
-
-    // Create state variables for each species
     for species in &system.species {
         variables.insert(
             species.name.clone(),
@@ -73,127 +195,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         );
     }
 
-    // Validate reactions and their stoichiometry
-    for (reaction_idx, reaction) in system.reactions.iter().enumerate() {
-        // Check for invalid stoichiometry
-        for substrate in &reaction.substrates {
-            if substrate.coefficient.is_some_and(|c| c < 0.0) {
-                return Err(DeriveError::InvalidStoichiometry(format!(
-                    "Negative substrate coefficient {} in reaction {}",
-                    substrate.coefficient.unwrap(),
-                    reaction_idx
-                )));
-            }
-            // Verify substrate species exists
-            if !system.species.iter().any(|s| s.name == substrate.species) {
-                return Err(DeriveError::InvalidStoichiometry(format!(
-                    "Unknown substrate species '{}' in reaction {}",
-                    substrate.species, reaction_idx
-                )));
-            }
-        }
-
-        for product in &reaction.products {
-            if product.coefficient.is_some_and(|c| c < 0.0) {
-                return Err(DeriveError::InvalidStoichiometry(format!(
-                    "Negative product coefficient {} in reaction {}",
-                    product.coefficient.unwrap(),
-                    reaction_idx
-                )));
-            }
-            // Verify product species exists
-            if !system.species.iter().any(|s| s.name == product.species) {
-                return Err(DeriveError::InvalidStoichiometry(format!(
-                    "Unknown product species '{}' in reaction {}",
-                    product.species, reaction_idx
-                )));
-            }
-        }
-
-        // Check for source/sink reactions (no substrates or no products)
-        if reaction.substrates.is_empty() && reaction.products.is_empty() {
-            return Err(DeriveError::InvalidStoichiometry(format!(
-                "Reaction {} has no substrates or products",
-                reaction_idx
-            )));
-        }
-    }
-
-    // Generate ODE equations for each species
-    for species in &system.species {
-        let mut rate_terms = Vec::new();
-
-        // Check each reaction for contributions to this species
-        for reaction in &system.reactions {
-            let mut net_stoichiometry = 0.0;
-
-            // Check if species is a substrate (negative contribution)
-            for substrate in &reaction.substrates {
-                if substrate.species == species.name {
-                    net_stoichiometry -= substrate.coefficient.unwrap_or(1.0);
-                }
-            }
-
-            // Check if species is a product (positive contribution)
-            for product in &reaction.products {
-                if product.species == species.name {
-                    net_stoichiometry += product.coefficient.unwrap_or(1.0);
-                }
-            }
-
-            // If species participates in this reaction, add rate term
-            if net_stoichiometry != 0.0 {
-                // For mass action kinetics, we need to multiply the base rate by concentration terms
-                let enhanced_rate =
-                    enhance_rate_with_mass_action(&reaction.rate, &reaction.substrates)?;
-
-                if net_stoichiometry == 1.0 {
-                    // Direct rate contribution
-                    rate_terms.push(enhanced_rate);
-                } else if net_stoichiometry == -1.0 {
-                    // Negative rate contribution
-                    rate_terms.push(Expr::Operator(ExpressionNode {
-                        op: "*".to_string(),
-                        args: vec![Expr::Number(-1.0), enhanced_rate],
-                        wrt: None,
-                        dim: None,
-                    }));
-                } else {
-                    // Scaled rate contribution
-                    rate_terms.push(Expr::Operator(ExpressionNode {
-                        op: "*".to_string(),
-                        args: vec![Expr::Number(net_stoichiometry), enhanced_rate],
-                        wrt: None,
-                        dim: None,
-                    }));
-                }
-            }
-        }
-
-        // Create the RHS expression (sum of all rate terms)
-        let rhs = if rate_terms.is_empty() {
-            Expr::Number(0.0)
-        } else if rate_terms.len() == 1 {
-            rate_terms.into_iter().next().unwrap()
-        } else {
-            Expr::Operator(ExpressionNode {
-                op: "+".to_string(),
-                args: rate_terms,
-                wrt: None,
-                dim: None,
-            })
-        };
-
-        // Create the ODE equation: D[species] (wrt t) = rhs
-        let lhs = Expr::Operator(ExpressionNode {
-            op: "D".to_string(),
-            args: vec![Expr::Variable(species.name.clone())],
-            wrt: Some("t".to_string()),
-            dim: None,
-        });
-
-        equations.push(Equation { lhs, rhs });
-    }
+    let equations = lower_reactions_to_equations(&system.reactions, &system.species)?;
 
     Ok(Model {
         name: system.name.clone(),

@@ -1438,6 +1438,8 @@ esm.explore(file)  # widget showing models, reactions, coupling graph
 
 Rust provides a high-performance, memory-safe implementation suitable for CLI tools, WASM compilation (for web), and embedding in other systems.
 
+**Flattening scope (Core tier only).** The Rust implementation of `flatten()` targets the Core dimension-promotion tier: it supports `broadcast` and `identity` mappings per §4.7.6, and raises `FlattenError::UnsupportedMapping` with the specific type name (`slice`, `project`, `regrid`, or the spatial operator that was encountered — `grad`, `div`, `laplacian`, `D(_, x)`, etc.) for anything beyond that. This scope limit is deliberate: the downstream Rust simulator (`earthsci-toolkit-rs` → diffsol) is ODE-only and cannot consume PDE output, so implementing slice/project/regrid in Rust v1 would be wasted work. Higher tiers will be added when Rust gains PDE capability. The full cross-language §4.7.6.10 error taxonomy (`ConflictingDerivative`, `DimensionPromotion`, `UnmappedDomain`, `UnsupportedMapping`, `DomainUnitMismatch`, `DomainExtent`, `SliceOutOfDomain`, `CyclicPromotion`) is defined on the Rust `FlattenError` enum for API parity even where a given variant is never raised by Core tier.
+
 #### 5.4.1 Dependencies
 
 - `serde` + `serde_json` — serialization

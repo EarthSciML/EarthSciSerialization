@@ -60,6 +60,10 @@ pub mod performance;
 // Re-export main types
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};
+pub use flatten::{
+    DimensionPromotionRecord, FlattenError, FlattenMetadata, FlattenedSystem, flatten,
+    flatten_model,
+};
 pub use graph::{
     ComponentGraph, ComponentNode, ComponentType, CouplingEdge, DependencyEdge,
     DependencyRelationship, ExpressionGraph, ExpressionGraphInput, VariableKind, VariableNode,
@@ -68,7 +72,8 @@ pub use graph::{
 pub use parse::{ParseError, SchemaValidationError, load, load_path};
 pub use reactions::{
     ConservationAnalysis, ConservationLawType, ConservationViolation, DeriveError, LinearInvariant,
-    derive_odes, detect_conservation_violations, stoichiometric_matrix,
+    derive_odes, detect_conservation_violations, lower_reactions_to_equations,
+    stoichiometric_matrix,
 };
 pub use ref_loading::resolve_subsystem_refs;
 pub use serialize::{save, save_compact};
