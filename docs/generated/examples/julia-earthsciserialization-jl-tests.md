@@ -18,6 +18,7 @@ include("parse_test.jl")
     include("test_codegen.jl")
     include("flatten_test.jl")
     include("subsystem_ref_test.jl")
+    include("editing_test.jl")
 
     # Comprehensive test suite for full verification
     @testset "Comprehensive Test Suite" begin

@@ -618,7 +618,7 @@ function compose(file::EsmFile, system_a::String, system_b::String)::EsmFile
 
 > compose(file::EsmFile, system_a::String, system_b::String) -> EsmFile
 
-Convenience function to create an operator_compose coupling entry.
+Convenience function to create an operator_compose coupling entry linking two systems.
 
 **Typescript:**
 ```typescript
@@ -1162,12 +1162,13 @@ map_variable(...)
 
 **Julia:**
 ```julia
-function map_variable(file::EsmFile, from::String, to::String, transform::Union{EarthSciSerialization.Expr,Nothing}=nothing)::EsmFile
+function map_variable(file::EsmFile, from::String, to::String; transform::String="identity")::EsmFile
 ```
 
-> map_variable(file::EsmFile, from::String, to::String, transform::Union{Expr,Nothing}=nothing) -> EsmFile
+> map_variable(file::EsmFile, from::String, to::String; transform::String="identity") -> EsmFile
 
-Convenience function to create a variable_map coupling entry.
+Convenience function to create a variable_map coupling entry that forwards a
+variable reference `from` into `to`.
 
 ---
 

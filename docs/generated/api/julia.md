@@ -2421,7 +2421,7 @@ compose(...)
 
 ### compose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:437`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:439`
 
 **Signature:**
 ```julia
@@ -2431,7 +2431,7 @@ function compose(file::EsmFile, system_a::String, system_b::String)::EsmFile
 **Description:**
 compose(file::EsmFile, system_a::String, system_b::String) -> EsmFile
 
-Convenience function to create an operator_compose coupling entry.
+Convenience function to create an operator_compose coupling entry linking two systems.
 
 **Available in other languages:**
 - [Typescript](typescript.md#compose)
@@ -2786,7 +2786,7 @@ extract(...)
 
 ### extract
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:507`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:519`
 
 **Signature:**
 ```julia
@@ -3506,17 +3506,19 @@ map_variable(...)
 
 ### map_variable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:447`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:451`
 
 **Signature:**
 ```julia
-function map_variable(file::EsmFile, from::String, to::String, transform::Union{EarthSciSerialization.Expr,Nothing}=nothing)::EsmFile
+function map_variable(file::EsmFile, from::String, to::String; transform::String="identity")::EsmFile
 ```
 
 **Description:**
-map_variable(file::EsmFile, from::String, to::String, transform::Union{Expr,Nothing}=nothing) -> EsmFile
+map_variable(file::EsmFile, from::String, to::String; transform::String="identity") -> EsmFile
 
-Convenience function to create a variable_map coupling entry.
+Convenience function to create a variable_map coupling entry that forwards a
+variable reference `from` into `to`. `transform` names the transform function
+(e.g. `"identity"`, `"affine"`).
 
 ---
 
@@ -3547,7 +3549,7 @@ merge(...)
 
 ### merge
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:462`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:466`
 
 **Signature:**
 ```julia
@@ -3800,7 +3802,7 @@ remove_coupling(...)
 
 ### remove_coupling
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:411`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/edit.jl:412`
 
 **Signature:**
 ```julia
