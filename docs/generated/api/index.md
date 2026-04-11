@@ -3,8 +3,8 @@
 Complete API documentation for all ESM Format language implementations.
 
 ## [Julia](julia.md)
-- 448 functions
-- 59 types
+- 382 functions
+- 60 types
 
 ## [Python](python.md)
 - 773 functions

@@ -83,11 +83,6 @@ Expression(...)
 Expression(...)
 ```
 
-**Julia:**
-```julia
-Expression(...)
-```
-
 ---
 
 ### Graph
@@ -101,6 +96,80 @@ Graph(...)
 ```julia
 Graph(...)
 ```
+
+---
+
+### MockCatalystSystem
+
+**Julia:**
+```julia
+MockCatalystSystem(...)
+```
+
+**Julia:**
+```julia
+function MockCatalystSystem(rsys::ReactionSystem;
+```
+
+> MockCatalystSystem(rsys::ReactionSystem; name=:anonymous)
+
+Build a `MockCatalystSystem` snapshot from an ESM `ReactionSystem`.
+
+---
+
+### MockMTKSystem
+
+**Julia:**
+```julia
+MockMTKSystem(...)
+```
+
+**Julia:**
+```julia
+function MockMTKSystem(flat::FlattenedSystem;
+```
+
+> MockMTKSystem(flat::FlattenedSystem; name=:anonymous)
+
+Construct a `MockMTKSystem` from a `FlattenedSystem`.
+
+**Julia:**
+```julia
+function MockMTKSystem(model::Model;
+```
+
+> MockMTKSystem(model::Model; name=:anonymous)
+
+Convenience constructor: flatten the model first, then build the
+`MockMTKSystem` from the resulting `FlattenedSystem`.
+
+---
+
+### MockPDESystem
+
+**Julia:**
+```julia
+MockPDESystem(...)
+```
+
+**Julia:**
+```julia
+function MockPDESystem(flat::FlattenedSystem;
+```
+
+> MockPDESystem(flat::FlattenedSystem; name=:anonymous)
+
+Construct a `MockPDESystem` from a `FlattenedSystem`.
+
+**Julia:**
+```julia
+function MockPDESystem(model::Model;
+```
+
+> MockPDESystem(model::Model; name=:anonymous)
+
+Convenience constructor: flatten the model first, then build the
+`MockPDESystem` from the resulting `FlattenedSystem`.
 
 ---
 
@@ -533,60 +602,6 @@ function adjacency(graph::Graph{N, E}, node::N) where {N, E}
 
 ---
 
-### check_catalyst_availability
-
-**Julia:**
-```julia
-check_catalyst_availability(...)
-```
-
-**Julia:**
-```julia
-function check_catalyst_availability()
-```
-
-> check_catalyst_availability() -> Bool
-
-Check if Catalyst and Symbolics are available.
-
----
-
-### check_mtk_availability
-
-**Julia:**
-```julia
-check_mtk_availability(...)
-```
-
-**Julia:**
-```julia
-function check_mtk_availability()
-```
-
-> check_mtk_availability() -> Bool
-
-Check if ModelingToolkit and Symbolics are available.
-
----
-
-### check_mtk_catalyst_availability
-
-**Julia:**
-```julia
-check_mtk_catalyst_availability(...)
-```
-
-**Julia:**
-```julia
-function check_mtk_catalyst_availability()
-```
-
-> check_mtk_catalyst_availability() -> Bool
-
-Check if both ModelingToolkit and Catalyst are available.
-
----
-
 ### coerce_coupling_entry
 
 **Julia:**
@@ -711,47 +726,6 @@ export function contains(expr: Expr, varName: string): boolean {
 
 ---
 
-### conversion
-
-**Julia:**
-```julia
-conversion(...)
-```
-
-**Julia:**
-```julia
-conversion(...)
-```
-
-**Julia:**
-```julia
-conversion(...)
-```
-
----
-
-### create_mock_catalyst_system
-
-**Julia:**
-```julia
-function create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
-```
-
-> create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> MockCatalystSystem
-
-Create a mock Catalyst system for testing when Catalyst is not available.
-
-**Julia:**
-```julia
-function create_mock_catalyst_system(rs::ReactionSystem)
-```
-
-> create_mock_catalyst_system(rs::ReactionSystem) -> MockCatalystSystem
-
-Create a mock Catalyst system for testing when Catalyst.
-
----
-
 ### create_nested_expr
 
 **Python:**
@@ -763,28 +737,6 @@ def create_nested_expr(depth):
 ```python
 def create_nested_expr(depth):
 ```
-
----
-
-### create_real_catalyst_system
-
-**Julia:**
-```julia
-function create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
-```
-
-> create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> ReactionSystem
-
-Create a real Catalyst ReactionSystem from an ESM reaction system.
-
-**Julia:**
-```julia
-function create_real_catalyst_system(rs::ReactionSystem)
-```
-
-> create_real_catalyst_system(rs::ReactionSystem) -> ReactionSystem
-
-Create a real Catalyst.
 
 ---
 
@@ -850,24 +802,6 @@ export function differentiate(expr: Expr, variable: string): DerivativeResult {
 @param variable Variable with respect to which to differentiate
 @returns Derivative result with simplified form
 /.
-
----
-
-### esm_to_symbolic
-
-**Julia:**
-```julia
-esm_to_symbolic(...)
-```
-
-**Julia:**
-```julia
-function esm_to_symbolic(expr::Expr, var_dict::Dict)
-```
-
-> esm_to_symbolic(expr::Expr, var_dict::Dict) -> Any
-
-Convert ESM expression to symbolic form for Catalyst.
 
 ---
 
@@ -1089,66 +1023,6 @@ function free_variables(expr::NumExpr)::Set{String}
 > free_variables(expr::Expr)::Set{String}
 
 Extract all free (unbound) variable names from an expression.
-
----
-
-### from_catalyst_system
-
-**Julia:**
-```julia
-from_catalyst_system(...)
-```
-
-**Julia:**
-```julia
-function from_catalyst_system(rs, name::String)
-```
-
-> from_catalyst_system(rs, name::String) -> ReactionSystem
-
-Convert a Catalyst ReactionSystem or MockCatalystSystem back to ESM ReactionSystem format.
-
----
-
-### from_mtk_system
-
-**Julia:**
-```julia
-from_mtk_system(...)
-```
-
-**Julia:**
-```julia
-function from_mtk_system(sys, name::String)
-```
-
-> from_mtk_system(sys, name::String) -> Model
-
-Convert a ModelingToolkit ODESystem or MockMTKSystem back to ESM Model format.
-
----
-
-### functions
-
-**Julia:**
-```julia
-functions(...)
-```
-
-**Julia:**
-```julia
-functions(...)
-```
-
-**Julia:**
-```julia
-functions(...)
-```
-
-**Julia:**
-```julia
-functions(...)
-```
 
 ---
 
@@ -1504,6 +1378,20 @@ export function migrate(file: EsmFile, targetVersion: string): EsmFile {
 ```
 
 > Migrate an ESM file from its current schema version to the target version.
+
+---
+
+### no
+
+**Julia:**
+```julia
+no(...)
+```
+
+**Julia:**
+```julia
+no(...)
+```
 
 ---
 
@@ -2014,30 +1902,7 @@ function successors(graph::Graph{N, E}, node::N) where {N, E}
 
 ---
 
-### symbolic_to_esm
-
-**Julia:**
-```julia
-symbolic_to_esm(...)
-```
-
-**Julia:**
-```julia
-function symbolic_to_esm(symbolic_expr)
-```
-
-> symbolic_to_esm(symbolic_expr) -> Expr
-
-Convert Symbolics/MTK symbolic expression back to ESM form.
-
----
-
 ### system
-
-**Julia:**
-```julia
-system(...)
-```
 
 **Julia:**
 ```julia
@@ -2993,51 +2858,6 @@ Format target as plain ASCII mathematical notation.
 
 ---
 
-### to_catalyst_system
-
-**Julia:**
-```julia
-to_catalyst_system(...)
-```
-
-**Julia:**
-```julia
-function to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false)
-```
-
-> to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false) -> Union{ReactionSystem, MockCatalystSystem}
-
-Convert an ESM ReactionSystem to a Catalyst ReactionSystem with comprehensive features.
-
-**Julia:**
-```julia
-function to_catalyst_system(rs::ReactionSystem)
-```
-
-> to_catalyst_system(rs::ReactionSystem)::Union{ReactionSystem, MockCatalystSystem}
-
-Convert an ESM ReactionSystem to a Catalyst.
-
----
-
-### to_coupled_system
-
-**Julia:**
-```julia
-to_coupled_system(...)
-```
-
-**Julia:**
-```julia
-function to_coupled_system(file::EsmFile)::MockCoupledSystem
-```
-
-> to_coupled_system(file::EsmFile)::MockCoupledSystem
-
-Convert an ESM file with coupling rules into a coupled system.
-
----
-
 ### to_dot
 
 **Julia:**
@@ -3083,33 +2903,6 @@ function to_mermaid(graph::Graph{ComponentNode, CouplingEdge})::String
 ```
 
 > Export graph to Mermaid format for markdown embedding.
-
----
-
-### to_mtk_system
-
-**Julia:**
-```julia
-to_mtk_system(...)
-```
-
-**Julia:**
-```julia
-function to_mtk_system(model::Model, name::String; advanced_features=false)
-```
-
-> to_mtk_system(model::Model, name::String; advanced_features=false) -> Union{ODESystem, MockMTKSystem}
-
-Convert an ESM Model to a ModelingToolkit ODESystem with comprehensive features.
-
-**Julia:**
-```julia
-function to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
-```
-
-> to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
-
-Convert an ESM Model to a ModelingToolkit ODESystem or MockMTKSystem.
 
 ---
 

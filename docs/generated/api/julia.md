@@ -30,17 +30,6 @@ AffectEquation(...)
 
 ---
 
-### Availability
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-Availability(...)
-```
-
----
-
 ### Base
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/display.jl:310`
@@ -250,17 +239,6 @@ ContinuousEvent(...)
 **Available in other languages:**
 - [Python](python.md#continuousevent)
 - [Typescript](typescript.md#continuousevent)
-
----
-
-### Coupled
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-Coupled(...)
-```
 
 ---
 
@@ -605,17 +583,6 @@ Expression(...)
 
 ---
 
-### Expression
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-Expression(...)
-```
-
----
-
 ### Flatten
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -735,17 +702,6 @@ JSON(...)
 
 ---
 
-### Legacy
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-Legacy(...)
-```
-
----
-
 ### MTK
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -772,6 +728,17 @@ Metadata(...)
 
 ---
 
+### Mock
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Mock(...)
+```
+
+---
+
 ### MockCatalystSystem
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -783,14 +750,19 @@ MockCatalystSystem(...)
 
 ---
 
-### MockCoupledSystem
+### MockCatalystSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:294`
 
 **Signature:**
 ```julia
-MockCoupledSystem(...)
+function MockCatalystSystem(rsys::ReactionSystem;
 ```
+
+**Description:**
+MockCatalystSystem(rsys::ReactionSystem; name=:anonymous)
+
+Build a `MockCatalystSystem` snapshot from an ESM `ReactionSystem`.
 
 ---
 
@@ -802,6 +774,87 @@ MockCoupledSystem(...)
 ```julia
 MockMTKSystem(...)
 ```
+
+---
+
+### MockMTKSystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:171`
+
+**Signature:**
+```julia
+function MockMTKSystem(flat::FlattenedSystem;
+```
+
+**Description:**
+MockMTKSystem(flat::FlattenedSystem; name=:anonymous)
+
+Construct a `MockMTKSystem` from a `FlattenedSystem`. Errors with a clear
+redirect to `MockPDESystem` when the flattened system has spatial
+independent variables (i.e. is actually a PDE).
+
+---
+
+### MockMTKSystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:210`
+
+**Signature:**
+```julia
+function MockMTKSystem(model::Model;
+```
+
+**Description:**
+MockMTKSystem(model::Model; name=:anonymous)
+
+Convenience constructor: flatten the model first, then build the
+`MockMTKSystem` from the resulting `FlattenedSystem`.
+
+---
+
+### MockPDESystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+MockPDESystem(...)
+```
+
+---
+
+### MockPDESystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:227`
+
+**Signature:**
+```julia
+function MockPDESystem(flat::FlattenedSystem;
+```
+
+**Description:**
+MockPDESystem(flat::FlattenedSystem; name=:anonymous)
+
+Construct a `MockPDESystem` from a `FlattenedSystem`. Errors with a clear
+redirect to `MockMTKSystem` when the flattened system is a pure ODE
+(i.e. has only `:t` as its independent variable).
+
+---
+
+### MockPDESystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:279`
+
+**Signature:**
+```julia
+function MockPDESystem(model::Model;
+```
+
+**Description:**
+MockPDESystem(model::Model; name=:anonymous)
+
+Convenience constructor: flatten the model first, then build the
+`MockPDESystem` from the resulting `FlattenedSystem`.
 
 ---
 
@@ -1416,6 +1469,23 @@ variables are then namespaced by `prefix`.
 
 ---
 
+### _expr_to_string
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:131`
+
+**Signature:**
+```julia
+function _expr_to_string(expr::Expr)
+```
+
+**Description:**
+_expr_to_string(expr::Expr) -> String
+
+Render an ESM Expr tree as a readable string. Shared helper for mock
+system equation rendering.
+
+---
+
 ### _find_conflicting_derivatives
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:491`
@@ -1489,6 +1559,24 @@ _load_remote_ref(ref::String) -> EsmFile
 
 Load a remotely referenced ESM file from a URL.
 Uses the Downloads stdlib to fetch the content.
+
+---
+
+### _pde_independent_vars
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:120`
+
+**Signature:**
+```julia
+function _pde_independent_vars(flat::FlattenedSystem)
+```
+
+**Description:**
+_pde_independent_vars(flat::FlattenedSystem) -> Bool
+
+Return true when the flattened system has spatial independent variables
+(i.e. needs a PDESystem rather than an ODESystem). A FlattenedSystem with
+`[:t]` only is a pure ODE; anything else is a PDE.
 
 ---
 
@@ -1774,17 +1862,6 @@ Get all adjacent nodes (both predecessors and successors).
 
 ---
 
-### aliases
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-aliases(...)
-```
-
----
-
 ### analysis
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1819,245 +1896,6 @@ Analyze coupling-related issues and provide debugging info.
 **Signature:**
 ```julia
 and(...)
-```
-
----
-
-### apply_additive_transform
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:621`
-
-**Signature:**
-```julia
-function apply_additive_transform(coupled_system, from_resolution, to_resolution, constraint)
-```
-
-**Description:**
-apply_additive_transform(coupled_system, from_resolution, to_resolution, constraint)
-
-Create an additive coupling between two variables.
-
----
-
-### apply_advanced_mtk_features
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1165`
-
-**Signature:**
-```julia
-function apply_advanced_mtk_features(sys, metadata::Dict)
-```
-
-**Description:**
-apply_advanced_mtk_features(sys, metadata::Dict) -> ODESystem
-
-Apply advanced MTK features like algebraic reduction and optimization hints.
-
----
-
-### apply_connector_transform
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:413`
-
-**Signature:**
-```julia
-function apply_connector_transform(system::MockMTKSystem, constraint)
-```
-
-**Description:**
-apply_connector_transform(system, constraint)
-
-Apply a connector transform to modify equations in the target system.
-
----
-
-### apply_conversion_factor_transform
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:669`
-
-**Signature:**
-```julia
-function apply_conversion_factor_transform(coupled_system, from_resolution, to_resolution, constraint)
-```
-
-**Description:**
-apply_conversion_factor_transform(coupled_system, from_resolution, to_resolution, constraint)
-
-Create a conversion factor coupling with scaling between two variables.
-
----
-
-### apply_identity_transform
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:601`
-
-**Signature:**
-```julia
-function apply_identity_transform(coupled_system, from_resolution, to_resolution, constraint)
-```
-
-**Description:**
-apply_identity_transform(coupled_system, from_resolution, to_resolution, constraint)
-
-Create an identity mapping constraint between two variables.
-
----
-
-### apply_multiplicative_transform
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:645`
-
-**Signature:**
-```julia
-function apply_multiplicative_transform(coupled_system, from_resolution, to_resolution, constraint)
-```
-
-**Description:**
-apply_multiplicative_transform(coupled_system, from_resolution, to_resolution, constraint)
-
-Create a multiplicative coupling between two variables.
-
----
-
-### apply_param_to_var_transform
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:574`
-
-**Signature:**
-```julia
-function apply_param_to_var_transform(coupled_system, from_resolution, to_resolution, constraint)
-```
-
-**Description:**
-apply_param_to_var_transform(coupled_system, from_resolution, to_resolution, constraint)
-
-Promote a parameter to a shared state variable between systems.
-
----
-
-### apply_translations
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:190`
-
-**Signature:**
-```julia
-function apply_translations(vars::Vector{String}, translate)
-```
-
-**Description:**
-apply_translations(vars::Vector{String}, translate)
-
-Apply translation mappings to variable names.
-
----
-
-### apply_variable_transform
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:518`
-
-**Signature:**
-```julia
-function apply_variable_transform(coupled_system, from_resolution, to_resolution, coupling)
-```
-
-**Description:**
-apply_variable_transform(coupled_system, from_resolution, to_resolution, coupling)
-
-Apply the specified transform operation between variables.
-
----
-
-### check_catalyst_availability
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-check_catalyst_availability(...)
-```
-
----
-
-### check_catalyst_availability
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/availability.jl:52`
-
-**Signature:**
-```julia
-function check_catalyst_availability()
-```
-
-**Description:**
-check_catalyst_availability() -> Bool
-
-Check if Catalyst and Symbolics are available.
-Uses lazy loading to avoid precompilation issues.
-
----
-
-### check_mtk_availability
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-check_mtk_availability(...)
-```
-
----
-
-### check_mtk_availability
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/availability.jl:25`
-
-**Signature:**
-```julia
-function check_mtk_availability()
-```
-
-**Description:**
-check_mtk_availability() -> Bool
-
-Check if ModelingToolkit and Symbolics are available.
-Uses lazy loading to avoid precompilation issues.
-
----
-
-### check_mtk_catalyst_availability
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-check_mtk_catalyst_availability(...)
-```
-
----
-
-### check_mtk_catalyst_availability
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/availability.jl:79`
-
-**Signature:**
-```julia
-function check_mtk_catalyst_availability()
-```
-
-**Description:**
-check_mtk_catalyst_availability() -> Bool
-
-Check if both ModelingToolkit and Catalyst are available.
-Uses lazy loading to avoid precompilation issues.
-
----
-
-### checking
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-checking(...)
 ```
 
 ---
@@ -2502,17 +2340,6 @@ Parse variable_map coupling entry.
 
 ---
 
-### compatibility
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-compatibility(...)
-```
-
----
-
 ### component
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -2611,26 +2438,6 @@ Convenience function to create an operator_compose coupling entry.
 
 ---
 
-### compose_systems
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:224`
-
-**Signature:**
-```julia
-function compose_systems(system1, system2, matched_vars, translate, composed_name)
-```
-
-**Description:**
-compose_systems(system1, system2, matched_vars, translate, composed_name)
-
-Actually compose two systems by combining equations for matched variables.
-This implements the core operator_compose algorithm:
-1. For each matched variable, combine RHS terms by addition
-2. Preserve unmatched equations from both systems
-3. Create a unified system with merged variables, parameters, and equations
-
----
-
 ### contains
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -2674,74 +2481,6 @@ contains(sum_expr, "z")  # false
 
 ---
 
-### conversion
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-conversion(...)
-```
-
----
-
-### conversion
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-conversion(...)
-```
-
----
-
-### conversion
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-conversion(...)
-```
-
----
-
-### convert_operator_enhanced
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:983`
-
-**Signature:**
-```julia
-function convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,Nothing}, advanced_features::Bool)
-```
-
-**Description:**
-convert_operator_enhanced(op::String, args::Vector, wrt::Union{String,Nothing}, advanced_features::Bool) -> Any
-
-Enhanced operator conversion supporting more functions and advanced features.
-
----
-
-### couple
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:334`
-
-**Signature:**
-```julia
-function couple(coupled_system::MockCoupledSystem, coupling::CouplingCouple)
-```
-
-**Description:**
-couple(coupled_system::MockCoupledSystem, coupling::CouplingCouple)
-
-Implement bi-directional coupling via connector equations:
-1. Read connector equations from the coupling specification
-2. Resolve scoped references in connector equations
-3. Apply transform operations (additive/multiplicative/replacement)
-
----
-
 ### coupling
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -2750,23 +2489,6 @@ Implement bi-directional coupling via connector equations:
 ```julia
 coupling(...)
 ```
-
----
-
-### create_connector_constraint
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:364`
-
-**Signature:**
-```julia
-function create_connector_constraint(coupled_system, from_ref, to_ref, transform, systems)
-```
-
-**Description:**
-create_connector_constraint(coupled_system, from_ref, to_ref, transform, systems)
-
-Create an actual coupling constraint from connector equation specification.
-This processes scoped references and applies the specified transform.
 
 ---
 
@@ -2802,71 +2524,6 @@ Create a JSON parse error with fix suggestions.
 
 ---
 
-### create_mock_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:488`
-
-**Signature:**
-```julia
-function create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
-```
-
-**Description:**
-create_mock_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> MockCatalystSystem
-
-Create a mock Catalyst system for testing when Catalyst is not available.
-
----
-
-### create_mock_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/catalyst.jl:218`
-
-**Signature:**
-```julia
-function create_mock_catalyst_system(rs::ReactionSystem)
-```
-
-**Description:**
-create_mock_catalyst_system(rs::ReactionSystem) -> MockCatalystSystem
-
-Create a mock Catalyst system for testing when Catalyst.jl is not available.
-Preserves all the structural information in a testable format.
-
----
-
-### create_mock_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:280`
-
-**Signature:**
-```julia
-function create_mock_mtk_system(model::Model, name::String, advanced_features::Bool)
-```
-
-**Description:**
-create_mock_mtk_system(model::Model, name::String, advanced_features::Bool) -> MockMTKSystem
-
-Create a mock MTK system for testing when ModelingToolkit is not available.
-
----
-
-### create_mock_mtk_system_basic
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk.jl:79`
-
-**Signature:**
-```julia
-function create_mock_mtk_system_basic(model::Model, name::String)
-```
-
-**Description:**
-create_mock_mtk_system_basic(model::Model, name::String) -> MockMTKSystem
-
-Create a mock MTK system for testing when ModelingToolkit is not available.
-
----
-
 ### create_model_with_mixed_events
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:293`
@@ -2899,55 +2556,6 @@ Create performance warning with optimization suggestions.
 
 ---
 
-### create_real_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:364`
-
-**Signature:**
-```julia
-function create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool)
-```
-
-**Description:**
-create_real_catalyst_system(rsys::ReactionSystem, name::String, advanced_features::Bool) -> ReactionSystem
-
-Create a real Catalyst ReactionSystem from an ESM reaction system.
-
----
-
-### create_real_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/catalyst.jl:79`
-
-**Signature:**
-```julia
-function create_real_catalyst_system(rs::ReactionSystem)
-```
-
-**Description:**
-create_real_catalyst_system(rs::ReactionSystem) -> ReactionSystem
-
-Create a real Catalyst.jl ReactionSystem from an ESM ReactionSystem.
-Handles the full conversion pipeline with proper symbolic mathematics.
-
----
-
-### create_real_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:75`
-
-**Signature:**
-```julia
-function create_real_mtk_system(model::Model, name::String, advanced_features::Bool)
-```
-
-**Description:**
-create_real_mtk_system(model::Model, name::String, advanced_features::Bool) -> ODESystem
-
-Create a real ModelingToolkit ODESystem from an ESM model.
-
----
-
 ### create_undefined_reference_error
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/error_handling.jl:443`
@@ -2961,22 +2569,6 @@ function create_undefined_reference_error(reference::String, available_variables
 create_undefined_reference_error(reference, available_variables=String[], scope_path="")
 
 Create undefined reference error with smart suggestions.
-
----
-
-### create_variable_mapping_constraint
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:531`
-
-**Signature:**
-```julia
-function create_variable_mapping_constraint(coupled_system, from_resolution, to_resolution, coupling)
-```
-
-**Description:**
-create_variable_mapping_constraint(coupled_system, from_resolution, to_resolution, coupling)
-
-Create an actual variable mapping constraint that modifies the coupled system.
 
 ---
 
@@ -3073,61 +2665,6 @@ error(...)
 
 ---
 
-### esm_to_mock_symbolic
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-esm_to_mock_symbolic(...)
-```
-
----
-
-### esm_to_symbolic
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-esm_to_symbolic(...)
-```
-
----
-
-### esm_to_symbolic
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/catalyst.jl:309`
-
-**Signature:**
-```julia
-function esm_to_symbolic(expr::Expr, var_dict::Dict)
-```
-
-**Description:**
-esm_to_symbolic(expr::Expr, var_dict::Dict) -> Any
-
-Convert ESM expression to symbolic form for Catalyst.jl.
-Handles the expression mapping required for rate expressions.
-
----
-
-### esm_to_symbolic_enhanced
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:951`
-
-**Signature:**
-```julia
-function esm_to_symbolic_enhanced(expr::Expr, var_dict::Dict, advanced_features::Bool)
-```
-
-**Description:**
-esm_to_symbolic_enhanced(expr::Expr, var_dict::Dict, advanced_features::Bool) -> Any
-
-Enhanced ESM to symbolic conversion with support for advanced features and better error handling.
-
----
-
 ### evaluate
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -3177,22 +2714,6 @@ result = evaluate(sum_expr, bindings)  # 5.0
 
 **Available in other languages:**
 - [Typescript](typescript.md#evaluate)
-
----
-
-### expr_to_string
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/catalyst.jl:455`
-
-**Signature:**
-```julia
-function expr_to_string(expr::Expr)
-```
-
-**Description:**
-expr_to_string(expr::Expr) -> String
-
-Convert ESM expression to string representation for mock systems.
 
 ---
 
@@ -3285,35 +2806,14 @@ coupling entries that reference it.
 
 ---
 
-### extract_dependent_variables
+### fallbacks
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:164`
-
-**Signature:**
-```julia
-function extract_dependent_variables(system)
-```
-
-**Description:**
-extract_dependent_variables(system)
-
-Extract dependent variables (LHS of differential equations) from a system.
-
----
-
-### extract_variable_name
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1296`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
 
 **Signature:**
 ```julia
-function extract_variable_name(symbolic_var)
+fallbacks(...)
 ```
-
-**Description:**
-extract_variable_name(symbolic_var) -> String
-
-Extract variable name from a symbolic variable, handling various formats.
 
 ---
 
@@ -3426,17 +2926,6 @@ Convenience: wrap a ReactionSystem in a synthetic EsmFile and flatten.
 
 **Available in other languages:**
 - [Typescript](typescript.md#flatten)
-
----
-
-### for
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-for(...)
-```
 
 ---
 
@@ -3646,106 +3135,6 @@ vars = free_variables(nested)  # Set(["x", "y"])
 
 ---
 
-### from_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-from_catalyst_system(...)
-```
-
----
-
-### from_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:670`
-
-**Signature:**
-```julia
-function from_catalyst_system(rs, name::String)
-```
-
-**Description:**
-from_catalyst_system(rs, name::String) -> ReactionSystem
-
-Convert a Catalyst ReactionSystem or MockCatalystSystem back to ESM ReactionSystem format.
-Extracts species, parameters, reactions, and events from Catalyst symbolic form.
-
-This function implements reverse conversion: taking Catalyst systems and reconstructing
-ESM ReactionSystems with proper species mapping, parameter extraction, and reaction
-reconstruction. Maps Catalyst Reaction objects to ESM Reaction format with proper
-stoichiometry and rate expressions.
-
----
-
-### from_mock_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1249`
-
-**Signature:**
-```julia
-function from_mock_catalyst_system(sys::MockCatalystSystem, name::String)
-```
-
-**Description:**
-from_mock_catalyst_system(sys::MockCatalystSystem, name::String) -> ReactionSystem
-
-Convert a MockCatalystSystem back to ESM ReactionSystem format.
-This handles the case when Catalyst is not available but we have mock systems.
-
----
-
-### from_mock_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1186`
-
-**Signature:**
-```julia
-function from_mock_mtk_system(sys::MockMTKSystem, name::String)
-```
-
-**Description:**
-from_mock_mtk_system(sys::MockMTKSystem, name::String) -> Model
-
-Convert a MockMTKSystem back to ESM Model format.
-This handles the case when MTK is not available but we have mock systems.
-
----
-
-### from_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-from_mtk_system(...)
-```
-
----
-
-### from_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:520`
-
-**Signature:**
-```julia
-function from_mtk_system(sys, name::String)
-```
-
-**Description:**
-from_mtk_system(sys, name::String) -> Model
-
-Convert a ModelingToolkit ODESystem or MockMTKSystem back to ESM Model format.
-Extracts variables, equations, and events from MTK symbolic form.
-
-This function implements reverse conversion: taking MTK systems and reconstructing
-ESM Models with proper variable classification, equation extraction, and event handling.
-Maps Differential(t)(var) → D(var,t), symbolic operations → OpExpr, and detects
-state vs parameter vs observed variable types.
-
----
-
 ### functionality
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -3753,39 +3142,6 @@ state vs parameter vs observed variable types.
 **Signature:**
 ```julia
 functionality(...)
-```
-
----
-
-### functions
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-functions(...)
-```
-
----
-
-### functions
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-functions(...)
-```
-
----
-
-### functions
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-functions(...)
 ```
 
 ---
@@ -4211,17 +3567,6 @@ from file_b take precedence.
 
 ---
 
-### mock_symbolic_to_esm
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-mock_symbolic_to_esm(...)
-```
-
----
-
 ### namespace_expr
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:264`
@@ -4253,6 +3598,28 @@ function needs_parentheses(parent_op::String, child::Expr, is_right_operand::Boo
 needs_parentheses(parent_op::String, child::Expr, is_right_operand::Bool=false) -> Bool
 
 Check if parentheses are needed around a subexpression.
+
+---
+
+### no
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+no(...)
+```
+
+---
+
+### no
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+no(...)
+```
 
 ---
 
@@ -4289,43 +3656,6 @@ operator(...)
 
 ---
 
-### operator_apply
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:693`
-
-**Signature:**
-```julia
-function operator_apply(coupled_system::MockCoupledSystem, coupling::CouplingOperatorApply, file::EsmFile)
-```
-
-**Description:**
-operator_apply(coupled_system::MockCoupledSystem, coupling::CouplingOperatorApply, file::EsmFile)
-
-Register an Operator in CoupledSystem.ops for runtime execution.
-
----
-
-### operator_compose
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:118`
-
-**Signature:**
-```julia
-function operator_compose(coupled_system::MockCoupledSystem, coupling::CouplingOperatorCompose)
-```
-
-**Description:**
-operator_compose(coupled_system::MockCoupledSystem, coupling::CouplingOperatorCompose)
-
-Implement the operator_compose algorithm from specification Section 4.7.1:
-1. Extract dependent variables from both systems
-2. Apply translation mappings if specified
-3. Match equations (direct, translation, _var placeholder expansion)
-4. Combine matched RHS terms by addition
-5. Preserve unmatched equations
-
----
-
 ### parse_expression
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:31`
@@ -4343,40 +3673,6 @@ Handles the oneOf discriminated union based on JSON structure.
 
 ---
 
-### parse_mock_expression
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1321`
-
-**Signature:**
-```julia
-function parse_mock_expression(expr_str::AbstractString)
-```
-
-**Description:**
-parse_mock_expression(expr_str::AbstractString) -> Expr
-
-Parse a string representation of an expression into an ESM Expr.
-This is a simple parser for mock system string representations.
-
----
-
-### parse_mock_reaction
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1373`
-
-**Signature:**
-```julia
-function parse_mock_reaction(rxn_str::String)
-```
-
-**Description:**
-parse_mock_reaction(rxn_str::String) -> Union{Reaction, Nothing}
-
-Parse a string representation of a reaction into an ESM Reaction.
-Expected format: "A + 2B -> C + D, rate: k1" or "A -> B"
-
----
-
 ### parse_model_variable_type
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:62`
@@ -4390,23 +3686,6 @@ function parse_model_variable_type(data::String)::ModelVariableType
 parse_model_variable_type(data::String) -> ModelVariableType
 
 Parse string into ModelVariableType enum.
-
----
-
-### parse_species_list
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1438`
-
-**Signature:**
-```julia
-function parse_species_list(species_str::String)
-```
-
-**Description:**
-parse_species_list(species_str::String) -> Dict{String, Int}
-
-Parse a species list like "A + 2B + C" into a dictionary of species and stoichiometry.
-Handles special case "∅" for empty (null) reactants/products.
 
 ---
 
@@ -4483,71 +3762,6 @@ function predecessors(graph::Graph{N, E}, node::N) where {N, E}
 
 **Description:**
 Get nodes that point to this node.
-
----
-
-### process_connector_equation
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:454`
-
-**Signature:**
-```julia
-function process_connector_equation(coupled_system, equation, systems)
-```
-
-**Description:**
-process_connector_equation(coupled_system, equation, systems)
-
-Process a single connector equation, resolving scoped references and applying transforms.
-
----
-
-### process_event_affects
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1121`
-
-**Signature:**
-```julia
-function process_event_affects(affects, symbolic_vars::Dict, advanced_features::Bool)
-```
-
-**Description:**
-process_event_affects(affects, symbolic_vars::Dict, advanced_features::Bool)
-
-Process event affects for MTK callbacks.
-
----
-
-### process_events_enhanced
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:1066`
-
-**Signature:**
-```julia
-function process_events_enhanced(events::Vector{EventType}, symbolic_vars::Dict, advanced_features::Bool)
-```
-
-**Description:**
-process_events_enhanced(events::Vector{EventType}, symbolic_vars::Dict, advanced_features::Bool)
-
-Enhanced event processing with comprehensive MTK callback support.
-
----
-
-### process_reaction_events
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/catalyst.jl:376`
-
-**Signature:**
-```julia
-function process_reaction_events(events::Vector, var_dict::Dict)
-```
-
-**Description:**
-process_reaction_events(events::Vector, var_dict::Dict) -> (Vector, Vector)
-
-Process ESM events for inclusion in Catalyst ReactionSystem.
-Returns (continuous_events, discrete_events).
 
 ---
 
@@ -5736,44 +4950,6 @@ Suggest improvements based on error patterns.
 
 ---
 
-### symbolic_to_esm
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-symbolic_to_esm(...)
-```
-
----
-
-### symbolic_to_esm
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:854`
-
-**Signature:**
-```julia
-function symbolic_to_esm(symbolic_expr)
-```
-
-**Description:**
-symbolic_to_esm(symbolic_expr) -> Expr
-
-Convert Symbolics/MTK symbolic expression back to ESM form.
-
----
-
-### system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-system(...)
-```
-
----
-
 ### system
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -5812,6 +4988,17 @@ Check if a system (model, reaction_system, data_loader, or operator) exists in t
 
 ---
 
+### systems
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+systems(...)
+```
+
+---
+
 ### taxonomy
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -5819,17 +5006,6 @@ Check if a system (model, reaction_system, data_loader, or operator) exists in t
 **Signature:**
 ```julia
 taxonomy(...)
-```
-
----
-
-### tests
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-tests(...)
 ```
 
 ---
@@ -5877,133 +5053,6 @@ to_ascii(expr)  # Returns "x*2"
 eq = Equation(VarExpr("y"), OpExpr("+", [VarExpr("x"), NumExpr(1.0)]))
 to_ascii(eq)   # Returns "y = x + 1"
 ```
-
----
-
-### to_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-to_catalyst_system(...)
-```
-
----
-
-### to_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:344`
-
-**Signature:**
-```julia
-function to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false)
-```
-
-**Description:**
-to_catalyst_system(reaction_system::ReactionSystem, name::String; advanced_features=false) -> Union{ReactionSystem, MockCatalystSystem}
-
-Convert an ESM ReactionSystem to a Catalyst ReactionSystem with comprehensive features.
-
-# Arguments
-- `reaction_system::ReactionSystem`: ESM reaction system to convert
-- `name::String`: Name for the resulting system
-- `advanced_features::Bool`: Enable advanced features
-
-# Enhanced Features
-- Species and parameter registration with metadata preservation
-- Rate law expression translation with kinetics detection
-- Conservation law preservation
-- Mass action vs. general kinetics handling
-- Event system support for reaction systems
-- Performance optimization hints for large systems
-
----
-
-### to_catalyst_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/catalyst.jl:58`
-
-**Signature:**
-```julia
-function to_catalyst_system(rs::ReactionSystem)
-```
-
-**Description:**
-to_catalyst_system(rs::ReactionSystem)::Union{ReactionSystem, MockCatalystSystem}
-
-Convert an ESM ReactionSystem to a Catalyst.jl ReactionSystem.
-
-This function implements the ESM → Catalyst system conversion task by:
-1. Mapping ESM species to @species declarations
-2. Converting ESM parameters to @parameters declarations
-3. Translating ESM reactions to Reaction() objects
-4. Handling null substrates for source reactions (no reactants)
-5. Handling null products for sink reactions (no products)
-6. Converting rate expressions via symbolic expression mapping
-7. Processing constraint_equations as additional equations (if present)
-8. Copying events (if present in the ReactionSystem)
-
-# Arguments
-- `rs::ReactionSystem`: ESM ReactionSystem to convert
-
-# Returns
-- `Union{ReactionSystem, MockCatalystSystem}`: Catalyst ReactionSystem or mock equivalent
-
-# Examples
-```julia
-# Simple A → B reaction
-species = [Species("A"), Species("B")]
-parameters = [Parameter("k", 0.1)]
-reactions = [Reaction(Dict("A" => 1), Dict("B" => 1), VarExpr("k"))]
-rs = ReactionSystem(species, reactions; parameters=parameters)
-
-catalyst_sys = to_catalyst_system(rs)
-```
-
-# Error Handling
-- Gracefully falls back to mock implementation if Catalyst.jl unavailable
-- Warns about unsupported features but continues processing
-- Validates species and parameter references in reactions
-
----
-
-### to_coupled_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-to_coupled_system(...)
-```
-
----
-
-### to_coupled_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:63`
-
-**Signature:**
-```julia
-function to_coupled_system(file::EsmFile)::MockCoupledSystem
-```
-
-**Description:**
-to_coupled_system(file::EsmFile)::MockCoupledSystem
-
-Convert an ESM file with coupling rules into a coupled system.
-This implements the Full tier capability for coupled system assembly
-handling operator_compose, couple, variable_map, and operator_apply.
-
-The algorithm processes coupling entries in array order for deterministic naming
-and applies the four main coupling operations:
-1. operator_compose - Compose systems by matching equations
-2. couple - Bidirectional coupling via connector equations
-3. variable_map - Map variables between systems with transforms
-4. operator_apply - Register operators for runtime
-
-Returns a MockCoupledSystem that would be compatible with OrdinaryDiffEq.jl
-in a real implementation with EarthSciMLBase.
 
 ---
 
@@ -6090,86 +5139,6 @@ function to_mermaid(graph::Graph{ComponentNode, CouplingEdge})::String
 
 **Description:**
 Export graph to Mermaid format for markdown embedding.
-
----
-
-### to_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-to_mtk_system(...)
-```
-
----
-
-### to_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk_catalyst.jl:60`
-
-**Signature:**
-```julia
-function to_mtk_system(model::Model, name::String; advanced_features=false)
-```
-
-**Description:**
-to_mtk_system(model::Model, name::String; advanced_features=false) -> Union{ODESystem, MockMTKSystem}
-
-Convert an ESM Model to a ModelingToolkit ODESystem with comprehensive features.
-
-# Arguments
-- `model::Model`: ESM model to convert
-- `name::String`: Name for the resulting system
-- `advanced_features::Bool`: Enable advanced features like algebraic reduction
-
-# Enhanced Features
-- Parameter/variable mapping with proper scoping and metadata preservation
-- Event system translation (continuous/discrete) with full MTK compatibility
-- Initial condition and boundary condition handling
-- Symbolic differentiation integration with enhanced expression support
-- Hierarchical system composition for complex models
-- Cross-system coupling via MTK connectors
-- Automated algebraic reduction where possible
-- Numerical method selection optimization
-- Performance profiling integration
-
----
-
-### to_mtk_system
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mtk.jl:57`
-
-**Signature:**
-```julia
-function to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
-```
-
-**Description:**
-to_mtk_system(model::Model, name::Union{String,Nothing}=nothing)
-
-Convert an ESM Model to a ModelingToolkit ODESystem or MockMTKSystem.
-
-# Arguments
-- `model::Model`: ESM model containing variables, equations, and events
-- `name::Union{String,Nothing}`: Optional name for the system (defaults to :anonymous)
-
-# Returns
-- `ODESystem` or `MockMTKSystem`: Real or mock system depending on availability
-
-# Expression mapping:
-- `OpExpr('+')` → +
-- `OpExpr('D', wrt='t')` → Differential(t)(var)
-- `OpExpr('exp')` → exp
-- `OpExpr('Pre')` → Pre
-- `OpExpr('grad', dim='y')` → Differential(y)(var)
-- `OpExpr('ifelse')` → ifelse
-- `NumExpr` → literal
-- `VarExpr` → @variables/@parameters based on type
-
-Creates symbolic variables for state vars as functions of t, parameters as plain symbols.
-Maps equations to MTK ~ syntax. Maps continuous events to SymbolicContinuousCallback,
-discrete events to SymbolicDiscreteCallback.
 
 ---
 
@@ -6289,17 +5258,6 @@ types(...)
 **Signature:**
 ```julia
 types(...)
-```
-
----
-
-### utilities
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
-
-**Signature:**
-```julia
-utilities(...)
 ```
 
 ---
@@ -6772,24 +5730,6 @@ function variable_exists_in_system(system::Model, variable_name::String)::Bool
 variable_exists_in_system(system, variable_name::String) -> Bool
 
 Check if a variable exists in the given system.
-
----
-
-### variable_map
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:487`
-
-**Signature:**
-```julia
-function variable_map(coupled_system::MockCoupledSystem, coupling::CouplingVariableMap, file::EsmFile)
-```
-
-**Description:**
-variable_map(coupled_system::MockCoupledSystem, coupling::CouplingVariableMap, file::EsmFile)
-
-Implement variable mapping with transform operations:
-1. Resolve from/to scoped references using the qualified reference system
-2. Apply transform: param_to_var, identity, additive, multiplicative, conversion_factor
 
 ---
 
@@ -7420,7 +6360,7 @@ Authorship, provenance, and description metadata.
 
 ### MockCatalystSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/catalyst.jl:292`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:96`
 
 **Definition:**
 ```julia
@@ -7430,25 +6370,75 @@ struct MockCatalystSystem
 **Description:**
 MockCatalystSystem
 
-Mock Catalyst system for testing and fallback when Catalyst.jl is unavailable.
-Preserves all structural information from the ESM ReactionSystem.
+No-Catalyst fallback for `Catalyst.ReactionSystem`. Captures the structure
+of an ESM `ReactionSystem` as plain-Julia collections.
+
+Fields:
+- `name::Symbol`: system name.
+- `species::Vector{String}`: species names.
+- `parameters::Vector{String}`: parameter names.
+- `reactions::Vector{String}`: string-rendered reactions (e.g. `"A + B → C, rate: k*A*B"`).
+- `events::Vector{String}`: string summaries of any reaction-system events.
+- `constraints::Vector{String}`: string dump of any constraint equations.
+- `metadata::Dict{String,Any}`: provenance.
 
 ---
 
-### MockCoupledSystem
+### MockMTKSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/coupled.jl:31`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:38`
 
 **Definition:**
 ```julia
-mutable struct MockCoupledSystem
+struct MockMTKSystem
 ```
 
 **Description:**
-MockCoupledSystem
+MockMTKSystem
 
-Mock implementation of EarthSciMLBase.CoupledSystem for demonstration.
-This would be replaced with real EarthSciMLBase integration.
+No-MTK fallback for `ModelingToolkit.System`. Captures the ODE form of a
+flattened ESM system as plain-Julia collections.
+
+Fields:
+- `name::Symbol`: system name.
+- `state_variables::Vector{String}`: namespaced state-variable names.
+- `parameters::Vector{String}`: namespaced parameter names.
+- `observed_variables::Vector{String}`: namespaced observed-variable names.
+- `equations::Vector{String}`: string dump of the flattened equations
+  (one per equation, e.g. `"D(x, t) ~ -k * x"`).
+- `events::Vector{String}`: string summaries of continuous/discrete events.
+- `metadata::Dict{String,Any}`: provenance (source system, creation time, ...).
+
+---
+
+### MockPDESystem
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/mock_systems.jl:68`
+
+**Definition:**
+```julia
+struct MockPDESystem
+```
+
+**Description:**
+MockPDESystem
+
+No-MTK fallback for `ModelingToolkit.PDESystem`. Captures the PDE form of a
+flattened ESM system as plain-Julia collections.
+
+Fields:
+- `name::Symbol`: system name.
+- `independent_variables::Vector{Symbol}`: e.g. `[:t, :x, :y]`.
+- `state_variables::Vector{String}`: namespaced spatial-field names.
+- `parameters::Vector{String}`: namespaced parameter names.
+- `observed_variables::Vector{String}`: namespaced observed-variable names.
+- `equations::Vector{String}`: string dump of the flattened PDE equations.
+- `boundary_conditions::Vector{String}`: string dump of BCs derived from
+  the domain and slice-based coupling patterns.
+- `initial_conditions::Vector{String}`: string dump of ICs from variable
+  defaults.
+- `domain::Union{Domain,Nothing}`: the target domain of the flattened system.
+- `metadata::Dict{String,Any}`: provenance.
 
 ---
 
