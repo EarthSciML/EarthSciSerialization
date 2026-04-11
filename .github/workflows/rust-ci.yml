@@ -55,6 +55,8 @@ jobs:
 
     - name: Build WASM
       working-directory: packages/earthsci-toolkit-rs
+      env:
+        RUSTFLAGS: --cfg getrandom_backend="wasm_js"
       run: cargo build --target wasm32-unknown-unknown --features wasm --verbose
       if: matrix.rust == 'stable'
 
