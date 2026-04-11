@@ -10,7 +10,11 @@ try
                     catch e
                         if e isa EarthSciSerialization.SchemaValidationError ||
                            e isa EarthSciSerialization.ParseError ||
-                           e isa ConflictingDerivativeError
+                           e isa ConflictingDerivativeError ||
+                           e isa UnmappedDomainError ||
+                           e isa UnsupportedRegriddingError ||
+                           e isa DimensionPromotionError ||
+                           e isa DomainUnitMismatchError
                             @test_broken false
                         else
                             @warn "Flatten test failed for $filename: $e"

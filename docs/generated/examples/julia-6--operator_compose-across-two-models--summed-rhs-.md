@@ -32,8 +32,16 @@
         # (B.T, since A.T was translated to B.T) and none for A.T.
         @test _find_eq(flat, "B.T") !== nothing
         eq = _find_eq(flat, "B.T")
-        # Merged RHS must reference both A.k and B.j.
-        @test _uses_var(eq.rhs, "A.k") || _uses_var(eq.rhs, "B.k")
-        @test _uses_var(eq.rhs, "B.j") || _uses_var(eq.rhs, "A.j")
+        # Merged RHS MUST reference BOTH A's parameter (k) AND B's parameter (j),
+        # i.e. both sides of the summed equation made it through the merge.
+        # Using || would mask the case where only one side survived.
+        @test _uses_var(eq.rhs, "A.k")
+        @test _uses_var(eq.rhs, "B.j")
+        # And both state references (A.T and B.T) must appear.
+        @test _uses_var(eq.rhs, "A.T")
+        @test _uses_var(eq.rhs, "B.T")
+        # The top-level RHS should be a sum (+) of the two composed terms.
+        @test eq.rhs isa EarthSciSerialization.OpExpr
+        @test (eq.rhs::EarthSciSerialization.OpExpr).op == "+"
 ```
 

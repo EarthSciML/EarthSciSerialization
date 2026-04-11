@@ -1372,7 +1372,7 @@ VariableNode(...)
 
 ### _apply_couple!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:689`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:884`
 
 **Signature:**
 ```julia
@@ -1389,7 +1389,7 @@ connector entries.
 
 ### _apply_operator_compose!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:554`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:749`
 
 **Signature:**
 ```julia
@@ -1406,7 +1406,7 @@ representation, "matching" means "has the same namespaced dependent variable".
 
 ### _apply_variable_map!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:730`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:925`
 
 **Signature:**
 ```julia
@@ -1434,6 +1434,66 @@ _canonical_ref(ref::String, base_path::String) -> String
 
 Produce a canonical key for a reference, used for cycle detection.
 URLs are returned as-is; local paths are resolved to absolute paths.
+
+---
+
+### _check_coupling_domain_coverage!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:637`
+
+**Signature:**
+```julia
+function _check_coupling_domain_coverage!(file::EsmFile)
+```
+
+**Description:**
+For every coupling entry that references two or more systems (`operator_compose`,
+`couple`), raise `UnmappedDomainError` if any pair of referenced systems lives
+on distinct, non-null domains and no declared `Interface` covers both domains.
+
+§4.7.6: "Any other hybrid coupling (N-D ↔ M-D with N ≠ M, or different grids
+of the same dimensionality) requires an explicit Interface in the file's
+interfaces section; its absence raises `UnmappedDomainError`."
+
+---
+
+### _check_interfaces!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:560`
+
+**Signature:**
+```julia
+function _check_interfaces!(file::EsmFile)
+```
+
+**Description:**
+Validate that every declared `Interface` names a dimension mapping and
+regridding strategy that the Julia flatten pipeline actually implements.
+
+§4.7.6 defines five canonical mapping types: `broadcast`, `identity`, `slice`,
+`project`, `regrid`. The Julia library's flatten pipeline currently wires only
+`broadcast` and `identity` (the Core-tier minimum). Interfaces that declare
+`slice` or `project` raise `DimensionPromotionError`; interfaces that declare
+a regridding method outside the supported set raise `UnsupportedRegriddingError`.
+
+---
+
+### _check_variable_map_units!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:670`
+
+**Signature:**
+```julia
+function _check_variable_map_units!(file::EsmFile)
+```
+
+**Description:**
+Walk every `variable_map` coupling entry with `transform == "identity"` and
+raise `DomainUnitMismatchError` when the source and target variables carry
+non-empty, declared-different units. `param_to_var` and `conversion_factor`
+transforms are exempt: `conversion_factor` declares the conversion explicitly;
+`param_to_var` replaces a parameter with a variable and does not imply unit
+equivalence at the mapping site (units are still validated elsewhere).
 
 ---
 
@@ -1466,6 +1526,21 @@ Lower a ReactionSystem into the flattener accumulators. Species become state
 variables, rate constants become parameters, and reactions are converted to
 ODE equations via `lower_reactions_to_equations`. Both species and equation
 variables are then namespaced by `prefix`.
+
+---
+
+### _collect_system_domains
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:595`
+
+**Signature:**
+```julia
+function _collect_system_domains(file::EsmFile)::Dict{String, String}
+```
+
+**Description:**
+Build a mapping `system_name => domain_name` from a file's models and
+reaction systems. Systems without a declared domain are omitted.
 
 ---
 
@@ -1505,6 +1580,21 @@ reaction in any `reaction_systems[*]` (after namespacing).
 
 Used by `flatten` to throw `ConflictingDerivativeError` before any lowering,
 and by `validate_structural` to catch the same class of error at load time.
+
+---
+
+### _interface_covers
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:618`
+
+**Signature:**
+```julia
+function _interface_covers(file::EsmFile, d_a::String, d_b::String)::Bool
+```
+
+**Description:**
+True if `file.interfaces` contains an Interface whose `domains` vector covers
+both `d_a` and `d_b` (order-insensitive).
 
 ---
 
@@ -1559,6 +1649,22 @@ _load_remote_ref(ref::String) -> EsmFile
 
 Load a remotely referenced ESM file from a URL.
 Uses the Downloads stdlib to fetch the content.
+
+---
+
+### _lookup_variable_units
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:690`
+
+**Signature:**
+```julia
+function _lookup_variable_units(file::EsmFile, qualified::String)::Union{String, Nothing}
+```
+
+**Description:**
+Look up a dot-qualified variable's declared units across models, subsystems,
+and reaction systems (species + parameters). Returns `nothing` when the
+variable is missing or carries no declared units.
 
 ---
 
@@ -2596,7 +2702,7 @@ derive_odes(...)
 
 ### describe_coupling_entry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:931`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1131`
 
 **Signature:**
 ```julia
@@ -2867,7 +2973,7 @@ flatten(...)
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:814`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1009`
 
 **Signature:**
 ```julia
@@ -2891,7 +2997,7 @@ a system is over-determined.
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:904`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1104`
 
 **Signature:**
 ```julia
@@ -2912,7 +3018,7 @@ name) and run the full flattener. This is the call path used by
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:915`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1115`
 
 **Signature:**
 ```julia
