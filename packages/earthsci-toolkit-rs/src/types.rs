@@ -431,9 +431,39 @@ pub struct DataLoader {
     #[serde(rename = "type")]
     pub loader_type: String,
 
+    /// Registered identifier the runtime uses to find the implementation
+    pub loader_id: String,
+
     /// Configuration parameters
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
+
+    /// Academic citation or data source reference
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Reference>,
+
+    /// Variables this loader makes available, keyed by name
+    pub provides: HashMap<String, DataLoaderProvides>,
+
+    /// ISO 8601 duration (e.g., "PT3H")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temporal_resolution: Option<String>,
+
+    /// Grid spacing per dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spatial_resolution: Option<HashMap<String, f64>>,
+
+    /// Interpolation method (linear, nearest, cubic)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interpolation: Option<String>,
+}
+
+/// A variable provided by a data loader
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataLoaderProvides {
+    /// Physical units
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
 
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
