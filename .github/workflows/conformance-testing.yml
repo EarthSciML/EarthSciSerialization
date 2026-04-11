@@ -19,7 +19,7 @@ on:
 
 env:
   # Consistent versions across jobs
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   PYTHON_VERSION: '3.11'
   JULIA_VERSION: '1.10'
   RUST_VERSION: 'stable'
