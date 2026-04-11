@@ -9,41 +9,53 @@ use std::collections::HashMap;
 #[test]
 fn test_simple_stoichiometric_matrix() {
     // Simple reaction: A -> B
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![Reaction {
+        id: None,
         name: None,
-        substrates: vec![StoichiometricEntry {
+        substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: Some(1.0),
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1,
+        }]),
+        products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: Some(1.0),
-        }],
+            coefficient: 1,
+        }]),
         rate: Expr::Variable("k".to_string()),
-        description: None,
+        reference: None,
     }];
 
     let rs = ReactionSystem {
-        name: Some("Simple RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -61,62 +73,77 @@ fn test_simple_stoichiometric_matrix() {
 #[test]
 fn test_multiple_reaction_stoichiometric_matrix() {
     // Reactions: A -> B, B -> C
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-        Species {
-            name: "C".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "C".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![
         Reaction {
+            id: None,
             name: Some("R1".to_string()),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
+                coefficient: 1,
+            }]),
+            products: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: Expr::Variable("k1".to_string()),
-            description: None,
+            reference: None,
         },
         Reaction {
+            id: None,
             name: Some("R2".to_string()),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
+                coefficient: 1,
+            }]),
+            products: Some(vec![StoichiometricEntry {
                 species: "C".to_string(),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: Expr::Variable("k2".to_string()),
-            description: None,
+            reference: None,
         },
     ];
 
     let rs = ReactionSystem {
-        name: Some("Chain RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -140,53 +167,67 @@ fn test_multiple_reaction_stoichiometric_matrix() {
 #[test]
 fn test_stoichiometric_coefficients() {
     // Reaction: 2A + B -> 3C
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "C".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "C".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![Reaction {
+        id: None,
         name: None,
-        substrates: vec![
+        substrates: Some(vec![
             StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: Some(2.0),
+                coefficient: 2,
             },
             StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: Some(1.0),
+                coefficient: 1,
             },
-        ],
-        products: vec![StoichiometricEntry {
+        ]),
+        products: Some(vec![StoichiometricEntry {
             species: "C".to_string(),
-            coefficient: Some(3.0),
-        }],
+            coefficient: 3,
+        }]),
         rate: Expr::Variable("k".to_string()),
-        description: None,
+        reference: None,
     }];
 
     let rs = ReactionSystem {
-        name: Some("Coefficients RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -201,56 +242,69 @@ fn test_stoichiometric_coefficients() {
 #[test]
 fn test_reversible_reactions() {
     // Forward: A -> B, Reverse: B -> A
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![
         Reaction {
+            id: None,
             name: Some("Forward".to_string()),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
+                coefficient: 1,
+            }]),
+            products: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: Expr::Variable("kf".to_string()),
-            description: None,
+            reference: None,
         },
         Reaction {
+            id: None,
             name: Some("Reverse".to_string()),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
+                coefficient: 1,
+            }]),
+            products: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: Expr::Variable("kr".to_string()),
-            description: None,
+            reference: None,
         },
     ];
 
     let rs = ReactionSystem {
-        name: Some("Reversible RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -272,102 +326,122 @@ fn test_reversible_reactions() {
 #[test]
 fn test_complex_reaction_network() {
     // Network: A + B -> C, C -> D + E, D -> A
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "C".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-        Species {
-            name: "D".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-        Species {
-            name: "E".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "C".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "D".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "E".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![
         // A + B -> C
         Reaction {
+            id: None,
             name: Some("R1".to_string()),
-            substrates: vec![
+            substrates: Some(vec![
                 StoichiometricEntry {
                     species: "A".to_string(),
-                    coefficient: Some(1.0),
+                    coefficient: 1,
                 },
                 StoichiometricEntry {
                     species: "B".to_string(),
-                    coefficient: Some(1.0),
+                    coefficient: 1,
                 },
-            ],
-            products: vec![StoichiometricEntry {
+            ]),
+            products: Some(vec![StoichiometricEntry {
                 species: "C".to_string(),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: Expr::Variable("k1".to_string()),
-            description: None,
+            reference: None,
         },
         // C -> D + E
         Reaction {
+            id: None,
             name: Some("R2".to_string()),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: "C".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![
+                coefficient: 1,
+            }]),
+            products: Some(vec![
                 StoichiometricEntry {
                     species: "D".to_string(),
-                    coefficient: Some(1.0),
+                    coefficient: 1,
                 },
                 StoichiometricEntry {
                     species: "E".to_string(),
-                    coefficient: Some(1.0),
+                    coefficient: 1,
                 },
-            ],
+            ]),
             rate: Expr::Variable("k2".to_string()),
-            description: None,
+            reference: None,
         },
         // D -> A
         Reaction {
+            id: None,
             name: Some("R3".to_string()),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: "D".to_string(),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
+                coefficient: 1,
+            }]),
+            products: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: Expr::Variable("k3".to_string()),
-            description: None,
+            reference: None,
         },
     ];
 
     let rs = ReactionSystem {
-        name: Some("Complex Network".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -402,11 +476,16 @@ fn test_complex_reaction_network() {
 #[test]
 fn test_empty_reaction_system() {
     let rs = ReactionSystem {
-        name: Some("Empty RS".to_string()),
-        species: vec![],
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
+        species: std::collections::HashMap::new(),
         parameters: HashMap::new(),
         reactions: vec![],
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -419,19 +498,30 @@ fn test_empty_reaction_system() {
 /// Test reaction system with no reactions
 #[test]
 fn test_no_reactions() {
-    let species = vec![Species {
-        name: "A".to_string(),
-        units: Some("mol/L".to_string()),
-        default: Some(1.0),
-        description: None,
-    }];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let rs = ReactionSystem {
-        name: Some("No Reactions RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions: vec![],
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -439,92 +529,59 @@ fn test_no_reactions() {
     assert_eq!(matrix[0].len(), 0, "Should have 0 columns for 0 reactions");
 }
 
-/// Test fractional coefficients
-#[test]
-fn test_fractional_coefficients() {
-    // Reaction: 0.5A -> 1.5B
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
-
-    let reactions = vec![Reaction {
-        name: None,
-        substrates: vec![StoichiometricEntry {
-            species: "A".to_string(),
-            coefficient: Some(0.5),
-        }],
-        products: vec![StoichiometricEntry {
-            species: "B".to_string(),
-            coefficient: Some(1.5),
-        }],
-        rate: Expr::Variable("k".to_string()),
-        description: None,
-    }];
-
-    let rs = ReactionSystem {
-        name: Some("Fractional RS".to_string()),
-        species,
-        parameters: HashMap::new(),
-        reactions,
-        description: None,
-    };
-
-    let matrix = stoichiometric_matrix(&rs);
-
-    assert_eq!(matrix[0][0], -0.5, "A consumed with fractional coefficient");
-    assert_eq!(matrix[1][0], 1.5, "B produced with fractional coefficient");
-}
+// Note: fractional coefficient test removed; schema requires integer ≥ 1 stoichiometry.
 
 /// Test default coefficient handling
 #[test]
 fn test_default_coefficients() {
     // Reaction with no explicit coefficients should default to 1.0
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![Reaction {
+        id: None,
         name: None,
-        substrates: vec![StoichiometricEntry {
+        substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: None, // Should default to 1.0
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1, // Default
+        }]),
+        products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: None, // Should default to 1.0
-        }],
+            coefficient: 1, // Default
+        }]),
         rate: Expr::Variable("k".to_string()),
-        description: None,
+        reference: None,
     }];
 
     let rs = ReactionSystem {
-        name: Some("Default Coeffs RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);

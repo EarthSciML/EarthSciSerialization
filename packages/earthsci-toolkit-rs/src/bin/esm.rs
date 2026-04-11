@@ -269,17 +269,17 @@ fn check_mass_conservation(esm_file: &earthsci_toolkit::EsmFile) {
 
             for (i, reaction) in rs.reactions.iter().enumerate() {
                 // Check if mass is conserved in each reaction
-                let mut substrate_mass = 0.0;
-                let mut product_mass = 0.0;
+                let mut substrate_mass: f64 = 0.0;
+                let mut product_mass: f64 = 0.0;
 
                 // For simplicity, assume all species have unit atomic mass
                 // In a real implementation, this would use actual atomic masses
-                for substrate in &reaction.substrates {
-                    substrate_mass += substrate.coefficient.unwrap_or(1.0);
+                for substrate in reaction.substrates.iter().flatten() {
+                    substrate_mass += substrate.coefficient as f64;
                 }
 
-                for product in &reaction.products {
-                    product_mass += product.coefficient.unwrap_or(1.0);
+                for product in reaction.products.iter().flatten() {
+                    product_mass += product.coefficient as f64;
                 }
 
                 if (substrate_mass - product_mass).abs() > 1e-6 {
@@ -375,20 +375,19 @@ fn check_species_conservation(esm_file: &earthsci_toolkit::EsmFile) {
 
             // Check species mass balance for each reaction
             for (i, reaction) in rs.reactions.iter().enumerate() {
-                let mut atom_balance = std::collections::HashMap::new();
+                let mut atom_balance: std::collections::HashMap<&String, f64> =
+                    std::collections::HashMap::new();
 
                 // For each substrate, add atoms consumed
-                for substrate in &reaction.substrates {
-                    // Simplified: assume species name indicates element
-                    // Real implementation would parse chemical formulas
-                    let coeff = substrate.coefficient.unwrap_or(1.0);
-                    *atom_balance.entry(&substrate.species).or_insert(0.0) -= coeff;
+                for substrate in reaction.substrates.iter().flatten() {
+                    *atom_balance.entry(&substrate.species).or_insert(0.0) -=
+                        substrate.coefficient as f64;
                 }
 
                 // For each product, add atoms produced
-                for product in &reaction.products {
-                    let coeff = product.coefficient.unwrap_or(1.0);
-                    *atom_balance.entry(&product.species).or_insert(0.0) += coeff;
+                for product in reaction.products.iter().flatten() {
+                    *atom_balance.entry(&product.species).or_insert(0.0) +=
+                        product.coefficient as f64;
                 }
 
                 // Check if atom counts balance
@@ -457,12 +456,12 @@ fn analyze_reaction_system_units(esm_file: &earthsci_toolkit::EsmFile) {
 
             // Analyze species units
             let mut species_with_units = 0;
-            for species in &rs.species {
+            for (species_name, species) in &rs.species {
                 if let Some(ref units) = species.units {
-                    println!("  Species {}: [{}]", species.name, units);
+                    println!("  Species {}: [{}]", species_name, units);
                     species_with_units += 1;
                 } else {
-                    println!("  Species {}: [no units]", species.name);
+                    println!("  Species {}: [no units]", species_name);
                 }
             }
 
@@ -579,13 +578,15 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
             code.push_str(&format!("# Reaction System: {}\n", rs_id));
             code.push_str(&format!("function {}!(du, u, p, t)\n", rs_id));
 
-            // Species mapping
-            for (i, species) in rs.species.iter().enumerate() {
+            // Species mapping (sorted for determinism, since species is a HashMap)
+            let mut species_names: Vec<&String> = rs.species.keys().collect();
+            species_names.sort();
+            for (i, species_name) in species_names.iter().enumerate() {
                 code.push_str(&format!(
                     "    {} = u[{}]  # {}\n",
-                    species.name,
+                    species_name,
                     i + 1,
-                    species.name
+                    species_name
                 ));
             }
             code.push('\n');
@@ -598,35 +599,33 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
             code.push('\n');
 
             // Species rate equations
-            for (i, species) in rs.species.iter().enumerate() {
+            for (i, species_name) in species_names.iter().enumerate() {
                 code.push_str(&format!(
                     "    du[{}] = 0.0  # d[{}]/dt\n",
                     i + 1,
-                    species.name
+                    species_name
                 ));
 
                 for (j, reaction) in rs.reactions.iter().enumerate() {
                     // Check if species is a substrate
-                    for substrate in &reaction.substrates {
-                        if substrate.species == species.name {
-                            let coeff = substrate.coefficient.unwrap_or(1.0);
+                    for substrate in reaction.substrates.iter().flatten() {
+                        if &substrate.species == *species_name {
                             code.push_str(&format!(
                                 "    du[{}] -= {} * rate_{}  # substrate\n",
                                 i + 1,
-                                coeff,
+                                substrate.coefficient,
                                 j + 1
                             ));
                         }
                     }
 
                     // Check if species is a product
-                    for product in &reaction.products {
-                        if product.species == species.name {
-                            let coeff = product.coefficient.unwrap_or(1.0);
+                    for product in reaction.products.iter().flatten() {
+                        if &product.species == *species_name {
                             code.push_str(&format!(
                                 "    du[{}] += {} * rate_{}  # product\n",
                                 i + 1,
-                                coeff,
+                                product.coefficient,
                                 j + 1
                             ));
                         }
@@ -741,17 +740,16 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
         for (rs_id, rs) in reaction_systems {
             code.push_str(&format!("def {}(t, y):\n", rs_id));
             code.push_str("    \"\"\"\n");
-            code.push_str(&format!(
-                "    Reaction System: {}\n",
-                rs.name.as_deref().unwrap_or("Unnamed")
-            ));
+            code.push_str(&format!("    Reaction System: {}\n", rs_id));
             code.push_str("    \"\"\"\n");
 
-            // Species unpacking
-            for (i, species) in rs.species.iter().enumerate() {
+            // Species unpacking (sorted for determinism)
+            let mut species_names: Vec<&String> = rs.species.keys().collect();
+            species_names.sort();
+            for (i, species_name) in species_names.iter().enumerate() {
                 code.push_str(&format!(
                     "    {} = y[{}]  # {}\n",
-                    species.name, i, species.name
+                    species_name, i, species_name
                 ));
             }
             code.push('\n');
@@ -766,31 +764,29 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
             code.push_str(&format!("    dydt = np.zeros({})\n", rs.species.len()));
 
             // Species rate equations
-            for (i, species) in rs.species.iter().enumerate() {
-                code.push_str(&format!("    # d[{}]/dt\n", species.name));
+            for (i, species_name) in species_names.iter().enumerate() {
+                code.push_str(&format!("    # d[{}]/dt\n", species_name));
 
                 for (j, reaction) in rs.reactions.iter().enumerate() {
                     // Check if species is a substrate
-                    for substrate in &reaction.substrates {
-                        if substrate.species == species.name {
-                            let coeff = substrate.coefficient.unwrap_or(1.0);
+                    for substrate in reaction.substrates.iter().flatten() {
+                        if &substrate.species == *species_name {
                             code.push_str(&format!(
                                 "    dydt[{}] -= {} * rate_{}\n",
                                 i,
-                                coeff,
+                                substrate.coefficient,
                                 j + 1
                             ));
                         }
                     }
 
                     // Check if species is a product
-                    for product in &reaction.products {
-                        if product.species == species.name {
-                            let coeff = product.coefficient.unwrap_or(1.0);
+                    for product in reaction.products.iter().flatten() {
+                        if &product.species == *species_name {
                             code.push_str(&format!(
                                 "    dydt[{}] += {} * rate_{}\n",
                                 i,
-                                coeff,
+                                product.coefficient,
                                 j + 1
                             ));
                         }
@@ -960,7 +956,7 @@ fn collect_unit_types(esm_file: &earthsci_toolkit::EsmFile) -> Vec<String> {
 
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for rs in reaction_systems.values() {
-            for species in &rs.species {
+            for species in rs.species.values() {
                 if let Some(ref unit_str) = species.units {
                     units.insert(unit_str.clone());
                 }
@@ -1662,30 +1658,27 @@ fn perform_numerical_comparison(
                         .zip(system2.reactions.iter())
                         .enumerate()
                     {
-                        // Compare substrate coefficients
-                        if reaction1.substrates.len() == reaction2.substrates.len() {
-                            for (sub1, sub2) in
-                                reaction1.substrates.iter().zip(reaction2.substrates.iter())
-                            {
-                                let coeff1 = sub1.coefficient.unwrap_or(1.0);
-                                let coeff2 = sub2.coefficient.unwrap_or(1.0);
-                                if (coeff1 - coeff2).abs() > tolerance {
+                        // Compare substrate coefficients (substrates/products are now
+                        // Option<Vec<_>>; treat None as empty when zipping).
+                        let subs1: &[_] = reaction1.substrates.as_deref().unwrap_or(&[]);
+                        let subs2: &[_] = reaction2.substrates.as_deref().unwrap_or(&[]);
+                        if subs1.len() == subs2.len() {
+                            for (sub1, sub2) in subs1.iter().zip(subs2.iter()) {
+                                if sub1.coefficient != sub2.coefficient {
                                     differences.push(format!("Reaction system {}, reaction {}: substrate coefficient {} vs {}",
-                                        rs_id, i + 1, coeff1, coeff2));
+                                        rs_id, i + 1, sub1.coefficient, sub2.coefficient));
                                 }
                             }
                         }
 
                         // Compare product coefficients
-                        if reaction1.products.len() == reaction2.products.len() {
-                            for (prod1, prod2) in
-                                reaction1.products.iter().zip(reaction2.products.iter())
-                            {
-                                let coeff1 = prod1.coefficient.unwrap_or(1.0);
-                                let coeff2 = prod2.coefficient.unwrap_or(1.0);
-                                if (coeff1 - coeff2).abs() > tolerance {
+                        let prods1: &[_] = reaction1.products.as_deref().unwrap_or(&[]);
+                        let prods2: &[_] = reaction2.products.as_deref().unwrap_or(&[]);
+                        if prods1.len() == prods2.len() {
+                            for (prod1, prod2) in prods1.iter().zip(prods2.iter()) {
+                                if prod1.coefficient != prod2.coefficient {
                                     differences.push(format!("Reaction system {}, reaction {}: product coefficient {} vs {}",
-                                        rs_id, i + 1, coeff1, coeff2));
+                                        rs_id, i + 1, prod1.coefficient, prod2.coefficient));
                                 }
                             }
                         }
@@ -1776,17 +1769,10 @@ fn count_numerical_values(esm_file: &earthsci_toolkit::EsmFile, count: &mut usiz
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for rs in reaction_systems.values() {
             for reaction in &rs.reactions {
-                // Count coefficients
-                for substrate in &reaction.substrates {
-                    if substrate.coefficient.is_some() {
-                        *count += 1;
-                    }
-                }
-                for product in &reaction.products {
-                    if product.coefficient.is_some() {
-                        *count += 1;
-                    }
-                }
+                // Count coefficients (schema requires integer stoichiometry ≥ 1, so
+                // every entry contributes one counted numeric value).
+                *count += reaction.substrates.as_ref().map(|v| v.len()).unwrap_or(0);
+                *count += reaction.products.as_ref().map(|v| v.len()).unwrap_or(0);
 
                 // Count numbers in rate expressions
                 count_numbers_in_expression(&reaction.rate, count);
@@ -2255,11 +2241,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Print reaction rates
             if let Some(ref reaction_systems) = esm_file.reaction_systems {
                 for (rs_id, rs) in reaction_systems {
-                    println!(
-                        "\nReaction System: {} ({})",
-                        rs_id,
-                        rs.name.as_deref().unwrap_or("unnamed")
-                    );
+                    println!("\nReaction System: {}", rs_id);
                     for (i, reaction) in rs.reactions.iter().enumerate() {
                         let rate = match format.as_str() {
                             "unicode" => earthsci_toolkit::to_unicode(&reaction.rate),
@@ -2295,7 +2277,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 data_loaders: None,
                 operators: None,
                 coupling: None,
-                domain: esm_file.domain.clone(),
+                domains: esm_file.domains.clone(),
+                interfaces: esm_file.interfaces.clone(),
             };
 
             // Extract the specific component
@@ -2397,16 +2380,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(rs) = reaction_systems.get(&system) {
                     println!("Stoichiometric matrix for reaction system '{}':", system);
 
-                    // Create species index map
-                    let mut species_index = HashMap::new();
-                    for (i, species) in rs.species.iter().enumerate() {
-                        species_index.insert(species.name.clone(), i);
-                    }
+                    // Build a stable (sorted) species order and index map
+                    let mut sorted_species: Vec<&String> = rs.species.keys().collect();
+                    sorted_species.sort();
+                    let species_index: HashMap<String, usize> = sorted_species
+                        .iter()
+                        .enumerate()
+                        .map(|(i, name)| ((*name).clone(), i))
+                        .collect();
 
                     // Print species header
                     print!("{:>15}", "");
-                    for species in &rs.species {
-                        print!("{:>10}", species.name);
+                    for name in &sorted_species {
+                        print!("{:>10}", name);
                     }
                     println!();
 
@@ -2417,16 +2403,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let mut coeffs = vec![0.0; rs.species.len()];
 
                         // Substrates (negative coefficients)
-                        for substrate in &reaction.substrates {
+                        for substrate in reaction.substrates.iter().flatten() {
                             if let Some(&idx) = species_index.get(&substrate.species) {
-                                coeffs[idx] -= substrate.coefficient.unwrap_or(1.0);
+                                coeffs[idx] -= substrate.coefficient as f64;
                             }
                         }
 
                         // Products (positive coefficients)
-                        for product in &reaction.products {
+                        for product in reaction.products.iter().flatten() {
                             if let Some(&idx) = species_index.get(&product.species) {
-                                coeffs[idx] += product.coefficient.unwrap_or(1.0);
+                                coeffs[idx] += product.coefficient as f64;
                             }
                         }
 

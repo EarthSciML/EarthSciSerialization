@@ -34,9 +34,13 @@ pub struct EsmFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coupling: Option<Vec<CouplingEntry>>,
 
-    /// Spatial/temporal domain specification
+    /// Named spatial/temporal domain specifications
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub domain: Option<Domain>,
+    pub domains: Option<HashMap<String, Domain>>,
+
+    /// Geometric interfaces between domains
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interfaces: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// Academic citation or data source reference
@@ -134,6 +138,14 @@ pub struct Model {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
+    /// Name of a domain from the `domains` section (or null for 0D models)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
+
+    /// Coupling type label
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coupletype: Option<String>,
+
     /// Academic citation or data source reference
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reference: Option<Reference>,
@@ -151,6 +163,10 @@ pub struct Model {
     /// Continuous events
     #[serde(skip_serializing_if = "Option::is_none")]
     pub continuous_events: Option<Vec<ContinuousEvent>>,
+
+    /// Named child models (subsystems), keyed by unique identifier
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subsystems: Option<HashMap<String, serde_json::Value>>,
 
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -339,12 +355,20 @@ pub enum RootFindDirection {
 /// Reaction network component
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReactionSystem {
-    /// Human-readable name
+    /// Domain name (key in EsmFile.domains)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub domain: Option<String>,
 
-    /// Chemical species
-    pub species: Vec<Species>,
+    /// Coupling type label
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coupletype: Option<String>,
+
+    /// Academic citation or data source reference
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Reference>,
+
+    /// Chemical species, keyed by species name
+    pub species: HashMap<String, Species>,
 
     /// Named parameters (rate constants, temperature, photolysis rates, etc.)
     pub parameters: HashMap<String, Parameter>,
@@ -352,17 +376,26 @@ pub struct ReactionSystem {
     /// Chemical reactions
     pub reactions: Vec<Reaction>,
 
-    /// Brief description
+    /// Additional algebraic or ODE constraints
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub constraint_equations: Option<Vec<Equation>>,
+
+    /// Discrete events
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discrete_events: Option<Vec<DiscreteEvent>>,
+
+    /// Continuous events
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continuous_events: Option<Vec<ContinuousEvent>>,
+
+    /// Named child reaction systems (subsystems), keyed by unique identifier
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subsystems: Option<HashMap<String, serde_json::Value>>,
 }
 
-/// Chemical species in a reaction system
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Chemical species in a reaction system. Keyed by name in the parent map.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Species {
-    /// Species name (unique within reaction system)
-    pub name: String,
-
     /// Physical units
     #[serde(skip_serializing_if = "Option::is_none")]
     pub units: Option<String>,
@@ -395,22 +428,30 @@ pub struct Parameter {
 /// Chemical reaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Reaction {
+    /// Unique reaction identifier
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+
     /// Human-readable reaction name
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    /// Reactant species and stoichiometry
-    pub substrates: Vec<StoichiometricEntry>,
+    /// Reactant species and stoichiometry. May be null for source reactions (∅ → X).
+    /// Schema requires this field to be present (possibly null).
+    #[serde(default)]
+    pub substrates: Option<Vec<StoichiometricEntry>>,
 
-    /// Product species and stoichiometry
-    pub products: Vec<StoichiometricEntry>,
+    /// Product species and stoichiometry. May be null for sink reactions (X → ∅).
+    /// Schema requires this field to be present (possibly null).
+    #[serde(default)]
+    pub products: Option<Vec<StoichiometricEntry>>,
 
     /// Rate law expression
     pub rate: Expr,
 
-    /// Brief description
+    /// Academic citation or data source reference
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub reference: Option<Reference>,
 }
 
 /// Species with stoichiometric coefficient
@@ -419,9 +460,13 @@ pub struct StoichiometricEntry {
     /// Species name
     pub species: String,
 
-    /// Stoichiometric coefficient (default: 1.0)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub coefficient: Option<f64>,
+    /// Stoichiometric coefficient (integer ≥ 1 per schema; serialized as `stoichiometry`)
+    #[serde(rename = "stoichiometry", default = "default_stoichiometry")]
+    pub coefficient: u32,
+}
+
+fn default_stoichiometry() -> u32 {
+    1
 }
 
 /// External data loader reference
@@ -608,11 +653,39 @@ pub struct VariableMapping {
 /// Spatial/temporal domain specification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Domain {
-    /// Spatial dimensions
+    /// Name of the independent (time) variable
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub spatial: Option<serde_json::Value>,
+    pub independent_variable: Option<String>,
 
     /// Temporal domain
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temporal: Option<serde_json::Value>,
+
+    /// Spatial dimensions, keyed by name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spatial: Option<serde_json::Value>,
+
+    /// Coordinate transforms
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coordinate_transforms: Option<serde_json::Value>,
+
+    /// Coordinate reference system
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spatial_ref: Option<String>,
+
+    /// Initial conditions specification
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initial_conditions: Option<serde_json::Value>,
+
+    /// Boundary conditions
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub boundary_conditions: Option<serde_json::Value>,
+
+    /// Floating point precision
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub element_type: Option<String>,
+
+    /// Array backend identifier
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub array_type: Option<String>,
 }

@@ -196,6 +196,8 @@ pub fn substitute_in_model(
 
     Model {
         name: model.name.clone(),
+        domain: model.domain.clone(),
+        coupletype: model.coupletype.clone(),
         reference: model.reference.clone(),
         variables: model.variables.clone(),
         equations: new_equations,
@@ -211,6 +213,7 @@ pub fn substitute_in_model(
                 .map(|event| substitute_in_continuous_event(event, substitutions))
                 .collect()
         }),
+        subsystems: model.subsystems.clone(),
         description: model.description.clone(),
     }
 }
@@ -233,20 +236,26 @@ pub fn substitute_in_reaction_system(
         .reactions
         .iter()
         .map(|rxn| Reaction {
+            id: rxn.id.clone(),
             name: rxn.name.clone(),
             substrates: rxn.substrates.clone(),
             products: rxn.products.clone(),
             rate: substitute(&rxn.rate, substitutions),
-            description: rxn.description.clone(),
+            reference: rxn.reference.clone(),
         })
         .collect();
 
     ReactionSystem {
-        name: reaction_system.name.clone(),
+        domain: reaction_system.domain.clone(),
+        coupletype: reaction_system.coupletype.clone(),
+        reference: reaction_system.reference.clone(),
         species: reaction_system.species.clone(),
         parameters: reaction_system.parameters.clone(),
         reactions: new_reactions,
-        description: reaction_system.description.clone(),
+        constraint_equations: reaction_system.constraint_equations.clone(),
+        discrete_events: reaction_system.discrete_events.clone(),
+        continuous_events: reaction_system.continuous_events.clone(),
+        subsystems: reaction_system.subsystems.clone(),
     }
 }
 
@@ -350,8 +359,8 @@ impl ScopedContext {
         }
 
         if remaining.len() == 1 {
-            // Check species
-            if rs.species.iter().any(|s| s.name == remaining[0]) {
+            // Check species (species name is the HashMap key)
+            if rs.species.contains_key(remaining[0]) {
                 return true;
             }
             // Check parameters
@@ -383,7 +392,7 @@ impl ScopedContext {
         // Search in reaction systems
         for (rs_name, rs) in &self.reaction_systems {
             if components.len() == 1 {
-                if rs.species.iter().any(|s| s.name == components[0]) {
+                if rs.species.contains_key(components[0]) {
                     return Some(format!("{}.{}", rs_name, components[0]));
                 }
                 if rs.parameters.contains_key(components[0]) {
@@ -476,6 +485,8 @@ pub fn substitute_in_model_with_context(
 
     Model {
         name: model.name.clone(),
+        domain: model.domain.clone(),
+        coupletype: model.coupletype.clone(),
         reference: model.reference.clone(),
         variables: model.variables.clone(),
         equations: new_equations,
@@ -495,6 +506,7 @@ pub fn substitute_in_model_with_context(
                 })
                 .collect()
         }),
+        subsystems: model.subsystems.clone(),
         description: model.description.clone(),
     }
 }
@@ -664,20 +676,26 @@ pub fn substitute_in_reaction_system_with_context(
         .reactions
         .iter()
         .map(|rxn| Reaction {
+            id: rxn.id.clone(),
             name: rxn.name.clone(),
             substrates: rxn.substrates.clone(),
             products: rxn.products.clone(),
             rate: substitute_with_context(&rxn.rate, substitutions, context),
-            description: rxn.description.clone(),
+            reference: rxn.reference.clone(),
         })
         .collect();
 
     ReactionSystem {
-        name: reaction_system.name.clone(),
+        domain: reaction_system.domain.clone(),
+        coupletype: reaction_system.coupletype.clone(),
+        reference: reaction_system.reference.clone(),
         species: reaction_system.species.clone(),
         parameters: reaction_system.parameters.clone(),
         reactions: new_reactions,
-        description: reaction_system.description.clone(),
+        constraint_equations: reaction_system.constraint_equations.clone(),
+        discrete_events: reaction_system.discrete_events.clone(),
+        continuous_events: reaction_system.continuous_events.clone(),
+        subsystems: reaction_system.subsystems.clone(),
     }
 }
 
@@ -769,6 +787,9 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 reference: None,
                 variables: model_variables,
                 equations: vec![],
@@ -795,7 +816,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -831,6 +853,9 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 reference: None,
                 variables: model_variables,
                 equations: vec![],
@@ -857,7 +882,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -896,6 +922,9 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 reference: None,
                 variables: model_variables,
                 equations: vec![],
@@ -922,7 +951,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -971,6 +1001,9 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 reference: None,
                 variables: model_variables,
                 equations: vec![],
@@ -997,7 +1030,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -1138,6 +1172,9 @@ mod tests {
         // Create a model with discrete and continuous events
         let model = Model {
             name: Some("TestModel".to_string()),
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             reference: None,
             variables: {
                 let mut vars = HashMap::new();

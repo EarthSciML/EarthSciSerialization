@@ -80,6 +80,9 @@ fn test_structural_validation() {
     // Create a model with equations but no variables (should fail structural validation)
     let variables = HashMap::new();
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("Test Model".to_string()),
         variables,
@@ -112,7 +115,8 @@ fn test_structural_validation() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -159,41 +163,50 @@ fn test_expression_operations() {
 /// Test stoichiometric matrix generation
 #[test]
 fn test_stoichiometric_matrix() {
-    let species = vec![
+    let mut species = HashMap::new();
+    species.insert(
+        "A".to_string(),
         Species {
-            name: "A".to_string(),
             units: Some("mol/L".to_string()),
             default: Some(1.0),
             description: None,
         },
+    );
+    species.insert(
+        "B".to_string(),
         Species {
-            name: "B".to_string(),
             units: Some("mol/L".to_string()),
             default: Some(0.0),
             description: None,
         },
-    ];
+    );
 
     let reactions = vec![Reaction {
+        id: None,
         name: None,
-        substrates: vec![StoichiometricEntry {
+        substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: Some(1.0),
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1,
+        }]),
+        products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: Some(1.0),
-        }],
+            coefficient: 1,
+        }]),
         rate: Expr::Variable("k".to_string()),
-        description: None,
+        reference: None,
     }];
 
     let rs = ReactionSystem {
-        name: Some("Test RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let matrix = stoichiometric_matrix(&rs);
@@ -218,6 +231,9 @@ fn test_component_graph() {
     };
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("TestModel".to_string()),
         variables: HashMap::new(),
@@ -238,7 +254,8 @@ fn test_component_graph() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     let graph = component_graph(&esm_file);
@@ -293,6 +310,9 @@ fn test_units() {
 #[test]
 fn test_editing() {
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("Test Model".to_string()),
         variables: HashMap::new(),

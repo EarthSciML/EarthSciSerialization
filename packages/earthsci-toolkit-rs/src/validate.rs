@@ -308,8 +308,8 @@ fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo>
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (name, rs) in reaction_systems {
             let mut species = HashSet::new();
-            for spec in &rs.species {
-                species.insert(spec.name.clone());
+            for spec_name in rs.species.keys() {
+                species.insert(spec_name.clone());
             }
 
             // Note: parameters field would be added here when ReactionSystem supports it
@@ -541,23 +541,24 @@ fn validate_reaction_system(
 ) {
     let rs_path = format!("/reaction_systems/{}", rs_name);
 
-    // Create a map of defined species
-    let mut defined_species = HashSet::new();
-    for species in &rs.species {
-        defined_species.insert(species.name.clone());
-    }
+    // Create a map of defined species (species name is the HashMap key)
+    let defined_species: HashSet<String> = rs.species.keys().cloned().collect();
 
-    // Note: ReactionSystem currently doesn't have parameters field
-    // This would be added when types are updated to match spec
-    let defined_parameters = HashSet::new();
+    // Rate expressions can reference both parameters and species names.
+    let defined_parameters: HashSet<String> = rs.parameters.keys().cloned().collect();
 
     // Check that all reaction references are defined
     for (rxn_idx, reaction) in rs.reactions.iter().enumerate() {
         let rxn_path = format!("{}/reactions/{}", rs_path, rxn_idx);
+        let reaction_label = reaction
+            .id
+            .as_deref()
+            .or(reaction.name.as_deref())
+            .unwrap_or("unnamed");
 
         // Check for null reaction (both substrates and products are null/empty)
-        let substrates_empty = reaction.substrates.is_empty();
-        let products_empty = reaction.products.is_empty();
+        let substrates_empty = reaction.substrates.as_ref().is_none_or(|v| v.is_empty());
+        let products_empty = reaction.products.as_ref().is_none_or(|v| v.is_empty());
 
         if substrates_empty && products_empty {
             errors.push(StructuralError {
@@ -565,13 +566,13 @@ fn validate_reaction_system(
                 code: StructuralErrorCode::NullReaction,
                 message: "Reaction has both substrates: null and products: null".to_string(),
                 details: serde_json::json!({
-                    "reaction_id": reaction.name.as_deref().unwrap_or("unnamed")
+                    "reaction_id": reaction_label
                 }),
             });
         }
 
         // Check substrate references
-        for substrate in &reaction.substrates {
+        for substrate in reaction.substrates.iter().flatten() {
             if !defined_species.contains(&substrate.species) {
                 errors.push(StructuralError {
                     path: rxn_path.clone(),
@@ -582,7 +583,7 @@ fn validate_reaction_system(
                     ),
                     details: serde_json::json!({
                         "species": substrate.species,
-                        "reaction_id": reaction.name.as_deref().unwrap_or("unnamed"),
+                        "reaction_id": reaction_label,
                         "location": "substrates",
                         "expected_in": "species"
                     }),
@@ -591,7 +592,7 @@ fn validate_reaction_system(
         }
 
         // Check product references
-        for product in &reaction.products {
+        for product in reaction.products.iter().flatten() {
             if !defined_species.contains(&product.species) {
                 errors.push(StructuralError {
                     path: rxn_path.clone(),
@@ -602,7 +603,7 @@ fn validate_reaction_system(
                     ),
                     details: serde_json::json!({
                         "species": product.species,
-                        "reaction_id": reaction.name.as_deref().unwrap_or("unnamed"),
+                        "reaction_id": reaction_label,
                         "location": "products",
                         "expected_in": "species"
                     }),
@@ -615,7 +616,7 @@ fn validate_reaction_system(
             &reaction.rate,
             &defined_parameters,
             &rxn_path,
-            reaction.name.as_deref().unwrap_or("unnamed"),
+            reaction_label,
             errors,
         );
     }
@@ -1549,7 +1550,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -1577,6 +1579,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![Equation {
@@ -1611,7 +1616,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -1659,6 +1665,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![
@@ -1696,7 +1705,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -1735,7 +1745,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -1768,6 +1779,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![], // No equations needed for this test
@@ -1794,7 +1808,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -1865,6 +1880,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![Equation {
@@ -1899,7 +1917,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -2005,6 +2024,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![Equation {
@@ -2047,7 +2069,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -2100,6 +2123,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![Equation {
@@ -2134,7 +2160,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -2186,6 +2213,9 @@ mod tests {
             "test_model".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![Equation {
@@ -2220,7 +2250,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -2259,6 +2290,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![Equation {
@@ -2298,7 +2332,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = validate(&esm_file);
@@ -2344,7 +2379,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         // JSON that should fail schema validation (has invalid variable type)

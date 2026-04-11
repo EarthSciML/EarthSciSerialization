@@ -114,7 +114,7 @@ fn migrate_species_units(
         // Convert species units in all reaction systems
         if let Some(ref mut reaction_systems) = new_file.reaction_systems {
             for system in reaction_systems.values_mut() {
-                for species in &mut system.species {
+                for species in system.species.values_mut() {
                     if species.units == Some("ppbv".to_string()) {
                         if let Some(val) = species.default {
                             species.units = Some("mol/mol".to_string());

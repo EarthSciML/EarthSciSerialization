@@ -186,6 +186,9 @@ fn test_model_substitution() {
     );
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("Test Model".to_string()),
         variables,
@@ -232,31 +235,38 @@ fn test_model_substitution() {
 #[test]
 fn test_reaction_system_substitution() {
     // Create a simple reaction system
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![Reaction {
+        id: None,
         name: None,
-        substrates: vec![StoichiometricEntry {
+        substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: Some(1.0),
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1,
+        }]),
+        products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: Some(1.0),
-        }],
+            coefficient: 1,
+        }]),
         rate: Expr::Operator(ExpressionNode {
             op: "*".to_string(),
             args: vec![
@@ -266,15 +276,20 @@ fn test_reaction_system_substitution() {
             wrt: None,
             dim: None,
         }),
-        description: None,
+        reference: None,
     }];
 
     let rs = ReactionSystem {
-        name: Some("Test RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     // Create substitutions

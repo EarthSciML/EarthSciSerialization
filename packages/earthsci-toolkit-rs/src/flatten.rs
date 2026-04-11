@@ -167,8 +167,8 @@ pub struct FlattenedSystem {
     pub continuous_events: Vec<ContinuousEvent>,
     /// Discrete events from every component, LHS rewritten to namespaced form.
     pub discrete_events: Vec<DiscreteEvent>,
-    /// The file's domain section, passed through.
-    pub domain: Option<Domain>,
+    /// The file's named domain sections, passed through.
+    pub domains: Option<std::collections::HashMap<String, Domain>>,
     /// Provenance metadata.
     pub metadata: FlattenMetadata,
 }
@@ -336,7 +336,7 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
         equations,
         continuous_events,
         discrete_events,
-        domain: file.domain.clone(),
+        domains: file.domains.clone(),
         metadata: FlattenMetadata {
             source_systems,
             coupling_rules_applied,
@@ -378,7 +378,8 @@ pub fn flatten_model(model: &Model) -> Result<FlattenedSystem, FlattenError> {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     flatten(&file)
@@ -471,8 +472,11 @@ fn build_reaction_block(
     let mut state_vars = IndexMap::new();
     let mut parameters = IndexMap::new();
 
-    for species in &rs.species {
-        let namespaced = format!("{}.{}", system_name, species.name);
+    let mut species_names: Vec<&String> = rs.species.keys().collect();
+    species_names.sort();
+    for species_name in species_names {
+        let species = &rs.species[species_name];
+        let namespaced = format!("{}.{}", system_name, species_name);
         state_vars.insert(
             namespaced,
             ModelVariable {
@@ -947,7 +951,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         }
     }
 
@@ -986,6 +991,9 @@ mod tests {
             "sys".to_string(),
             Model {
                 name: Some("System".to_string()),
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 reference: None,
                 variables: vars,
                 equations: vec![Equation {

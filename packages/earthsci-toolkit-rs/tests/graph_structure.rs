@@ -33,6 +33,9 @@ fn test_component_graph_generation() {
     );
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("TestModel".to_string()),
         variables,
@@ -45,19 +48,30 @@ fn test_component_graph_generation() {
     let mut models = HashMap::new();
     models.insert("model1".to_string(), model);
 
-    let species = vec![Species {
-        name: "A".to_string(),
-        units: Some("mol/L".to_string()),
-        default: Some(1.0),
-        description: None,
-    }];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let rs = ReactionSystem {
-        name: Some("TestRS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions: vec![],
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let mut reaction_systems = HashMap::new();
@@ -71,7 +85,8 @@ fn test_component_graph_generation() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     // Generate component graph
@@ -115,6 +130,9 @@ fn test_component_graph_exports() {
     };
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("SimpleModel".to_string()),
         variables: HashMap::new(),
@@ -135,7 +153,8 @@ fn test_component_graph_exports() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     let comp_graph = component_graph(&esm_file);
@@ -195,6 +214,9 @@ fn test_model_expression_graph() {
     );
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("ExprTest".to_string()),
         variables,
@@ -250,31 +272,38 @@ fn test_model_expression_graph() {
 #[test]
 fn test_reaction_system_expression_graph() {
     // Create reaction system
-    let species = vec![
-        Species {
-            name: "A".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(1.0),
-            description: None,
-        },
-        Species {
-            name: "B".to_string(),
-            units: Some("mol/L".to_string()),
-            default: Some(0.0),
-            description: None,
-        },
-    ];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m.insert(
+            "B".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(0.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![Reaction {
+        id: None,
         name: None,
-        substrates: vec![StoichiometricEntry {
+        substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: Some(1.0),
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1,
+        }]),
+        products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: Some(1.0),
-        }],
+            coefficient: 1,
+        }]),
         rate: Expr::Operator(ExpressionNode {
             op: "*".to_string(),
             args: vec![
@@ -284,15 +313,20 @@ fn test_reaction_system_expression_graph() {
             wrt: None,
             dim: None,
         }),
-        description: None,
+        reference: None,
     }];
 
     let rs = ReactionSystem {
-        name: Some("ExprRS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     // Generate expression graph
@@ -328,6 +362,9 @@ fn test_component_existence() {
     };
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("TestModel".to_string()),
         variables: HashMap::new(),
@@ -348,7 +385,8 @@ fn test_component_existence() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     // Test component existence
@@ -442,6 +480,9 @@ fn test_expected_graph_outputs() {
     );
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("Simple".to_string()),
         variables,

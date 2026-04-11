@@ -49,7 +49,8 @@ fn esm_with_model(model_name: &str, model: Model) -> EsmFile {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     }
 }
 
@@ -126,6 +127,9 @@ fn make_model(
     }
     Model {
         name: Some(name.to_string()),
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         variables,
         equations,
@@ -788,7 +792,7 @@ fn dummy_flat() -> FlattenedSystem {
         equations: Vec::new(),
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),
-        domain: None,
+        domains: None,
         metadata: Default::default(),
     }
 }

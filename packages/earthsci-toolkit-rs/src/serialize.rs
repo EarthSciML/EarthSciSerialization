@@ -91,7 +91,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = save(&esm_file);
@@ -121,6 +122,9 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
+                domain: None,
+                coupletype: None,
+                subsystems: None,
                 name: Some("Test Model".to_string()),
                 variables,
                 equations: vec![Equation {
@@ -150,7 +154,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = save(&esm_file);
@@ -182,7 +187,8 @@ mod tests {
             data_loaders: None,
             operators: None,
             coupling: None,
-            domain: None,
+            domains: None,
+            interfaces: None,
         };
 
         let result = save_compact(&esm_file);

@@ -24,6 +24,9 @@ fn test_undefined_variable_in_model() {
     );
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("Test Model".to_string()),
         variables,
@@ -56,7 +59,8 @@ fn test_undefined_variable_in_model() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -102,6 +106,9 @@ fn test_equation_count_mismatch() {
     );
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("Test Model".to_string()),
         variables,
@@ -140,7 +147,8 @@ fn test_equation_count_mismatch() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -163,33 +171,45 @@ fn test_equation_count_mismatch() {
 /// Test undefined species in reaction system
 #[test]
 fn test_undefined_species_in_reaction() {
-    let species = vec![Species {
-        name: "A".to_string(),
-        units: Some("mol/L".to_string()),
-        default: Some(1.0),
-        description: None,
-    }];
+    let species = {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "A".to_string(),
+            Species {
+                units: Some("mol/L".to_string()),
+                default: Some(1.0),
+                description: None,
+            },
+        );
+        m
+    };
 
     let reactions = vec![Reaction {
+        id: None,
         name: None,
-        substrates: vec![StoichiometricEntry {
+        substrates: Some(vec![StoichiometricEntry {
             species: "B".to_string(), // 'B' is not defined
-            coefficient: Some(1.0),
-        }],
-        products: vec![StoichiometricEntry {
+            coefficient: 1,
+        }]),
+        products: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: Some(1.0),
-        }],
+            coefficient: 1,
+        }]),
         rate: Expr::Variable("k".to_string()),
-        description: None,
+        reference: None,
     }];
 
     let rs = ReactionSystem {
-        name: Some("Test RS".to_string()),
+        subsystems: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
     };
 
     let mut reaction_systems = HashMap::new();
@@ -212,7 +232,8 @@ fn test_undefined_species_in_reaction() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -280,6 +301,9 @@ fn test_valid_file_passes() {
     );
 
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         reference: None,
         name: Some("Valid Model".to_string()),
         variables,
@@ -309,7 +333,8 @@ fn test_valid_file_passes() {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     };
 
     let validation_result = validate(&esm_file);

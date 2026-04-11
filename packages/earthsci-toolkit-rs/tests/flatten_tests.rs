@@ -36,7 +36,8 @@ fn empty_file() -> EsmFile {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     }
 }
 
@@ -82,13 +83,17 @@ fn reaction_system(
 ) -> ReactionSystem {
     let species = species
         .into_iter()
-        .map(|(n, d)| Species {
-            name: n.to_string(),
-            units: None,
-            default: d,
-            description: None,
+        .map(|(n, d)| {
+            (
+                n.to_string(),
+                Species {
+                    units: None,
+                    default: d,
+                    description: None,
+                },
+            )
         })
-        .collect();
+        .collect::<HashMap<_, _>>();
     let mut parameters = HashMap::new();
     for (name, default) in params {
         parameters.insert(
@@ -101,18 +106,23 @@ fn reaction_system(
         );
     }
     ReactionSystem {
-        name: None,
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters,
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
+        subsystems: None,
     }
 }
 
-fn stoich(name: &str, coeff: f64) -> StoichiometricEntry {
+fn stoich(name: &str, coeff: u32) -> StoichiometricEntry {
     StoichiometricEntry {
         species: name.to_string(),
-        coefficient: Some(coeff),
+        coefficient: coeff,
     }
 }
 
@@ -125,11 +135,12 @@ fn flatten_reactions_only_file_produces_mass_action_odes() {
         vec![("A", Some(1.0)), ("B", Some(0.0))],
         vec![("k1", Some(0.1))],
         vec![Reaction {
+            id: None,
             name: Some("r1".to_string()),
-            substrates: vec![stoich("A", 1.0)],
-            products: vec![stoich("B", 1.0)],
+            substrates: Some(vec![stoich("A", 1)]),
+            products: Some(vec![stoich("B", 1)]),
             rate: var("k1"),
-            description: None,
+            reference: None,
         }],
     );
 
@@ -179,6 +190,9 @@ fn flatten_mixed_model_and_reaction_system() {
     models.insert(
         "dyn".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: model_vars,
@@ -196,11 +210,12 @@ fn flatten_mixed_model_and_reaction_system() {
         vec![("X", Some(1.0))],
         vec![("k", Some(0.5))],
         vec![Reaction {
+            id: None,
             name: None,
-            substrates: vec![stoich("X", 1.0)],
-            products: vec![],
+            substrates: Some(vec![stoich("X", 1)]),
+            products: Some(vec![]),
             rate: var("k"),
-            description: None,
+            reference: None,
         }],
     );
     let mut reaction_systems = HashMap::new();
@@ -243,11 +258,12 @@ fn flatten_autocatalytic_reaction_net_stoichiometry() {
         vec![("A", Some(1.0)), ("B", Some(1.0))],
         vec![("k", Some(0.1))],
         vec![Reaction {
+            id: None,
             name: None,
-            substrates: vec![stoich("A", 1.0), stoich("B", 1.0)],
-            products: vec![stoich("B", 2.0)],
+            substrates: Some(vec![stoich("A", 1), stoich("B", 1)]),
+            products: Some(vec![stoich("B", 2)]),
             rate: var("k"),
-            description: None,
+            reference: None,
         }],
     );
     let mut reaction_systems = HashMap::new();
@@ -292,19 +308,21 @@ fn flatten_source_and_sink_reactions() {
         vec![
             // source: ∅ → X  (rate k_src, no substrates)
             Reaction {
+                id: None,
                 name: Some("src".to_string()),
-                substrates: vec![],
-                products: vec![stoich("X", 1.0)],
+                substrates: Some(vec![]),
+                products: Some(vec![stoich("X", 1)]),
                 rate: var("k_src"),
-                description: None,
+                reference: None,
             },
             // sink: X → ∅  (rate k_sink * X, enhanced with mass action)
             Reaction {
+                id: None,
                 name: Some("sink".to_string()),
-                substrates: vec![stoich("X", 1.0)],
-                products: vec![],
+                substrates: Some(vec![stoich("X", 1)]),
+                products: Some(vec![]),
                 rate: var("k_sink"),
-                description: None,
+                reference: None,
             },
         ],
     );
@@ -350,6 +368,9 @@ fn flatten_conflicting_derivative_raises_error() {
     models.insert(
         "sys".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: model_vars,
@@ -367,11 +388,12 @@ fn flatten_conflicting_derivative_raises_error() {
         vec![("X", Some(1.0))],
         vec![("k", Some(0.5))],
         vec![Reaction {
+            id: None,
             name: None,
-            substrates: vec![stoich("X", 1.0)],
-            products: vec![],
+            substrates: Some(vec![stoich("X", 1)]),
+            products: Some(vec![]),
             rate: var("k"),
-            description: None,
+            reference: None,
         }],
     );
     let mut reaction_systems = HashMap::new();
@@ -441,6 +463,9 @@ fn flatten_operator_compose_sums_matched_rhses() {
     models.insert(
         "A".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: vars_a,
@@ -456,6 +481,9 @@ fn flatten_operator_compose_sums_matched_rhses() {
     models.insert(
         "B".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: vars_b,
@@ -558,6 +586,9 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
     models.insert(
         "M".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: vars_m,
@@ -573,6 +604,9 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
     models.insert(
         "S".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: vars_s,
@@ -635,6 +669,9 @@ fn flatten_couple_includes_connector_equations() {
     models.insert(
         "A".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: vars_a,
@@ -699,6 +736,9 @@ fn flatten_model_wraps_and_namespaces_under_declared_name() {
         },
     );
     let model = Model {
+        domain: None,
+        coupletype: None,
+        subsystems: None,
         name: Some("Nested".to_string()),
         reference: None,
         variables: vars,
@@ -735,6 +775,9 @@ fn flatten_rejects_spatial_operators() {
     models.insert(
         "transport".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: vars,
@@ -787,6 +830,9 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
     models.insert(
         "pde".to_string(),
         Model {
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: None,
             reference: None,
             variables: vars,
