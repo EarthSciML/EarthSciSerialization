@@ -185,6 +185,40 @@ Substitution must be recursive and handle hierarchical scoped references (`"Mode
 
 Convert expression tree back to ESM JSON format (the inverse of parsing). Must produce output that validates against the schema and round-trips identically.
 
+### 2.4 Library Scope and Dependency Policy
+
+**Libraries set up systems; they do not solve them.** The general scope of an EarthSciSerialization library is to parse, validate, edit, flatten, and convert ESM format files into simulation-ready native solver objects (e.g., `ModelingToolkit.System` in Julia, SciPy-compatible function handles in Python, `diffsol` `OdeProblem` in Rust). **Libraries SHOULD NOT embed their own ODE/PDE solver nor export wrapper functions that perform actual time integration.** This keeps the runtime dependency graph small, avoids version-pinning disputes with downstream solvers, and lets users pick the solver appropriate for their problem.
+
+#### 2.4.1 Rationale
+
+- **Dependency weight.** ODE/PDE solvers bring large transitive dependency trees (SciPy pulls NumPy + BLAS + LAPACK; `OrdinaryDiffEq.jl` pulls the full DifferentialEquations.jl ecosystem with dozens of subpackages). Libraries that only construct systems can ship with far smaller runtime footprints.
+- **Solver choice.** Users are better positioned to pick solvers than library authors. A library that hard-codes BDF forces everyone into that solver; a library that produces a native system object lets each user plug in Tsit5, Rosenbrock23, Radau, or a custom method.
+- **Browser and embedded targets.** Smaller runtimes are easier to compile to WebAssembly or run in constrained environments. This matters specifically for the Rust + WebAssembly browser-simulation path (`earthsci-toolkit-rs` + `diffsol`) where every transitive dependency adds to the `.wasm` bundle size.
+
+#### 2.4.2 Testing Requirement for Simulation-Capable Packages
+
+Libraries at a tier that produces simulation-ready systems (currently: Julia via MTK, Python via SciPy-compatible lambdified RHS, Rust via `diffsol` integration) **MUST include integration tests that run an actual simulation end-to-end** — call the solver, integrate forward in time, and assert numerical correctness of the resulting trajectory against an analytical solution (where available) or a published reference (e.g., Robertson's stiff benchmark for chemistry, exponential decay for first-order kinetics). The test suite must demonstrate that the system objects produced by the library are actually solvable, not merely constructible.
+
+**Rationale.** A library can construct an ODE system object that looks correct (right state variables, right parameters, right equation count) but fails when a solver tries to integrate it — due to subtle issues like non-numeric expression nodes, missing initial conditions, unit mismatches, or singular Jacobians. Construction-only tests do not catch these. The only reliable way to verify a system is simulation-ready is to simulate it. The solver used for these tests is a **test** dependency, not a runtime dependency — it does not affect the shipped package's dependency footprint.
+
+- **PDE test discretization (minimum viable).** For PDE tests specifically, use the *minimum* number of grid points that verifies correctness, not numerical accuracy. PDE test cost scales poorly — a 3D test with a 20×20×20 grid is 8000 DOFs and will dominate CI wall-time. The library test suite validates that the system constructor produces a solvable `PDESystem` and that the coupling rules apply correctly, not that the underlying solver achieves a particular numerical convergence rate (that is the solver project's validation, not the library's). Concrete guidance: 1D PDE tests use 5–10 grid points; 2D PDE tests use 3×3 to 5×5; 3D PDE tests use 3×3×3 (avoid larger than 5×5×5 unless the test is specifically validating spatial convergence). Flux boundary condition tests only need enough grid points to evaluate the BC at least once on the boundary — 3–5 per direction is adequate. Assert on structural correctness (right shape, no NaN, conservation holds to within 1%), not pointwise analytical-solution matching.
+
+#### 2.4.3 Preferred Patterns
+
+- **Python.** The solver (`scipy.integrate`) is a test dependency. The runtime package imports it lazily only inside simulation entry points, or the simulation entry point is gated behind an optional `simulate` extra (e.g., `pip install earthsci-toolkit[simulate]`).
+- **Rust.** The solver (`diffsol`) is a feature-gated dependency. A `simulate` Cargo feature brings `diffsol` in; users who only need parse/validate/flatten/graph can depend on the crate without the `simulate` feature and avoid the solver transitive weight.
+- **Julia.** The solver (`OrdinaryDiffEq` or a specific subpackage like `OrdinaryDiffEqRosenbrock`) is a test dependency declared in `[targets].test` of `Project.toml`, **not** in `[deps]`. For users who want a one-line simulate API, the library provides a Julia package extension (e.g., `EarthSciSerializationSolverExt.jl` via a `weakdep` on `OrdinaryDiffEq`), loaded only when the user explicitly does `using OrdinaryDiffEq` alongside the main package. The extension approach preserves the "library sets up systems but does not solve" principle while still giving users easy access to simulation when they want it.
+
+#### 2.4.4 Current Conformance Status
+
+*Informative — update as things change.*
+
+| Library | Status | Notes |
+|---|---|---|
+| Python (`earthsci_toolkit`) | ✅ conforms | `tests/test_simulation.py` calls `scipy.integrate.solve_ivp` on multiple canonical problems and asserts trajectory correctness. |
+| Rust (`earthsci-toolkit-rs`) | ✅ conforms (partial) | `tests/simulate_tests.rs` runs Robertson, exponential decay, reversible, and autocatalytic problems through `diffsol`. `diffsol` is currently an unconditional dependency; moving it behind a `simulate` feature flag is a recommended follow-up. |
+| Julia (`EarthSciSerialization.jl`) | ❌ does not conform | The test suite constructs `ODESystem` objects but never calls `solve()`. `real_mtk_integration_test.jl` has `@test_skip` gates and only verifies the returned object is a non-`MockMTKSystem`. Tracked as a follow-up gap. |
+
 ---
 
 ## 3. Validation
@@ -1888,6 +1922,10 @@ For every valid `.esm` file: `load(save(load(file))) == load(file)`. JSON key or
 
 Periodically, the CI runs the same test suite across Julia, TypeScript, Python, and Rust and compares outputs. Failures indicate divergence in rendering or validation logic.
 
+### 7.5 End-to-End Simulation Tests
+
+Libraries that produce simulation-ready system objects (see Section 2.4) must include integration tests that invoke a real solver on the produced system and assert numerical correctness of the integrated trajectory. Construction-only tests are insufficient — the solver is the only reliable check that system objects are actually simulation-ready. The solver is a test dependency, not a runtime dependency. See Section 2.4.2 for the full requirement, including PDE test discretization minimums.
+
 ---
 
 ## 8. Versioning and Compatibility
@@ -2013,3 +2051,5 @@ The following items are acknowledged gaps in this specification. They do not blo
 | Julia code generation | — | ✓ | — | — | — | — |
 | Python code generation | — | ✓ | — | — | — | — |
 | Jupyter integration | — | — | — | ✓ | — | — |
+
+**Note.** Libraries marked with a ✓ for any simulation capability row (0D simulation, Spatial simulation, Event simulation) are considered **simulation-capable** and must include end-to-end simulation tests per Section 2.4.2 — the test suite must invoke a real solver on the library's produced system object and assert numerical correctness, not merely that the object was constructed. Solvers used for these tests are test-only dependencies; libraries MUST NOT embed a solver as a runtime dependency (Section 2.4).
