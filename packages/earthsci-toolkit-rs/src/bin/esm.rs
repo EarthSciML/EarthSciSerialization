@@ -141,15 +141,6 @@ enum Commands {
     },
 
     // ANALYSIS COMMANDS
-    /// Verify conservation laws
-    CheckConservation {
-        /// Path to the ESM file
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-        /// Conservation type (mass, energy, species)
-        #[arg(long, default_value = "all")]
-        conservation_type: String,
-    },
     /// Dimensional analysis report
     Units {
         /// Path to the ESM file
@@ -254,166 +245,6 @@ enum Commands {
         #[arg(value_name = "FILE")]
         file: Option<PathBuf>,
     },
-}
-
-#[cfg(feature = "cli")]
-fn check_mass_conservation(esm_file: &earthsci_toolkit::EsmFile) {
-    println!("Mass Conservation Analysis:");
-
-    if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        for (rs_id, rs) in reaction_systems {
-            println!("  Reaction System: {}", rs_id);
-
-            let mut mass_balanced = true;
-            let mut mass_issues = Vec::new();
-
-            for (i, reaction) in rs.reactions.iter().enumerate() {
-                // Check if mass is conserved in each reaction
-                let mut substrate_mass: f64 = 0.0;
-                let mut product_mass: f64 = 0.0;
-
-                // For simplicity, assume all species have unit atomic mass
-                // In a real implementation, this would use actual atomic masses
-                for substrate in reaction.substrates.iter().flatten() {
-                    substrate_mass += substrate.coefficient as f64;
-                }
-
-                for product in reaction.products.iter().flatten() {
-                    product_mass += product.coefficient as f64;
-                }
-
-                if (substrate_mass - product_mass).abs() > 1e-6 {
-                    mass_balanced = false;
-                    mass_issues.push(format!(
-                        "Reaction {}: mass imbalance ({:.3} -> {:.3})",
-                        i + 1,
-                        substrate_mass,
-                        product_mass
-                    ));
-                } else {
-                    println!("    Reaction {}: ✓ mass conserved", i + 1);
-                }
-            }
-
-            if mass_balanced {
-                println!("    ✓ All reactions are mass-balanced");
-            } else {
-                println!("    ⚠ Mass conservation issues found:");
-                for issue in &mass_issues {
-                    println!("      {}", issue);
-                }
-            }
-        }
-    } else {
-        println!("  No reaction systems found - mass conservation check not applicable");
-    }
-}
-
-#[cfg(feature = "cli")]
-fn check_energy_conservation(esm_file: &earthsci_toolkit::EsmFile) {
-    println!("Energy Conservation Analysis:");
-
-    // Check for energy-related variables and equations
-    let mut energy_vars = Vec::new();
-    let mut energy_equations = Vec::new();
-
-    if let Some(ref models) = esm_file.models {
-        for (model_id, model) in models {
-            println!("  Model: {}", model_id);
-
-            // Look for energy-related variables
-            for var_name in model.variables.keys() {
-                if var_name.to_lowercase().contains("energy")
-                    || var_name.to_lowercase().contains("temperature")
-                    || var_name.to_lowercase().contains("heat")
-                {
-                    energy_vars.push((model_id, var_name));
-                }
-            }
-
-            // Look for energy-related equations
-            for (i, equation) in model.equations.iter().enumerate() {
-                if contains_energy_terms(&equation.lhs) || contains_energy_terms(&equation.rhs) {
-                    energy_equations.push((model_id, i + 1));
-                }
-            }
-        }
-    }
-
-    if energy_vars.is_empty() {
-        println!("  No energy variables detected");
-    } else {
-        println!("  Energy variables found:");
-        for (model_id, var_name) in energy_vars {
-            println!("    {}.{}", model_id, var_name);
-        }
-    }
-
-    if energy_equations.is_empty() {
-        println!("  No energy equations detected");
-    } else {
-        println!("  Energy equations found:");
-        for (model_id, eq_num) in energy_equations {
-            println!("    {}: equation {}", model_id, eq_num);
-        }
-    }
-
-    // Note: A full energy conservation check would require:
-    // 1. Identifying all energy sources and sinks
-    // 2. Checking that d(total_energy)/dt = energy_input - energy_output
-    // 3. Verifying thermodynamic consistency
-    println!("  Note: Full energy conservation analysis requires domain-specific knowledge");
-}
-
-#[cfg(feature = "cli")]
-fn check_species_conservation(esm_file: &earthsci_toolkit::EsmFile) {
-    println!("Species Conservation Analysis:");
-
-    if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        for (rs_id, rs) in reaction_systems {
-            println!("  Reaction System: {}", rs_id);
-
-            // Check species mass balance for each reaction
-            for (i, reaction) in rs.reactions.iter().enumerate() {
-                let mut atom_balance: std::collections::HashMap<&String, f64> =
-                    std::collections::HashMap::new();
-
-                // For each substrate, add atoms consumed
-                for substrate in reaction.substrates.iter().flatten() {
-                    *atom_balance.entry(&substrate.species).or_insert(0.0) -=
-                        substrate.coefficient as f64;
-                }
-
-                // For each product, add atoms produced
-                for product in reaction.products.iter().flatten() {
-                    *atom_balance.entry(&product.species).or_insert(0.0) +=
-                        product.coefficient as f64;
-                }
-
-                // Check if atom counts balance
-                let mut balanced = true;
-                for balance in atom_balance.values() {
-                    if balance.abs() > 1e-6 {
-                        balanced = false;
-                        break;
-                    }
-                }
-
-                if balanced {
-                    println!("    Reaction {}: ✓ species conserved", i + 1);
-                } else {
-                    println!("    Reaction {}: ⚠ species imbalance", i + 1);
-                    for (species, balance) in &atom_balance {
-                        if balance.abs() > 1e-6 {
-                            println!("      {} imbalance: {:.3}", species, balance);
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        println!("  No reaction systems found - species conservation check not applicable");
-    }
 }
 
 #[cfg(feature = "cli")]
@@ -967,20 +798,6 @@ fn collect_unit_types(esm_file: &earthsci_toolkit::EsmFile) -> Vec<String> {
     let mut unit_list: Vec<String> = units.into_iter().collect();
     unit_list.sort();
     unit_list
-}
-
-#[cfg(feature = "cli")]
-fn contains_energy_terms(expr: &earthsci_toolkit::Expr) -> bool {
-    match expr {
-        earthsci_toolkit::Expr::Variable(name) => {
-            name.to_lowercase().contains("energy")
-                || name.to_lowercase().contains("temperature")
-                || name.to_lowercase().contains("heat")
-                || name.to_lowercase().contains("enthalpy")
-        }
-        earthsci_toolkit::Expr::Operator(node) => node.args.iter().any(contains_energy_terms),
-        earthsci_toolkit::Expr::Number(_) => false,
-    }
 }
 
 #[cfg(feature = "cli")]
@@ -2819,47 +2636,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // ANALYSIS COMMANDS
-        Commands::CheckConservation {
-            file,
-            conservation_type,
-        } => {
-            let content = fs::read_to_string(&file)?;
-            let esm_file = load(&content)?;
-
-            println!("Conservation Analysis for: {}", file.display());
-            println!("Type: {}", conservation_type);
-
-            match conservation_type.as_str() {
-                "mass" => {
-                    println!("\n=== MASS CONSERVATION ANALYSIS ===");
-                    check_mass_conservation(&esm_file);
-                }
-                "energy" => {
-                    println!("\n=== ENERGY CONSERVATION ANALYSIS ===");
-                    check_energy_conservation(&esm_file);
-                }
-                "species" => {
-                    println!("\n=== SPECIES CONSERVATION ANALYSIS ===");
-                    check_species_conservation(&esm_file);
-                }
-                "all" => {
-                    println!("\n=== COMPREHENSIVE CONSERVATION ANALYSIS ===");
-                    check_mass_conservation(&esm_file);
-                    println!();
-                    check_energy_conservation(&esm_file);
-                    println!();
-                    check_species_conservation(&esm_file);
-                }
-                _ => {
-                    eprintln!(
-                        "Unsupported conservation type: {}. Use all, mass, energy, or species.",
-                        conservation_type
-                    );
-                    std::process::exit(1);
-                }
-            }
-        }
-
         Commands::Units { file, check } => {
             let content = fs::read_to_string(&file)?;
             let esm_file = load(&content)?;
