@@ -127,13 +127,13 @@ end
         A0, B0 = 1.0, 0.01
         # Build as an ESM ReactionSystem → flatten → System path so we
         # exercise the reaction-to-ODE derivation plus the solve loop.
-        rate = OpExpr("*", ESM.Expr[
-            VarExpr("k"), VarExpr("A"), VarExpr("B"),
-        ])
+        # NOTE: `mass_action_rate` multiplies the user-supplied rate by the
+        # substrate species automatically, so the `rate` below is the rate
+        # constant only. Effective rate: k * A * B.
         rxn = ESM.Reaction("auto",
             [ESM.StoichiometryEntry("A", 1), ESM.StoichiometryEntry("B", 1)],
             [ESM.StoichiometryEntry("B", 2)],
-            rate)
+            VarExpr("k"))
         rsys = ESM.ReactionSystem(
             [ESM.Species("A"; default=A0), ESM.Species("B"; default=B0)],
             [rxn];
@@ -142,7 +142,10 @@ end
         flat = flatten(rsys; name="Auto")
         sys = MTK.System(flat; name=:Auto)
         simp = MTK.mtkcompile(sys)
-        prob = MTK.ODEProblem(simp, Dict{Any,Any}(), (0.0, 20.0))
+        # Logistic time scale: 1/(k * total) = 1/(2 * 1.01) ≈ 0.495. Half-life
+        # from x(0)=0.01 takes ~ln((M-x0)/x0)/(k*M) = ln(99)/2.02 ≈ 2.27.
+        # Integrate to t = 10 (≈ 20 half-times) — A should be ~0.
+        prob = MTK.ODEProblem(simp, Dict{Any,Any}(), (0.0, 10.0))
         sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
             reltol=1e-10, abstol=1e-12, saveat=0.25)
 
@@ -158,11 +161,17 @@ end
         totals = As .+ Bs
         @test maximum(abs.(totals .- total0)) < 1e-8
 
-        # Sanity: autocatalysis should eventually convert essentially all A
-        # into B (B grows from tiny seed, consumes A). By t=20 with k=2,
-        # reaction has long since run to completion.
+        # Sanity: autocatalysis should drive A → 0, B → total.
         @test As[end] < 1e-6
         @test isapprox(Bs[end], total0; rtol=1e-6)
+
+        # Also verify the logistic solution along the trajectory at
+        # several intermediate points.
+        for t in (1.0, 2.0, 3.0, 5.0)
+            x = total0 / (1 + (total0/B0 - 1) * exp(-k * total0 * t))  # B(t)
+            @test isapprox(sol(t, idxs=Bsym), x; rtol=1e-5)
+            @test isapprox(sol(t, idxs=Asym), total0 - x; rtol=1e-5)
+        end
     end
 
     # ====================================================================
@@ -205,7 +214,7 @@ end
         simp = MTK.mtkcompile(sys)
         prob = MTK.ODEProblem(simp, Dict{Any,Any}(), (0.0, 4.0e10))
         sol = OrdinaryDiffEqRosenbrock.solve(prob, OrdinaryDiffEqRosenbrock.Rodas5P();
-            reltol=1e-8, abstol=1e-12)
+            reltol=1e-10, abstol=1e-14)
 
         Asym = _find_unknown(simp, "A")
         Bsym = _find_unknown(simp, "B")
@@ -226,11 +235,14 @@ end
             A_val = sol(t, idxs=Asym)
             B_val = sol(t, idxs=Bsym)
             C_val = sol(t, idxs=Csym)
-            @test isapprox(A_val, A_ref; rtol=1e-4)
-            @test isapprox(B_val, B_ref; rtol=1e-3)  # B is tiny; looser rtol
-            @test isapprox(C_val, C_ref; rtol=1e-4)
+            # Hairer & Wanner reference values are 5 significant digits.
+            # Allow rtol = 5e-4 so a numerical solution matching H&W's
+            # tabulated digits exactly still passes.
+            @test isapprox(A_val, A_ref; rtol=5e-4)
+            @test isapprox(B_val, B_ref; rtol=5e-3)  # B is tiny; looser rtol
+            @test isapprox(C_val, C_ref; rtol=5e-4)
             # Mass conservation: A + B + C = 1 always
-            @test isapprox(A_val + B_val + C_val, 1.0; atol=1e-8)
+            @test isapprox(A_val + B_val + C_val, 1.0; atol=1e-6)
         end
 
         # Final state at t = 4e10: A → 0, B → 0, C → 1

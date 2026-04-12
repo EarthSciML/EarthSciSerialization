@@ -929,6 +929,68 @@ Callers must migrate to the constructor-dispatch API above.
 | `discrete_parameters` | `SymbolicDiscreteCallback(...; discrete_parameters=[p])` |
 | Functional affect | `(affect!, [vars...], [params...], [discretes...], ctx)` tuple registered by `handler_id` |
 
+#### 5.1.6 End-to-End Simulation Test Coverage
+
+`EarthSciSerialization.jl` produces simulation-ready `ModelingToolkit.System`
+objects, so its test suite MUST verify that the returned systems integrate
+correctly end-to-end with `OrdinaryDiffEq`. Construction-only tests (verifying
+that a non-mock object is returned) are insufficient: they cannot catch
+silent bugs such as non-numeric `Expr` nodes, missing initial conditions, unit
+mismatches, or singular Jacobians — all of which surface only inside `solve`.
+
+The test file `test/simulate_e2e_test.jl` is part of `runtests.jl` and MUST
+cover at minimum:
+
+1. **Exponential decay** — `D(x, t) = −k·x`, `x(0) = 1`, `k = 0.1`. Build via
+   `ModelingToolkit.System(::Model)`, call `ODEProblem` + `solve` with `Tsit5`
+   to `t = 10`, assert `x(10) ≈ exp(−1)` to `rtol = 1e-6`. Sample intermediate
+   points against the analytical curve.
+
+2. **Reversible first-order reaction** — `A ⇌ B` with `k_fwd = 1.0`,
+   `k_rev = 0.5`, `A(0) = 1`, `B(0) = 0`. Integrate to steady state and
+   assert `A_eq = k_rev / (k_fwd + k_rev)`, `B_eq = k_fwd / (k_fwd + k_rev)`
+   along with mass conservation `A + B = A0 + B0`.
+
+3. **Autocatalytic reaction with mass conservation** —
+   `A + B → 2B` with `k = 2.0`, `A(0) = 1`, `B(0) = 0.01`. Built via the
+   `ReactionSystem` → `flatten` → `ModelingToolkit.System` path so the
+   reaction-to-ODE derivation is exercised. Assert that total mass `A + B`
+   is conserved at every stored time step (`atol = 1e-8`) and that the
+   trajectory matches the closed-form logistic solution at several
+   intermediate points.
+
+4. **Robertson stiff benchmark** —
+   `dA/dt = −0.04·A + 1e4·B·C`,
+   `dB/dt =  0.04·A − 1e4·B·C − 3e7·B²`,
+   `dC/dt =  3e7·B²`, with `A(0) = 1`, `B(0) = C(0) = 0`. Integrate with
+   `Rodas5P` (or any L-stable Rosenbrock) to `t = 4e10`. Assert against
+   the reference values in Hairer & Wanner, *Solving ODEs II*, Table 1.4
+   at `t ∈ {0.4, 4, 40, 400, 4000, 40000}` to `rtol = 5e-4`, plus mass
+   conservation `A + B + C = 1` and the steady-state limit
+   `A, B → 0, C → 1` at `t = 4e10`. Robertson is the canonical stiff
+   validation case; if it integrates correctly, the stiff path is proven.
+
+5. **.esm fixture round-trip vs cross-language reference** —
+   Load `tests/simulation/simple_ode.esm`, flatten, build a `System`, and
+   compare the numerical trajectory against the analytical / Python-SciPy
+   reference in `tests/simulation/reference_solutions/simple_ode_solution.json`
+   at the documented sample times to `rtol = 1e-6`. This proves that the
+   Julia library produces the same trajectory as the cross-language
+   reference solution for an identical input fixture.
+
+**Dependency discipline.** The solver packages used by these tests
+(`OrdinaryDiffEqTsit5`, `OrdinaryDiffEqRosenbrock`) MUST live in
+`[extras]` + `[targets].test` only — never in `[deps]`. The runtime package
+remains lean and precompiles fast; users who only need `load`/`save`/`flatten`
+do not pay the cost of the full `SciMLBase` stack.
+
+**Initial conditions and parameters.** The `EarthSciSerializationMTKExt`
+constructor wires `ModelVariable.default` values into the Symbolics variables
+via `Symbolics.setdefaultval`, so `ODEProblem(sys, [], tspan)` can be called
+with an empty `u0` / `p` map — MTK picks up the defaults automatically. This
+is what makes the e2e tests callable without manually restating the
+initial-condition map that was already declared in the ESM model.
+
 ---
 
 ### 5.2 TypeScript / SolidJS — `earthsci-toolkit` + `esm-editor`
