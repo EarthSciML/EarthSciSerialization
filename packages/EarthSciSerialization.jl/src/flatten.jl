@@ -66,17 +66,22 @@ Base.showerror(io::IO, e::UnmappedDomainError) =
           "' to domain '", e.target, "'")
 
 """
-    UnsupportedRegriddingError
+    UnsupportedMappingError
 
-Raised when an `Interface` requests a regridding strategy not supported by
-the current library tier (§4.7.6).
+Raised when an `Interface` requests a `dimension_mapping` type or regridding
+strategy that is not supported by the current library tier (§4.7.6). The
+`mapping_type` field carries the offending type or strategy name (e.g.
+`"slice"`, `"project"`, `"regrid"`, or a specific regridding method like
+`"cubic_spline"`). Matches the Rust `FlattenError::UnsupportedMapping` variant
+and the Python `UnsupportedMappingError` exception for cross-language
+error-name parity.
 """
-struct UnsupportedRegriddingError <: Exception
-    strategy::String
+struct UnsupportedMappingError <: Exception
+    mapping_type::String
 end
-Base.showerror(io::IO, e::UnsupportedRegriddingError) =
-    print(io, "UnsupportedRegriddingError: regridding strategy '",
-          e.strategy, "' is not supported")
+Base.showerror(io::IO, e::UnsupportedMappingError) =
+    print(io, "UnsupportedMappingError: mapping type '",
+          e.mapping_type, "' is not supported by this library tier")
 
 """
     DomainUnitMismatchError
@@ -93,6 +98,55 @@ Base.showerror(io::IO, e::DomainUnitMismatchError) =
     print(io, "DomainUnitMismatchError: variable '", e.variable,
           "' has units '", e.source_units, "' on source and '",
           e.target_units, "' on target")
+
+"""
+    DomainExtentMismatchError
+
+Defined for cross-language error-name parity with the Rust `FlattenError`
+taxonomy and the Python `flatten()` exception set. Would be raised when an
+`identity` mapping bridges two domains whose spatial extents on a shared
+independent variable disagree. The Julia flatten pipeline does not currently
+perform this check, so this type is reserved and never raised by the current
+implementation — it exists so consumers can catch it by name.
+"""
+struct DomainExtentMismatchError <: Exception
+    variable::String
+end
+Base.showerror(io::IO, e::DomainExtentMismatchError) =
+    print(io, "DomainExtentMismatchError: domain extent mismatch on ",
+          "independent variable '", e.variable, "' under identity mapping")
+
+"""
+    SliceOutOfDomainError
+
+Defined for cross-language error-name parity; only raised if `slice` is ever
+implemented at a higher tier in the Julia flatten pipeline. Would be raised
+when a `slice` mapping's fixed coordinate lies outside the source variable's
+declared domain extent.
+"""
+struct SliceOutOfDomainError <: Exception
+    coordinate::String
+    value::String
+end
+Base.showerror(io::IO, e::SliceOutOfDomainError) =
+    print(io, "SliceOutOfDomainError: slice coordinate '", e.coordinate,
+          "' = ", e.value, " lies outside the source domain extent")
+
+"""
+    CyclicPromotionError
+
+Defined for cross-language error-name parity. Not raised by Core-tier Julia
+because no promotion graph is built — reserved for a future tier upgrade that
+does promotion-graph analysis. Would signal that the declared `Interface`
+rules form a cycle (A promotes to B, B promotes back to A on a different
+axis).
+"""
+struct CyclicPromotionError <: Exception
+    variables::Vector{String}
+end
+Base.showerror(io::IO, e::CyclicPromotionError) =
+    print(io, "CyclicPromotionError: cyclic promotion detected involving ",
+          "variables ", e.variables)
 
 # ========================================
 # Types
@@ -555,7 +609,7 @@ regridding strategy that the Julia flatten pipeline actually implements.
 `project`, `regrid`. The Julia library's flatten pipeline currently wires only
 `broadcast` and `identity` (the Core-tier minimum). Interfaces that declare
 `slice` or `project` raise `DimensionPromotionError`; interfaces that declare
-a regridding method outside the supported set raise `UnsupportedRegriddingError`.
+a regridding method outside the supported set raise `UnsupportedMappingError`.
 """
 function _check_interfaces!(file::EsmFile)
     file.interfaces === nothing && return
@@ -567,7 +621,7 @@ function _check_interfaces!(file::EsmFile)
             if t == "regrid"
                 method = iface.regridding === nothing ? "unspecified" :
                          String(get(iface.regridding, "method", "unspecified"))
-                throw(UnsupportedRegriddingError(method))
+                throw(UnsupportedMappingError(method))
             elseif t in ("slice", "project")
                 throw(DimensionPromotionError(
                     "interface '$(iface_name)': dimension_mapping type '$(t)' " *
@@ -580,7 +634,7 @@ function _check_interfaces!(file::EsmFile)
             if method_val !== nothing
                 method = String(method_val)
                 if !(method in _SUPPORTED_REGRIDDING_METHODS)
-                    throw(UnsupportedRegriddingError(method))
+                    throw(UnsupportedMappingError(method))
                 end
             end
         end

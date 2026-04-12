@@ -52,9 +52,10 @@ export
     CouplingOperatorApply, CouplingCallback, CouplingEvent,
     # Flattened system (§4.7.5 / §4.7.6)
     FlattenMetadata, FlattenedSystem, flatten, lower_reactions_to_equations,
-    # Flatten error taxonomy
+    # Flatten error taxonomy (spec §4.7.6.10, 8 types for cross-language parity)
     ConflictingDerivativeError, DimensionPromotionError, UnmappedDomainError,
-    UnsupportedRegriddingError, DomainUnitMismatchError,
+    UnsupportedMappingError, DomainUnitMismatchError,
+    DomainExtentMismatchError, SliceOutOfDomainError, CyclicPromotionError,
     # System types
     Domain, Interface, Reference, Metadata, EsmFile,
     # JSON functionality

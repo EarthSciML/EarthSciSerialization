@@ -513,10 +513,10 @@ end
         @test flat isa FlattenedSystem
     end
 
-    @testset "13. §4.7.6 UnsupportedRegriddingError from real flatten" begin
+    @testset "13. §4.7.6 UnsupportedMappingError from real flatten" begin
         # An Interface with a regridding.method outside the supported set
         # (`identity` only, at the Julia Core tier) MUST raise
-        # UnsupportedRegriddingError at flatten time.
+        # UnsupportedMappingError at flatten time.
         domains = Dict{String, Domain}(
             "grid_a" => Domain(spatial=Dict{String,Any}("x" => [0.0, 1.0])),
             "grid_b" => Domain(spatial=Dict{String,Any}("x" => [0.0, 1.0])),
@@ -548,8 +548,8 @@ end
         catch e
             e
         end
-        @test err isa UnsupportedRegriddingError
-        @test err.strategy == "cubic_spline"
+        @test err isa UnsupportedMappingError
+        @test err.mapping_type == "cubic_spline"
         @test occursin("cubic_spline", sprint(showerror, err))
 
         # Same input but with dimension_mapping type explicitly declared as
@@ -674,7 +674,7 @@ end
                            e isa EarthSciSerialization.ParseError ||
                            e isa ConflictingDerivativeError ||
                            e isa UnmappedDomainError ||
-                           e isa UnsupportedRegriddingError ||
+                           e isa UnsupportedMappingError ||
                            e isa DimensionPromotionError ||
                            e isa DomainUnitMismatchError
                             @test_broken false
