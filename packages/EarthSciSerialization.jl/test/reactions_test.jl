@@ -124,6 +124,69 @@ using EarthSciSerialization
         @test single_rate isa OpExpr
         @test single_rate.op == "*"
         @test length(single_rate.args) == 2  # k_single * A
+
+        # gt-p60 regression: if the user-supplied rate already references
+        # substrate concentrations (i.e. they gave us a full rate law, not
+        # a rate coefficient), mass_action_rate MUST return it unchanged
+        # rather than double-applying the substrate multiplication and
+        # producing `k*A²*B²` for a `rate=k*A*B` bimolecular reaction.
+        full_rate = OpExpr("*",
+            EarthSciSerialization.Expr[VarExpr("k_full"),
+                                       VarExpr("A"), VarExpr("B")])
+        full_reaction = Reaction(
+            Dict("A" => 1, "B" => 1),
+            Dict("C" => 1),
+            full_rate,
+        )
+        full_result = mass_action_rate(full_reaction, species)
+        # Result is exactly the user's rate expression, unwrapped.
+        @test full_result === full_rate
+        @test full_result isa OpExpr
+        @test full_result.op == "*"
+        @test length(full_result.args) == 3
+        # Each substrate variable appears EXACTLY once in the rate law.
+        _uses_full(expr, name) = expr isa VarExpr ? expr.name == name :
+            (expr isa OpExpr && any(a -> _uses_full(a, name), expr.args))
+        _count_full(expr, name) = if expr isa VarExpr
+            expr.name == name ? 1 : 0
+        elseif expr isa OpExpr
+            isempty(expr.args) ? 0 : sum(a -> _count_full(a, name), expr.args)
+        else
+            0
+        end
+        @test _count_full(full_result, "A") == 1
+        @test _count_full(full_result, "B") == 1
+        @test _count_full(full_result, "k_full") == 1
+
+        # Detection is per-substrate: a rate that references ONE substrate
+        # but not the other still opts out of mass-action multiplication
+        # (assumes the user knows what they're doing).
+        partial_rate = OpExpr("*",
+            EarthSciSerialization.Expr[VarExpr("k_partial"), VarExpr("A")])
+        partial_reaction = Reaction(
+            Dict("A" => 1, "B" => 1),
+            Dict("C" => 1),
+            partial_rate,
+        )
+        partial_result = mass_action_rate(partial_reaction, species)
+        @test partial_result === partial_rate
+        @test _count_full(partial_result, "A") == 1
+        @test _count_full(partial_result, "B") == 0
+
+        # A rate that does NOT reference any substrate still gets the full
+        # mass-action multiplication (the coefficient-only path is the
+        # common case and must continue to work).
+        const_reaction = Reaction(
+            Dict("A" => 1, "B" => 1),
+            Dict("C" => 1),
+            VarExpr("k_const"),
+        )
+        const_result = mass_action_rate(const_reaction, species)
+        @test const_result isa OpExpr
+        @test const_result.op == "*"
+        @test length(const_result.args) == 3
+        @test const_result.args[1] isa VarExpr
+        @test const_result.args[1].name == "k_const"
     end
 
     @testset "ODE Derivation Tests" begin
