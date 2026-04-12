@@ -67,6 +67,9 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
 
         let model = Model {
             reference: None,
+            domain: None,
+            coupletype: None,
+            subsystems: None,
             name: Some(format!("model_{}", i)),
             variables,
             equations,
@@ -95,23 +98,26 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         data_loaders: None,
         operators: None,
         coupling: None,
-        domain: None,
+        domains: None,
+        interfaces: None,
     }
 }
 
 /// Create a test reaction system with varying complexity
 fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> ReactionSystem {
-    let mut species = Vec::new();
+    let mut species = HashMap::new();
     let mut reactions = Vec::new();
 
-    // Create species
+    // Create species (keyed by name in the new schema)
     for i in 0..num_species {
-        species.push(Species {
-            name: format!("S{}", i),
-            units: None,
-            default: None,
-            description: None,
-        });
+        species.insert(
+            format!("S{}", i),
+            Species {
+                units: None,
+                default: None,
+                description: None,
+            },
+        );
     }
 
     // Create reactions
@@ -120,30 +126,36 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
         let product_idx = (i + 1) % num_species;
 
         reactions.push(Reaction {
+            id: Some(format!("R{}", i)),
             name: Some(format!("R{}", i)),
-            substrates: vec![StoichiometricEntry {
+            substrates: Some(vec![StoichiometricEntry {
                 species: format!("S{}", substrate_idx),
-                coefficient: Some(1.0),
-            }],
-            products: vec![StoichiometricEntry {
+                coefficient: 1,
+            }]),
+            products: Some(vec![StoichiometricEntry {
                 species: format!("S{}", product_idx),
-                coefficient: Some(1.0),
-            }],
+                coefficient: 1,
+            }]),
             rate: bin_op(
                 "*",
                 Expr::Number(0.1),
                 Expr::Variable(format!("S{}", substrate_idx)),
             ),
-            description: None,
+            reference: None,
         });
     }
 
     ReactionSystem {
-        name: Some("benchmark_system".to_string()),
+        domain: None,
+        coupletype: None,
+        reference: None,
         species,
         parameters: HashMap::new(),
         reactions,
-        description: None,
+        constraint_equations: None,
+        discrete_events: None,
+        continuous_events: None,
+        subsystems: None,
     }
 }
 

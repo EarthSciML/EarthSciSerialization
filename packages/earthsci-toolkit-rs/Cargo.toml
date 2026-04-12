@@ -2,7 +2,7 @@
 name = "earthsci-toolkit"
 version = "0.0.2"
 edition = "2024"
-rust-version = "1.85.0"
+rust-version = "1.87.0"
 authors = ["EarthSciML Authors and Contributors"]
 description = "Rust implementation of EarthSciML Serialization Format"
 license = "MIT"

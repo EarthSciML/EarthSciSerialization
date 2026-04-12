@@ -99,12 +99,14 @@ impl ParallelEvaluator {
         let num_species = system.species.len();
         let num_reactions = system.reactions.len();
 
-        // Create species index mapping
-        let species_index: HashMap<String, usize> = system
-            .species
+        // Build a stable, sorted species ordering so indices are reproducible
+        // and match `stoichiometric_matrix` in src/reactions.rs.
+        let mut sorted_species_names: Vec<&String> = system.species.keys().collect();
+        sorted_species_names.sort();
+        let species_index: HashMap<String, usize> = sorted_species_names
             .iter()
             .enumerate()
-            .map(|(idx, species)| (species.name.clone(), idx))
+            .map(|(idx, name)| ((*name).clone(), idx))
             .collect();
 
         self.thread_pool.install(|| {
@@ -123,18 +125,16 @@ impl ParallelEvaluator {
                     let mut contributions = Vec::new();
 
                     // Process substrates (negative coefficients)
-                    for substrate in &reaction.substrates {
+                    for substrate in reaction.substrates.iter().flatten() {
                         if let Some(&species_idx) = species_index.get(&substrate.species) {
-                            let coeff = substrate.coefficient.unwrap_or(1.0);
-                            contributions.push((species_idx, -coeff));
+                            contributions.push((species_idx, -(substrate.coefficient as f64)));
                         }
                     }
 
                     // Process products (positive coefficients)
-                    for product in &reaction.products {
+                    for product in reaction.products.iter().flatten() {
                         if let Some(&species_idx) = species_index.get(&product.species) {
-                            let coeff = product.coefficient.unwrap_or(1.0);
-                            contributions.push((species_idx, coeff));
+                            contributions.push((species_idx, product.coefficient as f64));
                         }
                     }
 

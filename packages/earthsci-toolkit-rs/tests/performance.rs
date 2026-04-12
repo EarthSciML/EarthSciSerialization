@@ -1,4 +1,8 @@
-use earthsci_toolkit::{Expr, ExpressionNode, performance::CompactExpr};
+use earthsci_toolkit::{
+    Expr, ExpressionNode, Reaction, ReactionSystem, Species, StoichiometricEntry,
+    performance::CompactExpr, types::Parameter,
+};
+use std::collections::HashMap;
 
 #[cfg(feature = "parallel")]
 use earthsci_toolkit::performance::ParallelEvaluator;
@@ -287,14 +291,14 @@ fn test_simd_operations_large_vectors() {
 
     // Test addition
     simd_math::add_vectors_simd(&a, &b, &mut result).unwrap();
-    for i in 0..size {
-        assert_eq!(result[i], (i * 3) as f64);
+    for (i, v) in result.iter().enumerate().take(size) {
+        assert_eq!(*v, (i * 3) as f64);
     }
 
     // Test multiplication
     simd_math::multiply_vectors_simd(&a, &b, &mut result).unwrap();
-    for i in 0..size {
-        assert_eq!(result[i], (i * i * 2) as f64);
+    for (i, v) in result.iter().enumerate().take(size) {
+        assert_eq!(*v, (i * i * 2) as f64);
     }
 
     // Test dot product
@@ -396,7 +400,7 @@ fn test_compact_expr_all_operators() {
         ("sin", 1.0, 1.0_f64.sin()),
         ("cos", 0.0, 1.0),
         ("exp", 1.0, 1.0_f64.exp()),
-        ("log", 2.718281828459045, 1.0),
+        ("log", std::f64::consts::E, 1.0),
     ];
 
     for (op, arg, expected) in unary_test_cases {
@@ -485,24 +489,32 @@ fn test_parallel_evaluator_complex_batch() {
 fn test_parallel_stoichiometric_matrix_computation() {
     let evaluator = ParallelEvaluator::new(Some(2)).unwrap();
 
-    // Create a simple reaction system: A + B -> C
-    let species = vec![
+    // Create a simple reaction system: A + B -> C (species are keyed by name)
+    let mut species = HashMap::new();
+    species.insert(
+        "A".to_string(),
         Species {
             units: Some("mol".to_string()),
             default: Some(1.0),
             description: None,
         },
+    );
+    species.insert(
+        "B".to_string(),
         Species {
             units: Some("mol".to_string()),
             default: Some(1.0),
             description: None,
         },
+    );
+    species.insert(
+        "C".to_string(),
         Species {
             units: Some("mol".to_string()),
             default: Some(0.0),
             description: None,
         },
-    ];
+    );
 
     let reactions = vec![Reaction {
         id: None,
@@ -541,9 +553,9 @@ fn test_parallel_stoichiometric_matrix_computation() {
         domain: None,
         coupletype: None,
         reference: None,
-        species: species,
-        parameters: parameters,
-        reactions: reactions,
+        species,
+        parameters,
+        reactions,
         constraint_equations: None,
         discrete_events: None,
         continuous_events: None,
@@ -610,7 +622,7 @@ fn test_model_allocator_reset() {
 
     // Allocate memory
     let _slice1 = allocator.alloc_slice::<f64>(50);
-    let bytes_after_first_alloc = allocator.allocated_bytes();
+    let _bytes_after_first_alloc = allocator.allocated_bytes();
 
     // Reset allocator
     allocator.reset();
