@@ -1,10 +1,15 @@
 //! JSON parsing and schema validation for ESM files
 
 use crate::{EsmFile, error::EsmError};
-use jsonschema::JSONSchema;
+use jsonschema::{Draft, JSONSchema};
 use serde_json::Value;
 use std::sync::OnceLock;
 use thiserror::Error;
+
+/// Library version supported by this implementation (major, minor, patch).
+/// Files with a major version mismatch are rejected per the version
+/// compatibility rules in esm-libraries-spec §8.
+const LIBRARY_VERSION: (u32, u32, u32) = (0, 1, 0);
 
 /// Error type for JSON parsing failures
 #[derive(Error, Debug)]
@@ -31,13 +36,23 @@ pub struct SchemaValidationError {
 /// Bundled ESM JSON Schema
 const ESM_SCHEMA_JSON: &str = include_str!("esm-schema.json");
 
-/// Get the compiled JSON schema (cached for performance)
+/// Get the compiled JSON schema (cached for performance).
+///
+/// The bundled schema declares Draft 2020-12, for which `jsonschema` disables
+/// format validation by default. We explicitly opt in so that `format:
+/// "date-time"` (and other `format` keywords in the schema) actually reject
+/// malformed strings — this is required for cross-language parity with Julia
+/// and Python, which both enforce format validation.
 fn get_schema() -> &'static JSONSchema {
     static SCHEMA: OnceLock<JSONSchema> = OnceLock::new();
     SCHEMA.get_or_init(|| {
         let schema_value: Value =
             serde_json::from_str(ESM_SCHEMA_JSON).expect("Bundled schema should be valid JSON");
-        JSONSchema::compile(&schema_value).expect("Bundled schema should compile successfully")
+        JSONSchema::options()
+            .with_draft(Draft::Draft202012)
+            .should_validate_formats(true)
+            .compile(&schema_value)
+            .expect("Bundled schema should compile successfully")
     })
 }
 
@@ -93,6 +108,12 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     // Validate against schema
     validate_schema(&json_value)?;
 
+    // Post-schema structural + semantic checks (version compatibility,
+    // cross-field format rules, reference integrity, cyclic coupling) — the
+    // things JSON Schema cannot express. Mirrors Python / Julia so that
+    // cross-language conformance agrees.
+    validate_structural_json(&json_value)?;
+
     // Deserialize into our types
     let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;
 
@@ -120,6 +141,7 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
         .map_err(EsmError::SchemaValidation)?;
 
     validate_schema(&json_value)?;
+    validate_structural_json(&json_value)?;
 
     let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;
 
@@ -149,6 +171,666 @@ pub fn validate_schema(json_value: &Value) -> Result<(), EsmError> {
             Err(EsmError::SchemaValidation(error_messages.join("; ")))
         }
     }
+}
+
+// ============================================================================
+// Post-schema structural / semantic validation
+// ============================================================================
+//
+// JSON Schema can enforce shape, type, and pattern rules, but a handful of
+// semantic rules in esm-libraries-spec §3.2 fall outside what Draft 2020-12
+// can express. The checks in this section mirror Python's `_validate_structural`
+// and Julia's validator so that a fixture that fails in one language fails
+// in all three, per §2.1a cross-language parity.
+
+/// Run every post-schema structural check, collecting errors and returning
+/// `EsmError::SchemaValidation` if any check fires.
+fn validate_structural_json(json_value: &Value) -> Result<(), EsmError> {
+    let mut errors: Vec<String> = Vec::new();
+
+    if let Some(obj) = json_value.as_object() {
+        check_version_compatibility(obj, &mut errors);
+        check_metadata_formats(obj, &mut errors);
+        check_data_loader_provides(obj, &mut errors);
+        check_data_loader_temporal_resolution(obj, &mut errors);
+        check_model_state_has_derivatives(obj, &mut errors);
+        check_coupling_references(obj, &mut errors);
+        check_circular_model_dependencies(obj, &mut errors);
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(EsmError::SchemaValidation(format!(
+            "Structural validation failed: {}",
+            errors.join("; ")
+        )))
+    }
+}
+
+/// Reject files whose major version does not match this library.
+///
+/// The schema already enforces the `\d+\.\d+\.\d+` pattern; this check runs
+/// after that and rejects mismatched major versions with the standardized
+/// message string the Julia / Python libraries use.
+fn check_version_compatibility(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    let Some(ver) = obj.get("esm").and_then(|v| v.as_str()) else {
+        return;
+    };
+    let parts: Vec<&str> = ver.split('.').collect();
+    if parts.len() != 3 {
+        return;
+    }
+    let Ok(major) = parts[0].parse::<u32>() else {
+        return;
+    };
+    if major != LIBRARY_VERSION.0 {
+        errors.push(format!(
+            "Unsupported major version {}. This library supports major version {} only.",
+            major, LIBRARY_VERSION.0
+        ));
+    }
+}
+
+/// Validate ISO 8601 dates, URLs, and DOIs in the metadata block, and reject
+/// empty strings for those fields.
+fn check_metadata_formats(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    let Some(md) = obj.get("metadata").and_then(|v| v.as_object()) else {
+        return;
+    };
+
+    for field in ["created", "modified"] {
+        if let Some(val) = md.get(field).and_then(|v| v.as_str())
+            && !is_iso8601_datetime(val)
+        {
+            errors.push(format!(
+                "metadata/{field}: '{val}' is not a valid ISO 8601 date"
+            ));
+        }
+    }
+
+    if let Some(refs) = md.get("references").and_then(|v| v.as_array()) {
+        for (i, r) in refs.iter().enumerate() {
+            let Some(r_obj) = r.as_object() else { continue };
+
+            if let Some(url) = r_obj.get("url").and_then(|v| v.as_str()) {
+                if url.is_empty() {
+                    errors.push(format!(
+                        "metadata/references[{i}]/url: empty string is not a valid URL"
+                    ));
+                } else if !is_valid_url(url) {
+                    errors.push(format!(
+                        "metadata/references[{i}]/url: '{url}' is not a valid URL"
+                    ));
+                }
+            }
+
+            if let Some(doi) = r_obj.get("doi").and_then(|v| v.as_str()) {
+                if doi.is_empty() {
+                    errors.push(format!(
+                        "metadata/references[{i}]/doi: empty string is not a valid DOI"
+                    ));
+                } else if !is_valid_doi(doi) {
+                    errors.push(format!(
+                        "metadata/references[{i}]/doi: '{doi}' is not a valid DOI format"
+                    ));
+                }
+            }
+
+            if let Some(citation) = r_obj.get("citation").and_then(|v| v.as_str())
+                && citation.is_empty()
+            {
+                errors.push(format!(
+                    "metadata/references[{i}]/citation: empty citation string is not allowed"
+                ));
+            }
+        }
+    }
+}
+
+/// Every variable in `data_loader.provides` must declare both `units` and
+/// `description` per §3.2.3, even though the schema only lists those as
+/// optional properties.
+fn check_data_loader_provides(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    let Some(loaders) = obj.get("data_loaders").and_then(|v| v.as_object()) else {
+        return;
+    };
+    for (dname, dv) in loaders {
+        let Some(d) = dv.as_object() else { continue };
+        let Some(provides) = d.get("provides").and_then(|v| v.as_object()) else {
+            continue;
+        };
+        for (vname, vv) in provides {
+            let Some(vd) = vv.as_object() else { continue };
+            if !vd.contains_key("units") {
+                errors.push(format!(
+                    "data_loaders/{dname}/provides/{vname}: missing required 'units' field"
+                ));
+            }
+            if !vd.contains_key("description") {
+                errors.push(format!(
+                    "data_loaders/{dname}/provides/{vname}: missing required 'description' field"
+                ));
+            }
+        }
+    }
+}
+
+/// `temporal_resolution`, if present, must be a valid ISO 8601 duration.
+fn check_data_loader_temporal_resolution(
+    obj: &serde_json::Map<String, Value>,
+    errors: &mut Vec<String>,
+) {
+    let Some(loaders) = obj.get("data_loaders").and_then(|v| v.as_object()) else {
+        return;
+    };
+    for (dname, dv) in loaders {
+        let Some(d) = dv.as_object() else { continue };
+        if let Some(res) = d.get("temporal_resolution").and_then(|v| v.as_str())
+            && !res.is_empty()
+            && !is_iso8601_duration(res)
+        {
+            errors.push(format!(
+                "data_loaders/{dname}/temporal_resolution: '{res}' is not a valid ISO 8601 duration"
+            ));
+        }
+    }
+}
+
+/// A model that declares state variables must provide at least one equation.
+/// An empty `equations: []` array paired with declared state variables is a
+/// structural contradiction — there is nothing to integrate.
+///
+/// We deliberately do NOT require *every* state variable to appear on the
+/// LHS of a D(_, t) equation: state variables may be governed by coupled
+/// equations in other models, reaction systems, or operators elsewhere in
+/// the file. Python and Julia take the same lenient-per-variable stance.
+fn check_model_state_has_derivatives(
+    obj: &serde_json::Map<String, Value>,
+    errors: &mut Vec<String>,
+) {
+    let Some(models) = obj.get("models").and_then(|v| v.as_object()) else {
+        return;
+    };
+    for (mname, mv) in models {
+        let Some(m) = mv.as_object() else { continue };
+        let Some(vars) = m.get("variables").and_then(|v| v.as_object()) else {
+            continue;
+        };
+        let has_state = vars.values().any(|v| {
+            v.as_object()
+                .and_then(|o| o.get("type"))
+                .and_then(|t| t.as_str())
+                == Some("state")
+        });
+        if !has_state {
+            continue;
+        }
+        let equations = m.get("equations").and_then(|v| v.as_array());
+        match equations {
+            Some(eqs) if eqs.is_empty() => {
+                errors.push(format!(
+                    "models/{mname}: declares state variables but has an empty 'equations' array"
+                ));
+            }
+            None => {
+                errors.push(format!(
+                    "models/{mname}: declares state variables but no 'equations' field"
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `coupling[].from` and `coupling[].to` must point to variables declared
+/// somewhere in the file. We only enforce `from`, matching Python's lenient
+/// handling of `to` (variable_map can introduce target vars).
+fn check_coupling_references(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    let Some(coupling) = obj.get("coupling").and_then(|v| v.as_array()) else {
+        return;
+    };
+    let tables = build_symbol_tables(obj);
+
+    for (i, c) in coupling.iter().enumerate() {
+        let Some(cobj) = c.as_object() else { continue };
+        let Some(from_ref) = cobj.get("from").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if !from_ref.contains('.') {
+            continue;
+        }
+        let dot_count = from_ref.chars().filter(|ch| *ch == '.').count();
+        if dot_count > 1 {
+            // Subsystem-nested ref — only verify top-level system exists.
+            let top = from_ref.split('.').next().unwrap_or("");
+            if !tables.all_systems.contains(top) {
+                errors.push(format!(
+                    "coupling[{i}]/from: reference '{from_ref}' to undefined system '{top}'"
+                ));
+            }
+            continue;
+        }
+        let (system, var) = from_ref.split_once('.').unwrap();
+        if !tables.all_systems.contains(system) {
+            errors.push(format!(
+                "coupling[{i}]/from: reference '{from_ref}' to undefined system '{system}'"
+            ));
+            continue;
+        }
+        if !tables.has_variable(system, var) {
+            errors.push(format!(
+                "coupling[{i}]/from: reference '{from_ref}' — variable '{var}' not provided by '{system}'"
+            ));
+        }
+    }
+}
+
+/// Detect cycles in model-to-model dependency edges derived from equation
+/// RHS cross-system references. Mirrors Python's `_check_circular_references`.
+fn check_circular_model_dependencies(
+    obj: &serde_json::Map<String, Value>,
+    errors: &mut Vec<String>,
+) {
+    let Some(models) = obj.get("models").and_then(|v| v.as_object()) else {
+        return;
+    };
+    let model_names: std::collections::HashSet<&str> = models.keys().map(String::as_str).collect();
+    if model_names.len() < 2 {
+        return;
+    }
+
+    // Build system -> set of system names it references.
+    let mut deps: std::collections::HashMap<&str, std::collections::HashSet<&str>> =
+        std::collections::HashMap::new();
+    for mname in &model_names {
+        deps.insert(mname, std::collections::HashSet::new());
+    }
+
+    for (mname, mv) in models {
+        let Some(m) = mv.as_object() else { continue };
+        let Some(eqs) = m.get("equations").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for eq in eqs {
+            let mut refs: Vec<String> = Vec::new();
+            if let Some(lhs) = eq.get("lhs") {
+                collect_variable_refs(lhs, &mut refs);
+            }
+            if let Some(rhs) = eq.get("rhs") {
+                collect_variable_refs(rhs, &mut refs);
+            }
+            for r in refs {
+                if let Some((system, _var)) = r.split_once('.') {
+                    let system_str = system.to_string();
+                    if system_str != *mname
+                        && let Some(target) = model_names.get(system.to_string().as_str())
+                        && let Some(set) = deps.get_mut(mname.as_str())
+                    {
+                        set.insert(*target);
+                    }
+                }
+            }
+        }
+    }
+
+    // DFS with gray-coloring for cycle detection.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Color {
+        White,
+        Gray,
+        Black,
+    }
+    let mut color: std::collections::HashMap<&str, Color> =
+        deps.keys().map(|k| (*k, Color::White)).collect();
+    let mut cycle: Option<Vec<String>> = None;
+
+    fn dfs<'a>(
+        node: &'a str,
+        deps: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
+        color: &mut std::collections::HashMap<&'a str, Color>,
+        path: &mut Vec<&'a str>,
+        cycle: &mut Option<Vec<String>>,
+    ) -> bool {
+        color.insert(node, Color::Gray);
+        path.push(node);
+        if let Some(children) = deps.get(node) {
+            for &child in children {
+                match color.get(child).copied().unwrap_or(Color::White) {
+                    Color::Gray => {
+                        let start_idx = path.iter().position(|&n| n == child).unwrap_or(0);
+                        let mut c: Vec<String> =
+                            path[start_idx..].iter().map(|s| s.to_string()).collect();
+                        c.push(child.to_string());
+                        *cycle = Some(c);
+                        return true;
+                    }
+                    Color::White => {
+                        if dfs(child, deps, color, path, cycle) {
+                            return true;
+                        }
+                    }
+                    Color::Black => {}
+                }
+            }
+        }
+        color.insert(node, Color::Black);
+        path.pop();
+        false
+    }
+
+    for node in deps.keys().copied().collect::<Vec<_>>() {
+        if color.get(node).copied().unwrap_or(Color::White) == Color::White {
+            let mut path: Vec<&str> = Vec::new();
+            if dfs(node, &deps, &mut color, &mut path, &mut cycle) {
+                break;
+            }
+        }
+    }
+
+    if let Some(c) = cycle {
+        errors.push(format!(
+            "circular reference (cycle) detected: {}",
+            c.join(" -> ")
+        ));
+    }
+}
+
+// ---- structural helpers ---------------------------------------------------
+
+/// Collect every bare `Expr::Variable`-style string out of an expression tree.
+fn collect_variable_refs(expr: &Value, out: &mut Vec<String>) {
+    match expr {
+        Value::String(s) => out.push(s.clone()),
+        Value::Object(obj) => {
+            if let Some(args) = obj.get("args").and_then(|v| v.as_array()) {
+                for a in args {
+                    collect_variable_refs(a, out);
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for a in arr {
+                collect_variable_refs(a, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+struct SymbolTables {
+    /// Names of all top-level systems (models + reaction_systems + data_loaders).
+    all_systems: std::collections::HashSet<String>,
+    /// Per-system: the set of variable names declared in that system.
+    per_system: std::collections::HashMap<String, std::collections::HashSet<String>>,
+}
+
+impl SymbolTables {
+    fn has_variable(&self, system: &str, var: &str) -> bool {
+        self.per_system
+            .get(system)
+            .map(|s| s.contains(var))
+            .unwrap_or(false)
+    }
+}
+
+fn build_symbol_tables(obj: &serde_json::Map<String, Value>) -> SymbolTables {
+    let mut all_systems: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut per_system: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+
+    if let Some(models) = obj.get("models").and_then(|v| v.as_object()) {
+        for (name, m) in models {
+            all_systems.insert(name.clone());
+            let vars: std::collections::HashSet<String> = m
+                .as_object()
+                .and_then(|o| o.get("variables"))
+                .and_then(|v| v.as_object())
+                .map(|vs| vs.keys().cloned().collect())
+                .unwrap_or_default();
+            per_system.insert(name.clone(), vars);
+        }
+    }
+
+    if let Some(rsystems) = obj.get("reaction_systems").and_then(|v| v.as_object()) {
+        for (name, rs) in rsystems {
+            all_systems.insert(name.clone());
+            let mut set: std::collections::HashSet<String> = std::collections::HashSet::new();
+            if let Some(rso) = rs.as_object() {
+                if let Some(sp) = rso.get("species").and_then(|v| v.as_object()) {
+                    set.extend(sp.keys().cloned());
+                }
+                if let Some(params) = rso.get("parameters").and_then(|v| v.as_object()) {
+                    set.extend(params.keys().cloned());
+                }
+            }
+            per_system.insert(name.clone(), set);
+        }
+    }
+
+    if let Some(loaders) = obj.get("data_loaders").and_then(|v| v.as_object()) {
+        for (name, d) in loaders {
+            all_systems.insert(name.clone());
+            let vars: std::collections::HashSet<String> = d
+                .as_object()
+                .and_then(|o| o.get("provides"))
+                .and_then(|v| v.as_object())
+                .map(|vs| vs.keys().cloned().collect())
+                .unwrap_or_default();
+            per_system.insert(name.clone(), vars);
+        }
+    }
+
+    // Operators are also addressable by name (scoped refs may point into
+    // their config.subsystems) so they count as top-level systems for
+    // reference-existence checks, matching Python / Julia.
+    if let Some(operators) = obj.get("operators").and_then(|v| v.as_object()) {
+        for name in operators.keys() {
+            all_systems.insert(name.clone());
+            per_system.entry(name.clone()).or_default();
+        }
+    }
+
+    SymbolTables {
+        all_systems,
+        per_system,
+    }
+}
+
+// ---- lightweight format validators ---------------------------------------
+
+/// Accept `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS[.fff][Z|±HH:MM]`.
+fn is_iso8601_datetime(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 10 {
+        return false;
+    }
+    // Date portion
+    if !(bytes[0].is_ascii_digit()
+        && bytes[1].is_ascii_digit()
+        && bytes[2].is_ascii_digit()
+        && bytes[3].is_ascii_digit()
+        && bytes[4] == b'-'
+        && bytes[5].is_ascii_digit()
+        && bytes[6].is_ascii_digit()
+        && bytes[7] == b'-'
+        && bytes[8].is_ascii_digit()
+        && bytes[9].is_ascii_digit())
+    {
+        return false;
+    }
+    if bytes.len() == 10 {
+        return true;
+    }
+    // Must have T separator next
+    if bytes[10] != b'T' {
+        return false;
+    }
+    // Time portion HH:MM:SS
+    if bytes.len() < 19
+        || !(bytes[11].is_ascii_digit()
+            && bytes[12].is_ascii_digit()
+            && bytes[13] == b':'
+            && bytes[14].is_ascii_digit()
+            && bytes[15].is_ascii_digit()
+            && bytes[16] == b':'
+            && bytes[17].is_ascii_digit()
+            && bytes[18].is_ascii_digit())
+    {
+        return false;
+    }
+    let mut idx = 19;
+    // Optional fractional seconds
+    if idx < bytes.len() && bytes[idx] == b'.' {
+        idx += 1;
+        let start = idx;
+        while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+            idx += 1;
+        }
+        if idx == start {
+            return false;
+        }
+    }
+    // Timezone (optional)
+    if idx == bytes.len() {
+        return true;
+    }
+    if bytes[idx] == b'Z' {
+        return idx + 1 == bytes.len();
+    }
+    if bytes[idx] == b'+' || bytes[idx] == b'-' {
+        // ±HH:MM or ±HHMM
+        let rest = &bytes[idx + 1..];
+        return (rest.len() == 5
+            && rest[0].is_ascii_digit()
+            && rest[1].is_ascii_digit()
+            && rest[2] == b':'
+            && rest[3].is_ascii_digit()
+            && rest[4].is_ascii_digit())
+            || (rest.len() == 4 && rest.iter().all(|b| b.is_ascii_digit()));
+    }
+    false
+}
+
+/// Accept `^https?://[^\s/$.?#].[^\s]*$` — the loose URL shape Python uses.
+fn is_valid_url(s: &str) -> bool {
+    let lowered = s.to_ascii_lowercase();
+    if !(lowered.starts_with("http://") || lowered.starts_with("https://")) {
+        return false;
+    }
+    let scheme_len = if lowered.starts_with("https://") {
+        8
+    } else {
+        7
+    };
+    let after = &s[scheme_len..];
+    if after.is_empty() {
+        return false;
+    }
+    // Must have at least one dot in the host section before any path separator.
+    let host_end = after.find('/').unwrap_or(after.len());
+    let host = &after[..host_end];
+    if host.is_empty() || !host.contains('.') {
+        return false;
+    }
+    !s.chars().any(|c| c.is_whitespace())
+}
+
+/// Accept `^10\.\d{4,9}/[^\s]+$` — the DOI shape defined by CrossRef.
+fn is_valid_doi(s: &str) -> bool {
+    let Some(rest) = s.strip_prefix("10.") else {
+        return false;
+    };
+    let Some(slash) = rest.find('/') else {
+        return false;
+    };
+    let registrant = &rest[..slash];
+    let suffix = &rest[slash + 1..];
+    if !(4..=9).contains(&registrant.len()) || !registrant.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    !suffix.is_empty() && !suffix.chars().any(|c| c.is_whitespace())
+}
+
+/// Accept the ISO 8601 duration shape Python enforces: `P` followed by an
+/// optional date part (`\d+Y`, `\d+M`, `\d+W`, `\d+D`) and an optional time
+/// part introduced by `T` (`\d+H`, `\d+M`, `\d+(\.\d+)?S`). Must have at
+/// least one component.
+fn is_iso8601_duration(s: &str) -> bool {
+    let mut chars = s.chars().peekable();
+    if chars.next() != Some('P') {
+        return false;
+    }
+    let mut any_component = false;
+
+    // Date components before T
+    while let Some(&c) = chars.peek() {
+        if c == 'T' {
+            break;
+        }
+        if !c.is_ascii_digit() {
+            return false;
+        }
+        // consume digits
+        while let Some(&d) = chars.peek() {
+            if d.is_ascii_digit() {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        match chars.next() {
+            Some('Y') | Some('M') | Some('W') | Some('D') => {
+                any_component = true;
+            }
+            _ => return false,
+        }
+    }
+
+    if chars.peek() == Some(&'T') {
+        chars.next();
+        while let Some(&c) = chars.peek() {
+            if !c.is_ascii_digit() {
+                return false;
+            }
+            while let Some(&d) = chars.peek() {
+                if d.is_ascii_digit() {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            // Optional fractional seconds — only valid before the final `S`
+            if chars.peek() == Some(&'.') {
+                chars.next();
+                let mut had_digit = false;
+                while let Some(&d) = chars.peek() {
+                    if d.is_ascii_digit() {
+                        chars.next();
+                        had_digit = true;
+                    } else {
+                        break;
+                    }
+                }
+                if !had_digit {
+                    return false;
+                }
+                if chars.next() != Some('S') {
+                    return false;
+                }
+                any_component = true;
+                break;
+            }
+            match chars.next() {
+                Some('H') | Some('M') | Some('S') => {
+                    any_component = true;
+                }
+                _ => return false,
+            }
+        }
+    }
+
+    any_component && chars.next().is_none()
 }
 
 #[cfg(test)]

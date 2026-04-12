@@ -550,14 +550,19 @@ fn test_event_error_conditions() {
     }
 }
 
-/// Test circular dependency detection
+/// Test circular dependency detection.
+///
+/// Accepts either outcome: `load()` may reject the fixture at parse time
+/// (the current behavior after cross-language conformance tightening in
+/// gt-sac), or `load()` may succeed and the `validate()` pass must find a
+/// `CircularDependency` structural error. Both paths are valid realizations
+/// of the spec §3.2 rule; the stricter parse-time rejection matches Julia
+/// and Python.
 #[test]
 fn test_circular_dependency_detection() {
     let fixture = include_str!("../../../tests/invalid/circular_coupling.esm");
 
-    let parsed_result = load(fixture);
-
-    match parsed_result {
+    match load(fixture) {
         Ok(esm_file) => {
             let validation_result = validate(&esm_file);
             assert!(
@@ -574,7 +579,6 @@ fn test_circular_dependency_detection() {
                 "Expected CircularDependency error"
             );
 
-            // Verify the error message contains cycle information
             let errors = validation_result.errors();
             let circular_error = errors
                 .iter()
@@ -590,9 +594,14 @@ fn test_circular_dependency_detection() {
             assert!(circular_error.message.contains("ModelB"));
         }
         Err(e) => {
-            panic!(
-                "Circular coupling file should parse successfully, but got error: {}",
-                e
+            let msg = e.to_string();
+            assert!(
+                msg.contains("cycle") || msg.contains("circular"),
+                "Expected load() failure to mention a cycle, got: {msg}"
+            );
+            assert!(
+                msg.contains("ModelA") && msg.contains("ModelB"),
+                "Expected load() failure to name both models, got: {msg}"
             );
         }
     }
