@@ -115,11 +115,11 @@ fn migrate_species_units(
         if let Some(ref mut reaction_systems) = new_file.reaction_systems {
             for system in reaction_systems.values_mut() {
                 for species in system.species.values_mut() {
-                    if species.units == Some("ppbv".to_string()) {
-                        if let Some(val) = species.default {
-                            species.units = Some("mol/mol".to_string());
-                            species.default = Some(convert_ppbv_to_mol_mol(val));
-                        }
+                    if species.units == Some("ppbv".to_string())
+                        && let Some(val) = species.default
+                    {
+                        species.units = Some("mol/mol".to_string());
+                        species.default = Some(convert_ppbv_to_mol_mol(val));
                     }
                 }
             }

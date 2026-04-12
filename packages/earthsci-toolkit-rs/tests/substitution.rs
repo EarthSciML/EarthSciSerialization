@@ -222,12 +222,11 @@ fn test_model_substitution() {
     let result = substitute_in_model(&model, &substitutions);
 
     // Check that substitution worked
-    if let Some(equation) = result.equations.first() {
-        if let Expr::Operator(rhs_node) = &equation.rhs {
-            if let Expr::Number(val) = &rhs_node.args[0] {
-                assert_eq!(*val, 0.2, "Expected k to be substituted with 0.2");
-            }
-        }
+    if let Some(equation) = result.equations.first()
+        && let Expr::Operator(rhs_node) = &equation.rhs
+        && let Expr::Number(val) = &rhs_node.args[0]
+    {
+        assert_eq!(*val, 0.2, "Expected k to be substituted with 0.2");
     }
 }
 
@@ -300,12 +299,11 @@ fn test_reaction_system_substitution() {
     let result = substitute_in_reaction_system(&rs, &substitutions);
 
     // Check that substitution worked
-    if let Some(reaction) = result.reactions.first() {
-        if let Expr::Operator(rate_node) = &reaction.rate {
-            if let Expr::Number(val) = &rate_node.args[0] {
-                assert_eq!(*val, 1.5, "Expected k_rate to be substituted with 1.5");
-            }
-        }
+    if let Some(reaction) = result.reactions.first()
+        && let Expr::Operator(rate_node) = &reaction.rate
+        && let Expr::Number(val) = &rate_node.args[0]
+    {
+        assert_eq!(*val, 1.5, "Expected k_rate to be substituted with 1.5");
     }
 }
 

@@ -634,12 +634,12 @@ fn test_model_expression_graph_fixture() {
         assert!(model_data.is_object(), "Should have model definition");
     }
 
-    if let Some(graph_data) = fixture_data.get("graph") {
-        if let Some(nodes) = graph_data.get("nodes").and_then(|v| v.as_array()) {
-            assert!(
-                !nodes.is_empty(),
-                "Model expression graph should have nodes"
-            );
-        }
+    if let Some(graph_data) = fixture_data.get("graph")
+        && let Some(nodes) = graph_data.get("nodes").and_then(|v| v.as_array())
+    {
+        assert!(
+            !nodes.is_empty(),
+            "Model expression graph should have nodes"
+        );
     }
 }

@@ -160,36 +160,36 @@ fn test_analysis_features_integration() {
     assert!(!json_export.is_empty());
 
     // Test expression graph for model
-    if let Some(ref models) = esm_file.models {
-        if let Some(model) = models.get("simple") {
-            let expr_graph = expression_graph(model);
-            assert!(!expr_graph.nodes.is_empty());
+    if let Some(ref models) = esm_file.models
+        && let Some(model) = models.get("simple")
+    {
+        let expr_graph = expression_graph(model);
+        assert!(!expr_graph.nodes.is_empty());
 
-            let expr_dot = expr_graph.to_dot();
-            assert!(!expr_dot.is_empty());
-            assert!(expr_dot.contains("digraph ExpressionGraph"));
-        }
+        let expr_dot = expr_graph.to_dot();
+        assert!(!expr_dot.is_empty());
+        assert!(expr_dot.contains("digraph ExpressionGraph"));
     }
 
     // Test reaction system analysis
-    if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        if let Some(rs) = reaction_systems.get("simple_rs") {
-            // Test stoichiometric matrix
-            let matrix = stoichiometric_matrix(rs);
-            assert_eq!(matrix.len(), 2); // 2 species
-            assert_eq!(matrix[0].len(), 1); // 1 reaction
-            assert_eq!(matrix[0][0], -1.0); // A consumed
-            assert_eq!(matrix[1][0], 1.0); // B produced
+    if let Some(ref reaction_systems) = esm_file.reaction_systems
+        && let Some(rs) = reaction_systems.get("simple_rs")
+    {
+        // Test stoichiometric matrix
+        let matrix = stoichiometric_matrix(rs);
+        assert_eq!(matrix.len(), 2); // 2 species
+        assert_eq!(matrix[0].len(), 1); // 1 reaction
+        assert_eq!(matrix[0][0], -1.0); // A consumed
+        assert_eq!(matrix[1][0], 1.0); // B produced
 
-            // Test ODE derivation
-            let ode_model = derive_odes(rs).expect("Should derive ODEs successfully");
-            assert_eq!(ode_model.variables.len(), 2); // A and B
-            assert_eq!(ode_model.equations.len(), 2); // d[A]/dt and d[B]/dt
+        // Test ODE derivation
+        let ode_model = derive_odes(rs).expect("Should derive ODEs successfully");
+        assert_eq!(ode_model.variables.len(), 2); // A and B
+        assert_eq!(ode_model.equations.len(), 2); // d[A]/dt and d[B]/dt
 
-            // Test expression graph for reaction system
-            let rs_expr_graph = expression_graph(rs);
-            assert!(!rs_expr_graph.nodes.is_empty());
-        }
+        // Test expression graph for reaction system
+        let rs_expr_graph = expression_graph(rs);
+        assert!(!rs_expr_graph.nodes.is_empty());
     }
 }
 

@@ -48,11 +48,11 @@ fn walk_top_level(
     };
 
     for section in ["models", "reaction_systems"] {
-        if let Some(section_val) = obj.get_mut(section) {
-            if let Some(map) = section_val.as_object_mut() {
-                for (_name, system) in map.iter_mut() {
-                    walk_subsystems(system, base_path, visited)?;
-                }
+        if let Some(section_val) = obj.get_mut(section)
+            && let Some(map) = section_val.as_object_mut()
+        {
+            for (_name, system) in map.iter_mut() {
+                walk_subsystems(system, base_path, visited)?;
             }
         }
     }
@@ -100,46 +100,46 @@ fn resolve_value(
     base_path: &Path,
     visited: &mut HashSet<PathBuf>,
 ) -> Result<Value, String> {
-    if let Some(obj) = value.as_object() {
-        if let Some(ref_val) = obj.get("ref") {
-            let ref_str = ref_val
-                .as_str()
-                .ok_or_else(|| "subsystem ref must be a string".to_string())?;
+    if let Some(obj) = value.as_object()
+        && let Some(ref_val) = obj.get("ref")
+    {
+        let ref_str = ref_val
+            .as_str()
+            .ok_or_else(|| "subsystem ref must be a string".to_string())?;
 
-            if ref_str.starts_with("http://") || ref_str.starts_with("https://") {
-                return Err(format!(
-                    "Remote subsystem refs are not supported in the Rust loader; \
+        if ref_str.starts_with("http://") || ref_str.starts_with("https://") {
+            return Err(format!(
+                "Remote subsystem refs are not supported in the Rust loader; \
                      download {ref_str:?} to a local file first"
-                ));
-            }
-
-            let resolved_path = base_path.join(ref_str);
-            let canonical = resolved_path
-                .canonicalize()
-                .map_err(|e| format!("failed to resolve ref {ref_str:?}: {e}"))?;
-
-            if visited.contains(&canonical) {
-                return Err(format!(
-                    "circular subsystem reference detected: {}",
-                    canonical.display()
-                ));
-            }
-            visited.insert(canonical.clone());
-
-            let content = std::fs::read_to_string(&canonical)
-                .map_err(|e| format!("failed to read ref {}: {}", canonical.display(), e))?;
-            let mut parsed: Value = serde_json::from_str(&content)
-                .map_err(|e| format!("failed to parse ref {}: {}", canonical.display(), e))?;
-
-            // Recursively resolve any refs inside the loaded file before we
-            // pluck out the single top-level system to inline.
-            let parent_dir = canonical.parent().unwrap_or(base_path).to_path_buf();
-            walk_top_level(&mut parsed, &parent_dir, visited)?;
-
-            visited.remove(&canonical);
-
-            return extract_single_system(parsed, &canonical);
+            ));
         }
+
+        let resolved_path = base_path.join(ref_str);
+        let canonical = resolved_path
+            .canonicalize()
+            .map_err(|e| format!("failed to resolve ref {ref_str:?}: {e}"))?;
+
+        if visited.contains(&canonical) {
+            return Err(format!(
+                "circular subsystem reference detected: {}",
+                canonical.display()
+            ));
+        }
+        visited.insert(canonical.clone());
+
+        let content = std::fs::read_to_string(&canonical)
+            .map_err(|e| format!("failed to read ref {}: {}", canonical.display(), e))?;
+        let mut parsed: Value = serde_json::from_str(&content)
+            .map_err(|e| format!("failed to parse ref {}: {}", canonical.display(), e))?;
+
+        // Recursively resolve any refs inside the loaded file before we
+        // pluck out the single top-level system to inline.
+        let parent_dir = canonical.parent().unwrap_or(base_path).to_path_buf();
+        walk_top_level(&mut parsed, &parent_dir, visited)?;
+
+        visited.remove(&canonical);
+
+        return extract_single_system(parsed, &canonical);
     }
 
     let mut value = value;

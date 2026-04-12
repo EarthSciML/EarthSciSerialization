@@ -203,30 +203,16 @@ fn test_fixture_based_formatting() {
     ];
 
     for fixture_path in &fixture_files {
-        if let Ok(fixture_content) = std::fs::read_to_string(fixture_path) {
-            if let Ok(test_data) = serde_json::from_str::<serde_json::Value>(&fixture_content) {
-                // Process test cases if they exist
-                if let Some(cases) = test_data.as_array() {
-                    for case in cases.iter().take(5) {
-                        // Test first 5 cases only
-                        if let Some(input) = case.get("input").and_then(|v| v.as_str()) {
-                            // Create a variable expression from the input
-                            let expr = Expr::Variable(input.to_string());
-
-                            let unicode_result = to_unicode(&expr);
-                            let latex_result = to_latex(&expr);
-                            let ascii_result = to_ascii(&expr);
-
-                            assert!(!unicode_result.is_empty());
-                            assert!(!latex_result.is_empty());
-                            assert!(!ascii_result.is_empty());
-                        }
-                    }
-                } else if let Some(obj) = test_data.as_object() {
-                    // Handle object-based test format
-                    for (key, _value) in obj.iter().take(3) {
-                        // Test first 3 entries only
-                        let expr = Expr::Variable(key.to_string());
+        if let Ok(fixture_content) = std::fs::read_to_string(fixture_path)
+            && let Ok(test_data) = serde_json::from_str::<serde_json::Value>(&fixture_content)
+        {
+            // Process test cases if they exist
+            if let Some(cases) = test_data.as_array() {
+                for case in cases.iter().take(5) {
+                    // Test first 5 cases only
+                    if let Some(input) = case.get("input").and_then(|v| v.as_str()) {
+                        // Create a variable expression from the input
+                        let expr = Expr::Variable(input.to_string());
 
                         let unicode_result = to_unicode(&expr);
                         let latex_result = to_latex(&expr);
@@ -236,6 +222,20 @@ fn test_fixture_based_formatting() {
                         assert!(!latex_result.is_empty());
                         assert!(!ascii_result.is_empty());
                     }
+                }
+            } else if let Some(obj) = test_data.as_object() {
+                // Handle object-based test format
+                for (key, _value) in obj.iter().take(3) {
+                    // Test first 3 entries only
+                    let expr = Expr::Variable(key.to_string());
+
+                    let unicode_result = to_unicode(&expr);
+                    let latex_result = to_latex(&expr);
+                    let ascii_result = to_ascii(&expr);
+
+                    assert!(!unicode_result.is_empty());
+                    assert!(!latex_result.is_empty());
+                    assert!(!ascii_result.is_empty());
                 }
             }
         }

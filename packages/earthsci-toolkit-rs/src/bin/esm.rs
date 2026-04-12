@@ -1605,15 +1605,14 @@ fn perform_numerical_comparison(
 
                 // Compare variable default values
                 for (var_name, var1) in &model1.variables {
-                    if let Some(var2) = model2.variables.get(var_name) {
-                        if let (Some(default1), Some(default2)) = (var1.default, var2.default) {
-                            if (default1 - default2).abs() > tolerance {
-                                differences.push(format!(
-                                    "Model {}, variable {}: default {} vs {}",
-                                    model_id, var_name, default1, default2
-                                ));
-                            }
-                        }
+                    if let Some(var2) = model2.variables.get(var_name)
+                        && let (Some(default1), Some(default2)) = (var1.default, var2.default)
+                        && (default1 - default2).abs() > tolerance
+                    {
+                        differences.push(format!(
+                            "Model {}, variable {}: default {} vs {}",
+                            model_id, var_name, default1, default2
+                        ));
                     }
                 }
 
@@ -2282,36 +2281,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             // Extract the specific component
-            if let Some(ref models) = esm_file.models {
-                if let Some(model) = models.get(&component) {
-                    let mut extracted_models = HashMap::new();
-                    extracted_models.insert(component.clone(), model.clone());
-                    extracted_esm.models = Some(extracted_models);
-                }
+            if let Some(ref models) = esm_file.models
+                && let Some(model) = models.get(&component)
+            {
+                let mut extracted_models = HashMap::new();
+                extracted_models.insert(component.clone(), model.clone());
+                extracted_esm.models = Some(extracted_models);
             }
 
-            if let Some(ref reaction_systems) = esm_file.reaction_systems {
-                if let Some(rs) = reaction_systems.get(&component) {
-                    let mut extracted_rs = HashMap::new();
-                    extracted_rs.insert(component.clone(), rs.clone());
-                    extracted_esm.reaction_systems = Some(extracted_rs);
-                }
+            if let Some(ref reaction_systems) = esm_file.reaction_systems
+                && let Some(rs) = reaction_systems.get(&component)
+            {
+                let mut extracted_rs = HashMap::new();
+                extracted_rs.insert(component.clone(), rs.clone());
+                extracted_esm.reaction_systems = Some(extracted_rs);
             }
 
-            if let Some(ref data_loaders) = esm_file.data_loaders {
-                if let Some(dl) = data_loaders.get(&component) {
-                    let mut extracted_dl = HashMap::new();
-                    extracted_dl.insert(component.clone(), dl.clone());
-                    extracted_esm.data_loaders = Some(extracted_dl);
-                }
+            if let Some(ref data_loaders) = esm_file.data_loaders
+                && let Some(dl) = data_loaders.get(&component)
+            {
+                let mut extracted_dl = HashMap::new();
+                extracted_dl.insert(component.clone(), dl.clone());
+                extracted_esm.data_loaders = Some(extracted_dl);
             }
 
-            if let Some(ref operators) = esm_file.operators {
-                if let Some(op) = operators.get(&component) {
-                    let mut extracted_op = HashMap::new();
-                    extracted_op.insert(component.clone(), op.clone());
-                    extracted_esm.operators = Some(extracted_op);
-                }
+            if let Some(ref operators) = esm_file.operators
+                && let Some(op) = operators.get(&component)
+            {
+                let mut extracted_op = HashMap::new();
+                extracted_op.insert(component.clone(), op.clone());
+                extracted_esm.operators = Some(extracted_op);
             }
 
             let output_content = save(&extracted_esm)?;

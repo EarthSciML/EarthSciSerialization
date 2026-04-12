@@ -206,31 +206,31 @@ pub fn component_graph(esm_file: &EsmFile) -> ComponentGraph {
 /// * `true` if the component exists, `false` otherwise
 pub fn component_exists(esm_file: &EsmFile, component_id: &str) -> bool {
     // Check models
-    if let Some(ref models) = esm_file.models {
-        if models.contains_key(component_id) {
-            return true;
-        }
+    if let Some(ref models) = esm_file.models
+        && models.contains_key(component_id)
+    {
+        return true;
     }
 
     // Check reaction systems
-    if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        if reaction_systems.contains_key(component_id) {
-            return true;
-        }
+    if let Some(ref reaction_systems) = esm_file.reaction_systems
+        && reaction_systems.contains_key(component_id)
+    {
+        return true;
     }
 
     // Check data loaders
-    if let Some(ref data_loaders) = esm_file.data_loaders {
-        if data_loaders.contains_key(component_id) {
-            return true;
-        }
+    if let Some(ref data_loaders) = esm_file.data_loaders
+        && data_loaders.contains_key(component_id)
+    {
+        return true;
     }
 
     // Check operators
-    if let Some(ref operators) = esm_file.operators {
-        if operators.contains_key(component_id) {
-            return true;
-        }
+    if let Some(ref operators) = esm_file.operators
+        && operators.contains_key(component_id)
+    {
+        return true;
     }
 
     false
@@ -249,31 +249,31 @@ pub fn component_exists(esm_file: &EsmFile, component_id: &str) -> bool {
 /// * `None` if the component doesn't exist
 pub fn get_component_type(esm_file: &EsmFile, component_id: &str) -> Option<ComponentType> {
     // Check models
-    if let Some(ref models) = esm_file.models {
-        if models.contains_key(component_id) {
-            return Some(ComponentType::Model);
-        }
+    if let Some(ref models) = esm_file.models
+        && models.contains_key(component_id)
+    {
+        return Some(ComponentType::Model);
     }
 
     // Check reaction systems
-    if let Some(ref reaction_systems) = esm_file.reaction_systems {
-        if reaction_systems.contains_key(component_id) {
-            return Some(ComponentType::ReactionSystem);
-        }
+    if let Some(ref reaction_systems) = esm_file.reaction_systems
+        && reaction_systems.contains_key(component_id)
+    {
+        return Some(ComponentType::ReactionSystem);
     }
 
     // Check data loaders
-    if let Some(ref data_loaders) = esm_file.data_loaders {
-        if data_loaders.contains_key(component_id) {
-            return Some(ComponentType::DataLoader);
-        }
+    if let Some(ref data_loaders) = esm_file.data_loaders
+        && data_loaders.contains_key(component_id)
+    {
+        return Some(ComponentType::DataLoader);
     }
 
     // Check operators
-    if let Some(ref operators) = esm_file.operators {
-        if operators.contains_key(component_id) {
-            return Some(ComponentType::Operator);
-        }
+    if let Some(ref operators) = esm_file.operators
+        && operators.contains_key(component_id)
+    {
+        return Some(ComponentType::Operator);
     }
 
     None

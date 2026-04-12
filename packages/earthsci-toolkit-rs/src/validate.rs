@@ -516,12 +516,12 @@ fn analyze_equation_mismatch(
 
     // Extract variables from LHS of ODE equations
     for equation in equations {
-        if let crate::Expr::Operator(op) = &equation.lhs {
-            if op.op == "D" && op.wrt.as_deref() == Some("t") {
-                if let Some(crate::Expr::Variable(var_name)) = op.args.first() {
-                    lhs_vars.insert(var_name.clone());
-                }
-            }
+        if let crate::Expr::Operator(op) = &equation.lhs
+            && op.op == "D"
+            && op.wrt.as_deref() == Some("t")
+            && let Some(crate::Expr::Variable(var_name)) = op.args.first()
+        {
+            lhs_vars.insert(var_name.clone());
         }
     }
 

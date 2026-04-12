@@ -1950,69 +1950,69 @@ impl fmt::Display for EsmFile {
         writeln!(f)?;
 
         // Display reaction systems
-        if let Some(ref reaction_systems) = self.reaction_systems {
-            if !reaction_systems.is_empty() {
-                writeln!(f, "  Reaction Systems:")?;
-                for system in reaction_systems.values() {
-                    write!(f, "{}", system)?;
-                    writeln!(f)?;
-                }
+        if let Some(ref reaction_systems) = self.reaction_systems
+            && !reaction_systems.is_empty()
+        {
+            writeln!(f, "  Reaction Systems:")?;
+            for system in reaction_systems.values() {
+                write!(f, "{}", system)?;
+                writeln!(f)?;
             }
         }
 
         // Display models
-        if let Some(ref models) = self.models {
-            if !models.is_empty() {
-                writeln!(f, "  Models:")?;
-                for model in models.values() {
-                    write!(f, "{}", model)?;
-                    writeln!(f)?;
-                }
+        if let Some(ref models) = self.models
+            && !models.is_empty()
+        {
+            writeln!(f, "  Models:")?;
+            for model in models.values() {
+                write!(f, "{}", model)?;
+                writeln!(f)?;
             }
         }
 
         // Display data loaders
-        if let Some(ref data_loaders) = self.data_loaders {
-            if !data_loaders.is_empty() {
-                writeln!(f, "  Data Loaders:")?;
-                for (name, loader) in data_loaders {
-                    writeln!(
-                        f,
-                        "    {}: {} ({})",
-                        name, loader.loader_id, loader.loader_type
-                    )?;
-                }
-                writeln!(f)?;
+        if let Some(ref data_loaders) = self.data_loaders
+            && !data_loaders.is_empty()
+        {
+            writeln!(f, "  Data Loaders:")?;
+            for (name, loader) in data_loaders {
+                writeln!(
+                    f,
+                    "    {}: {} ({})",
+                    name, loader.loader_id, loader.loader_type
+                )?;
             }
+            writeln!(f)?;
         }
 
         // Display coupling
-        if let Some(ref coupling) = self.coupling {
-            if !coupling.is_empty() {
-                writeln!(f, "  Coupling:")?;
-                for (i, entry) in coupling.iter().enumerate() {
-                    match entry {
-                        CouplingEntry::OperatorCompose { systems, .. } => {
-                            if systems.len() >= 2 {
-                                writeln!(
-                                    f,
-                                    "    {}. operator_compose: {} + {}",
-                                    i + 1,
-                                    systems[0],
-                                    systems[1]
-                                )?;
-                            }
-                        }
-                        CouplingEntry::VariableMap { from, to, .. } => {
-                            writeln!(f, "    {}. variable_map: {} → {}", i + 1, from, to)?;
-                        }
-                        _ => {
-                            writeln!(f, "    {}. {:?}", i + 1, entry)?;
+        if let Some(ref coupling) = self.coupling
+            && !coupling.is_empty()
+        {
+            writeln!(f, "  Coupling:")?;
+            for (i, entry) in coupling.iter().enumerate() {
+                match entry {
+                    CouplingEntry::OperatorCompose { systems, .. } => {
+                        if systems.len() >= 2 {
+                            writeln!(
+                                f,
+                                "    {}. operator_compose: {} + {}",
+                                i + 1,
+                                systems[0],
+                                systems[1]
+                            )?;
                         }
                     }
+                    CouplingEntry::VariableMap { from, to, .. } => {
+                        writeln!(f, "    {}. variable_map: {} → {}", i + 1, from, to)?;
+                    }
+                    _ => {
+                        writeln!(f, "    {}. {:?}", i + 1, entry)?;
+                    }
                 }
-                writeln!(f)?;
             }
+            writeln!(f)?;
         }
 
         // Display domain information (EsmFile.domains is now a named map of Domain specs)

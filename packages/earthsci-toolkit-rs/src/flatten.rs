@@ -320,10 +320,10 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
     // Apply post-collection variable_map parameter removals.
     if let Some(entries) = &file.coupling {
         for entry in entries {
-            if let CouplingEntry::VariableMap { to, transform, .. } = entry {
-                if matches!(transform.as_str(), "param_to_var" | "conversion_factor") {
-                    parameters.shift_remove(to);
-                }
+            if let CouplingEntry::VariableMap { to, transform, .. } = entry
+                && matches!(transform.as_str(), "param_to_var" | "conversion_factor")
+            {
+                parameters.shift_remove(to);
             }
         }
     }
@@ -635,16 +635,16 @@ fn reject_spatial_operators(expr: &Expr) -> Result<(), FlattenError> {
                     });
                 }
                 "D" => {
-                    if let Some(wrt) = &node.wrt {
-                        if wrt != "t" {
-                            return Err(FlattenError::UnsupportedMapping {
-                                mapping_type: format!("D(wrt={})", wrt),
-                                reason: format!(
-                                    "non-time derivative 'D(_, {})' requires PDE support",
-                                    wrt
-                                ),
-                            });
-                        }
+                    if let Some(wrt) = &node.wrt
+                        && wrt != "t"
+                    {
+                        return Err(FlattenError::UnsupportedMapping {
+                            mapping_type: format!("D(wrt={})", wrt),
+                            reason: format!(
+                                "non-time derivative 'D(_, {})' requires PDE support",
+                                wrt
+                            ),
+                        });
                     }
                 }
                 _ => {}

@@ -153,10 +153,10 @@ fn test_expression_operations() {
     substitutions.insert("x".to_string(), Expr::Number(20.0));
 
     let substituted = substitute_in_expression(&expr, &substitutions);
-    if let Expr::Operator(node) = substituted {
-        if let Expr::Number(val) = &node.args[0] {
-            assert_eq!(*val, 20.0);
-        }
+    if let Expr::Operator(node) = substituted
+        && let Expr::Number(val) = &node.args[0]
+    {
+        assert_eq!(*val, 20.0);
     }
 }
 
