@@ -33,8 +33,10 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
+OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "BenchmarkTools", "DomainSets", "ModelingToolkit", "Catalyst", "Symbolics"]
+test = ["Test", "BenchmarkTools", "DomainSets", "ModelingToolkit", "Catalyst", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqTsit5", "Symbolics"]

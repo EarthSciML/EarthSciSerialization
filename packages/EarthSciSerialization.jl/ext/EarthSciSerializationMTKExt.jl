@@ -201,6 +201,7 @@ function _build_var_dict(flat::FlattenedSystem)
     states = Vector{Num}()
     parameters = Vector{Num}()
     observed = Vector{Num}()
+    defaults = Dict{Any,Any}()
 
     # Concrete IV symbol objects to pass to the @variables macro via our
     # _make_dep_var helper (see the bindings trick inside that function).
@@ -214,28 +215,38 @@ function _build_var_dict(flat::FlattenedSystem)
     _san(s::AbstractString) = Symbol(replace(String(s), '.' => '_'))
 
     # State variables — functions of independent variables
-    for (vname, _mvar) in flat.state_variables
+    for (vname, mvar) in flat.state_variables
         sym_name = _san(vname)
         v_num = _make_dep_var(sym_name, iv_syms_any)
         push!(states, v_num)
         var_dict[vname] = v_num
+        if mvar.default !== nothing
+            defaults[v_num] = Float64(mvar.default)
+        end
     end
 
     # Parameters — plain symbols
-    for (pname, _mvar) in flat.parameters
+    for (pname, mvar) in flat.parameters
         p_num = _make_param(_san(pname))
         push!(parameters, p_num)
         var_dict[pname] = p_num
+        if mvar.default !== nothing
+            defaults[p_num] = Float64(mvar.default)
+        end
     end
 
     # Observed variables — same shape as states
-    for (oname, _mvar) in flat.observed_variables
+    for (oname, mvar) in flat.observed_variables
         ov_num = _make_dep_var(_san(oname), iv_syms_any)
         push!(observed, ov_num)
         var_dict[oname] = ov_num
+        if mvar.default !== nothing
+            defaults[ov_num] = Float64(mvar.default)
+        end
     end
 
-    return var_dict, t_sym, dim_dict, states, parameters, observed, spatial_syms
+    return var_dict, t_sym, dim_dict, states, parameters, observed,
+           spatial_syms, defaults
 end
 
 # ========================================
