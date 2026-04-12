@@ -54,5 +54,34 @@ species_A = Species("A")
         @test single_rate isa OpExpr
         @test single_rate.op == "*"
         @test length(single_rate.args) == 2  # k_single * A
+
+        # gt-p60 regression: if the user-supplied rate already references
+        # substrate concentrations (i.e. they gave us a full rate law, not
+        # a rate coefficient), mass_action_rate MUST return it unchanged
+        # rather than double-applying the substrate multiplication and
+        # producing `k*A²*B²` for a `rate=k*A*B` bimolecular reaction.
+        full_rate = OpExpr("*",
+            EarthSciSerialization.Expr[VarExpr("k_full"),
+                                       VarExpr("A"), VarExpr("B")])
+        full_reaction = Reaction(
+            Dict("A" => 1, "B" => 1),
+            Dict("C" => 1),
+            full_rate,
+        )
+        full_result = mass_action_rate(full_reaction, species)
+        # Result is exactly the user's rate expression, unwrapped.
+        @test full_result === full_rate
+        @test full_result isa OpExpr
+        @test full_result.op == "*"
+        @test length(full_result.args) == 3
+        # Each substrate variable appears EXACTLY once in the rate law.
+        _uses_full(expr, name) = expr isa VarExpr ? expr.name == name :
+            (expr isa OpExpr && any(a -> _uses_full(a, name), expr.args))
+        _count_full(expr, name) = if expr isa VarExpr
+            expr.name == name ? 1 : 0
+        elseif expr isa OpExpr
+            isempty(expr.args) ? 0 : sum(a -> _count_full(a, name), expr.args)
+        else
+            0
 ```
 
