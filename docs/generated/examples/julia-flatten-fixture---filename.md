@@ -12,7 +12,7 @@ try
                            e isa EarthSciSerialization.ParseError ||
                            e isa ConflictingDerivativeError ||
                            e isa UnmappedDomainError ||
-                           e isa UnsupportedRegriddingError ||
+                           e isa UnsupportedMappingError ||
                            e isa DimensionPromotionError ||
                            e isa DomainUnitMismatchError
                             @test_broken false

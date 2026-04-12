@@ -362,6 +362,20 @@ CouplingVariableMap(...)
 
 ---
 
+### CyclicPromotionError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+CyclicPromotionError(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#cyclicpromotionerror)
+
+---
+
 ### Data
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -454,6 +468,20 @@ Domain(...)
 **Available in other languages:**
 - [Python](python.md#domain)
 - [Typescript](typescript.md#domain)
+
+---
+
+### DomainExtentMismatchError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+DomainExtentMismatchError(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#domainextentmismatcherror)
 
 ---
 
@@ -1195,6 +1223,20 @@ Section(...)
 
 ---
 
+### SliceOutOfDomainError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+SliceOutOfDomainError(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#sliceoutofdomainerror)
+
+---
+
 ### Species
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1318,14 +1360,17 @@ UnmappedDomainError(...)
 
 ---
 
-### UnsupportedRegriddingError
+### UnsupportedMappingError
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
 
 **Signature:**
 ```julia
-UnsupportedRegriddingError(...)
+UnsupportedMappingError(...)
 ```
+
+**Available in other languages:**
+- [Python](python.md#unsupportedmappingerror)
 
 ---
 
@@ -1372,7 +1417,7 @@ VariableNode(...)
 
 ### _apply_couple!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:884`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:938`
 
 **Signature:**
 ```julia
@@ -1389,7 +1434,7 @@ connector entries.
 
 ### _apply_operator_compose!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:749`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:803`
 
 **Signature:**
 ```julia
@@ -1406,7 +1451,7 @@ representation, "matching" means "has the same namespaced dependent variable".
 
 ### _apply_variable_map!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:925`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:979`
 
 **Signature:**
 ```julia
@@ -1439,7 +1484,7 @@ URLs are returned as-is; local paths are resolved to absolute paths.
 
 ### _check_coupling_domain_coverage!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:637`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:691`
 
 **Signature:**
 ```julia
@@ -1459,7 +1504,7 @@ interfaces section; its absence raises `UnmappedDomainError`."
 
 ### _check_interfaces!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:560`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:614`
 
 **Signature:**
 ```julia
@@ -1474,13 +1519,13 @@ regridding strategy that the Julia flatten pipeline actually implements.
 `project`, `regrid`. The Julia library's flatten pipeline currently wires only
 `broadcast` and `identity` (the Core-tier minimum). Interfaces that declare
 `slice` or `project` raise `DimensionPromotionError`; interfaces that declare
-a regridding method outside the supported set raise `UnsupportedRegriddingError`.
+a regridding method outside the supported set raise `UnsupportedMappingError`.
 
 ---
 
 ### _check_variable_map_units!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:670`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:724`
 
 **Signature:**
 ```julia
@@ -1499,7 +1544,7 @@ equivalence at the mapping site (units are still validated elsewhere).
 
 ### _collect_model!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:357`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:411`
 
 **Signature:**
 ```julia
@@ -1514,7 +1559,7 @@ recursing through subsystems. All names are rewritten to `prefix.local_name`.
 
 ### _collect_reaction_system!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:429`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:483`
 
 **Signature:**
 ```julia
@@ -1531,7 +1576,7 @@ variables are then namespaced by `prefix`.
 
 ### _collect_system_domains
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:595`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:649`
 
 **Signature:**
 ```julia
@@ -1563,7 +1608,7 @@ system equation rendering.
 
 ### _find_conflicting_derivatives
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:491`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:545`
 
 **Signature:**
 ```julia
@@ -1585,7 +1630,7 @@ and by `validate_structural` to catch the same class of error at load time.
 
 ### _interface_covers
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:618`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:672`
 
 **Signature:**
 ```julia
@@ -1654,7 +1699,7 @@ Uses the Downloads stdlib to fetch the content.
 
 ### _lookup_variable_units
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:690`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:744`
 
 **Signature:**
 ```julia
@@ -2678,6 +2723,17 @@ Create undefined reference error with smart suggestions.
 
 ---
 
+### cross
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+cross(...)
+```
+
+---
+
 ### derivation
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -2702,7 +2758,7 @@ derive_odes(...)
 
 ### describe_coupling_entry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1131`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1185`
 
 **Signature:**
 ```julia
@@ -2973,7 +3029,7 @@ flatten(...)
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1009`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1063`
 
 **Signature:**
 ```julia
@@ -2997,7 +3053,7 @@ a system is over-determined.
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1104`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1158`
 
 **Signature:**
 ```julia
@@ -3018,7 +3074,7 @@ name) and run the full flattener. This is the call path used by
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1115`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1169`
 
 **Signature:**
 ```julia
@@ -3032,6 +3088,17 @@ Convenience: wrap a ReactionSystem in a synthetic EsmFile and flatten.
 
 **Available in other languages:**
 - [Typescript](typescript.md#flatten)
+
+---
+
+### for
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+for(...)
+```
 
 ---
 
@@ -3420,7 +3487,7 @@ Uses greedy matching algorithm per spec Section 6.1.
 
 ### has_spatial_operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:304`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:358`
 
 **Signature:**
 ```julia
@@ -3489,9 +3556,20 @@ Check if a string is a valid identifier (letters, numbers, underscores, no leadi
 
 ---
 
+### language
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+language(...)
+```
+
+---
+
 ### lhs_dependent_variable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:289`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:343`
 
 **Signature:**
 ```julia
@@ -3576,7 +3654,7 @@ lower_reactions_to_equations(...)
 
 ### lower_reactions_to_equations
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:190`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:244`
 
 **Signature:**
 ```julia
@@ -3677,7 +3755,7 @@ from file_b take precedence.
 
 ### namespace_expr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:264`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:318`
 
 **Signature:**
 ```julia
@@ -3760,6 +3838,17 @@ operations(...)
 **Signature:**
 ```julia
 operator(...)
+```
+
+---
+
+### parity
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+parity(...)
 ```
 
 ---
@@ -4867,7 +4956,7 @@ result = simplify(expr)  # VarExpr("x")
 
 ### spatial_dims_in_expr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:327`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:381`
 
 **Signature:**
 ```julia
@@ -4878,6 +4967,17 @@ function spatial_dims_in_expr(expr::EarthSciSerialization.Expr)::Set{Symbol}
 spatial_dims_in_expr(expr) -> Set{Symbol}
 
 Collect all spatial dimension names referenced by spatial operators in `expr`.
+
+---
+
+### spec
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+spec(...)
+```
 
 ---
 
@@ -5290,6 +5390,17 @@ function to_superscript(text::String)
 to_superscript(text::String) -> String
 
 Convert text to Unicode superscript representation.
+
+---
+
+### types
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+types(...)
+```
 
 ---
 
@@ -6076,6 +6187,29 @@ Replace a parameter in one system with a variable from another.
 
 ---
 
+### CyclicPromotionError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:144`
+
+**Definition:**
+```julia
+struct CyclicPromotionError <: Exception
+```
+
+**Description:**
+CyclicPromotionError
+
+Defined for cross-language error-name parity. Not raised by Core-tier Julia
+because no promotion graph is built — reserved for a future tier upgrade that
+does promotion-graph analysis. Would signal that the declared `Interface`
+rules form a cycle (A promotes to B, B promotes back to A on a different
+axis).
+
+**Available in other languages:**
+- [Python](python.md#cyclicpromotionerror)
+
+---
+
 ### DataLoader
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:480`
@@ -6175,9 +6309,33 @@ Spatial and temporal domain specification.
 
 ---
 
+### DomainExtentMismatchError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:112`
+
+**Definition:**
+```julia
+struct DomainExtentMismatchError <: Exception
+```
+
+**Description:**
+DomainExtentMismatchError
+
+Defined for cross-language error-name parity with the Rust `FlattenError`
+taxonomy and the Python `flatten()` exception set. Would be raised when an
+`identity` mapping bridges two domains whose spatial extents on a shared
+independent variable disagree. The Julia flatten pipeline does not currently
+perform this check, so this type is reserved and never raised by the current
+implementation — it exists so consumers can catch it by name.
+
+**Available in other languages:**
+- [Python](python.md#domainextentmismatcherror)
+
+---
+
 ### DomainUnitMismatchError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:87`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:92`
 
 **Definition:**
 ```julia
@@ -6318,7 +6476,7 @@ Actionable suggestion for fixing an error.
 
 ### FlattenMetadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:116`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:170`
 
 **Definition:**
 ```julia
@@ -6348,7 +6506,7 @@ Fields:
 
 ### FlattenedSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:160`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:214`
 
 **Definition:**
 ```julia
@@ -6868,6 +7026,28 @@ Contains detailed error information including paths and messages.
 
 ---
 
+### SliceOutOfDomainError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:127`
+
+**Definition:**
+```julia
+struct SliceOutOfDomainError <: Exception
+```
+
+**Description:**
+SliceOutOfDomainError
+
+Defined for cross-language error-name parity; only raised if `slice` is ever
+implemented at a higher tier in the Julia flatten pipeline. Would be raised
+when a `slice` mapping's fixed coordinate lies outside the source variable's
+declared domain extent.
+
+**Available in other languages:**
+- [Python](python.md#sliceoutofdomainerror)
+
+---
+
 ### Species
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:319`
@@ -6982,20 +7162,28 @@ that defines their dimension mapping (§4.7.6).
 
 ---
 
-### UnsupportedRegriddingError
+### UnsupportedMappingError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:74`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:79`
 
 **Definition:**
 ```julia
-struct UnsupportedRegriddingError <: Exception
+struct UnsupportedMappingError <: Exception
 ```
 
 **Description:**
-UnsupportedRegriddingError
+UnsupportedMappingError
 
-Raised when an `Interface` requests a regridding strategy not supported by
-the current library tier (§4.7.6).
+Raised when an `Interface` requests a `dimension_mapping` type or regridding
+strategy that is not supported by the current library tier (§4.7.6). The
+`mapping_type` field carries the offending type or strategy name (e.g.
+`"slice"`, `"project"`, `"regrid"`, or a specific regridding method like
+`"cubic_spline"`). Matches the Rust `FlattenError::UnsupportedMapping` variant
+and the Python `UnsupportedMappingError` exception for cross-language
+error-name parity.
+
+**Available in other languages:**
+- [Python](python.md#unsupportedmappingerror)
 
 ---
 

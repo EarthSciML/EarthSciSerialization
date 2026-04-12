@@ -1858,6 +1858,11 @@ types(...)
 types(...)
 ```
 
+**Julia:**
+```julia
+types(...)
+```
+
 ---
 
 ### validate
@@ -2306,6 +2311,26 @@ export interface CouplingVariableMap {
 
 ---
 
+### CyclicPromotionError
+
+**Julia:**
+```julia
+struct CyclicPromotionError <: Exception
+```
+
+> CyclicPromotionError
+
+Defined for cross-language error-name parity.
+
+**Python:**
+```python
+class CyclicPromotionError:
+```
+
+> Promotion rules form a cycle (A→B→…→A).
+
+---
+
 ### DataLoader
 
 **Julia:**
@@ -2422,6 +2447,27 @@ export interface Domain {
 ```
 
 > Spatiotemporal domain specification (DomainInfo).
+
+---
+
+### DomainExtentMismatchError
+
+**Julia:**
+```julia
+struct DomainExtentMismatchError <: Exception
+```
+
+> DomainExtentMismatchError
+
+Defined for cross-language error-name parity with the Rust `FlattenError`
+taxonomy and the Python `flatten()` exception set.
+
+**Python:**
+```python
+class DomainExtentMismatchError:
+```
+
+> Two domains coupled via ``identity`` have incompatible spatial extents.
 
 ---
 
@@ -3062,6 +3108,27 @@ class SimulationResult:
 
 ---
 
+### SliceOutOfDomainError
+
+**Julia:**
+```julia
+struct SliceOutOfDomainError <: Exception
+```
+
+> SliceOutOfDomainError
+
+Defined for cross-language error-name parity; only raised if `slice` is ever
+implemented at a higher tier in the Julia flatten pipeline.
+
+**Python:**
+```python
+class SliceOutOfDomainError:
+```
+
+> A ``slice`` mapping reaches outside the source variable's domain.
+
+---
+
 ### SpatialDimension
 
 **Python:**
@@ -3205,6 +3272,27 @@ class UnmappedDomainError:
 ```
 
 > A coupling references a variable whose domain has no mapping rule.
+
+---
+
+### UnsupportedMappingError
+
+**Julia:**
+```julia
+struct UnsupportedMappingError <: Exception
+```
+
+> UnsupportedMappingError
+
+Raised when an `Interface` requests a `dimension_mapping` type or regridding
+strategy that is not supported by the current library tier (§4.
+
+**Python:**
+```python
+class UnsupportedMappingError:
+```
+
+> A dimension-promotion mapping is not supported by this implementation tier.
 
 ---
 

@@ -43,7 +43,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [10. HYBRID §4.7.6 Example A: 0D chem + 2D advection via operator_compose](julia-10--hybrid--4-7-6-example-a--0d-chem---2d-advection-via-operator_compose.md)
 - [11. §4.7.6 UnmappedDomainError: cross-domain coupling with no interface](julia-11---4-7-6-unmappeddomainerror--cross-domain-coupling-with-no-interface.md)
 - [12. §4.7.6 Interface with covering mapping permits flatten](julia-12---4-7-6-interface-with-covering-mapping-permits-flatten.md)
-- [13. §4.7.6 UnsupportedRegriddingError from real flatten](julia-13---4-7-6-unsupportedregriddingerror-from-real-flatten.md)
+- [13. §4.7.6 UnsupportedMappingError from real flatten](julia-13---4-7-6-unsupportedmappingerror-from-real-flatten.md)
 - [14. §4.7.6 DomainUnitMismatchError from real variable_map flatten](julia-14---4-7-6-domainunitmismatcherror-from-real-variable_map-flatten.md)
 - [15. No @eval or __precompile__(false) in flatten.jl](julia-15--no--eval-or-__precompile__-false--in-flatten-jl.md)
 - [flatten(::Model) convenience](julia-flatten---model--convenience.md)
