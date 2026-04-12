@@ -1,7 +1,13 @@
+// Most of these symbols are only used by feature-gated tests (parallel, simd,
+// zero_copy, custom_alloc). Under the default feature set only the compact
+// expression tests run, so we silence the unused-import warning rather than
+// scatter cfg attributes over every import.
+#[allow(unused_imports)]
 use earthsci_toolkit::{
     Expr, ExpressionNode, Reaction, ReactionSystem, Species, StoichiometricEntry,
     performance::CompactExpr, types::Parameter,
 };
+#[allow(unused_imports)]
 use std::collections::HashMap;
 
 #[cfg(feature = "parallel")]

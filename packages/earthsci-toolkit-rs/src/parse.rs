@@ -196,6 +196,8 @@ fn validate_structural_json(json_value: &Value) -> Result<(), EsmError> {
         check_model_state_has_derivatives(obj, &mut errors);
         check_coupling_references(obj, &mut errors);
         check_circular_model_dependencies(obj, &mut errors);
+        check_event_variable_references(obj, &mut errors);
+        check_event_discrete_parameters(obj, &mut errors);
     }
 
     if errors.is_empty() {
@@ -533,6 +535,161 @@ fn check_circular_model_dependencies(
             "circular reference (cycle) detected: {}",
             c.join(" -> ")
         ));
+    }
+}
+
+/// Every variable referenced by an event — either on the LHS of an
+/// `affects` equation or inside a condition / trigger expression — must be
+/// declared in the host model's `variables` map. Applies to both continuous
+/// and discrete events. Mirrors Python's `_check_event_references` and
+/// Julia's equivalent to keep cross-language error codes aligned per spec
+/// §2.1a (error code: `EventVarUndeclared`).
+fn check_event_variable_references(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    let Some(models) = obj.get("models").and_then(|v| v.as_object()) else {
+        return;
+    };
+
+    for (mname, mv) in models {
+        let Some(m) = mv.as_object() else { continue };
+        let Some(vars) = m.get("variables").and_then(|v| v.as_object()) else {
+            continue;
+        };
+        let declared: std::collections::HashSet<&str> = vars.keys().map(String::as_str).collect();
+
+        // Continuous events: affects[].lhs must be declared; conditions[] expr
+        // bare variable refs must be declared.
+        if let Some(events) = m.get("continuous_events").and_then(|v| v.as_array()) {
+            for (ei, event) in events.iter().enumerate() {
+                let Some(event_obj) = event.as_object() else {
+                    continue;
+                };
+                if let Some(affects) = event_obj.get("affects").and_then(|v| v.as_array()) {
+                    for (ai, affect) in affects.iter().enumerate() {
+                        if let Some(lhs) = affect.get("lhs").and_then(|v| v.as_str())
+                            && !lhs.contains('.')
+                            && !declared.contains(lhs)
+                        {
+                            errors.push(format!(
+                                "models/{mname}/continuous_events[{ei}]/affects[{ai}]/lhs: \
+                                 undeclared variable '{lhs}'"
+                            ));
+                        }
+                    }
+                }
+                if let Some(conditions) = event_obj.get("conditions").and_then(|v| v.as_array()) {
+                    for (ci, cond) in conditions.iter().enumerate() {
+                        let mut refs: Vec<String> = Vec::new();
+                        collect_variable_refs(cond, &mut refs);
+                        for r in refs {
+                            if r.contains('.') {
+                                continue;
+                            }
+                            if !declared.contains(r.as_str()) {
+                                errors.push(format!(
+                                    "models/{mname}/continuous_events[{ei}]/conditions[{ci}]: \
+                                     undeclared variable '{r}'"
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Discrete events: affects[].lhs, plus trigger.expression if of type `condition`.
+        if let Some(events) = m.get("discrete_events").and_then(|v| v.as_array()) {
+            for (ei, event) in events.iter().enumerate() {
+                let Some(event_obj) = event.as_object() else {
+                    continue;
+                };
+                if let Some(affects) = event_obj.get("affects").and_then(|v| v.as_array()) {
+                    for (ai, affect) in affects.iter().enumerate() {
+                        if let Some(lhs) = affect.get("lhs").and_then(|v| v.as_str())
+                            && !lhs.contains('.')
+                            && !declared.contains(lhs)
+                        {
+                            errors.push(format!(
+                                "models/{mname}/discrete_events[{ei}]/affects[{ai}]/lhs: \
+                                 undeclared variable '{lhs}'"
+                            ));
+                        }
+                    }
+                }
+                if let Some(trigger) = event_obj.get("trigger").and_then(|v| v.as_object())
+                    && trigger.get("type").and_then(|v| v.as_str()) == Some("condition")
+                    && let Some(expression) = trigger.get("expression")
+                {
+                    let mut refs: Vec<String> = Vec::new();
+                    collect_variable_refs(expression, &mut refs);
+                    for r in refs {
+                        if r.contains('.') {
+                            continue;
+                        }
+                        if !declared.contains(r.as_str()) {
+                            errors.push(format!(
+                                "models/{mname}/discrete_events[{ei}]/trigger/expression: \
+                                 undeclared variable '{r}'"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A discrete event's `discrete_parameters` list must name variables of type
+/// `parameter` — not state variables, not observed, not undeclared. Mirrors
+/// Python's `_check_discrete_parameters` (error code: `InvalidDiscreteParam`).
+fn check_event_discrete_parameters(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    let Some(models) = obj.get("models").and_then(|v| v.as_object()) else {
+        return;
+    };
+
+    for (mname, mv) in models {
+        let Some(m) = mv.as_object() else { continue };
+        let Some(vars) = m.get("variables").and_then(|v| v.as_object()) else {
+            continue;
+        };
+        // name -> declared type
+        let var_types: std::collections::HashMap<&str, &str> = vars
+            .iter()
+            .filter_map(|(name, def)| {
+                def.as_object()
+                    .and_then(|o| o.get("type"))
+                    .and_then(|t| t.as_str())
+                    .map(|t| (name.as_str(), t))
+            })
+            .collect();
+
+        let Some(events) = m.get("discrete_events").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for (ei, event) in events.iter().enumerate() {
+            let Some(event_obj) = event.as_object() else {
+                continue;
+            };
+            let Some(dps) = event_obj
+                .get("discrete_parameters")
+                .and_then(|v| v.as_array())
+            else {
+                continue;
+            };
+            for dp_val in dps {
+                let Some(dp) = dp_val.as_str() else { continue };
+                match var_types.get(dp) {
+                    None => errors.push(format!(
+                        "models/{mname}/discrete_events[{ei}]: discrete_parameter '{dp}' \
+                         not declared in model"
+                    )),
+                    Some(&ty) if ty != "parameter" => errors.push(format!(
+                        "models/{mname}/discrete_events[{ei}]: discrete_parameter '{dp}' \
+                         references variable of type '{ty}', expected 'parameter'"
+                    )),
+                    _ => {}
+                }
+            }
+        }
     }
 }
 

@@ -442,14 +442,20 @@ pub struct LinearInvariant {
 ///
 /// ```rust
 /// use earthsci_toolkit::{ReactionSystem, detect_conservation_violations};
+/// use std::collections::HashMap;
 ///
-/// // Create a simple reaction system
+/// // Create an empty reaction system
 /// let system = ReactionSystem {
-///     name: Some("Test System".to_string()),
-///     species: vec![],
-///     parameters: std::collections::HashMap::new(),
+///     domain: None,
+///     coupletype: None,
+///     reference: None,
+///     species: HashMap::new(),
+///     parameters: HashMap::new(),
 ///     reactions: vec![],
-///     description: None,
+///     constraint_equations: None,
+///     discrete_events: None,
+///     continuous_events: None,
+///     subsystems: None,
 /// };
 ///
 /// let analysis = detect_conservation_violations(&system);
