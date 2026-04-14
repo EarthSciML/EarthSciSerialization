@@ -1778,6 +1778,9 @@ export interface Assertion {
 A single scalar check at a (variable, time) point.
 /
 
+**Available in other languages:**
+- [Julia](julia.md#assertion)
+
 ---
 
 ### AstStore
@@ -3317,6 +3320,9 @@ export interface Test {
 An inline validation test for the enclosing model or reaction system. Defines the run configuration (initial conditions, parameter overrides, time span) and the scalar assertions that must hold.
 /
 
+**Available in other languages:**
+- [Julia](julia.md#test)
+
 ---
 
 ### TimeSpan
@@ -3332,6 +3338,9 @@ export interface TimeSpan {
 Simulation time interval expressed in the component's time units.
 /
 
+**Available in other languages:**
+- [Julia](julia.md#timespan)
+
 ---
 
 ### Tolerance
@@ -3346,6 +3355,9 @@ export interface Tolerance {
 **Description:**
 Model-level default numerical tolerance for tests, used when a test or assertion does not provide its own.
 /
+
+**Available in other languages:**
+- [Julia](julia.md#tolerance)
 
 ---
 

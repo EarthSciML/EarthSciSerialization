@@ -910,6 +910,26 @@ def get_stats(self):
 
 ---
 
+### infer_array_shapes
+
+**Julia:**
+```julia
+infer_array_shapes(...)
+```
+
+**Julia:**
+```julia
+function infer_array_shapes(equations::Vector{Equation})
+```
+
+> infer_array_shapes(equations::Vector{Equation}) -> Dict{String, Vector{UnitRange{Int}}}
+
+Walk every `arrayop`, `makearray`, and `index` node in the equation set and
+compute, for each array-shaped variable, the union of ranges observed across
+all references.
+
+---
+
 ### infer_variable_units
 
 **Julia:**
@@ -1988,6 +2008,26 @@ export interface AffectEquation {
 ```
 
 > An affect equation in an event: lhs is the target variable (string), rhs is an expression.
+
+---
+
+### Assertion
+
+**Julia:**
+```julia
+struct Assertion
+```
+
+> Assertion(variable::String, time::Float64, expected::Float64, tolerance::Union{Tolerance,Nothing})
+
+A scalar `(variable, time, expected)` check used inside a `Test`.
+
+**Typescript:**
+```typescript
+export interface Assertion {
+```
+
+> A single scalar check at a (variable, time) point.
 
 ---
 
@@ -3331,6 +3371,26 @@ class SubsystemRefError:
 
 ---
 
+### Test
+
+**Julia:**
+```julia
+struct Test
+```
+
+> Test(id, time_span, assertions; description, initial_conditions, parameter_overrides, tolerance)
+
+Inline validation test for a Model (schema gt-cc1).
+
+**Typescript:**
+```typescript
+export interface Test {
+```
+
+> An inline validation test for the enclosing model or reaction system.
+
+---
+
 ### TestUnitConversion
 
 **Python:**
@@ -3344,6 +3404,46 @@ class TestUnitConversion:
 ```
 
 > Test unit conversion operations.
+
+---
+
+### TimeSpan
+
+**Julia:**
+```julia
+struct TimeSpan
+```
+
+> TimeSpan(start::Float64, stop::Float64)
+
+Simulation time interval for inline model tests and examples (§gt-cc1).
+
+**Typescript:**
+```typescript
+export interface TimeSpan {
+```
+
+> Simulation time interval expressed in the component's time units.
+
+---
+
+### Tolerance
+
+**Julia:**
+```julia
+struct Tolerance
+```
+
+> Tolerance(abs::Union{Float64,Nothing}, rel::Union{Float64,Nothing})
+
+Numerical comparison tolerance.
+
+**Typescript:**
+```typescript
+export interface Tolerance {
+```
+
+> Model-level default numerical tolerance for tests, used when a test or assertion does not provide its own.
 
 ---
 
