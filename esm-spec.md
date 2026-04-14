@@ -809,6 +809,9 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
 | `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.5). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.4). |
+| `tolerance` | | Model-level default numerical tolerance used by tests (see Section 6.6). Object with optional `abs` and/or `rel` fields. |
+| `tests` | | Inline validation tests that exercise this model in isolation (see Section 6.6). |
+| `examples` | | Inline illustrative examples showing how to run this model (see Section 6.7). |
 
 ### 6.3 Variable Types
 
@@ -907,6 +910,218 @@ A model that computes deposition velocities from surface resistance parameters. 
   }
 }
 ```
+
+### 6.6 Tests
+
+A model may carry an array of **inline tests**. Each test pins down a specific run configuration for the enclosing model and declares the scalar values that must hold at specific (variable, time) points. Tests travel with the model in the `.esm` document — they are not stored in a parallel filesystem hierarchy.
+
+Tests are **per-component** by design: they exercise one model (or one reaction system) in isolation. They do not reach across coupled systems. Integrated / coupled / cross-system testing is a separate concern.
+
+Because a test lives inside its parent component, there is no `model_ref` field: the target is implicit from document location.
+
+#### 6.6.1 Test Schema
+
+```json
+{
+  "tests": [
+    {
+      "id": "photostationary_approach",
+      "description": "Starting from NO=10, NO2=20, O3=50 ppbv, the system approaches photostationary state.",
+      "initial_conditions": {
+        "NO": 10.0,
+        "NO2": 20.0,
+        "O3": 50.0
+      },
+      "parameter_overrides": {
+        "j_NO2": 0.008,
+        "k_NO_O3": 1.8e-5
+      },
+      "time_span": { "start": 0.0, "end": 3600.0 },
+      "tolerance": { "abs": 1e-6, "rel": 1e-5 },
+      "assertions": [
+        { "variable": "NO",  "time":    0.0, "expected": 10.0 },
+        { "variable": "NO",  "time": 1140.0, "expected": 26.114863 },
+        { "variable": "O3",  "time": 3600.0, "expected": 66.115137,
+          "tolerance": { "abs": 1e-4 } }
+      ]
+    }
+  ]
+}
+```
+
+#### 6.6.2 Test Fields
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | ✓ | Identifier unique within this component's `tests` array. |
+| `description` | | Human-readable description of what this test verifies. |
+| `initial_conditions` | | Initial-value overrides for state variables, keyed by local variable name. Variables not listed fall back to their declared `default`. |
+| `parameter_overrides` | | Parameter value overrides, keyed by local parameter name. |
+| `time_span` | ✓ | `{start, end}` — simulation time interval in the component's time units. |
+| `tolerance` | | Test-level default tolerance; see Section 6.6.4. |
+| `assertions` | ✓ | Array of scalar checks; must contain at least one. |
+
+#### 6.6.3 Assertion Semantics
+
+Each assertion is a per-(variable, time) check against a scalar expected value:
+
+| Field | Required | Description |
+|---|---|---|
+| `variable` | ✓ | Variable or species name. Local names (e.g., `"O3"`) or scoped references into subsystems (e.g., `"inner.X"`) are both allowed. |
+| `time` | ✓ | Simulation time at which to evaluate the assertion; must lie in `[time_span.start, time_span.end]`. |
+| `expected` | ✓ | Expected scalar value. |
+| `tolerance` | | Per-assertion tolerance override. |
+
+Assertions are stored **inline** only — there is no file-reference option. Tests should be small (a handful of assertion points), not full reference trajectories.
+
+An assertion passes when the computed value `actual` satisfies
+
+```
+|actual - expected| ≤ abs    OR    |actual - expected| / max(|expected|, ε) ≤ rel
+```
+
+for the resolved absolute and relative tolerances. If both bounds are given, passing either is sufficient — the standard numerical convention. An implementation-defined small `ε` (e.g., `1e-300`) protects the relative check when `expected` is zero.
+
+#### 6.6.4 Tolerance Resolution Order
+
+Tolerance is resolved most-specific first:
+
+1. **Per-assertion** `tolerance` (if present) — wins outright.
+2. Otherwise, **per-test** `tolerance` — the test's default.
+3. Otherwise, the enclosing component's **model-level** `tolerance` field.
+4. Otherwise, an **implementation default** — conforming runtimes should use `rel = 1e-6` and no `abs` bound.
+
+Each level is a `{abs?, rel?}` object; absent fields fall through to the next level independently. Specifying only `abs` at a lower level does not mask `rel` from an upper level — they are merged per-field.
+
+### 6.7 Examples
+
+A model may also carry an array of **inline examples**. An example is an illustrative run (or family of runs) showing how the component is intended to be used. Examples do not produce pass/fail outcomes — they produce trajectories and plots.
+
+Like tests, examples are per-component and travel with the model in the `.esm` document.
+
+#### 6.7.1 Example Schema
+
+```json
+{
+  "examples": [
+    {
+      "id": "rate_constant_sweep",
+      "description": "Sweep over photolysis rates to explore the NO-NO2-O3 partitioning.",
+      "initial_state": {
+        "type": "per_variable",
+        "values": { "NO": 10.0, "NO2": 20.0, "O3": 50.0 }
+      },
+      "parameters": {
+        "k_NO_O3": 1.8e-5
+      },
+      "time_span": { "start": 0.0, "end": 3600.0 },
+      "parameter_sweep": {
+        "type": "cartesian",
+        "dimensions": [
+          { "parameter": "j_NO2",
+            "range": { "start": 0.001, "stop": 0.02, "count": 20, "scale": "linear" } },
+          { "parameter": "k_NO_O3",
+            "range": { "start": 1e-6,  "stop": 1e-4, "count": 10, "scale": "log" } }
+        ]
+      },
+      "plots": [
+        {
+          "id": "o3_vs_rates",
+          "type": "heatmap",
+          "description": "Final O3 as a function of j_NO2 and k_NO_O3.",
+          "x": { "variable": "j_NO2",   "label": "j_{NO2} (s^-1)" },
+          "y": { "variable": "k_NO_O3", "label": "k_{NO+O3} (ppbv^-1 s^-1)" },
+          "value": { "variable": "O3", "reduce": "final" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### 6.7.2 Example Fields
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | ✓ | Identifier unique within this component's `examples` array. |
+| `description` | | Human-readable description. |
+| `initial_state` | | Initial conditions. Reuses the same `InitialConditions` schema as the `domains` section: `{type: "constant", value}`, `{type: "per_variable", values: {...}}`, or `{type: "from_file", path, format?}`. |
+| `parameters` | | Parameter overrides, keyed by local parameter name. |
+| `time_span` | ✓ | `{start, end}` in the component's time units. |
+| `parameter_sweep` | | Optional parameter sweep; see Section 6.7.3. When present, the example represents a family of runs rather than a single trajectory. |
+| `plots` | | Plot specifications derived from the run(s); see Section 6.7.4. |
+
+#### 6.7.3 Parameter Sweeps
+
+```json
+{
+  "parameter_sweep": {
+    "type": "cartesian",
+    "dimensions": [
+      { "parameter": "T",       "values": [280, 290, 300, 310] },
+      { "parameter": "k_NO_O3", "range":  { "start": 1e-6, "stop": 1e-4, "count": 10, "scale": "log" } }
+    ]
+  }
+}
+```
+
+Sweeps are currently **Cartesian** only: the total run count is the product of the dimension lengths. Linked / zipped sweeps are deferred to a future extension.
+
+Each dimension specifies one parameter and either:
+
+- `values: [number, ...]` — an explicit enumeration, or
+- `range: {start, stop, count, scale}` — a generated range, where `scale` is `"linear"` (default) or `"log"` (both `start` and `stop` must be strictly positive for log scale).
+
+Exactly one of `values` or `range` must be given per dimension.
+
+#### 6.7.4 Plots
+
+Plots describe how the run (or sweep) result is turned into a visualization. Only **structural** information is recorded: axes, series selection, and value reduction. Styling — colors, fonts, legend placement, themes — is the viewer's concern.
+
+Three plot types are defined:
+
+- `line` — one or more trajectories plotted as lines against a shared x axis.
+- `scatter` — one or more trajectories as scatter points.
+- `heatmap` — a 2-D grid over two swept parameters with a per-run color channel.
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | ✓ | Identifier unique within this example's `plots` array. |
+| `type` | ✓ | `line`, `scatter`, or `heatmap`. |
+| `description` | | Human-readable description. |
+| `x`, `y` | ✓ | Axis specifications (`{variable, label?}`). `variable` may be any state variable, observed variable, parameter name, or swept parameter. |
+| `value` | heatmap | Heatmap color channel: a `PlotValue` (see below). |
+| `series` | | For `line`/`scatter`: an array of `{name, variable}` pairs selecting multiple trajectories to overlay. |
+
+**Plot axes are flexible.** Any state variable, observed variable, parameter, or swept-parameter name is allowed for `x`, `y`, and (for heatmaps) the `value.variable`. The independent variable of the simulation is typically spelled `"t"`.
+
+**PlotValue** (required for heatmaps, optional otherwise) reduces the per-run trajectory of one variable to a scalar:
+
+```json
+{ "variable": "O3", "reduce": "final" }
+{ "variable": "O3", "reduce": "max"   }
+{ "variable": "O3", "at_time": 1800.0 }
+```
+
+Exactly one of `at_time` or `reduce` should be specified; if both are present, `at_time` wins. Supported `reduce` values are `max`, `min`, `mean`, `integral`, and `final`. The preferred idiom for "at the end of the run" is `"reduce": "final"` — it is robust to changes in `time_span.end` and does not require the runtime to interpolate onto a specific output time.
+
+When `at_time` does not land exactly on an output time, whether the runtime interpolates or snaps to the nearest sample is a runtime concern, not part of this specification.
+
+#### 6.7.5 Worked Example: Heatmap Over a Sweep
+
+A heatmap of the maximum O3 concentration over a 20 × 10 sweep of `j_NO2` and `k_NO_O3`, using the box-model ozone model:
+
+```json
+{
+  "id": "o3_max_heatmap",
+  "type": "heatmap",
+  "x": { "variable": "j_NO2" },
+  "y": { "variable": "k_NO_O3" },
+  "value": { "variable": "O3", "reduce": "max" }
+}
+```
+
+For each Cartesian combination of `(j_NO2, k_NO_O3)`, the runtime simulates once, takes the maximum O3 over the trajectory, and places that scalar at the corresponding grid cell.
 
 ---
 
@@ -1111,6 +1326,9 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
 | `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.5). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.4). |
+| `tolerance` | | System-level default numerical tolerance for tests. Same semantics as Section 6.6.4. |
+| `tests` | | Inline validation tests for this reaction system. Semantics, field shape, and tolerance resolution are identical to Section 6.6. Assertion `variable` names refer to species or observed quantities of this reaction system. |
+| `examples` | | Inline illustrative examples. Semantics, field shape, and plot/sweep rules are identical to Section 6.7. |
 
 ### 7.3 Reaction Fields
 

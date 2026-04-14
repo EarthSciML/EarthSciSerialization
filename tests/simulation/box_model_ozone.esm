@@ -164,6 +164,100 @@
             ]
           }
         }
+      ],
+      "tolerance": {
+        "abs": 1e-06,
+        "rel": 1e-05
+      },
+      "tests": [
+        {
+          "id": "photostationary_approach",
+          "description": "Starting from NO=10, NO2=20, O3=50 (ppbv) with default rate constants (j_NO2=0.008 s^-1, k_NO_O3=1.8e-5 ppbv^-1 s^-1), the system approaches a photostationary state over one hour. Assertions sample the trajectory at 9-minute intervals, including the near-steady-state tail where [NO] ≈ 26.115 ppbv and [NO2] ≈ 3.885 ppbv.",
+          "initial_conditions": {
+            "NO": 10.0,
+            "NO2": 20.0,
+            "O3": 50.0
+          },
+          "parameter_overrides": {
+            "j_NO2": 0.008,
+            "k_NO_O3": 1.8e-05,
+            "k_O_O2": 100.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 3600.0
+          },
+          "assertions": [
+            { "variable": "NO",  "time": 0.0,    "expected": 10.0 },
+            { "variable": "NO2", "time": 0.0,    "expected": 20.0 },
+            { "variable": "O3",  "time": 0.0,    "expected": 50.0 },
+            { "variable": "NO",  "time": 540.0,  "expected": 26.024997 },
+            { "variable": "NO2", "time": 540.0,  "expected": 3.975003  },
+            { "variable": "O3",  "time": 540.0,  "expected": 66.024997 },
+            { "variable": "NO",  "time": 1140.0, "expected": 26.114863 },
+            { "variable": "NO2", "time": 1140.0, "expected": 3.885137  },
+            { "variable": "O3",  "time": 1140.0, "expected": 66.114863 },
+            { "variable": "NO",  "time": 3600.0, "expected": 26.115137, "tolerance": { "abs": 1e-04 } },
+            { "variable": "NO2", "time": 3600.0, "expected": 3.884863,  "tolerance": { "abs": 1e-04 } },
+            { "variable": "O3",  "time": 3600.0, "expected": 66.115137, "tolerance": { "abs": 1e-04 } }
+          ]
+        },
+        {
+          "id": "odd_oxygen_conservation",
+          "description": "Odd-oxygen (NO2 + O3) is conserved exactly by these three reactions. The assertions pin [NO2 + O3] to its initial value at multiple times by checking each component against the photostationary trajectory — their sum must equal 70 ppbv throughout (20 + 50 = 70).",
+          "initial_conditions": {
+            "NO": 10.0,
+            "NO2": 20.0,
+            "O3": 50.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 1800.0
+          },
+          "tolerance": {
+            "abs": 1e-04
+          },
+          "assertions": [
+            { "variable": "NO2", "time": 1800.0, "expected": 3.884864 },
+            { "variable": "O3",  "time": 1800.0, "expected": 66.115136 }
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "id": "default_run",
+          "description": "One-hour simulation of the box model under default parameters, plotting NO, NO2, and O3 concentration vs time. This reproduces the standard photostationary-state approach used in introductory atmospheric chemistry courses.",
+          "initial_state": {
+            "type": "per_variable",
+            "values": {
+              "NO": 10.0,
+              "NO2": 20.0,
+              "O3": 50.0
+            }
+          },
+          "parameters": {
+            "j_NO2": 0.008,
+            "k_NO_O3": 1.8e-05
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 3600.0
+          },
+          "plots": [
+            {
+              "id": "concentrations_vs_time",
+              "type": "line",
+              "description": "NO, NO2, and O3 mixing ratios over one hour, showing the approach to photostationary state.",
+              "x": { "variable": "t", "label": "time (s)" },
+              "y": { "variable": "NO", "label": "mixing ratio (ppbv)" },
+              "series": [
+                { "name": "NO",  "variable": "NO"  },
+                { "name": "NO2", "variable": "NO2" },
+                { "name": "O3",  "variable": "O3"  }
+              ]
+            }
+          ]
+        }
       ]
     }
   },

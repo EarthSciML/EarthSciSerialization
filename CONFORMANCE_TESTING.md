@@ -38,7 +38,7 @@ To test the conformance infrastructure without running full tests:
 
 ### Test Categories
 
-The conformance testing covers four main categories:
+The conformance testing covers five main categories:
 
 1. **Validation Tests** (`tests/valid/` and `tests/invalid/`)
    - Schema validation consistency
@@ -60,6 +60,12 @@ The conformance testing covers four main categories:
    - System-level coupling graphs
    - Variable dependency graphs
    - DOT/Mermaid/JSON export formats
+
+5. **Simulation Tests** (inline inside each `Model` / `ReactionSystem`)
+   - Scalar `(variable, time, expected)` assertions at specific points in a trajectory
+   - Flexible multi-level tolerance (per-assertion → per-test → per-component → runtime default)
+   - Per-component only; cross-system / coupled tests are out of scope
+   - Reference trajectories are **not** stored as filesystem CSVs — they travel inside the component's `tests` array. See `CONFORMANCE_SPEC.md` §2.2.5 and `esm-spec.md` §6.6 for the full schema.
 
 ### Scripts and Components
 

@@ -470,6 +470,15 @@ const schema = {
           "type": "object",
           "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\".",
           "additionalProperties": { "$ref": "#/$defs/Model" }
+        },
+        "tolerance": { "$ref": "#/$defs/Tolerance" },
+        "tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Test" }
+        },
+        "examples": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Example" }
         }
       }
     },
@@ -598,6 +607,15 @@ const schema = {
           "type": "object",
           "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\".",
           "additionalProperties": { "$ref": "#/$defs/ReactionSystem" }
+        },
+        "tolerance": { "$ref": "#/$defs/Tolerance" },
+        "tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Test" }
+        },
+        "examples": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Example" }
         }
       }
     },
@@ -1113,6 +1131,183 @@ const schema = {
           "type": "string",
           "description": "Array backend (e.g., \"Array\", \"CuArray\").",
           "default": "Array"
+        }
+      }
+    },
+
+    "Tolerance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "abs": { "type": "number", "minimum": 0 },
+        "rel": { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "Assertion": {
+      "type": "object",
+      "required": ["variable", "time", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": { "type": "string" },
+        "time": { "type": "number" },
+        "expected": { "type": "number" },
+        "tolerance": { "$ref": "#/$defs/Tolerance" }
+      }
+    },
+
+    "TimeSpan": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "number" },
+        "end": { "type": "number" }
+      }
+    },
+
+    "Test": {
+      "type": "object",
+      "required": ["id", "time_span", "assertions"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "initial_conditions": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "parameter_overrides": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "time_span": { "$ref": "#/$defs/TimeSpan" },
+        "tolerance": { "$ref": "#/$defs/Tolerance" },
+        "assertions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Assertion" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "SweepRange": {
+      "type": "object",
+      "required": ["start", "stop", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "number" },
+        "stop":  { "type": "number" },
+        "count": { "type": "integer", "minimum": 2 },
+        "scale": { "type": "string", "enum": ["linear", "log"], "default": "linear" }
+      }
+    },
+
+    "SweepDimension": {
+      "type": "object",
+      "required": ["parameter"],
+      "additionalProperties": false,
+      "properties": {
+        "parameter": { "type": "string" },
+        "values": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 1
+        },
+        "range": { "$ref": "#/$defs/SweepRange" }
+      },
+      "oneOf": [
+        { "required": ["values"] },
+        { "required": ["range"] }
+      ]
+    },
+
+    "ParameterSweep": {
+      "type": "object",
+      "required": ["type", "dimensions"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["cartesian"] },
+        "dimensions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SweepDimension" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "PlotAxis": {
+      "type": "object",
+      "required": ["variable"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+
+    "PlotValue": {
+      "type": "object",
+      "required": ["variable"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": { "type": "string" },
+        "at_time": { "type": "number" },
+        "reduce": { "type": "string", "enum": ["max", "min", "mean", "integral", "final"] }
+      }
+    },
+
+    "PlotSeries": {
+      "type": "object",
+      "required": ["name", "variable"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "variable": { "type": "string" }
+      }
+    },
+
+    "Plot": {
+      "type": "object",
+      "required": ["id", "type", "x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["line", "scatter", "heatmap"] },
+        "description": { "type": "string" },
+        "x": { "$ref": "#/$defs/PlotAxis" },
+        "y": { "$ref": "#/$defs/PlotAxis" },
+        "value": { "$ref": "#/$defs/PlotValue" },
+        "series": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PlotSeries" }
+        }
+      },
+      "if": {
+        "properties": { "type": { "const": "heatmap" } }
+      },
+      "then": {
+        "required": ["value"]
+      }
+    },
+
+    "Example": {
+      "type": "object",
+      "required": ["id", "time_span"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "initial_state": { "$ref": "#/$defs/InitialConditions" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "time_span": { "$ref": "#/$defs/TimeSpan" },
+        "parameter_sweep": { "$ref": "#/$defs/ParameterSweep" },
+        "plots": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Plot" }
         }
       }
     }

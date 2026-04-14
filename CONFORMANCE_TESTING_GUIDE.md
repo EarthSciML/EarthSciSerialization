@@ -9,7 +9,8 @@ The conformance testing infrastructure is **fully implemented** and includes:
 - ✅ Cross-language test runner scripts
 - ✅ Comparison and analysis tools
 - ✅ HTML report generation
-- ✅ Test fixture structure
+- ✅ Test fixture structure (validation, display, substitution, graphs)
+- ✅ Inline simulation tests (`tests[]` and `examples[]` on each `Model` / `ReactionSystem` — see `esm-spec.md` §6.6–6.7)
 - ✅ Comprehensive documentation
 
 However, individual language implementations currently have issues that prevent full conformance testing:
