@@ -140,7 +140,36 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         if op == "grad" and dim is None:
             raise ValueError(f"Operator 'grad' requires 'dim' field to be specified")
 
-        return ExprNode(op=op, args=args, wrt=wrt, dim=dim)
+        # Array-op fields (schema §ExpressionNode).
+        output_idx = expr_data.get("output_idx")
+        body_expr = _parse_expression(expr_data["expr"]) if "expr" in expr_data else None
+        reduce = expr_data.get("reduce")
+        ranges = expr_data.get("ranges")
+        regions = expr_data.get("regions")
+        values = None
+        if "values" in expr_data:
+            values = [_parse_expression(v) for v in expr_data["values"]]
+        shape = expr_data.get("shape")
+        perm = expr_data.get("perm")
+        axis = expr_data.get("axis")
+        fn = expr_data.get("fn")
+
+        return ExprNode(
+            op=op,
+            args=args,
+            wrt=wrt,
+            dim=dim,
+            output_idx=output_idx,
+            expr=body_expr,
+            reduce=reduce,
+            ranges=ranges,
+            regions=regions,
+            values=values,
+            shape=shape,
+            perm=perm,
+            axis=axis,
+            fn=fn,
+        )
     else:
         raise ValueError(f"Invalid expression data: {expr_data}")
 

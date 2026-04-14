@@ -204,6 +204,10 @@ class FlattenedSystem:
 
 
 _SPATIAL_OPS = {"grad", "div", "laplacian", "curl"}
+_ARRAY_OPS = {
+    "arrayop", "makearray", "index", "broadcast",
+    "reshape", "transpose", "concat",
+}
 
 
 def _is_number(x: Any) -> bool:
@@ -231,6 +235,32 @@ def _expr_to_string(expr: Expr) -> str:
             dim = expr.dim or ""
             return f"{op}({inner}, {dim})" if dim else f"{op}({inner})"
 
+        if op == "arrayop":
+            body = _expr_to_string(expr.expr) if expr.expr is not None else ""
+            idxs = ",".join(str(i) for i in (expr.output_idx or []))
+            ranges = expr.ranges or {}
+            ranges_str = ",".join(f"{k}={v}" for k, v in ranges.items())
+            return f"arrayop[{idxs}]({body}; {ranges_str})"
+
+        if op == "makearray":
+            vals = ",".join(_expr_to_string(v) for v in (expr.values or []))
+            return f"makearray(regions={expr.regions}, values=[{vals}])"
+
+        if op == "index":
+            return f"index({', '.join(args)})"
+
+        if op == "reshape":
+            return f"reshape({', '.join(args)}, shape={expr.shape})"
+
+        if op == "transpose":
+            return f"transpose({', '.join(args)})"
+
+        if op == "concat":
+            return f"concat({', '.join(args)}, axis={expr.axis})"
+
+        if op == "broadcast":
+            return f"broadcast[{expr.fn}]({', '.join(args)})"
+
         if op in ("+", "-", "*", "/", "^", "**"):
             if op == "-" and len(args) == 1:
                 return f"(-{args[0]})"
@@ -254,13 +284,42 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
             return expr
         return f"{prefix}.{expr}"
     if isinstance(expr, ExprNode):
-        new_args = [_namespace_expr(a, prefix, leave_alone) for a in expr.args]
-        new_wrt = expr.wrt
-        if new_wrt and new_wrt not in leave_alone and "." not in new_wrt:
-            # The "wrt" of D() is an independent variable like t — leave it.
-            # We only namespace if it looks like a state variable reference (rare).
-            pass
-        return ExprNode(op=expr.op, args=new_args, wrt=expr.wrt, dim=expr.dim)
+        # For arrayop, index symbols (output_idx and ranges keys) are local to
+        # the expression body and must not be namespaced.
+        local_leave = set(leave_alone)
+        if expr.op == "arrayop":
+            if expr.output_idx:
+                for sym in expr.output_idx:
+                    if isinstance(sym, str):
+                        local_leave.add(sym)
+            if expr.ranges:
+                for sym in expr.ranges.keys():
+                    local_leave.add(sym)
+        new_args = [_namespace_expr(a, prefix, local_leave) for a in expr.args]
+        new_body = (
+            _namespace_expr(expr.expr, prefix, local_leave)
+            if expr.expr is not None else None
+        )
+        new_values = (
+            [_namespace_expr(v, prefix, local_leave) for v in expr.values]
+            if expr.values is not None else None
+        )
+        return ExprNode(
+            op=expr.op,
+            args=new_args,
+            wrt=expr.wrt,
+            dim=expr.dim,
+            output_idx=expr.output_idx,
+            expr=new_body,
+            reduce=expr.reduce,
+            ranges=expr.ranges,
+            regions=expr.regions,
+            values=new_values,
+            shape=expr.shape,
+            perm=expr.perm,
+            axis=expr.axis,
+            fn=expr.fn,
+        )
     return expr
 
 
@@ -268,8 +327,10 @@ def _lhs_dependent_var(lhs: Expr) -> Optional[str]:
     """Return the dependent variable name from an LHS expression.
 
     For ``D(var, t)`` returns ``var``. For a bare variable name returns it.
-    Returns None if the LHS is something we cannot identify (e.g. an algebraic
-    constraint with a complex LHS).
+    For ``D(index(var, ...), t)`` returns ``var`` — the array state whose
+    element is being differentiated. For ``arrayop(expr=D(index(var, ...), t))``
+    likewise returns ``var``. Returns None if the LHS cannot be identified
+    (e.g. an algebraic constraint with a complex LHS).
     """
     if isinstance(lhs, str):
         return lhs
@@ -278,11 +339,67 @@ def _lhs_dependent_var(lhs: Expr) -> Optional[str]:
             inner = lhs.args[0]
             if isinstance(inner, str):
                 return inner
-            if isinstance(inner, ExprNode) and inner.op == "D" and inner.args:
-                return _lhs_dependent_var(inner)
+            if isinstance(inner, ExprNode):
+                if inner.op == "D" and inner.args:
+                    return _lhs_dependent_var(inner)
+                if inner.op == "index" and inner.args:
+                    head = inner.args[0]
+                    if isinstance(head, str):
+                        return head
+            return None
+        if lhs.op == "arrayop" and lhs.expr is not None:
+            return _lhs_dependent_var(lhs.expr)
         # Algebraic equation: LHS is a complex expression — not a single var.
         return None
     return None
+
+
+def _has_array_op(expr: Expr) -> bool:
+    """Return True if ``expr`` contains any array op node."""
+    if _is_number(expr) or isinstance(expr, str) or expr is None:
+        return False
+    if isinstance(expr, ExprNode):
+        if expr.op in _ARRAY_OPS:
+            return True
+        for a in expr.args:
+            if _has_array_op(a):
+                return True
+        if expr.expr is not None and _has_array_op(expr.expr):
+            return True
+        if expr.values is not None:
+            for v in expr.values:
+                if _has_array_op(v):
+                    return True
+    return False
+
+
+def _expand_range(r: List[int]) -> List[int]:
+    """Expand a range spec ``[start, stop]`` or ``[start, step, stop]``.
+
+    Ranges are inclusive on both ends (matching Julia ``start:stop``).
+    """
+    if len(r) == 2:
+        start, stop = r
+        step = 1
+    elif len(r) == 3:
+        start, step, stop = r
+    else:
+        raise ValueError(f"Invalid range spec: {r}")
+    if step == 0:
+        raise ValueError(f"Range step cannot be zero: {r}")
+    vals: List[int] = []
+    v = int(start)
+    stop = int(stop)
+    step = int(step)
+    if step > 0:
+        while v <= stop:
+            vals.append(v)
+            v += step
+    else:
+        while v >= stop:
+            vals.append(v)
+            v += step
+    return vals
 
 
 def _has_spatial_operator(expr: Expr) -> bool:
@@ -769,16 +886,26 @@ def flatten(esm_file: EsmFile) -> FlattenedSystem:
             flat.observed_variables[name] = var
         for eq in comp.equations:
             dep = _lhs_dependent_var(eq.lhs)
-            if dep is not None:
+            # Equations that use array ops may legitimately define different
+            # index subsets of the same state variable (stencil interior + BCs,
+            # block-assembled makearray, etc.). Skip the scalar-only dedup check
+            # in that case — the array simulation path resolves per-element.
+            is_array_eq = _has_array_op(eq.lhs) or _has_array_op(eq.rhs)
+            if dep is not None and not is_array_eq:
                 if dep in seen_lhs:
                     existing = seen_lhs[dep]
                     if _expr_to_string(existing.rhs) != _expr_to_string(eq.rhs):
-                        raise ConflictingDerivativeError(
-                            f"Two systems define non-additive equations for "
-                            f"variable {dep!r}: "
-                            f"{existing.source_system} vs {eq.source_system}"
-                        )
-                    continue
+                        # Only flag conflicts when neither side uses array ops.
+                        if not (
+                            _has_array_op(existing.lhs) or _has_array_op(existing.rhs)
+                        ):
+                            raise ConflictingDerivativeError(
+                                f"Two systems define non-additive equations for "
+                                f"variable {dep!r}: "
+                                f"{existing.source_system} vs {eq.source_system}"
+                            )
+                    else:
+                        continue
                 seen_lhs[dep] = eq
             flat.equations.append(eq)
 
@@ -875,3 +1002,216 @@ def _expand_operator_compose_placeholders(
         else:
             new_equations.append(eq)
     b.equations = new_equations
+
+
+# ============================================================================
+# Array-op variable shape inference
+# ============================================================================
+
+
+def _eval_index_expr(
+    expr: Expr, index_vals: Dict[str, int]
+) -> Optional[int]:
+    """Evaluate a small integer expression used as an array index.
+
+    Supports literals, index symbols (bound via ``index_vals``), and the
+    minimal set of arithmetic ops (+, -, *) on integers. Returns ``None`` if
+    the expression is not a resolvable integer (e.g. contains a non-bound
+    variable) — in that case the caller should skip this index for shape
+    inference.
+    """
+    if isinstance(expr, (int, float)):
+        if isinstance(expr, bool):
+            return None
+        try:
+            return int(expr)
+        except Exception:
+            return None
+    if isinstance(expr, str):
+        if expr in index_vals:
+            return index_vals[expr]
+        return None
+    if isinstance(expr, ExprNode):
+        if expr.op == "+" and expr.args:
+            acc = 0
+            for a in expr.args:
+                v = _eval_index_expr(a, index_vals)
+                if v is None:
+                    return None
+                acc += v
+            return acc
+        if expr.op == "-" and expr.args:
+            if len(expr.args) == 1:
+                v = _eval_index_expr(expr.args[0], index_vals)
+                return None if v is None else -v
+            acc = _eval_index_expr(expr.args[0], index_vals)
+            if acc is None:
+                return None
+            for a in expr.args[1:]:
+                v = _eval_index_expr(a, index_vals)
+                if v is None:
+                    return None
+                acc -= v
+            return acc
+        if expr.op == "*" and expr.args:
+            acc = 1
+            for a in expr.args:
+                v = _eval_index_expr(a, index_vals)
+                if v is None:
+                    return None
+                acc *= v
+            return acc
+    return None
+
+
+def _collect_index_uses(
+    expr: Expr,
+    state_vars: Set[str],
+    out: Dict[str, List[List[int]]],
+    bound_indices: Optional[Dict[str, int]] = None,
+) -> None:
+    """Walk ``expr`` collecting concrete index tuples used against state vars.
+
+    For every ``index(var, i0, i1, ...)`` sub-expression where ``var`` is a
+    known state variable (post-namespacing), append the resolved integer
+    index tuple to ``out[var]``. ``bound_indices`` carries the current
+    arrayop index-symbol bindings (one entry per iterated point in the
+    output box) so offset indices like ``u[i-1]`` resolve to concrete ints.
+    """
+    bound_indices = bound_indices or {}
+    if _is_number(expr) or isinstance(expr, str) or expr is None:
+        return
+    if isinstance(expr, ExprNode):
+        if expr.op == "index" and expr.args:
+            head = expr.args[0]
+            # Only resolve direct state variable references. Nested array ops
+            # (reshape/transpose/... wrapping a state variable) still contribute
+            # via their inner operand — but the outer index doesn't constrain
+            # the state variable's shape directly. Keep it simple.
+            if isinstance(head, str) and head in state_vars:
+                # We need to enumerate index tuples across the current
+                # bound_indices iteration context. Caller sets bound_indices
+                # per sample point, so this walker just reads the current
+                # values. If any index_expr is non-literal and no binding is
+                # available, we skip.
+                tup: List[int] = []
+                ok = True
+                for idx_expr in expr.args[1:]:
+                    v = _eval_index_expr(idx_expr, bound_indices)
+                    if v is None:
+                        ok = False
+                        break
+                    tup.append(v)
+                if ok and tup:
+                    out.setdefault(head, []).append(tup)
+            # Regardless, recurse into args (e.g. indices may themselves have
+            # sub-expressions — shouldn't contain further `index` ops for
+            # state vars in practice, but be safe).
+            for a in expr.args:
+                _collect_index_uses(a, state_vars, out, bound_indices)
+            return
+
+        if expr.op == "arrayop":
+            # Iterate the output box (via `ranges` if provided, else via the
+            # output_idx symbols we cannot resolve). For each concrete point
+            # inherit bound_indices and walk the body.
+            ranges = expr.ranges or {}
+            idx_syms = [s for s in (expr.output_idx or []) if isinstance(s, str)]
+            # Also include any ranges-only symbols (reduction indices).
+            for k in ranges.keys():
+                if k not in idx_syms:
+                    idx_syms.append(k)
+            if idx_syms and all(s in ranges for s in idx_syms):
+                # Enumerate Cartesian product of index ranges.
+                value_lists = [_expand_range(ranges[s]) for s in idx_syms]
+                def rec(pos: int, current: Dict[str, int]) -> None:
+                    if pos == len(idx_syms):
+                        if expr.expr is not None:
+                            _collect_index_uses(
+                                expr.expr, state_vars, out, current
+                            )
+                        for a in expr.args:
+                            _collect_index_uses(
+                                a, state_vars, out, current
+                            )
+                        return
+                    sym = idx_syms[pos]
+                    for v in value_lists[pos]:
+                        current[sym] = v
+                        rec(pos + 1, current)
+                        del current[sym]
+                rec(0, dict(bound_indices))
+            else:
+                # Fall back: just walk children without bound indices.
+                if expr.expr is not None:
+                    _collect_index_uses(expr.expr, state_vars, out, bound_indices)
+                for a in expr.args:
+                    _collect_index_uses(a, state_vars, out, bound_indices)
+            return
+
+        # Default recursion: walk all subtrees.
+        for a in expr.args:
+            _collect_index_uses(a, state_vars, out, bound_indices)
+        if expr.expr is not None:
+            _collect_index_uses(expr.expr, state_vars, out, bound_indices)
+        if expr.values is not None:
+            for v in expr.values:
+                _collect_index_uses(v, state_vars, out, bound_indices)
+
+
+def infer_variable_shapes(flat: FlattenedSystem) -> Dict[str, Tuple[int, ...]]:
+    """Infer per-state-variable array shapes from the equation set.
+
+    Walks every equation (LHS and RHS), collecting concrete integer indices
+    used against state variables, and returns a ``{name: shape}`` dict where
+    shape is a tuple of positive integers (one per dimension). Scalar
+    variables — those that appear only as bare names, never inside an
+    ``index`` op — get shape ``()``.
+
+    Indices are assumed to be 1-based and contiguous starting at 1; the
+    inferred length for each dimension is the maximum observed index along
+    that dimension. Variables whose index uses report a minimum below 1 get
+    their shape biased so the flat size covers the full range (``max - min + 1``),
+    which mirrors the Julia binding's 1-based semantics.
+    """
+    state_names: Set[str] = set(flat.state_variables.keys())
+    uses: Dict[str, List[List[int]]] = {}
+    for eq in flat.equations:
+        _collect_index_uses(eq.lhs, state_names, uses)
+        _collect_index_uses(eq.rhs, state_names, uses)
+
+    shapes: Dict[str, Tuple[int, ...]] = {}
+    for name in state_names:
+        if name not in uses or not uses[name]:
+            shapes[name] = ()
+            continue
+        tups = uses[name]
+        ndim_set = {len(t) for t in tups}
+        if len(ndim_set) != 1:
+            raise FlattenError(
+                f"Variable {name!r} is indexed with conflicting dimensionality: "
+                f"{sorted(ndim_set)}"
+            )
+        ndim = next(iter(ndim_set))
+        per_dim_max: List[int] = [0] * ndim
+        per_dim_min: List[int] = [10 ** 9] * ndim
+        for tup in tups:
+            for d, v in enumerate(tup):
+                if v > per_dim_max[d]:
+                    per_dim_max[d] = v
+                if v < per_dim_min[d]:
+                    per_dim_min[d] = v
+        shape: List[int] = []
+        for d in range(ndim):
+            # 1-based: length = max index (under the convention that index 1
+            # is the first slot). Offset indices like u[i-1] where i starts at
+            # 2 still max out at the highest element.
+            length = max(per_dim_max[d], 1)
+            if per_dim_min[d] < 1:
+                # Indices below 1 mean the variable is referenced "out of range" —
+                # not supported. Keep the max as-is; simulate() will error if this
+                # ever gets flat-indexed.
+                pass
+            shape.append(length)
+        shapes[name] = tuple(shape)
+    return shapes

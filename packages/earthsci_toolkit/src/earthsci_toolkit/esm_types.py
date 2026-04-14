@@ -3,7 +3,7 @@ Type definitions for ESM Format using dataclasses.
 """
 
 from dataclasses import dataclass, field
-from typing import Union, List, Dict, Any, Optional, Literal
+from typing import Union, List, Dict, Any, Optional, Literal, Tuple
 from enum import Enum
 
 
@@ -18,6 +18,24 @@ class ExprNode:
     args: List['Expr'] = field(default_factory=list)
     wrt: Optional[str] = None  # with respect to (for derivatives)
     dim: Optional[str] = None  # dimension information
+
+    # Array-op extensions (schema §ExpressionNode). None unless the op uses them.
+    # arrayop:
+    output_idx: Optional[List[Union[str, int]]] = None
+    expr: Optional['Expr'] = None
+    reduce: Optional[str] = None  # default "+"
+    ranges: Optional[Dict[str, List[int]]] = None
+    # makearray:
+    regions: Optional[List[List[List[int]]]] = None
+    values: Optional[List['Expr']] = None
+    # reshape:
+    shape: Optional[List[Union[int, str]]] = None
+    # transpose:
+    perm: Optional[List[int]] = None
+    # concat:
+    axis: Optional[int] = None
+    # broadcast:
+    fn: Optional[str] = None
 
 
 # Recursive type definition for expressions

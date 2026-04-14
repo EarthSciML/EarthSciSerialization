@@ -31,11 +31,26 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
     elif isinstance(expr, ExprNode):
         # Recursively substitute in all arguments
         substituted_args = [substitute(arg, bindings) for arg in expr.args]
+        substituted_body = substitute(expr.expr, bindings) if expr.expr is not None else None
+        substituted_values = (
+            [substitute(v, bindings) for v in expr.values]
+            if expr.values is not None else None
+        )
         return ExprNode(
             op=expr.op,
             args=substituted_args,
             wrt=expr.wrt,
-            dim=expr.dim
+            dim=expr.dim,
+            output_idx=expr.output_idx,
+            expr=substituted_body,
+            reduce=expr.reduce,
+            ranges=expr.ranges,
+            regions=expr.regions,
+            values=substituted_values,
+            shape=expr.shape,
+            perm=expr.perm,
+            axis=expr.axis,
+            fn=expr.fn,
         )
     elif isinstance(expr, dict):
         # Handle dict-form expression nodes (e.g. {"op": "+", "args": ["x", "y"]})
