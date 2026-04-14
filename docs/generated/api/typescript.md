@@ -1082,7 +1082,7 @@ Check if an expression is differentiable with respect to a variable
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1442`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1637`
 
 **Signature:**
 ```typescript
@@ -1715,7 +1715,7 @@ Validate ESM data and return structured validation result.
 
 ### validateSchema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1143`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1338`
 
 **Signature:**
 ```typescript
@@ -1749,7 +1749,7 @@ Validate dimensional consistency of all equations in an ESM file
 
 ### AffectEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:365`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:412`
 
 **Definition:**
 ```typescript
@@ -1763,6 +1763,21 @@ An affect equation in an event: lhs is the target variable (string), rhs is an e
 **Available in other languages:**
 - [Julia](julia.md#affectequation)
 - [Python](python.md#affectequation)
+
+---
+
+### Assertion
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:559`
+
+**Definition:**
+```typescript
+export interface Assertion {
+```
+
+**Description:**
+A single scalar check at a (variable, time) point.
+/
 
 ---
 
@@ -1798,7 +1813,7 @@ Configuration for the AST store
 
 ### BoundaryCondition
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:778`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1105`
 
 **Definition:**
 ```typescript
@@ -1897,7 +1912,7 @@ export interface ComponentNode {
 
 ### ConnectorEquation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:633`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:952`
 
 **Definition:**
 ```typescript
@@ -1915,7 +1930,7 @@ A single equation in a ConnectorSystem linking two coupled systems.
 
 ### ContinuousEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:405`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:452`
 
 **Definition:**
 ```typescript
@@ -1934,7 +1949,7 @@ Fires when a condition expression crosses zero (root-finding). Maps to MTK Symbo
 
 ### CoordinateTransform
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:770`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1097`
 
 **Definition:**
 ```typescript
@@ -1948,7 +1963,7 @@ export interface CoordinateTransform {
 
 ### CouplingCallback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:688`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1015`
 
 **Definition:**
 ```typescript
@@ -1966,7 +1981,7 @@ Register a callback for simulation events.
 
 ### CouplingCouple
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:615`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:926`
 
 **Definition:**
 ```typescript
@@ -1974,7 +1989,7 @@ export interface CouplingCouple {
 ```
 
 **Description:**
-Bi-directional coupling via connector equations.
+Bi-directional coupling via explicit ConnectorSystem equations.
 /
 
 **Available in other languages:**
@@ -2001,7 +2016,7 @@ export interface CouplingEdge {
 
 ### CouplingOperatorApply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:677`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1004`
 
 **Definition:**
 ```typescript
@@ -2019,7 +2034,7 @@ Register an Operator to run during simulation.
 
 ### CouplingOperatorCompose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:595`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:898`
 
 **Definition:**
 ```typescript
@@ -2037,7 +2052,7 @@ Match LHS time derivatives and add RHS terms together.
 
 ### CouplingVariableMap
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:654`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:973`
 
 **Definition:**
 ```typescript
@@ -2055,7 +2070,7 @@ Replace a parameter in one system with a variable from another.
 
 ### DataLoader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:523`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:826`
 
 **Definition:**
 ```typescript
@@ -2074,7 +2089,7 @@ An external data source registration. Runtime-specific; registered by type and l
 
 ### DataLoaderProvides
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:563`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:866`
 
 **Definition:**
 ```typescript
@@ -2175,7 +2190,7 @@ Maps base dimensions to their powers
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:729`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1056`
 
 **Definition:**
 ```typescript
@@ -2220,7 +2235,7 @@ export interface ESMError {
 
 ### ESMFormat2
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:185`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:208`
 
 **Definition:**
 ```typescript
@@ -2242,7 +2257,7 @@ export interface EditorState {
 
 ### Equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:357`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:404`
 
 **Definition:**
 ```typescript
@@ -2531,6 +2546,21 @@ show-details="true">
 
 ---
 
+### Example
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:590`
+
+**Definition:**
+```typescript
+export interface Example {
+```
+
+**Description:**
+An inline illustrative example of how to run the enclosing component. Defines the run configuration and one or more plots derived from the result.
+/
+
+---
+
 ### ExportOptions
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:19`
@@ -2559,7 +2589,7 @@ export interface ExpressionLocation {
 
 ### ExpressionNode
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:299`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:346`
 
 **Definition:**
 ```typescript
@@ -2656,7 +2686,7 @@ A fully flattened representation of a coupled ESM system.
 
 ### FunctionalAffect
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:378`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:425`
 
 **Definition:**
 ```typescript
@@ -2675,7 +2705,7 @@ Registered functional affect handler (alternative to symbolic affects).
 
 ### FunctionalAffect1
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:702`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1029`
 
 **Definition:**
 ```typescript
@@ -2740,6 +2770,39 @@ export interface HoverState {
 
 ---
 
+### Interface
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1138`
+
+**Definition:**
+```typescript
+export interface Interface {
+```
+
+**Description:**
+Geometric connection between two domains of potentially different dimensionality.
+/
+
+**Available in other languages:**
+- [Julia](julia.md#interface)
+
+---
+
+### InterfaceConstraint
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1178`
+
+**Definition:**
+```typescript
+export interface InterfaceConstraint {
+```
+
+**Description:**
+Constraint on a non-shared dimension at the interface.
+/
+
+---
+
 ### LayoutAlgorithm
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/types.ts:141`
@@ -2775,7 +2838,7 @@ export interface MatchResult {
 
 ### Metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:224`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:258`
 
 **Definition:**
 ```typescript
@@ -2794,7 +2857,7 @@ Authorship, provenance, and description.
 
 ### Model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:255`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:289`
 
 **Definition:**
 ```typescript
@@ -2813,7 +2876,7 @@ An ODE system — a fully specified set of time-dependent equations.
 
 ### ModelVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:283`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:330`
 
 **Definition:**
 ```typescript
@@ -2832,7 +2895,7 @@ A variable in an ODE model.
 
 ### Operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:570`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:873`
 
 **Definition:**
 ```typescript
@@ -2862,7 +2925,7 @@ export interface Optimization {
 
 ### Parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:485`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:775`
 
 **Definition:**
 ```typescript
@@ -2879,9 +2942,84 @@ A parameter in a reaction system.
 
 ---
 
+### ParameterSweep
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:634`
+
+**Definition:**
+```typescript
+export interface ParameterSweep {
+```
+
+**Description:**
+Optional parameter sweep. When present, the example represents a family of runs (one per Cartesian combination) rather than a single trajectory.
+/
+
+---
+
+### Plot
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:659`
+
+**Definition:**
+```typescript
+export interface Plot {
+```
+
+**Description:**
+A plot specification associated with an example. Only structural information is recorded — axes, series selection, and value reductions. Styling (colors, fonts, legends, themes) is the viewer's concern.
+/
+
+---
+
+### PlotAxis
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:677`
+
+**Definition:**
+```typescript
+export interface PlotAxis {
+```
+
+**Description:**
+Axis specification: any state variable, observed variable, parameter name, or swept parameter may be used.
+/
+
+---
+
+### PlotSeries
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:707`
+
+**Definition:**
+```typescript
+export interface PlotSeries {
+```
+
+**Description:**
+A single named series for multi-series line or scatter plots.
+/
+
+---
+
+### PlotValue
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:690`
+
+**Definition:**
+```typescript
+export interface PlotValue {
+```
+
+**Description:**
+Required for heatmap; defines the color channel. Ignored for line/scatter.
+/
+
+---
+
 ### Reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:493`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:783`
 
 **Definition:**
 ```typescript
@@ -2900,7 +3038,7 @@ A single reaction in a reaction system.
 
 ### ReactionSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:437`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:714`
 
 **Definition:**
 ```typescript
@@ -2919,7 +3057,7 @@ A reaction network — declarative representation of chemical or biological reac
 
 ### Reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:246`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:280`
 
 **Definition:**
 ```typescript
@@ -2956,7 +3094,7 @@ Schema validation error with JSON Pointer path
 
 ### SpatialDimension
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:764`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1091`
 
 **Definition:**
 ```typescript
@@ -2974,7 +3112,7 @@ Specification of a single spatial dimension.
 
 ### Species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:477`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:767`
 
 **Definition:**
 ```typescript
@@ -2993,7 +3131,7 @@ A reactive species in a reaction system.
 
 ### StoichiometryEntry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:516`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:806`
 
 **Definition:**
 ```typescript
@@ -3038,6 +3176,126 @@ export interface SubstitutionContext {
 
 **Description:**
 Context for resolving scoped references during substitution
+/
+
+---
+
+### SubsystemRef
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:484`
+
+**Definition:**
+```typescript
+export interface SubsystemRef {
+```
+
+**Description:**
+A reference to an external ESM file containing a model or reaction system definition. The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file.
+/
+
+---
+
+### SweepRange
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:647`
+
+**Definition:**
+```typescript
+export interface SweepRange {
+```
+
+**Description:**
+Generated range; mutually exclusive with values.
+/
+
+---
+
+### Test
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:506`
+
+**Definition:**
+```typescript
+export interface Test {
+```
+
+**Description:**
+An inline validation test for the enclosing model or reaction system. Defines the run configuration (initial conditions, parameter overrides, time span) and the scalar assertions that must hold.
+/
+
+---
+
+### TimeSpan
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:539`
+
+**Definition:**
+```typescript
+export interface TimeSpan {
+```
+
+**Description:**
+Simulation time interval expressed in the component's time units.
+/
+
+---
+
+### Tolerance
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:493`
+
+**Definition:**
+```typescript
+export interface Tolerance {
+```
+
+**Description:**
+Model-level default numerical tolerance for tests, used when a test or assertion does not provide its own.
+/
+
+---
+
+### Tolerance1
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:546`
+
+**Definition:**
+```typescript
+export interface Tolerance1 {
+```
+
+**Description:**
+Test-level default tolerance applied to all assertions in this test that do not override it.
+/
+
+---
+
+### Tolerance2
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:577`
+
+**Definition:**
+```typescript
+export interface Tolerance2 {
+```
+
+**Description:**
+Per-assertion tolerance override. If present, this takes precedence over the test-level and model-level defaults.
+/
+
+---
+
+### Tolerance3
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:813`
+
+**Definition:**
+```typescript
+export interface Tolerance3 {
+```
+
+**Description:**
+System-level default numerical tolerance for tests, used when a test or assertion does not provide its own.
 /
 
 ---

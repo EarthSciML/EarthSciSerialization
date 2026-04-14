@@ -2217,7 +2217,7 @@ class CouplingCouple:
 export interface CouplingCouple {
 ```
 
-> Bi-directional coupling via connector equations.
+> Bi-directional coupling via explicit ConnectorSystem equations.
 
 ---
 
@@ -2830,6 +2830,27 @@ class Graph:
 ```typescript
 export interface Graph<N, E> {
 ```
+
+---
+
+### Interface
+
+**Julia:**
+```julia
+struct Interface
+```
+
+> Interface
+
+Defines the geometric relationship between two domains of potentially different
+dimensionality.
+
+**Typescript:**
+```typescript
+export interface Interface {
+```
+
+> Geometric connection between two domains of potentially different dimensionality.
 
 ---
 

@@ -717,6 +717,9 @@ Graph(...)
 Interface(...)
 ```
 
+**Available in other languages:**
+- [Typescript](typescript.md#interface)
+
 ---
 
 ### JSON
@@ -6601,6 +6604,9 @@ Interface
 Defines the geometric relationship between two domains of potentially different
 dimensionality. Specifies shared dimensions, constraints on non-shared dimensions,
 and regridding strategy.
+
+**Available in other languages:**
+- [Typescript](typescript.md#interface)
 
 ---
 
