@@ -197,6 +197,38 @@ from .migration import (
     MigrationError,
 )
 
+# Runtime data loaders (dispatch on DataLoader.kind)
+from .data_loaders import (
+    UrlTemplateError,
+    expand_url_template,
+    expand_with_mirrors,
+    template_placeholders,
+    TimeResolutionError,
+    parse_iso_duration,
+    file_anchor_for_time,
+    file_anchors_in_range,
+    records_for_file,
+    MirrorFallbackError,
+    open_with_fallback,
+    UnitConversionError,
+    apply_variable_mapping,
+    apply_unit_conversion,
+    RegriddingError,
+    regrid_latlon_to_target,
+    GridLoaderError,
+    GridLoader,
+    load_grid,
+    PointsLoaderError,
+    PointsLoader,
+    load_points,
+    StaticLoaderError,
+    StaticLoader,
+    load_static,
+    DataLoaderDispatchError,
+    load_data,
+    resolve_files,
+)
+
 # Operator registry functionality (Core tier requirement)
 from .operator_registry import (
     register_operator,
@@ -389,6 +421,36 @@ __all__ = [
     "RegisteredOperator",
     "OperatorRegistryError",
     "OperatorValidationError",
+
+    # Runtime data loaders
+    "UrlTemplateError",
+    "expand_url_template",
+    "expand_with_mirrors",
+    "template_placeholders",
+    "TimeResolutionError",
+    "parse_iso_duration",
+    "file_anchor_for_time",
+    "file_anchors_in_range",
+    "records_for_file",
+    "MirrorFallbackError",
+    "open_with_fallback",
+    "UnitConversionError",
+    "apply_variable_mapping",
+    "apply_unit_conversion",
+    "RegriddingError",
+    "regrid_latlon_to_target",
+    "GridLoaderError",
+    "GridLoader",
+    "load_grid",
+    "PointsLoaderError",
+    "PointsLoader",
+    "load_points",
+    "StaticLoaderError",
+    "StaticLoader",
+    "load_static",
+    "DataLoaderDispatchError",
+    "load_data",
+    "resolve_files",
 ]
 
 # Add simulation components if scipy is available
