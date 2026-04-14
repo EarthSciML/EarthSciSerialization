@@ -1005,11 +1005,11 @@ class ESMExplorer:
         # Data Loaders section
         if self.esm_file.data_loaders:
             html_parts.append('<h4 style="color: #F18F01; margin-top: 20px;">📁 Data Loaders</h4>')
-            for loader in self.esm_file.data_loaders:
-                loader_type = getattr(loader, 'type', 'unknown')
+            for name, loader in self.esm_file.data_loaders.items():
+                kind = loader.kind.value if hasattr(loader, 'kind') else 'unknown'
                 html_parts.append(f"""
                 <div style="margin: 10px 0; padding: 10px; border-left: 4px solid #F18F01; background-color: #fefbf0;">
-                    <strong>{loader.name}</strong> ({loader_type})<br>
+                    <strong>{name}</strong> ({kind})<br>
                 </div>
                 """)
 

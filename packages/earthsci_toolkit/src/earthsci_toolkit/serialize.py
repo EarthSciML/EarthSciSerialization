@@ -13,7 +13,8 @@ from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
-    DataLoader, DataLoaderType, Operator,
+    DataLoader, DataLoaderKind, DataLoaderSource, DataLoaderTemporal,
+    DataLoaderSpatial, DataLoaderVariable, DataLoaderRegridding, Operator,
     CouplingEntry, CouplingType, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
@@ -359,33 +360,91 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
     return result
 
 
+def _serialize_data_loader_source(source: DataLoaderSource) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"url_template": source.url_template}
+    if source.mirrors:
+        result["mirrors"] = list(source.mirrors)
+    return result
+
+
+def _serialize_data_loader_temporal(temporal: DataLoaderTemporal) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
+    if temporal.start is not None:
+        result["start"] = temporal.start
+    if temporal.end is not None:
+        result["end"] = temporal.end
+    if temporal.file_period is not None:
+        result["file_period"] = temporal.file_period
+    if temporal.frequency is not None:
+        result["frequency"] = temporal.frequency
+    if temporal.records_per_file is not None:
+        result["records_per_file"] = temporal.records_per_file
+    if temporal.time_variable is not None:
+        result["time_variable"] = temporal.time_variable
+    return result
+
+
+def _serialize_data_loader_spatial(spatial: DataLoaderSpatial) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"crs": spatial.crs, "grid_type": spatial.grid_type}
+    if spatial.staggering:
+        result["staggering"] = dict(spatial.staggering)
+    if spatial.resolution:
+        result["resolution"] = dict(spatial.resolution)
+    if spatial.extent:
+        result["extent"] = {k: list(v) for k, v in spatial.extent.items()}
+    return result
+
+
+def _serialize_data_loader_variable(variable: DataLoaderVariable) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "file_variable": variable.file_variable,
+        "units": variable.units,
+    }
+    if variable.unit_conversion is not None:
+        if isinstance(variable.unit_conversion, (int, float)):
+            result["unit_conversion"] = variable.unit_conversion
+        else:
+            result["unit_conversion"] = _serialize_expression(variable.unit_conversion)
+    if variable.description is not None:
+        result["description"] = variable.description
+    if variable.reference is not None:
+        result["reference"] = _serialize_reference(variable.reference)
+    return result
+
+
+def _serialize_data_loader_regridding(regridding: DataLoaderRegridding) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
+    if regridding.fill_value is not None:
+        result["fill_value"] = regridding.fill_value
+    if regridding.extrapolation is not None:
+        result["extrapolation"] = regridding.extrapolation
+    return result
+
+
 def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
     """Serialize a data loader to JSON-compatible format."""
-    result = {}
-
-    # Map our enum directly to schema types (they now match)
-    type_mapping = {
-        DataLoaderType.GRIDDED_DATA: "gridded_data",
-        DataLoaderType.EMISSIONS: "emissions",
-        DataLoaderType.TIMESERIES: "timeseries",
-        DataLoaderType.STATIC: "static",
-        DataLoaderType.CALLBACK: "callback"
+    result: Dict[str, Any] = {
+        "kind": loader.kind.value,
+        "source": _serialize_data_loader_source(loader.source),
+        "variables": {
+            vname: _serialize_data_loader_variable(vdef)
+            for vname, vdef in loader.variables.items()
+        },
     }
-    result["type"] = type_mapping.get(loader.type, "static")
-
-    # Schema uses loader_id for source
-    if loader.source:
-        result["loader_id"] = loader.source
-
-    # Schema uses config for format_options
-    if loader.format_options:
-        result["config"] = loader.format_options
-
-    # Schema uses provides for variables
-    if getattr(loader, "provides", None):
-        result["provides"] = loader.provides
-    elif loader.variables:
-        result["provides"] = {var: {} for var in loader.variables}
+    if loader.temporal is not None:
+        temporal_dict = _serialize_data_loader_temporal(loader.temporal)
+        if temporal_dict:
+            result["temporal"] = temporal_dict
+    if loader.spatial is not None:
+        result["spatial"] = _serialize_data_loader_spatial(loader.spatial)
+    if loader.regridding is not None:
+        regridding_dict = _serialize_data_loader_regridding(loader.regridding)
+        if regridding_dict:
+            result["regridding"] = regridding_dict
+    if loader.reference is not None:
+        result["reference"] = _serialize_reference(loader.reference)
+    if loader.metadata:
+        result["metadata"] = dict(loader.metadata)
 
     return result
 
@@ -536,8 +595,8 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     # Serialize data loaders
     if esm_file.data_loaders:
         result["data_loaders"] = {
-            loader.name: _serialize_data_loader(loader)
-            for loader in esm_file.data_loaders
+            name: _serialize_data_loader(loader)
+            for name, loader in esm_file.data_loaders.items()
         }
 
     # Serialize operators

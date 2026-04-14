@@ -5,7 +5,7 @@ from earthsci_toolkit.esm_types import (
     ExprNode, Expr, Equation, AffectEquation, ModelVariable, Model,
     Species, Parameter, Reaction, ReactionSystem,
     ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
-    DataLoader, DataLoaderType, Operator,
+    DataLoader, DataLoaderKind, DataLoaderSource, DataLoaderVariable, Operator,
     CouplingEntry, CouplingType, VariableMapCoupling, OperatorComposeCoupling,
     Domain,
     Reference, Metadata, EsmFile
@@ -98,10 +98,19 @@ def test_reaction_system():
 
 def test_data_loader():
     """Test DataLoader creation."""
-    loader = DataLoader(name="test", type=DataLoaderType.EMISSIONS, source="data.csv")
+    loader = DataLoader(
+        name="test",
+        kind=DataLoaderKind.GRID,
+        source=DataLoaderSource(url_template="file:///data/test_{date:%Y%m%d}.nc"),
+        variables={
+            "T": DataLoaderVariable(file_variable="T", units="K", description="temperature"),
+        },
+    )
     assert loader.name == "test"
-    assert loader.type == DataLoaderType.EMISSIONS
-    assert loader.source == "data.csv"
+    assert loader.kind == DataLoaderKind.GRID
+    assert loader.source.url_template == "file:///data/test_{date:%Y%m%d}.nc"
+    assert "T" in loader.variables
+    assert loader.variables["T"].file_variable == "T"
 
 
 def test_operator():

@@ -271,8 +271,12 @@ def _generate_domain_comment(domain: Dict[str, Any]) -> List[str]:
 def _generate_data_loader_comment(name: str, data_loader: Dict[str, Any]) -> List[str]:
     lines = []
     lines.append(f"# TODO: Implement data loader {name}")
-    if data_loader.get('source'):
-        lines.append(f"#   Source: {data_loader['source']}")
+    source = data_loader.get('source')
+    if isinstance(source, dict) and 'url_template' in source:
+        lines.append(f"#   Source: {source['url_template']}")
+    kind = data_loader.get('kind')
+    if kind:
+        lines.append(f"#   Kind: {kind}")
     return lines
 
 

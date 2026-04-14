@@ -22,7 +22,12 @@ from .esm_types import (
     FunctionalAffect,
     DiscreteEventTrigger,
     DataLoader,
-    DataLoaderType,
+    DataLoaderKind,
+    DataLoaderSource,
+    DataLoaderTemporal,
+    DataLoaderSpatial,
+    DataLoaderVariable,
+    DataLoaderRegridding,
     Operator,
     CouplingEntry,
     Domain,
@@ -67,13 +72,6 @@ from .flatten import (
     CyclicPromotionError,
     UnsupportedDimensionalityError,
 )
-
-# Enhanced parsing with CSV integration (optional - requires pandas)
-try:
-    from .parse import load_with_csv_data
-    _has_enhanced_loading = True
-except (ImportError, ValueError, Exception):
-    _has_enhanced_loading = False
 
 # Validation (Core tier requirement)
 from .validation import validate, ValidationResult, ValidationError
@@ -199,46 +197,6 @@ from .migration import (
     MigrationError,
 )
 
-# Data loading functionality (optional - requires pandas)
-_has_csv_support = False
-try:
-    from .csv_loader import (
-        CSVLoader,
-        CSVValidationError,
-        load_csv_data,
-    )
-    _has_csv_support = True
-except (ImportError, ValueError, Exception):
-    # pandas not available or compatibility issues, skip CSV loader functionality
-    pass
-
-# Gridded data loading functionality (optional - requires xarray/netCDF4/h5py)
-_has_gridded_support = False
-try:
-    from .gridded_loader import (
-        GriddedDataLoader,
-        GriddedValidationError,
-        load_gridded_data,
-    )
-    _has_gridded_support = True
-except (ImportError, ValueError, Exception):
-    # gridded data libraries not available or compatibility issues
-    pass
-
-# Callback data loading functionality (no external dependencies)
-_has_callback_support = False
-try:
-    from .callback_loader import (
-        CallbackLoader,
-        CallbackValidationError,
-        CallbackDataSource,
-        load_callback_data,
-    )
-    _has_callback_support = True
-except (ImportError, ValueError, Exception):
-    # callback loader functionality failed to load
-    pass
-
 # Operator registry functionality (Core tier requirement)
 from .operator_registry import (
     register_operator,
@@ -276,7 +234,12 @@ __all__ = [
     "FunctionalAffect",
     "DiscreteEventTrigger",
     "DataLoader",
-    "DataLoaderType",
+    "DataLoaderKind",
+    "DataLoaderSource",
+    "DataLoaderTemporal",
+    "DataLoaderSpatial",
+    "DataLoaderVariable",
+    "DataLoaderRegridding",
     "Operator",
     "CouplingEntry",
     "Domain",
@@ -427,35 +390,6 @@ __all__ = [
     "OperatorRegistryError",
     "OperatorValidationError",
 ]
-
-# Add CSV data loading components if pandas is available
-if _has_csv_support:
-    __all__.extend([
-        "CSVLoader",
-        "CSVValidationError",
-        "load_csv_data",
-    ])
-
-# Add gridded data loading components if libraries are available
-if _has_gridded_support:
-    __all__.extend([
-        "GriddedDataLoader",
-        "GriddedValidationError",
-        "load_gridded_data",
-    ])
-
-# Add callback data loading components
-if _has_callback_support:
-    __all__.extend([
-        "CallbackLoader",
-        "CallbackValidationError",
-        "CallbackDataSource",
-        "load_callback_data",
-    ])
-
-# Add enhanced loading if available
-if _has_enhanced_loading:
-    __all__.append("load_with_csv_data")
 
 # Add simulation components if scipy is available
 if _has_simulation:

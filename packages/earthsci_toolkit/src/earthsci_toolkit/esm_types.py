@@ -151,25 +151,76 @@ class DiscreteEvent:
 # 4. Data Loading and Operations
 # ========================================
 
-class DataLoaderType(Enum):
-    """Types of data loaders."""
-    GRIDDED_DATA = "gridded_data"
-    EMISSIONS = "emissions"
-    TIMESERIES = "timeseries"
+class DataLoaderKind(Enum):
+    """Structural kind of an external data source."""
+    GRID = "grid"
+    POINTS = "points"
     STATIC = "static"
-    CALLBACK = "callback"
+
+
+@dataclass
+class DataLoaderSource:
+    """File discovery configuration for a data loader."""
+    url_template: str
+    mirrors: List[str] = field(default_factory=list)
+
+
+@dataclass
+class DataLoaderTemporal:
+    """Temporal coverage and record layout for a data source."""
+    start: Optional[str] = None
+    end: Optional[str] = None
+    file_period: Optional[str] = None
+    frequency: Optional[str] = None
+    records_per_file: Optional[Union[int, str]] = None
+    time_variable: Optional[str] = None
+
+
+@dataclass
+class DataLoaderSpatial:
+    """Spatial grid description for a data source."""
+    crs: str
+    grid_type: str
+    staggering: Dict[str, str] = field(default_factory=dict)
+    resolution: Dict[str, float] = field(default_factory=dict)
+    extent: Dict[str, List[float]] = field(default_factory=dict)
+
+
+@dataclass
+class DataLoaderVariable:
+    """A variable exposed by a data loader, mapped from a source-file variable."""
+    file_variable: str
+    units: str
+    unit_conversion: Optional[Union[float, int, 'Expr']] = None
+    description: Optional[str] = None
+    reference: Optional['Reference'] = None
+
+
+@dataclass
+class DataLoaderRegridding:
+    """Structural regridding configuration for a data loader."""
+    fill_value: Optional[float] = None
+    extrapolation: Optional[str] = None  # "clamp", "nan", "periodic"
 
 
 @dataclass
 class DataLoader:
-    """Configuration for loading external data."""
+    """
+    Generic, runtime-agnostic description of an external data source.
+
+    Carries enough structural information to locate files, map timestamps
+    to files, describe spatial/variable semantics, and regrid — rather than
+    pointing at a runtime handler.
+    """
     name: str
-    type: DataLoaderType
-    source: str  # file path, URL, or connection string
-    format_options: Dict[str, Any] = field(default_factory=dict)
-    variables: List[str] = field(default_factory=list)
-    # Store full metadata for each provided variable (units, description, etc.)
-    provides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    kind: DataLoaderKind
+    source: DataLoaderSource
+    variables: Dict[str, DataLoaderVariable] = field(default_factory=dict)
+    temporal: Optional[DataLoaderTemporal] = None
+    spatial: Optional[DataLoaderSpatial] = None
+    regridding: Optional[DataLoaderRegridding] = None
+    reference: Optional['Reference'] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -412,7 +463,7 @@ class EsmFile:
     models: Dict[str, Model] = field(default_factory=dict)
     reaction_systems: Dict[str, ReactionSystem] = field(default_factory=dict)
     events: List[Union[ContinuousEvent, DiscreteEvent]] = field(default_factory=list)
-    data_loaders: List[DataLoader] = field(default_factory=list)
+    data_loaders: Dict[str, DataLoader] = field(default_factory=dict)
     operators: List[Operator] = field(default_factory=list)
     coupling: List[CouplingEntry] = field(default_factory=list)
     domains: Dict[str, Domain] = field(default_factory=dict)

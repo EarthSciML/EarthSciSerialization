@@ -374,11 +374,11 @@ class ESMEditor:
                     merged_file.events = []
                 merged_file.events.extend(file_b.events)
 
-            # Merge data_loaders (list extend)
+            # Merge data_loaders (dict merge; file_b takes precedence on key collision)
             if file_b.data_loaders:
                 if not merged_file.data_loaders:
-                    merged_file.data_loaders = []
-                merged_file.data_loaders.extend(file_b.data_loaders)
+                    merged_file.data_loaders = {}
+                merged_file.data_loaders.update(file_b.data_loaders)
 
             # Merge operators (list extend)
             if file_b.operators:

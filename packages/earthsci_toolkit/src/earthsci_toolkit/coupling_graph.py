@@ -64,11 +64,7 @@ def construct_coupling_graph(esm_file: EsmFile) -> CouplingGraph:
 
     # Add data loader nodes
     if esm_file.data_loaders:
-        nodes.extend([loader.name for loader in esm_file.data_loaders if hasattr(loader, 'name')])
-        # Fallback if loaders don't have names
-        for i, loader in enumerate(esm_file.data_loaders):
-            if not hasattr(loader, 'name'):
-                nodes.append(f"loader_{i}")
+        nodes.extend(esm_file.data_loaders.keys())
 
     # Add operator nodes
     if esm_file.operators:
@@ -268,8 +264,7 @@ class ScopedReferenceResolver:
             for name in self.esm_file.reaction_systems:
                 cache[name] = 'reaction_system'
         if self.esm_file.data_loaders:
-            for i, loader in enumerate(self.esm_file.data_loaders):
-                name = getattr(loader, 'name', f'loader_{i}')
+            for name in self.esm_file.data_loaders:
                 cache[name] = 'data_loader'
         if self.esm_file.operators:
             for i, op in enumerate(self.esm_file.operators):
@@ -299,13 +294,12 @@ class ScopedReferenceResolver:
                     variables.update([p.name for p in rs.parameters if hasattr(p, 'name')])
                 cache[name] = variables
 
-        # Data loader provides
+        # Data loader variables
         if self.esm_file.data_loaders:
-            for i, loader in enumerate(self.esm_file.data_loaders):
-                name = getattr(loader, 'name', f'loader_{i}')
+            for name, loader in self.esm_file.data_loaders.items():
                 variables = set()
-                if hasattr(loader, 'provides') and loader.provides:
-                    variables.update(loader.provides.keys())
+                if getattr(loader, 'variables', None):
+                    variables.update(loader.variables.keys())
                 cache[name] = variables
 
         return cache

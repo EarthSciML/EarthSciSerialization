@@ -4,7 +4,8 @@ import json
 import pytest
 
 from earthsci_toolkit.esm_types import (
-    EsmFile, Metadata, DataLoader, DataLoaderType, Operator,
+    EsmFile, Metadata, DataLoader, DataLoaderKind, DataLoaderSource,
+    DataLoaderVariable, DataLoaderTemporal, DataLoaderSpatial, Operator,
     VariableMapCoupling, CouplingType, ContinuousEvent, AffectEquation
 )
 from earthsci_toolkit.serialize import save
@@ -27,10 +28,17 @@ def test_roundtrip_preserves_data_loaders():
     # Create data loader
     data_loader = DataLoader(
         name="test_loader",
-        type=DataLoaderType.GRIDDED_DATA,
-        source="test_data.nc",
-        format_options={"param1": "value1"},
-        variables=["temperature", "pressure"]
+        kind=DataLoaderKind.GRID,
+        source=DataLoaderSource(url_template="file:///data/test_{date:%Y%m%d}.nc"),
+        variables={
+            "temperature": DataLoaderVariable(
+                file_variable="T", units="K", description="Air temperature"
+            ),
+            "pressure": DataLoaderVariable(
+                file_variable="P", units="Pa", description="Air pressure"
+            ),
+        },
+        spatial=DataLoaderSpatial(crs="EPSG:4326", grid_type="latlon"),
     )
 
     # Create ESM file
@@ -40,7 +48,7 @@ def test_roundtrip_preserves_data_loaders():
         models={},
         reaction_systems={},
         events=[],
-        data_loaders=[data_loader],
+        data_loaders={"test_loader": data_loader},
         operators=[],
         coupling=[],
         domains={},
@@ -55,10 +63,11 @@ def test_roundtrip_preserves_data_loaders():
     assert "test_loader" in data["data_loaders"]
 
     loader_data = data["data_loaders"]["test_loader"]
-    assert loader_data["type"] == "gridded_data"  # NETCDF maps to gridded_data
-    assert loader_data["loader_id"] == "test_data.nc"
-    assert "config" in loader_data
-    assert "provides" in loader_data
+    assert loader_data["kind"] == "grid"
+    assert loader_data["source"]["url_template"] == "file:///data/test_{date:%Y%m%d}.nc"
+    assert "variables" in loader_data
+    assert loader_data["variables"]["temperature"]["file_variable"] == "T"
+    assert loader_data["variables"]["temperature"]["units"] == "K"
 
 
 def test_roundtrip_preserves_operators():
@@ -89,7 +98,7 @@ def test_roundtrip_preserves_operators():
         models={},
         reaction_systems={},
         events=[],
-        data_loaders=[],
+        data_loaders={},
         operators=[operator],
         coupling=[],
         domains={},
@@ -137,7 +146,7 @@ def test_roundtrip_preserves_couplings():
         models={},
         reaction_systems={},
         events=[],
-        data_loaders=[],
+        data_loaders={},
         operators=[],
         coupling=[coupling],
         domains={},
@@ -185,7 +194,7 @@ def test_roundtrip_preserves_events():
         models={},
         reaction_systems={},
         events=[event],
-        data_loaders=[],
+        data_loaders={},
         operators=[],
         coupling=[],
         domains={},
@@ -222,10 +231,11 @@ def test_roundtrip_preserves_all_missing_fields():
     # Create all components
     data_loader = DataLoader(
         name="loader",
-        type=DataLoaderType.EMISSIONS,
-        source="data.csv",
-        format_options={},
-        variables=["temp"]
+        kind=DataLoaderKind.GRID,
+        source=DataLoaderSource(url_template="file:///data/emissions_{date:%Y%m}.nc"),
+        variables={
+            "temp": DataLoaderVariable(file_variable="T", units="K"),
+        },
     )
 
     operator = Operator(
@@ -254,7 +264,7 @@ def test_roundtrip_preserves_all_missing_fields():
         models={},
         reaction_systems={},
         events=[event],
-        data_loaders=[data_loader],
+        data_loaders={"loader": data_loader},
         operators=[operator],
         coupling=[coupling],
         domains={},

@@ -109,7 +109,11 @@ class TestSection02TopLevelStructure:
             "metadata": {"name": "Complete Test"},
             "models": {"test_model": {"variables": {"x": {"type": "state"}}, "equations": []}},
             "reaction_systems": {"test_rs": {"species": {"A": {}}, "parameters": {}, "reactions": [{"id": "R1", "substrates": None, "products": [{"species": "A", "stoichiometry": 1}], "rate": 1.0}]}},
-            "data_loaders": {"test_loader": {"type": "gridded_data", "loader_id": "test", "provides": {}}},
+            "data_loaders": {"test_loader": {
+                "kind": "grid",
+                "source": {"url_template": "file:///data/test_{date:%Y%m%d}.nc"},
+                "variables": {"var1": {"file_variable": "v1", "units": "1"}}
+            }},
             "operators": {"test_op": {"operator_id": "test", "needed_vars": []}},
             "coupling": [],
             "domains": {"default": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}}}
@@ -911,24 +915,30 @@ class TestSection07ReactionSystems:
 
 
 class TestSection08DataLoaders:
-    """Section 8: Data loaders - by reference with provides validation"""
+    """Section 8: Data loaders - generic STAC-like description (kind/source/variables)"""
 
-    def test_all_data_loader_types(self):
-        """Test all supported data loader types."""
+    def test_all_data_loader_kinds(self):
+        """Test all supported data loader kinds."""
         schema = _get_schema()
 
-        loader_types = ["gridded_data", "emissions", "timeseries", "static", "callback"]
+        kinds = ["grid", "points", "static"]
 
-        for loader_type in loader_types:
+        for kind in kinds:
             valid_data = {
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
                 "data_loaders": {
-                    f"test_{loader_type}": {
-                        "type": loader_type,
-                        "loader_id": f"TestLoader_{loader_type}",
-                        "provides": {"test_var": {"units": "m/s", "description": "Test variable"}}
+                    f"test_{kind}": {
+                        "kind": kind,
+                        "source": {"url_template": f"file:///data/{kind}_{{date:%Y%m%d}}.nc"},
+                        "variables": {
+                            "test_var": {
+                                "file_variable": "test_var",
+                                "units": "m/s",
+                                "description": "Test variable"
+                            }
+                        }
                     }
                 }
             }
@@ -944,32 +954,38 @@ class TestSection08DataLoaders:
             "models": {"test": {"variables": {}, "equations": []}},
             "data_loaders": {
                 "GEOSFP": {
-                    "type": "gridded_data",
-                    "loader_id": "GEOSFP",
-                    "config": {
-                        "resolution": "0.25x0.3125_NA",
-                        "coord_defaults": {"lat": 34.0, "lev": 1}
+                    "kind": "grid",
+                    "source": {
+                        "url_template": "https://geos-chem.s3.amazonaws.com/GEOS_0.25x0.3125_NA/GEOS_FP/{date:%Y}/{date:%m}/GEOSFP.{date:%Y%m%d}.A3dyn.025x03125.NA.nc"
+                    },
+                    "temporal": {
+                        "file_period": "P1D",
+                        "frequency": "PT3H",
+                        "records_per_file": 8
+                    },
+                    "spatial": {
+                        "crs": "EPSG:4326",
+                        "grid_type": "latlon",
+                        "resolution": {"lon": 0.3125, "lat": 0.25}
+                    },
+                    "variables": {
+                        "u": {"file_variable": "U", "units": "m/s", "description": "Eastward wind"},
+                        "v": {"file_variable": "V", "units": "m/s", "description": "Northward wind"},
+                        "T": {"file_variable": "T", "units": "K", "description": "Air temperature"},
+                        "PBLH": {"file_variable": "PBLH", "units": "m", "description": "PBL height"}
                     },
                     "reference": {
                         "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC",
                         "url": "https://gmao.gsfc.nasa.gov/GEOS_systems/"
                     },
-                    "provides": {
-                        "u": {"units": "m/s", "description": "Eastward wind component"},
-                        "v": {"units": "m/s", "description": "Northward wind component"},
-                        "T": {"units": "K", "description": "Air temperature"},
-                        "PBLH": {"units": "m", "description": "Planetary boundary layer height"}
-                    },
-                    "temporal_resolution": "PT3H",
-                    "spatial_resolution": {"lon": 0.3125, "lat": 0.25},
-                    "interpolation": "linear"
+                    "metadata": {"tags": ["meteorology", "reanalysis"]}
                 }
             }
         }
         jsonschema.validate(valid_data, schema)
 
     def test_emissions_data_loader(self):
-        """Test emissions-specific data loader."""
+        """Test emissions-style data loader using new schema."""
         schema = _get_schema()
 
         valid_data = {
@@ -978,17 +994,36 @@ class TestSection08DataLoaders:
             "models": {"test": {"variables": {}, "equations": []}},
             "data_loaders": {
                 "NEI_Emissions": {
-                    "type": "emissions",
-                    "loader_id": "NEI2016",
-                    "config": {"year": 2016, "sector": "all"},
+                    "kind": "grid",
+                    "source": {
+                        "url_template": "https://gaftp.epa.gov/Air/emismod/2016/v1/gridded/monthly_netCDF/2016fh_16j_all_12US1_month_{date:%m}.ncf"
+                    },
+                    "temporal": {
+                        "file_period": "P1M",
+                        "frequency": "P1M",
+                        "records_per_file": 1
+                    },
+                    "spatial": {
+                        "crs": "EPSG:4326",
+                        "grid_type": "latlon"
+                    },
+                    "variables": {
+                        "emission_rate_NO": {
+                            "file_variable": "NO",
+                            "units": "mol/mol/s",
+                            "description": "NO emission rate"
+                        },
+                        "emission_rate_CO": {
+                            "file_variable": "CO",
+                            "units": "mol/mol/s",
+                            "description": "CO emission rate"
+                        }
+                    },
                     "reference": {
                         "citation": "US EPA, 2016 National Emissions Inventory",
                         "url": "https://www.epa.gov/air-emissions-inventories"
                     },
-                    "provides": {
-                        "emission_rate_NO": {"units": "mol/mol/s", "description": "NO emission rate"},
-                        "emission_rate_CO": {"units": "mol/mol/s", "description": "CO emission rate"}
-                    }
+                    "metadata": {"tags": ["emissions", "anthropogenic"]}
                 }
             }
         }
@@ -998,30 +1033,30 @@ class TestSection08DataLoaders:
         """Test that required fields are enforced for data loaders."""
         schema = _get_schema()
 
-        # Missing type
-        with pytest.raises(ValidationError, match="'type' is a required property"):
+        # Missing kind
+        with pytest.raises(ValidationError, match="'kind' is a required property"):
             jsonschema.validate({
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
                 "data_loaders": {
                     "bad_loader": {
-                        "loader_id": "test",
-                        "provides": {}
+                        "source": {"url_template": "file:///data/test.nc"},
+                        "variables": {"x": {"file_variable": "x", "units": "1"}}
                     }
                 }
             }, schema)
 
-        # Missing provides
-        with pytest.raises(ValidationError, match="'provides' is a required property"):
+        # Missing variables
+        with pytest.raises(ValidationError, match="'variables' is a required property"):
             jsonschema.validate({
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
                 "data_loaders": {
                     "bad_loader": {
-                        "type": "gridded_data",
-                        "loader_id": "test"
+                        "kind": "grid",
+                        "source": {"url_template": "file:///data/test.nc"}
                     }
                 }
             }, schema)
@@ -1468,13 +1503,17 @@ class TestSection13CompleteExamples:
             },
             "data_loaders": {
                 "GEOSFP": {
-                    "type": "gridded_data",
-                    "loader_id": "GEOSFP",
-                    "config": {"resolution": "0.25x0.3125_NA", "coord_defaults": {"lat": 34.0, "lev": 1}},
-                    "provides": {
-                        "u": {"units": "m/s", "description": "Eastward wind"},
-                        "v": {"units": "m/s", "description": "Northward wind"},
-                        "T": {"units": "K", "description": "Temperature"}
+                    "kind": "grid",
+                    "source": {"url_template": "file:///data/geosfp_{date:%Y%m%d}.nc"},
+                    "spatial": {
+                        "crs": "EPSG:4326",
+                        "grid_type": "latlon",
+                        "resolution": {"lon": 0.3125, "lat": 0.25}
+                    },
+                    "variables": {
+                        "u": {"file_variable": "U", "units": "m/s", "description": "Eastward wind"},
+                        "v": {"file_variable": "V", "units": "m/s", "description": "Northward wind"},
+                        "T": {"file_variable": "T", "units": "K", "description": "Temperature"}
                     }
                 }
             },
@@ -1549,9 +1588,12 @@ class TestSection13CompleteExamples:
             },
             "data_loaders": {
                 "Meteorology": {
-                    "type": "gridded_data",
-                    "loader_id": "WRF",
-                    "provides": {"T": {"units": "K"}, "wind": {"units": "m/s"}}
+                    "kind": "grid",
+                    "source": {"url_template": "file:///data/wrf_{date:%Y%m%d_%H}.nc"},
+                    "variables": {
+                        "T": {"file_variable": "T", "units": "K"},
+                        "wind": {"file_variable": "U", "units": "m/s"}
+                    }
                 }
             },
             "operators": {
@@ -1610,9 +1652,11 @@ class TestSection14DesignPrinciples:
             "models": {"test": {"variables": {}, "equations": []}},
             "data_loaders": {
                 "MetData": {
-                    "type": "gridded_data",
-                    "loader_id": "GEOSFP",  # Reference to external implementation
-                    "provides": {"T": {"units": "K"}}
+                    "kind": "grid",
+                    "source": {"url_template": "file:///data/met_{date:%Y%m%d}.nc"},
+                    "variables": {
+                        "T": {"file_variable": "T", "units": "K"}
+                    }
                 }
             }
         }
@@ -1713,10 +1757,12 @@ class TestSection15FutureConsiderations:
             "models": {"test": {"variables": {}, "equations": []}},
             "data_loaders": {
                 "future_loader": {
-                    "type": "gridded_data",
-                    "loader_id": "FutureFormat",
-                    "provides": {"x": {"units": "m"}},
-                    "config": {
+                    "kind": "grid",
+                    "source": {"url_template": "file:///data/future_{date:%Y%m%d}.nc"},
+                    "variables": {
+                        "x": {"file_variable": "x", "units": "m"}
+                    },
+                    "metadata": {
                         "future_option": True,
                         "experimental_feature": {"nested": "value"},
                         "version_specific_params": [1, 2, 3]
@@ -1889,9 +1935,11 @@ class TestCrossSectionValidation:
             },
             "data_loaders": {
                 "MetData": {
-                    "type": "gridded_data",
-                    "loader_id": "TestMet",
-                    "provides": {"wind_field": {"units": "m/s"}}
+                    "kind": "grid",
+                    "source": {"url_template": "file:///data/met_{date:%Y%m%d}.nc"},
+                    "variables": {
+                        "wind_field": {"file_variable": "wind", "units": "m/s"}
+                    }
                 }
             },
             "operators": {
@@ -1991,7 +2039,7 @@ def test_complete_specification_coverage():
         'TestSection05Events',
         'TestSection06Models',
         'TestSection07ReactionSystems',
-        'TestSection08DataLoaders',
+        'TestSection08DataLoaders',  # class name unchanged but tests renamed to test_all_data_loader_kinds
         'TestSection09Operators',
         'TestSection10Coupling',
         'TestSection11Domain',

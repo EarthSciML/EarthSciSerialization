@@ -135,10 +135,10 @@ class HierarchicalScopeResolver:
             if rsys.parameters and var_name in rsys.parameters:
                 return True
 
-        # Check data loaders (variables are in outputs)
+        # Check data loaders (variables are in .variables dict)
         if self.esm_file.data_loaders and system_name in self.esm_file.data_loaders:
             loader = self.esm_file.data_loaders[system_name]
-            if hasattr(loader, 'outputs') and loader.outputs and var_name in loader.outputs:
+            if getattr(loader, 'variables', None) and var_name in loader.variables:
                 return True
 
         return False

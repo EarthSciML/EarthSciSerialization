@@ -254,11 +254,19 @@ def test_load_comprehensive_fields():
         },
         "data_loaders": {
             "weather": {
-                "type": "gridded_data",
-                "loader_id": "ERA5",
-                "provides": {
-                    "temperature": {"units": "K", "description": "Air temperature"},
-                    "pressure": {"units": "Pa", "description": "Air pressure"}
+                "kind": "grid",
+                "source": {"url_template": "file:///data/era5_{date:%Y%m}.nc"},
+                "variables": {
+                    "temperature": {
+                        "file_variable": "t",
+                        "units": "K",
+                        "description": "Air temperature"
+                    },
+                    "pressure": {
+                        "file_variable": "p",
+                        "units": "Pa",
+                        "description": "Air pressure"
+                    }
                 }
             }
         },
@@ -300,11 +308,14 @@ def test_load_comprehensive_fields():
     assert "threshold_event" in event_names
 
     # Check data loader
-    data_loader = esm_file.data_loaders[0]
+    assert "weather" in esm_file.data_loaders
+    data_loader = esm_file.data_loaders["weather"]
     assert data_loader.name == "weather"
     assert len(data_loader.variables) == 2
     assert "temperature" in data_loader.variables
     assert "pressure" in data_loader.variables
+    assert data_loader.variables["temperature"].file_variable == "t"
+    assert data_loader.variables["temperature"].units == "K"
 
     # Check operator
     operator = esm_file.operators[0]

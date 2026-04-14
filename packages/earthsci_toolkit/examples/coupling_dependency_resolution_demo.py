@@ -52,11 +52,14 @@ def create_demo_esm_file():
         }
     }
 
-    # Create data loader with subsystem
+    # Create data loader with subsystem (new STAC-like shape)
     met_data = {
-        'type': 'gridded_data',
-        'loader_id': 'WRF',
-        'provides': {'temperature': {'units': 'K'}, 'pressure': {'units': 'Pa'}},
+        'kind': 'grid',
+        'source': {'url_template': 'file:///data/wrf_{date:%Y%m%d_%H}.nc'},
+        'variables': {
+            'temperature': {'file_variable': 'T2', 'units': 'K'},
+            'pressure': {'file_variable': 'PSFC', 'units': 'Pa'},
+        },
         'subsystems': {
             'QualityControl': {
                 'variables': {

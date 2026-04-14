@@ -359,8 +359,8 @@ class TestEnumValidation:
         with pytest.raises(ValidationError):
             jsonschema.validate(invalid_data, schema)
 
-    def test_invalid_data_loader_type_enum(self):
-        """Test validation of invalid data loader type values."""
+    def test_invalid_data_loader_kind_enum(self):
+        """Test validation of invalid data loader kind values."""
         schema = _get_schema()
 
         invalid_data = {
@@ -369,13 +369,13 @@ class TestEnumValidation:
             "models": {"test": {"variables": {}, "equations": []}},
             "data_loaders": {
                 "test_loader": {
-                    "type": "invalid_loader_type",
-                    "loader_id": "test",
-                    "provides": {}
+                    "kind": "invalid_kind",
+                    "source": {"url_template": "file:///data/test.nc"},
+                    "variables": {"x": {"file_variable": "x", "units": "1"}}
                 }
             }
         }
-        with pytest.raises(ValidationError, match="'invalid_loader_type' is not one of"):
+        with pytest.raises(ValidationError, match="'invalid_kind' is not one of"):
             jsonschema.validate(invalid_data, schema)
 
 

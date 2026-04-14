@@ -27,7 +27,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from .esm_types import DataLoader
-    from .csv_loader import CSVValidationError
 
 import jsonschema
 from jsonschema import validate
@@ -36,7 +35,8 @@ from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
-    DataLoader, DataLoaderType, Operator,
+    DataLoader, DataLoaderKind, DataLoaderSource, DataLoaderTemporal,
+    DataLoaderSpatial, DataLoaderVariable, DataLoaderRegridding, Operator,
     CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
@@ -461,41 +461,95 @@ def _parse_metadata(metadata_data: Dict[str, Any]) -> Metadata:
     )
 
 
+def _parse_data_loader_source(src_data: Dict[str, Any]) -> DataLoaderSource:
+    return DataLoaderSource(
+        url_template=src_data["url_template"],
+        mirrors=list(src_data.get("mirrors", [])),
+    )
+
+
+def _parse_data_loader_temporal(tmp_data: Dict[str, Any]) -> DataLoaderTemporal:
+    return DataLoaderTemporal(
+        start=tmp_data.get("start"),
+        end=tmp_data.get("end"),
+        file_period=tmp_data.get("file_period"),
+        frequency=tmp_data.get("frequency"),
+        records_per_file=tmp_data.get("records_per_file"),
+        time_variable=tmp_data.get("time_variable"),
+    )
+
+
+def _parse_data_loader_spatial(sp_data: Dict[str, Any]) -> DataLoaderSpatial:
+    return DataLoaderSpatial(
+        crs=sp_data["crs"],
+        grid_type=sp_data["grid_type"],
+        staggering=dict(sp_data.get("staggering", {})),
+        resolution=dict(sp_data.get("resolution", {})),
+        extent={k: list(v) for k, v in sp_data.get("extent", {}).items()},
+    )
+
+
+def _parse_data_loader_variable(var_data: Dict[str, Any]) -> DataLoaderVariable:
+    unit_conversion = var_data.get("unit_conversion")
+    if isinstance(unit_conversion, dict):
+        unit_conversion = _parse_expression(unit_conversion)
+    reference = None
+    if "reference" in var_data:
+        reference = _parse_reference(var_data["reference"])
+    return DataLoaderVariable(
+        file_variable=var_data["file_variable"],
+        units=var_data["units"],
+        unit_conversion=unit_conversion,
+        description=var_data.get("description"),
+        reference=reference,
+    )
+
+
+def _parse_data_loader_regridding(rg_data: Dict[str, Any]) -> DataLoaderRegridding:
+    return DataLoaderRegridding(
+        fill_value=rg_data.get("fill_value"),
+        extrapolation=rg_data.get("extrapolation"),
+    )
+
+
 def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     """Parse a data loader from JSON data."""
-    name = ""  # Name comes from the key
+    kind = DataLoaderKind(loader_data["kind"])
+    source = _parse_data_loader_source(loader_data["source"])
 
-    # Map schema type directly to our enum, fallback to STATIC
-    schema_type = loader_data["type"]
-    type_mapping = {
-        "gridded_data": DataLoaderType.GRIDDED_DATA,
-        "emissions": DataLoaderType.EMISSIONS,
-        "timeseries": DataLoaderType.TIMESERIES,
-        "static": DataLoaderType.STATIC,
-        "callback": DataLoaderType.CALLBACK
+    variables = {
+        vname: _parse_data_loader_variable(vdef)
+        for vname, vdef in loader_data["variables"].items()
     }
-    loader_type = type_mapping.get(schema_type, DataLoaderType.STATIC)
 
-    # Schema uses loader_id, we use source
-    source = loader_data.get("loader_id", "")
+    temporal = None
+    if "temporal" in loader_data:
+        temporal = _parse_data_loader_temporal(loader_data["temporal"])
 
-    # Schema uses config, we use format_options
-    format_options = loader_data.get("config", {})
+    spatial = None
+    if "spatial" in loader_data:
+        spatial = _parse_data_loader_spatial(loader_data["spatial"])
 
-    # Extract variable names and metadata from provides
-    variables = []
-    provides = {}
-    if "provides" in loader_data:
-        variables = list(loader_data["provides"].keys())
-        provides = loader_data["provides"]
+    regridding = None
+    if "regridding" in loader_data:
+        regridding = _parse_data_loader_regridding(loader_data["regridding"])
+
+    reference = None
+    if "reference" in loader_data:
+        reference = _parse_reference(loader_data["reference"])
+
+    metadata = dict(loader_data.get("metadata", {}))
 
     return DataLoader(
-        name=name,
-        type=loader_type,
+        name="",  # Name comes from the key
+        kind=kind,
         source=source,
-        format_options=format_options,
         variables=variables,
-        provides=provides
+        temporal=temporal,
+        spatial=spatial,
+        regridding=regridding,
+        reference=reference,
+        metadata=metadata,
     )
 
 
@@ -836,12 +890,12 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             domains[domain_name] = d
 
     # Parse data loaders
-    data_loaders = []
+    data_loaders: Dict[str, DataLoader] = {}
     if "data_loaders" in data:
         for loader_name, loader_data in data["data_loaders"].items():
             loader = _parse_data_loader(loader_data)
             loader.name = loader_name
-            data_loaders.append(loader)
+            data_loaders[loader_name] = loader
 
     # Parse operators
     operators = []
@@ -1202,7 +1256,7 @@ def _build_symbol_tables(data: Dict[str, Any]) -> Dict[str, Any]:
     data_loaders = {}
     for dname, d in data.get("data_loaders", {}).items():
         loader_info = {}
-        for vname, vdef in d.get("provides", {}).items():
+        for vname, vdef in d.get("variables", {}).items():
             loader_info[vname] = vdef
         data_loaders[dname] = loader_info
 
@@ -1370,14 +1424,23 @@ def _check_circular_references(data: Dict[str, Any], tables: Dict[str, Any], err
                 break
 
 
-def _check_data_loader_provides(data: Dict[str, Any], errors: List[str]) -> None:
-    """Each variable in data_loader.provides must have units and description."""
+def _check_data_loader_variables(data: Dict[str, Any], errors: List[str]) -> None:
+    """Each variable in data_loader.variables must declare file_variable and units."""
     for dname, d in data.get("data_loaders", {}).items():
-        for vname, vdef in d.get("provides", {}).items():
+        variables = d.get("variables", {})
+        if not variables:
+            errors.append(f"data_loaders/{dname}/variables: must declare at least one variable")
+        for vname, vdef in variables.items():
+            if not isinstance(vdef, dict):
+                continue
+            if "file_variable" not in vdef:
+                errors.append(
+                    f"data_loaders/{dname}/variables/{vname}: missing required 'file_variable' field"
+                )
             if "units" not in vdef:
-                errors.append(f"data_loaders/{dname}/provides/{vname}: missing required 'units' field")
-            if "description" not in vdef:
-                errors.append(f"data_loaders/{dname}/provides/{vname}: missing required 'description' field")
+                errors.append(
+                    f"data_loaders/{dname}/variables/{vname}: missing required 'units' field"
+                )
 
 
 def _check_discrete_parameters(data: Dict[str, Any], errors: List[str]) -> None:
@@ -1423,13 +1486,17 @@ def _check_metadata_formats(data: Dict[str, Any], errors: List[str]) -> None:
 
 
 def _check_temporal_resolution(data: Dict[str, Any], errors: List[str]) -> None:
-    """Validate ISO 8601 duration in data_loader temporal_resolution fields."""
+    """Validate ISO 8601 duration strings in data_loader.temporal fields."""
     for dname, d in data.get("data_loaders", {}).items():
-        res = d.get("temporal_resolution")
-        if isinstance(res, str) and res and not _DURATION_RE.match(res):
-            errors.append(
-                f"data_loaders/{dname}/temporal_resolution: '{res}' is not a valid ISO 8601 duration"
-            )
+        temporal = d.get("temporal", {})
+        if not isinstance(temporal, dict):
+            continue
+        for field_name in ("file_period", "frequency"):
+            res = temporal.get(field_name)
+            if isinstance(res, str) and res and not _DURATION_RE.match(res):
+                errors.append(
+                    f"data_loaders/{dname}/temporal/{field_name}: '{res}' is not a valid ISO 8601 duration"
+                )
 
 
 def _check_subsystem_refs(data: Dict[str, Any], errors: List[str], file_path) -> None:
@@ -1773,7 +1840,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     _check_variable_references(data, tables, errors)
     _check_coupling_references(data, tables, errors)
     _check_circular_references(data, tables, errors)
-    _check_data_loader_provides(data, errors)
+    _check_data_loader_variables(data, errors)
     _check_discrete_parameters(data, errors)
     _check_metadata_formats(data, errors)
     _check_temporal_resolution(data, errors)
@@ -1855,56 +1922,3 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     return esm_file
 
 
-def load_with_csv_data(esm_path_or_string: Union[str, Path], csv_data_loaders: List['DataLoader'] = None) -> 'EsmFile':
-    """
-    Load an ESM file and optionally integrate CSV data loaders.
-
-    This function provides a convenient way to load ESM files that reference CSV data
-    sources, automatically validating and integrating the CSV data.
-
-    Args:
-        esm_path_or_string: File path to JSON file or JSON string for the ESM file
-        csv_data_loaders: Optional list of DataLoader objects referencing CSV files
-
-    Returns:
-        EsmFile object with parsed data and integrated CSV data loaders
-
-    Raises:
-        ImportError: If pandas is not available for CSV processing
-        CSVValidationError: If CSV data validation fails
-
-    Example:
-        # Load ESM file with CSV data
-        data_loader = DataLoader(
-            name="emissions_data",
-            type=DataLoaderType.EMISSIONS,
-            source="emissions.csv",
-            variables=["time", "NO2", "O3"]
-        )
-        esm_file = load_with_csv_data("model.esm", [data_loader])
-    """
-    try:
-        from .csv_loader import load_csv_data, CSVValidationError
-    except ImportError:
-        raise ImportError("CSV integration requires pandas. Install with: pip install pandas")
-
-    # Load the main ESM file
-    esm_file = load(esm_path_or_string)
-
-    # If CSV data loaders are provided, validate them and add to ESM file
-    if csv_data_loaders:
-        # Validate each CSV data loader by attempting to load the data
-        for data_loader in csv_data_loaders:
-            try:
-                # This will validate the CSV file and configuration
-                df = load_csv_data(data_loader)
-                # TODO: Could add the DataFrame to the data_loader for caching
-            except Exception as e:
-                raise CSVValidationError(f"Failed to validate CSV data loader '{data_loader.name}': {e}")
-
-        # Add the validated data loaders to the ESM file
-        if esm_file.data_loaders is None:
-            esm_file.data_loaders = []
-        esm_file.data_loaders.extend(csv_data_loaders)
-
-    return esm_file
