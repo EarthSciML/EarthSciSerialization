@@ -577,7 +577,7 @@ describe('Schema Edge Cases', () => {
       expect(() => load(extraExprProps)).toThrow(SchemaValidationError)
     })
 
-    it('should allow additional properties in config objects', () => {
+    it('should allow additional properties in data loader metadata', () => {
       const configProps = {
         esm: "0.1.0",
         metadata: { name: "test" },
@@ -589,13 +589,14 @@ describe('Schema Edge Cases', () => {
         },
         data_loaders: {
           "test_loader": {
-            type: "gridded_data",
-            loader_id: "test",
-            provides: {
-              "temp": { units: "K", description: "Temperature" }
+            kind: "grid",
+            source: { url_template: "/data/weather_{date:%Y%m%d}.nc" },
+            variables: {
+              "temp": { file_variable: "T2", units: "K", description: "Temperature" }
             },
-            config: {
-              // config objects have additionalProperties: true
+            metadata: {
+              // data loader metadata has additionalProperties: true
+              tags: ["reanalysis"],
               custom_setting: "allowed",
               another_setting: 42,
               nested_config: {
@@ -612,7 +613,9 @@ describe('Schema Edge Cases', () => {
       expect(errors).toEqual([])
 
       const result = load(configProps)
-      expect(result.data_loaders?.["test_loader"].config?.["custom_setting"]).toBe("allowed")
+      const loader = result.data_loaders?.["test_loader"]
+      const metadata = loader?.metadata as Record<string, unknown> | undefined
+      expect(metadata?.["custom_setting"]).toBe("allowed")
     })
   })
 

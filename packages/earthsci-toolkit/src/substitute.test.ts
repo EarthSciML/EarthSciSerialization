@@ -266,11 +266,13 @@ describe('substitute', () => {
       metadata: { name: 'test' },
       data_loaders: {
         GEOSFP: {
-          type: 'gridded_data',
-          loader_id: 'GEOSFP',
-          provides: {
-            T: { units: 'K', description: 'Temperature' },
-            u: { units: 'm/s', description: 'Eastward wind' }
+          kind: 'grid',
+          source: {
+            url_template: 's3://geosfp/{date:%Y/%m/%d}/GEOSFP.{date:%Y%m%d}.A1.05x0625.nc4'
+          },
+          variables: {
+            T: { file_variable: 'T', units: 'K', description: 'Temperature' },
+            u: { file_variable: 'U', units: 'm/s', description: 'Eastward wind' }
           }
         }
       }

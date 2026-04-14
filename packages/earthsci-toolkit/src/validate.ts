@@ -549,8 +549,8 @@ function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
                             if (!vars[varName] && !params[varName]) {
                                 // Check data loaders
                                 const dataLoader = (esmFile.data_loaders || {})[systemName];
-                                const provides = dataLoader?.provides || {};
-                                if (!provides[varName]) {
+                                const loaderVariables = dataLoader?.variables || {};
+                                if (!loaderVariables[varName]) {
                                     errors.push({
                                         path: `${couplingPath}/${field}`,
                                         code: 'unresolved_scoped_ref',
@@ -670,13 +670,13 @@ function validateDataLoaderReferences(esmFile: EsmFile): StructuralError[] {
                 // Check if source is a data loader
                 if (esmFile.data_loaders[sourceName]) {
                     const loader = esmFile.data_loaders[sourceName];
-                    const provides = (loader as any).provides || {};
-                    if (!(varName in provides)) {
+                    const loaderVariables = (loader as any).variables || {};
+                    if (!(varName in loaderVariables)) {
                         errors.push({
                             path: `${couplingPath}/from`,
-                            message: `Data loader '${sourceName}' does not provide variable '${varName}'`,
+                            message: `Data loader '${sourceName}' does not expose variable '${varName}'`,
                             code: 'undefined_data_loader_variable',
-                            details: { data_loader: sourceName, variable: varName, available: Object.keys(provides) }
+                            details: { data_loader: sourceName, variable: varName, available: Object.keys(loaderVariables) }
                         });
                     }
                 }
@@ -688,7 +688,8 @@ function validateDataLoaderReferences(esmFile: EsmFile): StructuralError[] {
 }
 
 /**
- * Validate temporal_resolution fields in data loaders are valid ISO 8601 durations
+ * Validate file_period and frequency fields in data loader temporal sections
+ * are valid ISO 8601 durations
  */
 function validateTemporalResolution(esmFile: EsmFile): StructuralError[] {
     const errors: StructuralError[] = [];
@@ -696,16 +697,22 @@ function validateTemporalResolution(esmFile: EsmFile): StructuralError[] {
 
     // ISO 8601 duration pattern: P[nY][nM][nD][T[nH][nM][nS]]
     const iso8601DurationPattern = /^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$/;
+    const isValidDuration = (v: unknown): v is string =>
+        typeof v === 'string' && v !== 'P' && v !== 'PT' && iso8601DurationPattern.test(v);
+
+    const durationFields: Array<'file_period' | 'frequency'> = ['file_period', 'frequency'];
 
     for (const [loaderName, loader] of Object.entries(esmFile.data_loaders)) {
-        const temporalResolution = (loader as any).temporal_resolution;
-        if (temporalResolution && typeof temporalResolution === 'string') {
-            if (!iso8601DurationPattern.test(temporalResolution) || temporalResolution === 'P' || temporalResolution === 'PT') {
+        const temporal = (loader as any).temporal;
+        if (!temporal || typeof temporal !== 'object') continue;
+        for (const field of durationFields) {
+            const value = temporal[field];
+            if (value !== undefined && !isValidDuration(value)) {
                 errors.push({
-                    path: `/data_loaders/${loaderName}/temporal_resolution`,
-                    message: `Invalid ISO 8601 duration: '${temporalResolution}'`,
-                    code: 'invalid_temporal_resolution',
-                    details: { value: temporalResolution }
+                    path: `/data_loaders/${loaderName}/temporal/${field}`,
+                    message: `Invalid ISO 8601 duration: '${value}'`,
+                    code: 'invalid_temporal_duration',
+                    details: { field, value }
                 });
             }
         }

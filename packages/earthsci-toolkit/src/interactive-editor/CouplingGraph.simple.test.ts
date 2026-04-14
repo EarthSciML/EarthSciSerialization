@@ -44,9 +44,14 @@ describe('CouplingGraph Utilities', () => {
     },
     data_loaders: {
       'WeatherData': {
-        type: 'netcdf',
-        path: '/data/weather.nc',
-        variables: ['temperature', 'pressure']
+        kind: 'grid',
+        source: {
+          url_template: '/data/weather.nc'
+        },
+        variables: {
+          temperature: { file_variable: 'T2', units: 'K' },
+          pressure: { file_variable: 'P', units: 'Pa' }
+        }
       }
     },
     operators: {

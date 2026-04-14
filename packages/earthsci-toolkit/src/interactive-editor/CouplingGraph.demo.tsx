@@ -96,21 +96,39 @@ const sampleEsmFile: EsmFile = {
   },
   data_loaders: {
     'GEOS-FP_Meteorology': {
-      type: 'netcdf',
-      path: '/data/GEOS-FP/{{YYYY}}/{{MM}}/GEOSFP.{{YYYYMMDD}}.A3dyn.nc',
-      variables: ['T', 'U', 'V', 'OMEGA'],
+      kind: 'grid',
+      source: {
+        url_template: '/data/GEOS-FP/{date:%Y}/{date:%m}/GEOSFP.{date:%Y%m%d}.A3dyn.nc'
+      },
+      variables: {
+        T: { file_variable: 'T', units: 'K' },
+        U: { file_variable: 'U', units: 'm/s' },
+        V: { file_variable: 'V', units: 'm/s' },
+        OMEGA: { file_variable: 'OMEGA', units: 'Pa/s' }
+      },
       reference: { notes: 'GEOS Forward Processing meteorological data' }
     },
     'EmissionInventory': {
-      type: 'netcdf',
-      path: '/data/emissions/NEI2017_{{MM}}.nc',
-      variables: ['E_NO', 'E_CO', 'E_VOC'],
+      kind: 'grid',
+      source: {
+        url_template: '/data/emissions/NEI2017_{date:%m}.nc'
+      },
+      variables: {
+        E_NO: { file_variable: 'E_NO', units: 'kg/m^2/s' },
+        E_CO: { file_variable: 'E_CO', units: 'kg/m^2/s' },
+        E_VOC: { file_variable: 'E_VOC', units: 'kg/m^2/s' }
+      },
       reference: { notes: '2017 National Emissions Inventory' }
     },
     'SatelliteObservations': {
-      type: 'hdf5',
-      path: '/data/satellite/OMI_{{YYYYMMDD}}.h5',
-      variables: ['NO2_column', 'O3_column'],
+      kind: 'grid',
+      source: {
+        url_template: '/data/satellite/OMI_{date:%Y%m%d}.h5'
+      },
+      variables: {
+        NO2_column: { file_variable: 'NO2_column', units: 'molec/cm^2' },
+        O3_column: { file_variable: 'O3_column', units: 'DU' }
+      },
       reference: { notes: 'OMI satellite observations' }
     }
   },

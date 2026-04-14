@@ -177,10 +177,13 @@ describe('toJuliaCode', () => {
       },
       data_loaders: {
         weather: {
-          type: 'gridded_data',
-          loader_id: 'weather',
-          source: 'weather_data.nc',
-          config: { format: 'netcdf' }
+          kind: 'grid',
+          source: {
+            url_template: 'weather_data.nc'
+          },
+          variables: {
+            T: { file_variable: 'T2', units: 'K' }
+          }
         }
       }
     }
@@ -200,8 +203,10 @@ describe('toJuliaCode', () => {
 
     // Check data loader implementation
     expect(code).toContain('# Data loader: weather')
-    expect(code).toContain('weather_loader = GriddedDataLoader("weather")')
-    expect(code).toContain('weather_data = load_gridded_data("weather_data.nc")')
+    expect(code).toContain('weather_loader = DataLoader(')
+    expect(code).toContain('kind = "grid"')
+    expect(code).toContain('url_template = "weather_data.nc"')
+    expect(code).toContain('T <- T2 (K)')
   })
 
   it('should handle complex expressions with nested operations', () => {
@@ -495,10 +500,13 @@ describe('toPythonCode', () => {
       },
       data_loaders: {
         weather: {
-          type: 'gridded_data',
-          loader_id: 'weather',
-          source: 'weather_data.nc',
-          config: { format: 'netcdf' }
+          kind: 'grid',
+          source: {
+            url_template: 'weather_data.nc'
+          },
+          variables: {
+            T: { file_variable: 'T2', units: 'K' }
+          }
         }
       }
     }
@@ -520,8 +528,10 @@ describe('toPythonCode', () => {
 
     // Check data loader implementation
     expect(code).toContain('# Data loader: weather')
-    expect(code).toContain('weather_loader = esm.GriddedDataLoader("weather")')
-    expect(code).toContain('weather_data = weather_loader.load("weather_data.nc")')
+    expect(code).toContain('weather_loader = esm.DataLoader(')
+    expect(code).toContain('kind="grid"')
+    expect(code).toContain('url_template="weather_data.nc"')
+    expect(code).toContain('T <- T2 (K)')
   })
 
   it('should populate parameters and initial_conditions dictionaries with default values', () => {

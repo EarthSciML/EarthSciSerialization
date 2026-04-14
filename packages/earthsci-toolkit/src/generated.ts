@@ -821,51 +821,141 @@ export interface Tolerance3 {
   rel?: number;
 }
 /**
- * An external data source registration. Runtime-specific; registered by type and loader_id.
+ * A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.
  */
 export interface DataLoader {
   /**
-   * Data loader category.
+   * Structural kind of the dataset. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags.
    */
-  type: "gridded_data" | "emissions" | "timeseries" | "static" | "callback";
+  kind: "grid" | "points" | "static";
+  source: DataLoaderSource;
+  temporal?: DataLoaderTemporal;
+  spatial?: DataLoaderSpatial;
   /**
-   * Registered identifier the runtime uses to find the implementation.
+   * Variables exposed by this loader, keyed by schema-level variable name.
    */
-  loader_id: string;
-  /**
-   * Implementation-specific configuration.
-   */
-  config?: {
-    [k: string]: unknown;
+  variables: {
+    [k: string]: DataLoaderVariable;
   };
+  regridding?: DataLoaderRegridding;
   reference?: Reference;
   /**
-   * Variables this loader makes available.
+   * Free-form metadata about the data source. The "tags" field (array of strings) is conventional for expressing scientific role (e.g. "emissions", "reanalysis") and is not schema-validated.
    */
-  provides: {
-    [k: string]: DataLoaderProvides;
+  metadata?: {
+    tags?: string[];
+    [k: string]: unknown;
   };
+}
+/**
+ * File discovery configuration. Describes how to locate data files at runtime via URL templates with date/variable substitutions.
+ */
+export interface DataLoaderSource {
   /**
-   * ISO 8601 duration (e.g., "PT3H").
+   * Jinja-style URL template with substitutions. Supported: {date:<strftime>} (e.g. {date:%Y%m%d}), {var}, {sector}, {species}. Custom substitutions are allowed and the runtime must accept and pass them through.
    */
-  temporal_resolution?: string;
+  url_template: string;
   /**
-   * Grid spacing per dimension.
+   * Ordered fallback URL templates. Runtime tries each in order, first is primary. Follows the same substitution grammar as url_template.
    */
-  spatial_resolution?: {
+  mirrors?: string[];
+}
+/**
+ * Temporal coverage and record layout for a data source.
+ */
+export interface DataLoaderTemporal {
+  /**
+   * ISO 8601 datetime — first timestamp available from this source.
+   */
+  start?: string;
+  /**
+   * ISO 8601 datetime — last timestamp available from this source.
+   */
+  end?: string;
+  /**
+   * ISO 8601 duration describing how much time one file covers (e.g., "P1D", "P1M", "PT3H").
+   */
+  file_period?: string;
+  /**
+   * ISO 8601 duration describing spacing between samples within a file.
+   */
+  frequency?: string;
+  /**
+   * Number of time records per file. "auto" means read from file at runtime.
+   */
+  records_per_file?: number | "auto";
+  /**
+   * Name of the time coordinate variable in the file. Used when records_per_file is absent or "auto". If both static declarations (records_per_file + frequency) and time_variable are present, the static declaration wins and time_variable is a fallback.
+   */
+  time_variable?: string;
+}
+/**
+ * Spatial grid description for a data source.
+ */
+export interface DataLoaderSpatial {
+  /**
+   * Coordinate reference system as a PROJ string or EPSG code.
+   */
+  crs: string;
+  /**
+   * Structural grid family. Use "unstructured" for mesh/point datasets.
+   */
+  grid_type: "latlon" | "lambert_conformal" | "mercator" | "polar_stereographic" | "rotated_pole" | "unstructured";
+  staggering?: DataLoaderStaggering;
+  /**
+   * Per-dimension resolution in native CRS units. Optional; some datasets only know this at runtime.
+   */
+  resolution?: {
     [k: string]: number;
   };
   /**
-   * Interpolation method.
+   * Per-dimension [min, max] extent in native CRS units. Optional; runtime can infer from files.
    */
-  interpolation?: "linear" | "nearest" | "cubic";
+  extent?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    [k: string]: [number, number];
+  };
 }
 /**
- * A variable provided by a data loader.
+ * Per-dimension grid staggering (centered or edge-aligned).
  */
-export interface DataLoaderProvides {
-  units?: string;
+export interface DataLoaderStaggering {
+  [k: string]: "center" | "edge";
+}
+/**
+ * A variable exposed by a data loader, mapped from a source-file variable.
+ */
+export interface DataLoaderVariable {
+  /**
+   * Name of the variable inside the source file. May differ from the schema-level variable name.
+   */
+  file_variable: string;
+  /**
+   * Units of the variable as exposed to the schema.
+   */
+  units: string;
+  /**
+   * Optional multiplicative factor or Expression AST applied to convert source-file values to the declared units.
+   */
+  unit_conversion?: number | Expression;
   description?: string;
+  reference?: Reference;
+}
+/**
+ * Structural regridding configuration. Algorithm-specific tuning parameters are runtime-side and not in the schema.
+ */
+export interface DataLoaderRegridding {
+  /**
+   * Value to assign to cells with no source data.
+   */
+  fill_value?: number;
+  /**
+   * Behavior when regridding targets fall outside the source extent. Defaults to "clamp".
+   */
+  extrapolation?: "clamp" | "nan" | "periodic";
 }
 /**
  * A registered runtime operator (e.g., dry deposition, wet scavenging).

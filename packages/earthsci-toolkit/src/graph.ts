@@ -153,7 +153,7 @@ export function component_graph(esmFile: EsmFile): ComponentGraph {
         description: dataLoader.reference?.notes,
         reference: dataLoader.reference,
         metadata: {
-          var_count: dataLoader.variables ? dataLoader.variables.length : 0,
+          var_count: dataLoader.variables ? Object.keys(dataLoader.variables).length : 0,
           eq_count: 0,
           species_count: 0
         }

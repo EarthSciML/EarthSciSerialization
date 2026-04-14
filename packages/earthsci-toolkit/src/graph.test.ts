@@ -54,9 +54,15 @@ describe('componentGraph function', () => {
     },
     data_loaders: {
       'WeatherData': {
-        type: 'netcdf',
-        path: '/data/weather.nc',
-        variables: ['temperature', 'pressure', 'humidity']
+        kind: 'grid',
+        source: {
+          url_template: '/data/weather.nc'
+        },
+        variables: {
+          temperature: { file_variable: 'T2', units: 'K' },
+          pressure: { file_variable: 'P', units: 'Pa' },
+          humidity: { file_variable: 'Q', units: 'kg/kg' }
+        }
       }
     },
     operators: {
@@ -648,9 +654,14 @@ describe('Graph export functions', () => {
     },
     data_loaders: {
       'WeatherData': {
-        type: 'netcdf',
-        path: '/data/weather.nc',
-        variables: ['temperature', 'pressure']
+        kind: 'grid',
+        source: {
+          url_template: '/data/weather.nc'
+        },
+        variables: {
+          temperature: { file_variable: 'T2', units: 'K' },
+          pressure: { file_variable: 'P', units: 'Pa' }
+        }
       }
     },
     operators: {

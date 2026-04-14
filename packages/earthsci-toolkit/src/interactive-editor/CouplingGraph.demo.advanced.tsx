@@ -82,19 +82,31 @@ const advancedDemoEsmFile: EsmFile = {
   },
   data_loaders: {
     'MeteoData': {
-      type: 'netcdf',
-      path: '/data/meteo/ECMWF_reanalysis.nc',
-      variables: ['temperature', 'pressure', 'wind_u', 'wind_v']
+      kind: 'grid',
+      source: { url_template: '/data/meteo/ECMWF_reanalysis.nc' },
+      variables: {
+        temperature: { file_variable: 'T', units: 'K' },
+        pressure: { file_variable: 'P', units: 'Pa' },
+        wind_u: { file_variable: 'U', units: 'm/s' },
+        wind_v: { file_variable: 'V', units: 'm/s' }
+      }
     },
     'EmissionInventory': {
-      type: 'netcdf',
-      path: '/data/emissions/CAMS_global.nc',
-      variables: ['nox', 'co', 'voc', 'so2']
+      kind: 'grid',
+      source: { url_template: '/data/emissions/CAMS_global.nc' },
+      variables: {
+        nox: { file_variable: 'NOx', units: 'kg/m^2/s' },
+        co: { file_variable: 'CO', units: 'kg/m^2/s' },
+        voc: { file_variable: 'VOC', units: 'kg/m^2/s' },
+        so2: { file_variable: 'SO2', units: 'kg/m^2/s' }
+      }
     },
     'SatelliteData': {
-      type: 'netcdf',
-      path: '/data/satellite/OMI_NO2.nc',
-      variables: ['tropospheric_no2_column']
+      kind: 'grid',
+      source: { url_template: '/data/satellite/OMI_NO2.nc' },
+      variables: {
+        tropospheric_no2_column: { file_variable: 'NO2_column', units: 'molec/cm^2' }
+      }
     }
   },
   operators: {

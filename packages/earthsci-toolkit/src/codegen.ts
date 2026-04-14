@@ -429,53 +429,53 @@ function generateDataLoaderCode(name: string, dataLoader: DataLoader): string[] 
   const lines: string[] = []
 
   lines.push(`# Data loader: ${name}`)
-
-  // Type-specific data loader implementations
-  switch (dataLoader.type) {
-    case 'gridded_data':
-      lines.push(`${name}_loader = GriddedDataLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_data = load_gridded_data("${dataLoader.source}")`)
-      }
-      break
-    case 'emissions':
-      lines.push(`${name}_loader = EmissionsLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_emissions = load_emissions("${dataLoader.source}")`)
-      }
-      break
-    case 'timeseries':
-      lines.push(`${name}_loader = TimeSeriesLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_timeseries = load_timeseries("${dataLoader.source}")`)
-      }
-      break
-    case 'static':
-      lines.push(`${name}_loader = StaticDataLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_static = load_static_data("${dataLoader.source}")`)
-      }
-      break
-    case 'callback':
-      lines.push(`${name}_loader = CallbackDataLoader("${dataLoader.loader_id}")`)
-      break
-    default:
-      lines.push(`${name}_loader = DataLoader("${dataLoader.loader_id}")`)
+  lines.push(`${name}_loader = DataLoader(`)
+  lines.push(`  kind = "${dataLoader.kind}",`)
+  lines.push(`  url_template = "${dataLoader.source.url_template}",`)
+  if (dataLoader.source.mirrors && dataLoader.source.mirrors.length > 0) {
+    const mirrors = dataLoader.source.mirrors.map((m) => `"${m}"`).join(', ')
+    lines.push(`  mirrors = [${mirrors}],`)
   }
-
-  // Configuration
-  if (dataLoader.config) {
-    lines.push(`configure!(${name}_loader, ${JSON.stringify(dataLoader.config)})`)
-  }
-
-  // Variables provided
-  if (dataLoader.provides) {
-    lines.push(`# Variables provided by ${name}:`)
-    for (const [variable, info] of Object.entries(dataLoader.provides)) {
-      const units = info.units ? ` (${info.units})` : ''
-      const desc = info.description ? ` - ${info.description}` : ''
-      lines.push(`#   ${variable}${units}${desc}`)
+  if (dataLoader.temporal) {
+    if (dataLoader.temporal.start) {
+      lines.push(`  temporal_start = "${dataLoader.temporal.start}",`)
     }
+    if (dataLoader.temporal.end) {
+      lines.push(`  temporal_end = "${dataLoader.temporal.end}",`)
+    }
+    if (dataLoader.temporal.file_period) {
+      lines.push(`  file_period = "${dataLoader.temporal.file_period}",`)
+    }
+    if (dataLoader.temporal.frequency) {
+      lines.push(`  frequency = "${dataLoader.temporal.frequency}",`)
+    }
+    if (dataLoader.temporal.records_per_file !== undefined) {
+      const rpf = dataLoader.temporal.records_per_file
+      const rendered = typeof rpf === 'string' ? `"${rpf}"` : String(rpf)
+      lines.push(`  records_per_file = ${rendered},`)
+    }
+    if (dataLoader.temporal.time_variable) {
+      lines.push(`  time_variable = "${dataLoader.temporal.time_variable}",`)
+    }
+  }
+  if (dataLoader.spatial) {
+    lines.push(`  crs = "${dataLoader.spatial.crs}",`)
+    lines.push(`  grid_type = "${dataLoader.spatial.grid_type}",`)
+  }
+  if (dataLoader.regridding) {
+    if (dataLoader.regridding.fill_value !== undefined) {
+      lines.push(`  fill_value = ${dataLoader.regridding.fill_value},`)
+    }
+    if (dataLoader.regridding.extrapolation) {
+      lines.push(`  extrapolation = "${dataLoader.regridding.extrapolation}",`)
+    }
+  }
+  lines.push(`)`)
+
+  lines.push(`# Variables exposed by ${name}:`)
+  for (const [variable, info] of Object.entries(dataLoader.variables)) {
+    const desc = info.description ? ` - ${info.description}` : ''
+    lines.push(`#   ${variable} <- ${info.file_variable} (${info.units})${desc}`)
   }
 
   return lines
@@ -911,53 +911,53 @@ function generatePythonDataLoaderCode(name: string, dataLoader: DataLoader): str
   const lines: string[] = []
 
   lines.push(`# Data loader: ${name}`)
-
-  // Type-specific data loader implementations
-  switch (dataLoader.type) {
-    case 'gridded_data':
-      lines.push(`${name}_loader = esm.GriddedDataLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_data = ${name}_loader.load("${dataLoader.source}")`)
-      }
-      break
-    case 'emissions':
-      lines.push(`${name}_loader = esm.EmissionsLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_emissions = ${name}_loader.load("${dataLoader.source}")`)
-      }
-      break
-    case 'timeseries':
-      lines.push(`${name}_loader = esm.TimeSeriesLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_timeseries = ${name}_loader.load("${dataLoader.source}")`)
-      }
-      break
-    case 'static':
-      lines.push(`${name}_loader = esm.StaticDataLoader("${dataLoader.loader_id}")`)
-      if (dataLoader.source) {
-        lines.push(`${name}_static = ${name}_loader.load("${dataLoader.source}")`)
-      }
-      break
-    case 'callback':
-      lines.push(`${name}_loader = esm.CallbackDataLoader("${dataLoader.loader_id}")`)
-      break
-    default:
-      lines.push(`${name}_loader = esm.DataLoader("${dataLoader.loader_id}")`)
+  lines.push(`${name}_loader = esm.DataLoader(`)
+  lines.push(`    kind="${dataLoader.kind}",`)
+  lines.push(`    url_template="${dataLoader.source.url_template}",`)
+  if (dataLoader.source.mirrors && dataLoader.source.mirrors.length > 0) {
+    const mirrors = dataLoader.source.mirrors.map((m) => `"${m}"`).join(', ')
+    lines.push(`    mirrors=[${mirrors}],`)
   }
-
-  // Configuration
-  if (dataLoader.config) {
-    lines.push(`${name}_loader.configure(${JSON.stringify(dataLoader.config)})`)
-  }
-
-  // Variables provided
-  if (dataLoader.provides) {
-    lines.push(`# Variables provided by ${name}:`)
-    for (const [variable, info] of Object.entries(dataLoader.provides)) {
-      const units = info.units ? ` (${info.units})` : ''
-      const desc = info.description ? ` - ${info.description}` : ''
-      lines.push(`#   ${variable}${units}${desc}`)
+  if (dataLoader.temporal) {
+    if (dataLoader.temporal.start) {
+      lines.push(`    temporal_start="${dataLoader.temporal.start}",`)
     }
+    if (dataLoader.temporal.end) {
+      lines.push(`    temporal_end="${dataLoader.temporal.end}",`)
+    }
+    if (dataLoader.temporal.file_period) {
+      lines.push(`    file_period="${dataLoader.temporal.file_period}",`)
+    }
+    if (dataLoader.temporal.frequency) {
+      lines.push(`    frequency="${dataLoader.temporal.frequency}",`)
+    }
+    if (dataLoader.temporal.records_per_file !== undefined) {
+      const rpf = dataLoader.temporal.records_per_file
+      const rendered = typeof rpf === 'string' ? `"${rpf}"` : String(rpf)
+      lines.push(`    records_per_file=${rendered},`)
+    }
+    if (dataLoader.temporal.time_variable) {
+      lines.push(`    time_variable="${dataLoader.temporal.time_variable}",`)
+    }
+  }
+  if (dataLoader.spatial) {
+    lines.push(`    crs="${dataLoader.spatial.crs}",`)
+    lines.push(`    grid_type="${dataLoader.spatial.grid_type}",`)
+  }
+  if (dataLoader.regridding) {
+    if (dataLoader.regridding.fill_value !== undefined) {
+      lines.push(`    fill_value=${dataLoader.regridding.fill_value},`)
+    }
+    if (dataLoader.regridding.extrapolation) {
+      lines.push(`    extrapolation="${dataLoader.regridding.extrapolation}",`)
+    }
+  }
+  lines.push(`)`)
+
+  lines.push(`# Variables exposed by ${name}:`)
+  for (const [variable, info] of Object.entries(dataLoader.variables)) {
+    const desc = info.description ? ` - ${info.description}` : ''
+    lines.push(`#   ${variable} <- ${info.file_variable} (${info.units})${desc}`)
   }
 
   return lines

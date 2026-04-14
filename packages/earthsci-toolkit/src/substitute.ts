@@ -127,7 +127,7 @@ function resolveScopedReference(reference: string, esmFile: EsmFile): Expr | nul
   // Try to find in data loaders
   if (esmFile.data_loaders && esmFile.data_loaders[systemName]) {
     const dataLoader = esmFile.data_loaders[systemName]
-    if (dataLoader.provides && dataLoader.provides[variableName]) {
+    if (dataLoader.variables && dataLoader.variables[variableName]) {
       // Data loaders don't have default values, return the variable name as a placeholder
       return reference
     }
