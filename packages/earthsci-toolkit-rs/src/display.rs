@@ -1977,10 +1977,19 @@ impl fmt::Display for EsmFile {
         {
             writeln!(f, "  Data Loaders:")?;
             for (name, loader) in data_loaders {
+                let kind = match loader.kind {
+                    crate::DataLoaderKind::Grid => "grid",
+                    crate::DataLoaderKind::Points => "points",
+                    crate::DataLoaderKind::Static => "static",
+                };
                 writeln!(
                     f,
-                    "    {}: {} ({})",
-                    name, loader.loader_id, loader.loader_type
+                    "    {}: [{}] {} ({} variable{})",
+                    name,
+                    kind,
+                    loader.source.url_template,
+                    loader.variables.len(),
+                    if loader.variables.len() == 1 { "" } else { "s" },
                 )?;
             }
             writeln!(f)?;

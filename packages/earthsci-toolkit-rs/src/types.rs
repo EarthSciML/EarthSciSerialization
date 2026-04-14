@@ -469,50 +469,246 @@ fn default_stoichiometry() -> u32 {
     1
 }
 
-/// External data loader reference
+/// Generic, runtime-agnostic description of an external data source.
+///
+/// Carries enough structural information to locate files, map timestamps to
+/// files, describe spatial/variable semantics, and regrid — rather than
+/// pointing at a runtime handler. Authentication and algorithm-specific
+/// tuning are runtime-only and not part of the schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataLoader {
-    /// Data loader type identifier
-    #[serde(rename = "type")]
-    pub loader_type: String,
+    /// Structural kind of the dataset. Scientific role (emissions,
+    /// meteorology, elevation, ...) is not schema-validated and belongs in
+    /// `metadata.tags`.
+    pub kind: DataLoaderKind,
 
-    /// Registered identifier the runtime uses to find the implementation
-    pub loader_id: String,
+    /// File discovery configuration.
+    pub source: DataLoaderSource,
 
-    /// Configuration parameters
+    /// Temporal coverage and record layout.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub config: Option<serde_json::Value>,
+    pub temporal: Option<DataLoaderTemporal>,
 
-    /// Academic citation or data source reference
+    /// Spatial grid description.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spatial: Option<DataLoaderSpatial>,
+
+    /// Variables exposed by this loader, keyed by schema-level variable name.
+    pub variables: HashMap<String, DataLoaderVariable>,
+
+    /// Structural regridding configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub regridding: Option<DataLoaderRegridding>,
+
+    /// Academic citation or data source reference.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reference: Option<Reference>,
 
-    /// Variables this loader makes available, keyed by name
-    pub provides: HashMap<String, DataLoaderProvides>,
-
-    /// ISO 8601 duration (e.g., "PT3H")
+    /// Free-form metadata about the data source. Tags convey scientific role.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub temporal_resolution: Option<String>,
-
-    /// Grid spacing per dimension
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spatial_resolution: Option<HashMap<String, f64>>,
-
-    /// Interpolation method (linear, nearest, cubic)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub interpolation: Option<String>,
+    pub metadata: Option<DataLoaderMetadata>,
 }
 
-/// A variable provided by a data loader
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DataLoaderProvides {
-    /// Physical units
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub units: Option<String>,
+/// Structural kind of a data loader dataset.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DataLoaderKind {
+    /// Gridded dataset.
+    Grid,
+    /// Point / observational dataset.
+    Points,
+    /// Static dataset (no time dimension).
+    Static,
+}
 
-    /// Brief description
+/// File discovery configuration. Describes how to locate data files at
+/// runtime via URL templates with date/variable substitutions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataLoaderSource {
+    /// Jinja-style URL template with substitutions. Supported:
+    /// `{date:<strftime>}` (e.g. `{date:%Y%m%d}`), `{var}`, `{sector}`,
+    /// `{species}`. Custom substitutions are allowed and must be passed
+    /// through by the runtime.
+    pub url_template: String,
+
+    /// Ordered fallback URL templates. Runtime tries each in order.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mirrors: Option<Vec<String>>,
+}
+
+/// Temporal coverage and record layout for a data source.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DataLoaderTemporal {
+    /// ISO 8601 datetime — first timestamp available from this source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<String>,
+
+    /// ISO 8601 datetime — last timestamp available from this source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<String>,
+
+    /// ISO 8601 duration describing how much time one file covers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_period: Option<String>,
+
+    /// ISO 8601 duration describing spacing between samples within a file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency: Option<String>,
+
+    /// Number of time records per file. `"auto"` means read from file at
+    /// runtime.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub records_per_file: Option<RecordsPerFile>,
+
+    /// Name of the time coordinate variable in the file. Used when
+    /// `records_per_file` is absent or `"auto"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_variable: Option<String>,
+}
+
+/// Number of records per file — an integer, or the literal `"auto"`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RecordsPerFile {
+    /// Fixed count (`>= 1`).
+    Count(u32),
+    /// `"auto"` — read from file at runtime.
+    Auto(AutoRecords),
+}
+
+/// Carrier for the `"auto"` literal in [`RecordsPerFile`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AutoRecords {
+    /// Runtime discovers the record count from file metadata.
+    Auto,
+}
+
+/// Per-dimension grid staggering (centered or edge-aligned).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StaggeringMode {
+    /// Cell-centered.
+    Center,
+    /// Edge-aligned.
+    Edge,
+}
+
+/// Spatial grid description for a data source.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataLoaderSpatial {
+    /// Coordinate reference system as a PROJ string or EPSG code.
+    pub crs: String,
+
+    /// Structural grid family.
+    pub grid_type: GridType,
+
+    /// Per-dimension staggering.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub staggering: Option<HashMap<String, StaggeringMode>>,
+
+    /// Per-dimension resolution in native CRS units.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution: Option<HashMap<String, f64>>,
+
+    /// Per-dimension `[min, max]` extent in native CRS units.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extent: Option<HashMap<String, [f64; 2]>>,
+}
+
+/// Structural grid family for a data loader.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GridType {
+    /// Latitude/longitude grid.
+    Latlon,
+    /// Lambert conformal conic.
+    LambertConformal,
+    /// Mercator projection.
+    Mercator,
+    /// Polar stereographic projection.
+    PolarStereographic,
+    /// Rotated-pole projection.
+    RotatedPole,
+    /// Unstructured mesh / point dataset.
+    Unstructured,
+}
+
+/// A variable exposed by a data loader, mapped from a source-file variable.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataLoaderVariable {
+    /// Name of the variable inside the source file. May differ from the
+    /// schema-level variable name.
+    pub file_variable: String,
+
+    /// Units of the variable as exposed to the schema.
+    pub units: String,
+
+    /// Optional multiplicative factor or Expression AST applied to convert
+    /// source-file values to the declared units.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit_conversion: Option<UnitConversion>,
+
+    /// Brief description.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// Academic citation or data source reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Reference>,
+}
+
+/// Multiplicative factor (number) or Expression AST used to convert source-
+/// file values to the declared units.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UnitConversion {
+    /// Simple multiplicative factor.
+    Factor(f64),
+    /// Expression AST applied to the source value.
+    Expression(Expr),
+}
+
+/// Structural regridding configuration. Algorithm-specific tuning parameters
+/// are runtime-side and not in the schema.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DataLoaderRegridding {
+    /// Value to assign to cells with no source data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill_value: Option<f64>,
+
+    /// Behavior when regridding targets fall outside the source extent.
+    /// Defaults to `clamp`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extrapolation: Option<ExtrapolationMode>,
+}
+
+/// Behavior when regridding targets fall outside the source extent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExtrapolationMode {
+    /// Clamp to nearest in-range value.
+    Clamp,
+    /// Return NaN.
+    Nan,
+    /// Periodic wrap-around.
+    Periodic,
+}
+
+/// Free-form metadata about a data loader.
+///
+/// The `tags` field is conventional for expressing scientific role
+/// (e.g. `"emissions"`, `"reanalysis"`) and is not schema-validated.
+/// Additional fields are preserved as raw JSON via `extra`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DataLoaderMetadata {
+    /// Scientific role tags (freeform).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+
+    /// Additional, loader-specific metadata fields.
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
 }
 
 /// Runtime operator reference

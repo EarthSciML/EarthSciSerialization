@@ -191,8 +191,7 @@ fn validate_structural_json(json_value: &Value) -> Result<(), EsmError> {
     if let Some(obj) = json_value.as_object() {
         check_version_compatibility(obj, &mut errors);
         check_metadata_formats(obj, &mut errors);
-        check_data_loader_provides(obj, &mut errors);
-        check_data_loader_temporal_resolution(obj, &mut errors);
+        check_data_loader_temporal_durations(obj, &mut errors);
         check_model_state_has_derivatives(obj, &mut errors);
         check_coupling_references(obj, &mut errors);
         check_circular_model_dependencies(obj, &mut errors);
@@ -290,36 +289,10 @@ fn check_metadata_formats(obj: &serde_json::Map<String, Value>, errors: &mut Vec
     }
 }
 
-/// Every variable in `data_loader.provides` must declare both `units` and
-/// `description` per §3.2.3, even though the schema only lists those as
-/// optional properties.
-fn check_data_loader_provides(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
-    let Some(loaders) = obj.get("data_loaders").and_then(|v| v.as_object()) else {
-        return;
-    };
-    for (dname, dv) in loaders {
-        let Some(d) = dv.as_object() else { continue };
-        let Some(provides) = d.get("provides").and_then(|v| v.as_object()) else {
-            continue;
-        };
-        for (vname, vv) in provides {
-            let Some(vd) = vv.as_object() else { continue };
-            if !vd.contains_key("units") {
-                errors.push(format!(
-                    "data_loaders/{dname}/provides/{vname}: missing required 'units' field"
-                ));
-            }
-            if !vd.contains_key("description") {
-                errors.push(format!(
-                    "data_loaders/{dname}/provides/{vname}: missing required 'description' field"
-                ));
-            }
-        }
-    }
-}
-
-/// `temporal_resolution`, if present, must be a valid ISO 8601 duration.
-fn check_data_loader_temporal_resolution(
+/// Any duration string inside `data_loader.temporal` (`file_period` or
+/// `frequency`), if present, must be a valid ISO 8601 duration. The schema
+/// types these as `string` but does not enforce the grammar.
+fn check_data_loader_temporal_durations(
     obj: &serde_json::Map<String, Value>,
     errors: &mut Vec<String>,
 ) {
@@ -328,13 +301,18 @@ fn check_data_loader_temporal_resolution(
     };
     for (dname, dv) in loaders {
         let Some(d) = dv.as_object() else { continue };
-        if let Some(res) = d.get("temporal_resolution").and_then(|v| v.as_str())
-            && !res.is_empty()
-            && !is_iso8601_duration(res)
-        {
-            errors.push(format!(
-                "data_loaders/{dname}/temporal_resolution: '{res}' is not a valid ISO 8601 duration"
-            ));
+        let Some(temporal) = d.get("temporal").and_then(|v| v.as_object()) else {
+            continue;
+        };
+        for field in ["file_period", "frequency"] {
+            if let Some(res) = temporal.get(field).and_then(|v| v.as_str())
+                && !res.is_empty()
+                && !is_iso8601_duration(res)
+            {
+                errors.push(format!(
+                    "data_loaders/{dname}/temporal/{field}: '{res}' is not a valid ISO 8601 duration"
+                ));
+            }
         }
     }
 }
@@ -770,7 +748,7 @@ fn build_symbol_tables(obj: &serde_json::Map<String, Value>) -> SymbolTables {
             all_systems.insert(name.clone());
             let vars: std::collections::HashSet<String> = d
                 .as_object()
-                .and_then(|o| o.get("provides"))
+                .and_then(|o| o.get("variables"))
                 .and_then(|v| v.as_object())
                 .map(|vs| vs.keys().cloned().collect())
                 .unwrap_or_default();

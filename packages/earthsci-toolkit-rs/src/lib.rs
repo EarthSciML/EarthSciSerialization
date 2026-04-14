@@ -86,10 +86,12 @@ pub use substitute::{
     substitute_with_context,
 };
 pub use types::{
-    AffectEquation, ContinuousEvent, CouplingEntry, DataLoader, DiscreteEvent,
-    DiscreteEventTrigger, Domain, Equation, EsmFile, Expr, ExpressionNode, FunctionalAffect,
-    Metadata, Model, ModelVariable, Operator, Reaction, ReactionSystem, Species,
-    StoichiometricEntry, VariableType,
+    AffectEquation, AutoRecords, ContinuousEvent, CouplingEntry, DataLoader, DataLoaderKind,
+    DataLoaderMetadata, DataLoaderRegridding, DataLoaderSource, DataLoaderSpatial,
+    DataLoaderTemporal, DataLoaderVariable, DiscreteEvent, DiscreteEventTrigger, Domain, Equation,
+    EsmFile, Expr, ExpressionNode, ExtrapolationMode, FunctionalAffect, GridType, Metadata, Model,
+    ModelVariable, Operator, Reaction, ReactionSystem, RecordsPerFile, Species, StaggeringMode,
+    StoichiometricEntry, UnitConversion, VariableType,
 };
 pub use validate::{
     SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,

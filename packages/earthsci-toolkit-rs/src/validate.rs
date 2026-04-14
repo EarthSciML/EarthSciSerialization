@@ -327,14 +327,16 @@ fn build_system_reference_map(esm_file: &EsmFile) -> HashMap<String, SystemInfo>
         }
     }
 
-    // Add data loaders (note: current type doesn't have provides field)
+    // Add data loaders. Schema-level variable names (keys of DataLoader.variables)
+    // are what coupling `from`/`to` references point at, so they go in `variables`.
     if let Some(ref data_loaders) = esm_file.data_loaders {
-        for name in data_loaders.keys() {
+        for (name, loader) in data_loaders {
+            let variables: HashSet<String> = loader.variables.keys().cloned().collect();
             systems.insert(
                 name.clone(),
                 SystemInfo {
                     _system_type: SystemType::DataLoader,
-                    variables: HashSet::new(), // Would be populated from provides field when available
+                    variables,
                     species: HashSet::new(),
                     parameters: HashSet::new(),
                 },
