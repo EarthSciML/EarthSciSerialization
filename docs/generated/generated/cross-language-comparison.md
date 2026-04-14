@@ -2354,7 +2354,7 @@ class DataLoader:
 export interface DataLoader {
 ```
 
-> An external data source registration.
+> A generic, runtime-agnostic description of an external data source.
 
 ---
 
