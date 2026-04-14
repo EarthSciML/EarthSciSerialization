@@ -88,38 +88,76 @@
   },
   "data_loaders": {
     "ObservationData": {
-      "type": "timeseries",
-      "loader_id": "csv_timeseries_loader",
-      "provides": {
+      "kind": "points",
+      "source": {
+        "url_template": "file:///data/csv_timeseries_loader/{date:%Y%m%d}.csv"
+      },
+      "temporal": {
+        "frequency": "PT1H",
+        "file_period": "PT1H",
+        "records_per_file": 1
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "obs_temperature": {
+          "file_variable": "obs_temperature",
           "units": "K",
           "description": "Observed temperature"
         },
         "obs_pressure": {
+          "file_variable": "obs_pressure",
           "units": "Pa",
           "description": "Observed pressure"
         }
       },
-      "interpolation": "linear",
-      "temporal_resolution": "PT1H"
+      "metadata": {
+        "tags": [
+          "observation",
+          "point-data"
+        ]
+      }
     },
     "EmissionInventory": {
-      "type": "gridded_data",
-      "loader_id": "netcdf_gridded_loader",
-      "provides": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/netcdf_gridded_loader/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        },
+        "resolution": {
+          "lon": 0.5,
+          "lat": 0.5
+        }
+      },
+      "variables": {
         "NOx_emissions": {
+          "file_variable": "NOx_emissions",
           "units": "kg/m2/s",
           "description": "NOx emission flux"
         },
         "CO_emissions": {
+          "file_variable": "CO_emissions",
           "units": "kg/m2/s",
           "description": "CO emission flux"
         }
       },
-      "interpolation": "linear",
-      "spatial_resolution": {
-        "lon": 0.5,
-        "lat": 0.5
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     }
   },

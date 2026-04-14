@@ -1196,94 +1196,106 @@
   },
   "data_loaders": {
     "MeteorologicalForcing": {
-      "type": "gridded_data",
-      "loader_id": "ERA5_Hourly",
-      "config": {
-        "variables": [
-          "2m_temperature",
-          "2m_dewpoint",
-          "surface_pressure",
-          "10m_u",
-          "10m_v",
-          "total_precipitation",
-          "surface_solar_radiation",
-          "surface_thermal_radiation"
-        ],
-        "temporal_resolution": "hourly",
-        "spatial_resolution": "0.25_degree"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/ERA5_Hourly/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "air_temperature": {
+          "file_variable": "air_temperature",
           "units": "K",
           "description": "2m air temperature"
         },
         "specific_humidity": {
+          "file_variable": "specific_humidity",
           "units": "kg/kg",
           "description": "2m specific humidity from dewpoint"
         },
         "pressure": {
+          "file_variable": "pressure",
           "units": "Pa",
           "description": "Surface pressure"
         },
         "wind_speed": {
+          "file_variable": "wind_speed",
           "units": "m/s",
           "description": "10m wind speed magnitude"
         },
         "precipitation": {
+          "file_variable": "precipitation",
           "units": "kg/m^2/s",
           "description": "Precipitation rate"
         },
         "incoming_radiation": {
+          "file_variable": "incoming_radiation",
           "units": "W/m^2",
           "description": "Surface solar radiation"
         },
         "longwave_radiation": {
+          "file_variable": "longwave_radiation",
           "units": "W/m^2",
           "description": "Surface thermal radiation"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "SoilProperties": {
-      "type": "static",
-      "loader_id": "SoilGrids250",
-      "config": {
-        "variables": [
-          "clay",
-          "sand",
-          "silt",
-          "bulk_density",
-          "organic_carbon"
-        ],
-        "depths": [
-          "0-5cm",
-          "5-15cm",
-          "15-30cm",
-          "30-60cm",
-          "60-100cm",
-          "100-200cm"
-        ]
+      "kind": "static",
+      "source": {
+        "url_template": "file:///data/SoilGrids250.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "porosity": {
+          "file_variable": "porosity",
           "units": "m^3/m^3",
           "description": "Soil porosity from bulk density"
         },
         "field_capacity": {
+          "file_variable": "field_capacity",
           "units": "m^3/m^3",
           "description": "Field capacity from soil texture"
         },
         "wilting_point": {
+          "file_variable": "wilting_point",
           "units": "m^3/m^3",
           "description": "Wilting point from soil texture"
         },
         "hydraulic_conductivity": {
+          "file_variable": "hydraulic_conductivity",
           "units": "m/s",
           "description": "Saturated hydraulic conductivity"
         },
         "thermal_conductivity": {
+          "file_variable": "thermal_conductivity",
           "units": "W/m/K",
           "description": "Soil thermal conductivity"
         }
+      },
+      "metadata": {
+        "tags": [
+          "static"
+        ]
       }
     }
   },

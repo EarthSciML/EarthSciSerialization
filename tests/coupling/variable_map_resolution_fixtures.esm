@@ -261,47 +261,76 @@
   },
   "data_loaders": {
     "WeatherStation": {
-      "type": "static",
-      "loader_id": "weather_station_csv",
-      "config": {
-        "url": "file://weather_data.csv",
-        "time_column": "timestamp"
+      "kind": "static",
+      "source": {
+        "url_template": "file:///data/weather_station_csv.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "air_temp": {
+          "file_variable": "air_temp",
           "units": "K",
           "description": "Measured air temperature"
         },
         "rel_humidity": {
+          "file_variable": "rel_humidity",
           "units": "%",
           "description": "Measured relative humidity"
         },
         "wind_velocity": {
+          "file_variable": "wind_velocity",
           "units": "m/s",
           "description": "Measured wind speed"
         },
         "incoming_radiation": {
+          "file_variable": "incoming_radiation",
           "units": "W/m^2",
           "description": "Measured solar irradiance"
         }
+      },
+      "metadata": {
+        "tags": [
+          "static"
+        ]
       }
     },
     "SatelliteData": {
-      "type": "gridded_data",
-      "loader_id": "satellite_netcdf",
-      "config": {
-        "url": "file://satellite_sst.nc",
-        "time_dimension": "time"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/satellite_netcdf/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "sst_satellite": {
+          "file_variable": "sst_satellite",
           "units": "K",
           "description": "Satellite sea surface temperature"
         },
         "ocean_color": {
+          "file_variable": "ocean_color",
           "units": "mg/m^3",
           "description": "Chlorophyll concentration"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     }
   },

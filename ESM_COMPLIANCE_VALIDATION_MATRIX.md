@@ -161,9 +161,11 @@ Where:
 ### FORMAT-08-A: Data Loader Fields
 | ID | Requirement | Spec Reference | Testable | Test Category |
 |---|---|---|---|---|
-| FORMAT-08-A-001 | type field MUST be present | esm-spec.md:956 | Yes | format |
-| FORMAT-08-A-002 | loader_id field MUST be present | esm-spec.md:957 | Yes | format |
-| FORMAT-08-A-003 | provides field MUST be present | esm-spec.md:960 | Yes | format |
+| FORMAT-08-A-001 | kind field MUST be present (`grid`, `points`, or `static`) | esm-spec.md §8.1 | Yes | format |
+| FORMAT-08-A-002 | source field MUST be present with url_template | esm-spec.md §8.2 | Yes | format |
+| FORMAT-08-A-003 | variables field MUST be present and non-empty | esm-spec.md §8.5 | Yes | format |
+| FORMAT-08-A-004 | each variable MUST have file_variable and units | esm-spec.md §8.5 | Yes | format |
+| FORMAT-08-A-005 | if spatial is present, crs and grid_type MUST be present | esm-spec.md §8.4 | Yes | format |
 
 ### FORMAT-09-A: Operator Fields
 | ID | Requirement | Spec Reference | Testable | Test Category |

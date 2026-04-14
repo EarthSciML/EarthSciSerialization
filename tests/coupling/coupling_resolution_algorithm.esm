@@ -246,28 +246,45 @@
   },
   "data_loaders": {
     "MeteorologicalData": {
-      "type": "gridded_data",
-      "loader_id": "WRF",
-      "config": {
-        "file_pattern": "wrfout_*"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/WRF/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "temperature": {
+          "file_variable": "temperature",
           "units": "K",
           "description": "Air temperature"
         },
         "pressure": {
+          "file_variable": "pressure",
           "units": "Pa",
           "description": "Surface pressure"
         },
         "wind_u": {
+          "file_variable": "wind_u",
           "units": "m/s",
           "description": "Eastward wind component"
         },
         "wind_v": {
+          "file_variable": "wind_v",
           "units": "m/s",
           "description": "Northward wind component"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     }
   },

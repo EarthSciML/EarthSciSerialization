@@ -462,30 +462,44 @@
   },
   "data_loaders": {
     "PhotolysisRates": {
-      "type": "static",
-      "loader_id": "TUV_rates",
-      "config": {
-        "model": "TUV_v5.2",
-        "wavelength_grid": "fast_TUV",
-        "aerosol_optical_depth": 0.235
+      "kind": "static",
+      "source": {
+        "url_template": "file:///data/TUV_rates.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "jO3": {
+          "file_variable": "jO3",
           "units": "1/s",
           "description": "O3 photolysis rate"
         },
         "jNO2": {
+          "file_variable": "jNO2",
           "units": "1/s",
           "description": "NO2 photolysis rate"
         },
         "jNO3": {
+          "file_variable": "jNO3",
           "units": "1/s",
           "description": "NO3 photolysis rate"
         },
         "jH2O2": {
+          "file_variable": "jH2O2",
           "units": "1/s",
           "description": "H2O2 photolysis rate"
         }
+      },
+      "metadata": {
+        "tags": [
+          "static"
+        ]
       }
     }
   },

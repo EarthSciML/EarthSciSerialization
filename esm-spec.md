@@ -1145,67 +1145,281 @@ where `net_stoich_X = (stoich as product) − (stoich as substrate)`.
 
 ## 8. Data Loaders
 
-Data loaders are inherently runtime-specific — they involve file I/O, network access, data format parsing, and interpolation. They are therefore **registered by type and name** rather than fully specified.
+Data loaders are generic, runtime-agnostic descriptions of external data sources. The schema carries enough information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — **not** just a pointer at a runtime handler.
 
-A data loader declares what variables it provides and how to identify/configure the data source. The actual loading implementation is supplied by the runtime environment.
+The shape is loosely modeled on a STAC catalog: it is usable for any gridded or point dataset (reanalysis, emissions inventories, static fields), not tied to any specific runtime or library.
 
-```json
-{
-  "data_loaders": {
-    "GEOSFP": {
-      "type": "gridded_data",
-      "loader_id": "GEOSFP",
-      "config": {
-        "resolution": "0.25x0.3125_NA",
-        "coord_defaults": { "lat": 34.0, "lev": 1 }
-      },
-      "reference": {
-        "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC",
-        "url": "https://gmao.gsfc.nasa.gov/GEOS_systems/"
-      },
-      "provides": {
-        "u": { "units": "m/s", "description": "Eastward wind component" },
-        "v": { "units": "m/s", "description": "Northward wind component" },
-        "T": { "units": "K", "description": "Air temperature" },
-        "PBLH": { "units": "m", "description": "Planetary boundary layer height" }
-      },
-      "temporal_resolution": "PT3H",
-      "spatial_resolution": { "lon": 0.3125, "lat": 0.25 },
-      "interpolation": "linear"
-    },
-
-    "NEI_Emissions": {
-      "type": "emissions",
-      "loader_id": "NEI2016",
-      "config": {
-        "year": 2016,
-        "sector": "all"
-      },
-      "reference": {
-        "citation": "US EPA, 2016 National Emissions Inventory",
-        "url": "https://www.epa.gov/air-emissions-inventories"
-      },
-      "provides": {
-        "emission_rate_NO": { "units": "mol/mol/s", "description": "NO emission rate" },
-        "emission_rate_CO": { "units": "mol/mol/s", "description": "CO emission rate" }
-      }
-    }
-  }
-}
-```
+Authentication, credential management, algorithm-specific regridding tuning, and per-variable temporal availability constraints are **out of scope** for the schema. Those are runtime concerns.
 
 ### 8.1 Data Loader Fields
 
 | Field | Required | Description |
 |---|---|---|
-| `type` | ✓ | Category: `gridded_data`, `emissions`, `timeseries`, `static`, `callback` |
-| `loader_id` | ✓ | Registered identifier the runtime uses to find the implementation |
-| `config` | | Implementation-specific configuration (opaque to the format) |
-| `reference` | | Data source citation |
-| `provides` | ✓ | Named variables this loader makes available, with units and descriptions |
-| `temporal_resolution` | | ISO 8601 duration (e.g., `"PT3H"`) |
-| `spatial_resolution` | | Grid spacing |
-| `interpolation` | | Interpolation method: `"linear"`, `"nearest"`, `"cubic"` |
+| `kind` | ✓ | Structural kind: `"grid"`, `"points"`, or `"static"`. Scientific role (emissions, meteorology, elevation, …) is **not** schema-validated and belongs in `metadata.tags`. |
+| `source` | ✓ | File discovery object (see §8.2). |
+| `variables` | ✓ | Map of schema-level variable name → variable descriptor (see §8.5). At least one entry required. |
+| `temporal` | | Temporal coverage and record layout (see §8.3). |
+| `spatial` | | Spatial grid description (see §8.4). |
+| `regridding` | | Regridding configuration (see §8.6). |
+| `reference` | | Data source citation. |
+| `metadata` | | Free-form metadata. The `tags` array is conventional for scientific role. |
+
+### 8.2 `source` — file discovery
+
+```
+source:
+  url_template: string    # required
+  mirrors: [string]       # optional, ordered fallback list
+```
+
+`url_template` is a Jinja-style template with substitutions that runtimes resolve at load time. The following substitutions are supported:
+
+| Substitution | Meaning |
+|---|---|
+| `{date:<strftime>}` | Date/time formatted with a strftime pattern. Example: `{date:%Y%m%d}` → `20240501`, `{date:%Y-%m-%dT%H%M}` → `2024-05-01T0000`. |
+| `{var}` | Variable name (for datasets that split variables across files). |
+| `{sector}` | User-defined sector key (for emissions inventories). |
+| `{species}` | User-defined species key. |
+
+Custom substitutions are allowed. Runtimes **must** accept and pass through unrecognized substitutions rather than rejecting them, so that domain-specific keys (e.g. `{grid_res}`, `{ensemble_member}`) can be added without schema changes.
+
+`mirrors` is an optional ordered list of fallback templates following the same grammar. If present, runtimes try `url_template` first, then each mirror in order.
+
+### 8.3 `temporal` — coverage and records
+
+```
+temporal:
+  start: ISO8601 datetime      # first timestamp available
+  end:   ISO8601 datetime      # last timestamp available
+  file_period: ISO8601 duration   # how much time one file covers, e.g. "P1D", "P1M", "PT3H"
+  frequency:   ISO8601 duration   # spacing between samples within a file
+  records_per_file: integer | "auto"
+  time_variable: string        # name of the time coord inside the file
+```
+
+Both **static declaration** (`records_per_file` + `frequency`) and **runtime discovery** (`time_variable`) are allowed. If both are present, the static declaration wins and `time_variable` acts as a fallback. `records_per_file: "auto"` explicitly defers to runtime discovery.
+
+### 8.4 `spatial` — grid description
+
+```
+spatial:
+  crs: string                              # PROJ string or EPSG code (required)
+  grid_type: enum                          # required; see below
+  staggering:                              # optional, per-dimension
+    lon: "center" | "edge"
+    lat: "center" | "edge"
+    lev: "center" | "edge"
+  resolution:                              # optional; in native CRS units
+    <dim>: number
+  extent:                                  # optional; runtime can infer from files
+    <dim>: [min, max]
+```
+
+`grid_type` is one of: `"latlon"`, `"lambert_conformal"`, `"mercator"`, `"polar_stereographic"`, `"rotated_pole"`, `"unstructured"`. Use `"unstructured"` (in combination with `kind: "points"`) for mesh or point-cloud datasets; mesh connectivity is out of scope for the schema and deferred to runtime.
+
+`staggering` is first-class rather than buried in `config`, because it changes how variables align to the grid and is needed for regridding. Dimensions not listed default to `"center"`.
+
+### 8.5 `variables` — variable mapping
+
+```
+variables:
+  <schema_var_name>:
+    file_variable: string        # required; name in the source file
+    units: string                # required; units as exposed to the schema
+    unit_conversion: number | Expression   # optional
+    description: string
+    reference: Reference
+```
+
+`file_variable` lets the schema-level variable name differ from the on-disk name. `unit_conversion` is either a plain multiplicative factor or a full `Expression` AST (§4); the runtime applies it when producing values in the declared `units`.
+
+### 8.6 `regridding` — regridding configuration
+
+```
+regridding:
+  fill_value: number                         # optional
+  extrapolation: "clamp" | "nan" | "periodic"  # optional, default "clamp"
+```
+
+Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters, etc.) is runtime-only and not part of the schema.
+
+### 8.7 Out of scope
+
+- **Authentication / credentials.** Env vars, API keys, S3 credentials, CDS API tokens — all runtime-side. The schema stores **no** credential information.
+- **Per-variable temporal availability windows** (e.g. "CEDS covers 1750–2023 for NOx but 1850–2023 for CH4"). Runtime validation concern.
+- **Regridding algorithm tuning parameters.**
+- **Mesh connectivity for unstructured grids.** `kind: "points"` is a placeholder for future work.
+
+### 8.8 Worked examples
+
+#### GEOSFP reanalysis (gridded meteorology, 3-hourly, one file per timestep)
+
+```json
+{
+  "GEOSFP_A1": {
+    "kind": "grid",
+    "source": {
+      "url_template": "https://portal.nccs.nasa.gov/datashare/gmao/geos-fp/das/Y{date:%Y}/M{date:%m}/D{date:%d}/GEOS.fp.asm.tavg1_2d_slv_Nx.{date:%Y%m%d_%H%M}.V01.nc4"
+    },
+    "temporal": {
+      "start": "2014-01-01T00:00:00Z",
+      "end":   "2099-12-31T23:59:59Z",
+      "file_period": "PT1H",
+      "frequency":   "PT1H",
+      "records_per_file": 1
+    },
+    "spatial": {
+      "crs": "EPSG:4326",
+      "grid_type": "latlon",
+      "staggering": { "lon": "center", "lat": "center" },
+      "resolution": { "lon": 0.3125, "lat": 0.25 }
+    },
+    "variables": {
+      "u": { "file_variable": "U10M", "units": "m/s", "description": "10-m eastward wind" },
+      "v": { "file_variable": "V10M", "units": "m/s", "description": "10-m northward wind" },
+      "T": { "file_variable": "T2M",  "units": "K",   "description": "2-m temperature" },
+      "PBLH": { "file_variable": "PBLH", "units": "m", "description": "PBL height" }
+    },
+    "regridding": { "extrapolation": "clamp" },
+    "reference": {
+      "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC",
+      "url": "https://gmao.gsfc.nasa.gov/GEOS_systems/",
+      "doi": "10.5067/8D5L8QSF2Y6L"
+    },
+    "metadata": { "tags": ["meteorology", "reanalysis", "hourly"] }
+  }
+}
+```
+
+#### CEDS emissions (per-species monthly files, multi-decade)
+
+```json
+{
+  "CEDS_anthro": {
+    "kind": "grid",
+    "source": {
+      "url_template": "https://data.pnnl.gov/ceds/v2021/{species}-em-anthro_input4MIPs_emissions_CMIP_CEDS-2021-04-21-supplemental-data_gn_{date:%Y}01-{date:%Y}12.nc",
+      "mirrors": [
+        "s3://ceds-mirror/v2021/{species}-em-anthro_{date:%Y}.nc"
+      ]
+    },
+    "temporal": {
+      "start": "1750-01-01T00:00:00Z",
+      "end":   "2023-12-31T00:00:00Z",
+      "file_period": "P1Y",
+      "frequency":   "P1M",
+      "records_per_file": 12,
+      "time_variable": "time"
+    },
+    "spatial": {
+      "crs": "EPSG:4326",
+      "grid_type": "latlon",
+      "staggering": { "lon": "center", "lat": "center" },
+      "resolution": { "lon": 0.5, "lat": 0.5 }
+    },
+    "variables": {
+      "emis_NOx": {
+        "file_variable": "NOx_em_anthro",
+        "units": "kg/m^2/s",
+        "description": "Anthropogenic NOx emissions (sum of sectors)"
+      },
+      "emis_CO": {
+        "file_variable": "CO_em_anthro",
+        "units": "kg/m^2/s",
+        "description": "Anthropogenic CO emissions"
+      }
+    },
+    "reference": {
+      "citation": "Hoesly et al. (2018), CEDS historical emissions",
+      "doi": "10.5194/gmd-11-369-2018"
+    },
+    "metadata": { "tags": ["emissions", "anthropogenic", "monthly"] }
+  }
+}
+```
+
+#### ERA5 pressure-level reanalysis (multi-variable monthly files)
+
+```json
+{
+  "ERA5_PL": {
+    "kind": "grid",
+    "source": {
+      "url_template": "cds://reanalysis-era5-pressure-levels/{date:%Y%m}.nc"
+    },
+    "temporal": {
+      "start": "1979-01-01T00:00:00Z",
+      "end":   "2099-12-31T23:59:59Z",
+      "file_period": "P1M",
+      "frequency":   "PT1H",
+      "records_per_file": "auto",
+      "time_variable": "time"
+    },
+    "spatial": {
+      "crs": "EPSG:4326",
+      "grid_type": "latlon",
+      "staggering": { "lon": "center", "lat": "center", "lev": "center" },
+      "resolution": { "lon": 0.25, "lat": 0.25 }
+    },
+    "variables": {
+      "T": {
+        "file_variable": "t",
+        "units": "K",
+        "description": "Temperature on pressure levels"
+      },
+      "Q": {
+        "file_variable": "q",
+        "units": "kg/kg",
+        "description": "Specific humidity"
+      },
+      "Z": {
+        "file_variable": "z",
+        "units": "m^2/s^2",
+        "description": "Geopotential"
+      }
+    },
+    "reference": {
+      "citation": "Hersbach et al. (2020), ERA5",
+      "doi": "10.1002/qj.3803"
+    },
+    "metadata": { "tags": ["meteorology", "reanalysis", "pressure-levels"] }
+  }
+}
+```
+
+*Note: the CDS API requires credentials. Those are runtime-side and intentionally absent from the schema.*
+
+#### USGS 3DEP elevation (static, single file)
+
+```json
+{
+  "USGS_3DEP": {
+    "kind": "static",
+    "source": {
+      "url_template": "s3://prd-tnm/StagedProducts/Elevation/1/TIFF/USGS_Seamless_DEM_1.tif"
+    },
+    "spatial": {
+      "crs": "EPSG:4326",
+      "grid_type": "latlon",
+      "staggering": { "lon": "center", "lat": "center" },
+      "resolution": { "lon": 0.00027778, "lat": 0.00027778 }
+    },
+    "variables": {
+      "elevation": {
+        "file_variable": "Band1",
+        "units": "m",
+        "description": "Ground-surface elevation above geoid"
+      }
+    },
+    "regridding": { "fill_value": -9999.0, "extrapolation": "nan" },
+    "reference": {
+      "citation": "USGS 3D Elevation Program (3DEP)",
+      "url": "https://www.usgs.gov/3d-elevation-program"
+    },
+    "metadata": { "tags": ["elevation", "static", "topography"] }
+  }
+}
+```
 
 ---
 
@@ -1948,14 +2162,29 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
 
   "data_loaders": {
     "GEOSFP": {
-      "type": "gridded_data",
-      "loader_id": "GEOSFP",
-      "config": { "resolution": "0.25x0.3125_NA", "coord_defaults": { "lat": 34.0, "lev": 1 } },
-      "provides": {
-        "u": { "units": "m/s", "description": "Eastward wind" },
-        "v": { "units": "m/s", "description": "Northward wind" },
-        "T": { "units": "K", "description": "Temperature" }
-      }
+      "kind": "grid",
+      "source": {
+        "url_template": "https://portal.nccs.nasa.gov/datashare/gmao/geos-fp/das/Y{date:%Y}/M{date:%m}/D{date:%d}/GEOS.fp.asm.tavg1_2d_slv_Nx.{date:%Y%m%d_%H%M}.V01.nc4"
+      },
+      "temporal": {
+        "start": "2014-01-01T00:00:00Z",
+        "end":   "2099-12-31T23:59:59Z",
+        "file_period": "PT1H",
+        "frequency":   "PT1H",
+        "records_per_file": 1
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": { "lon": "center", "lat": "center" },
+        "resolution": { "lon": 0.3125, "lat": 0.25 }
+      },
+      "variables": {
+        "u": { "file_variable": "U10M", "units": "m/s", "description": "Eastward wind" },
+        "v": { "file_variable": "V10M", "units": "m/s", "description": "Northward wind" },
+        "T": { "file_variable": "T2M",  "units": "K",   "description": "Temperature" }
+      },
+      "metadata": { "tags": ["meteorology", "reanalysis"] }
     }
   },
 

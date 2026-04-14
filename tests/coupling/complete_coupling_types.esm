@@ -380,61 +380,84 @@
   },
   "data_loaders": {
     "MeteorologicalData": {
-      "type": "gridded_data",
-      "loader_id": "GEOS_FP",
-      "config": {
-        "resolution": "0.5x0.625_global",
-        "variables": [
-          "temperature",
-          "pressure",
-          "u_wind",
-          "v_wind"
-        ],
-        "update_frequency": "3h"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/GEOS_FP/{date:%Y%m%d_%H%M}.nc"
       },
-      "reference": {
-        "citation": "NASA GEOS Forward Processing meteorological data"
+      "temporal": {
+        "frequency": "PT3H",
+        "file_period": "PT3H",
+        "records_per_file": 1
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        },
+        "resolution": {
+          "lon": 0.625,
+          "lat": 0.5
+        }
+      },
+      "variables": {
         "temperature": {
+          "file_variable": "temperature",
           "units": "K",
           "description": "Air temperature"
         },
         "pressure": {
+          "file_variable": "pressure",
           "units": "Pa",
           "description": "Surface pressure"
         },
         "u_wind": {
+          "file_variable": "u_wind",
           "units": "m/s",
           "description": "Eastward wind"
         },
         "v_wind": {
+          "file_variable": "v_wind",
           "units": "m/s",
           "description": "Northward wind"
         }
       },
-      "temporal_resolution": "PT3H",
-      "spatial_resolution": {
-        "lon": 0.625,
-        "lat": 0.5
+      "reference": {
+        "citation": "NASA GEOS Forward Processing meteorological data"
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "EmissionInventory": {
-      "type": "emissions",
-      "loader_id": "EDGAR_v6",
-      "config": {
-        "year": 2018,
-        "sectors": [
-          "transport",
-          "industry",
-          "residential"
-        ]
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/EDGAR_v6/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "NOx_emission_rate": {
+          "file_variable": "NOx_emission_rate",
           "units": "mol/mol/s",
           "description": "Nitrogen oxides emission rate"
         }
+      },
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
       }
     }
   },

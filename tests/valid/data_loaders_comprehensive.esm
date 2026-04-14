@@ -15,167 +15,225 @@
   },
   "data_loaders": {
     "GEOSFP_MeteoData": {
-      "type": "gridded_data",
-      "loader_id": "GEOSFP",
-      "config": {
-        "resolution": "0.25x0.3125_NA",
-        "coord_defaults": {
-          "lat": 34.0,
-          "lev": 1
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/GEOSFP/{date:%Y%m%d_%H%M}.nc"
+      },
+      "temporal": {
+        "frequency": "PT3H",
+        "file_period": "PT3H",
+        "records_per_file": 1
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
         },
-        "cache_size": 1000,
-        "parallel_load": true
+        "resolution": {
+          "lon": 0.3125,
+          "lat": 0.25,
+          "lev": 72
+        }
+      },
+      "variables": {
+        "u": {
+          "file_variable": "u",
+          "units": "m/s",
+          "description": "Eastward wind component"
+        },
+        "v": {
+          "file_variable": "v",
+          "units": "m/s",
+          "description": "Northward wind component"
+        },
+        "T": {
+          "file_variable": "T",
+          "units": "K",
+          "description": "Air temperature"
+        },
+        "PBLH": {
+          "file_variable": "PBLH",
+          "units": "m",
+          "description": "Planetary boundary layer height"
+        },
+        "P": {
+          "file_variable": "P",
+          "units": "Pa",
+          "description": "Air pressure"
+        }
       },
       "reference": {
         "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC",
         "url": "https://gmao.gsfc.nasa.gov/GEOS_systems/",
         "doi": "10.5067/8D5L8QSF2Y6L"
       },
-      "provides": {
-        "u": {
-          "units": "m/s",
-          "description": "Eastward wind component"
-        },
-        "v": {
-          "units": "m/s",
-          "description": "Northward wind component"
-        },
-        "T": {
-          "units": "K",
-          "description": "Air temperature"
-        },
-        "PBLH": {
-          "units": "m",
-          "description": "Planetary boundary layer height"
-        },
-        "P": {
-          "units": "Pa",
-          "description": "Air pressure"
-        }
-      },
-      "temporal_resolution": "PT3H",
-      "spatial_resolution": {
-        "lon": 0.3125,
-        "lat": 0.25,
-        "lev": 72
-      },
-      "interpolation": "linear"
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
+      }
     },
     "NEI_Emissions": {
-      "type": "emissions",
-      "loader_id": "NEI2016",
-      "config": {
-        "year": 2016,
-        "sector": "all",
-        "spatial_grid": "0.1x0.1",
-        "temporal_profile": "monthly"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/NEI2016/{date:%Y%m%d_%H%M}.nc"
+      },
+      "temporal": {
+        "frequency": "PT1H",
+        "file_period": "PT1H",
+        "records_per_file": 1
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        },
+        "resolution": {
+          "lon": 0.1,
+          "lat": 0.1
+        }
+      },
+      "variables": {
+        "emission_rate_NO": {
+          "file_variable": "emission_rate_NO",
+          "units": "kg/m^2/s",
+          "description": "NO emission rate"
+        },
+        "emission_rate_CO": {
+          "file_variable": "emission_rate_CO",
+          "units": "kg/m^2/s",
+          "description": "CO emission rate"
+        },
+        "emission_rate_SO2": {
+          "file_variable": "emission_rate_SO2",
+          "units": "kg/m^2/s",
+          "description": "SO2 emission rate"
+        }
       },
       "reference": {
         "citation": "US EPA, 2016 National Emissions Inventory",
         "url": "https://www.epa.gov/air-emissions-inventories/2016-national-emissions-inventory-nei-data",
         "notes": "Gridded annual emissions with temporal and spatial allocation"
       },
-      "provides": {
-        "emission_rate_NO": {
-          "units": "kg/m^2/s",
-          "description": "NO emission rate"
-        },
-        "emission_rate_CO": {
-          "units": "kg/m^2/s",
-          "description": "CO emission rate"
-        },
-        "emission_rate_SO2": {
-          "units": "kg/m^2/s",
-          "description": "SO2 emission rate"
-        }
-      },
-      "temporal_resolution": "PT1H",
-      "spatial_resolution": {
-        "lon": 0.1,
-        "lat": 0.1
-      },
-      "interpolation": "nearest"
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
+      }
     },
     "ObservationalData": {
-      "type": "timeseries",
-      "loader_id": "EPA_AQS",
-      "config": {
-        "stations": [
-          "060371201",
-          "060371202"
-        ],
-        "parameters": [
-          "44201",
-          "42401"
-        ],
-        "quality_flag": "valid_only"
+      "kind": "points",
+      "source": {
+        "url_template": "file:///data/EPA_AQS/{date:%Y%m%d}.csv"
+      },
+      "temporal": {
+        "frequency": "PT1H",
+        "file_period": "PT1H",
+        "records_per_file": 1
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
+        "observed_O3": {
+          "file_variable": "observed_O3",
+          "units": "ppb",
+          "description": "Surface ozone concentration"
+        },
+        "observed_SO2": {
+          "file_variable": "observed_SO2",
+          "units": "ppb",
+          "description": "Surface SO2 concentration"
+        }
       },
       "reference": {
         "citation": "US EPA Air Quality System (AQS)",
         "url": "https://www.epa.gov/aqs"
       },
-      "provides": {
-        "observed_O3": {
-          "units": "ppb",
-          "description": "Surface ozone concentration"
-        },
-        "observed_SO2": {
-          "units": "ppb",
-          "description": "Surface SO2 concentration"
-        }
-      },
-      "temporal_resolution": "PT1H",
-      "interpolation": "linear"
+      "metadata": {
+        "tags": [
+          "observation",
+          "point-data"
+        ]
+      }
     },
     "StaticFields": {
-      "type": "static",
-      "loader_id": "LandUseCover",
-      "config": {
-        "dataset": "MODIS_IGBP",
-        "year": 2020
+      "kind": "static",
+      "source": {
+        "url_template": "file:///data/LandUseCover.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        },
+        "resolution": {
+          "lon": 0.00833333,
+          "lat": 0.00833333
+        }
+      },
+      "variables": {
+        "land_use_type": {
+          "file_variable": "land_use_type",
+          "units": "1",
+          "description": "IGBP land use classification (1-17)"
+        },
+        "leaf_area_index": {
+          "file_variable": "leaf_area_index",
+          "units": "m^2/m^2",
+          "description": "Leaf area index"
+        }
       },
       "reference": {
         "citation": "Friedl, M., Sulla-Menashe, D. MODIS Collection 6 Land Cover (MCD12Q1)",
         "doi": "10.5067/MODIS/MCD12Q1.006"
       },
-      "provides": {
-        "land_use_type": {
-          "units": "1",
-          "description": "IGBP land use classification (1-17)"
-        },
-        "leaf_area_index": {
-          "units": "m^2/m^2",
-          "description": "Leaf area index"
-        }
-      },
-      "spatial_resolution": {
-        "lon": 0.00833333,
-        "lat": 0.00833333
-      },
-      "interpolation": "nearest"
+      "metadata": {
+        "tags": [
+          "static"
+        ]
+      }
     },
     "CallbackData": {
-      "type": "callback",
-      "loader_id": "UserDefinedCallback",
-      "config": {
-        "function_name": "custom_meteorology",
-        "parameters": {
-          "wind_scale": 1.2,
-          "temp_offset": 2.0
-        }
+      "kind": "grid",
+      "source": {
+        "url_template": "callback://UserDefinedCallback"
       },
-      "provides": {
+      "temporal": {
+        "frequency": "PT30M",
+        "file_period": "PT30M",
+        "records_per_file": 1
+      },
+      "variables": {
         "custom_u": {
+          "file_variable": "custom_u",
           "units": "m/s",
           "description": "Custom scaled eastward wind"
         },
         "custom_T": {
+          "file_variable": "custom_T",
           "units": "K",
           "description": "Custom adjusted temperature"
         }
       },
-      "temporal_resolution": "PT30M",
-      "interpolation": "linear"
+      "metadata": {
+        "tags": [
+          "runtime-callback"
+        ]
+      }
     }
   },
   "models": {

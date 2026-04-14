@@ -399,72 +399,82 @@
   },
   "data_loaders": {
     "WeatherData": {
-      "type": "gridded_data",
-      "loader_id": "ECMWF_ERA5",
-      "config": {
-        "resolution": "0.25x0.25",
-        "variables": [
-          "temperature",
-          "pressure",
-          "wind_u",
-          "wind_v",
-          "humidity"
-        ],
-        "coord_defaults": {
-          "lat": 40.0,
-          "lon": -100.0,
-          "lev": 850
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/ECMWF_ERA5/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
         }
       },
-      "provides": {
+      "variables": {
         "T": {
+          "file_variable": "T",
           "units": "K",
           "description": "2-meter temperature"
         },
         "P": {
+          "file_variable": "P",
           "units": "Pa",
           "description": "Surface pressure"
         },
         "u": {
+          "file_variable": "u",
           "units": "m/s",
           "description": "10-meter eastward wind"
         },
         "v": {
+          "file_variable": "v",
           "units": "m/s",
           "description": "10-meter northward wind"
         },
         "RH": {
+          "file_variable": "RH",
           "units": "1",
           "description": "Relative humidity"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "EmissionInventory": {
-      "type": "emissions",
-      "loader_id": "CEDS_v2021",
-      "config": {
-        "sectors": [
-          "energy",
-          "industry",
-          "transport",
-          "residential"
-        ],
-        "species": [
-          "NOx",
-          "CO",
-          "SO2",
-          "NH3"
-        ]
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/CEDS_v2021/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "E_NO_total": {
+          "file_variable": "E_NO_total",
           "units": "kg/m^2/s",
           "description": "Total NOx emissions"
         },
         "E_CO_total": {
+          "file_variable": "E_CO_total",
           "units": "kg/m^2/s",
           "description": "Total CO emissions"
         }
+      },
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
       }
     }
   },

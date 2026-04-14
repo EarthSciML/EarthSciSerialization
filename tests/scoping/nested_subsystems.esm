@@ -277,17 +277,35 @@
   },
   "data_loaders": {
     "Emissions": {
-      "type": "emissions",
-      "loader_id": "EDGAR",
-      "provides": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/EDGAR/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "NO_flux": {
+          "file_variable": "NO_flux",
           "units": "mol/m^2/s",
           "description": "NO emission flux"
         },
         "CH4_flux": {
+          "file_variable": "CH4_flux",
           "units": "mol/m^2/s",
           "description": "CH4 emission flux"
         }
+      },
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
       }
     }
   },

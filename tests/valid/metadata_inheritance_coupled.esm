@@ -201,34 +201,45 @@
   },
   "data_loaders": {
     "MeteorologicalData": {
-      "type": "gridded_data",
-      "loader_id": "ECMWF_ERA5",
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/ECMWF_ERA5/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
+        "T": {
+          "file_variable": "T",
+          "units": "K",
+          "description": "Temperature from ERA5"
+        },
+        "u": {
+          "file_variable": "u",
+          "units": "m/s",
+          "description": "Eastward wind from ERA5"
+        },
+        "v": {
+          "file_variable": "v",
+          "units": "m/s",
+          "description": "Northward wind from ERA5"
+        }
+      },
       "reference": {
         "doi": "10.24381/cds.adbb2d47",
         "citation": "Hersbach, H. et al. (2020). ERA5 hourly data. Copernicus Climate Change Service.",
         "notes": "External data source with its own provenance"
       },
-      "config": {
-        "resolution": "0.25x0.25",
-        "variables": [
-          "temperature",
-          "wind_u",
-          "wind_v"
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
         ]
-      },
-      "provides": {
-        "T": {
-          "units": "K",
-          "description": "Temperature from ERA5"
-        },
-        "u": {
-          "units": "m/s",
-          "description": "Eastward wind from ERA5"
-        },
-        "v": {
-          "units": "m/s",
-          "description": "Northward wind from ERA5"
-        }
       }
     }
   },

@@ -509,47 +509,77 @@
   },
   "data_loaders": {
     "MeteorologicalForcing": {
-      "type": "gridded_data",
-      "loader_id": "meteorological_netcdf",
-      "config": {
-        "url": "file://met_forcing.nc",
-        "time_dimension": "time"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/meteorological_netcdf/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "wind_u": {
+          "file_variable": "wind_u",
           "units": "m/s",
           "description": "Zonal wind velocity"
         },
         "wind_v": {
+          "file_variable": "wind_v",
           "units": "m/s",
           "description": "Meridional wind velocity"
         },
         "solar_flux": {
+          "file_variable": "solar_flux",
           "units": "W/m^2",
           "description": "Solar radiation flux"
         },
         "air_temperature": {
+          "file_variable": "air_temperature",
           "units": "K",
           "description": "Air temperature"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "EmissionInventory": {
-      "type": "emissions",
-      "loader_id": "emissions_csv",
-      "config": {
-        "url": "file://emissions.csv",
-        "time_column": "datetime"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/emissions_csv/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "NOx_emissions": {
+          "file_variable": "NOx_emissions",
           "units": "mol/m^2/s",
           "description": "NOx emission rate"
         },
         "CO2_flux": {
+          "file_variable": "CO2_flux",
           "units": "kg/m^2/s",
           "description": "CO2 surface flux"
         }
+      },
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
       }
     }
   },

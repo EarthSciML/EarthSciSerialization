@@ -68,11 +68,11 @@ tests/
 - **Export Formats**: DOT, Mermaid, JSON adjacency lists
 
 ### Data Loaders and Operators (ESM Spec Sections 8-9)
-- **Valid Fixtures**: Comprehensive test cases covering all data loader types (`gridded_data`, `emissions`, `timeseries`, `static`, `callback`) and operator configurations
-- **Schema Validation**: Tests for missing required fields (`type`, `loader_id`, `provides`, `operator_id`, `needed_vars`)
-- **Configuration Validation**: Tests for invalid interpolation methods, temporal resolution formats, and config structures
-- **Variable Resolution**: Tests for undefined variable references in coupling and operator variable mismatches
-- **Provides Validation**: Tests for missing units and descriptions in data loader variable specifications
+- **Valid Fixtures**: Comprehensive test cases covering data loader kinds (`grid`, `points`, `static`) and operator configurations
+- **Schema Validation**: Tests for missing required fields (`kind`, `source`, `variables`, `operator_id`, `needed_vars`)
+- **Source & Temporal Validation**: Tests for missing `url_template`, malformed ISO 8601 durations, and invalid `records_per_file` values
+- **Spatial Validation**: Tests for missing `crs`/`grid_type`, invalid `grid_type` enum values, and invalid staggering values
+- **Variable Validation**: Tests for missing `file_variable` and `units` in the loader's `variables` map
 
 ## Error Codes Tested
 

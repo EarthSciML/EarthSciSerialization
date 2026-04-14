@@ -299,17 +299,35 @@
   },
   "data_loaders": {
     "MeteoData": {
-      "type": "gridded_data",
-      "loader_id": "WRF_output",
-      "provides": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/WRF_output/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "wind_speed": {
+          "file_variable": "wind_speed",
           "units": "m/s",
           "description": "Wind speed field"
         },
         "boundary_layer_height": {
+          "file_variable": "boundary_layer_height",
           "units": "m",
           "description": "PBL height"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     }
   },

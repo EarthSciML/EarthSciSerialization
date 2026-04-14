@@ -1,19 +1,22 @@
 {
   "esm": "0.1.0",
   "metadata": {
-    "name": "TemporalResolutionInvalid",
-    "description": "Test case: data loader with invalid ISO 8601 temporal resolution",
+    "name": "TemporalRecordsPerFileInvalid",
+    "description": "Test case: data loader temporal.records_per_file must be a positive integer or the string \"auto\"",
     "authors": ["Test Suite"]
   },
 
   "data_loaders": {
     "BadTemporal": {
-      "type": "timeseries",
-      "loader_id": "TestLoader",
-      "provides": {
-        "T": { "units": "K", "description": "Temperature" }
+      "kind": "points",
+      "source": { "url_template": "file:///data/{date:%Y%m%d}.csv" },
+      "temporal": {
+        "frequency": "PT1H",
+        "records_per_file": "not_auto"
       },
-      "temporal_resolution": "invalid_iso8601_duration"
+      "variables": {
+        "T": { "file_variable": "T", "units": "K" }
+      }
     }
   },
 

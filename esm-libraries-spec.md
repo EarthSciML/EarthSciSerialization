@@ -111,7 +111,7 @@ Every library must define typed representations for:
 | Continuous event | `ContinuousEvent` | Conditions, affects, affect_neg |
 | Discrete event | `DiscreteEvent` | Trigger, affects, discrete_parameters |
 | Functional affect | `FunctionalAffect` | Handler reference |
-| Data loader | `DataLoader` | Registered by ID |
+| Data loader | `DataLoader` | STAC-like description: `kind`, `source`, `temporal`, `spatial`, `variables`, `regridding` |
 | Operator | `Operator` | Registered by ID |
 | Coupling entry | `CouplingEntry` | Discriminated union on `type` |
 | Domain | `Domain` | Temporal, spatial, BCs, ICs |

@@ -648,56 +648,72 @@
   },
   "data_loaders": {
     "ClimateForcing": {
-      "type": "gridded_data",
-      "loader_id": "CESM2_Output",
-      "config": {
-        "model": "CESM2",
-        "scenario": "SSP2-4.5",
-        "variables": [
-          "SST",
-          "U10",
-          "V10",
-          "SLP",
-          "FSNS"
-        ],
-        "temporal_frequency": "daily"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/CESM2_Output/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "temperature_ocean": {
+          "file_variable": "temperature_ocean",
           "units": "K",
           "description": "Sea surface temperature"
         },
         "wind_speed": {
+          "file_variable": "wind_speed",
           "units": "m/s",
           "description": "Surface wind speed"
         },
         "pressure": {
+          "file_variable": "pressure",
           "units": "Pa",
           "description": "Sea level pressure"
         },
         "light": {
+          "file_variable": "light",
           "units": "W/m^2",
           "description": "Net surface solar radiation"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "OceanObservations": {
-      "type": "timeseries",
-      "loader_id": "SOCAT_pCO2",
-      "config": {
-        "dataset": "SOCATv2022",
-        "quality_flags": [
-          2,
-          3
-        ],
-        "spatial_binning": "1x1_degree",
-        "temporal_binning": "monthly"
+      "kind": "points",
+      "source": {
+        "url_template": "file:///data/SOCAT_pCO2/{date:%Y%m%d}.csv"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "pCO2_observed": {
+          "file_variable": "pCO2_observed",
           "units": "uatm",
           "description": "Observed ocean pCO2"
         }
+      },
+      "metadata": {
+        "tags": [
+          "observation",
+          "point-data"
+        ]
       }
     }
   },

@@ -221,12 +221,29 @@
   },
   "data_loaders": {
     "EmptyDataLoader": {
-      "type": "static",
-      "loader_id": "empty_csv",
-      "config": {
-        "url": "file://empty.csv"
+      "kind": "static",
+      "source": {
+        "url_template": "file:///data/empty_csv.nc"
       },
-      "provides": {}
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
+        "value": {
+          "file_variable": "value",
+          "units": "1"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "static"
+        ]
+      }
     }
   },
   "coupling": [

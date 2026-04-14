@@ -391,17 +391,35 @@
   },
   "data_loaders": {
     "EmissionInventory": {
-      "type": "emissions",
-      "loader_id": "EDGAR_v6",
-      "provides": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/EDGAR_v6/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "NO_emissions": {
+          "file_variable": "NO_emissions",
           "units": "kg N/m^2/s",
           "description": "Nitrogen oxide emissions"
         },
         "temperature_profile": {
+          "file_variable": "temperature_profile",
           "units": "K",
           "description": "3D temperature field"
         }
+      },
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
       }
     }
   },

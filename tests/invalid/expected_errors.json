@@ -786,48 +786,52 @@
     "schema_errors": [
       {
         "path": "/data_loaders/BadLoader",
-        "message": "Required property 'type' is missing",
+        "message": "Required property 'kind' is missing",
         "keyword": "required"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: tests missing 'kind' (formerly 'type')."
   },
 
   "data_loader_missing_loader_id.esm": {
     "schema_errors": [
       {
         "path": "/data_loaders/BadLoader",
-        "message": "Required property 'loader_id' is missing",
+        "message": "Required property 'source' is missing",
         "keyword": "required"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: loader_id no longer exists; tests missing 'source'."
   },
 
   "data_loader_missing_provides.esm": {
     "schema_errors": [
       {
         "path": "/data_loaders/BadLoader",
-        "message": "Required property 'provides' is missing",
+        "message": "Required property 'variables' is missing",
         "keyword": "required"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: 'provides' renamed to 'variables'."
   },
 
   "data_loader_invalid_type.esm": {
     "schema_errors": [
       {
-        "path": "/data_loaders/BadLoader/type",
-        "message": "Value 'invalid_type' not in enum: [gridded_data, emissions, timeseries, static, callback]",
+        "path": "/data_loaders/BadLoader/kind",
+        "message": "Value 'invalid_kind' not in enum: [grid, points, static]",
         "keyword": "enum"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: tests invalid 'kind' enum value."
   },
 
   "data_loader_undefined_reference.esm": {
@@ -915,61 +919,66 @@
   "interpolation_method_invalid.esm": {
     "schema_errors": [
       {
-        "path": "/data_loaders/BadInterpolation/interpolation",
-        "message": "Value 'invalid_interpolation_method' not in enum: [linear, nearest, cubic]",
+        "path": "/data_loaders/BadInterpolation/regridding/extrapolation",
+        "message": "Value 'invalid_extrapolation_method' not in enum: [clamp, nan, periodic]",
         "keyword": "enum"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: 'interpolation' field removed; tests invalid 'regridding.extrapolation' enum value."
   },
 
   "temporal_resolution_invalid.esm": {
     "schema_errors": [
       {
-        "path": "/data_loaders/BadTemporal/temporal_resolution",
-        "message": "Does not match format 'duration' (ISO 8601)",
-        "keyword": "format"
+        "path": "/data_loaders/BadTemporal/temporal/records_per_file",
+        "message": "Value 'not_auto' is not a positive integer and not the literal \"auto\"",
+        "keyword": "oneOf"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: tests invalid temporal.records_per_file value."
   },
 
   "data_loader_config_schema_violation.esm": {
     "schema_errors": [
       {
-        "path": "/data_loaders/BadConfig/config",
+        "path": "/data_loaders/BadConfig/source",
         "message": "Expected object, got string",
         "keyword": "type"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: 'config' field removed; tests invalid 'source' type (should be object)."
   },
 
   "data_loader_provides_missing_units.esm": {
     "schema_errors": [
       {
-        "path": "/data_loaders/BadProvides/provides/T",
+        "path": "/data_loaders/BadProvides/variables/T",
         "message": "Required property 'units' is missing",
         "keyword": "required"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: 'provides' renamed to 'variables'."
   },
 
   "data_loader_provides_missing_description.esm": {
     "schema_errors": [
       {
-        "path": "/data_loaders/BadProvides/provides/T",
-        "message": "Required property 'description' is missing",
+        "path": "/data_loaders/BadProvides/variables/T",
+        "message": "Required property 'file_variable' is missing",
         "keyword": "required"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Repurposed for new DataLoader shape: 'description' is still optional in new 'variables'; this fixture now tests missing 'file_variable' instead."
   },
 
   "missing_required_fields.esm": {

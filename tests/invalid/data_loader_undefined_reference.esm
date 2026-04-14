@@ -8,11 +8,16 @@
 
   "data_loaders": {
     "WeatherData": {
-      "type": "gridded_data",
-      "loader_id": "TestLoader",
-      "provides": {
-        "T": { "units": "K", "description": "Temperature" },
-        "P": { "units": "Pa", "description": "Pressure" }
+      "kind": "grid",
+      "source": { "url_template": "file:///data/weather/{date:%Y%m%d}.nc" },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": { "lon": "center", "lat": "center" }
+      },
+      "variables": {
+        "T": { "file_variable": "T", "units": "K", "description": "Temperature" },
+        "P": { "file_variable": "P", "units": "Pa", "description": "Pressure" }
       }
     }
   },

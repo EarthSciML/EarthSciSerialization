@@ -185,28 +185,40 @@
   },
   "data_loaders": {
     "GEOSFP": {
-      "type": "gridded_data",
-      "loader_id": "GEOSFP",
-      "config": {
-        "resolution": "0.25x0.3125_NA",
-        "coord_defaults": {
-          "lat": 34.0,
-          "lev": 1
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/GEOSFP/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
         }
       },
-      "provides": {
+      "variables": {
         "u": {
+          "file_variable": "u",
           "units": "m/s",
           "description": "Eastward wind"
         },
         "v": {
+          "file_variable": "v",
           "units": "m/s",
           "description": "Northward wind"
         },
         "T": {
+          "file_variable": "T",
           "units": "K",
           "description": "Temperature"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     }
   },

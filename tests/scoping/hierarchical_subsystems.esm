@@ -304,21 +304,40 @@
   },
   "data_loaders": {
     "MeteorologicalFields": {
-      "type": "gridded_data",
-      "loader_id": "ECMWF_ERA5",
-      "provides": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/ECMWF_ERA5/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "temperature_3d": {
+          "file_variable": "temperature_3d",
           "units": "K",
           "description": "3D temperature field"
         },
         "wind_u": {
+          "file_variable": "wind_u",
           "units": "m/s",
           "description": "Eastward wind component"
         },
         "wind_v": {
+          "file_variable": "wind_v",
           "units": "m/s",
           "description": "Northward wind component"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     }
   },

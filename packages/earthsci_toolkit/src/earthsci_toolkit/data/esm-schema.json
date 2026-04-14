@@ -677,55 +677,186 @@
       }
     },
 
-    "DataLoaderProvides": {
+    "DataLoaderSource": {
       "type": "object",
-      "description": "A variable provided by a data loader.",
+      "description": "File discovery configuration. Describes how to locate data files at runtime via URL templates with date/variable substitutions.",
+      "required": ["url_template"],
       "additionalProperties": false,
       "properties": {
-        "units": { "type": "string" },
-        "description": { "type": "string" }
+        "url_template": {
+          "type": "string",
+          "description": "Jinja-style URL template with substitutions. Supported: {date:<strftime>} (e.g. {date:%Y%m%d}), {var}, {sector}, {species}. Custom substitutions are allowed and the runtime must accept and pass them through."
+        },
+        "mirrors": {
+          "type": "array",
+          "description": "Ordered fallback URL templates. Runtime tries each in order, first is primary. Follows the same substitution grammar as url_template.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "DataLoaderTemporal": {
+      "type": "object",
+      "description": "Temporal coverage and record layout for a data source.",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 datetime — first timestamp available from this source."
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 datetime — last timestamp available from this source."
+        },
+        "file_period": {
+          "type": "string",
+          "description": "ISO 8601 duration describing how much time one file covers (e.g., \"P1D\", \"P1M\", \"PT3H\")."
+        },
+        "frequency": {
+          "type": "string",
+          "description": "ISO 8601 duration describing spacing between samples within a file."
+        },
+        "records_per_file": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "string", "enum": ["auto"] }
+          ],
+          "description": "Number of time records per file. \"auto\" means read from file at runtime."
+        },
+        "time_variable": {
+          "type": "string",
+          "description": "Name of the time coordinate variable in the file. Used when records_per_file is absent or \"auto\". If both static declarations (records_per_file + frequency) and time_variable are present, the static declaration wins and time_variable is a fallback."
+        }
+      }
+    },
+
+    "DataLoaderStaggering": {
+      "type": "object",
+      "description": "Per-dimension grid staggering (centered or edge-aligned).",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["center", "edge"]
+      }
+    },
+
+    "DataLoaderSpatial": {
+      "type": "object",
+      "description": "Spatial grid description for a data source.",
+      "required": ["crs", "grid_type"],
+      "additionalProperties": false,
+      "properties": {
+        "crs": {
+          "type": "string",
+          "description": "Coordinate reference system as a PROJ string or EPSG code."
+        },
+        "grid_type": {
+          "type": "string",
+          "enum": [
+            "latlon",
+            "lambert_conformal",
+            "mercator",
+            "polar_stereographic",
+            "rotated_pole",
+            "unstructured"
+          ],
+          "description": "Structural grid family. Use \"unstructured\" for mesh/point datasets."
+        },
+        "staggering": { "$ref": "#/$defs/DataLoaderStaggering" },
+        "resolution": {
+          "type": "object",
+          "description": "Per-dimension resolution in native CRS units. Optional; some datasets only know this at runtime.",
+          "additionalProperties": { "type": "number" }
+        },
+        "extent": {
+          "type": "object",
+          "description": "Per-dimension [min, max] extent in native CRS units. Optional; runtime can infer from files.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
+    },
+
+    "DataLoaderVariable": {
+      "type": "object",
+      "description": "A variable exposed by a data loader, mapped from a source-file variable.",
+      "required": ["file_variable", "units"],
+      "additionalProperties": false,
+      "properties": {
+        "file_variable": {
+          "type": "string",
+          "description": "Name of the variable inside the source file. May differ from the schema-level variable name."
+        },
+        "units": {
+          "type": "string",
+          "description": "Units of the variable as exposed to the schema."
+        },
+        "unit_conversion": {
+          "oneOf": [
+            { "type": "number" },
+            { "$ref": "#/$defs/Expression" }
+          ],
+          "description": "Optional multiplicative factor or Expression AST applied to convert source-file values to the declared units."
+        },
+        "description": { "type": "string" },
+        "reference": { "$ref": "#/$defs/Reference" }
+      }
+    },
+
+    "DataLoaderRegridding": {
+      "type": "object",
+      "description": "Structural regridding configuration. Algorithm-specific tuning parameters are runtime-side and not in the schema.",
+      "additionalProperties": false,
+      "properties": {
+        "fill_value": {
+          "type": "number",
+          "description": "Value to assign to cells with no source data."
+        },
+        "extrapolation": {
+          "type": "string",
+          "enum": ["clamp", "nan", "periodic"],
+          "description": "Behavior when regridding targets fall outside the source extent. Defaults to \"clamp\"."
+        }
       }
     },
 
     "DataLoader": {
       "type": "object",
-      "description": "An external data source registration. Runtime-specific; registered by type and loader_id.",
-      "required": ["type", "loader_id", "provides"],
+      "description": "A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.",
+      "required": ["kind", "source", "variables"],
       "additionalProperties": false,
       "properties": {
-        "type": {
+        "kind": {
           "type": "string",
-          "enum": ["gridded_data", "emissions", "timeseries", "static", "callback"],
-          "description": "Data loader category."
+          "enum": ["grid", "points", "static"],
+          "description": "Structural kind of the dataset. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags."
         },
-        "loader_id": {
-          "type": "string",
-          "description": "Registered identifier the runtime uses to find the implementation."
-        },
-        "config": {
+        "source": { "$ref": "#/$defs/DataLoaderSource" },
+        "temporal": { "$ref": "#/$defs/DataLoaderTemporal" },
+        "spatial": { "$ref": "#/$defs/DataLoaderSpatial" },
+        "variables": {
           "type": "object",
-          "description": "Implementation-specific configuration.",
-          "additionalProperties": true
+          "description": "Variables exposed by this loader, keyed by schema-level variable name.",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/DataLoaderVariable" }
         },
+        "regridding": { "$ref": "#/$defs/DataLoaderRegridding" },
         "reference": { "$ref": "#/$defs/Reference" },
-        "provides": {
+        "metadata": {
           "type": "object",
-          "description": "Variables this loader makes available.",
-          "additionalProperties": { "$ref": "#/$defs/DataLoaderProvides" }
-        },
-        "temporal_resolution": {
-          "type": "string",
-          "description": "ISO 8601 duration (e.g., \"PT3H\")."
-        },
-        "spatial_resolution": {
-          "type": "object",
-          "description": "Grid spacing per dimension.",
-          "additionalProperties": { "type": "number" }
-        },
-        "interpolation": {
-          "type": "string",
-          "enum": ["linear", "nearest", "cubic"],
-          "description": "Interpolation method."
+          "description": "Free-form metadata about the data source. The \"tags\" field (array of strings) is conventional for expressing scientific role (e.g. \"emissions\", \"reanalysis\") and is not schema-validated.",
+          "additionalProperties": true,
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
         }
       }
     },

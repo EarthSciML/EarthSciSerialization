@@ -1,19 +1,19 @@
 {
   "esm": "0.1.0",
   "metadata": {
-    "name": "InterpolationMethodInvalid",
-    "description": "Test case: data loader with invalid interpolation method",
+    "name": "ExtrapolationMethodInvalid",
+    "description": "Test case: data loader with invalid regridding.extrapolation value",
     "authors": ["Test Suite"]
   },
 
   "data_loaders": {
     "BadInterpolation": {
-      "type": "gridded_data",
-      "loader_id": "TestLoader",
-      "provides": {
-        "T": { "units": "K", "description": "Temperature" }
+      "kind": "grid",
+      "source": { "url_template": "file:///data/{date:%Y%m%d}.nc" },
+      "variables": {
+        "T": { "file_variable": "T", "units": "K" }
       },
-      "interpolation": "invalid_interpolation_method"
+      "regridding": { "extrapolation": "invalid_extrapolation_method" }
     }
   },
 

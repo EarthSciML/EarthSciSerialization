@@ -1,15 +1,15 @@
 {
   "esm": "0.1.0",
   "metadata": {
-    "name": "DataLoaderMissingProvides",
-    "description": "Test case: data loader missing required 'provides' field",
+    "name": "DataLoaderMissingVariables",
+    "description": "Test case: data loader missing required 'variables' field",
     "authors": ["Test Suite"]
   },
 
   "data_loaders": {
     "BadLoader": {
-      "type": "gridded_data",
-      "loader_id": "TestLoader"
+      "kind": "grid",
+      "source": { "url_template": "file:///data/{date:%Y%m%d}.nc" }
     }
   },
 

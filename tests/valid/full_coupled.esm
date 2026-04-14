@@ -335,55 +335,77 @@
   },
   "data_loaders": {
     "MeteoData": {
-      "type": "gridded_data",
-      "loader_id": "GEOSFP",
-      "config": {
-        "resolution": "0.25x0.3125_NA",
-        "coord_defaults": {
-          "lat": 34.0,
-          "lon": -118.0,
-          "lev": 1
-        },
-        "interpolation": "linear"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/GEOSFP/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "u": {
+          "file_variable": "u",
           "units": "m/s",
           "description": "Eastward wind"
         },
         "v": {
+          "file_variable": "v",
           "units": "m/s",
           "description": "Northward wind"
         },
         "w": {
+          "file_variable": "w",
           "units": "m/s",
           "description": "Vertical wind"
         },
         "T": {
+          "file_variable": "T",
           "units": "K",
           "description": "Temperature"
         },
         "P": {
+          "file_variable": "P",
           "units": "Pa",
           "description": "Pressure"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "EmissionsData": {
-      "type": "emissions",
-      "loader_id": "EDGAR_v5",
-      "config": {
-        "year": 2020,
-        "sectors": [
-          "power",
-          "transport"
-        ]
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/EDGAR_v5/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "NOx_emissions": {
+          "file_variable": "NOx_emissions",
           "units": "kg/m^2/s",
           "description": "NOx emissions"
         }
+      },
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
       }
     }
   },

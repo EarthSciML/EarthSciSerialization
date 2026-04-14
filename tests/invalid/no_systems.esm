@@ -12,12 +12,27 @@
   },
   "data_loaders": {
     "weather": {
-      "type": "netcdf",
-      "path": "weather.nc",
-      "provides_vars": [
-        "temperature",
-        "pressure"
-      ]
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/weather/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
+        "value": {
+          "file_variable": "value",
+          "units": "1"
+        }
+      },
+      "metadata": {
+        "tags": []
+      }
     }
   },
   "domain": {

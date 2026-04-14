@@ -203,31 +203,50 @@
   },
   "data_loaders": {
     "MeteoData": {
-      "type": "gridded_data",
-      "loader_id": "WRF",
-      "config": {
-        "file_pattern": "met_*.nc"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/WRF/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "temporal": {
+        "frequency": "PT1H",
+        "file_period": "PT1H",
+        "records_per_file": 1
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        },
+        "resolution": {
+          "lon": 0.1,
+          "lat": 0.1
+        }
+      },
+      "variables": {
         "temperature": {
+          "file_variable": "temperature",
           "units": "K",
           "description": "Air temperature"
         },
         "wind_u": {
+          "file_variable": "wind_u",
           "units": "m/s",
           "description": "Eastward wind"
         },
         "wind_v": {
+          "file_variable": "wind_v",
           "units": "m/s",
           "description": "Northward wind"
         }
       },
-      "temporal_resolution": "PT1H",
-      "spatial_resolution": {
-        "lon": 0.1,
-        "lat": 0.1
-      },
-      "interpolation": "linear"
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
+      }
     }
   },
   "coupling": [

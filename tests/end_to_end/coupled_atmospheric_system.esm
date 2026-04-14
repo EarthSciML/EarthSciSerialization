@@ -723,89 +723,104 @@
   },
   "data_loaders": {
     "MeteorologicalFields": {
-      "type": "gridded_data",
-      "loader_id": "WRF_Output",
-      "config": {
-        "domain": "d01",
-        "resolution": "12km",
-        "variables": [
-          "T2",
-          "PSFC",
-          "U10",
-          "V10",
-          "PBLH",
-          "Q2"
-        ],
-        "temporal_interpolation": "linear",
-        "spatial_interpolation": "bilinear"
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/WRF_Output/{date:%Y%m%d_%H%M}.nc"
+      },
+      "temporal": {
+        "frequency": "PT1H",
+        "file_period": "PT1H",
+        "records_per_file": 1
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        },
+        "resolution": {
+          "dx": 12000,
+          "dy": 12000
+        }
+      },
+      "variables": {
+        "temperature": {
+          "file_variable": "temperature",
+          "units": "K",
+          "description": "2m air temperature"
+        },
+        "pressure": {
+          "file_variable": "pressure",
+          "units": "Pa",
+          "description": "Surface pressure"
+        },
+        "u_wind": {
+          "file_variable": "u_wind",
+          "units": "m/s",
+          "description": "10m eastward wind"
+        },
+        "v_wind": {
+          "file_variable": "v_wind",
+          "units": "m/s",
+          "description": "10m northward wind"
+        },
+        "boundary_layer_height": {
+          "file_variable": "boundary_layer_height",
+          "units": "m",
+          "description": "PBL height"
+        },
+        "humidity": {
+          "file_variable": "humidity",
+          "units": "kg/kg",
+          "description": "2m specific humidity"
+        }
       },
       "reference": {
         "citation": "Weather Research and Forecasting (WRF) Model v4.3",
         "url": "https://www.mmm.ucar.edu/weather-research-and-forecasting-model"
       },
-      "provides": {
-        "temperature": {
-          "units": "K",
-          "description": "2m air temperature"
-        },
-        "pressure": {
-          "units": "Pa",
-          "description": "Surface pressure"
-        },
-        "u_wind": {
-          "units": "m/s",
-          "description": "10m eastward wind"
-        },
-        "v_wind": {
-          "units": "m/s",
-          "description": "10m northward wind"
-        },
-        "boundary_layer_height": {
-          "units": "m",
-          "description": "PBL height"
-        },
-        "humidity": {
-          "units": "kg/kg",
-          "description": "2m specific humidity"
-        }
-      },
-      "temporal_resolution": "PT1H",
-      "spatial_resolution": {
-        "dx": 12000,
-        "dy": 12000
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "EmissionInventories": {
-      "type": "emissions",
-      "loader_id": "NEI_2017",
-      "config": {
-        "base_year": 2017,
-        "sectors": [
-          "onroad",
-          "nonroad",
-          "nonpoint",
-          "point"
-        ],
-        "pollutants": [
-          "NOX",
-          "VOC"
-        ],
-        "temporal_profiles": true,
-        "speciation_profiles": true
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/NEI_2017/{date:%Y%m%d_%H%M}.nc"
+      },
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
+        "NOx_emission_rate": {
+          "file_variable": "NOx_emission_rate",
+          "units": "mol/mol/s",
+          "description": "NOx emission rate"
+        },
+        "VOC_emission_rate": {
+          "file_variable": "VOC_emission_rate",
+          "units": "mol/mol/s",
+          "description": "VOC emission rate"
+        }
       },
       "reference": {
         "citation": "US EPA National Emissions Inventory 2017",
         "url": "https://www.epa.gov/air-emissions-inventories/2017-national-emissions-inventory-nei-data"
       },
-      "provides": {
-        "NOx_emission_rate": {
-          "units": "mol/mol/s",
-          "description": "NOx emission rate"
-        },
-        "VOC_emission_rate": {
-          "units": "mol/mol/s",
-          "description": "VOC emission rate"
-        }
+      "metadata": {
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ]
       }
     }
   },

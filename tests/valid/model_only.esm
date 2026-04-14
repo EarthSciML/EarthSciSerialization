@@ -672,61 +672,76 @@
   },
   "data_loaders": {
     "WindField": {
-      "type": "gridded_data",
-      "loader_id": "ERA5_reanalysis",
-      "config": {
-        "resolution": "0.25x0.25",
-        "variables": [
-          "u10",
-          "v10",
-          "t2m"
-        ],
-        "pressure_levels": [
-          1000,
-          850,
-          500
-        ]
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/ERA5_reanalysis/{date:%Y%m%d_%H%M}.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "wind_u": {
+          "file_variable": "wind_u",
           "units": "m/s",
           "description": "10m eastward wind"
         },
         "wind_v": {
+          "file_variable": "wind_v",
           "units": "m/s",
           "description": "10m northward wind"
         },
         "temperature_2m": {
+          "file_variable": "temperature_2m",
           "units": "K",
           "description": "2m temperature"
         }
+      },
+      "metadata": {
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ]
       }
     },
     "InitialConditions": {
-      "type": "static",
-      "loader_id": "analytical_fields",
-      "config": {
-        "field_type": "gaussian_pulse",
-        "center": [
-          0.5,
-          0.5
-        ],
-        "width": 0.1,
-        "amplitude": 1.0
+      "kind": "static",
+      "source": {
+        "url_template": "file:///data/analytical_fields.nc"
       },
-      "provides": {
+      "spatial": {
+        "crs": "EPSG:4326",
+        "grid_type": "latlon",
+        "staggering": {
+          "lon": "center",
+          "lat": "center"
+        }
+      },
+      "variables": {
         "initial_phi": {
+          "file_variable": "initial_phi",
           "units": "m",
           "description": "Initial wave displacement"
         },
         "initial_prey": {
+          "file_variable": "initial_prey",
           "units": "individuals/km^2",
           "description": "Initial prey density"
         },
         "initial_predator": {
+          "file_variable": "initial_predator",
           "units": "individuals/km^2",
           "description": "Initial predator density"
         }
+      },
+      "metadata": {
+        "tags": [
+          "static"
+        ]
       }
     }
   },

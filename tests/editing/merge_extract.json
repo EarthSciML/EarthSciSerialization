@@ -8,23 +8,51 @@
         "metadata": {
           "name": "ChemistryOnly",
           "description": "Simple chemistry reactions",
-          "authors": ["Author A"]
+          "authors": [
+            "Author A"
+          ]
         },
         "reaction_systems": {
           "SimpleChemistry": {
             "species": {
-              "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
-              "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+              "O3": {
+                "units": "mol/mol",
+                "default": 4e-08,
+                "description": "Ozone"
+              },
+              "NO": {
+                "units": "mol/mol",
+                "default": 1e-10,
+                "description": "Nitric oxide"
+              }
             },
             "parameters": {
-              "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+              "T": {
+                "units": "K",
+                "default": 298.15,
+                "description": "Temperature"
+              }
             },
             "reactions": [
               {
                 "id": "R1",
                 "name": "NO_O3",
-                "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
-                "products": [{ "species": "NO2", "stoichiometry": 1 }],
+                "substrates": [
+                  {
+                    "species": "NO",
+                    "stoichiometry": 1
+                  },
+                  {
+                    "species": "O3",
+                    "stoichiometry": 1
+                  }
+                ],
+                "products": [
+                  {
+                    "species": "NO2",
+                    "stoichiometry": 1
+                  }
+                ],
                 "rate": 1.8e-12
               }
             ]
@@ -36,27 +64,83 @@
         "metadata": {
           "name": "TransportOnly",
           "description": "Advection model",
-          "authors": ["Author B"]
+          "authors": [
+            "Author B"
+          ]
         },
         "models": {
           "Advection": {
             "variables": {
-              "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
-              "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+              "u_wind": {
+                "type": "parameter",
+                "units": "m/s",
+                "default": 5.0,
+                "description": "Eastward wind"
+              },
+              "v_wind": {
+                "type": "parameter",
+                "units": "m/s",
+                "default": 2.0,
+                "description": "Northward wind"
+              }
             },
             "equations": [
-              { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+              {
+                "lhs": {
+                  "op": "D",
+                  "args": [
+                    "_var"
+                  ],
+                  "wrt": "t"
+                },
+                "rhs": {
+                  "op": "*",
+                  "args": [
+                    "u_wind",
+                    {
+                      "op": "grad",
+                      "args": [
+                        "_var"
+                      ],
+                      "dim": "x"
+                    }
+                  ]
+                }
+              }
             ]
           }
         },
         "data_loaders": {
           "WindData": {
-            "type": "gridded_data",
-            "loader_id": "GEOSFP",
-            "config": { "resolution": "0.25x0.3125" },
-            "provides": {
-              "u": { "units": "m/s", "description": "Eastward wind" },
-              "v": { "units": "m/s", "description": "Northward wind" }
+            "kind": "grid",
+            "source": {
+              "url_template": "file:///data/GEOSFP/{date:%Y%m%d_%H%M}.nc"
+            },
+            "spatial": {
+              "crs": "EPSG:4326",
+              "grid_type": "latlon",
+              "staggering": {
+                "lon": "center",
+                "lat": "center"
+              }
+            },
+            "variables": {
+              "u": {
+                "file_variable": "u",
+                "units": "m/s",
+                "description": "Eastward wind"
+              },
+              "v": {
+                "file_variable": "v",
+                "units": "m/s",
+                "description": "Northward wind"
+              }
+            },
+            "metadata": {
+              "tags": [
+                "meteorology",
+                "reanalysis"
+              ]
             }
           }
         }
@@ -67,23 +151,51 @@
       "metadata": {
         "name": "ChemistryOnly",
         "description": "Simple chemistry reactions",
-        "authors": ["Author A"]
+        "authors": [
+          "Author A"
+        ]
       },
       "reaction_systems": {
         "SimpleChemistry": {
           "species": {
-            "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
-            "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" }
+            "O3": {
+              "units": "mol/mol",
+              "default": 4e-08,
+              "description": "Ozone"
+            },
+            "NO": {
+              "units": "mol/mol",
+              "default": 1e-10,
+              "description": "Nitric oxide"
+            }
           },
           "parameters": {
-            "T": { "units": "K", "default": 298.15, "description": "Temperature" }
+            "T": {
+              "units": "K",
+              "default": 298.15,
+              "description": "Temperature"
+            }
           },
           "reactions": [
             {
               "id": "R1",
               "name": "NO_O3",
-              "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
-              "products": [{ "species": "NO2", "stoichiometry": 1 }],
+              "substrates": [
+                {
+                  "species": "NO",
+                  "stoichiometry": 1
+                },
+                {
+                  "species": "O3",
+                  "stoichiometry": 1
+                }
+              ],
+              "products": [
+                {
+                  "species": "NO2",
+                  "stoichiometry": 1
+                }
+              ],
               "rate": 1.8e-12
             }
           ]
@@ -92,22 +204,76 @@
       "models": {
         "Advection": {
           "variables": {
-            "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
-            "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+            "u_wind": {
+              "type": "parameter",
+              "units": "m/s",
+              "default": 5.0,
+              "description": "Eastward wind"
+            },
+            "v_wind": {
+              "type": "parameter",
+              "units": "m/s",
+              "default": 2.0,
+              "description": "Northward wind"
+            }
           },
           "equations": [
-            { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+            {
+              "lhs": {
+                "op": "D",
+                "args": [
+                  "_var"
+                ],
+                "wrt": "t"
+              },
+              "rhs": {
+                "op": "*",
+                "args": [
+                  "u_wind",
+                  {
+                    "op": "grad",
+                    "args": [
+                      "_var"
+                    ],
+                    "dim": "x"
+                  }
+                ]
+              }
+            }
           ]
         }
       },
       "data_loaders": {
         "WindData": {
-          "type": "gridded_data",
-          "loader_id": "GEOSFP",
-          "config": { "resolution": "0.25x0.3125" },
-          "provides": {
-            "u": { "units": "m/s", "description": "Eastward wind" },
-            "v": { "units": "m/s", "description": "Northward wind" }
+          "kind": "grid",
+          "source": {
+            "url_template": "file:///data/GEOSFP/{date:%Y%m%d_%H%M}.nc"
+          },
+          "spatial": {
+            "crs": "EPSG:4326",
+            "grid_type": "latlon",
+            "staggering": {
+              "lon": "center",
+              "lat": "center"
+            }
+          },
+          "variables": {
+            "u": {
+              "file_variable": "u",
+              "units": "m/s",
+              "description": "Eastward wind"
+            },
+            "v": {
+              "file_variable": "v",
+              "units": "m/s",
+              "description": "Northward wind"
+            }
+          },
+          "metadata": {
+            "tags": [
+              "meteorology",
+              "reanalysis"
+            ]
           }
         }
       }
@@ -122,7 +288,13 @@
         "esm": "0.1.0",
         "reaction_systems": {
           "Chemistry": {
-            "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone from file A" } },
+            "species": {
+              "O3": {
+                "units": "mol/mol",
+                "default": 4e-08,
+                "description": "Ozone from file A"
+              }
+            },
             "parameters": {},
             "reactions": []
           }
@@ -132,7 +304,13 @@
         "esm": "0.1.0",
         "reaction_systems": {
           "Chemistry": {
-            "species": { "O3": { "units": "mol/mol", "default": 35e-9, "description": "Ozone from file B" } },
+            "species": {
+              "O3": {
+                "units": "mol/mol",
+                "default": 3.5e-08,
+                "description": "Ozone from file B"
+              }
+            },
             "parameters": {},
             "reactions": []
           }
@@ -143,13 +321,21 @@
       "esm": "0.1.0",
       "reaction_systems": {
         "Chemistry": {
-          "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone from file A" } },
+          "species": {
+            "O3": {
+              "units": "mol/mol",
+              "default": 4e-08,
+              "description": "Ozone from file A"
+            }
+          },
           "parameters": {},
           "reactions": []
         }
       }
     },
-    "expected_warnings": ["Conflicting definitions for system 'Chemistry' - keeping file_a version"]
+    "expected_warnings": [
+      "Conflicting definitions for system 'Chemistry' - keeping file_a version"
+    ]
   },
   {
     "description": "Extract component from ESM file",
@@ -160,32 +346,82 @@
         "metadata": {
           "name": "FullModel",
           "description": "Chemistry and transport model",
-          "authors": ["Full Model Author"]
+          "authors": [
+            "Full Model Author"
+          ]
         },
         "reaction_systems": {
           "AtmosphericChemistry": {
             "species": {
-              "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
-              "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
-              "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+              "O3": {
+                "units": "mol/mol",
+                "default": 4e-08,
+                "description": "Ozone"
+              },
+              "NO": {
+                "units": "mol/mol",
+                "default": 1e-10,
+                "description": "Nitric oxide"
+              },
+              "NO2": {
+                "units": "mol/mol",
+                "default": 1e-09,
+                "description": "Nitrogen dioxide"
+              }
             },
             "parameters": {
-              "T": { "units": "K", "default": 298.15, "description": "Temperature" },
-              "j_NO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
+              "T": {
+                "units": "K",
+                "default": 298.15,
+                "description": "Temperature"
+              },
+              "j_NO2": {
+                "units": "1/s",
+                "default": 0.005,
+                "description": "NO2 photolysis rate"
+              }
             },
             "reactions": [
               {
                 "id": "R1",
                 "name": "NO_O3",
-                "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
-                "products": [{ "species": "NO2", "stoichiometry": 1 }],
+                "substrates": [
+                  {
+                    "species": "NO",
+                    "stoichiometry": 1
+                  },
+                  {
+                    "species": "O3",
+                    "stoichiometry": 1
+                  }
+                ],
+                "products": [
+                  {
+                    "species": "NO2",
+                    "stoichiometry": 1
+                  }
+                ],
                 "rate": 1.8e-12
               },
               {
                 "id": "R2",
                 "name": "NO2_photolysis",
-                "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
-                "products": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+                "substrates": [
+                  {
+                    "species": "NO2",
+                    "stoichiometry": 1
+                  }
+                ],
+                "products": [
+                  {
+                    "species": "NO",
+                    "stoichiometry": 1
+                  },
+                  {
+                    "species": "O3",
+                    "stoichiometry": 1
+                  }
+                ],
                 "rate": "j_NO2"
               }
             ]
@@ -194,15 +430,47 @@
         "models": {
           "Transport": {
             "variables": {
-              "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" }
+              "u_wind": {
+                "type": "parameter",
+                "units": "m/s",
+                "default": 5.0,
+                "description": "Eastward wind"
+              }
             },
             "equations": [
-              { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "*", "args": ["u_wind", { "op": "grad", "args": ["_var"], "dim": "x" }] } }
+              {
+                "lhs": {
+                  "op": "D",
+                  "args": [
+                    "_var"
+                  ],
+                  "wrt": "t"
+                },
+                "rhs": {
+                  "op": "*",
+                  "args": [
+                    "u_wind",
+                    {
+                      "op": "grad",
+                      "args": [
+                        "_var"
+                      ],
+                      "dim": "x"
+                    }
+                  ]
+                }
+              }
             ]
           }
         },
         "coupling": [
-          { "type": "operator_compose", "systems": ["AtmosphericChemistry", "Transport"] }
+          {
+            "type": "operator_compose",
+            "systems": [
+              "AtmosphericChemistry",
+              "Transport"
+            ]
+          }
         ]
       },
       "component_name": "AtmosphericChemistry"
@@ -212,32 +480,82 @@
       "metadata": {
         "name": "AtmosphericChemistry",
         "description": "Extracted from FullModel",
-        "authors": ["Full Model Author"]
+        "authors": [
+          "Full Model Author"
+        ]
       },
       "reaction_systems": {
         "AtmosphericChemistry": {
           "species": {
-            "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" },
-            "NO": { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide" },
-            "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide" }
+            "O3": {
+              "units": "mol/mol",
+              "default": 4e-08,
+              "description": "Ozone"
+            },
+            "NO": {
+              "units": "mol/mol",
+              "default": 1e-10,
+              "description": "Nitric oxide"
+            },
+            "NO2": {
+              "units": "mol/mol",
+              "default": 1e-09,
+              "description": "Nitrogen dioxide"
+            }
           },
           "parameters": {
-            "T": { "units": "K", "default": 298.15, "description": "Temperature" },
-            "j_NO2": { "units": "1/s", "default": 0.005, "description": "NO2 photolysis rate" }
+            "T": {
+              "units": "K",
+              "default": 298.15,
+              "description": "Temperature"
+            },
+            "j_NO2": {
+              "units": "1/s",
+              "default": 0.005,
+              "description": "NO2 photolysis rate"
+            }
           },
           "reactions": [
             {
               "id": "R1",
               "name": "NO_O3",
-              "substrates": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
-              "products": [{ "species": "NO2", "stoichiometry": 1 }],
+              "substrates": [
+                {
+                  "species": "NO",
+                  "stoichiometry": 1
+                },
+                {
+                  "species": "O3",
+                  "stoichiometry": 1
+                }
+              ],
+              "products": [
+                {
+                  "species": "NO2",
+                  "stoichiometry": 1
+                }
+              ],
               "rate": 1.8e-12
             },
             {
               "id": "R2",
               "name": "NO2_photolysis",
-              "substrates": [{ "species": "NO2", "stoichiometry": 1 }],
-              "products": [{ "species": "NO", "stoichiometry": 1 }, { "species": "O3", "stoichiometry": 1 }],
+              "substrates": [
+                {
+                  "species": "NO2",
+                  "stoichiometry": 1
+                }
+              ],
+              "products": [
+                {
+                  "species": "NO",
+                  "stoichiometry": 1
+                },
+                {
+                  "species": "O3",
+                  "stoichiometry": 1
+                }
+              ],
               "rate": "j_NO2"
             }
           ]
@@ -255,11 +573,19 @@
         "metadata": {
           "name": "CoupledSystem",
           "description": "Coupled chemistry and transport",
-          "authors": ["System Author"]
+          "authors": [
+            "System Author"
+          ]
         },
         "reaction_systems": {
           "Chemistry": {
-            "species": { "O3": { "units": "mol/mol", "default": 40e-9, "description": "Ozone" } },
+            "species": {
+              "O3": {
+                "units": "mol/mol",
+                "default": 4e-08,
+                "description": "Ozone"
+              }
+            },
             "parameters": {},
             "reactions": []
           }
@@ -267,23 +593,92 @@
         "models": {
           "Advection": {
             "variables": {
-              "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
-              "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+              "u_wind": {
+                "type": "parameter",
+                "units": "m/s",
+                "default": 5.0,
+                "description": "Eastward wind"
+              },
+              "v_wind": {
+                "type": "parameter",
+                "units": "m/s",
+                "default": 2.0,
+                "description": "Northward wind"
+              }
             },
             "equations": [
-              { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "+", "args": [
-                { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
-                { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
-              ]} }
+              {
+                "lhs": {
+                  "op": "D",
+                  "args": [
+                    "_var"
+                  ],
+                  "wrt": "t"
+                },
+                "rhs": {
+                  "op": "+",
+                  "args": [
+                    {
+                      "op": "*",
+                      "args": [
+                        {
+                          "op": "-",
+                          "args": [
+                            "u_wind"
+                          ]
+                        },
+                        {
+                          "op": "grad",
+                          "args": [
+                            "_var"
+                          ],
+                          "dim": "x"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "*",
+                      "args": [
+                        {
+                          "op": "-",
+                          "args": [
+                            "v_wind"
+                          ]
+                        },
+                        {
+                          "op": "grad",
+                          "args": [
+                            "_var"
+                          ],
+                          "dim": "y"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
             ]
           },
           "Boundary": {
-            "variables": { "bc_flux": { "type": "parameter", "units": "mol/mol/s", "default": 1e-12, "description": "Boundary flux" } },
+            "variables": {
+              "bc_flux": {
+                "type": "parameter",
+                "units": "mol/mol/s",
+                "default": 1e-12,
+                "description": "Boundary flux"
+              }
+            },
             "equations": []
           }
         },
         "coupling": [
-          { "type": "operator_compose", "systems": ["Chemistry", "Advection"] }
+          {
+            "type": "operator_compose",
+            "systems": [
+              "Chemistry",
+              "Advection"
+            ]
+          }
         ]
       },
       "component_name": "Advection"
@@ -293,19 +688,77 @@
       "metadata": {
         "name": "Advection",
         "description": "Extracted from CoupledSystem",
-        "authors": ["System Author"]
+        "authors": [
+          "System Author"
+        ]
       },
       "models": {
         "Advection": {
           "variables": {
-            "u_wind": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Eastward wind" },
-            "v_wind": { "type": "parameter", "units": "m/s", "default": 2.0, "description": "Northward wind" }
+            "u_wind": {
+              "type": "parameter",
+              "units": "m/s",
+              "default": 5.0,
+              "description": "Eastward wind"
+            },
+            "v_wind": {
+              "type": "parameter",
+              "units": "m/s",
+              "default": 2.0,
+              "description": "Northward wind"
+            }
           },
           "equations": [
-            { "lhs": { "op": "D", "args": ["_var"], "wrt": "t" }, "rhs": { "op": "+", "args": [
-              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
-              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
-            ]} }
+            {
+              "lhs": {
+                "op": "D",
+                "args": [
+                  "_var"
+                ],
+                "wrt": "t"
+              },
+              "rhs": {
+                "op": "+",
+                "args": [
+                  {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "u_wind"
+                        ]
+                      },
+                      {
+                        "op": "grad",
+                        "args": [
+                          "_var"
+                        ],
+                        "dim": "x"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "*",
+                    "args": [
+                      {
+                        "op": "-",
+                        "args": [
+                          "v_wind"
+                        ]
+                      },
+                      {
+                        "op": "grad",
+                        "args": [
+                          "_var"
+                        ],
+                        "dim": "y"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
           ]
         }
       }
