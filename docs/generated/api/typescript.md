@@ -2100,6 +2100,7 @@ Structural regridding configuration. Algorithm-specific tuning parameters are ru
 /
 
 **Available in other languages:**
+- [Julia](julia.md#dataloaderregridding)
 - [Python](python.md#dataloaderregridding)
 
 ---
@@ -2118,6 +2119,7 @@ File discovery configuration. Describes how to locate data files at runtime via 
 /
 
 **Available in other languages:**
+- [Julia](julia.md#dataloadersource)
 - [Python](python.md#dataloadersource)
 
 ---
@@ -2136,6 +2138,7 @@ Spatial grid description for a data source.
 /
 
 **Available in other languages:**
+- [Julia](julia.md#dataloaderspatial)
 - [Python](python.md#dataloaderspatial)
 
 ---
@@ -2169,6 +2172,7 @@ Temporal coverage and record layout for a data source.
 /
 
 **Available in other languages:**
+- [Julia](julia.md#dataloadertemporal)
 - [Python](python.md#dataloadertemporal)
 
 ---
@@ -2187,6 +2191,7 @@ A variable exposed by a data loader, mapped from a source-file variable.
 /
 
 **Available in other languages:**
+- [Julia](julia.md#dataloadervariable)
 - [Python](python.md#dataloadervariable)
 
 ---

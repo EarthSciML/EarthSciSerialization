@@ -2261,7 +2261,7 @@ struct DataLoader
 
 > DataLoader
 
-External data source registration (by reference).
+Generic, runtime-agnostic description of an external data source.
 
 **Python:**
 ```python
@@ -2281,6 +2281,15 @@ export interface DataLoader {
 
 ### DataLoaderRegridding
 
+**Julia:**
+```julia
+struct DataLoaderRegridding
+```
+
+> DataLoaderRegridding
+
+Structural regridding configuration for a DataLoader.
+
 **Python:**
 ```python
 class DataLoaderRegridding:
@@ -2298,6 +2307,15 @@ export interface DataLoaderRegridding {
 ---
 
 ### DataLoaderSource
+
+**Julia:**
+```julia
+struct DataLoaderSource
+```
+
+> DataLoaderSource
+
+File discovery configuration for a DataLoader.
 
 **Python:**
 ```python
@@ -2317,6 +2335,15 @@ export interface DataLoaderSource {
 
 ### DataLoaderSpatial
 
+**Julia:**
+```julia
+struct DataLoaderSpatial
+```
+
+> DataLoaderSpatial
+
+Spatial grid description for a DataLoader.
+
 **Python:**
 ```python
 class DataLoaderSpatial:
@@ -2335,6 +2362,15 @@ export interface DataLoaderSpatial {
 
 ### DataLoaderTemporal
 
+**Julia:**
+```julia
+struct DataLoaderTemporal
+```
+
+> DataLoaderTemporal
+
+Temporal coverage and record layout for a DataLoader.
+
 **Python:**
 ```python
 class DataLoaderTemporal:
@@ -2352,6 +2388,15 @@ export interface DataLoaderTemporal {
 ---
 
 ### DataLoaderVariable
+
+**Julia:**
+```julia
+struct DataLoaderVariable
+```
+
+> DataLoaderVariable
+
+A variable exposed by a DataLoader, mapped from a source-file variable.
 
 **Python:**
 ```python
