@@ -1170,6 +1170,25 @@ def objective(x):
 
 ---
 
+### opener
+
+**Python:**
+```python
+def opener(url: str):
+```
+
+**Python:**
+```python
+def opener(url: str):
+```
+
+**Python:**
+```python
+def opener(url: str):
+```
+
+---
+
 ### operations
 
 **Julia:**
@@ -3309,6 +3328,22 @@ class SubsystemRefError:
 ```
 
 > Exception raised when a subsystem reference cannot be resolved.
+
+---
+
+### TestUnitConversion
+
+**Python:**
+```python
+class TestUnitConversion:
+```
+
+**Python:**
+```python
+class TestUnitConversion:
+```
+
+> Test unit conversion operations.
 
 ---
 
