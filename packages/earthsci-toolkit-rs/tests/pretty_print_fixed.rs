@@ -17,6 +17,7 @@ fn test_basic_expression_formatting() {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
     ];
 
@@ -51,6 +52,7 @@ fn test_operator_formatting() {
             args: vec![Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let unicode_result = to_unicode(&expr);
@@ -115,15 +117,18 @@ fn test_complex_expression_formatting() {
                         ],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                     Expr::Number(2.0),
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     let unicode_result = to_unicode(&complex_expr);
@@ -148,6 +153,7 @@ fn test_derivative_formatting() {
         args: vec![Expr::Variable("x".to_string())],
         wrt: Some("t".to_string()),
         dim: None,
+        ..Default::default()
     });
 
     let unicode_result = to_unicode(&derivative_expr);
@@ -254,6 +260,7 @@ fn test_edge_cases() {
             args: vec![Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
     ];
 

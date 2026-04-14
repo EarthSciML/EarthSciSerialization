@@ -2129,11 +2129,13 @@ mod tests {
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
                 Expr::Variable("c".to_string()),
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
         assert_eq!(format!("{}", add), "a·b + c");
 
@@ -2148,11 +2150,13 @@ mod tests {
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
                 Expr::Variable("c".to_string()),
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
         assert_eq!(format!("{}", mul), "(a + b)·c");
     }
@@ -2268,6 +2272,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         // Test all three formatting functions
@@ -2286,9 +2291,11 @@ mod tests {
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             })],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         assert_eq!(to_unicode(&complex_pre), "a + b⁻");
@@ -2304,6 +2311,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         assert_eq!(to_unicode(&multi_arg_pre), "Pre(x, y)");

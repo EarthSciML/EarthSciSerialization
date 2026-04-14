@@ -586,6 +586,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                         args: args.to_vec(),
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 }
             } else {
@@ -594,6 +595,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                     args: args.to_vec(),
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 })
             }
         }
@@ -615,6 +617,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                         args: args.to_vec(),
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 }
             } else {
@@ -623,6 +626,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                     args: args.to_vec(),
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 })
             }
         }
@@ -640,6 +644,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                         args: args.to_vec(),
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 }
             } else {
@@ -648,6 +653,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
                     args: args.to_vec(),
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 })
             }
         }
@@ -656,6 +662,7 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
             args: args.to_vec(),
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
     }
 }
@@ -677,6 +684,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let vars = free_variables(&expr);
@@ -692,6 +700,7 @@ mod tests {
             args: vec![Expr::Number(2.0), Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         assert!(contains(&expr, "x"));
@@ -705,6 +714,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(5.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let mut bindings = HashMap::new();
@@ -732,6 +742,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(0.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let simplified = simplify(&expr);
@@ -748,6 +759,7 @@ mod tests {
             args: vec![Expr::Number(1.0), Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let simplified = simplify(&expr);
@@ -764,6 +776,7 @@ mod tests {
             args: vec![Expr::Number(0.0), Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let simplified = simplify(&expr);
@@ -813,6 +826,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let result = substitute(&expr, &bindings);
@@ -844,6 +858,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let bindings = HashMap::new();
@@ -866,6 +881,7 @@ mod tests {
             args: vec![Expr::Number(9.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
         assert_eq!(evaluate(&expr, &bindings).unwrap(), 3.0);
 
@@ -875,6 +891,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(5.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
         assert_eq!(evaluate(&expr, &bindings).unwrap(), 5.0);
     }

@@ -94,6 +94,7 @@ fn op(name: &str, args: Vec<Expr>) -> Expr {
         args,
         wrt: None,
         dim: None,
+        ..Default::default()
     })
 }
 
@@ -104,6 +105,7 @@ fn ddt(state_name: &str, rhs: Expr) -> Equation {
             args: vec![var(state_name)],
             wrt: Some("t".to_string()),
             dim: None,
+            ..Default::default()
         }),
         rhs,
     }

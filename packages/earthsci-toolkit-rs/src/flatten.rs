@@ -555,6 +555,7 @@ fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
                 }
             }),
             dim: node.dim.clone(),
+            ..Default::default()
         }),
     }
 }
@@ -832,6 +833,7 @@ fn sum_exprs(a: Expr, b: Expr) -> Expr {
         args: vec![a, b],
         wrt: None,
         dim: None,
+        ..Default::default()
     })
 }
 
@@ -892,6 +894,7 @@ fn apply_variable_map(
             args: vec![Expr::Variable(from.to_string()), Expr::Number(f)],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
         _ => Expr::Variable(from.to_string()),
     };
@@ -919,6 +922,7 @@ fn substitute_var(expr: &Expr, target: &str, replacement: &Expr) -> Expr {
                 .collect(),
             wrt: node.wrt.clone(),
             dim: node.dim.clone(),
+            ..Default::default()
         }),
     }
 }
@@ -1002,6 +1006,7 @@ mod tests {
                         args: vec![Expr::Variable("x".to_string())],
                         wrt: Some("t".to_string()),
                         dim: None,
+                        ..Default::default()
                     }),
                     rhs: Expr::Variable("k".to_string()),
                 }],

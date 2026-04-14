@@ -17,6 +17,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let latex_result = to_latex(&division_expr);
@@ -31,6 +32,7 @@ mod tests {
             args: vec![Expr::Number(1.0), Expr::Number(2.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let latex_result = to_latex(&number_division);
@@ -51,6 +53,7 @@ mod tests {
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
                 Expr::Operator(ExpressionNode {
                     op: "-".to_string(),
@@ -60,10 +63,12 @@ mod tests {
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let latex_result = to_latex(&nested_division);
@@ -78,6 +83,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let latex_result = to_latex(&single_arg_division);
@@ -92,6 +98,7 @@ mod tests {
             args: vec![],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let latex_result = to_latex(&empty_division);
@@ -116,10 +123,12 @@ mod tests {
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let latex_result = to_latex(&complex_expr);
@@ -140,11 +149,13 @@ mod tests {
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
                 Expr::Variable("c".to_string()),
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let latex_result = to_latex(&nested_divisions);

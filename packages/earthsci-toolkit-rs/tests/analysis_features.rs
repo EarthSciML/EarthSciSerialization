@@ -51,6 +51,7 @@ fn test_analysis_features_integration() {
                 args: vec![Expr::Variable("x".to_string())],
                 wrt: Some("t".to_string()),
                 dim: None,
+                ..Default::default()
             }),
             rhs: Expr::Operator(ExpressionNode {
                 op: "*".to_string(),
@@ -60,6 +61,7 @@ fn test_analysis_features_integration() {
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
         }],
         discrete_events: None,
@@ -111,6 +113,7 @@ fn test_analysis_features_integration() {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
         reference: None,
     }];
@@ -262,6 +265,7 @@ fn test_editing_operations() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     let mut substitutions = HashMap::new();

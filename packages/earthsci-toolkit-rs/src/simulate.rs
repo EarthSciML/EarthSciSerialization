@@ -749,6 +749,11 @@ where
 }
 
 /// One-shot convenience: flatten -> compile -> simulate.
+///
+/// Dispatches to the array-op interpreter ([`crate::simulate_array`]) when
+/// the file contains any `arrayop`, `makearray`, `reshape`, `transpose`,
+/// `concat`, `broadcast`, or `index` nodes (gt-oxr). Otherwise uses the
+/// scalar path via [`Compiled::from_file`].
 pub fn simulate(
     file: &EsmFile,
     tspan: (f64, f64),
@@ -756,6 +761,10 @@ pub fn simulate(
     initial_conditions: &HashMap<String, f64>,
     opts: &SimulateOptions,
 ) -> Result<Solution, SimulateError> {
+    if crate::simulate_array::file_has_array_ops(file) {
+        let compiled = crate::simulate_array::ArrayCompiled::from_file(file)?;
+        return compiled.simulate(tspan, params, initial_conditions, opts);
+    }
     let compiled = Compiled::from_file(file)?;
     compiled.simulate(tspan, params, initial_conditions, opts)
 }

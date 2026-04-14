@@ -406,6 +406,7 @@ pub fn substitute_in_expression(expr: &Expr, substitutions: &HashMap<String, Exp
                 args: new_args,
                 wrt: node.wrt.clone(),
                 dim: node.dim.clone(),
+                ..Default::default()
             })
         }
     }
@@ -761,6 +762,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let mut substitutions = HashMap::new();

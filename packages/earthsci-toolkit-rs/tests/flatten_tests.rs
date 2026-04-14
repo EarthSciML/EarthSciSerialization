@@ -47,6 +47,7 @@ fn ddt(var: &str) -> Expr {
         args: vec![Expr::Variable(var.to_string())],
         wrt: Some("t".to_string()),
         dim: None,
+        ..Default::default()
     })
 }
 
@@ -493,6 +494,7 @@ fn flatten_operator_compose_sums_matched_rhses() {
                     args: vec![Expr::Variable("A.u".to_string())],
                     wrt: Some("t".to_string()),
                     dim: None,
+                    ..Default::default()
                 }),
                 rhs: var("k"),
             }],
@@ -789,6 +791,7 @@ fn flatten_rejects_spatial_operators() {
                     args: vec![var("c")],
                     wrt: None,
                     dim: Some("x".to_string()),
+                    ..Default::default()
                 }),
             }],
             discrete_events: None,
@@ -843,6 +846,7 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
                     args: vec![var("c")],
                     wrt: Some("x".to_string()),
                     dim: None,
+                    ..Default::default()
                 }),
             }],
             discrete_events: None,

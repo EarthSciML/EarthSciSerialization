@@ -498,6 +498,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let compact = CompactExpr::from_expr(&expr);
@@ -514,6 +515,7 @@ mod tests {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let compact = CompactExpr::from_expr(&expr);

@@ -116,6 +116,7 @@ pub fn lower_reactions_to_equations(
                         args: vec![Expr::Number(-1.0), enhanced_rate],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }));
                 } else {
                     rate_terms.push(Expr::Operator(ExpressionNode {
@@ -123,6 +124,7 @@ pub fn lower_reactions_to_equations(
                         args: vec![Expr::Number(net_stoichiometry as f64), enhanced_rate],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }));
                 }
             }
@@ -138,6 +140,7 @@ pub fn lower_reactions_to_equations(
                 args: rate_terms,
                 wrt: None,
                 dim: None,
+                ..Default::default()
             })
         };
 
@@ -146,6 +149,7 @@ pub fn lower_reactions_to_equations(
             args: vec![Expr::Variable(sp_name.clone())],
             wrt: Some("t".to_string()),
             dim: None,
+            ..Default::default()
         });
 
         equations.push(Equation { lhs, rhs });
@@ -250,6 +254,7 @@ fn enhance_rate_with_mass_action(
                 args: power_terms,
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }));
         }
     }
@@ -266,6 +271,7 @@ fn enhance_rate_with_mass_action(
             args: all_factors,
             wrt: None,
             dim: None,
+            ..Default::default()
         }))
     }
 }
@@ -977,6 +983,7 @@ mod tests {
                         ],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 ),
             ],
@@ -1429,6 +1436,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
         assert!(contains_variable(&expr3, "A"));
         assert!(contains_variable(&expr3, "k"));

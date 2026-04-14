@@ -39,6 +39,7 @@ pub fn substitute(expr: &Expr, substitutions: &std::collections::HashMap<String,
                 args: new_args,
                 wrt: op_node.wrt.clone(),
                 dim: op_node.dim.clone(),
+                ..Default::default()
             })
         }
     }
@@ -453,6 +454,7 @@ pub fn substitute_with_context(
                 args: new_args,
                 wrt: op_node.wrt.clone(),
                 dim: op_node.dim.clone(),
+                ..Default::default()
             })
         }
     }
@@ -745,6 +747,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let result = substitute(&expr, &subs);
@@ -1045,6 +1048,7 @@ mod tests {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let mut substitutions = HashMap::new();

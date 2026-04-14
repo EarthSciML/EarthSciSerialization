@@ -1592,6 +1592,7 @@ mod tests {
                         args: vec![Expr::Variable("x".to_string())],
                         wrt: Some("t".to_string()),
                         dim: None,
+                        ..Default::default()
                     }),
                     rhs: Expr::Variable("undefined_var".to_string()), // This should cause an error
                 }],
@@ -1680,6 +1681,7 @@ mod tests {
                             args: vec![Expr::Variable("x".to_string())],
                             wrt: Some("t".to_string()),
                             dim: None,
+                            ..Default::default()
                         }),
                         rhs: Expr::Variable("x".to_string()),
                     },
@@ -1874,6 +1876,7 @@ mod tests {
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 })),
             },
         );
@@ -1893,6 +1896,7 @@ mod tests {
                         args: vec![Expr::Variable("x".to_string())],
                         wrt: Some("t".to_string()),
                         dim: None,
+                        ..Default::default()
                     }),
                     rhs: Expr::Variable("rate".to_string()),
                 }],
@@ -2037,6 +2041,7 @@ mod tests {
                         args: vec![Expr::Variable("x".to_string())],
                         wrt: Some("t".to_string()),
                         dim: None,
+                        ..Default::default()
                     }),
                     rhs: Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
@@ -2046,6 +2051,7 @@ mod tests {
                         ],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 }],
                 discrete_events: None,
@@ -2136,6 +2142,7 @@ mod tests {
                         args: vec![Expr::Variable("x".to_string())],
                         wrt: Some("t".to_string()),
                         dim: None,
+                        ..Default::default()
                     }),
                     rhs: Expr::Variable("k".to_string()), // Just k, not k*x
                 }],
@@ -2226,6 +2233,7 @@ mod tests {
                         args: vec![Expr::Variable("position".to_string())],
                         wrt: Some("t".to_string()),
                         dim: None,
+                        ..Default::default()
                     }),
                     rhs: Expr::Variable("velocity".to_string()),
                 }],
@@ -2303,12 +2311,14 @@ mod tests {
                         args: vec![Expr::Variable("x".to_string())],
                         wrt: Some("t".to_string()),
                         dim: None,
+                        ..Default::default()
                     }),
                     rhs: Expr::Operator(ExpressionNode {
                         op: "exp".to_string(),
                         args: vec![Expr::Variable("x".to_string())], // exp(x) where x has units - should warn
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 }],
                 discrete_events: None,

@@ -102,6 +102,7 @@ pub struct Metadata {
 /// Mathematical expression: a number literal, variable reference, or operator node
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum Expr {
     /// Number literal
     Number(f64),
@@ -114,7 +115,7 @@ pub enum Expr {
 }
 
 /// Expression node representing an operator with operands
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ExpressionNode {
     /// Operator name (e.g., "+", "-", "*", "/", "sin", "cos", etc.)
     pub op: String,
@@ -129,6 +130,50 @@ pub struct ExpressionNode {
     /// Dimensional analysis hint
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dim: Option<String>,
+
+    /// Body expression for `arrayop` nodes (the scalar body evaluated for
+    /// each tuple of loop-index values). Out-of-band from `args` because the
+    /// serialized schema uses a sidecar `expr` field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expr: Option<Box<Expr>>,
+
+    /// Output index names for `arrayop` (e.g. `["i", "j"]`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_idx: Option<Vec<String>>,
+
+    /// Per-index inclusive ranges `{name: [lo, hi]}` for `arrayop`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ranges: Option<HashMap<String, [i64; 2]>>,
+
+    /// Reduction operator (`"+"`, `"*"`, `"max"`, `"min"`) for `arrayop`
+    /// contractions over indices appearing in `expr` but not `output_idx`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduce: Option<String>,
+
+    /// Per-region per-dimension inclusive range lists for `makearray`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regions: Option<Vec<Vec<[i64; 2]>>>,
+
+    /// Per-region value expressions for `makearray`. Later regions overwrite
+    /// earlier regions at overlapping positions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<Expr>>,
+
+    /// Target shape for `reshape`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<Vec<i64>>,
+
+    /// Permutation for `transpose` (defaults to reverse-axis for 2-D).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub perm: Option<Vec<i64>>,
+
+    /// Concatenation axis for `concat` (0-indexed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub axis: Option<i64>,
+
+    /// Elementwise operator name for `broadcast` (serialized as `fn`).
+    #[serde(default, rename = "fn", skip_serializing_if = "Option::is_none")]
+    pub broadcast_fn: Option<String>,
 }
 
 /// ODE-based model component
@@ -253,6 +298,7 @@ pub struct DiscreteEvent {
 /// Trigger condition for discrete events
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum DiscreteEventTrigger {
     /// Fires when boolean condition is true
     Condition { expression: Expr },
@@ -662,6 +708,7 @@ pub struct DataLoaderVariable {
 /// file values to the declared units.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum UnitConversion {
     /// Simple multiplicative factor.
     Factor(f64),

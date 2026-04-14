@@ -198,6 +198,7 @@ fn test_model_substitution() {
                 args: vec![Expr::Variable("x".to_string())],
                 wrt: Some("t".to_string()),
                 dim: None,
+                ..Default::default()
             }),
             rhs: Expr::Operator(ExpressionNode {
                 op: "*".to_string(),
@@ -207,6 +208,7 @@ fn test_model_substitution() {
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
         }],
         discrete_events: None,
@@ -274,6 +276,7 @@ fn test_reaction_system_substitution() {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
         reference: None,
     }];
@@ -323,10 +326,12 @@ fn test_complex_substitution_patterns() {
                         args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
             Expr::Operator(ExpressionNode {
                 op: "*".to_string(),
@@ -336,11 +341,13 @@ fn test_complex_substitution_patterns() {
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
             Expr::Variable("c".to_string()),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     // Create complex substitutions

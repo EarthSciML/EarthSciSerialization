@@ -11,6 +11,7 @@ fn bin_op(op: &str, left: Expr, right: Expr) -> Expr {
         args: vec![left, right],
         wrt: None,
         dim: None,
+        ..Default::default()
     })
 }
 
@@ -20,6 +21,7 @@ fn func_call(name: &str, args: Vec<Expr>) -> Expr {
         args,
         wrt: None,
         dim: None,
+        ..Default::default()
     })
 }
 

@@ -60,6 +60,9 @@ pub mod performance;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod simulate;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod simulate_array;
+
 // Re-export main types
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};

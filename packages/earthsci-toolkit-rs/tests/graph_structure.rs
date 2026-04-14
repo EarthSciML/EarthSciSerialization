@@ -226,6 +226,7 @@ fn test_model_expression_graph() {
                 args: vec![Expr::Variable("x".to_string())],
                 wrt: Some("t".to_string()),
                 dim: None,
+                ..Default::default()
             }),
             rhs: Expr::Operator(ExpressionNode {
                 op: "*".to_string(),
@@ -235,6 +236,7 @@ fn test_model_expression_graph() {
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
         }],
         discrete_events: None,
@@ -312,6 +314,7 @@ fn test_reaction_system_expression_graph() {
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
         reference: None,
     }];

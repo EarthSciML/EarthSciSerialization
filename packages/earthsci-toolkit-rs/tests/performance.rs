@@ -30,6 +30,7 @@ fn test_compact_expression_creation() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     let compact = CompactExpr::from_expr(&expr);
@@ -51,6 +52,7 @@ fn test_compact_expression_evaluation() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     let compact = CompactExpr::from_expr(&expr);
@@ -189,6 +191,7 @@ fn test_compact_expr_evaluation_errors() {
         args: vec![Expr::Number(1.0), Expr::Number(0.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let compact = CompactExpr::from_expr(&expr);
 
@@ -202,6 +205,7 @@ fn test_compact_expr_evaluation_errors() {
         args: vec![Expr::Number(-1.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let compact = CompactExpr::from_expr(&expr);
 
@@ -328,6 +332,7 @@ fn test_compact_expr_complex_expressions() {
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
             Expr::Operator(ExpressionNode {
                 op: "-".to_string(),
@@ -337,20 +342,24 @@ fn test_compact_expr_complex_expressions() {
                         args: vec![Expr::Variable("z".to_string())],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                     Expr::Operator(ExpressionNode {
                         op: "cos".to_string(),
                         args: vec![Expr::Variable("w".to_string())],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     let compact = CompactExpr::from_expr(&expr);
@@ -384,6 +393,7 @@ fn test_compact_expr_all_operators() {
                 args: vec![Expr::Number(args[0]), Expr::Number(args[1])],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             })
         } else {
             continue;
@@ -415,6 +425,7 @@ fn test_compact_expr_all_operators() {
             args: vec![Expr::Number(arg)],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let compact = CompactExpr::from_expr(&expr);
@@ -463,18 +474,21 @@ fn test_parallel_evaluator_complex_batch() {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
         Expr::Operator(ExpressionNode {
             op: "*".to_string(),
             args: vec![Expr::Variable("y".to_string()), Expr::Number(2.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
         Expr::Operator(ExpressionNode {
             op: "sin".to_string(),
             args: vec![Expr::Variable("z".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
     ];
 
@@ -739,11 +753,13 @@ fn test_compact_expr_variable_caching() {
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
             Expr::Variable("y".to_string()),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     let compact = CompactExpr::from_expr(&expr);

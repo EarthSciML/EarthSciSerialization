@@ -134,6 +134,7 @@ fn test_expression_operations() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(5.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     // Test free variables

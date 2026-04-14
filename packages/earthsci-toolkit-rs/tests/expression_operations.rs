@@ -29,6 +29,7 @@ fn test_free_variables() {
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let vars3 = free_variables(&expr3);
     assert!(vars3.contains("x"));
@@ -45,10 +46,12 @@ fn test_free_variables() {
                 args: vec![Expr::Variable("b".to_string()), Expr::Number(2.0)],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let vars4 = free_variables(&expr4);
     assert!(vars4.contains("a"));
@@ -69,6 +72,7 @@ fn test_free_parameters() {
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     let params = free_parameters(&expr);
@@ -96,6 +100,7 @@ fn test_contains() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     assert!(contains(&expr3, target));
 
@@ -109,10 +114,12 @@ fn test_contains() {
                 args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     assert!(contains(&expr4, target));
 
@@ -122,6 +129,7 @@ fn test_contains() {
         args: vec![Expr::Variable("y".to_string())],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     assert!(!contains(&expr5, target));
 }
@@ -153,6 +161,7 @@ fn test_evaluate() {
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let result3 = evaluate(&expr3, &context).expect("Failed to evaluate addition");
     assert_eq!(result3, 5.0);
@@ -163,6 +172,7 @@ fn test_evaluate() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(3.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let result4 = evaluate(&expr4, &context).expect("Failed to evaluate multiplication");
     assert_eq!(result4, 6.0);
@@ -185,6 +195,7 @@ fn test_simplify() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(0.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let simplified1 = simplify(&expr1);
     // Should simplify x + 0 to x (depending on implementation)
@@ -195,6 +206,7 @@ fn test_simplify() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(0.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let simplified2 = simplify(&expr2);
     // Should simplify x * 0 to 0 (depending on implementation)
@@ -205,6 +217,7 @@ fn test_simplify() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
     let simplified3 = simplify(&expr3);
     // Should simplify x * 1 to x (depending on implementation)
@@ -234,10 +247,12 @@ fn test_complex_expression_operations() {
                                 args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
                                 wrt: None,
                                 dim: None,
+                                ..Default::default()
                             }),
                         ],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                     Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
@@ -247,15 +262,18 @@ fn test_complex_expression_operations() {
                         ],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
             Expr::Variable("c".to_string()),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     // Test free variables
@@ -292,6 +310,7 @@ fn test_derivative_expressions() {
         args: vec![Expr::Variable("x".to_string())],
         wrt: Some("t".to_string()),
         dim: None,
+        ..Default::default()
     });
 
     let vars = free_variables(&derivative_expr);
@@ -306,9 +325,11 @@ fn test_derivative_expressions() {
             args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
             wrt: None,
             dim: None,
+            ..Default::default()
         })],
         wrt: Some("x".to_string()),
         dim: None,
+        ..Default::default()
     });
 
     let partial_vars = free_variables(&partial_derivative);
@@ -326,6 +347,7 @@ fn test_special_function_expressions() {
             args: vec![Expr::Variable("x".to_string())],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
 
         let vars = free_variables(&expr);
@@ -351,6 +373,7 @@ fn test_deeply_nested_expressions() {
             args: vec![expr],
             wrt: None,
             dim: None,
+            ..Default::default()
         });
     }
 

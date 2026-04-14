@@ -45,6 +45,7 @@ fn main() {
         args: vec![Expr::Variable("O3".to_string())],
         wrt: Some("t".to_string()),
         dim: None,
+        ..Default::default()
     });
 
     println!("D(O3)/Dt -> Unicode: {:<20} LaTeX: {:<30} ASCII: {}",
@@ -59,6 +60,7 @@ fn main() {
         args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     println!("x^2 -> Unicode: {:<20} LaTeX: {:<30} ASCII: {}",
@@ -82,16 +84,19 @@ fn main() {
                         ],
                         wrt: None,
                         dim: None,
+                        ..Default::default()
                     }),
                     Expr::Variable("NO".to_string()),
                 ],
                 wrt: None,
                 dim: None,
+                ..Default::default()
             }),
             Expr::Variable("M".to_string()),
         ],
         wrt: None,
         dim: None,
+        ..Default::default()
     });
 
     println!("Complex expr -> Unicode: {:<25} LaTeX: {:<40} ASCII: {}",
@@ -124,6 +129,7 @@ fn main() {
             args: vec![Expr::Variable("_var".to_string())],
             wrt: Some("t".to_string()),
             dim: None,
+            ..Default::default()
         }),
         rhs: Expr::Operator(ExpressionNode {
             op: "+".to_string(),
@@ -140,14 +146,17 @@ fn main() {
                                     args: vec![Expr::Variable("_var".to_string())],
                                     wrt: Some("x".to_string()),
                                     dim: None,
+                                    ..Default::default()
                                 }),
                             ],
                             wrt: None,
                             dim: None,
+                            ..Default::default()
                         })
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
                 Expr::Operator(ExpressionNode {
                     op: "-".to_string(),
@@ -161,18 +170,22 @@ fn main() {
                                     args: vec![Expr::Variable("_var".to_string())],
                                     wrt: Some("y".to_string()),
                                     dim: None,
+                                    ..Default::default()
                                 }),
                             ],
                             wrt: None,
                             dim: None,
+                            ..Default::default()
                         })
                     ],
                     wrt: None,
                     dim: None,
+                    ..Default::default()
                 }),
             ],
             wrt: None,
             dim: None,
+            ..Default::default()
         }),
     };
 
