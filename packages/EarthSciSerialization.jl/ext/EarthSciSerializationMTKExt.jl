@@ -305,8 +305,11 @@ function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
     error("Unknown expression type in arrayop body: $(typeof(expr))")
 end
 
-# Build a `SymbolicUtils.ArrayMaker` from a `makearray` node. We construct
-# it via `@makearray` macro eval for consistency with `_build_arrayop`.
+# Build a `Symbolics.ArrayMaker` from a `makearray` node, then scalarize it
+# to a `Matrix{Num}` / `Vector{Num}` so downstream callers (index, equation
+# RHS) work without running into MTK's clock-inference path, which has no
+# method for raw `ArrayMaker`. Later regions in the sequence override earlier
+# ones, matching the schema contract and `@makearray` semantics.
 function _build_makearray(expr::OpExpr, var_dict::Dict{String,Any},
                           t_sym, dim_dict::Dict{String,Any})
     expr.regions === nothing && error("makearray node missing 'regions'")
@@ -314,23 +317,24 @@ function _build_makearray(expr::OpExpr, var_dict::Dict{String,Any},
     length(expr.regions) == length(expr.values) ||
         error("makearray regions and values length mismatch")
 
-    # Infer output shape from union of regions (per axis: min start, max stop).
+    # Regions are 1-based; derive per-axis size from the largest stop seen.
     ndims = length(expr.regions[1])
-    starts = fill(typemax(Int), ndims)
-    stops = fill(typemin(Int), ndims)
+    sz = fill(0, ndims)
     for region in expr.regions
         length(region) == ndims || error("makearray regions must all share ndims")
         for (axis, pair) in enumerate(region)
-            starts[axis] = min(starts[axis], pair[1])
-            stops[axis] = max(stops[axis], pair[2])
+            pair[1] >= 1 || error("makearray regions must be 1-based")
+            sz[axis] = max(sz[axis], pair[2])
         end
     end
-    shape = Tuple(starts[i]:stops[i] for i in 1:ndims)
 
-    vals = [_esm_to_symbolic(v, var_dict, t_sym, dim_dict) for v in expr.values]
-    region_ranges = [Tuple(pair[1]:pair[2] for pair in region) for region in expr.regions]
-
-    return SymUtils.ArrayMaker{Real}(region_ranges, vals; shape=shape)
+    am = Symbolics.ArrayMaker{Real}(Tuple(sz))
+    for (region, val) in zip(expr.regions, expr.values)
+        vw = Tuple(pair[1]:pair[2] for pair in region)
+        v = _esm_to_symbolic(val, var_dict, t_sym, dim_dict)
+        push!(am.sequence, vw => v)
+    end
+    return Symbolics.scalarize(am)
 end
 
 # Build an `index` node: `args[1]` is the array-shaped operand, `args[2:]`
