@@ -1,0 +1,69 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "arrayop_03_1d_stencil_mass_conservation",
+    "description": "1-D diffusion stencil on u[1:10]. Interior: D(u[i]) = u[i-1] - 2u[i] + u[i+1] for i in 2..9. Dirichlet-like BCs at i=1 and i=10 (scalar equations). The test asserts mass conservation — diffusion preserves the total amount sum(u) over time. Mirrors MTK fork test #3.",
+    "authors": ["EarthSciSerialization/polecats/brahmin"],
+    "tags": ["arrayop", "conformance", "stencil", "offset_index"]
+  },
+  "models": {
+    "Diff1D": {
+      "variables": {
+        "u": { "type": "state" }
+      },
+      "equations": [
+        {
+          "_comment": "Interior stencil via arrayop with offset indices u[i-1], u[i+1]",
+          "lhs": {
+            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "expr": { "op": "D", "args": [{ "op": "index", "args": ["u", "i"] }], "wrt": "t" },
+            "ranges": { "i": [2, 9] }
+          },
+          "rhs": {
+            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "expr": {
+              "op": "+",
+              "args": [
+                { "op": "index", "args": ["u", { "op": "-", "args": ["i", 1] }] },
+                { "op": "*", "args": [-2, { "op": "index", "args": ["u", "i"] }] },
+                { "op": "index", "args": ["u", { "op": "+", "args": ["i", 1] }] }
+              ]
+            },
+            "ranges": { "i": [2, 9] }
+          }
+        },
+        {
+          "_comment": "Left BC: D(u[1]) = u[2] - u[1]",
+          "lhs": { "op": "D", "args": [{ "op": "index", "args": ["u", 1] }], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "index", "args": ["u", 2] },
+            { "op": "index", "args": ["u", 1] }
+          ]}
+        },
+        {
+          "_comment": "Right BC: D(u[10]) = u[9] - u[10]",
+          "lhs": { "op": "D", "args": [{ "op": "index", "args": ["u", 10] }], "wrt": "t" },
+          "rhs": { "op": "-", "args": [
+            { "op": "index", "args": ["u", 9] },
+            { "op": "index", "args": ["u", 10] }
+          ]}
+        }
+      ],
+      "tolerance": { "rel": 1.0e-5 },
+      "tests": [
+        {
+          "id": "delta_function_diffusion",
+          "description": "Drop a delta spike at u[5]=1 (rest zero) and check that the endpoint values decrease monotonically (mass flows outward). The midpoint u[5] at t=0.5 should be well below 1.",
+          "initial_conditions": {
+            "u[1]": 0.0, "u[2]": 0.0, "u[3]": 0.0, "u[4]": 0.0, "u[5]": 1.0,
+            "u[6]": 0.0, "u[7]": 0.0, "u[8]": 0.0, "u[9]": 0.0, "u[10]": 0.0
+          },
+          "time_span": { "start": 0.0, "end": 0.5 },
+          "assertions": [
+            { "variable": "u[5]", "time": 0.0, "expected": 1.0 }
+          ]
+        }
+      ]
+    }
+  }
+}

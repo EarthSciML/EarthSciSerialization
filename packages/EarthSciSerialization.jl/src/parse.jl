@@ -33,25 +33,89 @@ function parse_expression(data::Any)::Expr
         return NumExpr(Float64(data))
     elseif isa(data, String)
         return VarExpr(data)
-    elseif (isa(data, Dict) || hasfield(typeof(data), :op)) && haskey(data, "op")
-        # It's an OpExpr object - handle both Dict and JSON3.Object
-        op = string(data["op"])
-        args_data = get(data, "args", [])
-        args = Vector{EarthSciSerialization.Expr}([parse_expression(arg) for arg in args_data])
-        wrt = get(data, "wrt", nothing)
-        dim = get(data, "dim", nothing)
-        return OpExpr(op, args, wrt=wrt, dim=dim)
+    elseif isa(data, Dict) && haskey(data, "op")
+        return _parse_op_dict(data, "op", "args", "wrt", "dim",
+                              "output_idx", "expr", "reduce", "ranges",
+                              "regions", "values", "shape", "perm", "axis", "fn")
     elseif hasfield(typeof(data), :op) || (hasmethod(haskey, (typeof(data), String)) && haskey(data, "op"))
-        # Handle JSON3.Object specifically
-        op = string(data.op)
-        args_data = get(data, :args, [])
-        args = Vector{EarthSciSerialization.Expr}([parse_expression(arg) for arg in args_data])
-        wrt = get(data, :wrt, nothing)
-        dim = get(data, :dim, nothing)
-        return OpExpr(op, args, wrt=wrt, dim=dim)
+        return _parse_op_dict(data, :op, :args, :wrt, :dim,
+                              :output_idx, :expr, :reduce, :ranges,
+                              :regions, :values, :shape, :perm, :axis, :fn)
     else
         throw(ParseError("Invalid expression format: expected number, string, or object with 'op' field. Got: $(typeof(data))"))
     end
+end
+
+# Shared implementation for Dict and JSON3.Object parse paths. The key
+# arguments are passed as strings for Dict and symbols for JSON3.Object.
+function _parse_op_dict(data, kop, kargs, kwrt, kdim,
+                        koutput_idx, kexpr, kreduce, kranges,
+                        kregions, kvalues, kshape, kperm, kaxis, kfn)
+    op = string(data[kop])
+    args_data = get(data, kargs, [])
+    args = Vector{EarthSciSerialization.Expr}([parse_expression(arg) for arg in args_data])
+    wrt = get(data, kwrt, nothing)
+    dim = get(data, kdim, nothing)
+
+    output_idx = _coerce_output_idx(get(data, koutput_idx, nothing))
+    raw_expr = get(data, kexpr, nothing)
+    expr_body = raw_expr === nothing ? nothing : parse_expression(raw_expr)
+    reduce_val = get(data, kreduce, nothing)
+    reduce_str = reduce_val === nothing ? nothing : string(reduce_val)
+    ranges = _coerce_ranges(get(data, kranges, nothing))
+    regions = _coerce_regions(get(data, kregions, nothing))
+    raw_values = get(data, kvalues, nothing)
+    values_vec = raw_values === nothing ? nothing :
+        Vector{EarthSciSerialization.Expr}([parse_expression(v) for v in raw_values])
+    shape_vec = _coerce_shape(get(data, kshape, nothing))
+    perm_raw = get(data, kperm, nothing)
+    perm_vec = perm_raw === nothing ? nothing : Vector{Int}([Int(p) for p in perm_raw])
+    axis_val = get(data, kaxis, nothing)
+    axis_int = axis_val === nothing ? nothing : Int(axis_val)
+    fn_val = get(data, kfn, nothing)
+    fn_str = fn_val === nothing ? nothing : string(fn_val)
+
+    return OpExpr(op, args;
+        wrt=(wrt === nothing ? nothing : string(wrt)),
+        dim=(dim === nothing ? nothing : string(dim)),
+        output_idx=output_idx, expr_body=expr_body, reduce=reduce_str,
+        ranges=ranges, regions=regions, values=values_vec, shape=shape_vec,
+        perm=perm_vec, axis=axis_int, fn=fn_str)
+end
+
+function _coerce_output_idx(data)
+    data === nothing && return nothing
+    out = Vector{Any}(undef, length(data))
+    for (i, entry) in enumerate(data)
+        out[i] = isa(entry, Number) ? Int(entry) : string(entry)
+    end
+    return out
+end
+
+function _coerce_ranges(data)
+    data === nothing && return nothing
+    result = Dict{String,Vector{Int}}()
+    for (k, v) in pairs(data)
+        result[string(k)] = Vector{Int}([Int(x) for x in v])
+    end
+    return result
+end
+
+function _coerce_regions(data)
+    data === nothing && return nothing
+    return Vector{Vector{Vector{Int}}}([
+        Vector{Vector{Int}}([Vector{Int}([Int(x) for x in ax]) for ax in region])
+        for region in data
+    ])
+end
+
+function _coerce_shape(data)
+    data === nothing && return nothing
+    out = Vector{Any}(undef, length(data))
+    for (i, entry) in enumerate(data)
+        out[i] = isa(entry, Number) ? Int(entry) : string(entry)
+    end
+    return out
 end
 
 """
@@ -285,8 +349,87 @@ function coerce_model(data::Any)::Model
 
     domain = haskey(data, :domain) && data.domain !== nothing ? string(data.domain) : nothing
 
-    return Model(variables, equations, discrete_events=discrete_events,
-                continuous_events=continuous_events, domain=domain)
+    # Inline tests / tolerance (schema gt-cc1).
+    tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
+        coerce_tolerance(data.tolerance) : nothing
+    tests = haskey(data, :tests) && data.tests !== nothing ?
+        EarthSciSerialization.Test[coerce_test(t) for t in data.tests] :
+        EarthSciSerialization.Test[]
+
+    return Model(variables, equations;
+                 discrete_events=discrete_events,
+                 continuous_events=continuous_events,
+                 domain=domain,
+                 tolerance=tolerance,
+                 tests=tests)
+end
+
+"""
+    coerce_tolerance(data::Any) -> Tolerance
+
+Parse a schema `Tolerance` object into the Julia `Tolerance` struct.
+"""
+function coerce_tolerance(data::Any)::Tolerance
+    abs_val = haskey(data, :abs) && data.abs !== nothing ? Float64(data.abs) : nothing
+    rel_val = haskey(data, :rel) && data.rel !== nothing ? Float64(data.rel) : nothing
+    return Tolerance(; abs=abs_val, rel=rel_val)
+end
+
+"""
+    coerce_time_span(data::Any) -> TimeSpan
+
+Parse a schema `TimeSpan` object.
+"""
+function coerce_time_span(data::Any)::TimeSpan
+    start_val = Float64(data.start)
+    stop_val = Float64(data[Symbol("end")])
+    return TimeSpan(start_val, stop_val)
+end
+
+"""
+    coerce_assertion(data::Any) -> Assertion
+
+Parse a schema `Assertion` object.
+"""
+function coerce_assertion(data::Any)::Assertion
+    variable = string(data.variable)
+    time_val = Float64(data.time)
+    expected = Float64(data.expected)
+    tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
+        coerce_tolerance(data.tolerance) : nothing
+    return Assertion(variable, time_val, expected; tolerance=tolerance)
+end
+
+"""
+    coerce_test(data::Any) -> Test
+
+Parse a schema `Test` object into the Julia `Test` struct.
+"""
+function coerce_test(data::Any)::EarthSciSerialization.Test
+    id = string(data.id)
+    time_span = coerce_time_span(data.time_span)
+    assertions = [coerce_assertion(a) for a in data.assertions]
+    description = haskey(data, :description) && data.description !== nothing ?
+        string(data.description) : nothing
+    ic = Dict{String,Float64}()
+    if haskey(data, :initial_conditions) && data.initial_conditions !== nothing
+        for (k, v) in pairs(data.initial_conditions)
+            ic[string(k)] = Float64(v)
+        end
+    end
+    po = Dict{String,Float64}()
+    if haskey(data, :parameter_overrides) && data.parameter_overrides !== nothing
+        for (k, v) in pairs(data.parameter_overrides)
+            po[string(k)] = Float64(v)
+        end
+    end
+    tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
+        coerce_tolerance(data.tolerance) : nothing
+    return EarthSciSerialization.Test(id, time_span, assertions;
+        description=description,
+        initial_conditions=ic,
+        parameter_overrides=po,
+        tolerance=tolerance)
 end
 
 """

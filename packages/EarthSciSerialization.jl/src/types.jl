@@ -36,35 +36,66 @@ struct VarExpr <: Expr
 end
 
 """
-    OpExpr(op::String, args::Vector{Expr}, wrt::Union{String,Nothing}, dim::Union{String,Nothing})
+    OpExpr(op::String, args::Vector{Expr}; wrt, dim, output_idx, expr_body, reduce, ranges, regions, values, shape, perm, axis, fn)
 
 Operator expression node containing:
-- `op`: operator name (e.g., "+", "*", "log", "D")
+- `op`: operator name (e.g., "+", "*", "log", "D", "arrayop")
 - `args`: vector of argument expressions
-- `wrt`: variable name for differentiation (optional)
-- `dim`: dimension for spatial operators (optional)
+- `wrt`: variable name for differentiation (optional; for `D`)
+- `dim`: dimension for spatial operators (optional; for `grad`, `div`)
+- `output_idx`: for `arrayop`, list of result index symbols (String) or literal
+  singleton dimensions (Int 1). Mirrors SymbolicUtils.ArrayOp.output_idx.
+- `expr_body`: for `arrayop`, the scalar body evaluated at each index point
+  (a nested `Expr` tree). Named `expr_body` — not `expr` — to avoid shadowing
+  the `EarthSciSerialization.Expr` abstract type.
+- `reduce`: for `arrayop`, the reduction operator applied to contracted
+  indices (one of "+", "*", "max", "min"; default "+").
+- `ranges`: for `arrayop`, map from index symbol name to iteration range
+  (vector of 2 or 3 ints `[start, stop]` / `[start, step, stop]`).
+- `regions`: for `makearray`, list of sub-region boxes, each a list of
+  `[start, stop]` pairs per output dimension.
+- `values`: for `makearray`, one sub-expression per entry in `regions`.
+- `shape`: for `reshape`, target shape; entries are `Int` (concrete length)
+  or `String` (symbolic dimension).
+- `perm`: for `transpose`, optional 0-based axis permutation.
+- `axis`: for `concat`, 0-based axis to concatenate along.
+- `fn`: for `broadcast`, the scalar operator to apply element-wise.
 """
 struct OpExpr <: Expr
     op::String
     args::Vector{Expr}
     wrt::Union{String,Nothing}
     dim::Union{String,Nothing}
+    output_idx::Union{Vector{Any},Nothing}
+    expr_body::Union{Expr,Nothing}
+    reduce::Union{String,Nothing}
+    ranges::Union{Dict{String,Vector{Int}},Nothing}
+    regions::Union{Vector{Vector{Vector{Int}}},Nothing}
+    values::Union{Vector{Expr},Nothing}
+    shape::Union{Vector{Any},Nothing}
+    perm::Union{Vector{Int},Nothing}
+    axis::Union{Int,Nothing}
+    fn::Union{String,Nothing}
 
-    # Constructor with optional parameters
-    OpExpr(op::String, args::Vector{Expr}; wrt=nothing, dim=nothing) =
-        new(op, args, wrt, dim)
+    OpExpr(op::String, args::Vector{Expr};
+           wrt=nothing, dim=nothing,
+           output_idx=nothing, expr_body=nothing, reduce=nothing, ranges=nothing,
+           regions=nothing, values=nothing, shape=nothing, perm=nothing,
+           axis=nothing, fn=nothing) =
+        new(op, args, wrt, dim, output_idx, expr_body, reduce, ranges,
+            regions, values, shape, perm, axis, fn)
 end
 
 # Accept any AbstractVector of Expr-subtypes (e.g. Vector{VarExpr},
 # Vector{OpExpr}, mixed Any arrays) and widen to Vector{Expr}. This keeps
 # call sites terse — callers don't need to annotate `Expr[...]` when they
 # construct a homogeneous argument list.
-function OpExpr(op::String, args::AbstractVector; wrt=nothing, dim=nothing)
+function OpExpr(op::String, args::AbstractVector; kwargs...)
     widened = Vector{Expr}(undef, length(args))
     for (i, a) in enumerate(args)
         widened[i] = a
     end
-    return OpExpr(op, widened; wrt=wrt, dim=dim)
+    return OpExpr(op, widened; kwargs...)
 end
 
 # ========================================
@@ -239,6 +270,73 @@ struct ModelVariable
 end
 
 """
+    TimeSpan(start::Float64, stop::Float64)
+
+Simulation time interval for inline model tests and examples (§gt-cc1).
+"""
+struct TimeSpan
+    start::Float64
+    stop::Float64
+end
+
+"""
+    Tolerance(abs::Union{Float64,Nothing}, rel::Union{Float64,Nothing})
+
+Numerical comparison tolerance. Either or both of `abs` / `rel` may be
+set; an assertion passes when any set bound is satisfied.
+"""
+struct Tolerance
+    abs::Union{Float64,Nothing}
+    rel::Union{Float64,Nothing}
+
+    Tolerance(; abs=nothing, rel=nothing) = new(abs, rel)
+end
+
+"""
+    Assertion(variable::String, time::Float64, expected::Float64, tolerance::Union{Tolerance,Nothing})
+
+A scalar `(variable, time, expected)` check used inside a `Test`.
+"""
+struct Assertion
+    variable::String
+    time::Float64
+    expected::Float64
+    tolerance::Union{Tolerance,Nothing}
+
+    Assertion(variable::AbstractString, time::Real, expected::Real;
+              tolerance=nothing) =
+        new(String(variable), Float64(time), Float64(expected), tolerance)
+end
+
+"""
+    Test(id, time_span, assertions; description, initial_conditions, parameter_overrides, tolerance)
+
+Inline validation test for a Model (schema gt-cc1). Defines the run
+configuration — initial conditions, parameter overrides, simulation time
+span — and a list of scalar assertions that must hold.
+"""
+struct Test
+    id::String
+    description::Union{String,Nothing}
+    initial_conditions::Dict{String,Float64}
+    parameter_overrides::Dict{String,Float64}
+    time_span::TimeSpan
+    tolerance::Union{Tolerance,Nothing}
+    assertions::Vector{Assertion}
+
+    function Test(id::AbstractString, time_span::TimeSpan, assertions::Vector{Assertion};
+                  description=nothing,
+                  initial_conditions=Dict{String,Float64}(),
+                  parameter_overrides=Dict{String,Float64}(),
+                  tolerance=nothing)
+        return new(String(id), description,
+                   Dict{String,Float64}(string(k) => Float64(v) for (k, v) in initial_conditions),
+                   Dict{String,Float64}(string(k) => Float64(v) for (k, v) in parameter_overrides),
+                   time_span, tolerance, assertions)
+    end
+end
+
+"""
     Model
 
 ODE-based model component containing variables, equations, and optional subsystems.
@@ -251,12 +349,16 @@ struct Model
     continuous_events::Vector{ContinuousEvent}
     subsystems::Dict{String,Model}
     domain::Union{String,Nothing}
+    tolerance::Union{Tolerance,Nothing}
+    tests::Vector{Test}
 
     # Primary constructor with separate event arrays
     Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
-          subsystems::Dict{String,Model}; domain=nothing) =
-        new(variables, equations, discrete_events, continuous_events, subsystems, domain)
+          subsystems::Dict{String,Model};
+          domain=nothing, tolerance=nothing, tests=Test[]) =
+        new(variables, equations, discrete_events, continuous_events, subsystems,
+            domain, tolerance, tests)
 
     # Convenience constructor with optional events and subsystems.
     # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
@@ -267,7 +369,9 @@ struct Model
                    continuous_events=ContinuousEvent[],
                    events=nothing,
                    subsystems=Dict{String,Model}(),
-                   domain=nothing)
+                   domain=nothing,
+                   tolerance=nothing,
+                   tests=Test[])
         if events !== nothing
             discrete_events = DiscreteEvent[]
             continuous_events = ContinuousEvent[]
@@ -281,7 +385,8 @@ struct Model
                 end
             end
         end
-        return new(variables, equations, discrete_events, continuous_events, subsystems, domain)
+        return new(variables, equations, discrete_events, continuous_events, subsystems,
+                   domain, tolerance, tests)
     end
 end
 

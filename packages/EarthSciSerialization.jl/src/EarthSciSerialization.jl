@@ -54,6 +54,7 @@ export
     CouplingOperatorApply, CouplingCallback, CouplingEvent,
     # Flattened system (§4.7.5 / §4.7.6)
     FlattenMetadata, FlattenedSystem, flatten, lower_reactions_to_equations,
+    infer_array_shapes,
     # Flatten error taxonomy (spec §4.7.6.10, 8 types for cross-language parity)
     ConflictingDerivativeError, DimensionPromotionError, UnmappedDomainError,
     UnsupportedMappingError, DomainUnitMismatchError,

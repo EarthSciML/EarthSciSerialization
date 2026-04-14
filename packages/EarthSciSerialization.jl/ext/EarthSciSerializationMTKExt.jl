@@ -9,12 +9,16 @@ using EarthSciSerialization: FlattenedSystem, ModelVariable, StateVariable,
     ParameterVariable, ObservedVariable, NumExpr, VarExpr, OpExpr,
     Equation, AffectEquation, Model, EventType, ContinuousEvent, DiscreteEvent,
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger, FunctionalAffect,
-    Domain, flatten
+    Domain, flatten, infer_array_shapes
 const EsmExpr = EarthSciSerialization.Expr
 using ModelingToolkit
 using ModelingToolkit: @variables, @parameters, Differential, System, PDESystem
 using Symbolics
 using Symbolics: Num
+# SymbolicUtils ships inside Symbolics (via @reexport); access the module
+# through Symbolics.SymbolicUtils so we don't need to declare a separate
+# weak dep in Project.toml. Alias it locally for readability.
+const SymUtils = Symbolics.SymbolicUtils
 using DomainSets: Interval
 
 # ========================================
@@ -108,11 +112,296 @@ function _esm_to_symbolic(expr::EsmExpr, var_dict::Dict{String,Any},
                    op == "<=" ? l <= r :
                    op == "==" ? l == r :
                                 l != r
+        elseif op == "arrayop"
+            return _build_arrayop(expr, var_dict, t_sym, dim_dict)
+        elseif op == "makearray"
+            return _build_makearray(expr, var_dict, t_sym, dim_dict)
+        elseif op == "index"
+            return _build_index(expr, var_dict, t_sym, dim_dict)
+        elseif op == "broadcast"
+            return _build_broadcast(expr, var_dict, t_sym, dim_dict)
+        elseif op == "reshape"
+            return _build_reshape(expr, var_dict, t_sym, dim_dict)
+        elseif op == "transpose"
+            return _build_transpose(expr, var_dict, t_sym, dim_dict)
+        elseif op == "concat"
+            return _build_concat(expr, var_dict, t_sym, dim_dict)
         else
             error("Unsupported operator: $op")
         end
     end
     error("Unknown expression type: $(typeof(expr))")
+end
+
+# ========================================
+# Array op dispatch helpers (gt-vt3)
+# ========================================
+
+# Map reduce-name string from the schema to the Julia reducer callable used
+# by the low-level `SymbolicUtils.ArrayOp` constructor.
+function _reduce_fn(name::Union{Nothing,AbstractString})
+    name === nothing && return +
+    return name == "+" ? (+) :
+           name == "*" ? (*) :
+           name == "max" ? max :
+           name == "min" ? min :
+           error("Unsupported arrayop reduce: $name")
+end
+
+# Build a Symbolics `ArrayOp` by eval'ing a generated `@arrayop` expression.
+# This mirrors the pattern used by `_make_dep_var` for `@variables`: we
+# construct a `let` block that binds every free name (state/parameter/obs
+# variable referenced in the body) to its symbolic value, and then calls the
+# macro in a scope where those names are in reach. This is much less
+# error-prone than building a raw `ArrayOp{T}(...)` term, because index-
+# symbol plumbing (the `idxs_for_arrayop` dummy, the `OutIdxT`/`RangesT`
+# wrappers, and shape inference from operand axes) is handled by the macro.
+function _build_arrayop(expr::OpExpr, var_dict::Dict{String,Any},
+                        t_sym, dim_dict::Dict{String,Any})
+    output_idx = expr.output_idx === nothing ? Any[] : expr.output_idx
+    body = expr.expr_body
+    body === nothing && error("arrayop node missing 'expr' body")
+    reduce_fn = _reduce_fn(expr.reduce)
+
+    # Collect free names (variables) used in the body that live in var_dict,
+    # in order of first occurrence. Each gets a fresh placeholder identifier
+    # bound to its symbolic value in a `let` block so the macro body can
+    # reference it by that placeholder name.
+    binding_names = Symbol[]
+    binding_vals = Any[]
+    var_name_to_sym = Dict{String,Symbol}()
+    for vname in _collect_var_refs(body)
+        haskey(var_name_to_sym, vname) && continue
+        if haskey(var_dict, vname)
+            sym = Symbol("__esm_v_", length(binding_names))
+            push!(binding_names, sym)
+            push!(binding_vals, var_dict[vname])
+            var_name_to_sym[vname] = sym
+        end
+    end
+
+    # Build the output_idx tuple AST, mapping String → identifier and
+    # literal 1 → 1.
+    output_tuple_args = Any[]
+    for entry in output_idx
+        if entry isa AbstractString
+            push!(output_tuple_args, Symbol(entry))
+        elseif entry == 1
+            push!(output_tuple_args, 1)
+        else
+            error("arrayop output_idx entry must be a string or 1, got $(entry)")
+        end
+    end
+    output_tuple = Core.Expr(:tuple, output_tuple_args...)
+
+    # Build the body AST.
+    body_ast = _esm_to_julia_ast(body, var_name_to_sym)
+
+    # Collect explicit range declarations as `idx in lo:hi` macro options.
+    range_opts = Any[]
+    if expr.ranges !== nothing
+        for (name, r) in expr.ranges
+            lo, hi = _range_bounds_int(r)
+            push!(range_opts, Core.Expr(:call, :in, Symbol(name), Core.Expr(:call, :(:), lo, hi)))
+        end
+    end
+
+    # Build `reduce=<sym>` macro option.
+    reduce_opt = Core.Expr(:(=), :reduce, Symbol(expr.reduce === nothing ? "+" : expr.reduce))
+
+    # Assemble the `@arrayop` call. `@arrayop` is re-exported from
+    # Symbolics (which does `@reexport using SymbolicUtils`), so it is
+    # accessible unqualified inside the MTKExt module's own scope (where we
+    # `using Symbolics`). We build the macrocall AST with the bare macro
+    # name and eval it in `@__MODULE__` below.
+    arrayop_call = Core.Expr(:macrocall, Symbol("@arrayop"),
+                             LineNumberNode(0, Symbol("MTKExt")),
+                             output_tuple, body_ast,
+                             range_opts..., reduce_opt)
+
+    # Wrap in a let binding so Symbols referring to free variables resolve
+    # to the actual Symbolics objects in var_dict.
+    bindings = [Core.Expr(:(=), binding_names[i], binding_vals[i])
+                for i in 1:length(binding_names)]
+    let_block = Core.Expr(:block, bindings..., arrayop_call)
+    let_expr = Core.Expr(:let, Core.Expr(:block), let_block)
+
+    return Core.eval(@__MODULE__, let_expr)
+end
+
+# Decode a range field `[lo, hi]` or `[lo, step, hi]` to integer bounds.
+function _range_bounds_int(r::Vector{Int})
+    if length(r) == 2
+        return r[1], r[2]
+    elseif length(r) == 3
+        return r[1], r[3]
+    end
+    error("range must have 2 or 3 entries, got $(length(r))")
+end
+
+# Walk an ESM expression tree collecting variable names in order of first
+# occurrence. Used to build eval-time bindings for `_build_arrayop`.
+function _collect_var_refs(expr::EsmExpr, acc::Vector{String}=String[])
+    if expr isa VarExpr
+        push!(acc, expr.name)
+    elseif expr isa OpExpr
+        for a in expr.args
+            _collect_var_refs(a, acc)
+        end
+        if expr.expr_body !== nothing
+            _collect_var_refs(expr.expr_body, acc)
+        end
+        if expr.values !== nothing
+            for v in expr.values
+                _collect_var_refs(v, acc)
+            end
+        end
+    end
+    return acc
+end
+
+# Translate an ESM expression tree to a raw Julia AST that uses the
+# `Symbol`s in `var_name_to_sym` for named variables and leaves unknown
+# `VarExpr` names as bare symbols (used for array-op indices like `i, j`).
+# Numeric literals become Julia numbers; operators become `Expr(:call, ...)`
+# nodes; array indexing becomes `Expr(:ref, ...)`. Nested array ops inside
+# an arrayop body (e.g. `makearray` inside an arrayop) are not common but
+# we still handle `index` nodes since those are the primary way variables
+# are indexed inside an `@arrayop` body.
+function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
+    if expr isa NumExpr
+        # Prefer integer literals when the value is whole — this matters for
+        # expressions like `u[i-1]` where the macro's offset-range inference
+        # needs integer offsets, not 1.0 floats.
+        v = expr.value
+        return v == floor(v) ? Int(v) : v
+    elseif expr isa VarExpr
+        return get(var_name_to_sym, expr.name, Symbol(expr.name))
+    elseif expr isa OpExpr
+        op = expr.op
+        if op == "index"
+            arr = _esm_to_julia_ast(expr.args[1], var_name_to_sym)
+            idxs = [_esm_to_julia_ast(a, var_name_to_sym) for a in expr.args[2:end]]
+            return Core.Expr(:ref, arr, idxs...)
+        elseif op in ("+", "-", "*", "/", "^")
+            args_ast = [_esm_to_julia_ast(a, var_name_to_sym) for a in expr.args]
+            if length(args_ast) == 1 && op == "-"
+                return Core.Expr(:call, :-, args_ast[1])
+            end
+            return Core.Expr(:call, Symbol(op), args_ast...)
+        elseif op in ("exp", "log", "log10", "sin", "cos", "tan",
+                      "sinh", "cosh", "tanh", "asin", "acos", "atan",
+                      "sqrt", "abs")
+            args_ast = [_esm_to_julia_ast(a, var_name_to_sym) for a in expr.args]
+            return Core.Expr(:call, Symbol(op), args_ast...)
+        elseif op == "D"
+            # D(u[i]) inside an @arrayop body: use MTK's `D` shortcut.
+            inner = _esm_to_julia_ast(expr.args[1], var_name_to_sym)
+            return Core.Expr(:call, GlobalRef(ModelingToolkit, :D), inner)
+        else
+            error("Unsupported operator inside arrayop body: $op")
+        end
+    end
+    error("Unknown expression type in arrayop body: $(typeof(expr))")
+end
+
+# Build a `SymbolicUtils.ArrayMaker` from a `makearray` node. We construct
+# it via `@makearray` macro eval for consistency with `_build_arrayop`.
+function _build_makearray(expr::OpExpr, var_dict::Dict{String,Any},
+                          t_sym, dim_dict::Dict{String,Any})
+    expr.regions === nothing && error("makearray node missing 'regions'")
+    expr.values === nothing && error("makearray node missing 'values'")
+    length(expr.regions) == length(expr.values) ||
+        error("makearray regions and values length mismatch")
+
+    # Infer output shape from union of regions (per axis: min start, max stop).
+    ndims = length(expr.regions[1])
+    starts = fill(typemax(Int), ndims)
+    stops = fill(typemin(Int), ndims)
+    for region in expr.regions
+        length(region) == ndims || error("makearray regions must all share ndims")
+        for (axis, pair) in enumerate(region)
+            starts[axis] = min(starts[axis], pair[1])
+            stops[axis] = max(stops[axis], pair[2])
+        end
+    end
+    shape = Tuple(starts[i]:stops[i] for i in 1:ndims)
+
+    vals = [_esm_to_symbolic(v, var_dict, t_sym, dim_dict) for v in expr.values]
+    region_ranges = [Tuple(pair[1]:pair[2] for pair in region) for region in expr.regions]
+
+    return SymUtils.ArrayMaker{Real}(region_ranges, vals; shape=shape)
+end
+
+# Build an `index` node: `args[1]` is the array-shaped operand, `args[2:]`
+# are the index expressions. This is used outside arrayop bodies (inside an
+# arrayop body, the `index` op is consumed by `_esm_to_julia_ast`).
+function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
+                      t_sym, dim_dict::Dict{String,Any})
+    arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
+    idxs = Any[]
+    for a in expr.args[2:end]
+        if a isa NumExpr
+            push!(idxs, Int(a.value))
+        else
+            push!(idxs, _esm_to_symbolic(a, var_dict, t_sym, dim_dict))
+        end
+    end
+    return getindex(arr, idxs...)
+end
+
+function _build_broadcast(expr::OpExpr, var_dict::Dict{String,Any},
+                          t_sym, dim_dict::Dict{String,Any})
+    expr.fn === nothing && error("broadcast node missing 'fn'")
+    fn_name = expr.fn
+    operands = [_esm_to_symbolic(a, var_dict, t_sym, dim_dict) for a in expr.args]
+    fn = fn_name == "+" ? (+) :
+         fn_name == "-" ? (-) :
+         fn_name == "*" ? (*) :
+         fn_name == "/" ? (/) :
+         fn_name == "^" ? (^) :
+         fn_name == "exp" ? exp :
+         fn_name == "log" ? log :
+         fn_name == "log10" ? log10 :
+         fn_name == "sin" ? sin :
+         fn_name == "cos" ? cos :
+         fn_name == "sqrt" ? sqrt :
+         fn_name == "abs" ? abs :
+         error("Unsupported broadcast fn: $fn_name")
+    return Base.materialize(Base.broadcasted(fn, operands...))
+end
+
+function _build_reshape(expr::OpExpr, var_dict::Dict{String,Any},
+                        t_sym, dim_dict::Dict{String,Any})
+    expr.shape === nothing && error("reshape node missing 'shape'")
+    arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
+    dims = Int[]
+    for entry in expr.shape
+        if entry isa Integer
+            push!(dims, Int(entry))
+        else
+            error("reshape currently only supports integer shape entries, got $(entry)")
+        end
+    end
+    return Symbolics.reshape(arr, dims...)
+end
+
+function _build_transpose(expr::OpExpr, var_dict::Dict{String,Any},
+                          t_sym, dim_dict::Dict{String,Any})
+    arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
+    if expr.perm !== nothing
+        # Schema perm is 0-based; Julia permutedims expects 1-based axes.
+        perm1 = [p + 1 for p in expr.perm]
+        return permutedims(arr, perm1)
+    end
+    return transpose(arr)
+end
+
+function _build_concat(expr::OpExpr, var_dict::Dict{String,Any},
+                       t_sym, dim_dict::Dict{String,Any})
+    expr.axis === nothing && error("concat node missing 'axis'")
+    arrs = [_esm_to_symbolic(a, var_dict, t_sym, dim_dict) for a in expr.args]
+    return cat(arrs...; dims=expr.axis + 1)
 end
 
 function _get_or_make_dim(dim_dict::Dict{String,Any}, name::AbstractString)
@@ -163,6 +452,33 @@ function _make_param(name::Symbol)
     return vars[1]
 end
 
+"""
+    _make_array_dep_var(name::Symbol, iv_syms::Vector{Any}, shape::Vector{UnitRange{Int}})
+
+Construct a shape-annotated symbolic variable of the form
+`name(iv1, iv2, ...)[range1, range2, ...]` — the array form produced by
+`@variables (u(t))[1:N]`. We build the macro call via `Core.eval` in the
+Symbolics module so `iv_syms` can be passed by value. The result is the
+array-shaped `Symbolics.Arr` object that supports element-wise indexing
+via `u[i]`, `u[i, j]`, etc.
+"""
+function _make_array_dep_var(name::Symbol, iv_syms::Vector{Any},
+                             shape::Vector{UnitRange{Int}})
+    holder_names = [Symbol("__esm_iv_", i) for i in 1:length(iv_syms)]
+    bindings = [Core.Expr(:(=), holder_names[i], iv_syms[i]) for i in 1:length(iv_syms)]
+    call_expr = Core.Expr(:call, name, holder_names...)
+    # Build the `[range_1, range_2, ...]` index spec as a Julia :ref expression.
+    ranges_ast = [Core.Expr(:call, :(:), first(r), last(r)) for r in shape]
+    ref_expr = Core.Expr(:ref, call_expr, ranges_ast...)
+    # `(name(iv...)[range...])` — the parenthesized form the macro expects.
+    paren_expr = Core.Expr(:block, ref_expr)
+    block_expr = Core.Expr(:block, bindings...,
+                           :(Symbolics.@variables $(paren_expr)))
+    let_expr = Core.Expr(:let, Core.Expr(:block), block_expr)
+    vars = Core.eval(Symbolics, let_expr)
+    return vars[1]
+end
+
 # ========================================
 # Build symbolic variable dictionaries from a FlattenedSystem
 # ========================================
@@ -180,6 +496,14 @@ states, parameters, observed)` where the collections are typed `Vector{Num}`.
 For ODE systems, state variables are functions of `t` only. For PDE systems,
 state variables are functions of `t` and the spatial dimensions declared in
 `flat.independent_variables` (minus `:t`).
+
+When the flattened system contains `arrayop`/`makearray`/`index` nodes,
+shape inference is run first and any variable that appears inside an array
+operator is declared as a shaped `@variables (u(t))[1:N]` instead of a
+scalar `u(t)`. The `states`/`observed` vectors then contain the individual
+scalar elements of those array variables (so `length(states) == M*N` for a
+2-D array), matching the scalar dvs list passed to
+`System(..., dvs, [])` in the MTK fork's native `@arrayop` tests.
 """
 function _build_var_dict(flat::FlattenedSystem)
     is_pde = _pde_independent_vars(flat)
@@ -196,6 +520,9 @@ function _build_var_dict(flat::FlattenedSystem)
             push!(spatial_syms, dim_sym)
         end
     end
+
+    # Shape inference: scalar-only systems get an empty dict and pay nothing.
+    inferred_shapes = infer_array_shapes(flat.equations)
 
     var_dict = Dict{String,Any}()
     states = Vector{Num}()
@@ -223,9 +550,19 @@ function _build_var_dict(flat::FlattenedSystem)
     # State variables — functions of independent variables
     for (vname, mvar) in flat.state_variables
         sym_name = _san(vname)
-        v_num = _with_default(_make_dep_var(sym_name, iv_syms_any), mvar.default)
-        push!(states, v_num)
-        var_dict[vname] = v_num
+        shape = get(inferred_shapes, vname, nothing)
+        if shape === nothing
+            v_num = _with_default(_make_dep_var(sym_name, iv_syms_any), mvar.default)
+            push!(states, v_num)
+            var_dict[vname] = v_num
+        else
+            array_var = _make_array_dep_var(sym_name, iv_syms_any, shape)
+            var_dict[vname] = array_var
+            # Enumerate the individual scalar elements for the dvs vector.
+            for idx in Iterators.product(shape...)
+                push!(states, Num(array_var[idx...]))
+            end
+        end
     end
 
     # Parameters — plain symbols
@@ -349,24 +686,61 @@ function ModelingToolkit.System(flat::FlattenedSystem;
     cont_cbs = _build_continuous_events(flat, var_dict, t_sym, dim_dict)
     disc_cbs = _build_discrete_events(flat, var_dict, t_sym, dim_dict)
 
+    # Array-op equations must bypass MTK's structural checks — the LHS and
+    # RHS are typically `ArrayOp`-wrapped expressions whose scalar form is
+    # only accessible after `mtkcompile`, so the builder would otherwise
+    # reject them as non-scalar. Scalar-only systems still use default checks.
+    has_array = _has_array_op(flat.equations)
+    extra_kwargs = has_array ? (; checks=false) : (;)
+
     sys_name = name isa Symbol ? name : Symbol(name)
 
     sys = if !isempty(cont_cbs) && !isempty(disc_cbs)
         ModelingToolkit.System(eqs, t_sym, states, parameters;
             name=sys_name,
             continuous_events=cont_cbs,
-            discrete_events=disc_cbs, kwargs...)
+            discrete_events=disc_cbs, extra_kwargs..., kwargs...)
     elseif !isempty(cont_cbs)
         ModelingToolkit.System(eqs, t_sym, states, parameters;
-            name=sys_name, continuous_events=cont_cbs, kwargs...)
+            name=sys_name, continuous_events=cont_cbs, extra_kwargs..., kwargs...)
     elseif !isempty(disc_cbs)
         ModelingToolkit.System(eqs, t_sym, states, parameters;
-            name=sys_name, discrete_events=disc_cbs, kwargs...)
+            name=sys_name, discrete_events=disc_cbs, extra_kwargs..., kwargs...)
     else
         ModelingToolkit.System(eqs, t_sym, states, parameters;
-            name=sys_name, kwargs...)
+            name=sys_name, extra_kwargs..., kwargs...)
     end
     return sys
+end
+
+# Detect whether any equation (LHS or RHS) contains an array-op node.
+# Cheap recursive scan — short-circuits on the first hit.
+function _has_array_op(equations::Vector{Equation})
+    for eq in equations
+        _expr_has_array_op(eq.lhs) && return true
+        _expr_has_array_op(eq.rhs) && return true
+    end
+    return false
+end
+
+function _expr_has_array_op(expr::EsmExpr)
+    expr isa OpExpr || return false
+    if expr.op in ("arrayop", "makearray", "index", "broadcast",
+                   "reshape", "transpose", "concat")
+        return true
+    end
+    for a in expr.args
+        _expr_has_array_op(a) && return true
+    end
+    if expr.expr_body !== nothing && _expr_has_array_op(expr.expr_body)
+        return true
+    end
+    if expr.values !== nothing
+        for v in expr.values
+            _expr_has_array_op(v) && return true
+        end
+    end
+    return false
 end
 
 """

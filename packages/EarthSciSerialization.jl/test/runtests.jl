@@ -15,6 +15,7 @@ using JSON3
     include("mtk_catalyst_test.jl")
     include("real_mtk_integration_test.jl")
     include("simulate_e2e_test.jl")
+    include("array_ops_test.jl")
     include("catalyst_extension_test.jl")
     include("reference_resolution_test.jl")
     include("test_codegen.jl")

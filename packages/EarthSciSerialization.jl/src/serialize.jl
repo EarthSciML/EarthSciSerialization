@@ -28,6 +28,36 @@ function serialize_expression(expr::Expr)
         if expr.dim !== nothing
             result["dim"] = expr.dim
         end
+        if expr.output_idx !== nothing
+            result["output_idx"] = expr.output_idx
+        end
+        if expr.expr_body !== nothing
+            result["expr"] = serialize_expression(expr.expr_body)
+        end
+        if expr.reduce !== nothing
+            result["reduce"] = expr.reduce
+        end
+        if expr.ranges !== nothing
+            result["ranges"] = Dict{String,Any}(k => v for (k, v) in expr.ranges)
+        end
+        if expr.regions !== nothing
+            result["regions"] = expr.regions
+        end
+        if expr.values !== nothing
+            result["values"] = [serialize_expression(v) for v in expr.values]
+        end
+        if expr.shape !== nothing
+            result["shape"] = expr.shape
+        end
+        if expr.perm !== nothing
+            result["perm"] = expr.perm
+        end
+        if expr.axis !== nothing
+            result["axis"] = expr.axis
+        end
+        if expr.fn !== nothing
+            result["fn"] = expr.fn
+        end
         return result
     else
         throw(ArgumentError("Unknown expression type: $(typeof(expr))"))
@@ -236,6 +266,76 @@ function serialize_model(model::Model)::Dict{String,Any}
         result["domain"] = model.domain
     end
 
+    if model.tolerance !== nothing
+        result["tolerance"] = serialize_tolerance(model.tolerance)
+    end
+
+    if !isempty(model.tests)
+        result["tests"] = [serialize_test(t) for t in model.tests]
+    end
+
+    return result
+end
+
+"""
+    serialize_tolerance(tol::Tolerance) -> Dict{String,Any}
+"""
+function serialize_tolerance(tol::Tolerance)::Dict{String,Any}
+    result = Dict{String,Any}()
+    if tol.abs !== nothing
+        result["abs"] = tol.abs
+    end
+    if tol.rel !== nothing
+        result["rel"] = tol.rel
+    end
+    return result
+end
+
+"""
+    serialize_time_span(span::TimeSpan) -> Dict{String,Any}
+"""
+function serialize_time_span(span::TimeSpan)::Dict{String,Any}
+    return Dict{String,Any}("start" => span.start, "end" => span.stop)
+end
+
+"""
+    serialize_assertion(a::Assertion) -> Dict{String,Any}
+"""
+function serialize_assertion(a::Assertion)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "variable" => a.variable,
+        "time" => a.time,
+        "expected" => a.expected,
+    )
+    if a.tolerance !== nothing
+        result["tolerance"] = serialize_tolerance(a.tolerance)
+    end
+    return result
+end
+
+"""
+    serialize_test(t::Test) -> Dict{String,Any}
+"""
+function serialize_test(t::EarthSciSerialization.Test)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "id" => t.id,
+        "time_span" => serialize_time_span(t.time_span),
+        "assertions" => [serialize_assertion(a) for a in t.assertions],
+    )
+    if t.description !== nothing
+        result["description"] = t.description
+    end
+    if !isempty(t.initial_conditions)
+        result["initial_conditions"] = Dict{String,Any}(
+            k => v for (k, v) in t.initial_conditions)
+    end
+    if !isempty(t.parameter_overrides)
+        result["parameter_overrides"] = Dict{String,Any}(
+            k => v for (k, v) in t.parameter_overrides)
+    end
+    if t.tolerance !== nothing
+        result["tolerance"] = serialize_tolerance(t.tolerance)
+    end
     return result
 end
 
