@@ -132,13 +132,15 @@
             ">", "<", ">=", "<=", "==", "!=",
             "and", "or", "not",
             "Pre",
-            "sign"
+            "sign",
+            "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat"
           ]
         },
         "args": {
           "type": "array",
+          "description": "Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.",
           "items": { "$ref": "#/$defs/Expression" },
-          "minItems": 1
+          "minItems": 0
         },
         "wrt": {
           "type": "string",
@@ -147,9 +149,105 @@
         "dim": {
           "type": "string",
           "description": "Spatial dimension for grad operator (e.g., \"x\", \"y\", \"z\")."
+        },
+        "output_idx": {
+          "type": "array",
+          "description": "For arrayop: the result's index signature. Each entry is either a string (a symbolic index variable like \"i\", \"j\") or the integer 1 (a literal singleton dimension for reshape/broadcast). Mirrors SymbolicUtils.ArrayOp.output_idx.",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "integer", "const": 1 }
+            ]
+          }
+        },
+        "expr": {
+          "$ref": "#/$defs/Expression",
+          "description": "For arrayop: the scalar body evaluated at each index point. May reference index symbols declared in output_idx as well as additional (contracted) index symbols. Mirrors SymbolicUtils.ArrayOp.expr."
+        },
+        "reduce": {
+          "type": "string",
+          "description": "For arrayop: the reduction operator applied to any index symbol that appears in expr but not in output_idx. Default is \"+\".",
+          "enum": ["+", "*", "max", "min"],
+          "default": "+"
+        },
+        "ranges": {
+          "type": "object",
+          "description": "For arrayop: optional map from index symbol name to the range it iterates over. Each value is either a 2-element array [start, stop] (unit step) or a 3-element array [start, step, stop]. Indices not present are inferred from the domain / operand shapes at runtime. Mirrors SymbolicUtils.ArrayOp.ranges.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "minItems": 2,
+            "maxItems": 3
+          }
+        },
+        "regions": {
+          "type": "array",
+          "description": "For makearray: list of sub-region boxes of the output array. Each region is an array of [start, stop] pairs, one per output dimension. The nth region is filled with the nth entry of values. Overlapping regions are permitted; later regions overwrite earlier ones. Mirrors SymbolicUtils.ArrayMaker.regions.",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "integer" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 1
+          }
+        },
+        "values": {
+          "type": "array",
+          "description": "For makearray: list of expressions, one per entry in regions. Each value may be a scalar expression (broadcast across the region) or an array-valued expression whose shape matches the region (excluding singleton dimensions). Mirrors SymbolicUtils.ArrayMaker.values.",
+          "items": { "$ref": "#/$defs/Expression" }
+        },
+        "shape": {
+          "type": "array",
+          "description": "For reshape: the target shape. Each entry is either an integer (a concrete length) or a string (a symbolic dimension reference).",
+          "items": {
+            "oneOf": [
+              { "type": "integer" },
+              { "type": "string" }
+            ]
+          },
+          "minItems": 1
+        },
+        "perm": {
+          "type": "array",
+          "description": "For transpose: optional axis permutation. A list of 0-based axis indices giving the new order. If omitted, the matrix-transpose convention is used (reverse axes).",
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "axis": {
+          "type": "integer",
+          "description": "For concat: the 0-based axis along which to concatenate the operand arrays. All operands must have identical shape on every other axis.",
+          "minimum": 0
+        },
+        "fn": {
+          "type": "string",
+          "description": "For broadcast: the name of the scalar operator to apply element-wise to the operands in args. Must be an ExpressionNode op name drawn from the scalar subset (arithmetic, elementary functions, comparisons, etc.)."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "const": "arrayop" } }, "required": ["op"] },
+          "then": { "required": ["output_idx", "expr"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "makearray" } }, "required": ["op"] },
+          "then": { "required": ["regions", "values"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "broadcast" } }, "required": ["op"] },
+          "then": { "required": ["fn"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "reshape" } }, "required": ["op"] },
+          "then": { "required": ["shape"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "concat" } }, "required": ["op"] },
+          "then": { "required": ["axis"] }
+        }
+      ]
     },
 
     "Equation": {

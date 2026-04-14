@@ -1,0 +1,265 @@
+[
+  {
+    "description": "Matrix multiplication via arrayop (Einstein contraction over k)",
+    "operator": "arrayop",
+    "required_fields": ["output_idx", "expr"],
+    "examples": [
+      {
+        "input": {
+          "op": "arrayop",
+          "output_idx": ["i", "j"],
+          "expr": {
+            "op": "*",
+            "args": [
+              { "op": "index", "args": ["A", "i", "k"] },
+              { "op": "index", "args": ["B", "k", "j"] }
+            ]
+          },
+          "args": ["A", "B"]
+        },
+        "meaning": "C[i,j] = Σ_k A[i,k] * B[k,j] — matrix multiply. k is contracted with the default reducer (+).",
+        "reference": "SymbolicUtils/src/arrayop.jl:@arrayop macro, matmul example"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Column sum reduction via arrayop with explicit reducer",
+    "operator": "arrayop",
+    "required_fields": ["output_idx", "expr"],
+    "examples": [
+      {
+        "input": {
+          "op": "arrayop",
+          "output_idx": ["j"],
+          "expr": { "op": "index", "args": ["A", "i", "j"] },
+          "reduce": "+",
+          "args": ["A"]
+        },
+        "meaning": "result[j] = Σ_i A[i,j] — column sum. i is contracted."
+      },
+      {
+        "input": {
+          "op": "arrayop",
+          "output_idx": ["j"],
+          "expr": { "op": "index", "args": ["A", "i", "j"] },
+          "reduce": "max",
+          "args": ["A"]
+        },
+        "meaning": "result[j] = max_i A[i,j] — column max. Reducer is max instead of +."
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "2D 5-point Laplacian stencil — arrayop with affine index offsets",
+    "operator": "arrayop",
+    "required_fields": ["output_idx", "expr"],
+    "examples": [
+      {
+        "input": {
+          "op": "arrayop",
+          "output_idx": ["i", "j"],
+          "expr": {
+            "op": "+",
+            "args": [
+              { "op": "index", "args": ["u", { "op": "+", "args": ["i", 1] }, "j"] },
+              { "op": "index", "args": ["u", { "op": "-", "args": ["i", 1] }, "j"] },
+              { "op": "index", "args": ["u", "i", { "op": "+", "args": ["j", 1] }] },
+              { "op": "index", "args": ["u", "i", { "op": "-", "args": ["j", 1] }] },
+              { "op": "*", "args": [-4, { "op": "index", "args": ["u", "i", "j"] }] }
+            ]
+          },
+          "ranges": {
+            "i": [2, 3],
+            "j": [2, 3]
+          },
+          "args": ["u"]
+        },
+        "meaning": "5-point Laplacian: (u[i+1,j] + u[i-1,j] + u[i,j+1] + u[i,j-1] - 4 u[i,j]) over interior points. ranges restrict i,j to the interior.",
+        "reference": "SymbolicUtils/src/arrayop.jl § Axis offsets"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Reshape via arrayop with singleton output index — insert a unit dimension",
+    "operator": "arrayop",
+    "examples": [
+      {
+        "input": {
+          "op": "arrayop",
+          "output_idx": ["i", 1, "j", 1],
+          "expr": {
+            "op": "*",
+            "args": [
+              { "op": "index", "args": ["A", "i", "k"] },
+              { "op": "index", "args": ["B", "k", "j"] }
+            ]
+          },
+          "args": ["A", "B"]
+        },
+        "meaning": "(5, 1, 5, 1)-shaped result. Literal 1 entries in output_idx are singleton dimensions.",
+        "reference": "SymbolicUtils/src/arrayop.jl § Singleton dimensions"
+      }
+    ]
+  },
+  {
+    "description": "Block-assembled 3x3 matrix via makearray (overlapping regions, later overrides)",
+    "operator": "makearray",
+    "required_fields": ["regions", "values"],
+    "examples": [
+      {
+        "input": {
+          "op": "makearray",
+          "regions": [
+            [[1, 1], [1, 3]],
+            [[2, 2], [1, 3]],
+            [[3, 3], [1, 1]],
+            [[3, 3], [2, 2]],
+            [[3, 3], [3, 3]]
+          ],
+          "values": [
+            "x_row",
+            {
+              "op": "arrayop",
+              "output_idx": [1, "i"],
+              "expr": {
+                "op": "+",
+                "args": [
+                  { "op": "index", "args": ["y", "i"] },
+                  { "op": "index", "args": ["z", "i"] }
+                ]
+              },
+              "args": ["y", "z"]
+            },
+            1,
+            { "op": "index", "args": ["z", 1] },
+            {
+              "op": "arrayop",
+              "output_idx": [],
+              "expr": {
+                "op": "*",
+                "args": [
+                  { "op": "index", "args": ["z", "i"] },
+                  { "op": "index", "args": ["z", "i"] }
+                ]
+              },
+              "args": ["z"]
+            }
+          ],
+          "args": []
+        },
+        "meaning": "3x3 block assembly mirroring the @makearray example from SymbolicUtils. Row 1 = x_row, row 2 = y + z, row 3 = [1, z[1], z·z].",
+        "reference": "SymbolicUtils/src/arraymaker.jl @makearray macro"
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Overwrite semantics in makearray — later regions override earlier ones",
+    "operator": "makearray",
+    "required_fields": ["regions", "values"],
+    "examples": [
+      {
+        "input": {
+          "op": "makearray",
+          "regions": [
+            [[1, 3]],
+            [[2, 3]]
+          ],
+          "values": ["x", "y_tail"],
+          "args": []
+        },
+        "meaning": "q = [x[1], y_tail[1], y_tail[2]] — the second region overwrites positions 2..3 assigned by the first.",
+        "reference": "SymbolicUtils/src/arraymaker.jl @makearray — overlapping ranges"
+      }
+    ]
+  },
+  {
+    "description": "Element-wise broadcast of a scalar operator",
+    "operator": "broadcast",
+    "required_fields": ["fn"],
+    "examples": [
+      {
+        "input": {
+          "op": "broadcast",
+          "fn": "+",
+          "args": ["A", "B"]
+        },
+        "meaning": "A + B element-wise (with numpy-style broadcasting if shapes differ on singleton dims)."
+      },
+      {
+        "input": {
+          "op": "broadcast",
+          "fn": "exp",
+          "args": ["A"]
+        },
+        "meaning": "exp(A) element-wise."
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Array indexing primitive (element and offset access)",
+    "operator": "index",
+    "examples": [
+      {
+        "input": { "op": "index", "args": ["A", 1, 2] },
+        "meaning": "A[1, 2] — integer-literal element access."
+      },
+      {
+        "input": { "op": "index", "args": ["u", { "op": "+", "args": ["i", 1] }, "j"] },
+        "meaning": "u[i+1, j] — offset stencil access inside an arrayop body."
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Reshape to a given target shape",
+    "operator": "reshape",
+    "required_fields": ["shape"],
+    "examples": [
+      {
+        "input": { "op": "reshape", "args": ["A"], "shape": [1, 9] },
+        "meaning": "Flatten a 3x3 matrix into a 1x9 row vector."
+      },
+      {
+        "input": { "op": "reshape", "args": ["v"], "shape": ["n", 1] },
+        "meaning": "Reshape to a symbolic (n, 1) column vector — shape entries may be symbolic."
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Transpose / axis permutation",
+    "operator": "transpose",
+    "examples": [
+      {
+        "input": { "op": "transpose", "args": ["A"] },
+        "meaning": "Default matrix transpose: A^T (axes reversed)."
+      },
+      {
+        "input": { "op": "transpose", "args": ["T"], "perm": [2, 0, 1] },
+        "meaning": "3-tensor axis permutation: new axis 0 = old axis 2, new 1 = old 0, new 2 = old 1."
+      }
+    ],
+    "required": true
+  },
+  {
+    "description": "Concatenation along a given axis",
+    "operator": "concat",
+    "required_fields": ["axis"],
+    "examples": [
+      {
+        "input": { "op": "concat", "args": ["A", "B"], "axis": 0 },
+        "meaning": "Vertical concat (stack rows of A on top of rows of B)."
+      },
+      {
+        "input": { "op": "concat", "args": ["A", "B", "C"], "axis": 1 },
+        "meaning": "Horizontal concat of three matrices along axis 1."
+      }
+    ],
+    "required": true
+  }
+]

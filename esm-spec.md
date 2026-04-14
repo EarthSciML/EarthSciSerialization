@@ -135,7 +135,213 @@ All take their standard mathematical arguments in `args`.
 |---|---|---|
 | `Pre` | `[var]` | Value of variable immediately before an event fires (see Section 5) |
 
-### 4.3 Scoped References
+#### Array / Tensor
+
+| Op | Required extra fields | Meaning |
+|---|---|---|
+| `arrayop` | `output_idx`, `expr` | Generalized Einstein-notation tensor expression with implicit reductions over non-output indices. See Section 4.3.1. |
+| `makearray` | `regions`, `values` | Block assembly of an array from overlapping sub-region assignments. Later regions overwrite earlier ones. See Section 4.3.2. |
+| `index` | — | Element or sub-array access. `args[0]` is the array; `args[1..]` are the index expressions. See Section 4.3.3. |
+| `broadcast` | `fn` | Element-wise application of scalar operator `fn` to broadcast-compatible operands. See Section 4.3.4. |
+| `reshape` | `shape` | Reshape `args[0]` to the given target shape. See Section 4.3.5. |
+| `transpose` | — (optional `perm`) | Axis permutation of `args[0]`. See Section 4.3.5. |
+| `concat` | `axis` | Concatenate the operand arrays along the given axis. See Section 4.3.5. |
+
+### 4.3 Array / Tensor Semantics
+
+Earth-system models frequently need to serialize operations on arrays and tensors — discretized PDEs, matrix multiplies, stencils, index contractions, block assemblies. The array ops listed in Section 4.2 cover these cases. Their data model mirrors [`SymbolicUtils.jl`](https://github.com/JuliaSymbolics/SymbolicUtils.jl)'s `ArrayOp` and `ArrayMaker` (see `src/types.jl`, `src/arrayop.jl`, `src/arraymaker.jl`).
+
+**Implicit dimensions.** Array ops use an *implicit* dimension model: there is no per-variable `dimensions` field on schema variables. Index symbols are local to the enclosing `arrayop` node, and lengths are resolved at runtime from the `domain` section and the shapes of the operand arrays. A given string can be a variable reference in most contexts but serves as an index symbol inside `arrayop.output_idx`, `arrayop.expr`, and `arrayop.ranges` keys. Callers must not rely on cross-node scoping of index symbols.
+
+#### 4.3.1 `arrayop`
+
+An `arrayop` node represents a generalized Einstein-notation expression.
+
+Fields:
+- `output_idx`: array. Each entry is either a string (a symbolic index variable) or the integer literal `1` (a singleton dimension that can be inserted for reshape/broadcast, mirroring `@arrayop (i, 1, j, 1) ...`).
+- `expr`: a sub-expression. This is the scalar body evaluated at each index point. It may reference any index symbol appearing in `output_idx` plus additional "contracted" index symbols that are reduced away.
+- `reduce`: optional string, one of `"+"`, `"*"`, `"max"`, `"min"`. Default `"+"`. Applied to index symbols that appear in `expr` but not in `output_idx`.
+- `ranges`: optional object mapping an index symbol name to either a 2-element array `[start, stop]` (unit step) or a 3-element array `[start, step, stop]`. Indices not listed are inferred at runtime from the operand shapes.
+- `args`: the input array operands that `expr` references. These are included so that a serializer can attach the operand list without walking `expr`; at runtime they must match the arrays referenced in `expr`.
+
+**Semantics.** Let `O = output_idx` and let `C` be the set of index symbols that occur in `expr` but not in `O`. Then
+
+```
+result[O] = reduce over C of expr
+```
+
+evaluated with each index taking every value in its inferred (or declared) range.
+
+**Example — matrix multiply `C = A · B`:**
+
+```json
+{
+  "op": "arrayop",
+  "output_idx": ["i", "j"],
+  "expr": {
+    "op": "*",
+    "args": [
+      { "op": "index", "args": ["A", "i", "k"] },
+      { "op": "index", "args": ["B", "k", "j"] }
+    ]
+  },
+  "args": ["A", "B"]
+}
+```
+
+Here `k` is contracted (reduced with the default `+`) while `i` and `j` form the output.
+
+**Example — 2D 5-point Laplacian stencil on `u`:**
+
+```json
+{
+  "op": "arrayop",
+  "output_idx": ["i", "j"],
+  "expr": {
+    "op": "+",
+    "args": [
+      { "op": "index", "args": ["u", { "op": "+", "args": ["i", 1] }, "j"] },
+      { "op": "index", "args": ["u", { "op": "-", "args": ["i", 1] }, "j"] },
+      { "op": "index", "args": ["u", "i", { "op": "+", "args": ["j", 1] }] },
+      { "op": "index", "args": ["u", "i", { "op": "-", "args": ["j", 1] }] },
+      { "op": "*", "args": [-4, { "op": "index", "args": ["u", "i", "j"] }] }
+    ]
+  },
+  "ranges": {
+    "i": [2, 3],
+    "j": [2, 3]
+  },
+  "args": ["u"]
+}
+```
+
+The `ranges` entries use the form `[start, stop]` to say that the interior points start at `2` and stop one short of the last index in each direction. More complex offsets are permitted in `expr`; for non-affine offsets the author should declare `ranges` explicitly (see `SymbolicUtils/src/arrayop.jl` § "Axis offsets").
+
+**Example — column-sum reduction:**
+
+```json
+{
+  "op": "arrayop",
+  "output_idx": ["j"],
+  "expr": { "op": "index", "args": ["A", "i", "j"] },
+  "reduce": "+",
+  "args": ["A"]
+}
+```
+
+Here `i` is contracted with `+`, yielding `result[j] = Σᵢ A[i, j]`.
+
+#### 4.3.2 `makearray`
+
+A `makearray` node assembles an output array from a sequence of sub-region assignments. It corresponds to `SymbolicUtils.ArrayMaker` / `@makearray`.
+
+Fields:
+- `regions`: array of regions. Each region is an array of `[start, stop]` integer pairs, one per output dimension (both endpoints inclusive, following SymbolicUtils convention).
+- `values`: array of expressions, same length as `regions`. Each entry fills the corresponding region. A scalar expression is broadcast across the region; an array-valued expression must match the region's shape (excluding singleton dimensions).
+- `args`: conventionally `[]` for `makearray` — the operands are carried inside `values`.
+
+**Overlap semantics.** Regions may overlap. When they do, **later entries overwrite earlier ones**. This matches `@makearray`'s documented behavior and is useful for expressing "default fill, then override" patterns.
+
+**Example — 3×3 block-diagonal with corner cells:**
+
+```json
+{
+  "op": "makearray",
+  "regions": [
+    [[1, 1], [1, 3]],
+    [[2, 2], [1, 3]],
+    [[3, 3], [1, 1]],
+    [[3, 3], [2, 2]],
+    [[3, 3], [3, 3]]
+  ],
+  "values": [
+    "x_row",
+    {
+      "op": "arrayop",
+      "output_idx": [1, "i"],
+      "expr": {
+        "op": "+",
+        "args": [
+          { "op": "index", "args": ["y", "i"] },
+          { "op": "index", "args": ["z", "i"] }
+        ]
+      },
+      "args": ["y", "z"]
+    },
+    1,
+    { "op": "index", "args": ["z", 1] },
+    {
+      "op": "arrayop",
+      "output_idx": [],
+      "expr": {
+        "op": "*",
+        "args": [
+          { "op": "index", "args": ["z", "i"] },
+          { "op": "index", "args": ["z", "i"] }
+        ]
+      },
+      "args": ["z"]
+    }
+  ],
+  "args": []
+}
+```
+
+This mirrors the `@makearray` example in `SymbolicUtils/src/arraymaker.jl`.
+
+#### 4.3.3 `index`
+
+`index` performs array element or sub-array access.
+
+- `args[0]`: the array expression to index.
+- `args[1..]`: one index expression per dimension. Each index is an `Expression`, so it may be an integer literal, a symbolic index variable (as a string, when inside an `arrayop.expr`), or a composite expression (e.g. `{ "op": "+", "args": ["i", 1] }` for an offset stencil point).
+
+Non-affine index expressions are legal; it is the author's responsibility to ensure runtime access is in-bounds (cf. `SymbolicUtils/src/arrayop.jl` § "Axis offsets"). Sparsity and other structured-array optimizations are runtime concerns and are not represented in the schema.
+
+#### 4.3.4 `broadcast`
+
+`broadcast` applies a scalar operator element-wise to one or more broadcast-compatible arrays. The operator is named in the `fn` field; the operands are in `args`.
+
+```json
+{
+  "op": "broadcast",
+  "fn": "+",
+  "args": ["A", "B"]
+}
+```
+
+The `fn` value must name a scalar operator (arithmetic, elementary function, comparison, etc.). Broadcasts do not fuse: a nested expression of broadcasts decomposes into primitive broadcast nodes. Runtimes are free to apply their own fusion.
+
+#### 4.3.5 `reshape`, `transpose`, `concat`
+
+**`reshape`.** `args[0]` is the array; `shape` is the target shape. Each entry of `shape` is an integer (concrete length) or a string (a symbolic length reference — resolved at runtime against the domain or operand shapes). The total number of elements must be preserved.
+
+```json
+{ "op": "reshape", "args": ["A"], "shape": [1, 9] }
+```
+
+**`transpose`.** `args[0]` is the array. The optional `perm` field gives the axis permutation as a list of 0-based axis indices. If `perm` is omitted, the convention is to reverse the axes (classic matrix transpose for 2D).
+
+```json
+{ "op": "transpose", "args": ["A"], "perm": [1, 0] }
+```
+
+**`concat`.** Concatenates the operand arrays along `axis` (0-based). All operands must have identical shape on every axis other than `axis`.
+
+```json
+{ "op": "concat", "args": ["A", "B"], "axis": 0 }
+```
+
+#### 4.3.6 Out of Scope
+
+The following are intentionally *not* represented in the schema:
+
+- Custom user-defined reduction operators (only `+`, `*`, `max`, `min` are supported).
+- Sparsity patterns and structured-array metadata — these are runtime concerns.
+- Broadcast fusion — handled by the runtime, not the serialization.
+- The `term` optimization hint on `SymbolicUtils.ArrayOp` (a pre-computed array-valued form used to short-circuit codegen). It is an optimization cache, not part of the mathematical semantics, and is recomputed at load time.
+
+### 4.4 Scoped References
 
 Variables are referenced across systems using **hierarchical dot notation**. Systems can contain subsystems to arbitrary depth, and the dot-separated path walks the hierarchy from the top-level system down to the variable:
 
@@ -157,7 +363,7 @@ The **last** segment is always the variable (or species/parameter) name. All pre
 
 **Bare references** (no dot) refer to a variable within the current system context. In coupling entries, all references must be fully qualified from the top-level system name.
 
-### 4.4 Subsystem Inclusion by Reference
+### 4.5 Subsystem Inclusion by Reference
 
 Subsystems can be defined inline (as described in Sections 6 and 7) or included by reference from an external ESM file. A reference is an object with a single `ref` field containing a local file path or URL:
 
@@ -602,7 +808,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `equations` | ✓ | Array of `{lhs, rhs}` equation objects |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
-| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.4). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
+| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.5). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.4). |
 
 ### 6.3 Variable Types
 
@@ -904,7 +1110,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `constraint_equations` | | Additional algebraic or ODE constraints (in expression AST form) |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
-| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.4). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.3). |
+| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.5). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.4). |
 
 ### 7.3 Reaction Fields
 
@@ -1298,7 +1504,7 @@ Advection.u_wind          # parameter u_wind from the Advection model
 Atmosphere.Chemistry.NO2  # species NO2 from a nested subsystem
 ```
 
-The last dot-separated segment is always the variable name; all preceding segments form the system path. This convention is consistent with the scoped reference notation used in coupling entries (Section 4.3) — the difference is that in the flattened system, **all** variable references are fully qualified, not just cross-system references.
+The last dot-separated segment is always the variable name; all preceding segments form the system path. This convention is consistent with the scoped reference notation used in coupling entries (Section 4.4) — the difference is that in the flattened system, **all** variable references are fully qualified, not just cross-system references.
 
 **Flattening is a core operation.** All libraries (not just simulation-tier) must be able to flatten a coupled system. The flattened representation is the input to:
 
