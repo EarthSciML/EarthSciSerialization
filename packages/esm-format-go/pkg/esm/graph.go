@@ -131,8 +131,8 @@ func ComponentGraphFromFile(file *EsmFile) *ComponentGraph {
 			Type: "data_loader",
 			Name: id,
 			Metadata: map[string]interface{}{
-				"loader_type": loader.Type,
-				"provides": len(loader.Provides),
+				"kind":     loader.Kind,
+				"variables": len(loader.Variables),
 			},
 		}
 

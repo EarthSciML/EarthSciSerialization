@@ -274,10 +274,12 @@ func TestValidateDataLoaders(t *testing.T) {
 		},
 		DataLoaders: map[string]DataLoader{
 			"TestLoader": {
-				Type:     "gridded_data",
-				LoaderID: "test_loader",
-				Provides: map[string]ProvidedVar{
-					"temperature": {Units: "K"},
+				Kind: "grid",
+				Source: DataLoaderSource{
+					URLTemplate: "https://example.com/{date:%Y%m%d}.nc",
+				},
+				Variables: map[string]DataLoaderVariable{
+					"temperature": {FileVariable: "T", Units: "K"},
 				},
 			},
 		},
@@ -310,8 +312,8 @@ func TestValidateDataLoaderMissingRequiredFields(t *testing.T) {
 		},
 		DataLoaders: map[string]DataLoader{
 			"BadLoader": {
-				// Missing Type and LoaderID
-				Provides: map[string]ProvidedVar{},
+				// Missing Kind, Source.URLTemplate, and Variables.
+				Variables: map[string]DataLoaderVariable{},
 			},
 		},
 	}
@@ -319,19 +321,15 @@ func TestValidateDataLoaderMissingRequiredFields(t *testing.T) {
 	result := Validate(esmFile)
 	assert.False(t, result.Valid)
 
-	// Should have errors for missing type and loader_id, and warning for no provides
+	// Expect errors for missing kind, url_template, and variables.
 	errorCount := 0
-	warningCount := 0
 	for _, msg := range result.Messages {
 		if msg.Level == "error" {
 			errorCount++
-		} else if msg.Level == "warning" {
-			warningCount++
 		}
 	}
 
-	assert.GreaterOrEqual(t, errorCount, 2) // Type and LoaderID missing
-	assert.GreaterOrEqual(t, warningCount, 1) // No variables provided
+	assert.GreaterOrEqual(t, errorCount, 3)
 }
 
 // Test equation-unknown balance validation

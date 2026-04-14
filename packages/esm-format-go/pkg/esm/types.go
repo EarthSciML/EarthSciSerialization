@@ -155,22 +155,62 @@ type ContinuousEvent struct {
 // 5. Data Loaders and Operators
 // ========================================
 
-// DataLoader represents an external data source
+// DataLoader is a runtime-agnostic description of an external data source.
+// It carries enough structural information to locate files, map timestamps
+// to files, describe spatial and variable semantics, and regrid — rather
+// than pointing at a runtime handler. Shape matches the schema under gt-q4k.
 type DataLoader struct {
-	Type                string                 `json:"type"` // "gridded_data", "emissions", etc.
-	LoaderID            string                 `json:"loader_id"`
-	Config              map[string]interface{} `json:"config,omitempty"`
-	Reference           *Reference             `json:"reference,omitempty"`
-	Provides            map[string]ProvidedVar `json:"provides"`
-	TemporalResolution  *string                `json:"temporal_resolution,omitempty"`
-	SpatialResolution   map[string]float64     `json:"spatial_resolution,omitempty"`
-	Interpolation       *string                `json:"interpolation,omitempty"`
+	Kind       string                        `json:"kind"` // "grid", "points", or "static"
+	Source     DataLoaderSource              `json:"source"`
+	Temporal   *DataLoaderTemporal           `json:"temporal,omitempty"`
+	Spatial    *DataLoaderSpatial            `json:"spatial,omitempty"`
+	Variables  map[string]DataLoaderVariable `json:"variables"`
+	Regridding *DataLoaderRegridding         `json:"regridding,omitempty"`
+	Reference  *Reference                    `json:"reference,omitempty"`
+	Metadata   map[string]interface{}        `json:"metadata,omitempty"`
 }
 
-// ProvidedVar represents a variable provided by a data loader
-type ProvidedVar struct {
-	Units       string  `json:"units"`
-	Description *string `json:"description,omitempty"`
+// DataLoaderSource describes file discovery for a data source. URL templates
+// use Jinja-style substitutions for dates, variable names, and similar.
+type DataLoaderSource struct {
+	URLTemplate string   `json:"url_template"`
+	Mirrors     []string `json:"mirrors,omitempty"`
+}
+
+// DataLoaderTemporal describes the temporal coverage and record layout.
+// RecordsPerFile may be an int or the string "auto"; represented as interface{}.
+type DataLoaderTemporal struct {
+	Start          *string     `json:"start,omitempty"`
+	End            *string     `json:"end,omitempty"`
+	FilePeriod     *string     `json:"file_period,omitempty"`
+	Frequency      *string     `json:"frequency,omitempty"`
+	RecordsPerFile interface{} `json:"records_per_file,omitempty"`
+	TimeVariable   *string     `json:"time_variable,omitempty"`
+}
+
+// DataLoaderSpatial describes the spatial grid of a data source.
+type DataLoaderSpatial struct {
+	CRS        string                `json:"crs"`
+	GridType   string                `json:"grid_type"` // "latlon", "lambert_conformal", "mercator", "polar_stereographic", "rotated_pole", "unstructured"
+	Staggering map[string]string     `json:"staggering,omitempty"`
+	Resolution map[string]float64    `json:"resolution,omitempty"`
+	Extent     map[string][2]float64 `json:"extent,omitempty"`
+}
+
+// DataLoaderVariable describes one variable exposed by a data loader.
+// UnitConversion is either a number or an Expression AST node.
+type DataLoaderVariable struct {
+	FileVariable   string      `json:"file_variable"`
+	Units          string      `json:"units"`
+	UnitConversion interface{} `json:"unit_conversion,omitempty"`
+	Description    *string     `json:"description,omitempty"`
+	Reference      *Reference  `json:"reference,omitempty"`
+}
+
+// DataLoaderRegridding describes the structural regridding configuration.
+type DataLoaderRegridding struct {
+	FillValue     *float64 `json:"fill_value,omitempty"`
+	Extrapolation *string  `json:"extrapolation,omitempty"` // "clamp", "nan", "periodic"
 }
 
 // Operator represents a runtime-specific operator
@@ -646,6 +686,34 @@ func (ec *EventCoupling) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	return nil
+}
+
+// Custom JSON unmarshaling for DataLoaderVariable (handles Expression union
+// in unit_conversion: number | ExpressionNode).
+func (v *DataLoaderVariable) UnmarshalJSON(data []byte) error {
+	type TempDataLoaderVariable struct {
+		FileVariable   string          `json:"file_variable"`
+		Units          string          `json:"units"`
+		UnitConversion json.RawMessage `json:"unit_conversion,omitempty"`
+		Description    *string         `json:"description,omitempty"`
+		Reference      *Reference      `json:"reference,omitempty"`
+	}
+	var temp TempDataLoaderVariable
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+	v.FileVariable = temp.FileVariable
+	v.Units = temp.Units
+	v.Description = temp.Description
+	v.Reference = temp.Reference
+	if len(temp.UnitConversion) > 0 && string(temp.UnitConversion) != "null" {
+		expr, err := UnmarshalExpression(temp.UnitConversion)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal unit_conversion: %w", err)
+		}
+		v.UnitConversion = expr
+	}
 	return nil
 }
 

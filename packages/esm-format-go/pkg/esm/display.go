@@ -606,14 +606,14 @@ func ModelSummary(esm *EsmFile) string {
 	if len(esm.DataLoaders) > 0 {
 		result.WriteString("  Data Loaders:\n")
 		for name, loader := range esm.DataLoaders {
-			providedVars := make([]string, 0, len(loader.Provides))
-			for varName := range loader.Provides {
-				providedVars = append(providedVars, varName)
+			varNames := make([]string, 0, len(loader.Variables))
+			for varName := range loader.Variables {
+				varNames = append(varNames, varName)
 			}
 			// Sort for deterministic output
-			sort.Strings(providedVars)
+			sort.Strings(varNames)
 			result.WriteString(fmt.Sprintf("    %s: %s (%s)\n", name,
-				strings.Join(providedVars, ", "), loader.Type))
+				strings.Join(varNames, ", "), loader.Kind))
 		}
 		result.WriteString("\n")
 	}

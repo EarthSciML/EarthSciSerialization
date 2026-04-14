@@ -613,31 +613,51 @@ func validateDataLoaderReferences(file *EsmFile, result *DetailedValidationResul
 	for loaderName, loader := range file.DataLoaders {
 		basePath := fmt.Sprintf("$.data_loaders.%s", loaderName)
 
-		// Validate that required fields are present
-		if loader.Type == "" {
+		// Validate that required fields are present.
+		if loader.Kind == "" {
 			result.Valid = false
 			result.Messages = append(result.Messages, ValidationMessage{
 				Level:   "error",
-				Message: "Data loader type is required",
-				Path:    fmt.Sprintf("%s.type", basePath),
+				Message: "Data loader kind is required",
+				Path:    fmt.Sprintf("%s.kind", basePath),
 			})
 		}
 
-		if loader.LoaderID == "" {
+		if loader.Source.URLTemplate == "" {
 			result.Valid = false
 			result.Messages = append(result.Messages, ValidationMessage{
 				Level:   "error",
-				Message: "Data loader ID is required",
-				Path:    fmt.Sprintf("%s.loader_id", basePath),
+				Message: "Data loader source.url_template is required",
+				Path:    fmt.Sprintf("%s.source.url_template", basePath),
 			})
 		}
 
-		if len(loader.Provides) == 0 {
+		if len(loader.Variables) == 0 {
+			result.Valid = false
 			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "warning",
-				Message: "Data loader provides no variables",
-				Path:    fmt.Sprintf("%s.provides", basePath),
+				Level:   "error",
+				Message: "Data loader must expose at least one variable",
+				Path:    fmt.Sprintf("%s.variables", basePath),
 			})
+		}
+
+		for varName, dv := range loader.Variables {
+			if dv.FileVariable == "" {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: "Data loader variable missing file_variable",
+					Path:    fmt.Sprintf("%s.variables.%s.file_variable", basePath, varName),
+				})
+			}
+			if dv.Units == "" {
+				result.Valid = false
+				result.Messages = append(result.Messages, ValidationMessage{
+					Level:   "error",
+					Message: "Data loader variable missing units",
+					Path:    fmt.Sprintf("%s.variables.%s.units", basePath, varName),
+				})
+			}
 		}
 	}
 }
@@ -1064,37 +1084,67 @@ func validateDataLoaderReferencesWithCodes(file *EsmFile, result *StructuralVali
 	for loaderName, loader := range file.DataLoaders {
 		basePath := fmt.Sprintf("$.data_loaders.%s", loaderName)
 
-		if loader.Type == "" {
+		if loader.Kind == "" {
 			result.Valid = false
 			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
-				Path:    fmt.Sprintf("%s.type", basePath),
-				Code:    "missing_loader_type", // Not in spec, but needed for validation
-				Message: "Data loader type is required",
+				Path:    fmt.Sprintf("%s.kind", basePath),
+				Code:    "missing_loader_kind",
+				Message: "Data loader kind is required",
 				Details: map[string]interface{}{
 					"loader": loaderName,
 				},
 			})
 		}
 
-		if loader.LoaderID == "" {
+		if loader.Source.URLTemplate == "" {
 			result.Valid = false
 			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
-				Path:    fmt.Sprintf("%s.loader_id", basePath),
-				Code:    "missing_loader_id", // Not in spec, but needed for validation
-				Message: "Data loader ID is required",
+				Path:    fmt.Sprintf("%s.source.url_template", basePath),
+				Code:    "missing_loader_source_url_template",
+				Message: "Data loader source.url_template is required",
 				Details: map[string]interface{}{
 					"loader": loaderName,
 				},
 			})
 		}
 
-		if len(loader.Provides) == 0 {
-			result.UnitWarnings = append(result.UnitWarnings, UnitWarning{
-				Path:     fmt.Sprintf("%s.provides", basePath),
-				Message:  "Data loader provides no variables",
-				LhsUnits: "unknown",
-				RhsUnits: "unknown",
+		if len(loader.Variables) == 0 {
+			result.Valid = false
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    fmt.Sprintf("%s.variables", basePath),
+				Code:    "missing_loader_variables",
+				Message: "Data loader must expose at least one variable",
+				Details: map[string]interface{}{
+					"loader": loaderName,
+				},
 			})
+		}
+
+		for varName, dv := range loader.Variables {
+			if dv.FileVariable == "" {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.variables.%s.file_variable", basePath, varName),
+					Code:    "missing_loader_variable_file_variable",
+					Message: "Data loader variable missing file_variable",
+					Details: map[string]interface{}{
+						"loader":   loaderName,
+						"variable": varName,
+					},
+				})
+			}
+			if dv.Units == "" {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("%s.variables.%s.units", basePath, varName),
+					Code:    "missing_loader_variable_units",
+					Message: "Data loader variable missing units",
+					Details: map[string]interface{}{
+						"loader":   loaderName,
+						"variable": varName,
+					},
+				})
+			}
 		}
 	}
 }

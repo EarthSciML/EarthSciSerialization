@@ -444,12 +444,14 @@ func TestModelSummary(t *testing.T) {
 		},
 		DataLoaders: map[string]DataLoader{
 			"GEOSFP": {
-				Type:     "gridded_data",
-				LoaderID: "GEOSFP",
-				Provides: map[string]ProvidedVar{
-					"u": {Units: "m/s", Description: strPtr("Eastward wind")},
-					"v": {Units: "m/s", Description: strPtr("Northward wind")},
-					"T": {Units: "K", Description: strPtr("Temperature")},
+				Kind: "grid",
+				Source: DataLoaderSource{
+					URLTemplate: "https://example.com/{date:%Y%m%d}.nc",
+				},
+				Variables: map[string]DataLoaderVariable{
+					"u": {FileVariable: "U", Units: "m/s", Description: strPtr("Eastward wind")},
+					"v": {FileVariable: "V", Units: "m/s", Description: strPtr("Northward wind")},
+					"T": {FileVariable: "T", Units: "K", Description: strPtr("Temperature")},
 				},
 			},
 		},
@@ -509,7 +511,7 @@ func TestModelSummary(t *testing.T) {
 	assert.Contains(t, result, "R2: NO₂ → NO + O₃    rate: jNO₂")
 	assert.Contains(t, result, "Advection (2 parameters, 1 equation)")
 	assert.Contains(t, result, "∂_var/∂t = −u_wind · ∂_var/∂x + −v_wind · ∂_var/∂y")
-	assert.Contains(t, result, "GEOSFP: T, u, v (gridded_data)")
+	assert.Contains(t, result, "GEOSFP: T, u, v (grid)")
 	assert.Contains(t, result, "operator_compose: SimpleOzone + Advection")
 	assert.Contains(t, result, "variable_map: GEOSFP.T → SimpleOzone.T")
 	assert.Contains(t, result, "lon [−130, −100] (Δ0.3125°)")

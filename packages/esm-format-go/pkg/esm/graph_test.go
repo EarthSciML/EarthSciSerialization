@@ -57,10 +57,12 @@ func TestComponentGraphFromFile(t *testing.T) {
 		},
 		DataLoaders: map[string]DataLoader{
 			"TestLoader": {
-				Type:     "gridded_data",
-				LoaderID: "test",
-				Provides: map[string]ProvidedVar{
-					"temp": {Units: "K"},
+				Kind: "grid",
+				Source: DataLoaderSource{
+					URLTemplate: "https://example.com/{date:%Y%m%d}.nc",
+				},
+				Variables: map[string]DataLoaderVariable{
+					"temp": {FileVariable: "T", Units: "K"},
 				},
 			},
 		},
