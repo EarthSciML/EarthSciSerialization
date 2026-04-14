@@ -292,11 +292,10 @@ end
 function generate_data_loader_comment(name::String, data_loader::DataLoader)
     lines = String[]
     push!(lines, "# TODO: Implement data loader $name")
-    push!(lines, "#   Type: $(data_loader.type)")
-    push!(lines, "#   Source: $(data_loader.source)")
-    if !isnothing(data_loader.description)
-        push!(lines, "#   Description: $(data_loader.description)")
-    end
+    push!(lines, "#   Kind: $(data_loader.kind)")
+    push!(lines, "#   Source: $(data_loader.source.url_template)")
+    var_names = sort(collect(keys(data_loader.variables)))
+    push!(lines, "#   Variables: $(join(var_names, ", "))")
     return lines
 end
 

@@ -223,7 +223,9 @@ using EarthSciSerialization
         reaction_system = ReactionSystem(species, reactions, parameters=params)
 
         # DataLoader and Operator (don't have variables, but should be findable)
-        data_loader = DataLoader("file", "met_data_loader", Dict("path" => "/path/to/data.nc"))
+        dl_source = DataLoaderSource("file:///path/to/data_{date:%Y%m%d}.nc")
+        dl_vars = Dict("met_data" => DataLoaderVariable("met_data", "K"))
+        data_loader = DataLoader("grid", dl_source, dl_vars)
         operator = Operator("advection", ["temperature", "wind_u", "wind_v"], description="Wind transport")
 
         esm_file = EsmFile("0.1.0", metadata,

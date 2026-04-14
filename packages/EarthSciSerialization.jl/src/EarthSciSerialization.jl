@@ -46,7 +46,9 @@ export
     EventType, ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger,
     # Data and operator types
-    DataLoader, Operator, CouplingEntry,
+    DataLoader, DataLoaderSource, DataLoaderTemporal, DataLoaderSpatial,
+    DataLoaderVariable, DataLoaderRegridding,
+    Operator, CouplingEntry,
     # Concrete coupling types
     CouplingOperatorCompose, CouplingCouple, CouplingVariableMap,
     CouplingOperatorApply, CouplingCallback, CouplingEvent,

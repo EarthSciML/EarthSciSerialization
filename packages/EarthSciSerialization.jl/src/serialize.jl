@@ -345,30 +345,98 @@ function serialize_reaction_system(rs::ReactionSystem)::Dict{String,Any}
 end
 
 """
+    serialize_data_loader_source(src::DataLoaderSource) -> Dict{String,Any}
+"""
+function serialize_data_loader_source(src::DataLoaderSource)::Dict{String,Any}
+    result = Dict{String,Any}("url_template" => src.url_template)
+    if src.mirrors !== nothing
+        result["mirrors"] = src.mirrors
+    end
+    return result
+end
+
+"""
+    serialize_data_loader_temporal(t::DataLoaderTemporal) -> Dict{String,Any}
+"""
+function serialize_data_loader_temporal(t::DataLoaderTemporal)::Dict{String,Any}
+    result = Dict{String,Any}()
+    t.start !== nothing && (result["start"] = t.start)
+    t.stop !== nothing && (result["end"] = t.stop)
+    t.file_period !== nothing && (result["file_period"] = t.file_period)
+    t.frequency !== nothing && (result["frequency"] = t.frequency)
+    t.records_per_file !== nothing && (result["records_per_file"] = t.records_per_file)
+    t.time_variable !== nothing && (result["time_variable"] = t.time_variable)
+    return result
+end
+
+"""
+    serialize_data_loader_spatial(s::DataLoaderSpatial) -> Dict{String,Any}
+"""
+function serialize_data_loader_spatial(s::DataLoaderSpatial)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "crs" => s.crs,
+        "grid_type" => s.grid_type,
+    )
+    s.staggering !== nothing && (result["staggering"] = s.staggering)
+    s.resolution !== nothing && (result["resolution"] = s.resolution)
+    s.extent !== nothing && (result["extent"] = s.extent)
+    return result
+end
+
+"""
+    serialize_data_loader_variable(v::DataLoaderVariable) -> Dict{String,Any}
+"""
+function serialize_data_loader_variable(v::DataLoaderVariable)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "file_variable" => v.file_variable,
+        "units" => v.units,
+    )
+    if v.unit_conversion !== nothing
+        result["unit_conversion"] = v.unit_conversion isa Number ?
+            v.unit_conversion : serialize_expression(v.unit_conversion)
+    end
+    v.description !== nothing && (result["description"] = v.description)
+    v.reference !== nothing && (result["reference"] = serialize_reference(v.reference))
+    return result
+end
+
+"""
+    serialize_data_loader_regridding(r::DataLoaderRegridding) -> Dict{String,Any}
+"""
+function serialize_data_loader_regridding(r::DataLoaderRegridding)::Dict{String,Any}
+    result = Dict{String,Any}()
+    r.fill_value !== nothing && (result["fill_value"] = r.fill_value)
+    r.extrapolation !== nothing && (result["extrapolation"] = r.extrapolation)
+    return result
+end
+
+"""
     serialize_data_loader(loader::DataLoader) -> Dict{String,Any}
 
-Serialize DataLoader to JSON-compatible format.
+Serialize DataLoader to JSON-compatible format (STAC-like shape).
 """
 function serialize_data_loader(loader::DataLoader)::Dict{String,Any}
     result = Dict{String,Any}(
-        "type" => loader.type,
-        "loader_id" => loader.loader_id,
-        "provides" => loader.provides
+        "kind" => loader.kind,
+        "source" => serialize_data_loader_source(loader.source),
+        "variables" => Dict{String,Any}(
+            k => serialize_data_loader_variable(v) for (k, v) in loader.variables
+        ),
     )
-    if loader.config !== nothing
-        result["config"] = loader.config
+    if loader.temporal !== nothing
+        result["temporal"] = serialize_data_loader_temporal(loader.temporal)
+    end
+    if loader.spatial !== nothing
+        result["spatial"] = serialize_data_loader_spatial(loader.spatial)
+    end
+    if loader.regridding !== nothing
+        result["regridding"] = serialize_data_loader_regridding(loader.regridding)
     end
     if loader.reference !== nothing
         result["reference"] = serialize_reference(loader.reference)
     end
-    if loader.temporal_resolution !== nothing
-        result["temporal_resolution"] = loader.temporal_resolution
-    end
-    if loader.spatial_resolution !== nothing
-        result["spatial_resolution"] = loader.spatial_resolution
-    end
-    if loader.interpolation !== nothing
-        result["interpolation"] = loader.interpolation
+    if loader.metadata !== nothing
+        result["metadata"] = loader.metadata
     end
     return result
 end

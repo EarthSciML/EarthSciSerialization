@@ -472,38 +472,127 @@ struct CouplingEvent <: CouplingEntry
 end
 
 """
+    DataLoaderSource
+
+File discovery configuration for a DataLoader. Describes how to locate data
+files at runtime via a URL template with `{date:<strftime>}`, `{var}`,
+`{sector}`, `{species}`, and custom substitutions. Optional `mirrors` list
+gives ordered fallback templates.
+"""
+struct DataLoaderSource
+    url_template::String
+    mirrors::Union{Vector{String},Nothing}
+
+    DataLoaderSource(url_template::String; mirrors=nothing) =
+        new(url_template, mirrors)
+end
+
+"""
+    DataLoaderTemporal
+
+Temporal coverage and record layout for a DataLoader.
+"""
+struct DataLoaderTemporal
+    start::Union{String,Nothing}
+    stop::Union{String,Nothing}           # field name "end" in JSON (reserved word in Julia)
+    file_period::Union{String,Nothing}
+    frequency::Union{String,Nothing}
+    records_per_file::Union{Int,String,Nothing}  # integer or "auto"
+    time_variable::Union{String,Nothing}
+
+    DataLoaderTemporal(; start=nothing, stop=nothing, file_period=nothing,
+                       frequency=nothing, records_per_file=nothing,
+                       time_variable=nothing) =
+        new(start, stop, file_period, frequency, records_per_file, time_variable)
+end
+
+"""
+    DataLoaderSpatial
+
+Spatial grid description for a DataLoader.
+"""
+struct DataLoaderSpatial
+    crs::String
+    grid_type::String
+    staggering::Union{Dict{String,String},Nothing}
+    resolution::Union{Dict{String,Float64},Nothing}
+    extent::Union{Dict{String,Vector{Float64}},Nothing}
+
+    DataLoaderSpatial(crs::String, grid_type::String;
+                      staggering=nothing, resolution=nothing, extent=nothing) =
+        new(crs, grid_type, staggering, resolution, extent)
+end
+
+"""
+    DataLoaderVariable
+
+A variable exposed by a DataLoader, mapped from a source-file variable.
+`unit_conversion` may be a numeric factor or an Expression AST.
+"""
+struct DataLoaderVariable
+    file_variable::String
+    units::String
+    unit_conversion::Union{Float64,Expr,Nothing}
+    description::Union{String,Nothing}
+    reference::Union{Reference,Nothing}
+
+    DataLoaderVariable(file_variable::String, units::String;
+                       unit_conversion=nothing,
+                       description=nothing,
+                       reference=nothing) =
+        new(file_variable, units, unit_conversion, description, reference)
+end
+
+"""
+    DataLoaderRegridding
+
+Structural regridding configuration for a DataLoader.
+"""
+struct DataLoaderRegridding
+    fill_value::Union{Float64,Nothing}
+    extrapolation::Union{String,Nothing}  # "clamp" | "nan" | "periodic"
+
+    DataLoaderRegridding(; fill_value=nothing, extrapolation=nothing) =
+        new(fill_value, extrapolation)
+end
+
+"""
     DataLoader
 
-External data source registration (by reference).
-Runtime-specific data loading functionality.
+Generic, runtime-agnostic description of an external data source. Carries
+enough structural information to locate files, map timestamps to files,
+describe spatial/variable semantics, and regrid — rather than pointing at a
+runtime handler. Authentication and algorithm-specific tuning are runtime-only
+and not part of the schema.
+
+Fields:
+- `kind`: "grid" | "points" | "static" (structural kind; scientific role goes in `metadata.tags`)
+- `source`: `DataLoaderSource` with url_template + optional mirrors
+- `temporal`: optional `DataLoaderTemporal`
+- `spatial`: optional `DataLoaderSpatial`
+- `variables`: schema-level variable name → `DataLoaderVariable` (minimum one)
+- `regridding`: optional `DataLoaderRegridding`
+- `reference`: optional academic/data-source citation
+- `metadata`: optional free-form map (conventionally carries a `tags` array)
 """
 struct DataLoader
-    type::String
-    loader_id::String
-    config::Union{Dict{String,Any},Nothing}
+    kind::String
+    source::DataLoaderSource
+    temporal::Union{DataLoaderTemporal,Nothing}
+    spatial::Union{DataLoaderSpatial,Nothing}
+    variables::Dict{String,DataLoaderVariable}
+    regridding::Union{DataLoaderRegridding,Nothing}
     reference::Union{Reference,Nothing}
-    provides::Dict{String,Any}
-    temporal_resolution::Union{String,Nothing}
-    spatial_resolution::Union{Dict{String,Any},Nothing}
-    interpolation::Union{String,Nothing}
+    metadata::Union{Dict{String,Any},Nothing}
 
-    # Constructor with optional parameters
-    DataLoader(type::String, loader_id::String, provides::Dict{String,Any};
-               config=nothing,
+    DataLoader(kind::String, source::DataLoaderSource,
+               variables::Dict{String,DataLoaderVariable};
+               temporal=nothing,
+               spatial=nothing,
+               regridding=nothing,
                reference=nothing,
-               temporal_resolution=nothing,
-               spatial_resolution=nothing,
-               interpolation=nothing) =
-        new(type, loader_id, config, reference, provides, temporal_resolution, spatial_resolution, interpolation)
-
-    # Convenience overload that accepts any AbstractDict and widens the value
-    # type to Any — tests/library consumers frequently build Dict{String,String}
-    # or similar homogeneous dicts.
-    DataLoader(type::String, loader_id::String, provides::AbstractDict;
-               kwargs...) =
-        DataLoader(type, loader_id,
-                   Dict{String,Any}(string(k) => v for (k, v) in provides);
-                   kwargs...)
+               metadata=nothing) =
+        new(kind, source, temporal, spatial, variables, regridding, reference, metadata)
 end
 
 """

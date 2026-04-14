@@ -194,7 +194,7 @@ function component_graph(file::EsmFile)::Graph{ComponentNode, CouplingEdge}
                 name,
                 name,
                 "data_loader",
-                loader.description,  # DataLoader has description field
+                nothing,  # DataLoader has no description; scientific role lives in metadata.tags
                 loader,
                 metadata
             )

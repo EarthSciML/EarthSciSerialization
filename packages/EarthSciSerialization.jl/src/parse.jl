@@ -521,27 +521,115 @@ function coerce_parameter(name::String, data::Any)::Parameter
 end
 
 """
+    coerce_data_loader_source(data::Any) -> DataLoaderSource
+
+Coerce JSON data into a DataLoaderSource.
+"""
+function coerce_data_loader_source(data::Any)::DataLoaderSource
+    url_template = string(data.url_template)
+    mirrors = haskey(data, :mirrors) && data.mirrors !== nothing ?
+              [string(m) for m in data.mirrors] : nothing
+    return DataLoaderSource(url_template; mirrors=mirrors)
+end
+
+"""
+    coerce_data_loader_temporal(data::Any) -> DataLoaderTemporal
+"""
+function coerce_data_loader_temporal(data::Any)::DataLoaderTemporal
+    start = haskey(data, :start) && data.start !== nothing ? string(data.start) : nothing
+    stop = haskey(data, :end) && data[:end] !== nothing ? string(data[:end]) : nothing
+    file_period = haskey(data, :file_period) && data.file_period !== nothing ? string(data.file_period) : nothing
+    frequency = haskey(data, :frequency) && data.frequency !== nothing ? string(data.frequency) : nothing
+    records_per_file = if haskey(data, :records_per_file) && data.records_per_file !== nothing
+        v = data.records_per_file
+        v isa Number ? Int(v) : string(v)
+    else
+        nothing
+    end
+    time_variable = haskey(data, :time_variable) && data.time_variable !== nothing ? string(data.time_variable) : nothing
+    return DataLoaderTemporal(; start=start, stop=stop, file_period=file_period,
+                              frequency=frequency, records_per_file=records_per_file,
+                              time_variable=time_variable)
+end
+
+"""
+    coerce_data_loader_spatial(data::Any) -> DataLoaderSpatial
+"""
+function coerce_data_loader_spatial(data::Any)::DataLoaderSpatial
+    crs = string(data.crs)
+    grid_type = string(data.grid_type)
+    staggering = haskey(data, :staggering) && data.staggering !== nothing ?
+                 Dict{String,String}(string(k) => string(v) for (k, v) in pairs(data.staggering)) : nothing
+    resolution = haskey(data, :resolution) && data.resolution !== nothing ?
+                 Dict{String,Float64}(string(k) => Float64(v) for (k, v) in pairs(data.resolution)) : nothing
+    extent = haskey(data, :extent) && data.extent !== nothing ?
+             Dict{String,Vector{Float64}}(string(k) => [Float64(x) for x in v] for (k, v) in pairs(data.extent)) : nothing
+    return DataLoaderSpatial(crs, grid_type;
+                             staggering=staggering,
+                             resolution=resolution,
+                             extent=extent)
+end
+
+"""
+    coerce_data_loader_variable(data::Any) -> DataLoaderVariable
+"""
+function coerce_data_loader_variable(data::Any)::DataLoaderVariable
+    file_variable = string(data.file_variable)
+    units = string(data.units)
+    unit_conversion = if haskey(data, :unit_conversion) && data.unit_conversion !== nothing
+        v = data.unit_conversion
+        v isa Number ? Float64(v) : parse_expression(v)
+    else
+        nothing
+    end
+    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    reference = haskey(data, :reference) && data.reference !== nothing ? coerce_reference(data.reference) : nothing
+    return DataLoaderVariable(file_variable, units;
+                              unit_conversion=unit_conversion,
+                              description=description,
+                              reference=reference)
+end
+
+"""
+    coerce_data_loader_regridding(data::Any) -> DataLoaderRegridding
+"""
+function coerce_data_loader_regridding(data::Any)::DataLoaderRegridding
+    fill_value = haskey(data, :fill_value) && data.fill_value !== nothing ? Float64(data.fill_value) : nothing
+    extrapolation = haskey(data, :extrapolation) && data.extrapolation !== nothing ? string(data.extrapolation) : nothing
+    return DataLoaderRegridding(; fill_value=fill_value, extrapolation=extrapolation)
+end
+
+"""
     coerce_data_loader(data::Any) -> DataLoader
 
-Coerce JSON data into DataLoader type.
+Coerce JSON data into the STAC-like DataLoader type.
 """
 function coerce_data_loader(data::Any)::DataLoader
-    loader_type = string(data.type)
-    loader_id = string(data.loader_id)
+    kind = string(data.kind)
+    source = coerce_data_loader_source(data.source)
 
-    config = haskey(data, :config) ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.config)) : nothing
-    reference = haskey(data, :reference) && data.reference !== nothing ? coerce_reference(data.reference) : nothing
-    provides = haskey(data, :provides) ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.provides)) : Dict{String,Any}()
-    temporal_resolution = haskey(data, :temporal_resolution) && data.temporal_resolution !== nothing ? string(data.temporal_resolution) : nothing
-    spatial_resolution = haskey(data, :spatial_resolution) && data.spatial_resolution !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.spatial_resolution)) : nothing
-    interpolation = haskey(data, :interpolation) && data.interpolation !== nothing ? string(data.interpolation) : nothing
+    temporal = haskey(data, :temporal) && data.temporal !== nothing ?
+               coerce_data_loader_temporal(data.temporal) : nothing
+    spatial = haskey(data, :spatial) && data.spatial !== nothing ?
+              coerce_data_loader_spatial(data.spatial) : nothing
 
-    return DataLoader(loader_type, loader_id, provides,
-                     config=config,
-                     reference=reference,
-                     temporal_resolution=temporal_resolution,
-                     spatial_resolution=spatial_resolution,
-                     interpolation=interpolation)
+    variables = Dict{String,DataLoaderVariable}(
+        string(k) => coerce_data_loader_variable(v) for (k, v) in pairs(data.variables)
+    )
+
+    regridding = haskey(data, :regridding) && data.regridding !== nothing ?
+                 coerce_data_loader_regridding(data.regridding) : nothing
+    reference = haskey(data, :reference) && data.reference !== nothing ?
+                coerce_reference(data.reference) : nothing
+    metadata = haskey(data, :metadata) && data.metadata !== nothing ?
+               Dict{String,Any}(string(k) => v for (k, v) in pairs(data.metadata)) : nothing
+
+    return DataLoader(kind, source, variables;
+                      temporal=temporal,
+                      spatial=spatial,
+                      regridding=regridding,
+                      reference=reference,
+                      metadata=metadata)
 end
 
 """
