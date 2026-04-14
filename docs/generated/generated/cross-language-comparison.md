@@ -254,13 +254,6 @@ def __init__(self, esm_file: EsmFile):
 
 **Python:**
 ```python
-def __init__(self, data_loader: DataLoader):
-```
-
-> Initialize CSV loader with DataLoader configuration.
-
-**Python:**
-```python
 def __init__(self, id: str, label: str, component_type: str, **metadata):
 ```
 
@@ -300,20 +293,6 @@ def __init__(self, esm_file: EsmFile):
 
 **Python:**
 ```python
-def __init__(self, data_loader: DataLoader):
-```
-
-> Initialize callback loader with DataLoader configuration.
-
-**Python:**
-```python
-def __init__(self, data_loader: DataLoader):
-```
-
-> Initialize gridded data loader with DataLoader configuration.
-
-**Python:**
-```python
 def __init__(self, esm_file: EsmFile):
 ```
 
@@ -325,11 +304,6 @@ def __init__(self):
 **Python:**
 ```python
 def __init__(self, data):
-```
-
-**Python:**
-```python
-def __init__(self, data_loader: DataLoader):
 ```
 
 **Python:**
@@ -660,24 +634,6 @@ export function contains(expr: Expr, varName: string): boolean {
 @param varName Variable name to look for
 @returns True if the variable appears in the expression
 /.
-
----
-
-### demonstrate_error_handling
-
-**Python:**
-```python
-def demonstrate_error_handling():
-```
-
-> Demonstrate error handling in NetCDF loading.
-
-**Python:**
-```python
-def demonstrate_error_handling():
-```
-
-> Demonstrate error handling capabilities.
 
 ---
 
@@ -1031,13 +987,6 @@ function load(io::IO)::EsmFile
 
 Load and parse an ESM file from an IO stream.
 
-**Python:**
-```python
-def load(self):
-```
-
-> Load CSV data (simplified implementation).
-
 **Typescript:**
 ```typescript
 export function load(input: string | object): EsmFile {
@@ -1093,21 +1042,7 @@ def main():
 def main():
 ```
 
-> Demonstrate data loader registry functionality.
-
-**Python:**
-```python
-def main():
-```
-
 > Main demonstration function.
-
-**Python:**
-```python
-def main():
-```
-
-> Demonstrate JSON loader functionality.
 
 **Python:**
 ```python
@@ -1121,21 +1056,7 @@ def main():
 def main():
 ```
 
-> Run all database loader examples.
-
-**Python:**
-```python
-def main():
-```
-
 > Run all demonstrations.
-
-**Python:**
-```python
-def main():
-```
-
-> Run all examples.
 
 **Python:**
 ```python
@@ -2347,7 +2268,7 @@ External data source registration (by reference).
 class DataLoader:
 ```
 
-> Configuration for loading external data.
+> Generic, runtime-agnostic description of an external data source.
 
 **Typescript:**
 ```typescript
@@ -2355,6 +2276,96 @@ export interface DataLoader {
 ```
 
 > A generic, runtime-agnostic description of an external data source.
+
+---
+
+### DataLoaderRegridding
+
+**Python:**
+```python
+class DataLoaderRegridding:
+```
+
+> Structural regridding configuration for a data loader.
+
+**Typescript:**
+```typescript
+export interface DataLoaderRegridding {
+```
+
+> Structural regridding configuration.
+
+---
+
+### DataLoaderSource
+
+**Python:**
+```python
+class DataLoaderSource:
+```
+
+> File discovery configuration for a data loader.
+
+**Typescript:**
+```typescript
+export interface DataLoaderSource {
+```
+
+> File discovery configuration.
+
+---
+
+### DataLoaderSpatial
+
+**Python:**
+```python
+class DataLoaderSpatial:
+```
+
+> Spatial grid description for a data source.
+
+**Typescript:**
+```typescript
+export interface DataLoaderSpatial {
+```
+
+> Spatial grid description for a data source.
+
+---
+
+### DataLoaderTemporal
+
+**Python:**
+```python
+class DataLoaderTemporal:
+```
+
+> Temporal coverage and record layout for a data source.
+
+**Typescript:**
+```typescript
+export interface DataLoaderTemporal {
+```
+
+> Temporal coverage and record layout for a data source.
+
+---
+
+### DataLoaderVariable
+
+**Python:**
+```python
+class DataLoaderVariable:
+```
+
+> A variable exposed by a data loader, mapped from a source-file variable.
+
+**Typescript:**
+```typescript
+export interface DataLoaderVariable {
+```
+
+> A variable exposed by a data loader, mapped from a source-file variable.
 
 ---
 

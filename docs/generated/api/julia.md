@@ -3597,7 +3597,6 @@ load(...)
 ```
 
 **Available in other languages:**
-- [Python](python.md#load)
 - [Typescript](typescript.md#load)
 
 ---
@@ -3619,7 +3618,6 @@ Automatically resolves any subsystem references (local or remote) relative
 to the directory containing the file.
 
 **Available in other languages:**
-- [Python](python.md#load)
 - [Typescript](typescript.md#load)
 
 ---
@@ -3639,7 +3637,6 @@ load(io::IO) -> EsmFile
 Load and parse an ESM file from an IO stream.
 
 **Available in other languages:**
-- [Python](python.md#load)
 - [Typescript](typescript.md#load)
 
 ---

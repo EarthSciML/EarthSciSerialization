@@ -1102,7 +1102,6 @@ Load an ESM file from a JSON string or pre-parsed object
 - [Julia](julia.md#load)
 - [Julia](julia.md#load)
 - [Julia](julia.md#load)
-- [Python](python.md#load)
 
 ---
 
@@ -2100,6 +2099,9 @@ export interface DataLoaderRegridding {
 Structural regridding configuration. Algorithm-specific tuning parameters are runtime-side and not in the schema.
 /
 
+**Available in other languages:**
+- [Python](python.md#dataloaderregridding)
+
 ---
 
 ### DataLoaderSource
@@ -2115,6 +2117,9 @@ export interface DataLoaderSource {
 File discovery configuration. Describes how to locate data files at runtime via URL templates with date/variable substitutions.
 /
 
+**Available in other languages:**
+- [Python](python.md#dataloadersource)
+
 ---
 
 ### DataLoaderSpatial
@@ -2129,6 +2134,9 @@ export interface DataLoaderSpatial {
 **Description:**
 Spatial grid description for a data source.
 /
+
+**Available in other languages:**
+- [Python](python.md#dataloaderspatial)
 
 ---
 
@@ -2160,6 +2168,9 @@ export interface DataLoaderTemporal {
 Temporal coverage and record layout for a data source.
 /
 
+**Available in other languages:**
+- [Python](python.md#dataloadertemporal)
+
 ---
 
 ### DataLoaderVariable
@@ -2174,6 +2185,9 @@ export interface DataLoaderVariable {
 **Description:**
 A variable exposed by a data loader, mapped from a source-file variable.
 /
+
+**Available in other languages:**
+- [Python](python.md#dataloadervariable)
 
 ---
 
