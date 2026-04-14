@@ -146,21 +146,57 @@ Examples:
 }
 ```
 
-#### 2.2.5 Simulation Tests (`tests/simulation/`)
+#### 2.2.5 Simulation Tests (inline in `.esm` files)
 
-**Purpose:** Verify numerical simulation consistency (Julia and Python only).
+**Purpose:** Verify numerical simulation consistency (for runtime-capable implementations).
+
+Simulation tests are carried **inline** inside each `Model` and `ReactionSystem` under a `tests` array field. Reference trajectories are no longer stored as a parallel filesystem hierarchy — each test is a small run specification plus a handful of scalar `(variable, time, expected)` assertion points that travel with the model in the `.esm` document itself.
+
+See `esm-spec.md` Sections 6.6 (tests) and 6.7 (examples) for the full schema.
 
 **Structure:**
-- `*.esm` files with simulation test cases
-- `expected/` subdirectory with reference solution CSV files
+- Component-level tests live at `models.<name>.tests[]` and `reaction_systems.<name>.tests[]`.
+- Each test object contains `id`, `time_span`, `assertions[]`, and optional `description`, `initial_conditions`, `parameter_overrides`, and `tolerance`.
+- Assertions are per-`(variable, time)` scalar checks against an `expected` value, with flexible multi-level tolerance (per-assertion → per-test → per-model → runtime default).
+- Tests are **per-component** — they exercise a single model or reaction system in isolation. Cross-system / coupled tests are out of scope for this feature.
+- Because a test lives inside its parent component, the target model is implicit from document location; there is no `model_ref` field.
 
-**Expected CSV format:**
-```csv
-t,O3,NO,NO2
-0.0,4.0e-08,1.0e-10,1.0e-09
-3600.0,3.95e-08,1.02e-10,1.05e-09
-7200.0,3.91e-08,1.04e-10,1.09e-09
+**Example (abbreviated):**
+
+```json
+{
+  "models": {
+    "AtmosphericChemistry": {
+      "variables": { "...": "..." },
+      "equations": [ "..." ],
+      "tolerance": { "abs": 1e-06, "rel": 1e-05 },
+      "tests": [
+        {
+          "id": "photostationary_approach",
+          "description": "Approach to photostationary state from NO=10, NO2=20, O3=50 ppbv.",
+          "initial_conditions": { "NO": 10.0, "NO2": 20.0, "O3": 50.0 },
+          "parameter_overrides": { "j_NO2": 0.008, "k_NO_O3": 1.8e-5 },
+          "time_span": { "start": 0.0, "end": 3600.0 },
+          "assertions": [
+            { "variable": "NO",  "time":    0.0, "expected": 10.0 },
+            { "variable": "NO",  "time": 1140.0, "expected": 26.114863 },
+            { "variable": "O3",  "time": 3600.0, "expected": 66.115137,
+              "tolerance": { "abs": 1e-4 } }
+          ]
+        }
+      ]
+    }
+  }
+}
 ```
+
+**Why inline.** Reference CSVs under `expected/` live far from their parent `.esm` and must be kept in lock-step with any change to variables, parameters, or initial conditions. Inline tests make the run configuration and its expected outputs a single editable unit and let a parser verify test structural correctness at load time using the normal JSON schema. Tests are intentionally small (a handful of assertion points) — full trajectories belong in implementation-side regression suites, not in the portable document format.
+
+**Runtime tolerance default:** when no `tolerance` is given at the assertion, test, or component level, conforming runtimes should use `rel = 1e-6` and no `abs` bound. If both `abs` and `rel` are given, passing either bound counts as a pass (standard numerical convention).
+
+**Inline examples.** Alongside `tests`, each `Model` and `ReactionSystem` may carry an `examples` array — illustrative run configurations (optionally including Cartesian parameter sweeps) paired with structural plot specifications (line, scatter, heatmap). Examples produce trajectories and plots, not pass/fail outcomes. See `esm-spec.md` Section 6.7.
+
+> **Note:** Earlier versions of this document described filesystem-based simulation tests (`tests/simulation/*.esm` + `tests/simulation/expected/*.csv`). That convention has been retired. The existing `tests/simulation/*.esm` fixtures now carry their reference behavior inline as `tests[]` arrays; the `expected/` CSV directory has been removed. Validation-error fixtures under `tests/invalid/` are unrelated to simulation tests and are unaffected by this change.
 
 ### 2.3 Test Fixture Metadata
 

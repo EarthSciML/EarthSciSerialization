@@ -76,6 +76,29 @@ export type DiscreteEvent1 =
       [k: string]: unknown;
     };
 /**
+ * One axis of a parameter sweep: exactly one of values or range must be given.
+ */
+export type SweepDimension = {
+  /**
+   * Name of the parameter to vary (local to this component).
+   */
+  parameter: string;
+  /**
+   * Enumerated values to use for this axis.
+   *
+   * @minItems 1
+   */
+  values?: [number, ...number[]];
+  range?: SweepRange;
+} & SweepDimension1;
+export type SweepDimension1 =
+  | {
+      [k: string]: unknown;
+    }
+  | {
+      [k: string]: unknown;
+    };
+/**
  * A single coupling rule connecting models, reaction systems, data loaders, or operators.
  */
 export type CouplingEntry =
@@ -186,7 +209,7 @@ export interface ESMFormat2 {
   /**
    * Format version string (semver).
    */
-  esm: "0.1.0";
+  esm: string;
   metadata: Metadata;
   /**
    * ODE-based model components, keyed by unique identifier.
@@ -216,7 +239,18 @@ export interface ESMFormat2 {
    * Composition and coupling rules.
    */
   coupling?: CouplingEntry[];
-  domain?: Domain;
+  /**
+   * Named spatial/temporal domain specifications.
+   */
+  domains?: {
+    [k: string]: Domain;
+  };
+  /**
+   * Geometric connections between domains of different dimensionality.
+   */
+  interfaces?: {
+    [k: string]: Interface;
+  };
 }
 /**
  * Authorship, provenance, and description.
@@ -254,7 +288,11 @@ export interface Reference {
  */
 export interface Model {
   /**
-   * Coupling type name for couple dispatch.
+   * Name of a domain from the domains section. Omit or set to null for 0D (non-spatial) models.
+   */
+  domain?: string | null;
+  /**
+   * Coupling type name. Informational label identifying this system's role in coupling.
    */
   coupletype?: string | null;
   reference?: Reference;
@@ -271,11 +309,20 @@ export interface Model {
   discrete_events?: DiscreteEvent[];
   continuous_events?: ContinuousEvent[];
   /**
-   * Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: "ParentModel.ChildModel.var".
+   * Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: "ParentModel.ChildModel.var". Each subsystem can be defined inline or included by reference via a local file path or URL.
    */
   subsystems?: {
-    [k: string]: Model;
+    [k: string]: Model | SubsystemRef;
   };
+  tolerance?: Tolerance;
+  /**
+   * Inline validation tests that exercise this model in isolation. Each test specifies initial conditions, parameter overrides, a time span, and scalar assertions at specific (variable, time) points.
+   */
+  tests?: Test[];
+  /**
+   * Inline illustrative examples of how to run this model. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.
+   */
+  examples?: Example[];
 }
 /**
  * A variable in an ODE model.
@@ -432,11 +479,245 @@ export interface ContinuousEvent {
   description?: string;
 }
 /**
+ * A reference to an external ESM file containing a model or reaction system definition. The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file.
+ */
+export interface SubsystemRef {
+  /**
+   * Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model or reaction system, which is used as the subsystem definition.
+   */
+  ref: string;
+}
+/**
+ * Model-level default numerical tolerance for tests, used when a test or assertion does not provide its own.
+ */
+export interface Tolerance {
+  /**
+   * Absolute tolerance: |actual - expected| <= abs.
+   */
+  abs?: number;
+  /**
+   * Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel.
+   */
+  rel?: number;
+}
+/**
+ * An inline validation test for the enclosing model or reaction system. Defines the run configuration (initial conditions, parameter overrides, time span) and the scalar assertions that must hold.
+ */
+export interface Test {
+  /**
+   * Identifier unique within this component's tests array.
+   */
+  id: string;
+  /**
+   * Human-readable description of what this test verifies.
+   */
+  description?: string;
+  /**
+   * Initial-value overrides for state variables, keyed by variable name (local to this component). Values not listed fall back to the variable's declared default.
+   */
+  initial_conditions?: {
+    [k: string]: number;
+  };
+  /**
+   * Parameter overrides, keyed by parameter name (local to this component). Values not listed fall back to the parameter's declared default.
+   */
+  parameter_overrides?: {
+    [k: string]: number;
+  };
+  time_span: TimeSpan;
+  tolerance?: Tolerance1;
+  /**
+   * Scalar (variable, time) checks that define the pass/fail criterion of the test.
+   *
+   * @minItems 1
+   */
+  assertions: [Assertion, ...Assertion[]];
+}
+/**
+ * Simulation time interval expressed in the component's time units.
+ */
+export interface TimeSpan {
+  start: number;
+  end: number;
+}
+/**
+ * Test-level default tolerance applied to all assertions in this test that do not override it.
+ */
+export interface Tolerance1 {
+  /**
+   * Absolute tolerance: |actual - expected| <= abs.
+   */
+  abs?: number;
+  /**
+   * Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel.
+   */
+  rel?: number;
+}
+/**
+ * A single scalar check at a (variable, time) point.
+ */
+export interface Assertion {
+  /**
+   * Name of the variable or species to check. Use the local name (e.g., "O3") or a scoped reference relative to this component (e.g., "subsystem.X").
+   */
+  variable: string;
+  /**
+   * Simulation time at which to evaluate the assertion. Must lie within [time_span.start, time_span.end].
+   */
+  time: number;
+  /**
+   * Expected scalar value of the variable at the given time.
+   */
+  expected: number;
+  tolerance?: Tolerance2;
+}
+/**
+ * Per-assertion tolerance override. If present, this takes precedence over the test-level and model-level defaults.
+ */
+export interface Tolerance2 {
+  /**
+   * Absolute tolerance: |actual - expected| <= abs.
+   */
+  abs?: number;
+  /**
+   * Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel.
+   */
+  rel?: number;
+}
+/**
+ * An inline illustrative example of how to run the enclosing component. Defines the run configuration and one or more plots derived from the result.
+ */
+export interface Example {
+  /**
+   * Identifier unique within this component's examples array.
+   */
+  id: string;
+  /**
+   * Human-readable description of what this example illustrates.
+   */
+  description?: string;
+  /**
+   * Initial conditions for state variables. Reuses the top-level InitialConditions $def (constant / per_variable / from_file).
+   */
+  initial_state?:
+    | {
+        type: "constant";
+        value: number;
+      }
+    | {
+        type: "per_variable";
+        values: {
+          [k: string]: number;
+        };
+      }
+    | {
+        type: "from_file";
+        path: string;
+        format?: string;
+      };
+  /**
+   * Parameter overrides, keyed by parameter name (local to this component).
+   */
+  parameters?: {
+    [k: string]: number;
+  };
+  time_span: TimeSpan;
+  parameter_sweep?: ParameterSweep;
+  /**
+   * Plot specifications derived from this example's run(s).
+   */
+  plots?: Plot[];
+}
+/**
+ * Optional parameter sweep. When present, the example represents a family of runs (one per Cartesian combination) rather than a single trajectory.
+ */
+export interface ParameterSweep {
+  /**
+   * Sweep combination strategy. Currently only cartesian (full Cartesian product) is supported.
+   */
+  type: "cartesian";
+  /**
+   * @minItems 1
+   */
+  dimensions: [SweepDimension, ...SweepDimension1[]];
+}
+/**
+ * Generated range; mutually exclusive with values.
+ */
+export interface SweepRange {
+  start: number;
+  stop: number;
+  count: number;
+  /**
+   * Spacing: linear = evenly spaced between start and stop; log = logarithmically spaced (start and stop must be strictly positive).
+   */
+  scale?: "linear" | "log";
+}
+/**
+ * A plot specification associated with an example. Only structural information is recorded — axes, series selection, and value reductions. Styling (colors, fonts, legends, themes) is the viewer's concern.
+ */
+export interface Plot {
+  /**
+   * Identifier unique within this example's plots array.
+   */
+  id: string;
+  type: "line" | "scatter" | "heatmap";
+  description?: string;
+  x: PlotAxis;
+  y: PlotAxis;
+  value?: PlotValue;
+  /**
+   * Multiple named series for line or scatter plots. Ignored for heatmap.
+   */
+  series?: PlotSeries[];
+}
+/**
+ * Axis specification: any state variable, observed variable, parameter name, or swept parameter may be used.
+ */
+export interface PlotAxis {
+  /**
+   * Variable or parameter name (local to this component or scoped within a subsystem).
+   */
+  variable: string;
+  /**
+   * Human-readable axis label. Viewers should fall back to the variable name if omitted.
+   */
+  label?: string;
+}
+/**
+ * Required for heatmap; defines the color channel. Ignored for line/scatter.
+ */
+export interface PlotValue {
+  /**
+   * Variable whose trajectory is reduced to a scalar per run.
+   */
+  variable: string;
+  /**
+   * Specific simulation time at which to sample the variable.
+   */
+  at_time?: number;
+  /**
+   * Time-reduction applied to the trajectory: max/min/mean over the run, time integral, or the final value at time_span.end.
+   */
+  reduce?: "max" | "min" | "mean" | "integral" | "final";
+}
+/**
+ * A single named series for multi-series line or scatter plots.
+ */
+export interface PlotSeries {
+  name: string;
+  variable: string;
+}
+/**
  * A reaction network — declarative representation of chemical or biological reactions.
  */
 export interface ReactionSystem {
   /**
-   * Coupling type name for couple dispatch.
+   * Name of a domain from the domains section. Omit or set to null for 0D (non-spatial) systems.
+   */
+  domain?: string | null;
+  /**
+   * Coupling type name. Informational label identifying this system's role in coupling.
    */
   coupletype?: string | null;
   reference?: Reference;
@@ -465,11 +746,20 @@ export interface ReactionSystem {
   discrete_events?: DiscreteEvent1[];
   continuous_events?: ContinuousEvent[];
   /**
-   * Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: "ParentSystem.ChildSystem.species".
+   * Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: "ParentSystem.ChildSystem.species". Each subsystem can be defined inline or included by reference via a local file path or URL.
    */
   subsystems?: {
-    [k: string]: ReactionSystem;
+    [k: string]: ReactionSystem | SubsystemRef;
   };
+  tolerance?: Tolerance3;
+  /**
+   * Inline validation tests that exercise this reaction system in isolation. Each test specifies initial conditions, parameter overrides, a time span, and scalar assertions at specific (species/variable, time) points.
+   */
+  tests?: Test[];
+  /**
+   * Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.
+   */
+  examples?: Example[];
 }
 /**
  * A reactive species in a reaction system.
@@ -516,6 +806,19 @@ export interface Reaction {
 export interface StoichiometryEntry {
   species: string;
   stoichiometry: number;
+}
+/**
+ * System-level default numerical tolerance for tests, used when a test or assertion does not provide its own.
+ */
+export interface Tolerance3 {
+  /**
+   * Absolute tolerance: |actual - expected| <= abs.
+   */
+  abs?: number;
+  /**
+   * Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel.
+   */
+  rel?: number;
 }
 /**
  * An external data source registration. Runtime-specific; registered by type and loader_id.
@@ -607,10 +910,18 @@ export interface CouplingOperatorCompose {
   translate?: {
     [k: string]: TranslateTarget;
   };
+  /**
+   * Name of an interface from the interfaces section for cross-domain coupling.
+   */
+  interface?: string;
+  /**
+   * Strategy for mapping between 0D and spatial systems.
+   */
+  lifting?: "pointwise" | "broadcast" | "mean" | "integral";
   description?: string;
 }
 /**
- * Bi-directional coupling via connector equations.
+ * Bi-directional coupling via explicit ConnectorSystem equations.
  */
 export interface CouplingCouple {
   type: "couple";
@@ -625,6 +936,14 @@ export interface CouplingCouple {
      */
     equations: [ConnectorEquation, ...ConnectorEquation[]];
   };
+  /**
+   * Name of an interface from the interfaces section for cross-domain coupling.
+   */
+  interface?: string;
+  /**
+   * Strategy for mapping between 0D and spatial systems.
+   */
+  lifting?: "pointwise" | "broadcast" | "mean" | "integral";
   description?: string;
 }
 /**
@@ -669,6 +988,14 @@ export interface CouplingVariableMap {
    * Conversion factor (for conversion_factor transform).
    */
   factor?: number;
+  /**
+   * Name of an interface from the interfaces section for cross-domain coupling.
+   */
+  interface?: string;
+  /**
+   * Strategy for mapping between 0D and spatial systems.
+   */
+  lifting?: "pointwise" | "broadcast" | "mean" | "integral";
   description?: string;
 }
 /**
@@ -804,4 +1131,54 @@ export interface BoundaryCondition {
    * Robin BC RHS value γ in αu + β∂u/∂n = γ.
    */
   robin_gamma?: number;
+}
+/**
+ * Geometric connection between two domains of potentially different dimensionality.
+ */
+export interface Interface {
+  description?: string;
+  /**
+   * The two domains connected by this interface.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  domains: [string, string];
+  /**
+   * Specifies shared dimensions and constraints.
+   */
+  dimension_mapping: {
+    /**
+     * Mapping of corresponding dimensions across domains, keyed by 'domain.dimension'.
+     */
+    shared?: {
+      [k: string]: string;
+    };
+    /**
+     * Non-shared dimensions fixed at the interface, keyed by 'domain.dimension'.
+     */
+    constraints?: {
+      [k: string]: InterfaceConstraint;
+    };
+  };
+  /**
+   * Regridding strategy when shared dimensions differ in resolution.
+   */
+  regridding?: {
+    /**
+     * Interpolation method for regridding.
+     */
+    method?: "bilinear" | "conservative" | "nearest" | "patch";
+    description?: string;
+  };
+}
+/**
+ * Constraint on a non-shared dimension at the interface.
+ */
+export interface InterfaceConstraint {
+  /**
+   * Where the dimension is constrained: 'min', 'max', 'boundary', or a numeric coordinate.
+   */
+  value: ("min" | "max" | "boundary") | number;
+  description?: string;
 }

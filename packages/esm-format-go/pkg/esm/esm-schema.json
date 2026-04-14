@@ -422,6 +422,20 @@
               { "$ref": "#/$defs/SubsystemRef" }
             ]
           }
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "Model-level default numerical tolerance for tests, used when a test or assertion does not provide its own."
+        },
+        "tests": {
+          "type": "array",
+          "description": "Inline validation tests that exercise this model in isolation. Each test specifies initial conditions, parameter overrides, a time span, and scalar assertions at specific (variable, time) points.",
+          "items": { "$ref": "#/$defs/Test" }
+        },
+        "examples": {
+          "type": "array",
+          "description": "Inline illustrative examples of how to run this model. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
+          "items": { "$ref": "#/$defs/Example" }
         }
       }
     },
@@ -575,6 +589,297 @@
               { "$ref": "#/$defs/SubsystemRef" }
             ]
           }
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "System-level default numerical tolerance for tests, used when a test or assertion does not provide its own."
+        },
+        "tests": {
+          "type": "array",
+          "description": "Inline validation tests that exercise this reaction system in isolation. Each test specifies initial conditions, parameter overrides, a time span, and scalar assertions at specific (species/variable, time) points.",
+          "items": { "$ref": "#/$defs/Test" }
+        },
+        "examples": {
+          "type": "array",
+          "description": "Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
+          "items": { "$ref": "#/$defs/Example" }
+        }
+      }
+    },
+
+    "Tolerance": {
+      "type": "object",
+      "description": "Numerical comparison tolerance. Any of abs/rel may be specified. If both are given, an assertion passes when either bound is satisfied: |actual - expected| <= abs  OR  |actual - expected| / max(|expected|, epsilon) <= rel.",
+      "additionalProperties": false,
+      "properties": {
+        "abs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Absolute tolerance: |actual - expected| <= abs."
+        },
+        "rel": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel."
+        }
+      }
+    },
+
+    "Assertion": {
+      "type": "object",
+      "description": "A single scalar check at a (variable, time) point.",
+      "required": ["variable", "time", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "Name of the variable or species to check. Use the local name (e.g., \"O3\") or a scoped reference relative to this component (e.g., \"subsystem.X\")."
+        },
+        "time": {
+          "type": "number",
+          "description": "Simulation time at which to evaluate the assertion. Must lie within [time_span.start, time_span.end]."
+        },
+        "expected": {
+          "type": "number",
+          "description": "Expected scalar value of the variable at the given time."
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "Per-assertion tolerance override. If present, this takes precedence over the test-level and model-level defaults."
+        }
+      }
+    },
+
+    "Test": {
+      "type": "object",
+      "description": "An inline validation test for the enclosing model or reaction system. Defines the run configuration (initial conditions, parameter overrides, time span) and the scalar assertions that must hold.",
+      "required": ["id", "time_span", "assertions"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier unique within this component's tests array."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this test verifies."
+        },
+        "initial_conditions": {
+          "type": "object",
+          "description": "Initial-value overrides for state variables, keyed by variable name (local to this component). Values not listed fall back to the variable's declared default.",
+          "additionalProperties": { "type": "number" }
+        },
+        "parameter_overrides": {
+          "type": "object",
+          "description": "Parameter overrides, keyed by parameter name (local to this component). Values not listed fall back to the parameter's declared default.",
+          "additionalProperties": { "type": "number" }
+        },
+        "time_span": { "$ref": "#/$defs/TimeSpan" },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "Test-level default tolerance applied to all assertions in this test that do not override it."
+        },
+        "assertions": {
+          "type": "array",
+          "description": "Scalar (variable, time) checks that define the pass/fail criterion of the test.",
+          "items": { "$ref": "#/$defs/Assertion" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "TimeSpan": {
+      "type": "object",
+      "description": "Simulation time interval expressed in the component's time units.",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "number" },
+        "end":   { "type": "number" }
+      }
+    },
+
+    "SweepRange": {
+      "type": "object",
+      "description": "Generated range of parameter values.",
+      "required": ["start", "stop", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "number" },
+        "stop":  { "type": "number" },
+        "count": { "type": "integer", "minimum": 2 },
+        "scale": {
+          "type": "string",
+          "enum": ["linear", "log"],
+          "default": "linear",
+          "description": "Spacing: linear = evenly spaced between start and stop; log = logarithmically spaced (start and stop must be strictly positive)."
+        }
+      }
+    },
+
+    "SweepDimension": {
+      "type": "object",
+      "description": "One axis of a parameter sweep: exactly one of values or range must be given.",
+      "required": ["parameter"],
+      "additionalProperties": false,
+      "properties": {
+        "parameter": {
+          "type": "string",
+          "description": "Name of the parameter to vary (local to this component)."
+        },
+        "values": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 1,
+          "description": "Enumerated values to use for this axis."
+        },
+        "range": {
+          "$ref": "#/$defs/SweepRange",
+          "description": "Generated range; mutually exclusive with values."
+        }
+      },
+      "oneOf": [
+        { "required": ["values"] },
+        { "required": ["range"] }
+      ]
+    },
+
+    "ParameterSweep": {
+      "type": "object",
+      "description": "A parameter sweep specification. Currently only Cartesian product sweeps are supported — the total run count is the product of each dimension's length.",
+      "required": ["type", "dimensions"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["cartesian"],
+          "description": "Sweep combination strategy. Currently only cartesian (full Cartesian product) is supported."
+        },
+        "dimensions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SweepDimension" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "PlotAxis": {
+      "type": "object",
+      "description": "Axis specification: any state variable, observed variable, parameter name, or swept parameter may be used.",
+      "required": ["variable"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "Variable or parameter name (local to this component or scoped within a subsystem)."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable axis label. Viewers should fall back to the variable name if omitted."
+        }
+      }
+    },
+
+    "PlotValue": {
+      "type": "object",
+      "description": "A scalar value derived from a trajectory: used for heatmap z / color channels. Exactly one of at_time or reduce should be specified; if both are given, at_time takes precedence.",
+      "required": ["variable"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "Variable whose trajectory is reduced to a scalar per run."
+        },
+        "at_time": {
+          "type": "number",
+          "description": "Specific simulation time at which to sample the variable."
+        },
+        "reduce": {
+          "type": "string",
+          "enum": ["max", "min", "mean", "integral", "final"],
+          "description": "Time-reduction applied to the trajectory: max/min/mean over the run, time integral, or the final value at time_span.end."
+        }
+      }
+    },
+
+    "PlotSeries": {
+      "type": "object",
+      "description": "A single named series for multi-series line or scatter plots.",
+      "required": ["name", "variable"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "variable": { "type": "string" }
+      }
+    },
+
+    "Plot": {
+      "type": "object",
+      "description": "A plot specification associated with an example. Only structural information is recorded — axes, series selection, and value reductions. Styling (colors, fonts, legends, themes) is the viewer's concern.",
+      "required": ["id", "type", "x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier unique within this example's plots array."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["line", "scatter", "heatmap"]
+        },
+        "description": { "type": "string" },
+        "x": { "$ref": "#/$defs/PlotAxis" },
+        "y": { "$ref": "#/$defs/PlotAxis" },
+        "value": {
+          "$ref": "#/$defs/PlotValue",
+          "description": "Required for heatmap; defines the color channel. Ignored for line/scatter."
+        },
+        "series": {
+          "type": "array",
+          "description": "Multiple named series for line or scatter plots. Ignored for heatmap.",
+          "items": { "$ref": "#/$defs/PlotSeries" }
+        }
+      },
+      "if": {
+        "properties": { "type": { "const": "heatmap" } }
+      },
+      "then": {
+        "required": ["value"]
+      }
+    },
+
+    "Example": {
+      "type": "object",
+      "description": "An inline illustrative example of how to run the enclosing component. Defines the run configuration and one or more plots derived from the result.",
+      "required": ["id", "time_span"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier unique within this component's examples array."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this example illustrates."
+        },
+        "initial_state": {
+          "$ref": "#/$defs/InitialConditions",
+          "description": "Initial conditions for state variables. Reuses the top-level InitialConditions $def (constant / per_variable / from_file)."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Parameter overrides, keyed by parameter name (local to this component).",
+          "additionalProperties": { "type": "number" }
+        },
+        "time_span": { "$ref": "#/$defs/TimeSpan" },
+        "parameter_sweep": {
+          "$ref": "#/$defs/ParameterSweep",
+          "description": "Optional parameter sweep. When present, the example represents a family of runs (one per Cartesian combination) rather than a single trajectory."
+        },
+        "plots": {
+          "type": "array",
+          "description": "Plot specifications derived from this example's run(s).",
+          "items": { "$ref": "#/$defs/Plot" }
         }
       }
     },

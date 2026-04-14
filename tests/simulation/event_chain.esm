@@ -186,6 +186,79 @@
             ]
           }
         }
+      ],
+      "tolerance": {
+        "rel": 1e-04
+      },
+      "tests": [
+        {
+          "id": "slow_heating_low_conversion",
+          "description": "With base reaction_rate=0.01 and activation_energy=50 kJ/mol, the Arrhenius-rate Michaelis-like dynamics are extremely slow at room temperature. Over a 500 s linear-heating run the temperature rises from 298.15 K to 348.15 K, but the concentration stays within 10^-8 of its initial value and only a few picomoles of product form. Assertions check temperature (dominated by the linear heating equation) and verify that concentration and product remain tiny.",
+          "initial_conditions": {
+            "concentration": 0.1,
+            "temperature": 298.15,
+            "product": 0.0
+          },
+          "parameter_overrides": {
+            "heating_rate": 0.1,
+            "reaction_rate": 0.01,
+            "activation_energy": 50000.0,
+            "R": 8.314
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 500.0
+          },
+          "assertions": [
+            { "variable": "temperature", "time": 0.0,   "expected": 298.15 },
+            { "variable": "temperature", "time": 48.0,  "expected": 302.95 },
+            { "variable": "temperature", "time": 98.0,  "expected": 307.95 },
+            { "variable": "temperature", "time": 500.0, "expected": 348.15, "tolerance": { "abs": 1e-06 } },
+            { "variable": "concentration", "time": 0.0,   "expected": 0.1 },
+            { "variable": "concentration", "time": 500.0, "expected": 0.1,  "tolerance": { "abs": 1e-07 } },
+            { "variable": "product",       "time": 0.0,   "expected": 0.0 },
+            { "variable": "product",       "time": 500.0, "expected": 6e-10, "tolerance": { "abs": 1e-09 } }
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "id": "temperature_ramp",
+          "description": "Illustrative run: a 500 s linear heating ramp at 0.1 K/s with the default reaction parameters. Plots temperature, concentration, and product on their own axes; rates are low enough that concentration looks flat, which is informative in itself.",
+          "initial_state": {
+            "type": "per_variable",
+            "values": {
+              "concentration": 0.1,
+              "temperature": 298.15,
+              "product": 0.0
+            }
+          },
+          "parameters": {
+            "heating_rate": 0.1,
+            "reaction_rate": 0.01,
+            "activation_energy": 50000.0,
+            "R": 8.314
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 500.0
+          },
+          "plots": [
+            {
+              "id": "temperature_vs_time",
+              "type": "line",
+              "x": { "variable": "t", "label": "time (s)" },
+              "y": { "variable": "temperature", "label": "temperature (K)" }
+            },
+            {
+              "id": "product_vs_time",
+              "type": "line",
+              "description": "Product buildup driven by the temperature-dependent Arrhenius rate.",
+              "x": { "variable": "t", "label": "time (s)" },
+              "y": { "variable": "product", "label": "product (mol/L)" }
+            }
+          ]
+        }
       ]
     }
   },
