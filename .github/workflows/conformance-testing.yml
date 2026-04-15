@@ -2,14 +2,14 @@ name: Cross-Language Conformance Testing
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'packages/**'
       - 'tests/**'
       - 'scripts/**'
       - '.github/workflows/conformance-testing.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'packages/**'
       - 'tests/**'

@@ -2,7 +2,7 @@ name: Schema Sync Check
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'esm-schema.json'
       - 'packages/*/src/esm-schema.json'

@@ -2,14 +2,14 @@ name: Package Security Scanning
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'packages/**'
       - 'scripts/package-security-scanner.py'
       - 'scripts/package-signature-verifier.py'
       - '.security-config.json'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'packages/**'
   schedule:
