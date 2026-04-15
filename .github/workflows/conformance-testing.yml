@@ -38,7 +38,6 @@ jobs:
   # Run each language's individual tests first (unchanged from original)
   julia-tests:
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail workflow if individual tests fail
     defaults:
       run:
         working-directory: packages/EarthSciSerialization.jl
@@ -68,7 +67,6 @@ jobs:
 
   typescript-tests:
     runs-on: ubuntu-latest
-    continue-on-error: true
     defaults:
       run:
         working-directory: packages/earthsci-toolkit
@@ -93,7 +91,6 @@ jobs:
 
   python-tests:
     runs-on: ubuntu-latest
-    continue-on-error: true
     defaults:
       run:
         working-directory: packages/earthsci_toolkit
@@ -124,7 +121,6 @@ jobs:
 
   rust-tests:
     runs-on: ubuntu-latest
-    continue-on-error: true
     defaults:
       run:
         working-directory: packages/earthsci-toolkit-rs
@@ -153,11 +149,10 @@ jobs:
       - name: Run Rust tests
         run: cargo test
 
-  # Standard conformance testing (original approach)
+  # Cross-language conformance testing — only runs if all per-language suites pass
   standard-conformance-testing:
     runs-on: ubuntu-latest
     needs: [julia-tests, typescript-tests, python-tests, rust-tests]
-    if: always()  # Run even if individual tests fail
     steps:
       - uses: actions/checkout@v4
 
@@ -202,27 +197,23 @@ jobs:
         working-directory: packages/EarthSciSerialization.jl
         run: |
           julia --project=. -e 'using Pkg; Pkg.instantiate()'
-        continue-on-error: true
 
       - name: Install TypeScript dependencies and build
         working-directory: packages/earthsci-toolkit
         run: |
           npm ci
           npm run build
-        continue-on-error: true
 
       - name: Install Python dependencies
         working-directory: packages/earthsci_toolkit
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev,test]
-        continue-on-error: true
 
       - name: Build Rust package
         working-directory: packages/earthsci-toolkit-rs
         run: |
           cargo build --release
-        continue-on-error: true
 
       # Make scripts executable
       - name: Make conformance scripts executable
@@ -236,9 +227,8 @@ jobs:
       - name: Run standard conformance tests
         run: |
           ./scripts/test-conformance.sh
-        continue-on-error: true
 
-      # Upload standard conformance results
+      # Upload conformance results (best-effort — partial output is useful for debugging)
       - name: Upload standard conformance results
         uses: actions/upload-artifact@v4
         if: always()
