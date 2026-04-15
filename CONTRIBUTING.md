@@ -427,7 +427,7 @@ All packages follow semantic versioning:
 
 **Adding a new operator:**
 1. Update `esm-schema.json` with operator definition
-2. Add conformance tests in `tests/expressions/`
+2. Add conformance fixtures under `tests/valid/` (or `tests/invalid/` for parse errors)
 3. Implement in each language package
 4. Update format specification (`esm-spec.md`)
 
@@ -438,7 +438,7 @@ All packages follow semantic versioning:
 4. Document in library specification
 
 **Performance optimization:**
-1. Add benchmarks in `tests/performance/`
+1. Add a benchmark in the relevant binding's test suite
 2. Profile and optimize implementation
 3. Verify conformance is maintained
 4. Document performance characteristics

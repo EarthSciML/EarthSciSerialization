@@ -251,7 +251,7 @@ ESMAnalytics.initialize({
 
 ## Performance Baselines
 
-The system tracks performance against established baselines in `/tests/performance/performance_baselines.json`:
+Performance baselines per language implementation:
 
 - **Python**: Reference implementation (flexibility focus)
 - **Julia**: High-performance scientific computing (speed focus)

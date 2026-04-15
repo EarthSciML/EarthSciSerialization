@@ -450,7 +450,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: conformance-test-results-v${{ needs.release-analysis.outputs.new_version }}
-        path: tests/conformance/results/
+        path: conformance-results/
         retention-days: 90
 
   # Update release with final assets and status
