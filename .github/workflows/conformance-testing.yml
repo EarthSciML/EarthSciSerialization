@@ -231,8 +231,6 @@ jobs:
           chmod +x scripts/run-julia-conformance.jl
           chmod +x scripts/run-typescript-conformance.js
           chmod +x scripts/run-python-conformance.py
-          chmod +x scripts/enhanced-conformance-analyzer.py
-          chmod +x scripts/enhanced-report-generator.py
 
       # Run standard cross-language conformance testing
       - name: Run standard conformance tests

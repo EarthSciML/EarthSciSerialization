@@ -20,32 +20,15 @@ However, individual language implementations currently have issues that prevent 
 - ⚠️ Python: Test failures
 - ⚠️ Rust: Compilation errors
 
-## Quick Verification
-
-To verify the conformance infrastructure works:
-
-```bash
-# Test the infrastructure with minimal test data
-./scripts/test-conformance-minimal.sh
-```
-
-This creates mock results and tests the comparison/reporting pipeline.
-
 ## Usage
 
-### 1. Test Infrastructure Only
-
-```bash
-./scripts/test-conformance-minimal.sh
-```
-
-### 2. Run Full Conformance Tests (when implementations are working)
+### 1. Run Full Conformance Tests (when implementations are working)
 
 ```bash
 ./scripts/test-conformance.sh
 ```
 
-### 3. Check Individual Language Status
+### 2. Check Individual Language Status
 
 ```bash
 # Julia
@@ -112,17 +95,12 @@ Common problems:
    - Get at least 2 language implementations passing their test suites
    - This is a prerequisite for conformance testing
 
-2. **Test Infrastructure**
-   ```bash
-   ./scripts/test-conformance-minimal.sh
-   ```
-
-3. **Run Full Conformance Tests**
+2. **Run Full Conformance Tests**
    ```bash
    ./scripts/test-conformance.sh
    ```
 
-4. **Review Results**
+3. **Review Results**
    - Check console output for overall status
    - Review HTML report in `conformance-results/reports/`
    - Examine `analysis.json` for detailed comparison data
@@ -132,7 +110,6 @@ Common problems:
 | File | Purpose |
 |------|---------|
 | `scripts/test-conformance.sh` | Main conformance test runner |
-| `scripts/test-conformance-minimal.sh` | Infrastructure testing only |
 | `scripts/run-julia-conformance.jl` | Julia-specific test runner |
 | `scripts/run-typescript-conformance.js` | TypeScript-specific test runner |
 | `scripts/run-python-conformance.py` | Python-specific test runner |
@@ -155,5 +132,4 @@ The conformance testing infrastructure is ready to use once the underlying langu
 
 - The conformance infrastructure itself is working correctly
 - Issues are primarily with individual language implementation test suites
-- Use `./scripts/test-conformance-minimal.sh` to verify infrastructure health
 - Check individual language test outputs for specific debugging information

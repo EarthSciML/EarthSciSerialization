@@ -453,8 +453,7 @@ All packages follow semantic versioning:
 
 **Test failures:**
 ```bash
-./scripts/test-conformance-minimal.sh  # Quick conformance check
-./scripts/enhanced-conformance-analyzer.py  # Detailed analysis
+./scripts/test-conformance.sh  # Run full conformance tests
 ```
 
 **Documentation builds:**
