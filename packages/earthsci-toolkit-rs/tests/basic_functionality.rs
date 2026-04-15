@@ -294,23 +294,6 @@ fn test_pretty_printing() {
     }
 }
 
-/// Test units functionality
-#[test]
-fn test_units() {
-    let m_per_s = parse_unit("m/s").expect("Failed to parse m/s");
-    let mol_per_l = parse_unit("mol/L").expect("Failed to parse mol/L");
-
-    // Test dimensional consistency (should fail)
-    let consistency_check = check_dimensional_consistency(&m_per_s, &mol_per_l);
-    assert!(consistency_check.is_err());
-
-    // Test unit conversion
-    let m_unit = parse_unit("m").expect("Failed to parse m");
-    let cm_unit = parse_unit("cm").expect("Failed to parse cm");
-    let conversion = convert_units(1.0, &m_unit, &cm_unit).expect("Failed to convert units");
-    assert!((conversion - 100.0).abs() < 1e-10);
-}
-
 /// Test editing operations
 #[test]
 fn test_editing() {

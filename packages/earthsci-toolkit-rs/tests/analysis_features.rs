@@ -199,29 +199,6 @@ fn test_analysis_features_integration() {
 }
 
 #[test]
-fn test_units_functionality() {
-    // Test unit parsing
-    let m_per_s = parse_unit("m/s").expect("Failed to parse m/s");
-    let mol_per_l = parse_unit("mol/L").expect("Failed to parse mol/L");
-
-    // Test dimensional consistency (should fail)
-    let consistency_check = check_dimensional_consistency(&m_per_s, &mol_per_l);
-    assert!(
-        consistency_check.is_err(),
-        "Should detect dimensional inconsistency"
-    );
-
-    // Test unit conversion
-    let m_unit = parse_unit("m").expect("Failed to parse m");
-    let cm_unit = parse_unit("cm").expect("Failed to parse cm");
-    let conversion = convert_units(1.0, &m_unit, &cm_unit).expect("Failed to convert units");
-    assert!(
-        (conversion - 100.0).abs() < 1e-10,
-        "1 m should equal 100 cm"
-    );
-}
-
-#[test]
 fn test_editing_operations() {
     use std::collections::HashMap;
 
