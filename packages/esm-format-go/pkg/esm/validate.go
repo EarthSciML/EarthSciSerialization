@@ -38,14 +38,14 @@ type ValidationResult struct {
 
 // Structural error codes per ESM Libraries Spec Section 3.4
 const (
-	ErrorEquationCountMismatch  = "equation_count_mismatch"
-	ErrorUndefinedVariable      = "undefined_variable"
-	ErrorUndefinedSpecies       = "undefined_species"
-	ErrorUndefinedParameter     = "undefined_parameter"
-	ErrorUndefinedSystem        = "undefined_system"
-	ErrorUndefinedOperator      = "undefined_operator"
-	ErrorUnresolvedScopedRef    = "unresolved_scoped_ref"
-	ErrorInvalidDiscreteParam   = "invalid_discrete_param"
+	ErrorEquationCountMismatch = "equation_count_mismatch"
+	ErrorUndefinedVariable     = "undefined_variable"
+	ErrorUndefinedSpecies      = "undefined_species"
+	ErrorUndefinedParameter    = "undefined_parameter"
+	ErrorUndefinedSystem       = "undefined_system"
+	ErrorUndefinedOperator     = "undefined_operator"
+	ErrorUnresolvedScopedRef   = "unresolved_scoped_ref"
+	ErrorInvalidDiscreteParam  = "invalid_discrete_param"
 	ErrorNullReaction          = "null_reaction"
 	ErrorMissingObservedExpr   = "missing_observed_expr"
 	ErrorEventVarUndeclared    = "event_var_undeclared"
@@ -105,7 +105,6 @@ func ValidateFile(file *EsmFile, jsonStr string) *ValidationResult {
 	return result
 }
 
-
 // Validate is the backward compatibility function that returns DetailedValidationResult
 // For the new spec-compliant validation, use ValidateFile
 func Validate(file *EsmFile) *DetailedValidationResult {
@@ -114,9 +113,9 @@ func Validate(file *EsmFile) *DetailedValidationResult {
 
 // StructuralValidationResult holds the structured validation errors for internal use
 type StructuralValidationResult struct {
-	Valid            bool               `json:"valid"`
-	StructuralErrors []StructuralError  `json:"structural_errors"`
-	UnitWarnings     []UnitWarning      `json:"unit_warnings"`
+	Valid            bool              `json:"valid"`
+	StructuralErrors []StructuralError `json:"structural_errors"`
+	UnitWarnings     []UnitWarning     `json:"unit_warnings"`
 }
 
 // ValidateStructural performs comprehensive structural validation of an ESM file (renamed for clarity)
@@ -183,11 +182,13 @@ func ValidateStructuralWithCodes(file *EsmFile) *StructuralValidationResult {
 	// Validate models
 	for modelName, model := range file.Models {
 		validateModelWithCodes(modelName, &model, result, file)
+		validateModelUnits(modelName, &model, fmt.Sprintf("$.models.%s", modelName), result)
 	}
 
 	// Validate reaction systems
 	for systemName, system := range file.ReactionSystems {
 		validateReactionSystemWithCodes(systemName, &system, result, file)
+		validateReactionSystemUnits(systemName, &system, fmt.Sprintf("$.reaction_systems.%s", systemName), result)
 	}
 
 	// Validate coupling references
@@ -798,11 +799,12 @@ func validateExpressionVariablesWithStructuredCodes(expr Expression, allVars map
 	case float64, int:
 		// Numeric literals are always valid
 	default:
-		result.UnitWarnings = append(result.UnitWarnings, UnitWarning{
-			Path:     path,
-			Message:  fmt.Sprintf("Unknown expression type: %T", e),
-			LhsUnits: "unknown",
-			RhsUnits: "unknown",
+		result.Valid = false
+		result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+			Path:    path,
+			Code:    "unknown_expression_type",
+			Message: fmt.Sprintf("Unknown expression type: %T", e),
+			Details: map[string]interface{}{"type": fmt.Sprintf("%T", e)},
 		})
 	}
 }
@@ -873,11 +875,11 @@ func validateEquationUnknownBalanceWithCodes(modelName string, model *Model, bas
 			Code:    ErrorEquationCountMismatch,
 			Message: message,
 			Details: map[string]interface{}{
-				"model":              modelName,
-				"state_count":        nStates,
-				"ode_count":          nOdes,
-				"missing_equations":  missingEquations,
-				"extra_equations":    extraEquations,
+				"model":             modelName,
+				"state_count":       nStates,
+				"ode_count":         nOdes,
+				"missing_equations": missingEquations,
+				"extra_equations":   extraEquations,
 			},
 		})
 	}
@@ -933,9 +935,9 @@ func validateReactionSystemWithCodes(systemName string, system *ReactionSystem, 
 					Code:    ErrorUndefinedSpecies,
 					Message: fmt.Sprintf("Undefined species '%s' in reaction substrate", substrate.Species),
 					Details: map[string]interface{}{
-						"species":        substrate.Species,
-						"system":         systemName,
-						"reaction_index": i,
+						"species":         substrate.Species,
+						"system":          systemName,
+						"reaction_index":  i,
 						"substrate_index": j,
 					},
 				})
@@ -951,10 +953,10 @@ func validateReactionSystemWithCodes(systemName string, system *ReactionSystem, 
 					Code:    ErrorUndefinedSpecies,
 					Message: fmt.Sprintf("Undefined species '%s' in reaction product", product.Species),
 					Details: map[string]interface{}{
-						"species":       product.Species,
-						"system":        systemName,
+						"species":        product.Species,
+						"system":         systemName,
 						"reaction_index": i,
-						"product_index": j,
+						"product_index":  j,
 					},
 				})
 			}
@@ -990,10 +992,10 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 						Code:    ErrorUndefinedSystem,
 						Message: fmt.Sprintf("Undefined system '%s' in coupling", sysName),
 						Details: map[string]interface{}{
-							"system":        sysName,
-							"coupling_type": "operator_compose",
+							"system":         sysName,
+							"coupling_type":  "operator_compose",
 							"coupling_index": i,
-							"system_index":  j,
+							"system_index":   j,
 						},
 					})
 				}
@@ -1008,10 +1010,10 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 						Code:    ErrorUndefinedSystem,
 						Message: fmt.Sprintf("Undefined system '%s' in coupling", sysName),
 						Details: map[string]interface{}{
-							"system":        sysName,
-							"coupling_type": "couple",
+							"system":         sysName,
+							"coupling_type":  "couple",
 							"coupling_index": i,
-							"system_index":  j,
+							"system_index":   j,
 						},
 					})
 				}
@@ -1062,8 +1064,8 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 						Code:    ErrorUndefinedOperator,
 						Message: fmt.Sprintf("Undefined operator '%s' in coupling", c.Operator),
 						Details: map[string]interface{}{
-							"operator":      c.Operator,
-							"coupling_type": "operator_apply",
+							"operator":       c.Operator,
+							"coupling_type":  "operator_apply",
 							"coupling_index": i,
 						},
 					})
@@ -1166,14 +1168,9 @@ func validateOperatorReferencesWithCodes(file *EsmFile, result *StructuralValida
 			})
 		}
 
-		if len(operator.NeededVars) == 0 {
-			result.UnitWarnings = append(result.UnitWarnings, UnitWarning{
-				Path:     fmt.Sprintf("%s.needed_vars", basePath),
-				Message:  "Operator requires no variables",
-				LhsUnits: "unknown",
-				RhsUnits: "unknown",
-			})
-		}
+		// An operator with zero needed_vars is legal (pure transformations
+		// without input dependencies); no warning needed.
+		_ = basePath
 	}
 }
 
