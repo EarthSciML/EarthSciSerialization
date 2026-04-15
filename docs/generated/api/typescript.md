@@ -355,6 +355,30 @@ Check if an expression contains a specific variable
 
 ---
 
+### convertUnits
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:213`
+
+**Signature:**
+```typescript
+export function convertUnits(value: number, from: string, to: string): number {
+```
+
+**Description:**
+Convert a numeric value from one unit string to another.
+
+@example
+convertUnits(1, 'km', 'm')            // 1000
+convertUnits(0, 'Celsius', 'K')       // 273.15
+convertUnits(1, 'atm', 'Pa')          // 101325
+convertUnits(1, 'Dobson', 'molec/m^2') // 2.6867e20
+
+@throws {UnitConversionError} when the unit strings have incompatible dimensions
+or cannot be parsed.
+/
+
+---
+
 ### createAstStore
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/esm-editor/src/primitives/ast-store.ts:129`
@@ -1191,6 +1215,26 @@ Handles common patterns:
 
 ---
 
+### parseUnitForConversion
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:132`
+
+**Signature:**
+```typescript
+export function parseUnitForConversion(unitStr: string): ParsedUnit {
+```
+
+**Description:**
+Parse a unit string into canonical SI dimensions plus scale (and optional offset).
+
+Accepts compound expressions like `"kg*m/s^2"`, `"molec/cm^3"`, `"cm^3/molec/s"`.
+Offset-based units (`C`, `Celsius`) may only appear as the sole term at power +1.
+
+@throws {UnitConversionError} on unknown unit names, malformed tokens, or misused offset units.
+/
+
+---
+
 ### partialDerivatives
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:36`
@@ -1690,6 +1734,22 @@ Format an expression as Unicode mathematical notation
 
 ---
 
+### unitsCompatible
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:232`
+
+**Signature:**
+```typescript
+export function unitsCompatible(a: string, b: string): boolean {
+```
+
+**Description:**
+Report whether two unit strings represent compatible (same-dimension) quantities.
+A non-throwing companion to `convertUnits`.
+/
+
+---
+
 ### validate
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:856`
@@ -1828,6 +1888,17 @@ Boundary condition for one or more dimensions.
 
 **Available in other languages:**
 - [Python](python.md#boundarycondition)
+
+---
+
+### CanonicalDims
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:16`
+
+**Definition:**
+```typescript
+export interface CanonicalDims {
+```
 
 ---
 
@@ -3051,6 +3122,17 @@ export interface ParameterSweep {
 **Description:**
 Optional parameter sweep. When present, the example represents a family of runs (one per Cartesian combination) rather than a single trajectory.
 /
+
+---
+
+### ParsedUnit
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:27`
+
+**Definition:**
+```typescript
+export interface ParsedUnit {
+```
 
 ---
 
