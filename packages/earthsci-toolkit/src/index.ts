@@ -52,6 +52,10 @@ export { deriveODEs, stoichiometricMatrix, substrateMatrix, productMatrix } from
 export { parseUnit, checkDimensions, validateUnits } from './units.js'
 export type { DimensionalRep, UnitResult, UnitWarning } from './units.js'
 
+// Export runtime unit conversion
+export { convertUnits, parseUnitForConversion, unitsCompatible, UnitConversionError } from './unit-conversion.js'
+export type { CanonicalDims, ParsedUnit } from './unit-conversion.js'
+
 // Export code generation utilities
 export { toJuliaCode, toPythonCode } from './codegen.js'
 
