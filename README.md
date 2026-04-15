@@ -156,12 +156,6 @@ We welcome contributions! This project uses:
 ### Testing the Conformance Infrastructure
 
 ```bash
-# Test conformance infrastructure with demonstration data
-./scripts/demo-conformance.sh
-
-# Test infrastructure components only
-./scripts/test-conformance-minimal.sh
-
 # Run full conformance tests (requires working language implementations)
 ./scripts/test-conformance.sh
 ```

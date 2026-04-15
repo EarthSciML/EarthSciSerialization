@@ -26,14 +26,6 @@ This will:
 - Generate an HTML conformance report
 - Output results to `conformance-results/`
 
-### Test Infrastructure Only
-
-To test the conformance infrastructure without running full tests:
-
-```bash
-./scripts/test-conformance-minimal.sh
-```
-
 ## Architecture
 
 ### Test Categories
@@ -359,5 +351,4 @@ For issues with conformance testing:
 
 1. Check this documentation first
 2. Review existing GitHub issues
-3. Run minimal test to verify infrastructure: `./scripts/test-conformance-minimal.sh`
-4. Create issue with full error output and system information
+3. Create issue with full error output and system information
