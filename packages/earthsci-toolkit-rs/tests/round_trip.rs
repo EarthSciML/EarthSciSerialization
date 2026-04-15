@@ -233,3 +233,75 @@ fn test_metadata_inheritance_round_trip() {
     assert_eq!(parsed.esm, reparsed.esm);
     assert_eq!(parsed.metadata.name, reparsed.metadata.name);
 }
+
+/// Round-trip for a fixture that carries `tests` and `tolerance` blocks on
+/// the `Model` struct (gt-c6w). Verifies that the typed `ModelTest`,
+/// `ModelTestAssertion`, `TimeSpan`, and `Tolerance` fields survive a
+/// load → save → load cycle and produce JSON equivalent to the original
+/// modulo key ordering.
+#[test]
+fn test_model_tests_tolerance_round_trip() {
+    let fixture = include_str!(
+        "../../EarthSciSerialization.jl/test/fixtures/arrayop/01_pure_ode_analytical.esm"
+    );
+
+    let parsed: EsmFile = load(fixture).expect("load fixture with tests/tolerance");
+
+    // The fixture has one model (PureODE) with a tolerance and one test.
+    let models = parsed.models.as_ref().expect("fixture has models");
+    let model = models.get("PureODE").expect("PureODE model present");
+
+    let tol = model.tolerance.as_ref().expect("model tolerance present");
+    assert_eq!(tol.rel, Some(1.0e-6));
+    assert_eq!(tol.abs, None);
+
+    let tests = model.tests.as_ref().expect("model tests present");
+    assert_eq!(tests.len(), 1);
+    let t = &tests[0];
+    assert_eq!(t.id, "analytical_t1");
+    assert_eq!(t.time_span.start, 0.0);
+    assert_eq!(t.time_span.end, 1.0);
+    assert_eq!(
+        t.initial_conditions
+            .as_ref()
+            .expect("initial conditions present")
+            .get("u[1]"),
+        Some(&1.0)
+    );
+    assert_eq!(t.assertions.len(), 5);
+    assert_eq!(t.assertions[0].variable, "u[1]");
+    assert_eq!(t.assertions[0].time, 1.0);
+    assert!((t.assertions[0].expected - 0.36787944117144233).abs() < 1e-15);
+
+    // Round-trip: save and reload, confirm typed fields survive.
+    let serialized = save(&parsed).expect("serialize model with tests/tolerance");
+    let reparsed: EsmFile = load(&serialized).expect("reparse serialized fixture");
+    let rmodel = reparsed
+        .models
+        .as_ref()
+        .and_then(|m| m.get("PureODE"))
+        .expect("reparsed PureODE present");
+    let rtol = rmodel.tolerance.as_ref().expect("reparsed tolerance");
+    assert_eq!(rtol.rel, tol.rel);
+    assert_eq!(rtol.abs, tol.abs);
+    let rtests = rmodel.tests.as_ref().expect("reparsed tests");
+    assert_eq!(rtests.len(), tests.len());
+    assert_eq!(rtests[0].id, t.id);
+    assert_eq!(rtests[0].time_span.start, t.time_span.start);
+    assert_eq!(rtests[0].time_span.end, t.time_span.end);
+    assert_eq!(rtests[0].assertions.len(), t.assertions.len());
+
+    // Idempotency: once through the typed parser, a second save→load must
+    // be a fixed point. This is a JSON-value equality check (modulo map key
+    // ordering). We compare parsed → save → load against parsed, because
+    // ryu's shortest-round-trip float formatting may differ from the
+    // original fixture's textual representation while preserving the
+    // underlying f64 values.
+    let serialized_again = save(&reparsed).expect("second serialize");
+    let reparsed_again: EsmFile = load(&serialized_again).expect("second reparse");
+    assert_eq!(
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+        serde_json::to_value(&reparsed_again).expect("reparsed_again as value"),
+        "save/load must be a fixed point on typed round-tripped EsmFile"
+    );
+}

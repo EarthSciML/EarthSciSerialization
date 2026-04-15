@@ -135,6 +135,8 @@ mod tests {
                 discrete_events: None,
                 continuous_events: None,
                 description: None,
+                tolerance: None,
+                tests: None,
             },
         );
 

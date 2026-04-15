@@ -93,6 +93,8 @@ fn test_structural_validation() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     let mut models = HashMap::new();
@@ -242,6 +244,8 @@ fn test_component_graph() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     let mut models = HashMap::new();
@@ -321,6 +325,8 @@ fn test_editing() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     // Test adding variables

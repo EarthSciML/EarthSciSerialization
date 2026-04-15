@@ -176,6 +176,88 @@ pub struct ExpressionNode {
     pub broadcast_fn: Option<String>,
 }
 
+/// Numerical comparison tolerance used by inline model tests.
+///
+/// Either or both of `abs` / `rel` may be set. An assertion passes when any
+/// set bound is satisfied:
+/// `|actual - expected| <= abs`  OR
+/// `|actual - expected| / max(|expected|, epsilon) <= rel`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Tolerance {
+    /// Absolute tolerance bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abs: Option<f64>,
+
+    /// Relative tolerance bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rel: Option<f64>,
+}
+
+/// Simulation time interval used by inline model tests.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeSpan {
+    /// Start of the simulation window (in the component's time units).
+    pub start: f64,
+
+    /// End of the simulation window (in the component's time units).
+    pub end: f64,
+}
+
+/// A single scalar `(variable, time, expected)` check inside a [`ModelTest`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelTestAssertion {
+    /// Name of the variable or species to check.
+    pub variable: String,
+
+    /// Simulation time at which to evaluate the assertion.
+    pub time: f64,
+
+    /// Expected scalar value of the variable at the given time.
+    pub expected: f64,
+
+    /// Per-assertion tolerance override. Takes precedence over test-level
+    /// and model-level defaults when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tolerance: Option<Tolerance>,
+}
+
+/// Inline validation test for a [`Model`] (schema gt-cc1).
+///
+/// Defines the run configuration — initial conditions, parameter overrides,
+/// simulation time span — and a list of scalar assertions that must hold.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelTest {
+    /// Identifier unique within this component's `tests` array.
+    pub id: String,
+
+    /// Human-readable description of what this test verifies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Initial-value overrides for state variables, keyed by variable name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_conditions: Option<HashMap<String, f64>>,
+
+    /// Parameter overrides, keyed by parameter name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parameter_overrides: Option<HashMap<String, f64>>,
+
+    /// Simulation time interval for this test.
+    pub time_span: TimeSpan,
+
+    /// Test-level default tolerance applied to assertions that do not
+    /// override it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tolerance: Option<Tolerance>,
+
+    /// Scalar `(variable, time)` checks that define the pass/fail criterion.
+    pub assertions: Vec<ModelTestAssertion>,
+}
+
 /// ODE-based model component
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
@@ -216,6 +298,14 @@ pub struct Model {
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// Model-level default numerical tolerance for inline tests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tolerance: Option<Tolerance>,
+
+    /// Inline validation tests that exercise this model in isolation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tests: Option<Vec<ModelTest>>,
 }
 
 /// Variable within a model

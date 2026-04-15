@@ -67,6 +67,8 @@ fn test_analysis_features_integration() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     let mut models = HashMap::new();
@@ -235,6 +237,8 @@ fn test_editing_operations() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     // Test adding variables

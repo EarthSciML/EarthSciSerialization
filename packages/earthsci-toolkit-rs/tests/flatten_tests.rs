@@ -204,6 +204,8 @@ fn flatten_mixed_model_and_reaction_system() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
 
@@ -382,6 +384,8 @@ fn flatten_conflicting_derivative_raises_error() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
 
@@ -477,6 +481,8 @@ fn flatten_operator_compose_sums_matched_rhses() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
     models.insert(
@@ -501,6 +507,8 @@ fn flatten_operator_compose_sums_matched_rhses() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
 
@@ -601,6 +609,8 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
     models.insert(
@@ -616,6 +626,8 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
 
@@ -684,6 +696,8 @@ fn flatten_couple_includes_connector_equations() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
     // Connector with one equation: lhs Variable "bridge", rhs Variable "A.x"
@@ -751,6 +765,8 @@ fn flatten_model_wraps_and_namespaces_under_declared_name() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
     let flat = flatten_model(&model).unwrap();
     assert!(flat.state_variables.contains_key("Nested.q"));
@@ -797,6 +813,8 @@ fn flatten_rejects_spatial_operators() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
     let file = EsmFile {
@@ -852,6 +870,8 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
             discrete_events: None,
             continuous_events: None,
             description: None,
+            tolerance: None,
+            tests: None,
         },
     );
     let file = EsmFile {

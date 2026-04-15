@@ -37,6 +37,8 @@ fn test_undefined_variable_in_model() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     let mut models = HashMap::new();
@@ -125,6 +127,8 @@ fn test_equation_count_mismatch() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     let mut models = HashMap::new();
@@ -311,6 +315,8 @@ fn test_valid_file_passes() {
         discrete_events: None,
         continuous_events: None,
         description: None,
+        tolerance: None,
+        tests: None,
     };
 
     let mut models = HashMap::new();

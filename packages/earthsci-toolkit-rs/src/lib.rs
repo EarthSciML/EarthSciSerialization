@@ -93,8 +93,9 @@ pub use types::{
     DataLoaderMetadata, DataLoaderRegridding, DataLoaderSource, DataLoaderSpatial,
     DataLoaderTemporal, DataLoaderVariable, DiscreteEvent, DiscreteEventTrigger, Domain, Equation,
     EsmFile, Expr, ExpressionNode, ExtrapolationMode, FunctionalAffect, GridType, Metadata, Model,
-    ModelVariable, Operator, Reaction, ReactionSystem, RecordsPerFile, Species, StaggeringMode,
-    StoichiometricEntry, UnitConversion, VariableType,
+    ModelTest, ModelTestAssertion, ModelVariable, Operator, Reaction, ReactionSystem,
+    RecordsPerFile, Species, StaggeringMode, StoichiometricEntry, TimeSpan, Tolerance,
+    UnitConversion, VariableType,
 };
 pub use validate::{
     SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,
