@@ -1,6 +1,6 @@
 # EarthSciSerialization
 
-[![Build Status](https://github.com/EarthSciML/EarthSciSerialization/workflows/CI/badge.svg)](https://github.com/EarthSciML/EarthSciSerialization/actions)
+[![Cross-Language Conformance Testing](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/conformance-testing.yml/badge.svg)](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/conformance-testing.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **EarthSciML Serialization Format** — A language-agnostic JSON-based format for earth science model components, their composition, and runtime configuration.
