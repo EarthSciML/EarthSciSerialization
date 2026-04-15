@@ -8,6 +8,7 @@
 import Ajv, { ErrorObject, ValidateFunction } from 'ajv'
 import addFormats from 'ajv-formats'
 import type { EsmFile, Expression, CouplingEntry } from './types.js'
+import { validateUnits } from './units.js'
 
 /**
  * Schema validation error with JSON Pointer path
@@ -1788,6 +1789,14 @@ export function load(input: string | object): EsmFile {
   // Step 4: Clean up unknown fields for forward compatibility and type coercion
   const cleanedData = removeUnknownFields(data)
   const typedData = coerceTypes(cleanedData) as EsmFile
+
+  // Step 5: Dimensional analysis — emit warnings but never fail the load.
+  // Mirrors the Julia @warn behavior so TS callers get the same signal
+  // without an API break.
+  for (const warning of validateUnits(typedData)) {
+    const location = warning.location ? ` [${warning.location}]` : ''
+    console.warn(`ESM unit validation${location}: ${warning.message}`)
+  }
 
   return typedData
 }

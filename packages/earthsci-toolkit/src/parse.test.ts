@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { load, save, ParseError, SchemaValidationError, validateSchema } from './index.js'
 
 describe('Parse and Serialize', () => {
@@ -135,6 +135,101 @@ describe('Parse and Serialize', () => {
       const result = load(esmWithCoupling)
       expect(result.coupling).toBeDefined()
       expect(result.coupling?.[0]?.type).toBe('operator_compose')
+    })
+
+    describe('auto-fire dimensional validation', () => {
+      afterEach(() => {
+        vi.restoreAllMocks()
+      })
+
+      it('should emit console.warn for dimensional mismatches', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const badDimensions = {
+          esm: "0.1.0",
+          metadata: { name: "bad-dims" },
+          models: {
+            "mech": {
+              variables: {
+                x: { type: "state", units: "m", description: "Position" },
+                f: { type: "parameter", units: "s", description: "Force (wrong units)" }
+              },
+              equations: [
+                {
+                  lhs: { op: "D", args: ["x"], wrt: "t" },
+                  rhs: "f"
+                }
+              ]
+            }
+          }
+        }
+
+        load(badDimensions)
+
+        expect(warnSpy).toHaveBeenCalled()
+        const messages = warnSpy.mock.calls.map(args => String(args[0]))
+        expect(messages.some(m => m.includes('ESM unit validation'))).toBe(true)
+        expect(messages.some(m => m.includes('Dimensional mismatch'))).toBe(true)
+      })
+
+      it('should not warn when dimensions are consistent', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const goodDimensions = {
+          esm: "0.1.0",
+          metadata: { name: "good-dims" },
+          models: {
+            "mech": {
+              variables: {
+                x: { type: "state", units: "m", description: "Position" },
+                v: { type: "state", units: "m/s", description: "Velocity" },
+                t: { type: "parameter", units: "s", description: "Time" }
+              },
+              equations: [
+                {
+                  lhs: { op: "D", args: ["x"], wrt: "t" },
+                  rhs: "v"
+                }
+              ]
+            }
+          }
+        }
+
+        load(goodDimensions)
+
+        const unitCalls = warnSpy.mock.calls
+          .map(args => String(args[0]))
+          .filter(m => m.includes('ESM unit validation'))
+        expect(unitCalls).toEqual([])
+      })
+
+      it('should include the location field in emitted messages', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const badDimensions = {
+          esm: "0.1.0",
+          metadata: { name: "located" },
+          models: {
+            "mech": {
+              variables: {
+                x: { type: "state", units: "m", description: "Position" },
+                f: { type: "parameter", units: "s", description: "Force (wrong units)" }
+              },
+              equations: [
+                {
+                  lhs: { op: "D", args: ["x"], wrt: "t" },
+                  rhs: "f"
+                }
+              ]
+            }
+          }
+        }
+
+        load(badDimensions)
+
+        const messages = warnSpy.mock.calls.map(args => String(args[0]))
+        expect(messages.some(m => m.includes('[models.mech]'))).toBe(true)
+      })
     })
 
     it('should handle optional vs required fields correctly', () => {
