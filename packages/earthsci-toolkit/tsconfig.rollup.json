@@ -47,7 +47,6 @@
     "tests/**/*",
     "src/interactive-editor/**",
     "src/web-components.ts",
-    "src/demo/**",
     "src/layout/**"
   ]
 }

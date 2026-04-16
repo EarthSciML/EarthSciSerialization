@@ -7,13 +7,13 @@
  */
 
 import { Component, createSignal, Show, For } from 'solid-js';
-import type { EsmFile, Model, ValidationError } from '../types.js';
-import { ValidationPanel } from '../interactive-editor/ValidationPanel.tsx';
-import { FileSummary } from '../interactive-editor/FileSummary.tsx';
-import { SimulationControls } from '../interactive-editor/SimulationControls.tsx';
-import { ModelEditor } from '../interactive-editor/ModelEditor.tsx';
-import { CouplingGraph } from '../interactive-editor/CouplingGraph.tsx';
-import { ExpressionNode } from '../interactive-editor/ExpressionNode.tsx';
+import type { EsmFile, Model, ValidationError } from '../../src/types.js';
+import { ValidationPanel } from '../../src/interactive-editor/ValidationPanel.tsx';
+import { FileSummary } from '../../src/interactive-editor/FileSummary.tsx';
+import { SimulationControls } from '../../src/interactive-editor/SimulationControls.tsx';
+import { ModelEditor } from '../../src/interactive-editor/ModelEditor.tsx';
+import { CouplingGraph } from '../../src/interactive-editor/CouplingGraph.tsx';
+import { ExpressionNode } from '../../src/interactive-editor/ExpressionNode.tsx';
 
 // Sample data for demonstrations
 const sampleModel: Model = {
