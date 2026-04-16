@@ -23,7 +23,30 @@
           ] }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "abs": 1e-9 },
+      "tests": [
+        {
+          "id": "freezing_point",
+          "description": "273.15 K = 0 degC = 32 degF (water freezing point). Exercises additive Kelvin-Celsius offset and the full Kelvin->Fahrenheit formula.",
+          "parameter_overrides": { "T_kelvin": 273.15 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "T_celsius",    "time": 0.0, "expected":  0.0 },
+            { "variable": "T_fahrenheit", "time": 0.0, "expected": 32.0 }
+          ]
+        },
+        {
+          "id": "boiling_point",
+          "description": "373.15 K = 100 degC = 212 degF (water boiling at 1 atm). Second point pins the scale factor in the Kelvin->Fahrenheit formula.",
+          "parameter_overrides": { "T_kelvin": 373.15 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "T_celsius",    "time": 0.0, "expected": 100.0 },
+            { "variable": "T_fahrenheit", "time": 0.0, "expected": 212.0 }
+          ]
+        }
+      ]
     },
 
     "LengthConversions": {
@@ -46,7 +69,23 @@
           "expression": { "op": "*", "args": ["distance_m", 1e9] }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-12 },
+      "tests": [
+        {
+          "id": "one_km_chain",
+          "description": "1000 m == 1 km == 1e5 cm == 1e6 mm == 1e9 um == 1e12 nm. Pins each scale-factor constant in the fixture.",
+          "parameter_overrides": { "distance_m": 1000.0 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "distance_km", "time": 0.0, "expected": 1.0 },
+            { "variable": "distance_cm", "time": 0.0, "expected": 100000.0 },
+            { "variable": "distance_mm", "time": 0.0, "expected": 1000000.0 },
+            { "variable": "distance_um", "time": 0.0, "expected": 1000000000.0 },
+            { "variable": "distance_nm", "time": 0.0, "expected": 1000000000000.0 }
+          ]
+        }
+      ]
     },
 
     "PressureConversions": {
@@ -69,7 +108,47 @@
           "expression": { "op": "/", "args": ["P_pascal", 6894.76] }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "one_bar",
+          "description": "1e5 Pa == 1 bar. Pins the 1e-5 Pa->bar factor.",
+          "parameter_overrides": { "P_pascal": 100000.0 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "P_bar", "time": 0.0, "expected": 1.0 }
+          ]
+        },
+        {
+          "id": "one_atm",
+          "description": "101325 Pa == 1 atm. Pins the 101325 Pa->atm divisor.",
+          "parameter_overrides": { "P_pascal": 101325.0 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "P_atm", "time": 0.0, "expected": 1.0 }
+          ]
+        },
+        {
+          "id": "one_torr",
+          "description": "133.322 Pa == 1 Torr == 1 mmHg. Pins the 133.322 divisor for both (duplicated-expression guard).",
+          "parameter_overrides": { "P_pascal": 133.322 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "P_torr", "time": 0.0, "expected": 1.0 },
+            { "variable": "P_mmHg", "time": 0.0, "expected": 1.0 }
+          ]
+        },
+        {
+          "id": "one_psi",
+          "description": "6894.76 Pa == 1 psi. Pins the 6894.76 Pa->psi divisor.",
+          "parameter_overrides": { "P_pascal": 6894.76 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "P_psi", "time": 0.0, "expected": 1.0 }
+          ]
+        }
+      ]
     },
 
     "EnergyConversions": {
@@ -92,7 +171,47 @@
           "expression": { "op": "*", "args": ["E_joule", 1e7] }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "one_kcal",
+          "description": "4184 J == 1 kcal == 1000 cal. Pins both the 4184 J->kcal divisor and the 4.184 J->cal divisor.",
+          "parameter_overrides": { "E_joule": 4184.0 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "E_kcal",    "time": 0.0, "expected": 1.0 },
+            { "variable": "E_calorie", "time": 0.0, "expected": 1000.0 }
+          ]
+        },
+        {
+          "id": "one_kwh",
+          "description": "3.6e6 J == 1 kWh. Pins the 3.6e6 J->kWh divisor.",
+          "parameter_overrides": { "E_joule": 3600000.0 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "E_kwh", "time": 0.0, "expected": 1.0 }
+          ]
+        },
+        {
+          "id": "one_btu",
+          "description": "1055.06 J == 1 BTU. Pins the 1055.06 J->BTU divisor.",
+          "parameter_overrides": { "E_joule": 1055.06 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "E_btu", "time": 0.0, "expected": 1.0 }
+          ]
+        },
+        {
+          "id": "one_erg",
+          "description": "1e-7 J == 1 erg. Pins the 1e7 J->erg multiplier.",
+          "parameter_overrides": { "E_joule": 1e-7 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "E_erg", "time": 0.0, "expected": 1.0 }
+          ]
+        }
+      ]
     },
 
     "ConcentrationConversions": {
@@ -121,7 +240,37 @@
           ] }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "mole_fraction_unity",
+          "description": "When conc_molec_cm3 == M (pure species), mole fraction is 1.0, corresponding to 1e9 ppb and 1e6 ppm. Pins the ppb and ppm scaling.",
+          "parameter_overrides": {
+            "M": 1.0e19,
+            "conc_molec_cm3": 1.0e19
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "conc_mol_mol", "time": 0.0, "expected": 1.0 },
+            { "variable": "conc_ppb",     "time": 0.0, "expected": 1.0e9 },
+            { "variable": "conc_ppm",     "time": 0.0, "expected": 1.0e6 }
+          ]
+        },
+        {
+          "id": "ug_per_m3_from_avogadro",
+          "description": "conc_molec_cm3 = 6.022e23 gives conc_ug_m3 = (6.022e23/6.022e23) * 48 * 1e12 = 4.8e13, pinning Avogadro (6.022e23), MW=48, and the cm^3->m^3 + g->ug factor 1e12.",
+          "parameter_overrides": {
+            "M": 6.022e23,
+            "conc_molec_cm3": 6.022e23
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "conc_mol_mol", "time": 0.0, "expected": 1.0 },
+            { "variable": "conc_ug_m3",   "time": 0.0, "expected": 4.8e13 }
+          ]
+        }
+      ]
     },
 
     "VolumeConversions": {
@@ -141,7 +290,22 @@
           "expression": { "op": "*", "args": ["V_m3", 1000.0] }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-12 },
+      "tests": [
+        {
+          "id": "one_liter",
+          "description": "0.001 m^3 == 1 L == 1000 mL == 1000 cm^3 == 1 dm^3. Pins all four scale factors and catches mL/cm^3 sharing the same factor.",
+          "parameter_overrides": { "V_m3": 0.001 },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "V_L",   "time": 0.0, "expected": 1.0 },
+            { "variable": "V_mL",  "time": 0.0, "expected": 1000.0 },
+            { "variable": "V_cm3", "time": 0.0, "expected": 1000.0 },
+            { "variable": "V_dm3", "time": 0.0, "expected": 1.0 }
+          ]
+        }
+      ]
     }
   }
 }

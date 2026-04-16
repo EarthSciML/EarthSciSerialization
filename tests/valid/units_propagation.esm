@@ -240,6 +240,30 @@
             ]
           }
         }
+      ],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "observed_at_initial_state",
+          "description": "Evaluate observed variables at t=0 with mass=2 kg, volume=0.5 m^3, length=4 m, time=2 s. Expected: density=4, velocity=2, acceleration=1, force=2, energy=8, power=4. Tests multiplication, division, nested-division, and exponent propagation.",
+          "initial_conditions": {
+            "mass": 2.0,
+            "volume": 0.5
+          },
+          "parameter_overrides": {
+            "time": 2.0,
+            "length": 4.0
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "density",      "time": 0.0, "expected": 4.0 },
+            { "variable": "velocity",     "time": 0.0, "expected": 2.0 },
+            { "variable": "acceleration", "time": 0.0, "expected": 1.0 },
+            { "variable": "force",        "time": 0.0, "expected": 2.0 },
+            { "variable": "energy",       "time": 0.0, "expected": 8.0 },
+            { "variable": "power",        "time": 0.0, "expected": 4.0 }
+          ]
+        }
       ]
     },
     "ThermodynamicsModel": {
@@ -331,7 +355,24 @@
           }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "ideal_gas_volume_clean",
+          "description": "Simple parameter values exercise the ideal-gas-law observed variable V = nRT/P. n=1, R=2, T=100, P=10 gives V=20 exactly (simple values chosen for numerical cleanliness, not physical plausibility). The entropy observed is excluded because its log argument's magnitude is unit-regime-dependent and separately tested via dimensional analysis.",
+          "parameter_overrides": {
+            "n": 1.0,
+            "R": 2.0,
+            "T": 100.0,
+            "P": 10.0
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "V", "time": 0.0, "expected": 20.0 }
+          ]
+        }
+      ]
     },
     "FluidDynamicsModel": {
       "reference": {
@@ -413,27 +454,15 @@
         "pressure_drop": {
           "type": "observed",
           "units": "Pa",
-          "description": "Pressure drop",
+          "description": "Dynamic pressure drop (Bernoulli): 0.5 * rho * v^2. Dimensionally (kg/m^3) * (m/s)^2 = kg/(m*s^2) = Pa.",
           "expression": {
             "op": "*",
             "args": [
               {
                 "op": "*",
                 "args": [
-                  {
-                    "op": "/",
-                    "args": [
-                      "mu",
-                      "rho"
-                    ]
-                  },
-                  {
-                    "op": "/",
-                    "args": [
-                      "rho",
-                      "L"
-                    ]
-                  }
+                  0.5,
+                  "rho"
                 ]
               },
               {
@@ -447,7 +476,27 @@
           }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "fluid_dynamics_default",
+          "description": "With rho=1000, v=2, A=0.01, mu=0.001, L=1: mass_flow = rho*v*A = 20; reynolds = rho*v*L/mu = 2e6; pressure_drop (Bernoulli) = 0.5*rho*v^2 = 2000.",
+          "parameter_overrides": {
+            "rho": 1000.0,
+            "v": 2.0,
+            "A": 0.01,
+            "mu": 0.001,
+            "L": 1.0
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "mass_flow",     "time": 0.0, "expected": 20.0 },
+            { "variable": "reynolds",      "time": 0.0, "expected": 2000000.0 },
+            { "variable": "pressure_drop", "time": 0.0, "expected": 2000.0 }
+          ]
+        }
+      ]
     }
   }
 }
