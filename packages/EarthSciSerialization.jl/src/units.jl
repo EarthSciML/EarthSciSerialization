@@ -12,24 +12,39 @@ Parse a unit string into a Unitful.Units object.
 
 Handles common scientific units and compositions used in Earth system models.
 """
+# ESM-specific dimensionless mole-fraction units (see docs/units-standard.md).
+# All elements are dimensionally-equivalent to Unitful.NoUnits; the scale factor
+# listed in the canonical doc is applied only during conversion, not dimensional
+# checking.
+const _ESM_DIMENSIONLESS_UNITS = Set([
+    "mol/mol", "ppm", "ppmv", "ppb", "ppbv", "ppt", "pptv",
+])
+
 function parse_units(unit_str::String)::Union{Unitful.Units, Nothing}
-    if isempty(unit_str) || unit_str == "dimensionless"
+    if isempty(unit_str) || unit_str == "dimensionless" || unit_str == "1"
         return Unitful.NoUnits
     end
 
+    # ESM-specific mole-fraction family: all dimensionless.
+    if unit_str in _ESM_DIMENSIONLESS_UNITS
+        return Unitful.NoUnits
+    end
+
+    # Dobson unit: areal number density of ozone molecules.
+    # 1 Dobson = 2.6867e20 molec/m^2 — dimension is [length]^-2 since the
+    # ESM standard treats `molec` as a dimensionless count atom.
+    if unit_str == "Dobson"
+        return Unitful.unit(1.0 * u"m"^-2)
+    end
+
     try
-        # Handle some common ESM unit patterns
-        unit_str = replace(unit_str, r"mol/mol" => "mol/mol")  # Keep as-is for concentration
-        unit_str = replace(unit_str, r"\bmol\b" => "mol")
-        unit_str = replace(unit_str, r"\bs\b" => "s")
-        unit_str = replace(unit_str, r"\bm\b" => "m")
-        unit_str = replace(unit_str, r"\bkg\b" => "kg")
-        unit_str = replace(unit_str, r"\bK\b" => "K")
-        unit_str = replace(unit_str, r"\bPa\b" => "Pa")
-        unit_str = replace(unit_str, r"\bJ\b" => "J")
+        # Replace the ESM-specific `molec` count atom with `1` so Unitful can
+        # parse composite forms like `molec/cm^3` → `1/cm^3`. Only replace
+        # whole-word occurrences to avoid clobbering substrings.
+        normalized = replace(unit_str, r"\bmolec\b" => "1")
 
         # Try to parse with Unitful
-        parsed = uparse(unit_str)
+        parsed = uparse(normalized)
         # Handle both FreeUnits (for unit strings like "mol/L") and Quantity (for strings like "1/s")
         if isa(parsed, Unitful.Units)
             return parsed  # Already units
