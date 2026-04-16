@@ -174,4 +174,10 @@ Collection of examples showing how to use the ESM Format libraries.
 - [merge prefers file_b on key conflicts](julia-merge-prefers-file_b-on-key-conflicts.md)
 - [extract top-level component](julia-extract-top-level-component.md)
 - [extract returns empty when component not found](julia-extract-returns-empty-when-component-not-found.md)
+- [MTK description metadata](julia-mtk-description-metadata.md)
+- [State variable carries description + units](julia-state-variable-carries-description---units.md)
+- [Only units](julia-only-units.md)
+- [Only description](julia-only-description.md)
+- [Neither description nor units: no metadata attached](julia-neither-description-nor-units--no-metadata-attached.md)
+- [Description does not clobber default value](julia-description-does-not-clobber-default-value.md)
 
