@@ -21,11 +21,16 @@ The release pipeline provides:
    - Triggers automatically on push to main or manual dispatch
    - Coordinates package-specific workflows
 
-2. **Package-Specific Workflows**
-   - `julia-ci.yml`: Julia package testing and registry registration
-   - `npm-publish.yml`: TypeScript/JavaScript package publishing to NPM
-   - `python-package.yml`: Python package publishing to PyPI
-   - `rust-ci.yml`: Rust package testing and crates.io publishing
+2. **Consolidated Publish Workflow** (`.github/workflows/release-publish.yml`)
+   - Fires on `release: published` and on `push` of `v*` tags
+   - Julia General registry registration
+   - TypeScript/JavaScript package publishing to NPM (stable + beta)
+   - Python package build and publish to PyPI / TestPyPI
+   - Rust package publishing to crates.io plus cross-platform binary assets
+   - Go module tagging and `proxy.golang.org` indexing trigger
+
+   Per-language CI test matrices were absorbed into `conformance-testing.yml`
+   (gt-9ju), and per-language publish workflows were consolidated here (gt-567).
 
 3. **Distribution Workflows**
    - `binary-release.yml`: Cross-platform binary compilation and distribution

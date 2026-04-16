@@ -1,6 +1,6 @@
 # EarthSciSerialization.jl
 
-[![Julia CI/CD](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/julia-ci.yml/badge.svg)](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/julia-ci.yml)
+[![Cross-Language Conformance Testing](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/conformance-testing.yml/badge.svg)](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/conformance-testing.yml)
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://earthsciml.github.io/EarthSciSerialization/packages/EarthSciSerialization.jl/stable)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://earthsciml.github.io/EarthSciSerialization/packages/EarthSciSerialization.jl/dev)
 

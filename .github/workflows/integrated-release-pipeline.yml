@@ -364,47 +364,10 @@ jobs:
         branch: main
         tags: true
 
-  # Run package-specific CI/CD workflows
-  trigger-package-workflows:
-    needs: [release-analysis, security-scan, create-release]
-    runs-on: ubuntu-latest
-    if: needs.release-analysis.outputs.needs_release == 'true' && needs.security-scan.outputs.security_status == 'passed'
-    strategy:
-      fail-fast: false
-      matrix:
-        workflow: [
-          { name: 'julia-ci.yml', package: 'EarthSciSerialization.jl' },
-          { name: 'npm-publish.yml', package: 'earthsci-toolkit' },
-          { name: 'python-package.yml', package: 'earthsci_toolkit' },
-          { name: 'rust-ci.yml', package: 'earthsci-toolkit-rs' }
-        ]
-    steps:
-    - name: Check if package changed
-      id: check_package
-      run: |
-        CHANGED_PACKAGES='${{ needs.release-analysis.outputs.changed_packages }}'
-        PACKAGE_NAME="${{ matrix.workflow.package }}"
-
-        if echo "$CHANGED_PACKAGES" | jq -e ".[] | select(. == \"$PACKAGE_NAME\")" > /dev/null; then
-          echo "should_trigger=true" >> $GITHUB_OUTPUT
-          echo "Package $PACKAGE_NAME changed, will trigger workflow"
-        else
-          echo "should_trigger=false" >> $GITHUB_OUTPUT
-          echo "Package $PACKAGE_NAME not changed, skipping workflow"
-        fi
-
-    - name: Trigger package workflow
-      if: steps.check_package.outputs.should_trigger == 'true'
-      uses: actions/github-script@v7
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          await github.rest.actions.createWorkflowDispatch({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            workflow_id: '${{ matrix.workflow.name }}',
-            ref: 'main'
-          });
+  # Note: package-specific publish jobs (npm, PyPI, crates.io, Julia registry,
+  # Go module tagging) are no longer dispatched from here. They live in
+  # release-publish.yml and fire automatically on the `release: published`
+  # event emitted by the `create-release` job above (gt-567).
 
   # Build cross-platform binaries
   build-binaries:
@@ -417,7 +380,7 @@ jobs:
 
   # Run comprehensive conformance testing (reuses the consolidated workflow)
   run-conformance-tests:
-    needs: [release-analysis, security-scan, create-release, trigger-package-workflows]
+    needs: [release-analysis, security-scan, create-release]
     if: needs.release-analysis.outputs.needs_release == 'true' && needs.security-scan.outputs.security_status == 'passed'
     uses: ./.github/workflows/conformance-testing.yml
     with:

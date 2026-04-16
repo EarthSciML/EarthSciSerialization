@@ -1,7 +1,7 @@
 # EarthSci Toolkit - TypeScript Package
 
 [![npm version](https://badge.fury.io/js/earthsci-toolkit.svg)](https://badge.fury.io/js/earthsci-toolkit)
-[![NPM Package Build and Publish](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/npm-publish.yml/badge.svg)](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/npm-publish.yml)
+[![Cross-Language Conformance Testing](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/conformance-testing.yml/badge.svg)](https://github.com/EarthSciML/EarthSciSerialization/actions/workflows/conformance-testing.yml)
 
 TypeScript types and utilities for the **EarthSciML Serialization Format**, providing complete type definitions, parsing, validation, and manipulation tools for scientific modeling data structures.
 

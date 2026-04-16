@@ -116,10 +116,8 @@ The security system integrates with the automated release pipeline:
 - **`.github/workflows/security-scan.yml`**: Main security scanning workflow
 - Integration with existing workflows:
   - `integrated-release-pipeline.yml`
-  - `npm-publish.yml`
-  - `python-package.yml`
-  - `julia-ci.yml`
-  - `rust-ci.yml`
+  - `release-publish.yml`
+  - `conformance-testing.yml`
 
 ## Security Policies
 
