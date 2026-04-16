@@ -93,6 +93,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [Model Validation](julia-model-validation.md)
 - [File Validation](julia-file-validation.md)
 - [Unit Inference](julia-unit-inference.md)
+- [Cross-binding units fixtures (gt-gtf)](julia-cross-binding-units-fixtures--gt-gtf-.md)
 - [Schema Validation](julia-schema-validation.md)
 - [SchemaError struct](julia-schemaerror-struct.md)
 - [SchemaValidationError exception](julia-schemavalidationerror-exception.md)
