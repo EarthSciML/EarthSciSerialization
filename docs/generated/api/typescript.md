@@ -414,7 +414,7 @@ Debounced validation hook for use in components that trigger validation
 
 ### createDemoServer
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/demo/demo-pages.ts:333`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/tests/demo/demo-pages.ts:333`
 
 **Signature:**
 ```typescript
@@ -2265,7 +2265,7 @@ A variable exposed by a data loader, mapped from a source-file variable.
 
 ### DemoPageConfig
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/demo/demo-pages.ts:8`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/tests/demo/demo-pages.ts:8`
 
 **Definition:**
 ```typescript
