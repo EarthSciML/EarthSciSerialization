@@ -9,12 +9,7 @@
 
 The ESM (`.esm`) format enables persistence, interchange, and version control for earth science models across multiple programming languages. Every model is fully self-describing: all equations, variables, parameters, species, and reactions are specified in the format itself, allowing conforming parsers in any language to reconstruct the complete mathematical system.
 
-**Key Features:**
-- 🌍 **Language-agnostic** — Works with Julia, TypeScript, Python, Rust, and Go
-- 📄 **Human-readable** — JSON-based format that's diff-friendly for version control
-- 🔗 **Composable** — Define coupling between model components
-- ✅ **Validated** — Built-in schema validation and consistency checks
-- 🧮 **Mathematical** — Rich expression system with operators and units
+The format is language-agnostic (Julia, TypeScript, Python, Rust, Go), human-readable JSON, composable, validated, and supports rich mathematical expressions. See the [format specification](esm-spec.md) for details.
 
 ## Quick Start
 
