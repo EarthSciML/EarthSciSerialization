@@ -137,55 +137,14 @@ All code contributions must:
 
 ## Testing Requirements
 
-### Test Categories
+See [CONFORMANCE_TESTING_GUIDE.md](CONFORMANCE_TESTING_GUIDE.md) for quick-start instructions and [CONFORMANCE_SPEC.md](CONFORMANCE_SPEC.md) for the full fixture format and execution protocol.
 
-1. **Unit Tests**: Language-specific functionality testing
-2. **Conformance Tests**: Cross-language consistency validation
-3. **Integration Tests**: End-to-end workflow testing
-4. **Performance Tests**: Benchmarking and scalability validation
-
-### Running Tests
-
-#### Full Test Suite
-```bash
-# Complete test suite (all languages)
-./scripts/test-conformance.sh
-
-# Individual language testing
-julia --project=. -e 'using Pkg; Pkg.test()'                    # Julia
-cd packages/earthsci-toolkit && npm test                              # TypeScript
-cd packages/earthsci_toolkit && python -m pytest                     # Python
-cd packages/earthsci-toolkit-rs && cargo test                      # Rust
-cd packages/esm-format-go && go test ./...                     # Go
-```
-
-#### Conformance Testing
-```bash
-# Run cross-language conformance tests
-./scripts/run-julia-conformance.jl
-./scripts/run-typescript-conformance.js
-./scripts/run-python-conformance.py
-
-# Generate conformance report
-./scripts/generate-conformance-report.py
-```
-
-#### Test Requirements for Contributions
+### Test Requirements for Contributions
 
 - **All tests must pass** before code submission
 - **New features** require corresponding conformance tests
 - **Bug fixes** must include regression tests
 - **Breaking changes** require migration guides and deprecation notices
-
-### Conformance Requirements
-
-All language implementations must:
-
-1. Parse all files in `tests/valid/` successfully
-2. Reject all files in `tests/invalid/` with expected error codes
-3. Produce identical outputs for display formatting tests
-4. Generate consistent graph representations
-5. Handle all mathematical expression types correctly
 
 ## Contribution Workflow
 

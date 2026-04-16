@@ -115,7 +115,36 @@ Common problems:
 | `scripts/run-python-conformance.py` | Python-specific test runner |
 | `scripts/compare-conformance-outputs.py` | Cross-language comparison |
 | `scripts/generate-conformance-report.py` | HTML report generation |
-| `CONFORMANCE_TESTING.md` | Detailed technical documentation |
+| `CONFORMANCE_SPEC.md` | Authoritative fixture format spec and execution protocol |
+
+## Advanced Usage
+
+### Debug Mode
+
+Run scripts with debug output:
+
+```bash
+bash -x ./scripts/test-conformance.sh
+```
+
+### Manual Comparison
+
+Run comparison on existing results:
+
+```bash
+python3 scripts/compare-conformance-outputs.py \
+  --output-dir conformance-results \
+  --languages julia typescript python \
+  --comparison-output analysis.json
+```
+
+### Customizing Thresholds
+
+Edit the status thresholds in `compare-conformance-outputs.py`:
+
+```python
+"status": "PASS" if consistency_score >= 0.9 else "WARN" if consistency_score >= 0.7 else "FAIL"
+```
 
 ## Next Steps for Full Conformance Testing
 

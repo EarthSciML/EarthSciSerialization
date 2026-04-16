@@ -141,7 +141,7 @@ The ESM format supports:
 - **[Format Specification](esm-spec.md)** — Complete ESM format documentation
 - **[Library Specification](esm-libraries-spec.md)** — Requirements for ESM library implementations
 - **[Schema Reference](esm-schema.json)** — Authoritative JSON schema
-- **[Conformance Testing](CONFORMANCE_TESTING.md)** — Cross-language test suite (detailed technical docs)
+- **[Conformance Spec](CONFORMANCE_SPEC.md)** — Fixture format, execution protocol, and CI integration
 - **[Conformance Testing Guide](CONFORMANCE_TESTING_GUIDE.md)** — Practical usage guide and current status
 - **[Validation Matrix](ESM_COMPLIANCE_VALIDATION_MATRIX.md)** — Reference taxonomy of testable requirements
 

@@ -454,9 +454,37 @@ The comparison system categorizes divergences as:
 }
 ```
 
-## 6. Error Handling and Reporting
+## 6. CI Integration
 
-### 6.1 Standard Error Codes
+### 6.1 GitHub Actions Workflow
+
+The `.github/workflows/conformance-testing.yml` workflow:
+
+1. **Individual Tests**: Runs each language's test suite independently
+2. **Conformance Tests**: Cross-language comparison (only if individual tests pass)
+3. **Results Upload**: Stores conformance results as artifacts
+4. **PR Comments**: Posts conformance status on pull requests
+5. **Failure Detection**: Fails if critical divergences detected
+
+### 6.2 Triggering
+
+Conformance tests run automatically on:
+- Pushes to `main` or `develop` branches
+- Pull requests affecting `packages/`, `tests/`, or `scripts/`
+- Manual workflow dispatch
+
+### 6.3 Workflow Dependencies
+
+```yaml
+conformance-testing:
+  needs: [julia-tests, typescript-tests, python-tests, rust-tests]
+```
+
+Only runs cross-language tests if individual language tests pass.
+
+## 7. Error Handling and Reporting
+
+### 7.1 Standard Error Codes
 
 Validation tests must use these standardized error codes:
 
@@ -475,7 +503,7 @@ Validation tests must use these standardized error codes:
 | `unit_dimension_mismatch` | Units | Dimensional analysis failure |
 | `unit_parse_error` | Units | Unrecognized unit string |
 
-### 6.2 Error Message Format
+### 7.2 Error Message Format
 
 ```json
 {
@@ -490,7 +518,7 @@ Validation tests must use these standardized error codes:
 }
 ```
 
-### 6.3 Test Failure Reporting
+### 7.3 Test Failure Reporting
 
 When a test case fails, implementations must report:
 
@@ -500,9 +528,9 @@ When a test case fails, implementations must report:
 - **Error**: Exception message or error description
 - **Context**: Additional debugging information
 
-## 7. Test Fixture Authoring Guidelines
+## 8. Test Fixture Authoring Guidelines
 
-### 7.1 Fixture Creation Process
+### 8.1 Fixture Creation Process
 
 1. **Design test case** targeting specific functionality or edge case
 2. **Author baseline fixture** in appropriate category directory
@@ -511,7 +539,7 @@ When a test case fails, implementations must report:
 5. **Document rationale** in fixture metadata or README
 6. **Commit to repository** after peer review
 
-### 7.2 Fixture Quality Standards
+### 8.2 Fixture Quality Standards
 
 - **Minimal**: Each fixture should test one specific aspect or behavior
 - **Comprehensive**: Edge cases and boundary conditions should be covered
@@ -519,16 +547,16 @@ When a test case fails, implementations must report:
 - **Reproducible**: Results should be deterministic across implementations
 - **Maintainable**: Fixtures should be easy to update when specifications change
 
-### 7.3 Version Control
+### 8.3 Version Control
 
 - Test fixtures are version-controlled alongside the ESM schema
 - Changes to expected outputs require review and approval
 - Breaking changes must be coordinated across all language implementations
 - Deprecated fixtures should be marked but preserved for historical testing
 
-## 8. Implementation Requirements
+## 9. Implementation Requirements
 
-### 8.1 Minimum Conformance
+### 9.1 Minimum Conformance
 
 To claim conformance with this specification, an implementation must:
 
@@ -538,7 +566,7 @@ To claim conformance with this specification, an implementation must:
 4. **Generate correct graph structures** for system and expression graphs
 5. **Produce standardized output formats** as specified in Section 3
 
-### 8.2 Test Coverage Requirements
+### 9.2 Test Coverage Requirements
 
 Implementations must provide test coverage for:
 
@@ -548,7 +576,7 @@ Implementations must provide test coverage for:
 - All coupling types and transformations
 - All event types (continuous, discrete, functional)
 
-### 8.3 Performance Guidelines
+### 9.3 Performance Guidelines
 
 While not strictly required for conformance, implementations should:
 
@@ -556,9 +584,9 @@ While not strictly required for conformance, implementations should:
 - Handle large ESM files (1000+ equations) without excessive memory usage
 - Provide progress reporting for long-running test operations
 
-## 9. Future Extensions
+## 10. Future Extensions
 
-### 9.1 Planned Additions
+### 10.1 Planned Additions
 
 - **MathML output format** tests for web/academic publishing
 - **Code generation tests** for Julia/Python output quality verification
@@ -566,7 +594,7 @@ While not strictly required for conformance, implementations should:
 - **Performance benchmarks** with standardized timing measurements
 - **Fuzzing test cases** for robustness testing
 
-### 9.2 Extensibility
+### 10.2 Extensibility
 
 The test fixture format is designed to accommodate:
 
@@ -575,7 +603,7 @@ The test fixture format is designed to accommodate:
 - Custom validation rules through metadata in test fixture files
 - Language-specific test extensions while maintaining core compatibility
 
-## 10. Reference Implementation
+## 11. Reference Implementation
 
 The Julia `EarthSciSerialization.jl` library serves as the reference implementation for conformance test development. When adding new test fixtures:
 
