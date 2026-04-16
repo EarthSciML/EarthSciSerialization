@@ -415,43 +415,15 @@ jobs:
       version: v${{ needs.release-analysis.outputs.new_version }}
     secrets: inherit
 
-  # Run comprehensive conformance testing
+  # Run comprehensive conformance testing (reuses the consolidated workflow)
   run-conformance-tests:
     needs: [release-analysis, security-scan, create-release, trigger-package-workflows]
-    runs-on: ubuntu-latest
     if: needs.release-analysis.outputs.needs_release == 'true' && needs.security-scan.outputs.security_status == 'passed'
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: v${{ needs.release-analysis.outputs.new_version }}
-
-    - name: Set up multi-language environment
-      run: |
-        # Install Node.js
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt-get install -y nodejs
-
-        # Install Python
-        sudo apt-get install -y python3 python3-pip
-
-        # Install Julia
-        curl -fsSL https://install.julialang.org | sh -s -- --yes
-
-        # Install Rust
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source ~/.cargo/env
-
-    - name: Run conformance tests
-      run: |
-        chmod +x scripts/test-conformance.sh
-        ./scripts/test-conformance.sh --all-languages --release-validation
-
-    - name: Upload conformance results
-      uses: actions/upload-artifact@v4
-      with:
-        name: conformance-test-results-v${{ needs.release-analysis.outputs.new_version }}
-        path: conformance-results/
-        retention-days: 90
+    uses: ./.github/workflows/conformance-testing.yml
+    with:
+      release_validation: true
+      ref: v${{ needs.release-analysis.outputs.new_version }}
+    secrets: inherit
 
   # Update release with final assets and status
   finalize-release:

@@ -15,6 +15,18 @@ on:
       - 'tests/**'
       - 'scripts/**'
       - '.github/workflows/conformance-testing.yml'
+  workflow_call:
+    inputs:
+      release_validation:
+        description: 'Run as part of release validation'
+        required: false
+        type: boolean
+        default: false
+      ref:
+        description: 'Git ref to check out (e.g. a release tag)'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:  # Allow manual triggering
     inputs:
       run_performance_analysis:
@@ -49,6 +61,8 @@ jobs:
         working-directory: packages/EarthSciSerialization.jl
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Julia
         uses: julia-actions/setup-julia@v2
@@ -94,6 +108,8 @@ jobs:
         working-directory: packages/earthsci-toolkit
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -122,6 +138,8 @@ jobs:
         working-directory: packages/earthsci_toolkit
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -171,6 +189,8 @@ jobs:
         working-directory: packages/earthsci-toolkit-rs
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
@@ -229,6 +249,8 @@ jobs:
         working-directory: packages/esm-format-go
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -278,6 +300,8 @@ jobs:
     needs: [julia-tests, typescript-tests, python-tests, rust-tests, go-tests]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Julia
         uses: julia-actions/setup-julia@v2
@@ -368,6 +392,8 @@ jobs:
     needs: [standard-conformance-testing]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -437,6 +463,8 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       # Download all results
       - name: Download standard conformance results
