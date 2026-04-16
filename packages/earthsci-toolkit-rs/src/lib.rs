@@ -122,7 +122,8 @@ pub use simulate::{
     SolutionMetadata, SolverChoice, interpret, simulate,
 };
 pub use units::{
-    Dimension, Unit, UnitError, check_dimensional_consistency, convert_units, parse_unit,
+    Dimension, Unit, UnitError, build_unit_env, check_dimensional_consistency, convert_units,
+    parse_unit, validate_equation_dimensions,
 };
 
 #[cfg(feature = "parallel")]
