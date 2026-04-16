@@ -513,6 +513,20 @@ function adjacency(graph::Graph{N, E}, node::N) where {N, E}
 
 ---
 
+### build
+
+**Python:**
+```python
+def build(draw):
+```
+
+**Python:**
+```python
+def build(draw):
+```
+
+---
+
 ### coerce_coupling_entry
 
 **Julia:**
