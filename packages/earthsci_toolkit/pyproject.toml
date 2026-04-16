@@ -59,6 +59,8 @@ test = [
     # Required for jsonschema FormatChecker to validate date-time and uri formats
     "rfc3339-validator",
     "rfc3986-validator",
+    # Property-based / fuzz testing (gt-72z)
+    "hypothesis>=6.0",
 ]
 # Analytics/performance monitoring. The `esm-monitoring` companion package
 # lives in this repo at `../../monitoring/` and is not yet published to PyPI.
