@@ -56,29 +56,29 @@ function to_julia_code(file::EsmFile)
 
     # Note: Events are handled within individual models, not at the file level
 
-    # Generate coupling as TODO comments
+    # Generate coupling placeholders (codegen not yet implemented)
     if !isnothing(file.coupling) && !isempty(file.coupling)
-        push!(lines, "# Coupling (TODO)")
+        push!(lines, "# Coupling")
         for coupling in file.coupling
-            append!(lines, generate_coupling_comment(coupling))
+            append!(lines, generate_coupling_placeholder(coupling))
         end
         push!(lines, "")
     end
 
-    # Generate domains as TODO comments
+    # Generate domain placeholders (codegen not yet implemented)
     if !isnothing(file.domains) && !isempty(file.domains)
-        push!(lines, "# Domains (TODO)")
-        for (_, domain) in file.domains
-            append!(lines, generate_domain_comment(domain))
+        push!(lines, "# Domains")
+        for (name, domain) in file.domains
+            append!(lines, generate_domain_placeholder(name, domain))
         end
         push!(lines, "")
     end
 
-    # Generate data loaders as TODO comments
+    # Generate data loader placeholders (codegen not yet implemented)
     if !isnothing(file.data_loaders) && !isempty(file.data_loaders)
-        push!(lines, "# Data Loaders (TODO)")
+        push!(lines, "# Data Loaders")
         for (name, data_loader) in file.data_loaders
-            append!(lines, generate_data_loader_comment(name, data_loader))
+            append!(lines, generate_data_loader_placeholder(name, data_loader))
         end
         push!(lines, "")
     end
@@ -133,7 +133,7 @@ function to_python_code(file::EsmFile)
     end
 
     # Generate simulation stub
-    push!(lines, "# Simulation setup (TODO: Configure parameters)")
+    push!(lines, "# Simulation setup")
     push!(lines, "tspan = (0, 10)  # time span")
     push!(lines, "parameters = {}  # parameter values")
     push!(lines, "initial_conditions = {}  # initial values")
@@ -141,19 +141,20 @@ function to_python_code(file::EsmFile)
     push!(lines, "# result = esm.simulate(tspan=tspan, parameters=parameters, initial_conditions=initial_conditions)")
     push!(lines, "")
 
-    # Generate TODO comments for other features
+    # Generate coupling placeholders (codegen not yet implemented)
     if !isnothing(file.coupling) && !isempty(file.coupling)
-        push!(lines, "# Coupling (TODO)")
+        push!(lines, "# Coupling")
         for coupling in file.coupling
-            append!(lines, generate_python_coupling_comment(coupling))
+            append!(lines, generate_python_coupling_placeholder(coupling))
         end
         push!(lines, "")
     end
 
+    # Generate domain placeholders (codegen not yet implemented)
     if !isnothing(file.domains) && !isempty(file.domains)
-        push!(lines, "# Domains (TODO)")
-        for (_, domain) in file.domains
-            append!(lines, generate_python_domain_comment(domain))
+        push!(lines, "# Domains")
+        for (name, domain) in file.domains
+            append!(lines, generate_python_domain_placeholder(name, domain))
         end
         push!(lines, "")
     end
@@ -272,26 +273,55 @@ function generate_event_code(name::String, event::Union{ContinuousEvent,Discrete
     return lines
 end
 
-function generate_coupling_comment(coupling::CouplingEntry)
+function generate_coupling_placeholder(coupling::CouplingEntry)
     lines = String[]
-    push!(lines, "# TODO: Implement coupling $(typeof(coupling))")
-    # Add specific coupling details based on type
-    return lines
-end
-
-function generate_domain_comment(domain::Domain)
-    lines = String[]
-    push!(lines, "# TODO: Implement domain")
-    if !isnothing(domain.spatial) && haskey(domain.spatial, "coordinates")
-        coords = domain.spatial["coordinates"]
-        push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
+    if coupling isa CouplingOperatorCompose
+        push!(lines, "# Coupling (operator_compose): compose systems $(join(coupling.systems, ", "))")
+        push!(lines, "#   Needs: ConnectorSystem to match LHS time derivatives and add RHS terms")
+    elseif coupling isa CouplingCouple
+        push!(lines, "# Coupling (couple): bidirectional coupling of $(join(coupling.systems, ", "))")
+        push!(lines, "#   Needs: connector equations via compose()")
+    elseif coupling isa CouplingVariableMap
+        push!(lines, "# Coupling (variable_map): $(coupling.from) → $(coupling.to) via $(coupling.transform)")
+        if !isnothing(coupling.factor)
+            push!(lines, "#   Factor: $(coupling.factor)")
+        end
+    elseif coupling isa CouplingOperatorApply
+        push!(lines, "# Coupling (operator_apply): register operator $(coupling.operator)")
+    elseif coupling isa CouplingCallback
+        push!(lines, "# Coupling (callback): $(coupling.callback_id)")
+    elseif coupling isa CouplingEvent
+        push!(lines, "# Coupling (event): $(coupling.event_type) with $(length(coupling.affects)) affect(s)")
+    else
+        push!(lines, "# Coupling: $(typeof(coupling))")
+    end
+    if !isnothing(coupling.description)
+        push!(lines, "#   $(coupling.description)")
     end
     return lines
 end
 
-function generate_data_loader_comment(name::String, data_loader::DataLoader)
+function generate_domain_placeholder(name::String, domain::Domain)
     lines = String[]
-    push!(lines, "# TODO: Implement data loader $name")
+    push!(lines, "# Domain: $name")
+    if !isnothing(domain.spatial) && haskey(domain.spatial, "coordinates")
+        coords = domain.spatial["coordinates"]
+        push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
+    end
+    if !isnothing(domain.temporal)
+        temporal = domain.temporal
+        tstart = get(temporal, "start", nothing)
+        tend = get(temporal, "end", nothing)
+        if !isnothing(tstart) && !isnothing(tend)
+            push!(lines, "#   Temporal range: $tstart to $tend")
+        end
+    end
+    return lines
+end
+
+function generate_data_loader_placeholder(name::String, data_loader::DataLoader)
+    lines = String[]
+    push!(lines, "# Data loader: $name")
     push!(lines, "#   Kind: $(data_loader.kind)")
     push!(lines, "#   Source: $(data_loader.source.url_template)")
     var_names = sort(collect(keys(data_loader.variables)))
@@ -592,18 +622,43 @@ function generate_python_reaction_system_code(name::String, reaction_system::Rea
     return lines
 end
 
-function generate_python_coupling_comment(coupling::CouplingEntry)
+function generate_python_coupling_placeholder(coupling::CouplingEntry)
     lines = String[]
-    push!(lines, "# TODO: Implement coupling $(typeof(coupling))")
+    if coupling isa CouplingOperatorCompose
+        push!(lines, "# Coupling (operator_compose): compose systems $(join(coupling.systems, ", "))")
+    elseif coupling isa CouplingCouple
+        push!(lines, "# Coupling (couple): bidirectional coupling of $(join(coupling.systems, ", "))")
+    elseif coupling isa CouplingVariableMap
+        push!(lines, "# Coupling (variable_map): $(coupling.from) → $(coupling.to) via $(coupling.transform)")
+    elseif coupling isa CouplingOperatorApply
+        push!(lines, "# Coupling (operator_apply): register operator $(coupling.operator)")
+    elseif coupling isa CouplingCallback
+        push!(lines, "# Coupling (callback): $(coupling.callback_id)")
+    elseif coupling isa CouplingEvent
+        push!(lines, "# Coupling (event): $(coupling.event_type) with $(length(coupling.affects)) affect(s)")
+    else
+        push!(lines, "# Coupling: $(typeof(coupling))")
+    end
+    if !isnothing(coupling.description)
+        push!(lines, "#   $(coupling.description)")
+    end
     return lines
 end
 
-function generate_python_domain_comment(domain::Domain)
+function generate_python_domain_placeholder(name::String, domain::Domain)
     lines = String[]
-    push!(lines, "# TODO: Implement domain")
+    push!(lines, "# Domain: $name")
     if !isnothing(domain.spatial) && haskey(domain.spatial, "coordinates")
         coords = domain.spatial["coordinates"]
         push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
+    end
+    if !isnothing(domain.temporal)
+        temporal = domain.temporal
+        tstart = get(temporal, "start", nothing)
+        tend = get(temporal, "end", nothing)
+        if !isnothing(tstart) && !isnothing(tend)
+            push!(lines, "#   Temporal range: $tstart to $tend")
+        end
     end
     return lines
 end
