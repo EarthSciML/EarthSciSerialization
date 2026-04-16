@@ -1954,5 +1954,41 @@
       }
     ],
     "is_valid": false
+  },
+
+  "units_inconsistent_subtraction.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_diff",
+        "code": "unit_inconsistency",
+        "message": "Cannot subtract quantities with different units: 'Pa' - 'K'",
+        "details": {
+          "operation": "subtraction",
+          "left_units": "Pa",
+          "right_units": "K",
+          "variable": "invalid_diff"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_exponent.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_power",
+        "code": "unit_inconsistency",
+        "message": "Exponent must be dimensionless, got 'kg' for base with units 'm'",
+        "details": {
+          "operation": "exponentiation",
+          "base_units": "m",
+          "exponent_units": "kg",
+          "variable": "invalid_power"
+        }
+      }
+    ],
+    "is_valid": false
   }
 }
