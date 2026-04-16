@@ -19,10 +19,7 @@ class TestStructuralValidation:
     @pytest.fixture
     def fixtures_dir(self):
         """Get path to validation fixtures."""
-        fixtures = Path(__file__).parent.parent.parent.parent / "tests"
-        if not fixtures.exists():
-            fixtures = Path("/home/ctessum/EarthSciSerialization/tests")
-        return fixtures
+        return Path(__file__).resolve().parents[3] / "tests"
 
     def test_circular_references_error_code(self, fixtures_dir):
         """Test detection of circular references with specific error code."""
@@ -300,10 +297,7 @@ class TestValidationWithFixtures:
     @pytest.fixture
     def fixtures_dir(self):
         """Get path to fixtures."""
-        fixtures = Path(__file__).parent.parent.parent.parent / "tests"
-        if not fixtures.exists():
-            fixtures = Path("/home/ctessum/EarthSciSerialization/tests")
-        return fixtures
+        return Path(__file__).resolve().parents[3] / "tests"
 
     def test_all_invalid_fixtures_fail_validation(self, fixtures_dir):
         """Test that all files in invalid/ directory fail validation."""

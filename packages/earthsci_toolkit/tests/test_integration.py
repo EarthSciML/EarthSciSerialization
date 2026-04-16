@@ -23,10 +23,7 @@ class TestFullWorkflowIntegration:
     @pytest.fixture
     def fixtures_dir(self):
         """Get path to test fixtures."""
-        fixtures = Path(__file__).parent.parent.parent.parent / "tests"
-        if not fixtures.exists():
-            fixtures = Path("/home/ctessum/EarthSciSerialization/tests")
-        return fixtures
+        return Path(__file__).resolve().parents[3] / "tests"
 
     def test_simple_model_full_workflow(self):
         """Test full workflow with a simple model."""

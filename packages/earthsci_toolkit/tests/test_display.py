@@ -19,10 +19,7 @@ class TestDisplayFixtures:
     @pytest.fixture
     def fixtures_dir(self):
         """Get path to display fixtures."""
-        fixtures = Path(__file__).parent.parent.parent.parent / "tests" / "display"
-        if not fixtures.exists():
-            fixtures = Path("/home/ctessum/EarthSciSerialization/tests/display")
-        return fixtures
+        return Path(__file__).resolve().parents[3] / "tests" / "display"
 
     def _get_cases(self, test_cases):
         """Extract cases from fixture data (handles both list and dict formats)."""

@@ -19,10 +19,7 @@ class TestSubstitutionFixtures:
     @pytest.fixture
     def fixtures_dir(self):
         """Get path to substitution fixtures."""
-        fixtures = Path(__file__).parent.parent.parent.parent / "tests" / "substitution"
-        if not fixtures.exists():
-            fixtures = Path("/home/ctessum/EarthSciSerialization/tests/substitution")
-        return fixtures
+        return Path(__file__).resolve().parents[3] / "tests" / "substitution"
 
     @staticmethod
     def _run_fixture_cases(fixture_file):
