@@ -1,54 +1,67 @@
 import { describe, it, expect } from 'vitest'
-import { parseUnit, checkDimensions, validateUnits } from './units.js'
-import type { DimensionalRep, Expression, EsmFile } from './types.js'
+import { parseUnit, checkDimensions, validateUnits, type ParsedUnit } from './units.js'
+import type { Expression, EsmFile } from './types.js'
 
 describe('Unit parsing and dimensional analysis', () => {
   describe('parseUnit', () => {
     it('should handle dimensionless units', () => {
-      expect(parseUnit('degrees')).toEqual({ dimensionless: true })
-      expect(parseUnit('dimensionless')).toEqual({ dimensionless: true })
-      expect(parseUnit('')).toEqual({ dimensionless: true })
-      expect(parseUnit('mol/mol')).toEqual({ dimensionless: true })
-      expect(parseUnit('ppb')).toEqual({ dimensionless: true })
-      expect(parseUnit('ppm')).toEqual({ dimensionless: true })
+      expect(parseUnit('degrees')).toEqual({ dims: {}, scale: 1 })
+      expect(parseUnit('dimensionless')).toEqual({ dims: {}, scale: 1 })
+      expect(parseUnit('')).toEqual({ dims: {}, scale: 1 })
+      expect(parseUnit('mol/mol')).toEqual({ dims: {}, scale: 1 })
+      expect(parseUnit('ppb')).toEqual({ dims: {}, scale: 1e-9 })
+      expect(parseUnit('ppm')).toEqual({ dims: {}, scale: 1e-6 })
     })
 
     it('should parse basic units', () => {
-      expect(parseUnit('K')).toEqual({ K: 1 })
-      expect(parseUnit('m')).toEqual({ m: 1 })
-      expect(parseUnit('s')).toEqual({ s: 1 })
-      expect(parseUnit('mol')).toEqual({ mol: 1 })
-      expect(parseUnit('molec')).toEqual({ molec: 1 })
+      expect(parseUnit('K')).toEqual({ dims: { K: 1 }, scale: 1 })
+      expect(parseUnit('m')).toEqual({ dims: { m: 1 }, scale: 1 })
+      expect(parseUnit('s')).toEqual({ dims: { s: 1 }, scale: 1 })
+      expect(parseUnit('mol')).toEqual({ dims: { mol: 1 }, scale: 1 })
+      expect(parseUnit('molec')).toEqual({ dims: { molec: 1 }, scale: 1 })
     })
 
     it('should parse compound units', () => {
-      expect(parseUnit('m/s')).toEqual({ m: 1, s: -1 })
-      expect(parseUnit('mol/mol/s')).toEqual({ s: -1 })  // mol/mol cancels out, left with 1/s
-      expect(parseUnit('1/s')).toEqual({ s: -1 })
-      expect(parseUnit('s/m')).toEqual({ s: 1, m: -1 })
+      expect(parseUnit('m/s')).toEqual({ dims: { m: 1, s: -1 }, scale: 1 })
+      expect(parseUnit('mol/mol/s')).toEqual({ dims: { s: -1 }, scale: 1 })
+      expect(parseUnit('1/s')).toEqual({ dims: { s: -1 }, scale: 1 })
+      expect(parseUnit('s/m')).toEqual({ dims: { s: 1, m: -1 }, scale: 1 })
     })
 
-    it('should parse units with exponents', () => {
-      expect(parseUnit('cm^3')).toEqual({ cm: 3 })
-      expect(parseUnit('cm^3/molec/s')).toEqual({ cm: 3, molec: -1, s: -1 })
+    it('should decompose derived and prefixed units to SI base', () => {
+      // cm collapses to m with a scale factor — this is the correctness
+      // fix that motivates sharing the representation with unit-conversion.
+      const cm3 = parseUnit('cm^3')
+      expect(cm3.dims).toEqual({ m: 3 })
+      expect(cm3.scale).toBeCloseTo(1e-6, 20)
+
+      const reactionRate = parseUnit('cm^3/molec/s')
+      expect(reactionRate.dims).toEqual({ m: 3, molec: -1, s: -1 })
+      expect(reactionRate.scale).toBeCloseTo(1e-6, 20)
+    })
+
+    it('should recognize cm and m as the same dimension', () => {
+      // The regression that motivated the unification: cm was a base
+      // dimension in the old DimensionalRep, so `cm + m` looked like a
+      // mismatch. Now both collapse to { m: 1 }.
+      expect(parseUnit('cm').dims).toEqual(parseUnit('m').dims)
     })
 
     it('should handle multiplication', () => {
-      expect(parseUnit('molec/cm^3')).toEqual({ molec: 1, cm: -3 })
+      const mcm3 = parseUnit('molec/cm^3')
+      expect(mcm3.dims).toEqual({ molec: 1, m: -3 })
+      expect(mcm3.scale).toBeCloseTo(1e6, -2)
     })
 
-    it('should handle complex real-world units', () => {
-      // Real examples from ESM spec
-      expect(parseUnit('mol/mol')).toEqual({ dimensionless: true })
-      expect(parseUnit('cm^3/molec/s')).toEqual({ cm: 3, molec: -1, s: -1 })
-      expect(parseUnit('molec/cm^3')).toEqual({ molec: 1, cm: -3 })
-      expect(parseUnit('mol/mol/s')).toEqual({ s: -1 })
+    it('should handle real-world ESM unit strings', () => {
+      expect(parseUnit('mol/mol')).toEqual({ dims: {}, scale: 1 })
+      expect(parseUnit('mol/mol/s')).toEqual({ dims: { s: -1 }, scale: 1 })
     })
   })
 
   describe('checkDimensions', () => {
-    const createUnitBindings = (bindings: Record<string, string>): Map<string, DimensionalRep> => {
-      const map = new Map<string, DimensionalRep>()
+    const createUnitBindings = (bindings: Record<string, string>): Map<string, ParsedUnit> => {
+      const map = new Map<string, ParsedUnit>()
       for (const [name, unitStr] of Object.entries(bindings)) {
         map.set(name, parseUnit(unitStr))
       }
@@ -59,31 +72,40 @@ describe('Unit parsing and dimensional analysis', () => {
       const bindings = createUnitBindings({ x: 'm', t: 's' })
 
       const numberResult = checkDimensions(42, bindings)
-      expect(numberResult.dimensions).toEqual({ dimensionless: true })
+      expect(numberResult.dimensions.dims).toEqual({})
       expect(numberResult.warnings).toEqual([])
 
       const varResult = checkDimensions('x', bindings)
-      expect(varResult.dimensions).toEqual({ m: 1 })
+      expect(varResult.dimensions.dims).toEqual({ m: 1 })
       expect(varResult.warnings).toEqual([])
 
       const unknownVarResult = checkDimensions('unknown', bindings)
-      expect(unknownVarResult.dimensions).toEqual({ dimensionless: true })
+      expect(unknownVarResult.dimensions.dims).toEqual({})
       expect(unknownVarResult.warnings).toEqual(['Unknown variable: unknown'])
     })
 
     it('should handle addition and subtraction', () => {
       const bindings = createUnitBindings({ x: 'm', y: 'm', t: 's' })
 
-      // Same dimensions - valid
       const addExpr: Expression = { op: '+', args: ['x', 'y'] }
       const addResult = checkDimensions(addExpr, bindings)
-      expect(addResult.dimensions).toEqual({ m: 1 })
+      expect(addResult.dimensions.dims).toEqual({ m: 1 })
       expect(addResult.warnings).toEqual([])
 
-      // Different dimensions - invalid
       const badAddExpr: Expression = { op: '+', args: ['x', 't'] }
       const badAddResult = checkDimensions(badAddExpr, bindings)
       expect(badAddResult.warnings[0]).toContain('Addition/subtraction requires same dimensions')
+    })
+
+    it('should treat cm and m as compatible in addition', () => {
+      // Previously impossible: `cm + m` would warn because cm was a base
+      // dimension distinct from m. With the shared representation, both
+      // decompose to { m: 1 } and the operation is accepted.
+      const bindings = createUnitBindings({ a: 'cm', b: 'm' })
+      const expr: Expression = { op: '+', args: ['a', 'b'] }
+      const result = checkDimensions(expr, bindings)
+      expect(result.warnings).toEqual([])
+      expect(result.dimensions.dims).toEqual({ m: 1 })
     })
 
     it('should handle multiplication', () => {
@@ -91,8 +113,8 @@ describe('Unit parsing and dimensional analysis', () => {
 
       const multExpr: Expression = { op: '*', args: ['m', 'a'] }
       const result = checkDimensions(multExpr, bindings)
-      // This is a simplified test - full implementation would need better unit parsing for compound units
       expect(result.warnings).toEqual([])
+      expect(result.dimensions.dims).toEqual({ kg: 1, m: 1, s: -2 })
     })
 
     it('should handle division', () => {
@@ -100,8 +122,8 @@ describe('Unit parsing and dimensional analysis', () => {
 
       const divExpr: Expression = { op: '/', args: ['v', 't'] }
       const result = checkDimensions(divExpr, bindings)
-      // v/t should give acceleration units
       expect(result.warnings).toEqual([])
+      expect(result.dimensions.dims).toEqual({ m: 1, s: -2 })
     })
 
     it('should handle derivative operator', () => {
@@ -109,21 +131,18 @@ describe('Unit parsing and dimensional analysis', () => {
 
       const derivExpr: Expression = { op: 'D', args: ['x'], wrt: 't' }
       const result = checkDimensions(derivExpr, bindings)
-      // D(x)/D(t) should have dimensions m/s
-      expect(result.dimensions).toEqual({ m: 1, s: -1 })
+      expect(result.dimensions.dims).toEqual({ m: 1, s: -1 })
       expect(result.warnings).toEqual([])
     })
 
     it('should handle mathematical functions', () => {
       const bindings = createUnitBindings({ x: 'dimensionless', y: 'm' })
 
-      // Functions requiring dimensionless arguments
       const expExpr: Expression = { op: 'exp', args: ['x'] }
       const expResult = checkDimensions(expExpr, bindings)
-      expect(expResult.dimensions).toEqual({ dimensionless: true })
+      expect(expResult.dimensions.dims).toEqual({})
       expect(expResult.warnings).toEqual([])
 
-      // Function with dimensional argument - should warn
       const badExpExpr: Expression = { op: 'exp', args: ['y'] }
       const badExpResult = checkDimensions(badExpExpr, bindings)
       expect(badExpResult.warnings[0]).toContain('exp() requires dimensionless argument')
@@ -132,13 +151,11 @@ describe('Unit parsing and dimensional analysis', () => {
     it('should handle comparison operators', () => {
       const bindings = createUnitBindings({ x: 'm', y: 'm', t: 's' })
 
-      // Same dimensions - valid
       const compExpr: Expression = { op: '>', args: ['x', 'y'] }
       const compResult = checkDimensions(compExpr, bindings)
-      expect(compResult.dimensions).toEqual({ dimensionless: true })
+      expect(compResult.dimensions.dims).toEqual({})
       expect(compResult.warnings).toEqual([])
 
-      // Different dimensions - invalid
       const badCompExpr: Expression = { op: '>', args: ['x', 't'] }
       const badCompResult = checkDimensions(badCompExpr, bindings)
       expect(badCompResult.warnings[0]).toContain('> requires arguments with same dimensions')
@@ -149,7 +166,7 @@ describe('Unit parsing and dimensional analysis', () => {
 
       const ifExpr: Expression = { op: 'ifelse', args: ['condition', 'x', 'y'] }
       const result = checkDimensions(ifExpr, bindings)
-      expect(result.dimensions).toEqual({ m: 1 })
+      expect(result.dimensions.dims).toEqual({ m: 1 })
       expect(result.warnings).toEqual([])
     })
   })
@@ -161,27 +178,26 @@ describe('Unit parsing and dimensional analysis', () => {
         metadata: {
           name: 'test',
           description: 'test model',
-          authors: ['test']
+          authors: ['test'],
         },
         models: {
           TestModel: {
             variables: {
               x: { type: 'state', units: 'm', description: 'Position' },
               v: { type: 'state', units: 'm/s', description: 'Velocity' },
-              t: { type: 'parameter', units: 's', description: 'Time' }
+              t: { type: 'parameter', units: 's', description: 'Time' },
             },
             equations: [
               {
                 lhs: { op: 'D', args: ['x'], wrt: 't' },
-                rhs: 'v'
-              }
-            ]
-          }
-        }
+                rhs: 'v',
+              },
+            ],
+          },
+        },
       }
 
       const warnings = validateUnits(esmFile)
-      // D(x)/D(t) has dimensions m/s, v has dimensions m/s - should be consistent
       expect(warnings).toEqual([])
     })
 
@@ -191,27 +207,27 @@ describe('Unit parsing and dimensional analysis', () => {
         metadata: {
           name: 'test',
           description: 'test model',
-          authors: ['test']
+          authors: ['test'],
         },
         models: {
           TestModel: {
             variables: {
               x: { type: 'state', units: 'm', description: 'Position' },
-              f: { type: 'parameter', units: 's', description: 'Force (wrong units)' }
+              f: { type: 'parameter', units: 's', description: 'Force (wrong units)' },
             },
             equations: [
               {
                 lhs: { op: 'D', args: ['x'], wrt: 't' },
-                rhs: 'f'
-              }
-            ]
-          }
-        }
+                rhs: 'f',
+              },
+            ],
+          },
+        },
       }
 
       const warnings = validateUnits(esmFile)
       expect(warnings.length).toBeGreaterThan(0)
-      expect(warnings[0].message).toContain('Dimensional mismatch')
+      expect(warnings[0]?.message).toContain('Dimensional mismatch')
     })
 
     it('should validate observed variables', () => {
@@ -220,7 +236,7 @@ describe('Unit parsing and dimensional analysis', () => {
         metadata: {
           name: 'test',
           description: 'test model',
-          authors: ['test']
+          authors: ['test'],
         },
         models: {
           TestModel: {
@@ -231,15 +247,15 @@ describe('Unit parsing and dimensional analysis', () => {
                 type: 'observed',
                 units: 'm/s',
                 expression: { op: '*', args: ['k', 'x'] },
-                description: 'Rate of change'
-              }
-            }
-          }
-        }
+                description: 'Rate of change',
+              },
+            },
+            equations: [],
+          },
+        },
       }
 
       const warnings = validateUnits(esmFile)
-      // k (1/s) * x (m) = m/s, which matches the declared units
       expect(warnings).toEqual([])
     })
 
@@ -249,45 +265,50 @@ describe('Unit parsing and dimensional analysis', () => {
         metadata: {
           name: 'test',
           description: 'test reaction',
-          authors: ['test']
+          authors: ['test'],
         },
         reaction_systems: {
           SimpleReaction: {
             species: {
               A: { units: 'mol/mol', description: 'Species A' },
-              B: { units: 'mol/mol', description: 'Species B' }
+              B: { units: 'mol/mol', description: 'Species B' },
             },
             parameters: {
               k: { units: '1/s', description: 'Rate constant' },
-              M: { units: 'molec/cm^3', description: 'Number density' }
+              M: { units: 'molec/cm^3', description: 'Number density' },
             },
             reactions: [
               {
                 id: 'R1',
-                substrates: { A: 1 },
-                products: { B: 1 },
-                rate: { op: '*', args: ['k', 'A'] }
-              }
-            ]
-          }
-        }
+                substrates: [{ species: 'A', stoichiometry: 1 }],
+                products: [{ species: 'B', stoichiometry: 1 }],
+                rate: { op: '*', args: ['k', 'A'] },
+              },
+            ],
+          },
+        },
       }
 
       const warnings = validateUnits(esmFile)
-      // This is a basic test - reaction system validation is complex
       expect(warnings).toEqual([])
     })
   })
 
   describe('Edge cases and error handling', () => {
     it('should handle empty or null unit strings gracefully', () => {
-      expect(parseUnit('')).toEqual({ dimensionless: true })
-      expect(parseUnit('   ')).toEqual({ dimensionless: true })
+      expect(parseUnit('')).toEqual({ dims: {}, scale: 1 })
+      expect(parseUnit('   ')).toEqual({ dims: {}, scale: 1 })
+    })
+
+    it('should handle unknown unit tokens by falling back to dimensionless', () => {
+      // Matches the lenient behavior of the legacy parser, which silently
+      // ignored tokens it did not recognize.
+      expect(parseUnit('completelyMadeUpUnit')).toEqual({ dims: {}, scale: 1 })
     })
 
     it('should handle unknown operators gracefully', () => {
-      const bindings = new Map<string, DimensionalRep>()
-      bindings.set('x', { m: 1 })
+      const bindings = new Map<string, ParsedUnit>()
+      bindings.set('x', { dims: { m: 1 }, scale: 1 })
 
       const unknownOpExpr: Expression = { op: 'unknown_op' as any, args: ['x'] }
       const result = checkDimensions(unknownOpExpr, bindings)
@@ -295,13 +316,13 @@ describe('Unit parsing and dimensional analysis', () => {
     })
 
     it('should handle malformed expressions', () => {
-      const bindings = new Map<string, DimensionalRep>()
+      const bindings = new Map<string, ParsedUnit>()
 
-      // Division with wrong number of arguments
       const badDivExpr: Expression = { op: '/', args: ['x', 'y', 'z'] }
       const result = checkDimensions(badDivExpr, bindings)
-      // Should find the division error among other warnings
-      const divisionWarning = result.warnings.find(w => w.includes('Division requires exactly 2 arguments'))
+      const divisionWarning = result.warnings.find((w) =>
+        w.includes('Division requires exactly 2 arguments'),
+      )
       expect(divisionWarning).toBeDefined()
     })
   })

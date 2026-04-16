@@ -89,7 +89,6 @@ export {
   parseUnit,
   checkDimensions,
   validateUnits,
-  type DimensionalRep,
   type UnitResult,
   type UnitWarning
 } from '../units.js';

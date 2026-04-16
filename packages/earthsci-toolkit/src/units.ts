@@ -1,46 +1,34 @@
 /**
  * Unit parsing and dimensional analysis for ESM format
  *
- * This module implements unit string parsing and dimensional consistency checking
- * following the ESM specification Section 3.3.1.
+ * This module implements unit string parsing and dimensional consistency
+ * checking following the ESM specification Section 3.3.1. It shares its
+ * canonical representation (`CanonicalDims` + `ParsedUnit`) with
+ * `unit-conversion.ts`, so derived units like `cm`, `J`, `Pa` collapse to
+ * their SI-base decomposition (`m`, `kg·m²·s⁻²`, `kg·m⁻¹·s⁻²`) with a scale
+ * factor rather than being treated as independent dimensions.
  */
 
 import type { Expression, ExpressionNode, EsmFile } from './types.js'
+import {
+  type CanonicalDims,
+  type ParsedUnit,
+  parseUnitForConversion,
+  UnitConversionError,
+} from './unit-conversion.js'
+
+export type { CanonicalDims, ParsedUnit } from './unit-conversion.js'
 
 /**
- * Canonical dimensional representation
- * Maps base dimensions to their powers
- */
-export interface DimensionalRep {
-  // Base SI dimensions
-  mol?: number    // amount of substance
-  molec?: number  // molecular count (alternative to mol)
-  m?: number      // length
-  s?: number      // time
-  K?: number      // temperature
-  kg?: number     // mass
-  A?: number      // electric current
-  cd?: number     // luminous intensity
-
-  // Derived dimensions commonly used in ESM
-  cm?: number     // centimeter (length, alternative to m)
-  J?: number      // joule (energy)
-  Pa?: number     // pascal (pressure)
-
-  // Dimensionless ratios
-  dimensionless?: boolean  // true if completely dimensionless
-}
-
-/**
- * Result of dimensional analysis
+ * Result of dimensional analysis for a single expression.
  */
 export interface UnitResult {
-  dimensions: DimensionalRep
+  dimensions: ParsedUnit
   warnings: string[]
 }
 
 /**
- * Unit validation warning
+ * Dimensional-consistency warning emitted during file-level validation.
  */
 export interface UnitWarning {
   message: string
@@ -48,253 +36,133 @@ export interface UnitWarning {
   equation?: string
 }
 
+function dimensionless(): ParsedUnit {
+  return { dims: {}, scale: 1 }
+}
+
 /**
- * Parse a unit string into canonical dimensional representation
+ * Parse a unit string into canonical SI dimensions plus scale factor.
  *
- * Handles common patterns:
- * - "mol/mol" → {dimensionless: true} (cancels out)
- * - "cm^3/molec/s" → {cm: 3, molec: -1, s: -1}
- * - "K" → {K: 1}
- * - "m/s" → {m: 1, s: -1}
- * - "1/s" → {s: -1}
- * - "degrees" → {dimensionless: true}
+ * Delegates to `parseUnitForConversion` but swallows parse errors and returns
+ * a dimensionless fallback, matching the lenient semantics of the earlier
+ * unit validator (which silently ignored unknown tokens). This keeps the
+ * `validateUnits` pipeline warning-driven rather than exception-driven.
  *
- * @param unitStr Unit string to parse
- * @returns Dimensional representation
+ * The string `"degrees"` is accepted as dimensionless because ESM treats
+ * angle labels as informational; the canonical unit table does not register
+ * it to avoid committing to a radian conversion factor that ESM does not
+ * promise.
  */
-export function parseUnit(unitStr: string): DimensionalRep {
-  if (!unitStr || unitStr.trim() === '') {
-    return { dimensionless: true }
+export function parseUnit(unitStr: string): ParsedUnit {
+  const normalized = (unitStr ?? '').trim().toLowerCase()
+  if (normalized === 'degrees') {
+    return dimensionless()
   }
-
-  // Handle special cases
-  const normalized = unitStr.trim().toLowerCase()
-  if (normalized === 'degrees' || normalized === 'dimensionless') {
-    return { dimensionless: true }
-  }
-
-  // Initialize result
-  const dimensions: DimensionalRep = {}
-
-  // Split by division first
-  const parts = unitStr.split('/')
-  const numerator = parts[0] || '1'
-  const denominatorParts = parts.slice(1)
-
-  // Parse numerator
-  parseUnitPart(numerator, dimensions, 1)
-
-  // Parse denominator parts
-  for (const part of denominatorParts) {
-    parseUnitPart(part, dimensions, -1)
-  }
-
-  // Check if all dimensions cancel out
-  const nonZeroDims = Object.entries(dimensions).filter(([key, value]) =>
-    key !== 'dimensionless' && value !== 0
-  )
-
-  if (nonZeroDims.length === 0) {
-    return { dimensionless: true }
-  }
-
-  // Remove zero dimensions from result
-  const cleanDimensions: DimensionalRep = {}
-  for (const [key, value] of Object.entries(dimensions)) {
-    if (key !== 'dimensionless' && value !== 0) {
-      cleanDimensions[key as keyof DimensionalRep] = value
+  try {
+    return parseUnitForConversion(unitStr)
+  } catch (err) {
+    if (err instanceof UnitConversionError) {
+      return dimensionless()
     }
-  }
-
-  return cleanDimensions
-}
-
-/**
- * Parse a single unit part (numerator or denominator component)
- * @param part Unit part string
- * @param dimensions Dimensions object to modify
- * @param sign Sign (1 for numerator, -1 for denominator)
- */
-function parseUnitPart(part: string, dimensions: DimensionalRep, sign: number): void {
-  if (!part || part.trim() === '' || part.trim() === '1') {
-    return
-  }
-
-  // Handle multiplication within the part
-  const factors = part.split('*')
-
-  for (let factor of factors) {
-    factor = factor.trim()
-    if (!factor || factor === '1') continue
-
-    // Check for exponents using ^ notation
-    const expMatch = factor.match(/^([a-zA-Z]+)(\^?)([\+\-]?\d*)$/)
-    if (expMatch) {
-      const [, base, caretOperator, exponentStr] = expMatch
-      let exponent = 1
-
-      if (caretOperator === '^' && exponentStr) {
-        exponent = parseInt(exponentStr) || 1
-      }
-
-      const finalExponent = sign * exponent
-
-      // Map to canonical dimension names
-      const canonicalBase = mapToCanonicalDimension(base)
-      if (canonicalBase) {
-        dimensions[canonicalBase] = (dimensions[canonicalBase] || 0) + finalExponent
-      }
-    }
+    throw err
   }
 }
 
 /**
- * Map unit strings to canonical dimension names
- * @param unit Unit string
- * @returns Canonical dimension name or null if unrecognized
- */
-function mapToCanonicalDimension(unit: string): keyof DimensionalRep | null {
-  const lowerUnit = unit.toLowerCase()
-
-  const mapping: Record<string, keyof DimensionalRep> = {
-    'mol': 'mol',
-    'molec': 'molec',
-    'm': 'm',
-    'meter': 'm',
-    'metres': 'm',
-    'meters': 'm',
-    'cm': 'cm',
-    'centimeter': 'cm',
-    'centimeters': 'cm',
-    's': 's',
-    'sec': 's',
-    'second': 's',
-    'seconds': 's',
-    'k': 'K',
-    'kelvin': 'K',
-    'kg': 'kg',
-    'kilogram': 'kg',
-    'kilograms': 'kg',
-    'a': 'A',
-    'ampere': 'A',
-    'amperes': 'A',
-    'cd': 'cd',
-    'candela': 'cd',
-    'j': 'J',
-    'joule': 'J',
-    'joules': 'J',
-    'pa': 'Pa',
-    'pascal': 'Pa',
-    'pascals': 'Pa',
-    'ppb': 'dimensionless',
-    'ppm': 'dimensionless'
-  }
-
-  return mapping[lowerUnit] || null
-}
-
-/**
- * Check dimensional consistency of an expression
+ * Check dimensional consistency of an expression.
  *
- * Follows rules from ESM spec Section 3.3.1:
- * - Addition/subtraction: operands must have same dimensions
- * - Multiplication: dimensions add
- * - Division: dimensions subtract
- * - D(x,t): dimension of x divided by dimension of t
- * - Functions require dimensionless arguments; result is dimensionless
- *
- * @param expr Expression to check
- * @param unitBindings Map of variable names to their dimensional representations
- * @returns Unit result with dimensions and any warnings
+ * Follows ESM spec Section 3.3.1:
+ * - Addition/subtraction: operands must share canonical dimensions
+ * - Multiplication: dimensions add (scales multiply)
+ * - Division: dimensions subtract (scales divide)
+ * - `D(x, wrt=t)`: dimension of x divided by dimension of t
+ * - Transcendental functions require dimensionless arguments
  */
-export function checkDimensions(expr: Expression, unitBindings: Map<string, DimensionalRep>): UnitResult {
+export function checkDimensions(
+  expr: Expression,
+  unitBindings: Map<string, ParsedUnit>,
+): UnitResult {
   const warnings: string[] = []
 
   if (typeof expr === 'number') {
-    return { dimensions: { dimensionless: true }, warnings }
+    return { dimensions: dimensionless(), warnings }
   }
 
   if (typeof expr === 'string') {
-    // Variable reference
     const dims = unitBindings.get(expr)
     if (!dims) {
       warnings.push(`Unknown variable: ${expr}`)
-      return { dimensions: { dimensionless: true }, warnings }
+      return { dimensions: dimensionless(), warnings }
     }
     return { dimensions: dims, warnings }
   }
 
-  // ExpressionNode
   const node = expr as ExpressionNode
   const op = node.op
   const args = node.args
 
-  // Recursively check arguments
-  const argResults = args.map(arg => checkDimensions(arg, unitBindings))
-  warnings.push(...argResults.flatMap(r => r.warnings))
+  const argResults = args.map((arg) => checkDimensions(arg, unitBindings))
+  warnings.push(...argResults.flatMap((r) => r.warnings))
 
-  const argDims = argResults.map(r => r.dimensions)
+  const argDims = argResults.map((r) => r.dimensions)
+  const get = (i: number): ParsedUnit => argDims[i] ?? dimensionless()
 
   switch (op) {
     case '+':
-    case '-':
-      // All operands must have same dimensions
-      const firstDim = argDims[0]
+    case '-': {
+      const first = get(0)
       for (let i = 1; i < argDims.length; i++) {
-        if (!dimensionsEqual(firstDim, argDims[i])) {
-          warnings.push(`Addition/subtraction requires same dimensions, got ${formatDimensions(firstDim)} and ${formatDimensions(argDims[i])}`)
+        const other = get(i)
+        if (!dimsEqual(first.dims, other.dims)) {
+          warnings.push(
+            `Addition/subtraction requires same dimensions, got ${formatDims(first.dims)} and ${formatDims(other.dims)}`,
+          )
         }
       }
-      return { dimensions: firstDim, warnings }
+      return { dimensions: first, warnings }
+    }
 
     case '*':
-      // Dimensions multiply (add exponents)
-      return { dimensions: multiplyDimensions(argDims), warnings }
+      return { dimensions: multiplyUnits(argDims), warnings }
 
     case '/':
-      // Dimensions divide (subtract exponents)
       if (argDims.length !== 2) {
         warnings.push(`Division requires exactly 2 arguments, got ${argDims.length}`)
-        return { dimensions: { dimensionless: true }, warnings }
+        return { dimensions: dimensionless(), warnings }
       }
-      return { dimensions: divideDimensions(argDims[0], argDims[1]), warnings }
+      return { dimensions: divideUnits(get(0), get(1)), warnings }
 
     case '^':
-      // Power: base dimensions multiplied by exponent (exponent must be dimensionless)
       if (argDims.length !== 2) {
         warnings.push(`Exponentiation requires exactly 2 arguments, got ${argDims.length}`)
-        return { dimensions: { dimensionless: true }, warnings }
+        return { dimensions: dimensionless(), warnings }
       }
-
-      if (!isDimensionless(argDims[1])) {
-        warnings.push(`Exponent must be dimensionless, got ${formatDimensions(argDims[1])}`)
+      if (!isDimensionless(get(1))) {
+        warnings.push(`Exponent must be dimensionless, got ${formatDims(get(1).dims)}`)
       }
+      // Preserve the base unit unchanged. Applying the exponent would require
+      // extracting the constant value from the second argument, which the
+      // original implementation did not attempt and current tests do not
+      // exercise.
+      return { dimensions: get(0), warnings }
 
-      // For simplicity, assume integer exponents for now
-      // In a full implementation, we'd need to extract the numeric value
-      return { dimensions: argDims[0], warnings }
-
-    case 'D':
-      // Derivative: dimension of variable divided by dimension of time
+    case 'D': {
       if (args.length !== 1) {
         warnings.push(`Derivative D() requires exactly 1 argument, got ${args.length}`)
-        return { dimensions: { dimensionless: true }, warnings }
+        return { dimensions: dimensionless(), warnings }
       }
-
-      // Time dimension (from wrt field, default to 't')
       const timeVar = node.wrt || 't'
-      const timeDims = unitBindings.get(timeVar) || { s: 1 }  // assume seconds if not found
-
-      return { dimensions: divideDimensions(argDims[0], timeDims), warnings }
+      const timeDims = unitBindings.get(timeVar) ?? { dims: { s: 1 }, scale: 1 }
+      return { dimensions: divideUnits(get(0), timeDims), warnings }
+    }
 
     case 'grad':
     case 'div':
-    case 'laplacian':
-      // Spatial operators - dimension divided by length
-      const lengthDims = { m: 1 }  // assume meters
-      return { dimensions: divideDimensions(argDims[0], lengthDims), warnings }
+    case 'laplacian': {
+      const lengthDims: ParsedUnit = { dims: { m: 1 }, scale: 1 }
+      return { dimensions: divideUnits(get(0), lengthDims), warnings }
+    }
 
-    // Functions that require dimensionless arguments and return dimensionless
     case 'exp':
     case 'log':
     case 'log10':
@@ -305,63 +173,64 @@ export function checkDimensions(expr: Expression, unitBindings: Map<string, Dime
     case 'acos':
     case 'atan':
       for (let i = 0; i < argDims.length; i++) {
-        if (!isDimensionless(argDims[i])) {
-          warnings.push(`${op}() requires dimensionless argument, got ${formatDimensions(argDims[i])}`)
+        const arg = get(i)
+        if (!isDimensionless(arg)) {
+          warnings.push(`${op}() requires dimensionless argument, got ${formatDims(arg.dims)}`)
         }
       }
-      return { dimensions: { dimensionless: true }, warnings }
+      return { dimensions: dimensionless(), warnings }
 
     case 'atan2':
-      // Both arguments must have same dimensions, result is dimensionless
       if (argDims.length !== 2) {
         warnings.push(`atan2() requires exactly 2 arguments, got ${argDims.length}`)
-        return { dimensions: { dimensionless: true }, warnings }
+        return { dimensions: dimensionless(), warnings }
       }
-      if (!dimensionsEqual(argDims[0], argDims[1])) {
-        warnings.push(`atan2() requires arguments with same dimensions, got ${formatDimensions(argDims[0])} and ${formatDimensions(argDims[1])}`)
+      if (!dimsEqual(get(0).dims, get(1).dims)) {
+        warnings.push(
+          `atan2() requires arguments with same dimensions, got ${formatDims(get(0).dims)} and ${formatDims(get(1).dims)}`,
+        )
       }
-      return { dimensions: { dimensionless: true }, warnings }
+      return { dimensions: dimensionless(), warnings }
 
     case 'sqrt':
     case 'abs':
     case 'sign':
     case 'floor':
     case 'ceil':
-      // These preserve dimensions of their argument
-      return { dimensions: argDims[0] || { dimensionless: true }, warnings }
+      return { dimensions: get(0), warnings }
 
     case 'min':
-    case 'max':
-      // All arguments must have same dimensions, result has those dimensions
+    case 'max': {
       if (argDims.length < 2) {
         warnings.push(`${op}() requires at least 2 arguments, got ${argDims.length}`)
-        return { dimensions: { dimensionless: true }, warnings }
+        return { dimensions: dimensionless(), warnings }
       }
-
-      const refDim = argDims[0]
+      const ref = get(0)
       for (let i = 1; i < argDims.length; i++) {
-        if (!dimensionsEqual(refDim, argDims[i])) {
-          warnings.push(`${op}() requires all arguments to have same dimensions, got ${formatDimensions(refDim)} and ${formatDimensions(argDims[i])}`)
+        const other = get(i)
+        if (!dimsEqual(ref.dims, other.dims)) {
+          warnings.push(
+            `${op}() requires all arguments to have same dimensions, got ${formatDims(ref.dims)} and ${formatDims(other.dims)}`,
+          )
         }
       }
-      return { dimensions: refDim, warnings }
+      return { dimensions: ref, warnings }
+    }
 
     case 'ifelse':
-      // Condition must be dimensionless, then/else branches must have same dimensions
       if (argDims.length !== 3) {
         warnings.push(`ifelse() requires exactly 3 arguments, got ${argDims.length}`)
-        return { dimensions: { dimensionless: true }, warnings }
+        return { dimensions: dimensionless(), warnings }
       }
-
-      if (!isDimensionless(argDims[0])) {
-        warnings.push(`ifelse() condition must be dimensionless, got ${formatDimensions(argDims[0])}`)
+      if (!isDimensionless(get(0))) {
+        warnings.push(`ifelse() condition must be dimensionless, got ${formatDims(get(0).dims)}`)
       }
-
-      if (!dimensionsEqual(argDims[1], argDims[2])) {
-        warnings.push(`ifelse() branches must have same dimensions, got ${formatDimensions(argDims[1])} and ${formatDimensions(argDims[2])}`)
+      if (!dimsEqual(get(1).dims, get(2).dims)) {
+        warnings.push(
+          `ifelse() branches must have same dimensions, got ${formatDims(get(1).dims)} and ${formatDims(get(2).dims)}`,
+        )
       }
-
-      return { dimensions: argDims[1], warnings }
+      return { dimensions: get(1), warnings }
 
     case '>':
     case '<':
@@ -369,73 +238,63 @@ export function checkDimensions(expr: Expression, unitBindings: Map<string, Dime
     case '<=':
     case '==':
     case '!=':
-      // Comparison: both operands must have same dimensions, result is dimensionless
       if (argDims.length !== 2) {
         warnings.push(`${op} requires exactly 2 arguments, got ${argDims.length}`)
-        return { dimensions: { dimensionless: true }, warnings }
+        return { dimensions: dimensionless(), warnings }
       }
-      if (!dimensionsEqual(argDims[0], argDims[1])) {
-        warnings.push(`${op} requires arguments with same dimensions, got ${formatDimensions(argDims[0])} and ${formatDimensions(argDims[1])}`)
+      if (!dimsEqual(get(0).dims, get(1).dims)) {
+        warnings.push(
+          `${op} requires arguments with same dimensions, got ${formatDims(get(0).dims)} and ${formatDims(get(1).dims)}`,
+        )
       }
-      return { dimensions: { dimensionless: true }, warnings }
+      return { dimensions: dimensionless(), warnings }
 
     case 'and':
     case 'or':
     case 'not':
-      // Logical operators: all arguments must be dimensionless, result is dimensionless
       for (let i = 0; i < argDims.length; i++) {
-        if (!isDimensionless(argDims[i])) {
-          warnings.push(`${op} requires dimensionless arguments, got ${formatDimensions(argDims[i])}`)
+        const arg = get(i)
+        if (!isDimensionless(arg)) {
+          warnings.push(`${op} requires dimensionless arguments, got ${formatDims(arg.dims)}`)
         }
       }
-      return { dimensions: { dimensionless: true }, warnings }
+      return { dimensions: dimensionless(), warnings }
 
     case 'Pre':
-      // Pre operator preserves dimensions of its argument
-      return { dimensions: argDims[0] || { dimensionless: true }, warnings }
+      return { dimensions: get(0), warnings }
 
     default:
       warnings.push(`Unknown operator: ${op}`)
-      return { dimensions: { dimensionless: true }, warnings }
+      return { dimensions: dimensionless(), warnings }
   }
 }
 
 /**
- * Validate dimensional consistency of all equations in an ESM file
- * @param file ESM file to validate
- * @returns Array of unit warnings
+ * Validate dimensional consistency of all equations in an ESM file.
  */
 export function validateUnits(file: EsmFile): UnitWarning[] {
   const warnings: UnitWarning[] = []
+  const unitBindings = new Map<string, ParsedUnit>()
 
-  // Build unit bindings from models and reaction systems
-  const unitBindings = new Map<string, DimensionalRep>()
-
-  // Process models
   if (file.models) {
     for (const [modelName, model] of Object.entries(file.models)) {
-      if (model.variables) {
+      if ('variables' in model && model.variables) {
         for (const [varName, variable] of Object.entries(model.variables)) {
           const fullVarName = `${modelName}.${varName}`
           if (variable.units) {
             unitBindings.set(fullVarName, parseUnit(variable.units))
           }
-          // Also add unqualified name if it doesn't conflict
-          if (!unitBindings.has(varName)) {
-            if (variable.units) {
-              unitBindings.set(varName, parseUnit(variable.units))
-            }
+          if (!unitBindings.has(varName) && variable.units) {
+            unitBindings.set(varName, parseUnit(variable.units))
           }
         }
       }
     }
   }
 
-  // Process reaction systems
   if (file.reaction_systems) {
     for (const [systemName, system] of Object.entries(file.reaction_systems)) {
-      // Species
-      if (system.species) {
+      if ('species' in system && system.species) {
         for (const [speciesName, species] of Object.entries(system.species)) {
           const fullSpeciesName = `${systemName}.${speciesName}`
           if (species.units) {
@@ -447,8 +306,7 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
         }
       }
 
-      // Parameters
-      if (system.parameters) {
+      if ('parameters' in system && system.parameters) {
         for (const [paramName, param] of Object.entries(system.parameters)) {
           const fullParamName = `${systemName}.${paramName}`
           if (param.units) {
@@ -462,72 +320,80 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
     }
   }
 
-  // Validate model equations
   if (file.models) {
     for (const [modelName, model] of Object.entries(file.models)) {
-      if (model.equations) {
+      if ('equations' in model && model.equations) {
         for (const equation of model.equations) {
           try {
             const lhsResult = checkDimensions(equation.lhs, unitBindings)
             const rhsResult = checkDimensions(equation.rhs, unitBindings)
 
             const allSubWarnings = [...lhsResult.warnings, ...rhsResult.warnings]
-            const hasUnknownVariable = allSubWarnings.some(w => w.includes('Unknown variable'))
+            const hasUnknownVariable = allSubWarnings.some((w) => w.includes('Unknown variable'))
 
             // Only emit mismatch warnings when dimensions are fully known.
-            // Missing unit declarations would otherwise produce false positives
-            // (both sides default to dimensionless in ways that don't round-trip).
-            if (!hasUnknownVariable && !dimensionsEqual(lhsResult.dimensions, rhsResult.dimensions)) {
+            // Missing unit declarations would otherwise produce false
+            // positives (both sides default to dimensionless in ways that
+            // don't round-trip).
+            if (
+              !hasUnknownVariable &&
+              !dimsEqual(lhsResult.dimensions.dims, rhsResult.dimensions.dims)
+            ) {
               warnings.push({
-                message: `Dimensional mismatch in equation: LHS has ${formatDimensions(lhsResult.dimensions)}, RHS has ${formatDimensions(rhsResult.dimensions)}`,
+                message: `Dimensional mismatch in equation: LHS has ${formatDims(lhsResult.dimensions.dims)}, RHS has ${formatDims(rhsResult.dimensions.dims)}`,
                 location: `models.${modelName}`,
-                equation: `${JSON.stringify(equation.lhs)} = ${JSON.stringify(equation.rhs)}`
+                equation: `${JSON.stringify(equation.lhs)} = ${JSON.stringify(equation.rhs)}`,
               })
             }
 
-            // Add any warnings from dimensional analysis
             for (const warning of allSubWarnings) {
               warnings.push({
                 message: warning,
-                location: `models.${modelName}`
+                location: `models.${modelName}`,
               })
             }
           } catch (error) {
             warnings.push({
               message: `Error checking equation dimensions: ${error instanceof Error ? error.message : String(error)}`,
-              location: `models.${modelName}`
+              location: `models.${modelName}`,
             })
           }
         }
       }
 
-      // Validate observed variable expressions
-      if (model.variables) {
+      if ('variables' in model && model.variables) {
         for (const [varName, variable] of Object.entries(model.variables)) {
           if (variable.type === 'observed' && variable.expression) {
             try {
               const exprResult = checkDimensions(variable.expression, unitBindings)
-              const varDims = variable.units ? parseUnit(variable.units) : { dimensionless: true }
+              const varDims: ParsedUnit = variable.units
+                ? parseUnit(variable.units)
+                : dimensionless()
 
-              const hasUnknownVariable = exprResult.warnings.some(w => w.includes('Unknown variable'))
+              const hasUnknownVariable = exprResult.warnings.some((w) =>
+                w.includes('Unknown variable'),
+              )
 
-              if (!hasUnknownVariable && !dimensionsEqual(exprResult.dimensions, varDims)) {
+              if (
+                !hasUnknownVariable &&
+                !dimsEqual(exprResult.dimensions.dims, varDims.dims)
+              ) {
                 warnings.push({
-                  message: `Dimensional mismatch in observed variable ${varName}: declared as ${formatDimensions(varDims)}, expression evaluates to ${formatDimensions(exprResult.dimensions)}`,
-                  location: `models.${modelName}.variables.${varName}`
+                  message: `Dimensional mismatch in observed variable ${varName}: declared as ${formatDims(varDims.dims)}, expression evaluates to ${formatDims(exprResult.dimensions.dims)}`,
+                  location: `models.${modelName}.variables.${varName}`,
                 })
               }
 
               for (const warning of exprResult.warnings) {
                 warnings.push({
                   message: warning,
-                  location: `models.${modelName}.variables.${varName}`
+                  location: `models.${modelName}.variables.${varName}`,
                 })
               }
             } catch (error) {
               warnings.push({
                 message: `Error checking observed variable dimensions: ${error instanceof Error ? error.message : String(error)}`,
-                location: `models.${modelName}.variables.${varName}`
+                location: `models.${modelName}.variables.${varName}`,
               })
             }
           }
@@ -539,111 +405,63 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
   return warnings
 }
 
-/**
- * Helper functions for dimensional arithmetic
- */
-
-function dimensionsEqual(a: DimensionalRep, b: DimensionalRep): boolean {
-  // Handle dimensionless special case
-  const aDimensionless = isDimensionless(a)
-  const bDimensionless = isDimensionless(b)
-
-  if (aDimensionless && bDimensionless) return true
-  if (aDimensionless || bDimensionless) return false
-
-  // Compare all possible dimension keys
-  const allKeys = new Set([...Object.keys(a), ...Object.keys(b)])
-
-  for (const key of allKeys) {
-    if (key === 'dimensionless') continue
-    const aVal = (a as any)[key] || 0
-    const bVal = (b as any)[key] || 0
-    if (aVal !== bVal) return false
-  }
-
-  return true
-}
-
-function isDimensionless(dims: DimensionalRep): boolean {
-  if (dims.dimensionless) return true
-
-  // Check if all dimension powers are zero
-  for (const [key, value] of Object.entries(dims)) {
-    if (key !== 'dimensionless' && value !== 0) {
-      return false
+function multiplyUnits(units: ParsedUnit[]): ParsedUnit {
+  const result: ParsedUnit = { dims: {}, scale: 1 }
+  for (const u of units) {
+    for (const [k, v] of Object.entries(u.dims)) {
+      if (v == null) continue
+      const key = k as keyof CanonicalDims
+      result.dims[key] = (result.dims[key] ?? 0) + v
     }
+    result.scale *= u.scale
   }
-
-  return true
-}
-
-function multiplyDimensions(dimensions: DimensionalRep[]): DimensionalRep {
-  const result: DimensionalRep = {}
-
-  for (const dim of dimensions) {
-    if (dim.dimensionless) continue
-
-    for (const [key, value] of Object.entries(dim)) {
-      if (key === 'dimensionless') continue
-      result[key as keyof DimensionalRep] = ((result as any)[key] || 0) + (value || 0)
-    }
-  }
-
-  // Check if result is dimensionless
-  const nonZero = Object.entries(result).filter(([key, value]) => key !== 'dimensionless' && value !== 0)
-  if (nonZero.length === 0) {
-    return { dimensionless: true }
-  }
-
+  pruneZeros(result.dims)
   return result
 }
 
-function divideDimensions(numerator: DimensionalRep, denominator: DimensionalRep): DimensionalRep {
-  const result: DimensionalRep = {}
-
-  // Add numerator dimensions
-  if (!numerator.dimensionless) {
-    for (const [key, value] of Object.entries(numerator)) {
-      if (key === 'dimensionless') continue
-      result[key as keyof DimensionalRep] = value || 0
-    }
+function divideUnits(a: ParsedUnit, b: ParsedUnit): ParsedUnit {
+  const result: ParsedUnit = { dims: { ...a.dims }, scale: a.scale }
+  for (const [k, v] of Object.entries(b.dims)) {
+    if (v == null) continue
+    const key = k as keyof CanonicalDims
+    result.dims[key] = (result.dims[key] ?? 0) - v
   }
-
-  // Subtract denominator dimensions
-  if (!denominator.dimensionless) {
-    for (const [key, value] of Object.entries(denominator)) {
-      if (key === 'dimensionless') continue
-      result[key as keyof DimensionalRep] = ((result as any)[key] || 0) - (value || 0)
-    }
-  }
-
-  // Check if result is dimensionless
-  const nonZero = Object.entries(result).filter(([key, value]) => key !== 'dimensionless' && value !== 0)
-  if (nonZero.length === 0) {
-    return { dimensionless: true }
-  }
-
+  result.scale /= b.scale
+  pruneZeros(result.dims)
   return result
 }
 
-function formatDimensions(dims: DimensionalRep): string {
-  if (dims.dimensionless) return 'dimensionless'
+function pruneZeros(dims: CanonicalDims): void {
+  for (const key of Object.keys(dims) as (keyof CanonicalDims)[]) {
+    if (dims[key] === 0) delete dims[key]
+  }
+}
 
+function isDimensionless(unit: ParsedUnit): boolean {
+  for (const v of Object.values(unit.dims)) {
+    if (v != null && v !== 0) return false
+  }
+  return true
+}
+
+function dimsEqual(a: CanonicalDims, b: CanonicalDims): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const key of keys) {
+    const av = (a as Record<string, number | undefined>)[key] ?? 0
+    const bv = (b as Record<string, number | undefined>)[key] ?? 0
+    if (av !== bv) return false
+  }
+  return true
+}
+
+function formatDims(dims: CanonicalDims): string {
   const parts: string[] = []
-
   for (const [key, value] of Object.entries(dims)) {
-    if (key === 'dimensionless' || value === 0) continue
-
-    if (value === 1) {
-      parts.push(key)
-    } else if (value === -1) {
-      parts.push(`/${key}`)
-    } else if (value > 0) {
-      parts.push(`${key}^${value}`)
-    } else {
-      parts.push(`/${key}^${-value}`)
-    }
+    if (!value) continue
+    if (value === 1) parts.push(key)
+    else if (value === -1) parts.push(`/${key}`)
+    else if (value > 0) parts.push(`${key}^${value}`)
+    else parts.push(`/${key}^${-value}`)
   }
-
   return parts.length > 0 ? parts.join('·') : 'dimensionless'
 }

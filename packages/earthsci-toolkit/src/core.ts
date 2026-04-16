@@ -52,7 +52,7 @@ export {
 } from './reactions.js'
 
 export { parseUnit, checkDimensions, validateUnits } from './units.js'
-export type { DimensionalRep, UnitResult, UnitWarning } from './units.js'
+export type { UnitResult, UnitWarning } from './units.js'
 
 export { toJuliaCode, toPythonCode } from './codegen.js'
 

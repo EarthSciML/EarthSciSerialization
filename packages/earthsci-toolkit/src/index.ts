@@ -50,7 +50,7 @@ export { deriveODEs, stoichiometricMatrix, substrateMatrix, productMatrix } from
 
 // Export unit parsing and dimensional analysis
 export { parseUnit, checkDimensions, validateUnits } from './units.js'
-export type { DimensionalRep, UnitResult, UnitWarning } from './units.js'
+export type { UnitResult, UnitWarning } from './units.js'
 
 // Export runtime unit conversion
 export { convertUnits, parseUnitForConversion, unitsCompatible, UnitConversionError } from './unit-conversion.js'
