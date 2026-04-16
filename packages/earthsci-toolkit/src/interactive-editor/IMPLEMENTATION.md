@@ -52,14 +52,11 @@ This implementation provides a comprehensive SolidJS ModelEditor component with 
 
 ### Core Components
 1. **`ModelEditor.tsx`** - Main component with comprehensive editing features
-2. **`ModelEditor.enhanced.tsx`** - Enhanced version with export functionality
-3. **`ExpressionNode.tsx`** - Interactive mathematical expression rendering
-4. **`CouplingGraph.tsx`** - Visual coupling visualization component
+2. **`ExpressionNode.tsx`** - Interactive mathematical expression rendering
+3. **`CouplingGraph.tsx`** - Visual coupling visualization component
 
 ### Utility Files
-5. **`ModelExportUtils.ts`** - Export functionality for multiple formats
-6. **`ModelEditor.css`** - Complete styling system
-7. **`ModelEditor.enhanced.css`** - Additional styles for enhanced features
+4. **`ModelEditor.css`** - Complete styling system
 
 ### Test Files
 8. **`ModelEditor.test.tsx`** - Comprehensive test suite (25 tests, 21 passing)
@@ -138,30 +135,6 @@ const MyApp = () => {
       onChange={setModel}
       allowEditing={true}
       showValidation={true}
-    />
-  );
-};
-```
-
-### Enhanced Usage with Export
-```tsx
-import { EnhancedModelEditor } from './ModelEditor.enhanced.js';
-
-const MyAdvancedApp = () => {
-  const [model, setModel] = createSignal(initialModel);
-
-  const validateModel = (m: Model) => {
-    // Custom validation logic
-    return [];
-  };
-
-  return (
-    <EnhancedModelEditor
-      model={model()}
-      onChange={setModel}
-      enableExport={true}
-      enablePerformanceMonitoring={true}
-      onValidate={validateModel}
     />
   );
 };
