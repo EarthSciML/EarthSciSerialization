@@ -699,7 +699,8 @@ class TestParallelExecution:
 
         # Compute some summary statistics
         final_value = x[-1]
-        integral = np.trapezoid(x, t)  # Numerical integration
+        _trapz = getattr(np, "trapezoid", None) or np.trapz  # noqa: NPY201
+        integral = _trapz(x, t)  # Numerical integration
 
         return {
             'task_id': task_id,
