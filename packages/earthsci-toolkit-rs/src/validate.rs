@@ -2,7 +2,7 @@
 
 use crate::EsmFile;
 use crate::parse::{load, validate_schema};
-use crate::units::{Unit, UnitError, check_dimensional_consistency, parse_unit};
+use crate::units::{build_unit_env, validate_equation_dimensions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -432,6 +432,10 @@ fn validate_model(
         });
     }
 
+    // Build a unit environment once per model — expression-level
+    // dimensional propagation walks the Expr AST using this map.
+    let unit_env = build_unit_env(&model.variables);
+
     // Check that all equation references are defined and validate dimensional consistency
     for (eq_idx, equation) in model.equations.iter().enumerate() {
         let eq_path = format!("{}/equations/{}", model_path, eq_idx);
@@ -452,8 +456,14 @@ fn validate_model(
             errors,
         );
 
-        // Validate dimensional consistency of equation
-        validate_equation_units(equation, &model.variables, &eq_path, eq_idx, warnings);
+        // Validate dimensional consistency of equation via expression-level
+        // propagation over the Expr AST.
+        if let Err(unit_error) = validate_equation_dimensions(equation, &unit_env) {
+            warnings.push(format!(
+                "Equation {}: {} (in {})",
+                eq_idx, unit_error, eq_path
+            ));
+        }
     }
 
     // Validate observed variable expressions
@@ -1108,276 +1118,6 @@ fn validate_scoped_reference(
     }
 }
 
-/// Validate dimensional consistency of an equation
-fn validate_equation_units(
-    equation: &crate::Equation,
-    variables: &HashMap<String, crate::ModelVariable>,
-    eq_path: &str,
-    eq_idx: usize,
-    warnings: &mut Vec<String>,
-) {
-    // Get units for LHS and RHS
-    let lhs_unit = get_expression_unit(&equation.lhs, variables);
-    let rhs_unit = get_expression_unit(&equation.rhs, variables);
-
-    // Check if both sides have units defined
-    match (lhs_unit, rhs_unit) {
-        (Ok(lhs), Ok(rhs)) => {
-            // Check dimensional consistency
-            if let Err(unit_error) = check_dimensional_consistency(&lhs, &rhs) {
-                warnings.push(format!(
-                    "Equation {}: {} (in {})",
-                    eq_idx, unit_error, eq_path
-                ));
-            }
-        }
-        (Err(e), _) => {
-            warnings.push(format!(
-                "Equation {} LHS: Could not determine units - {} (in {})",
-                eq_idx, e, eq_path
-            ));
-        }
-        (_, Err(e)) => {
-            warnings.push(format!(
-                "Equation {} RHS: Could not determine units - {} (in {})",
-                eq_idx, e, eq_path
-            ));
-        }
-    }
-}
-
-/// Get the dimensional units of an expression
-fn get_expression_unit(
-    expr: &crate::Expr,
-    variables: &HashMap<String, crate::ModelVariable>,
-) -> Result<Unit, UnitError> {
-    match expr {
-        crate::Expr::Variable(var_name) => {
-            // Handle special time variable
-            if var_name == "t" {
-                return parse_unit("s"); // time has units of seconds
-            }
-
-            // Look up variable units
-            if let Some(var) = variables.get(var_name) {
-                if let Some(ref units_str) = var.units {
-                    parse_unit(units_str)
-                } else {
-                    // No units specified, assume dimensionless
-                    Ok(Unit::dimensionless())
-                }
-            } else {
-                // Variable not found, assume dimensionless for built-in functions
-                if is_builtin_function(var_name) {
-                    Ok(Unit::dimensionless())
-                } else {
-                    Err(UnitError::UnknownUnit(format!("Variable: {}", var_name)))
-                }
-            }
-        }
-        crate::Expr::Number(_) => {
-            // Numbers are dimensionless
-            Ok(Unit::dimensionless())
-        }
-        crate::Expr::Operator(op) => get_operator_unit(op, variables),
-    }
-}
-
-/// Get the dimensional units of an operator expression
-fn get_operator_unit(
-    op: &crate::ExpressionNode,
-    variables: &HashMap<String, crate::ModelVariable>,
-) -> Result<Unit, UnitError> {
-    match op.op.as_str() {
-        // Arithmetic operations
-        "+" | "-" => {
-            // Addition/subtraction: all operands must have same units
-            if op.args.is_empty() {
-                return Ok(Unit::dimensionless());
-            }
-
-            let first_unit = get_expression_unit(&op.args[0], variables)?;
-            for arg in op.args.iter().skip(1) {
-                let arg_unit = get_expression_unit(arg, variables)?;
-                if !first_unit.is_compatible(&arg_unit) {
-                    return Err(UnitError::DimensionMismatch(format!(
-                        "Incompatible units in {} operation",
-                        op.op
-                    )));
-                }
-            }
-            Ok(first_unit)
-        }
-        "*" => {
-            // Multiplication: multiply units
-            let mut result = Unit::dimensionless();
-            for arg in &op.args {
-                let arg_unit = get_expression_unit(arg, variables)?;
-                result = result.multiply(&arg_unit);
-            }
-            Ok(result)
-        }
-        "/" => {
-            // Division: divide units
-            if op.args.len() != 2 {
-                return Err(UnitError::ParseError(
-                    "Division requires exactly 2 operands".to_string(),
-                ));
-            }
-            let numerator = get_expression_unit(&op.args[0], variables)?;
-            let denominator = get_expression_unit(&op.args[1], variables)?;
-            Ok(numerator.divide(&denominator))
-        }
-        "^" | "power" => {
-            // Power: raise units to power
-            if op.args.len() != 2 {
-                return Err(UnitError::ParseError(
-                    "Power requires exactly 2 operands".to_string(),
-                ));
-            }
-            let base_unit = get_expression_unit(&op.args[0], variables)?;
-
-            // For now, only handle constant integer exponents
-            if let crate::Expr::Number(exp) = &op.args[1] {
-                let exponent = *exp as i32;
-                Ok(base_unit.power(exponent))
-            } else {
-                // For variable exponents, we can't determine units statically
-                Err(UnitError::ParseError(
-                    "Variable exponents not supported for unit analysis".to_string(),
-                ))
-            }
-        }
-        "D" => {
-            // Derivative: d/dt has units of [quantity]/[time]
-            if op.args.is_empty() {
-                return Err(UnitError::ParseError(
-                    "Derivative requires at least one argument".to_string(),
-                ));
-            }
-
-            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
-
-            // Check what we're differentiating with respect to
-            if let Some(ref wrt) = op.wrt {
-                if wrt == "t" {
-                    // d/dt: divide by time units
-                    let time_unit = parse_unit("s")?;
-                    Ok(quantity_unit.divide(&time_unit))
-                } else {
-                    // For spatial derivatives, we need to know the coordinate units
-                    // For now, assume length units
-                    let coord_unit = parse_unit("m")?;
-                    Ok(quantity_unit.divide(&coord_unit))
-                }
-            } else {
-                Err(UnitError::ParseError(
-                    "Derivative missing 'wrt' specification".to_string(),
-                ))
-            }
-        }
-        "grad" => {
-            // Gradient: has units of [quantity]/[length]
-            if op.args.is_empty() {
-                return Err(UnitError::ParseError(
-                    "Gradient requires at least one argument".to_string(),
-                ));
-            }
-
-            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
-            let length_unit = parse_unit("m")?;
-            Ok(quantity_unit.divide(&length_unit))
-        }
-        "div" => {
-            // Divergence: has units of [quantity]/[length]
-            if op.args.is_empty() {
-                return Err(UnitError::ParseError(
-                    "Divergence requires at least one argument".to_string(),
-                ));
-            }
-
-            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
-            let length_unit = parse_unit("m")?;
-            Ok(quantity_unit.divide(&length_unit))
-        }
-        "laplacian" => {
-            // Laplacian: has units of [quantity]/[length^2]
-            if op.args.is_empty() {
-                return Err(UnitError::ParseError(
-                    "Laplacian requires at least one argument".to_string(),
-                ));
-            }
-
-            let quantity_unit = get_expression_unit(&op.args[0], variables)?;
-            let length_squared = parse_unit("m")?.power(2);
-            Ok(quantity_unit.divide(&length_squared))
-        }
-        // Transcendental functions (typically dimensionless input/output)
-        "exp" | "log" | "log10" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "sqrt"
-        | "abs" | "sign" | "floor" | "ceil" => {
-            // These functions require dimensionless input for mathematical validity
-            if !op.args.is_empty() {
-                let arg_unit = get_expression_unit(&op.args[0], variables)?;
-                if !arg_unit.is_dimensionless() {
-                    return Err(UnitError::DimensionMismatch(format!(
-                        "Function {} requires dimensionless input, got units with dimensions",
-                        op.op
-                    )));
-                }
-            }
-            Ok(Unit::dimensionless())
-        }
-        "min" | "max" => {
-            // Min/max: all operands must have same units
-            if op.args.is_empty() {
-                return Ok(Unit::dimensionless());
-            }
-
-            let first_unit = get_expression_unit(&op.args[0], variables)?;
-            for arg in op.args.iter().skip(1) {
-                let arg_unit = get_expression_unit(arg, variables)?;
-                if !first_unit.is_compatible(&arg_unit) {
-                    return Err(UnitError::DimensionMismatch(format!(
-                        "Incompatible units in {} operation",
-                        op.op
-                    )));
-                }
-            }
-            Ok(first_unit)
-        }
-        "ifelse" => {
-            // ifelse(condition, true_val, false_val): condition must be dimensionless,
-            // true_val and false_val must have same units
-            if op.args.len() != 3 {
-                return Err(UnitError::ParseError(
-                    "ifelse requires exactly 3 arguments".to_string(),
-                ));
-            }
-
-            let condition_unit = get_expression_unit(&op.args[0], variables)?;
-            if !condition_unit.is_dimensionless() {
-                return Err(UnitError::DimensionMismatch(
-                    "ifelse condition must be dimensionless".to_string(),
-                ));
-            }
-
-            let true_unit = get_expression_unit(&op.args[1], variables)?;
-            let false_unit = get_expression_unit(&op.args[2], variables)?;
-
-            if !true_unit.is_compatible(&false_unit) {
-                return Err(UnitError::DimensionMismatch(
-                    "ifelse true and false branches must have compatible units".to_string(),
-                ));
-            }
-
-            Ok(true_unit)
-        }
-        _ => {
-            // Unknown operator - assume dimensionless for now
-            Ok(Unit::dimensionless())
-        }
-    }
-}
 
 /// Check for circular dependencies between models
 fn check_circular_dependencies_in_models(
@@ -2378,7 +2118,7 @@ mod tests {
             "Should have unit warnings"
         );
         assert!(
-            result.unit_warnings[0].contains("requires dimensionless input"),
+            result.unit_warnings[0].contains("must be dimensionless"),
             "Should warn about dimensionless requirement: {:?}",
             result.unit_warnings
         );

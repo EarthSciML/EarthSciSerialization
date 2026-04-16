@@ -5,6 +5,14 @@
 //! `analysis_features::test_units_functionality`.
 
 use earthsci_toolkit::*;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+fn fixture_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/valid")
+        .join(name)
+}
 
 #[test]
 fn parse_basic() {
@@ -53,5 +61,52 @@ fn convert_cross_dimension_fails() {
     assert!(
         convert_units(1.0, &m_per_s, &mol_per_l).is_err(),
         "Converting m/s to mol/L should fail"
+    );
+}
+
+/// Canonical bead example: given `h` with units `m` and `v` with units `m/s`,
+/// verify that `D(h) ~ v` is dimensionally consistent via expression-level
+/// propagation.
+#[test]
+fn propagate_dh_equals_v() {
+    let mut env: HashMap<String, Unit> = HashMap::new();
+    env.insert("h".to_string(), parse_unit("m").unwrap());
+    env.insert("v".to_string(), parse_unit("m/s").unwrap());
+
+    let dh = Expr::Operator(ExpressionNode {
+        op: "D".to_string(),
+        args: vec![Expr::Variable("h".to_string())],
+        wrt: Some("t".to_string()),
+        ..ExpressionNode::default()
+    });
+
+    let eq = Equation {
+        lhs: dh,
+        rhs: Expr::Variable("v".to_string()),
+    };
+
+    validate_equation_dimensions(&eq, &env)
+        .expect("D(h)/dt should match v (both are m/s)");
+}
+
+/// Loading the fixture `units_propagation.esm` and validating it should
+/// surface no dimensional warnings — all observed-variable expressions have
+/// matching declared units.
+#[test]
+fn validate_units_propagation_fixture_warning_free() {
+    let path = fixture_path("units_propagation.esm");
+    let json = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {}", path.display(), e));
+
+    let result = validate_complete(&json);
+    let dim_warnings: Vec<_> = result
+        .unit_warnings
+        .iter()
+        .filter(|w| w.contains("Dimension mismatch"))
+        .collect();
+    assert!(
+        dim_warnings.is_empty(),
+        "Fixture should be dimensionally consistent; got: {:?}",
+        dim_warnings
     );
 }
