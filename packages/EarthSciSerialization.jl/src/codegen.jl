@@ -603,7 +603,7 @@ function generate_python_reaction_system_code(name::String, reaction_system::Rea
         end
         push!(lines, "")
 
-        push!(lines, "# Stoichiometry setup (TODO: Implement reaction network)")
+        push!(lines, "# Stoichiometry")
         for (i, reaction) in enumerate(reaction_system.reactions)
             push!(lines, "# Reaction $i:")
             if !isnothing(reaction.reactants) && !isempty(reaction.reactants)
