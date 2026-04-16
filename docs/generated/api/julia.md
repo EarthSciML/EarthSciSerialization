@@ -3777,7 +3777,7 @@ infer_variable_units(...)
 
 ### infer_variable_units
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:330`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:332`
 
 **Signature:**
 ```julia
