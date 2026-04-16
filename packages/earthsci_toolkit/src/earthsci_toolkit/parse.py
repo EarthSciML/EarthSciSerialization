@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 import jsonschema
 from jsonschema import validate
 
+from ._monitoring import track_performance
 from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
@@ -1943,6 +1944,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
         )
 
 
+@track_performance("parse", track_file_size=True)
 def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     """
     Load an ESM file from a file path, JSON string, or dict.

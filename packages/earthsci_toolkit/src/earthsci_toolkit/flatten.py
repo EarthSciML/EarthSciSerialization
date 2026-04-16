@@ -13,6 +13,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from ._monitoring import track_performance
 from .esm_types import (
     AffectEquation,
     CallbackCoupling,
@@ -812,6 +813,7 @@ def _namespace_event_expr(expr: Expr, system_var_names: Dict[str, str]) -> Expr:
 # ============================================================================
 
 
+@track_performance("flatten")
 def flatten(esm_file: EsmFile) -> FlattenedSystem:
     """Flatten a coupled multi-system EsmFile per spec §4.7.5.
 
