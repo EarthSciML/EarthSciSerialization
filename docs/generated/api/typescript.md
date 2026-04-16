@@ -184,26 +184,22 @@ Check if migration is possible from the source version to target version.
 
 ### checkDimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:210`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:81`
 
 **Signature:**
 ```typescript
-export function checkDimensions(expr: Expression, unitBindings: Map<string, DimensionalRep>): UnitResult {
+export function checkDimensions(
 ```
 
 **Description:**
-Check dimensional consistency of an expression
+Check dimensional consistency of an expression.
 
-Follows rules from ESM spec Section 3.3.1:
-- Addition/subtraction: operands must have same dimensions
-- Multiplication: dimensions add
-- Division: dimensions subtract
-- D(x,t): dimension of x divided by dimension of t
-- Functions require dimensionless arguments; result is dimensionless
-
-@param expr Expression to check
-@param unitBindings Map of variable names to their dimensional representations
-@returns Unit result with dimensions and any warnings
+Follows ESM spec Section 3.3.1:
+- Addition/subtraction: operands must share canonical dimensions
+- Multiplication: dimensions add (scales multiply)
+- Division: dimensions subtract (scales divide)
+- `D(x, wrt=t)`: dimension of x divided by dimension of t
+- Transcendental functions require dimensionless arguments
 /
 
 ---
@@ -227,7 +223,7 @@ Classify expression complexity level
 
 ### compareAnalysis
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:261`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:260`
 
 **Signature:**
 ```typescript
@@ -657,7 +653,7 @@ Export model to various formats
 
 ### exportResults
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:246`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:245`
 
 **Signature:**
 ```typescript
@@ -884,7 +880,7 @@ The algorithm:
 
 ### formatResults
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:238`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:237`
 
 **Signature:**
 ```typescript
@@ -1191,26 +1187,25 @@ Migrate an ESM file from its current schema version to the target version.
 
 ### parseUnit
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:56`
 
 **Signature:**
 ```typescript
-export function parseUnit(unitStr: string): DimensionalRep {
+export function parseUnit(unitStr: string): ParsedUnit {
 ```
 
 **Description:**
-Parse a unit string into canonical dimensional representation
+Parse a unit string into canonical SI dimensions plus scale factor.
 
-Handles common patterns:
-- "mol/mol" → {dimensionless: true} (cancels out)
-- "cm^3/molec/s" → {cm: 3, molec: -1, s: -1}
-- "K" → {K: 1}
-- "m/s" → {m: 1, s: -1}
-- "1/s" → {s: -1}
-- "degrees" → {dimensionless: true}
+Delegates to `parseUnitForConversion` but swallows parse errors and returns
+a dimensionless fallback, matching the lenient semantics of the earlier
+unit validator (which silently ignored unknown tokens). This keeps the
+`validateUnits` pipeline warning-driven rather than exception-driven.
 
-@param unitStr Unit string to parse
-@returns Dimensional representation
+The string `"degrees"` is accepted as dimensionless because ESM treats
+angle labels as informational; the canonical unit table does not register
+it to avoid committing to a radian conversion factor that ESM does not
+promise.
 /
 
 ---
@@ -1789,7 +1784,7 @@ Validate data against the ESM schema
 
 ### validateUnits
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:408`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:275`
 
 **Signature:**
 ```typescript
@@ -1797,9 +1792,7 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
 ```
 
 **Description:**
-Validate dimensional consistency of all equations in an ESM file
-@param file ESM file to validate
-@returns Array of unit warnings
+Validate dimensional consistency of all equations in an ESM file.
 /
 
 ---
@@ -2337,22 +2330,6 @@ export interface DependencyRelation {
 ```typescript
 export interface DerivativeResult {
 ```
-
----
-
-### DimensionalRep
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:14`
-
-**Definition:**
-```typescript
-export interface DimensionalRep {
-```
-
-**Description:**
-Canonical dimensional representation
-Maps base dimensions to their powers
-/
 
 ---
 
@@ -3542,7 +3519,7 @@ export interface UndoRedoState {
 
 ### UnitResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:37`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:25`
 
 **Definition:**
 ```typescript
@@ -3550,14 +3527,14 @@ export interface UnitResult {
 ```
 
 **Description:**
-Result of dimensional analysis
+Result of dimensional analysis for a single expression.
 /
 
 ---
 
 ### UnitWarning
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:33`
 
 **Definition:**
 ```typescript
@@ -3565,7 +3542,7 @@ export interface UnitWarning {
 ```
 
 **Description:**
-Unit validation warning
+Dimensional-consistency warning emitted during file-level validation.
 /
 
 **Available in other languages:**

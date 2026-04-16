@@ -3461,8 +3461,7 @@ class UnitWarning:
 export interface UnitWarning {
 ```
 
-> Unit validation warning
-/.
+> Dimensional-consistency warning emitted during file-level validation.
 
 ---
 
