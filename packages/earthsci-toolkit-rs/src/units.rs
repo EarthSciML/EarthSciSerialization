@@ -720,6 +720,35 @@ fn get_base_units() -> HashMap<String, Unit> {
             .divide(&Unit::base(Dimension::Time, 3, 1.0)),
     );
 
+    // ESM-specific units standard (docs/units-standard.md).
+    // Mole-fraction family: dimensionless with scale factors.
+    // ppmv/ppbv/pptv are volume-mixing-ratio aliases of ppm/ppb/ppt under
+    // the ideal-gas approximation — identical dimension and scale.
+    let dimensionless_scaled = |scale: f64| Unit {
+        dimensions: HashMap::new(),
+        scale,
+    };
+    units.insert("ppm".to_string(), dimensionless_scaled(1e-6));
+    units.insert("ppmv".to_string(), dimensionless_scaled(1e-6));
+    units.insert("ppb".to_string(), dimensionless_scaled(1e-9));
+    units.insert("ppbv".to_string(), dimensionless_scaled(1e-9));
+    units.insert("ppt".to_string(), dimensionless_scaled(1e-12));
+    units.insert("pptv".to_string(), dimensionless_scaled(1e-12));
+    // `molec` is a dimensionless count atom — composites like `molec/cm^3`
+    // fall out of the compound-unit parser as `[length]^-3`.
+    units.insert("molec".to_string(), Unit::dimensionless());
+    // Dobson unit: areal number density of ozone molecules.
+    // Since `molec` is dimensionless, Dobson resolves to `[length]^-2` with
+    // scale 2.6867e20 molec/m^2.
+    units.insert(
+        "Dobson".to_string(),
+        Unit::base(Dimension::Length, -2, 2.6867e20),
+    );
+    units.insert(
+        "DU".to_string(),
+        Unit::base(Dimension::Length, -2, 2.6867e20),
+    );
+
     units
 }
 

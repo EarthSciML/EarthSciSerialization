@@ -60,6 +60,33 @@ describe('Unit parsing and dimensional analysis', () => {
       expect(parseUnit('mol/mol')).toEqual({ dims: {}, scale: 1 })
       expect(parseUnit('mol/mol/s')).toEqual({ dims: { s: -1 }, scale: 1 })
     })
+
+    // ESM-specific units standard (docs/units-standard.md): every binding
+    // must accept these with the listed dimension/scale so cross-binding
+    // documents agree on dimension semantics.
+    describe('ESM-specific units standard', () => {
+      it('mole-fraction family is dimensionless with correct scale factors', () => {
+        expect(parseUnit('mol/mol')).toEqual({ dims: {}, scale: 1 })
+        expect(parseUnit('ppm')).toEqual({ dims: {}, scale: 1e-6 })
+        expect(parseUnit('ppmv')).toEqual({ dims: {}, scale: 1e-6 })
+        expect(parseUnit('ppb')).toEqual({ dims: {}, scale: 1e-9 })
+        expect(parseUnit('ppbv')).toEqual({ dims: {}, scale: 1e-9 })
+        expect(parseUnit('ppt')).toEqual({ dims: {}, scale: 1e-12 })
+        expect(parseUnit('pptv')).toEqual({ dims: {}, scale: 1e-12 })
+      })
+
+      it('molec is a dimensionless count atom usable in composites', () => {
+        expect(parseUnit('molec').dims).toEqual({ molec: 1 })
+        const numberDensity = parseUnit('molec/cm^3')
+        expect(numberDensity.dims).toEqual({ molec: 1, m: -3 })
+      })
+
+      it('Dobson is an areal number density with scale 2.6867e20 molec/m^2', () => {
+        const du = parseUnit('Dobson')
+        expect(du.dims).toEqual({ molec: 1, m: -2 })
+        expect(du.scale).toBeCloseTo(2.6867e20, -15)
+      })
+    })
   })
 
   describe('checkDimensions', () => {

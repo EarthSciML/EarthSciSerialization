@@ -110,3 +110,66 @@ fn validate_units_propagation_fixture_warning_free() {
         dim_warnings
     );
 }
+
+// ESM-specific units standard (docs/units-standard.md): every binding must
+// accept these and agree on dimensions so cross-binding documents resolve
+// identically.
+
+#[test]
+fn esm_mole_fraction_family_is_dimensionless() {
+    for unit_str in &["ppm", "ppmv", "ppb", "ppbv", "ppt", "pptv"] {
+        let u = parse_unit(unit_str)
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {}", unit_str, e));
+        assert!(
+            u.is_dimensionless(),
+            "{} should be dimensionless per ESM standard",
+            unit_str
+        );
+    }
+    // Aliases must share dimension with their base form — cross-binding
+    // agreement depends on `ppmv + ppm` not flagging a mismatch.
+    assert!(parse_unit("ppm").unwrap().is_compatible(&parse_unit("ppmv").unwrap()));
+    assert!(parse_unit("ppb").unwrap().is_compatible(&parse_unit("ppbv").unwrap()));
+    assert!(parse_unit("ppt").unwrap().is_compatible(&parse_unit("pptv").unwrap()));
+}
+
+#[test]
+fn esm_mol_per_mol_is_dimensionless() {
+    let u = parse_unit("mol/mol").expect("Failed to parse mol/mol");
+    assert!(u.is_dimensionless(), "mol/mol must be dimensionless");
+    assert!(u.is_compatible(&parse_unit("ppm").unwrap()));
+}
+
+#[test]
+fn esm_molec_count_atom_composes() {
+    // `molec` is a dimensionless count atom; the composite `molec/cm^3` is
+    // what actually carries dimension in the ESM standard.
+    let molec = parse_unit("molec").expect("Failed to parse molec");
+    assert!(molec.is_dimensionless());
+
+    let num_density = parse_unit("molec/cm^3").expect("Failed to parse molec/cm^3");
+    // Equivalent to `1/cm^3`, i.e. inverse-volume (Length^-3).
+    let inv_volume = parse_unit("1/cm^3").unwrap_or_else(|_| {
+        // The existing parser may not accept "1/cm^3"; fall back to m^-3.
+        parse_unit("cm^3").unwrap().power(-1)
+    });
+    assert!(
+        num_density.is_compatible(&inv_volume),
+        "molec/cm^3 should be dimensionally equivalent to 1/cm^3"
+    );
+}
+
+#[test]
+fn esm_dobson_is_areal_number_density() {
+    let dobson = parse_unit("Dobson").expect("Failed to parse Dobson");
+    // Standard: NOT dimensionless — Length^-2 (since molec is a count atom).
+    assert!(!dobson.is_dimensionless(), "Dobson must not be dimensionless");
+    let molec_per_m2 = parse_unit("molec/m^2").expect("Failed to parse molec/m^2");
+    assert!(
+        dobson.is_compatible(&molec_per_m2),
+        "Dobson should be dimensionally equivalent to molec/m^2"
+    );
+    // DU is an alias for Dobson.
+    let du = parse_unit("DU").expect("Failed to parse DU");
+    assert!(du.is_compatible(&dobson));
+}

@@ -15,12 +15,24 @@ try:
     ureg = pint.UnitRegistry()
     UnitsContainer = pint.util.UnitsContainer
 
-    # Add common Earth system model units
-    ureg.define('ppm = 1e-6 * dimensionless')  # parts per million
-    ureg.define('ppb = 1e-9 * dimensionless')  # parts per billion
-    ureg.define('ppt = 1e-12 * dimensionless')  # parts per trillion
-    ureg.define('molecule_cm3 = 1 / cm**3')  # molecules per cubic centimeter
-    ureg.define('Dobson = 2.69e16 * molecule * cm**(-2)')  # Dobson unit
+    # ESM-specific units standard (docs/units-standard.md).
+    # Mole-fraction family: dimensionless with scale factors; ppmv/ppbv/pptv
+    # are volume-mixing-ratio aliases that equal ppm/ppb/ppt under the
+    # ideal-gas approximation, so every binding must treat them as identical.
+    #
+    # pint form: `name = <scale>` (omitting the reference unit) registers a
+    # pure scaling of the empty dimension — this avoids a pint bug where
+    # `name = <scale> * dimensionless` stores `dimensionless` as a reference
+    # name and then fails conversion with KeyError: ''.
+    ureg.define('ppm = 1e-6 = ppmv')
+    ureg.define('ppb = 1e-9 = ppbv')
+    ureg.define('ppt = 1e-12 = pptv')
+    # `molec` is the schema-doc spelling of pint's predefined `molecule`.
+    ureg.define('@alias molecule = molec')
+    ureg.define('molecule_cm3 = 1 / cm**3')
+    # Dobson unit: areal number density of ozone molecules.
+    # 1 Dobson = 2.6867e20 molec/m^2 = 2.6867e16 molec/cm^2 (per standard).
+    ureg.define('Dobson = 2.6867e16 * molecule * cm**(-2)')
 
 except ImportError:
     PINT_AVAILABLE = False

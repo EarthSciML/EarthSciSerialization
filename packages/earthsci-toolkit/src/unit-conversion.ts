@@ -112,11 +112,17 @@ const UNIT_TABLE: Record<string, UnitSpec> = {
   dimensionless: { dims: {}, scale: 1 },
   ratio: { dims: {}, scale: 1 },
   percent: { dims: {}, scale: 0.01 },
+  // ESM mole-fraction family (see docs/units-standard.md).
+  // ppmv/ppbv/pptv are volume-mixing-ratio aliases of ppm/ppb/ppt under the
+  // ideal-gas approximation — they must parse to identical dims and scale.
   ppm: { dims: {}, scale: 1e-6 },
+  ppmv: { dims: {}, scale: 1e-6 },
   ppb: { dims: {}, scale: 1e-9 },
+  ppbv: { dims: {}, scale: 1e-9 },
   ppt: { dims: {}, scale: 1e-12 },
+  pptv: { dims: {}, scale: 1e-12 },
 
-  // Earth science: 1 Dobson Unit = 2.687e20 molec/m^2
+  // Earth science: 1 Dobson Unit = 2.6867e20 molec/m^2
   Dobson: { dims: { molec: 1, m: -2 }, scale: 2.6867e20 },
   DU: { dims: { molec: 1, m: -2 }, scale: 2.6867e20 },
 }

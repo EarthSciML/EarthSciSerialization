@@ -37,6 +37,30 @@ using Unitful
         @test EarthSciSerialization.parse_units("invalid_unit") === nothing
     end
 
+    @testset "ESM-specific units standard" begin
+        # docs/units-standard.md: every binding must accept these and agree
+        # on dimension semantics so cross-binding documents resolve alike.
+        # Mole-fraction family: dimensionless.
+        for u in ("mol/mol", "ppm", "ppmv", "ppb", "ppbv", "ppt", "pptv")
+            parsed = EarthSciSerialization.parse_units(u)
+            @test parsed !== nothing
+            @test dimension(parsed) == dimension(Unitful.NoUnits)
+        end
+
+        # `molec` is a dimensionless count atom; composites like `molec/cm^3`
+        # carry the dimension. The ESM standard treats `molec/cm^3` as an
+        # inverse volume, i.e. dimension `[length]^-3`.
+        num_density = EarthSciSerialization.parse_units("molec/cm^3")
+        @test num_density !== nothing
+        @test dimension(num_density) == Unitful.𝐋^-3
+
+        # Dobson unit: NOT dimensionless. Areal number density with
+        # dimension `[length]^-2`.
+        dobson = EarthSciSerialization.parse_units("Dobson")
+        @test dobson !== nothing
+        @test dimension(dobson) == Unitful.𝐋^-2
+    end
+
     @testset "Expression Dimensions" begin
         # Test get_expression_dimensions function
 
