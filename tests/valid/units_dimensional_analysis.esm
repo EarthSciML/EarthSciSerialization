@@ -139,6 +139,29 @@
           },
           "rhs": "a"
         }
+      ],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "newton_observed_at_t0",
+          "description": "At t=0 with m=10 kg, a=2 m/s^2, v=5 m/s, x=2 m: F = m*a = 20 N; p = m*v = 50 kg*m/s; E_kinetic = 0.5*m*v^2 = 125 J; W = m*a*x = 40 J. Exercises multiplication and v^2 via the ^ operator.",
+          "initial_conditions": {
+            "v": 5.0,
+            "x": 2.0
+          },
+          "parameter_overrides": {
+            "m": 10.0,
+            "a": 2.0,
+            "t": 1.0
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "F",         "time": 0.0, "expected":  20.0 },
+            { "variable": "p",         "time": 0.0, "expected":  50.0 },
+            { "variable": "E_kinetic", "time": 0.0, "expected": 125.0 },
+            { "variable": "W",         "time": 0.0, "expected":  40.0 }
+          ]
+        }
       ]
     },
     "Thermodynamics": {
@@ -354,6 +377,28 @@
             ]
           }
         }
+      ],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "thermo_observed_at_t0",
+          "description": "At t=0 with n=1 mol, Cv=20.8 J/(mol*K), T=300 K, P=100000 Pa, V=0.025 m^3: U = n*Cv*T = 6240 J; H = U + P*V = 6240 + 2500 = 8740 J. Tests multiplication chains and addition with mixed-but-commensurate expression terms. S and G are excluded because log(V) is dimensionally ill-formed (separate dimensional bead).",
+          "initial_conditions": {
+            "T": 300.0,
+            "P": 100000.0,
+            "V": 0.025
+          },
+          "parameter_overrides": {
+            "n": 1.0,
+            "R": 8.314,
+            "Cv": 20.8
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "U", "time": 0.0, "expected": 6240.0 },
+            { "variable": "H", "time": 0.0, "expected": 8740.0 }
+          ]
+        }
       ]
     },
     "ElectromagneticFields": {
@@ -518,7 +563,29 @@
           }
         }
       },
-      "equations": []
+      "equations": [],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "electromagnetism_observed_at_t0",
+          "description": "At t=0 with q=2 C, E=5 V/m, B=3.14159 T, v=10 m/s, m=1 kg: F_electric = q*E = 10 N; F_magnetic = q*v*B = 62.8318 N; cyclotron_freq = q*B/(2*3.14159*m) = 1.0 Hz (since B=2*pi/2 and the denominator has hardcoded 3.14159). energy_density is excluded because the magnetic-permeability literal 4e-7*3.14159 produces a huge magnitude that stresses float precision — it is dimensionally verified by downstream unit checkers.",
+          "parameter_overrides": {
+            "q": 2.0,
+            "E": 5.0,
+            "B": 3.14159,
+            "v": 10.0,
+            "m": 1.0,
+            "epsilon0": 1.0,
+            "c": 300000000.0
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "F_electric",     "time": 0.0, "expected": 10.0 },
+            { "variable": "F_magnetic",     "time": 0.0, "expected": 62.8318 },
+            { "variable": "cyclotron_freq", "time": 0.0, "expected":  1.0 }
+          ]
+        }
+      ]
     },
     "FluidMechanics": {
       "reference": {
@@ -716,6 +783,32 @@
               "rho"
             ]
           }
+        }
+      ],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "fluids_observed_at_t0",
+          "description": "At t=0 with rho=1000, v=2, P=100000, h=10, g=10, mu=0.001, L=1: nu = mu/rho = 1e-6 m^2/s; Re = v*L/nu = 2e6; dynamic_pressure = 0.5*rho*v^2 = 2000 Pa; hydrostatic_pressure = rho*g*h = 100000 Pa; total_pressure = P + dyn + hydro = 202000 Pa. Exercises division, v^2, and sum of three commensurate terms.",
+          "initial_conditions": {
+            "v": 2.0,
+            "P": 100000.0
+          },
+          "parameter_overrides": {
+            "rho": 1000.0,
+            "h": 10.0,
+            "g": 10.0,
+            "mu": 0.001,
+            "L": 1.0
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "nu",                   "time": 0.0, "expected":      1.0e-6 },
+            { "variable": "Re",                   "time": 0.0, "expected":  2000000.0 },
+            { "variable": "dynamic_pressure",     "time": 0.0, "expected":     2000.0 },
+            { "variable": "hydrostatic_pressure", "time": 0.0, "expected":   100000.0 },
+            { "variable": "total_pressure",       "time": 0.0, "expected":   202000.0 }
+          ]
         }
       ]
     },
@@ -937,6 +1030,33 @@
               "B"
             ]
           }
+        }
+      ],
+      "tolerance": { "rel": 1e-10 },
+      "tests": [
+        {
+          "id": "kinetics_observed_at_t0",
+          "description": "At t=0 with A=2, B=3, C=4, k_uni=0.1, k_bi=0.01, k_tri=0.001, Ea=0, R=8.314, T=300: rate_unimol = k_uni*A = 0.2; rate_bimol = k_bi*A*B = 0.06; rate_trimol = k_tri*A*B*C = 0.024; arrhenius_rate = k_uni * exp(-Ea/(R*T)) = 0.1 * exp(0) = 0.1. Exercises exp on a dimensionless argument via Ea=0.",
+          "initial_conditions": {
+            "A": 2.0,
+            "B": 3.0,
+            "C": 4.0
+          },
+          "parameter_overrides": {
+            "k_unimolecular": 0.1,
+            "k_bimolecular": 0.01,
+            "k_trimolecular": 0.001,
+            "Ea": 0.0,
+            "R": 8.314,
+            "T": 300.0
+          },
+          "time_span": { "start": 0.0, "end": 0.0 },
+          "assertions": [
+            { "variable": "rate_unimol",    "time": 0.0, "expected": 0.2 },
+            { "variable": "rate_bimol",     "time": 0.0, "expected": 0.06 },
+            { "variable": "rate_trimol",    "time": 0.0, "expected": 0.024 },
+            { "variable": "arrhenius_rate", "time": 0.0, "expected": 0.1 }
+          ]
         }
       ]
     }
