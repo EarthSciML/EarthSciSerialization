@@ -11,13 +11,10 @@ Invariants asserted (per gt-72z):
     also holds (catches JSON-encoding-induced lossiness).
 
 Scope notes:
-  - Expressions generated here cover the scalar operators that the parse/
-    serialize round-trip is currently expected to support. Array-op extensions
-    (``arrayop``, ``makearray``, ``reshape``, ``transpose``, ``concat``,
-    ``index``, ``broadcast``) are intentionally *excluded* — the current
-    serializer drops their auxiliary fields, which property-based testing
-    confirmed and which is tracked separately. Once that is fixed, those ops
-    can join ``_OP_STRATEGIES`` here.
+  - Expressions generated here cover the scalar operators plus the array-op
+    extensions (``arrayop``, ``makearray``, ``reshape``, ``transpose``,
+    ``concat``, ``index``, ``broadcast``). The array ops were added once the
+    serializer was fixed (gt-4009) to emit their auxiliary fields.
 """
 
 from __future__ import annotations
@@ -106,8 +103,112 @@ def _op_ifelse(child: st.SearchStrategy):
     )
 
 
+# ---------------------------------------------------------------------------
+# Array-op strategies (gt-4009).
+# ---------------------------------------------------------------------------
+# These exercise the auxiliary fields on ExprNode (output_idx, expr, reduce,
+# ranges, regions, values, shape, perm, axis, fn) that the serializer must
+# emit and the parser must read back. We don't try to generate semantically
+# valid array programs — we just need syntactic shapes that survive the
+# serialize/parse round-trip.
+
+_index_names = st.from_regex(r"\A[a-z]\Z", fullmatch=True)
+_small_int = st.integers(min_value=0, max_value=8)
+_shape_entry = st.one_of(st.integers(min_value=1, max_value=16), _var_names)
+
+
+def _op_reshape(child: st.SearchStrategy):
+    shape_strategy = st.lists(_shape_entry, min_size=1, max_size=4)
+    return st.tuples(child, shape_strategy).map(
+        lambda cs: ExprNode(op="reshape", args=[cs[0]], shape=cs[1])
+    )
+
+
+def _op_transpose(child: st.SearchStrategy):
+    # perm is optional on transpose; cover both the with-perm and without-perm
+    # shapes because the serializer and parser handle them separately.
+    perm_strategy = st.lists(_small_int, min_size=1, max_size=4, unique=True)
+    with_perm = st.tuples(child, perm_strategy).map(
+        lambda cp: ExprNode(op="transpose", args=[cp[0]], perm=cp[1])
+    )
+    without_perm = child.map(lambda a: ExprNode(op="transpose", args=[a]))
+    return st.one_of(with_perm, without_perm)
+
+
+def _op_concat(child: st.SearchStrategy):
+    # axis is required on concat and may be 0 — a falsy value that an
+    # ``if expr.axis:`` check would incorrectly drop. Include 0 explicitly.
+    return st.tuples(
+        st.lists(child, min_size=2, max_size=3),
+        st.integers(min_value=0, max_value=3),
+    ).map(lambda ca: ExprNode(op="concat", args=ca[0], axis=ca[1]))
+
+
+def _op_broadcast(child: st.SearchStrategy):
+    fn_strategy = st.sampled_from(["+", "-", "*", "/", "max", "min"])
+    return st.tuples(
+        st.lists(child, min_size=1, max_size=3),
+        fn_strategy,
+    ).map(lambda cf: ExprNode(op="broadcast", args=cf[0], fn=cf[1]))
+
+
+def _op_index(child: st.SearchStrategy):
+    # The 'index' op has no required auxiliary fields in the schema; treat it
+    # as a plain n-ary op over its args.
+    return st.lists(child, min_size=1, max_size=3).map(
+        lambda args: ExprNode(op="index", args=args)
+    )
+
+
+def _op_arrayop(child: st.SearchStrategy):
+    output_idx_strategy = st.lists(
+        st.one_of(_index_names, st.just(1)), min_size=1, max_size=3
+    )
+    reduce_strategy = st.sampled_from(["+", "*", "max", "min"])
+    range_strategy = st.one_of(
+        st.lists(_small_int, min_size=2, max_size=2),
+        st.lists(_small_int, min_size=3, max_size=3),
+    )
+    ranges_strategy = st.dictionaries(_index_names, range_strategy, max_size=3)
+
+    @st.composite
+    def build(draw):
+        args = draw(st.lists(child, min_size=1, max_size=2))
+        output_idx = draw(output_idx_strategy)
+        body = draw(child)
+        include_reduce = draw(st.booleans())
+        include_ranges = draw(st.booleans())
+        return ExprNode(
+            op="arrayop",
+            args=args,
+            output_idx=output_idx,
+            expr=body,
+            reduce=draw(reduce_strategy) if include_reduce else None,
+            ranges=draw(ranges_strategy) if include_ranges else None,
+        )
+
+    return build()
+
+
+def _op_makearray(child: st.SearchStrategy):
+    region_strategy = st.lists(
+        st.lists(_small_int, min_size=2, max_size=2),
+        min_size=1,
+        max_size=3,
+    )
+
+    @st.composite
+    def build(draw):
+        n = draw(st.integers(min_value=1, max_value=3))
+        regions = [draw(region_strategy) for _ in range(n)]
+        values = [draw(child) for _ in range(n)]
+        return ExprNode(op="makearray", args=[], regions=regions, values=values)
+
+    return build()
+
+
 def _node_strategy(child: st.SearchStrategy) -> st.SearchStrategy:
-    """All scalar ExprNode shapes that the parse/serialize round-trip must support."""
+    """All ExprNode shapes that the parse/serialize round-trip must support."""
     return st.one_of(
         # n-ary arithmetic
         _op_nary("+", child),
@@ -144,6 +245,14 @@ def _node_strategy(child: st.SearchStrategy) -> st.SearchStrategy:
         # operator nodes that carry auxiliary scalar fields
         _op_derivative(child),
         _op_grad(child),
+        # array-op extensions (gt-4009)
+        _op_reshape(child),
+        _op_transpose(child),
+        _op_concat(child),
+        _op_broadcast(child),
+        _op_index(child),
+        _op_arrayop(child),
+        _op_makearray(child),
     )
 
 

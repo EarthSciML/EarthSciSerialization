@@ -36,6 +36,27 @@ def _serialize_expression(expr: Expr) -> Union[int, float, str, Dict[str, Any]]:
             result["wrt"] = expr.wrt
         if expr.dim is not None:
             result["dim"] = expr.dim
+        # Array-op fields (schema §ExpressionNode). Mirrors _parse_expression.
+        if expr.output_idx is not None:
+            result["output_idx"] = expr.output_idx
+        if expr.expr is not None:
+            result["expr"] = _serialize_expression(expr.expr)
+        if expr.reduce is not None:
+            result["reduce"] = expr.reduce
+        if expr.ranges is not None:
+            result["ranges"] = expr.ranges
+        if expr.regions is not None:
+            result["regions"] = expr.regions
+        if expr.values is not None:
+            result["values"] = [_serialize_expression(v) for v in expr.values]
+        if expr.shape is not None:
+            result["shape"] = expr.shape
+        if expr.perm is not None:
+            result["perm"] = expr.perm
+        if expr.axis is not None:
+            result["axis"] = expr.axis
+        if expr.fn is not None:
+            result["fn"] = expr.fn
         return result
     else:
         raise ValueError(f"Invalid expression type: {type(expr)}")
