@@ -64,10 +64,11 @@ cd packages/earthsci-toolkit && npm test                            # TypeScript
 cd packages/earthsci_toolkit && python3 -m pytest tests/ -v         # Python
 cd packages/earthsci-toolkit-rs && cargo test                       # Rust
 cd packages/esm-format-go && go test ./...                          # Go
+cd packages/esm-editor && npm test                                  # SolidJS editor
 
 # Dependency management
-./scripts/deps install   # Install all dependencies
-./scripts/deps check     # Verify dependencies
+./install.sh --all       # Install all language environments
+./install.sh --check     # Verify system requirements
 ```
 
 ## Architecture Overview
