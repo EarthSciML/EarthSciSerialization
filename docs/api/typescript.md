@@ -544,21 +544,6 @@ Compute the symbolic derivative of an expression with respect to a variable
 
 ---
 
-### downloadExport
-
-**File:** `/home/ctessum/esmlgt/EarthSciSerialization/polecats/pipboy/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:631`
-
-**Signature:**
-```typescript
-export function downloadExport(content: string, filename: string, mimeType: string = 'text/plain'): void {
-```
-
-**Description:**
-Download exported model as file
-/
-
----
-
 ### estimateParallelPotential
 
 **File:** `/home/ctessum/esmlgt/EarthSciSerialization/polecats/pipboy/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:282`
@@ -613,21 +598,6 @@ Evaluate an expression numerically with variable bindings
 **Available in other languages:**
 - [Julia](julia.md#evaluate)
 - [Julia](julia.md#evaluate)
-
----
-
-### exportModel
-
-**File:** `/home/ctessum/esmlgt/EarthSciSerialization/polecats/pipboy/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:33`
-
-**Signature:**
-```typescript
-export function exportModel(model: Model, format: ExportFormat, options: ExportOptions = {}): string {
-```
-
-**Description:**
-Export model to various formats
-/
 
 ---
 
@@ -937,21 +907,6 @@ Generate variable names for factored subexpressions
 
 ---
 
-### getAvailableFormats
-
-**File:** `/home/ctessum/esmlgt/EarthSciSerialization/polecats/pipboy/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:609`
-
-**Signature:**
-```typescript
-export function getAvailableFormats(): ExportFormat[] {
-```
-
-**Description:**
-Get available export formats
-/
-
----
-
 ### getComponentType
 
 **File:** `/home/ctessum/esmlgt/EarthSciSerialization/polecats/pipboy/EarthSciSerialization/packages/earthsci-toolkit/src/graph.ts:361`
@@ -963,21 +918,6 @@ export function getComponentType(esmFile: EsmFile, componentId: string): Compone
 
 **Description:**
 Get the type of a component by its ID
-/
-
----
-
-### getFileExtension
-
-**File:** `/home/ctessum/esmlgt/EarthSciSerialization/polecats/pipboy/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:616`
-
-**Signature:**
-```typescript
-export function getFileExtension(format: ExportFormat): string {
-```
-
-**Description:**
-Get file extension for export format
 /
 
 ---
@@ -2632,21 +2572,6 @@ export interface Example {
 
 **Description:**
 An inline illustrative example of how to run the enclosing component. Defines the run configuration and one or more plots derived from the result.
-/
-
----
-
-### ExportOptions
-
-**File:** `/home/ctessum/esmlgt/EarthSciSerialization/polecats/pipboy/EarthSciSerialization/packages/earthsci-toolkit/src/interactive-editor/ModelExportUtils.ts:19`
-
-**Definition:**
-```typescript
-export interface ExportOptions {
-```
-
-**Description:**
-Export options for different formats
 /
 
 ---
