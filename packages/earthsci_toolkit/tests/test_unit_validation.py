@@ -10,12 +10,16 @@ This module provides comprehensive tests for:
 - Coupling scenarios with dimensional consistency
 """
 
+from pathlib import Path
+
 import pytest
 from pint import UnitRegistry, DimensionalityError
+from earthsci_toolkit import load
 from earthsci_toolkit.esm_types import (
     ModelVariable, Parameter, Species, Equation, ExprNode,
     Model, ReactionSystem, Reaction, CouplingEntry, CouplingType
 )
+from earthsci_toolkit.units import UnitValidator, UnitValidationResult
 
 
 # Initialize unit registry for testing
@@ -496,3 +500,41 @@ class TestIntegratedUnitValidation:
             if param.units:
                 param_quantity = Q_(param.value, param.units)
                 assert param_quantity is not None
+
+
+# Cross-binding units fixtures (gt-gtf): the three units_*.esm files in
+# tests/valid/ are shared across Julia/Python/Rust/TypeScript/Go and exist
+# specifically to drive cross-binding agreement on units handling. Wire them
+# into the Python suite by loading each fixture through the public API and
+# running the binding's UnitValidator on every model. The fixtures
+# intentionally cover the union of binding unit-registry coverage, so this
+# test asserts only that load and validation complete without raising.
+UNITS_FIXTURE_NAMES = [
+    "units_conversions.esm",
+    "units_dimensional_analysis.esm",
+    "units_propagation.esm",
+]
+
+
+@pytest.fixture
+def units_fixtures_dir():
+    return Path(__file__).resolve().parents[3] / "tests" / "valid"
+
+
+@pytest.mark.parametrize("fixture_name", UNITS_FIXTURE_NAMES)
+class TestCrossBindingUnitsFixtures:
+    def test_fixture_loads(self, units_fixtures_dir, fixture_name):
+        path = units_fixtures_dir / fixture_name
+        assert path.is_file(), f"missing fixture {path}"
+        esm = load(path.read_text())
+        assert esm.models, f"{fixture_name}: no models loaded"
+
+    def test_unit_validator_runs(self, units_fixtures_dir, fixture_name):
+        path = units_fixtures_dir / fixture_name
+        esm = load(path.read_text())
+        validator = UnitValidator()
+        result = validator.validate_esm_file(esm)
+        assert isinstance(result, UnitValidationResult)
+        for model in esm.models.values():
+            model_result = validator.validate_model(model)
+            assert isinstance(model_result, UnitValidationResult)

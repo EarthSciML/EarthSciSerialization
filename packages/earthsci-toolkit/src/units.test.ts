@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { parseUnit, checkDimensions, validateUnits, type ParsedUnit } from './units.js'
+import { load } from './parse.js'
 import type { Expression, EsmFile } from './types.js'
 
 describe('Unit parsing and dimensional analysis', () => {
@@ -325,5 +328,32 @@ describe('Unit parsing and dimensional analysis', () => {
       )
       expect(divisionWarning).toBeDefined()
     })
+  })
+
+  describe('Cross-binding units fixtures (gt-gtf)', () => {
+    // The three units_*.esm files in tests/valid/ are shared across
+    // Julia/Python/Rust/TypeScript/Go and exist specifically to drive
+    // cross-binding agreement on units handling. validateUnits is opt-in
+    // for TypeScript, so call it explicitly per-fixture. Each binding's
+    // unit registry covers a different subset, so this test asserts only
+    // that load and validateUnits complete successfully and emit warnings
+    // as a typed array.
+    const fixturesDir = join(__dirname, '..', '..', '..', 'tests', 'valid')
+    const fixtures = [
+      'units_conversions.esm',
+      'units_dimensional_analysis.esm',
+      'units_propagation.esm',
+    ]
+
+    for (const fname of fixtures) {
+      it(`loads ${fname} and runs validateUnits`, () => {
+        const content = readFileSync(join(fixturesDir, fname), 'utf8')
+        const file = load(content) as EsmFile
+        expect(file.models).toBeDefined()
+        expect(Object.keys(file.models ?? {}).length).toBeGreaterThan(0)
+        const warnings = validateUnits(file)
+        expect(Array.isArray(warnings)).toBe(true)
+      })
+    }
   })
 })
