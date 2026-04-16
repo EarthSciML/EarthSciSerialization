@@ -1,0 +1,32 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "UnitsMixedDimensionalOperations",
+    "description": "Invalid file demonstrating multiple unit inconsistencies in the same model (addition of incompatible units and a dimensionless function applied to a dimensional argument)",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-04-16T00:00:00Z"
+  },
+
+  "models": {
+    "ComplexUnitsModel": {
+      "variables": {
+        "length": { "type": "parameter", "units": "m", "default": 2.0, "description": "Length" },
+        "mass": { "type": "parameter", "units": "kg", "default": 3.0, "description": "Mass" },
+        "acceleration": { "type": "parameter", "units": "m/s^2", "default": 9.81, "description": "Acceleration" },
+        "area_like": { "type": "observed", "units": "m^2", "description": "Squared length",
+          "expression": { "op": "^", "args": ["length", 2] }
+        },
+        "force_like": { "type": "observed", "units": "kg*m/s^2", "description": "Mass times acceleration",
+          "expression": { "op": "*", "args": ["mass", "acceleration"] }
+        },
+        "invalid_sum": { "type": "observed", "units": "1", "description": "Invalid: adds m^2 (area_like) to kg*m/s^2 (force_like) — unit inconsistency #1",
+          "expression": { "op": "+", "args": ["area_like", "force_like"] }
+        },
+        "invalid_transcendental": { "type": "observed", "units": "1", "description": "Invalid: exp() requires dimensionless argument but 'mass' has units 'kg' — unit inconsistency #2",
+          "expression": { "op": "exp", "args": ["mass"] }
+        }
+      },
+      "equations": []
+    }
+  }
+}

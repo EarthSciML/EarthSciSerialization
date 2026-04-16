@@ -1990,5 +1990,56 @@
       }
     ],
     "is_valid": false
+  },
+
+  "units_invalid_derivative.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Derivative d(x)/dt has units 'm/s' but assigned expression has units 'kg'",
+        "details": {
+          "derivative_variable": "x",
+          "derivative_variable_units": "m",
+          "wrt_variable": "t",
+          "wrt_variable_units": "s",
+          "expected_units": "m/s",
+          "actual_units": "kg",
+          "equation_index": 0
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_mixed_dimensional_operations.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ComplexUnitsModel/variables/invalid_sum",
+        "code": "unit_inconsistency",
+        "message": "Cannot add quantities with different units: 'm^2' + 'kg*m/s^2'",
+        "details": {
+          "operation": "addition",
+          "left_units": "m^2",
+          "right_units": "kg*m/s^2",
+          "variable": "invalid_sum"
+        }
+      },
+      {
+        "path": "/models/ComplexUnitsModel/variables/invalid_transcendental",
+        "code": "unit_inconsistency",
+        "message": "Exponential argument must be dimensionless, got units 'kg'",
+        "details": {
+          "operation": "exponential",
+          "function": "exp",
+          "argument_units": "kg",
+          "variable": "invalid_transcendental"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Demonstrates two independent unit inconsistencies (addition of incompatible units, and transcendental function on dimensional argument) in one fixture. Validators may surface one or both depending on coverage; Python's validator currently only surfaces the addition case, while Julia/Rust/TS/Go also surface the transcendental case."
   }
 }
