@@ -89,6 +89,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [Equation Display](julia-equation-display.md)
 - [EsmFile Display](julia-esmfile-display.md)
 - [Units Tests](julia-units-tests.md)
+- [ESM-specific units standard](julia-esm-specific-units-standard.md)
 - [Expression Dimensions](julia-expression-dimensions.md)
 - [Equation Validation](julia-equation-validation.md)
 - [Model Validation](julia-model-validation.md)

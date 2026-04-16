@@ -1223,22 +1223,6 @@ operations(...)
 
 ---
 
-### parse_units
-
-**Julia:**
-```julia
-parse_units(...)
-```
-
-**Julia:**
-```julia
-function parse_units(unit_str::String)::Union{Unitful.Units, Nothing}
-```
-
-> Parse a unit string into a Unitful.
-
----
-
 ### predecessors
 
 **Julia:**

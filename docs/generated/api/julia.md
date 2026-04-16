@@ -3568,7 +3568,7 @@ get_expression_dimensions(...)
 
 ### get_expression_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:51`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:66`
 
 **Signature:**
 ```julia
@@ -3777,7 +3777,7 @@ infer_variable_units(...)
 
 ### infer_variable_units
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:332`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:347`
 
 **Signature:**
 ```julia
@@ -4177,22 +4177,6 @@ Schema-defined variants:
 ```julia
 parse_units(...)
 ```
-
----
-
-### parse_units
-
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:15`
-
-**Signature:**
-```julia
-function parse_units(unit_str::String)::Union{Unitful.Units, Nothing}
-```
-
-**Description:**
-Parse a unit string into a Unitful.Units object.
-
-Handles common scientific units and compositions used in Earth system models.
 
 ---
 
@@ -5948,7 +5932,7 @@ validate_equation_dimensions(...)
 
 ### validate_equation_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:196`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:211`
 
 **Signature:**
 ```julia
@@ -6025,7 +6009,7 @@ validate_file_dimensions(...)
 
 ### validate_file_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:301`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:316`
 
 **Signature:**
 ```julia
@@ -6086,7 +6070,7 @@ validate_model_dimensions(...)
 
 ### validate_model_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:220`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:235`
 
 **Signature:**
 ```julia
@@ -6167,7 +6151,7 @@ validate_reaction_system_dimensions(...)
 
 ### validate_reaction_system_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:245`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:260`
 
 **Signature:**
 ```julia
