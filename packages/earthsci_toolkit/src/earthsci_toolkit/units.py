@@ -321,6 +321,13 @@ class UnitValidator:
 
         elif node.op == '^':
             # Power: first argument's dimension raised to power
+            # The exponent must be dimensionless
+            if len(node.args) >= 2:
+                exp_dim = self._get_expression_dimension(node.args[1])
+                if exp_dim is not None and exp_dim != self.ureg.dimensionless.dimensionality:
+                    raise ValueError(
+                        f"Exponent must be dimensionless, got {exp_dim}"
+                    )
             if len(valid_dims) >= 1:
                 base_dim = valid_dims[0]
                 if len(node.args) > 1 and isinstance(node.args[1], (int, float)):

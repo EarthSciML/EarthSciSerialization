@@ -1643,6 +1643,32 @@ def _is_derivative_compatible(lhs_var_units: str, rhs_units: str) -> bool:
         return True  # If pint can't parse, don't flag
 
 
+def _check_exponent_dimensionless(expr, var_units: Dict[str, str], errors: List[str], path: str) -> None:
+    """Walk an expression tree and check that exponents of ^ are dimensionless."""
+    if not isinstance(expr, dict) or "op" not in expr:
+        return
+    op = expr.get("op")
+    args = expr.get("args", [])
+    if op == "^" and len(args) >= 2:
+        exp_arg = args[1]
+        if isinstance(exp_arg, str):
+            exp_units = var_units.get(exp_arg)
+            if exp_units is not None:
+                norm = _normalize_unit(exp_units)
+                if norm != "dimensionless":
+                    # Also look up the base units for the error message
+                    base_units = None
+                    if isinstance(args[0], str):
+                        base_units = var_units.get(args[0])
+                    base_str = f" for base with units '{base_units}'" if base_units else ""
+                    errors.append(
+                        f"{path}: exponent must be dimensionless, got '{exp_units}'{base_str}"
+                    )
+    # Recurse into all args
+    for i, arg in enumerate(args):
+        _check_exponent_dimensionless(arg, var_units, errors, f"{path}/args[{i}]")
+
+
 def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
     """
     Check unit compatibility in equations.
@@ -1651,6 +1677,7 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
     1. Equations of the form D(x)/dt = bare_var where bare_var has dimensions
        clearly incompatible with x/time (e.g., velocity-rate set to mass).
     2. Observed variable expressions whose top-level + or - has incompatible operands.
+    3. Exponents of ^ that have non-dimensionless units.
     """
     var_units = _collect_var_units(tables)
 
@@ -1673,6 +1700,21 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
                                     f"models/{mname}/variables/{vname}: expression has incompatible units in addition/subtraction"
                                 )
                                 break
+
+            # Check exponent dimensionality in all variable expressions
+            if "expression" in vdef:
+                _check_exponent_dimensionless(
+                    vdef["expression"], var_units, errors,
+                    f"models/{mname}/variables/{vname}/expression"
+                )
+
+        # Check exponent dimensionality in equation RHS
+        for i, eq in enumerate(m.get("equations", [])):
+            rhs = eq.get("rhs")
+            _check_exponent_dimensionless(
+                rhs, var_units, errors,
+                f"models/{mname}/equations[{i}]/rhs"
+            )
 
         # Equations: only check D(x)/dt = bare_var case
         for i, eq in enumerate(m.get("equations", [])):

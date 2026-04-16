@@ -471,22 +471,20 @@ class TestConstraintValidation:
         """Test validation of array size constraints."""
         schema = _get_schema()
 
-        # Expression args array must have minItems: 1
+        # Continuous event conditions array must have minItems: 1
         invalid_data = {
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {
                 "test_model": {
                     "variables": {"x": {"type": "state"}},
-                    "equations": [{
-                        "lhs": "x",
-                        "rhs": {
-                            "op": "+",
-                            "args": []  # Empty array violates minItems: 1
-                        }
-                    }]
+                    "equations": []
                 }
-            }
+            },
+            "continuous_events": [{
+                "conditions": [],  # Empty array violates minItems: 1
+                "affects": [{"lhs": "x", "rhs": 0}]
+            }]
         }
         with pytest.raises(ValidationError, match="should be non-empty|is too short"):
             jsonschema.validate(invalid_data, schema)
