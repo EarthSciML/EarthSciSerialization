@@ -8,7 +8,7 @@ with schema validation using the bundled esm-schema.json file.
 import json
 import os
 from pathlib import Path
-from typing import Union, Dict, Any, List, TYPE_CHECKING
+from typing import Union, Dict, Any, List, Optional, TYPE_CHECKING
 from dataclasses import fields
 from enum import Enum
 try:
@@ -1643,6 +1643,49 @@ def _is_derivative_compatible(lhs_var_units: str, rhs_units: str) -> bool:
         return True  # If pint can't parse, don't flag
 
 
+def _is_dimensionless_unit(unit: Optional[str]) -> bool:
+    """Return True if a unit string represents a dimensionless quantity."""
+    if unit is None:
+        return True
+    normalized = _normalize_unit(unit)
+    if normalized in ("dimensionless", "1", ""):
+        return True
+    try:
+        import pint
+        ureg = pint.UnitRegistry()
+        return ureg(normalized).dimensionless
+    except Exception:
+        return False
+
+
+def _walk_expression_for_exponent_checks(
+    expr: Any,
+    var_units: Dict[str, str],
+    path: str,
+    errors: List[str],
+) -> None:
+    """Walk an expression tree and flag any '^' whose exponent has dimensions."""
+    if not isinstance(expr, dict):
+        return
+    op = expr.get("op")
+    args = expr.get("args", []) or []
+    if op == "^" and len(args) >= 2:
+        base_arg, exp_arg = args[0], args[1]
+        if isinstance(exp_arg, str):
+            exp_units = var_units.get(exp_arg)
+            if exp_units is not None and not _is_dimensionless_unit(exp_units):
+                base_units = var_units.get(base_arg) if isinstance(base_arg, str) else None
+                errors.append(
+                    f"{path}: exponent must be dimensionless, got '{exp_units}'"
+                    + (f" for base with units '{base_units}'" if base_units else "")
+                )
+    for i, arg in enumerate(args):
+        _walk_expression_for_exponent_checks(arg, var_units, f"{path}/args[{i}]", errors)
+    # Also walk arrayop sub-expressions that live outside args.
+    if "expr" in expr:
+        _walk_expression_for_exponent_checks(expr["expr"], var_units, f"{path}/expr", errors)
+
+
 def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
     """
     Check unit compatibility in equations.
@@ -1651,6 +1694,7 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
     1. Equations of the form D(x)/dt = bare_var where bare_var has dimensions
        clearly incompatible with x/time (e.g., velocity-rate set to mass).
     2. Observed variable expressions whose top-level + or - has incompatible operands.
+    3. '^' operators whose right operand has non-dimensionless units.
     """
     var_units = _collect_var_units(tables)
 
@@ -1673,6 +1717,18 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
                                     f"models/{mname}/variables/{vname}: expression has incompatible units in addition/subtraction"
                                 )
                                 break
+                # Check '^' exponents anywhere within the observed expression tree
+                _walk_expression_for_exponent_checks(
+                    expr, var_units, f"models/{mname}/variables/{vname}/expression", errors
+                )
+
+        # Check '^' exponents in equation rhs/lhs expressions as well
+        for ei, eq in enumerate(m.get("equations", [])):
+            for side in ("lhs", "rhs"):
+                if side in eq:
+                    _walk_expression_for_exponent_checks(
+                        eq[side], var_units, f"models/{mname}/equations[{ei}]/{side}", errors
+                    )
 
         # Equations: only check D(x)/dt = bare_var case
         for i, eq in enumerate(m.get("equations", [])):
