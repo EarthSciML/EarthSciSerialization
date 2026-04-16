@@ -64,7 +64,7 @@
   "peerDependencies": {
     "solid-js": "^1.8.0",
     "solid-element": "^1.9.1",
-    "earthsci-toolkit": "^0.0.2"
+    "earthsci-toolkit": "^0.0.3"
   },
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.10",

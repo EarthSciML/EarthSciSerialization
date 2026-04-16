@@ -9,6 +9,11 @@ on:
       - 'packages/*/data/esm-schema.json'
       - 'packages/*/src/*/data/esm-schema.json'
       - 'packages/*/pkg/*/esm-schema.json'
+      - 'packages/*/package.json'
+      - 'packages/*/pyproject.toml'
+      - 'packages/*/Cargo.toml'
+      - 'packages/*/Project.toml'
+      - 'scripts/sync-schema.sh'
   pull_request:
     branches: [ main ]
     paths:
@@ -17,6 +22,11 @@ on:
       - 'packages/*/data/esm-schema.json'
       - 'packages/*/src/*/data/esm-schema.json'
       - 'packages/*/pkg/*/esm-schema.json'
+      - 'packages/*/package.json'
+      - 'packages/*/pyproject.toml'
+      - 'packages/*/Cargo.toml'
+      - 'packages/*/Project.toml'
+      - 'scripts/sync-schema.sh'
 
 jobs:
   check-schema-sync:
@@ -24,5 +34,5 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Check schema copies are in sync
+    - name: Check schema copies and binding versions are in sync
       run: scripts/sync-schema.sh --check

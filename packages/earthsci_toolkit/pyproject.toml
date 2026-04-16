@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "earthsci-toolkit"
-version = "0.0.2"
+version = "0.0.3"
 description = "Earth System Model Serialization Format"
 authors = [
     {name = "EarthSciML Authors and Contributors"}
