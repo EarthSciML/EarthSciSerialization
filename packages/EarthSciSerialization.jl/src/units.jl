@@ -301,21 +301,23 @@ Returns true if all models and reaction systems pass dimensional validation.
 function validate_file_dimensions(file::EsmFile)::Bool
     all_valid = true
 
-    # Validate models
-    for (name, model) in file.models
-        @info "Validating dimensions for model: $name"
-        if !validate_model_dimensions(model)
-            @warn "Model $name failed dimensional validation"
-            all_valid = false
+    if file.models !== nothing
+        for (name, model) in file.models
+            @info "Validating dimensions for model: $name"
+            if !validate_model_dimensions(model)
+                @warn "Model $name failed dimensional validation"
+                all_valid = false
+            end
         end
     end
 
-    # Validate reaction systems
-    for (name, rxn_sys) in file.reaction_systems
-        @info "Validating dimensions for reaction system: $name"
-        if !validate_reaction_system_dimensions(rxn_sys)
-            @warn "Reaction system $name failed dimensional validation"
-            all_valid = false
+    if file.reaction_systems !== nothing
+        for (name, rxn_sys) in file.reaction_systems
+            @info "Validating dimensions for reaction system: $name"
+            if !validate_reaction_system_dimensions(rxn_sys)
+                @warn "Reaction system $name failed dimensional validation"
+                all_valid = false
+            end
         end
     end
 

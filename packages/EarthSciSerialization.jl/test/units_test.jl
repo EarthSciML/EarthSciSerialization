@@ -134,14 +134,9 @@ using Unitful
         metadata = Metadata("test_units", description="Test model for unit validation")
         esm_file = EsmFile("0.1.0", metadata)
 
-        # The function may have issues with empty models field, so wrap in try-catch
-        try
-            result = EarthSciSerialization.validate_file_dimensions(esm_file)
-            @test result isa Bool
-        catch e
-            # File validation may fail on empty file, just test that function exists
-            @test_broken false
-        end
+        result = EarthSciSerialization.validate_file_dimensions(esm_file)
+        @test result isa Bool
+        @test result == true
     end
 
     @testset "Unit Inference" begin
