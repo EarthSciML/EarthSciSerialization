@@ -1,7 +1,7 @@
 //! Conformance tests for the array-op runtime (gt-oxr).
 //!
 //! Loads every `*.esm` fixture under
-//! `../EarthSciSerialization.jl/test/fixtures/arrayop/`, compiles each model
+//! `../../tests/fixtures/arrayop/`, compiles each model
 //! through [`earthsci_toolkit::simulate`], and verifies that every assertion
 //! inside every inline test matches within the declared tolerance.
 //!
@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-const FIXTURE_DIRS: &[&str] = &["../EarthSciSerialization.jl/test/fixtures/arrayop"];
+const FIXTURE_DIRS: &[&str] = &["../../tests/fixtures/arrayop"];
 
 fn effective_tolerance(
     assertion: Option<&Tolerance>,

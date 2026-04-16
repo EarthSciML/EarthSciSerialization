@@ -438,11 +438,11 @@ end
     # Schema-driven fixture runner (Phase 5, gt-cc1 integration).
     # ================================================================
     #
-    # Loads `.esm` files from `test/fixtures/arrayop/`, builds the MTK
+    # Loads `.esm` files from `tests/fixtures/arrayop/` (repo root), builds the MTK
     # system via the full parse → flatten → System path, then executes
     # every inline `test` against the compiled system.
     @testset "Schema fixture runner" begin
-        fixtures_dir = joinpath(@__DIR__, "fixtures", "arrayop")
+        fixtures_dir = joinpath(@__DIR__, "..", "..", "..", "tests", "fixtures", "arrayop")
         fixture_files = sort(filter(f -> endswith(f, ".esm"), readdir(fixtures_dir)))
         @test !isempty(fixture_files)
 

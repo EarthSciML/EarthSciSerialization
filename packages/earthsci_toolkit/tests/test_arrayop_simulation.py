@@ -26,9 +26,8 @@ from earthsci_toolkit.simulation import simulate
 
 
 _FIXTURES_DIR = (
-    Path(__file__).resolve().parents[2]  # packages/
-    / "EarthSciSerialization.jl"
-    / "test"
+    Path(__file__).resolve().parents[3]  # repo root
+    / "tests"
     / "fixtures"
     / "arrayop"
 )

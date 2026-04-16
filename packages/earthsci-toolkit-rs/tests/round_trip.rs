@@ -242,7 +242,7 @@ fn test_metadata_inheritance_round_trip() {
 #[test]
 fn test_model_tests_tolerance_round_trip() {
     let fixture = include_str!(
-        "../../EarthSciSerialization.jl/test/fixtures/arrayop/01_pure_ode_analytical.esm"
+        "../../../tests/fixtures/arrayop/01_pure_ode_analytical.esm"
     );
 
     let parsed: EsmFile = load(fixture).expect("load fixture with tests/tolerance");
