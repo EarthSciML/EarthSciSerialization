@@ -384,6 +384,38 @@ Test runners write results using this naming convention:
 └── <language>_summary.json                 # Overall test summary
 ```
 
+### 4.5 Running the Test Suite
+
+Run the full cross-language conformance suite:
+
+```bash
+./scripts/test-conformance.sh
+```
+
+Outputs land in `conformance-results/`:
+- `conformance-results/<language>/` — per-language result JSON
+- `conformance-results/comparison/analysis.json` — cross-language comparison
+- `conformance-results/reports/conformance_report_*.html` — HTML report
+
+The comparison step requires at least two passing language implementations; it is skipped otherwise with the message "Need at least 2 successful language implementations to perform comparison."
+
+Debug a failing run with shell tracing:
+
+```bash
+bash -x ./scripts/test-conformance.sh
+```
+
+Re-run only the comparison against existing per-language results:
+
+```bash
+python3 scripts/compare-conformance-outputs.py \
+  --output-dir conformance-results \
+  --languages julia typescript python \
+  --comparison-output analysis.json
+```
+
+The pass/warn/fail thresholds used by the comparison are defined in `scripts/compare-conformance-outputs.py` — adjust them there if the overall consistency policy changes.
+
 ## 5. Cross-Language Comparison
 
 ### 5.1 Comparison Protocol

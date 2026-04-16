@@ -52,7 +52,7 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup and [CONFORMANCE_TESTING_GUIDE.md](CONFORMANCE_TESTING_GUIDE.md) for cross-language conformance details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup and [CONFORMANCE_SPEC.md](CONFORMANCE_SPEC.md) for cross-language conformance details.
 
 ```bash
 # Cross-language conformance tests (all languages)

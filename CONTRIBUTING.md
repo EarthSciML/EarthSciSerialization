@@ -137,7 +137,7 @@ All code contributions must:
 
 ## Testing Requirements
 
-See [CONFORMANCE_TESTING_GUIDE.md](CONFORMANCE_TESTING_GUIDE.md) for quick-start instructions and [CONFORMANCE_SPEC.md](CONFORMANCE_SPEC.md) for the full fixture format and execution protocol.
+See [CONFORMANCE_SPEC.md](CONFORMANCE_SPEC.md) for the fixture format, execution protocol, and run commands.
 
 ### Test Requirements for Contributions
 
