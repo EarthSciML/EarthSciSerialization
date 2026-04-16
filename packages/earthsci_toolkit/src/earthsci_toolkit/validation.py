@@ -616,64 +616,6 @@ def _validate_reference_integrity_enhanced(esm_file: EsmFile, error_collector: E
                 error_collector.add_error(error)
 
 
-def _validate_reference_integrity(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
-    """
-    Validate reference integrity across the ESM file.
-
-    Checks:
-    - Variable references in equations exist in the model's variables
-    - Scoped references in coupling entries resolve correctly
-    - Discrete parameter references are valid
-    - Coupling references point to existing components
-    - Operator references exist in the operators section
-    """
-    # Build a comprehensive scope resolver for validation
-    all_variables = {}
-    all_models = {}
-    all_reaction_systems = {}
-    all_operators = {}
-
-    # Collect all models and their variables
-    for model in esm_file.models.values():
-        all_models[model.name] = model
-        for var_name, var in model.variables.items():
-            scoped_name = f"{model.name}.{var_name}"
-            all_variables[scoped_name] = var
-            all_variables[var_name] = var  # Also allow unscoped references within model
-
-    # Collect all reaction systems and their species/parameters
-    for rs in esm_file.reaction_systems.values():
-        all_reaction_systems[rs.name] = rs
-        # Add species as variables
-        for species in rs.species:
-            scoped_name = f"{rs.name}.{species.name}"
-            all_variables[scoped_name] = species
-        # Add parameters as variables
-        for param in rs.parameters:
-            scoped_name = f"{rs.name}.{param.name}"
-            all_variables[scoped_name] = param
-
-    # Collect all operators
-    for op in esm_file.operators:
-        all_operators[op.operator_id] = op
-
-    # Validate variable references in model equations
-    for i, model in enumerate(esm_file.models):
-        _validate_model_references(model, i, all_variables, structural_errors)
-
-    # Validate references in reaction systems
-    for i, rs in enumerate(esm_file.reaction_systems):
-        _validate_reaction_system_references(rs, i, all_variables, structural_errors)
-
-    # Validate coupling references
-    for i, coupling in enumerate(esm_file.coupling):
-        _validate_coupling_references(coupling, i, all_models, all_reaction_systems, all_operators, structural_errors)
-
-    # Validate event references
-    for i, event in enumerate(esm_file.events):
-        _validate_event_references(event, i, all_variables, structural_errors)
-
-
 def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
     """
     Validate reaction consistency in reaction systems.
@@ -1039,54 +981,6 @@ def _validate_units(esm_file: EsmFile, unit_warnings: List[UnitWarning]) -> None
             message=f"Unit validation failed: {str(e)}",
             details={"validation_type": "validation_error", "exception": str(e)}
         ))
-
-
-def _validate_model_references(model, model_idx: int, all_variables: Dict[str, Any], structural_errors: List[ValidationError]) -> None:
-    """Validate references within a model."""
-    model_path = f"/models/{model_idx}"
-
-    # Check variable references in equations (simplified - would need expression tree walking)
-    # This is a placeholder for full expression validation
-    for eq_idx, equation in enumerate(model.equations):
-        eq_path = f"{model_path}/equations/{eq_idx}"
-        # TODO: Walk expression tree and validate all variable references
-        pass
-
-
-def _validate_reaction_system_references(rs, rs_idx: int, all_variables: Dict[str, Any], structural_errors: List[ValidationError]) -> None:
-    """Validate references within a reaction system."""
-    # TODO: Implement reaction system reference validation
-    pass
-
-
-def _validate_coupling_references(coupling, coupling_idx: int, all_models: Dict[str, Any],
-                                all_reaction_systems: Dict[str, Any], all_operators: Dict[str, Any],
-                                structural_errors: List[ValidationError]) -> None:
-    """Validate coupling references."""
-    coupling_path = f"/coupling/{coupling_idx}"
-
-    # Check that source and target models/systems exist
-    if coupling.source_model not in all_models and coupling.source_model not in all_reaction_systems:
-        structural_errors.append(ValidationError(
-            path=f"{coupling_path}/source_model",
-            message=f"Source model/system '{coupling.source_model}' not found",
-            code="undeclared_coupling_source",
-            details={"source": coupling.source_model}
-        ))
-
-    if coupling.target_model not in all_models and coupling.target_model not in all_reaction_systems:
-        structural_errors.append(ValidationError(
-            path=f"{coupling_path}/target_model",
-            message=f"Target model/system '{coupling.target_model}' not found",
-            code="undeclared_coupling_target",
-            details={"target": coupling.target_model}
-        ))
-
-
-def _validate_event_references(event, event_idx: int, all_variables: Dict[str, Any], structural_errors: List[ValidationError]) -> None:
-    """Validate event references."""
-    # TODO: Implement event reference validation
-    pass
 
 
 @dataclass
