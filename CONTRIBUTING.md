@@ -52,14 +52,14 @@ Ensure you have the following installed:
 
 2. **Install dependencies for all packages:**
    ```bash
-   # Use the unified dependency manager
-   ./scripts/deps install
+   # Install environments for every supported language
+   ./install.sh --all
    ```
 
 3. **Run the setup verification:**
    ```bash
-   # Check all dependencies are correctly installed
-   ./scripts/deps check
+   # Check all required tools are installed
+   ./install.sh --check
    ```
 
 4. **Run the full test suite:**
@@ -73,12 +73,16 @@ Ensure you have the following installed:
 
 ### Environment Configuration
 
-The project includes environment management scripts:
+`install.sh` accepts per-language flags so you can set up only the environments you need:
 
 ```bash
-# Manage development environments
-./scripts/env-manager.sh create-dev-env
-./scripts/env-manager.sh activate julia  # or python, node, rust, go
+# Install only the languages you intend to work on
+./install.sh --julia
+./install.sh --ts --py
+./install.sh --rust --go
+
+# Install development tools (linters, formatters, etc.)
+./install.sh --dev
 ```
 
 ## Project Structure
@@ -194,8 +198,8 @@ bd close <issue-id>
    julia --project=. -e 'using Pkg; Pkg.test()'
    ./scripts/test-conformance.sh
 
-   # Check dependencies
-   ./scripts/deps check
+   # Verify required tools are installed
+   ./install.sh --check
    ```
 
 5. **Submit Pull Request:**
@@ -313,12 +317,6 @@ All contributions must include appropriate documentation:
 ```bash
 # Generate documentation for all packages
 ./scripts/generate_docs.py
-
-# Validate documentation
-./scripts/validate_docs.py
-
-# Deploy documentation (maintainers only)
-./scripts/deploy_docs.py
 ```
 
 ## Issue Tracking
@@ -364,15 +362,11 @@ All packages follow semantic versioning:
 ### Release Workflow
 
 1. **Version Coordination**: All language packages maintain synchronized versions
-2. **Testing**: Full conformance test suite must pass
+2. **Testing**: Full conformance test suite must pass (`./scripts/test-conformance.sh`)
 3. **Documentation**: Update all relevant documentation
-4. **Security**: Run security scans and address vulnerabilities
+4. **Security**: Run security scans (`./scripts/package-security-scanner.py`) and address vulnerabilities
 5. **Changelog**: Generate comprehensive changelog
-
-```bash
-# Automated release process (maintainers only)
-./scripts/release-coordinator.sh --version=minor
-```
+6. **Tagging**: Tag and publish each language package per its ecosystem (e.g., `npm publish`, `cargo publish`, Julia registry PR)
 
 ## Getting Help
 
@@ -404,21 +398,14 @@ All packages follow semantic versioning:
 
 ### Development Environment Issues
 
-**Dependency conflicts:**
+**Missing or incompatible tools:**
 ```bash
-./scripts/deps check        # Diagnose issues
-./scripts/deps report       # Generate detailed report
+./install.sh --check        # Diagnose missing language toolchains
 ```
 
 **Test failures:**
 ```bash
 ./scripts/test-conformance.sh  # Run full conformance tests
-```
-
-**Documentation builds:**
-```bash
-./scripts/docs_maintenance.py --check  # Validate documentation
-./scripts/docs_maintenance.py --fix    # Auto-fix common issues
 ```
 
 Thank you for contributing to EarthSciSerialization! Your contributions help advance earth science modeling capabilities across programming languages.
