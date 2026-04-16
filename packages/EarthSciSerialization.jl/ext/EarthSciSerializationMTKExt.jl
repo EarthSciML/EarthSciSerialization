@@ -457,6 +457,32 @@ function _make_param(name::Symbol)
 end
 
 """
+    _build_description(desc, units) -> Union{String,Nothing}
+
+Assemble a description string that encodes both the ESM variable's textual
+description and its units. MTK's `VariableDescription` metadata is a plain
+string, so we embed the unit as a `(units=...)` suffix. Returns `nothing`
+when there is nothing to attach — the caller uses that to skip metadata.
+
+The ESM binding intentionally does NOT feed units into MTK's own unit
+metadata system (that path has latent bugs and duplicates the work of
+`src/units.jl`); stuffing units into the description is a version-stable
+alternative that still surfaces in error messages and plot labels.
+"""
+function _build_description(desc::Union{String,Nothing},
+                            units::Union{String,Nothing})
+    if desc === nothing && units === nothing
+        return nothing
+    elseif units === nothing
+        return desc
+    elseif desc === nothing
+        return "(units=$(units))"
+    else
+        return "$(desc) (units=$(units))"
+    end
+end
+
+"""
     _make_array_dep_var(name::Symbol, iv_syms::Vector{Any}, shape::Vector{UnitRange{Int}})
 
 Construct a shape-annotated symbolic variable of the form
@@ -551,35 +577,48 @@ function _build_var_dict(flat::FlattenedSystem)
     _with_default(v, val) =
         val === nothing ? v : Symbolics.setdefaultval(v, Float64(val))
 
+    _with_description(v, desc_text) =
+        desc_text === nothing ? v :
+            Symbolics.setmetadata(v, ModelingToolkit.VariableDescription, desc_text)
+
     # State variables — functions of independent variables
     for (vname, mvar) in flat.state_variables
         sym_name = _san(vname)
         shape = get(inferred_shapes, vname, nothing)
+        desc_text = _build_description(mvar.description, mvar.units)
         if shape === nothing
-            v_num = _with_default(_make_dep_var(sym_name, iv_syms_any), mvar.default)
+            v_num = _with_description(
+                _with_default(_make_dep_var(sym_name, iv_syms_any), mvar.default),
+                desc_text)
             push!(states, v_num)
             var_dict[vname] = v_num
         else
             array_var = _make_array_dep_var(sym_name, iv_syms_any, shape)
             var_dict[vname] = array_var
             # Enumerate the individual scalar elements for the dvs vector.
+            # Description metadata is attached per-element because
+            # Symbolics.setmetadata has no method for Symbolics.Arr.
             for idx in Iterators.product(shape...)
-                push!(states, Num(array_var[idx...]))
+                elt = _with_description(Num(array_var[idx...]), desc_text)
+                push!(states, elt)
             end
         end
     end
 
     # Parameters — plain symbols
     for (pname, mvar) in flat.parameters
-        p_num = _with_default(_make_param(_san(pname)), mvar.default)
+        p_num = _with_description(
+            _with_default(_make_param(_san(pname)), mvar.default),
+            _build_description(mvar.description, mvar.units))
         push!(parameters, p_num)
         var_dict[pname] = p_num
     end
 
     # Observed variables — same shape as states
     for (oname, mvar) in flat.observed_variables
-        ov_num = _with_default(_make_dep_var(_san(oname), iv_syms_any),
-                               mvar.default)
+        ov_num = _with_description(
+            _with_default(_make_dep_var(_san(oname), iv_syms_any), mvar.default),
+            _build_description(mvar.description, mvar.units))
         push!(observed, ov_num)
         var_dict[oname] = ov_num
     end
