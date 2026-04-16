@@ -82,11 +82,11 @@
           },
           "assertions": [
             { "variable": "N", "time":  0.0, "expected":  1.0 },
-            { "variable": "N", "time":  5.0, "expected": 10.90909090909091 },
-            { "variable": "N", "time": 10.0, "expected": 59.8687006036041 },
-            { "variable": "N", "time": 15.0, "expected": 94.74122255776793,
+            { "variable": "N", "time":  5.0, "expected": 10.957205155884768 },
+            { "variable": "N", "time": 10.0, "expected": 59.985960181303476 },
+            { "variable": "N", "time": 15.0, "expected": 94.80871535685075,
               "tolerance": { "abs": 1e-04 } },
-            { "variable": "N", "time": 30.0, "expected": 99.99996940976669,
+            { "variable": "N", "time": 30.0, "expected": 99.99697165873832,
               "tolerance": { "abs": 1e-04, "rel": 1e-08 } }
           ]
         },
