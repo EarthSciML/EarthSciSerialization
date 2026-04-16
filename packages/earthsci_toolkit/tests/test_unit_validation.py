@@ -538,3 +538,58 @@ class TestCrossBindingUnitsFixtures:
         for model in esm.models.values():
             model_result = validator.validate_model(model)
             assert isinstance(model_result, UnitValidationResult)
+
+
+class TestEsmSpecificUnitsStandard:
+    """Cross-binding ESM units standard (docs/units-standard.md).
+
+    Uses the package's own registry so these tests exercise the definitions
+    added in ``earthsci_toolkit.units`` rather than a vanilla pint registry.
+    """
+
+    def setup_method(self):
+        from earthsci_toolkit.units import ureg as pkg_ureg
+        self.ureg = pkg_ureg
+
+    def test_mole_fraction_family_is_dimensionless(self):
+        dimensionless = self.ureg.dimensionless.dimensionality
+        for name, factor in [
+            ("ppm", 1e-6),
+            ("ppmv", 1e-6),
+            ("ppb", 1e-9),
+            ("ppbv", 1e-9),
+            ("ppt", 1e-12),
+            ("pptv", 1e-12),
+        ]:
+            q = self.ureg.Quantity(1.0, name)
+            assert q.dimensionality == dimensionless, (
+                f"{name} must be dimensionless per ESM standard"
+            )
+            # Scale factor must match the canonical doc exactly.
+            assert q.to("dimensionless").magnitude == pytest.approx(factor)
+
+    def test_mol_per_mol_is_dimensionless(self):
+        q = self.ureg.Quantity(1.0, "mol/mol")
+        assert q.dimensionality == self.ureg.dimensionless.dimensionality
+
+    def test_volume_mixing_ratio_aliases_match_mole_fraction(self):
+        # `ppmv`/`ppbv`/`pptv` must be interchangeable with `ppm`/`ppb`/`ppt`
+        # — otherwise cross-binding docs emit spurious unit mismatches.
+        assert self.ureg.Quantity(1.0, "ppmv").to("ppm").magnitude == pytest.approx(1.0)
+        assert self.ureg.Quantity(1.0, "ppbv").to("ppb").magnitude == pytest.approx(1.0)
+        assert self.ureg.Quantity(1.0, "pptv").to("ppt").magnitude == pytest.approx(1.0)
+
+    def test_dobson_is_areal_number_density(self):
+        # Standard: 1 Dobson = 2.6867e20 molec/m^2 = 2.6867e16 molec/cm^2.
+        # NOT dimensionless — carries `molecule / length^2`.
+        dobson = self.ureg.Quantity(1.0, "Dobson")
+        as_molec_cm2 = dobson.to("molecule / cm**2")
+        assert as_molec_cm2.magnitude == pytest.approx(2.6867e16, rel=1e-6)
+
+    def test_molec_alias_matches_molecule(self):
+        # `molec` is the schema-doc spelling of pint's `molecule`. Identity
+        # must hold so `molec/cm^3` and `molecule/cm^3` parse identically.
+        a = self.ureg.Quantity(1.0, "molec / cm**3")
+        b = self.ureg.Quantity(1.0, "molecule / cm**3")
+        assert a.dimensionality == b.dimensionality
+        assert a.to(b.units).magnitude == pytest.approx(1.0)
