@@ -1,3 +1,6 @@
+> **Historical Snapshot**: This is a point-in-time snapshot from February 2026.
+> For current test status, see CI artifacts.
+
 # ESM Format Test Coverage Matrix
 
 **Version**: 0.1.0

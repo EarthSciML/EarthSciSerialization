@@ -1,5 +1,11 @@
 # ESM Format Compliance Validation Matrix
 
+> **Reference Taxonomy**: This document catalogs testable requirements extracted from the
+> ESM specifications. It is a static reference taxonomy, not a live verification report.
+> For current test results, see CI artifacts.
+>
+> **Last manual audit**: February 2026
+
 **Version**: 0.1.0
 **Generated**: 2026-02-15
 **Sources**: esm-spec.md, esm-libraries-spec.md

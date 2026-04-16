@@ -143,7 +143,7 @@ The ESM format supports:
 - **[Schema Reference](esm-schema.json)** — Authoritative JSON schema
 - **[Conformance Testing](CONFORMANCE_TESTING.md)** — Cross-language test suite (detailed technical docs)
 - **[Conformance Testing Guide](CONFORMANCE_TESTING_GUIDE.md)** — Practical usage guide and current status
-- **[Validation Matrix](ESM_COMPLIANCE_VALIDATION_MATRIX.md)** — Implementation compliance tracking
+- **[Validation Matrix](ESM_COMPLIANCE_VALIDATION_MATRIX.md)** — Reference taxonomy of testable requirements
 
 ## Contributing
 
