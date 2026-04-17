@@ -1,0 +1,38 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BadObservedExpressionDimensions",
+    "description": "Invalid file: observed 'pressure_drop' is declared as Pa but expression (mu/rho * rho/L * v^2) evaluates to kg/s^3 — regression fixture for the units_propagation bug fixed in gt-p3v",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-04-17T00:00:00Z"
+  },
+
+  "models": {
+    "BadObservedExpressionDimensions": {
+      "variables": {
+        "mu":  { "type": "parameter", "units": "Pa*s",  "default": 0.001,  "description": "Dynamic viscosity" },
+        "rho": { "type": "parameter", "units": "kg/m^3", "default": 1000.0, "description": "Density" },
+        "L":   { "type": "parameter", "units": "m",      "default": 1.0,    "description": "Length scale" },
+        "v":   { "type": "parameter", "units": "m/s",    "default": 1.0,    "description": "Velocity" },
+        "pressure_drop_bad": {
+          "type": "observed",
+          "units": "Pa",
+          "description": "Invalid: declared Pa but expression (mu/rho * rho/L * v^2) has units kg/s^3, not Pa (kg/(m*s^2))",
+          "expression": {
+            "op": "*",
+            "args": [
+              { "op": "*",
+                "args": [
+                  { "op": "/", "args": ["mu", "rho"] },
+                  { "op": "/", "args": ["rho", "L"] }
+                ]
+              },
+              { "op": "^", "args": ["v", 2] }
+            ]
+          }
+        }
+      },
+      "equations": []
+    }
+  }
+}

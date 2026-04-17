@@ -740,7 +740,7 @@ function promoteUnitWarningsToErrors(warnings: UnitWarning[]): StructuralError[]
             errors.push({
                 path: warning.location ? `/${warning.location.replace(/\./g, '/')}` : '$',
                 message: warning.message,
-                code: 'unit_error',
+                code: 'unit_inconsistency',
                 details: { equation: warning.equation || '' }
             });
         }

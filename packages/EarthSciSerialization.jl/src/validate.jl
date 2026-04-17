@@ -151,7 +151,126 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
         ))
     end
 
+    # 7. Dimensional consistency for equations (D-LHS) and observed-variable expressions.
+    if file.models !== nothing
+        for (model_name, model) in file.models
+            append!(errors, validate_model_unit_consistency(model, "/models/$model_name"))
+        end
+    end
+
     return errors
+end
+
+"""
+    validate_model_unit_consistency(model, path) -> Vector{StructuralError}
+
+Walk a model's equations and observed variables, comparing composed expression
+units against declared units (or LHS-derivative units). Emits `unit_inconsistency`
+errors for genuine dimensional mismatches. Silent on cases where units cannot be
+inferred (missing units, unknown variables, offset units like Celsius).
+"""
+function validate_model_unit_consistency(model::Model, path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    var_units = Dict{String, String}()
+    for (name, var) in model.variables
+        if var.units !== nothing && !isempty(var.units)
+            var_units[name] = var.units
+        end
+    end
+
+    # Equation dimensional consistency: D(x)/dt_units vs RHS composed units
+    for (i, eq) in enumerate(model.equations)
+        lhs = eq.lhs
+        if !(lhs isa OpExpr) || lhs.op != "D"
+            continue
+        end
+        if length(lhs.args) != 1 || !(lhs.args[1] isa VarExpr)
+            continue
+        end
+        lhs_var = (lhs.args[1]::VarExpr).name
+        lhs_units_str = get(var_units, lhs_var, "")
+        if isempty(lhs_units_str)
+            continue
+        end
+        local lhs_dim, rhs_dim
+        try
+            lhs_dim = get_expression_dimensions(lhs, var_units)
+            rhs_dim = get_expression_dimensions(eq.rhs, var_units)
+        catch
+            continue
+        end
+        if lhs_dim === nothing || rhs_dim === nothing
+            continue
+        end
+        try
+            if dimension(lhs_dim) != dimension(rhs_dim)
+                wrt = lhs.wrt !== nothing ? lhs.wrt : "t"
+                wrt_units = get(var_units, wrt, "s")
+                expected_str = _format_units(lhs_dim)
+                actual_str = _format_units(rhs_dim)
+                push!(errors, StructuralError(
+                    "$path/equations/$(i-1)",
+                    "Derivative d($lhs_var)/d$wrt has units '$expected_str' but assigned expression has units '$actual_str'",
+                    "unit_inconsistency",
+                ))
+            end
+        catch
+            # Swallow comparison errors — best-effort check.
+        end
+    end
+
+    # Observed-variable dimensional consistency: declared units vs expression-composed units
+    for (vname, var) in model.variables
+        if var.type != ObservedVariable
+            continue
+        end
+        if var.expression === nothing
+            continue
+        end
+        if var.units === nothing || isempty(var.units)
+            continue
+        end
+        local declared_dim, inferred_dim
+        try
+            declared_dim = parse_units(var.units)
+            inferred_dim = get_expression_dimensions(var.expression, var_units)
+        catch
+            continue
+        end
+        if declared_dim === nothing || inferred_dim === nothing
+            continue
+        end
+        try
+            if dimension(declared_dim) != dimension(inferred_dim)
+                actual_str = _format_units(inferred_dim)
+                push!(errors, StructuralError(
+                    "$path/variables/$vname",
+                    "Observed variable '$vname' declares units '$(var.units)' but its expression has units '$actual_str'",
+                    "unit_inconsistency",
+                ))
+            end
+        catch
+            # Swallow comparison errors — best-effort check.
+        end
+    end
+
+    return errors
+end
+
+"""
+Format a Unitful units object as a compact string like "m/s" or "m^2/s^2".
+Falls back to the Unitful string repr on error.
+"""
+function _format_units(u)::String
+    try
+        s = string(u)
+        # Unitful prints things like "m s^-1" — normalize toward "m/s" style.
+        # Keep the default string for robustness; this is a human-facing message.
+        return s
+    catch
+        return "<unknown>"
+    end
 end
 
 """

@@ -1,0 +1,25 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BadEquationDimensions",
+    "description": "Invalid file demonstrating D(height)/dt = velocity*velocity dimensional mismatch (m/s vs m^2/s^2)",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-04-17T00:00:00Z"
+  },
+
+  "models": {
+    "BadEquationDimensions": {
+      "variables": {
+        "height": { "type": "state", "units": "m", "default": 0.0, "description": "Height in meters" },
+        "velocity": { "type": "parameter", "units": "m/s", "default": 1.0, "description": "Velocity in meters per second" },
+        "t": { "type": "parameter", "units": "s", "default": 1.0, "description": "Time independent variable placeholder" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["height"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["velocity", "velocity"] }
+        }
+      ]
+    }
+  }
+}

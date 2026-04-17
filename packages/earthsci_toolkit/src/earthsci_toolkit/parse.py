@@ -1595,31 +1595,196 @@ def _collect_var_units(tables: Dict[str, Any]) -> Dict[str, str]:
     return var_units
 
 
+_PINT_UREG = None
+
+
+def _get_pint_ureg():
+    """Return a shared module-level pint UnitRegistry (lazily created)."""
+    global _PINT_UREG
+    if _PINT_UREG is not None:
+        return _PINT_UREG
+    try:
+        import pint
+        _PINT_UREG = pint.UnitRegistry()
+        return _PINT_UREG
+    except Exception:
+        return None
+
+
+def _pint_quantity(unit_str):
+    """Return a pint Quantity(1, unit) for a unit string, or None on parse failure."""
+    if unit_str is None:
+        return None
+    ureg = _get_pint_ureg()
+    if ureg is None:
+        return None
+    try:
+        n = _normalize_unit(unit_str)
+        if n in ("dimensionless", "1", ""):
+            return ureg.Quantity(1, "dimensionless")
+        return ureg.Quantity(1, n)
+    except Exception:
+        return None
+
+
+def _format_pint_units(qty) -> Optional[str]:
+    """Format a pint Quantity's units as a compact string like 'm/s' or 'm^2/s^2'."""
+    if qty is None:
+        return None
+    try:
+        reduced = qty.to_base_units()
+        if reduced.dimensionless:
+            return "dimensionless"
+        s = f"{reduced.units:~}"
+        # pint formats like "m ** 2 / s ** 2" — rewrite to "m^2/s^2"
+        s = s.replace(" ** ", "^")
+        s = s.replace(" / ", "/")
+        s = s.replace(" * ", "*")
+        s = s.replace(" ", "")
+        return s
+    except Exception:
+        return None
+
+
 def _infer_expression_units(expr, var_units: Dict[str, str]):
     """
-    Best-effort inference of expression units. Returns the unit string,
-    None if can't infer, or special tag '<incompatible>' if a unit conflict was found inside.
+    Best-effort inference of expression units. Returns a pint.Quantity (magnitude 1)
+    with the expression's composed units, or None if can't infer, or the string
+    '<incompatible>' if a unit conflict was found inside the subtree.
+
+    Handles: numeric literals, variable refs, +, -, *, /, ^, D, unary -,
+    dimensionless transcendentals (exp, ln, log, sin, cos, tan, sqrt).
     """
+    ureg = _get_pint_ureg()
+    if ureg is None:
+        return None
+
+    if isinstance(expr, bool):
+        return ureg.Quantity(1, "dimensionless")
     if isinstance(expr, (int, float)):
-        return "dimensionless"
+        return ureg.Quantity(1, "dimensionless")
     if isinstance(expr, str):
-        return var_units.get(expr)
+        u = var_units.get(expr)
+        if u is None:
+            return None
+        return _pint_quantity(u)
     if not isinstance(expr, dict):
         return None
+
     op = expr.get("op")
-    args = expr.get("args", [])
+    args = expr.get("args", []) or []
+
     if op in ("+", "-"):
-        # All args must share units
         sub_units = [_infer_expression_units(a, var_units) for a in args]
+        if any(u == "<incompatible>" for u in sub_units):
+            return "<incompatible>"
         non_none = [u for u in sub_units if u is not None]
         if len(non_none) >= 2:
-            ref = non_none[0]
-            for u in non_none[1:]:
-                if not _units_compatible(ref, u):
-                    return "<incompatible>"
+            try:
+                ref = non_none[0]
+                for u in non_none[1:]:
+                    if ref.dimensionality != u.dimensionality:
+                        return "<incompatible>"
+            except Exception:
+                return None
         return non_none[0] if non_none else None
+
     if op == "*":
-        return None  # multiplication can have varied units
+        result = ureg.Quantity(1, "dimensionless")
+        saw_any = False
+        for a in args:
+            u = _infer_expression_units(a, var_units)
+            if u == "<incompatible>":
+                return "<incompatible>"
+            if u is None:
+                return None
+            try:
+                result = result * u
+            except Exception:
+                return None
+            saw_any = True
+        return result if saw_any else None
+
+    if op == "/":
+        if len(args) == 0:
+            return None
+        first = _infer_expression_units(args[0], var_units)
+        if first == "<incompatible>":
+            return "<incompatible>"
+        if first is None:
+            return None
+        result = first
+        for a in args[1:]:
+            u = _infer_expression_units(a, var_units)
+            if u == "<incompatible>":
+                return "<incompatible>"
+            if u is None:
+                return None
+            try:
+                result = result / u
+            except Exception:
+                return None
+        return result
+
+    if op == "^":
+        if len(args) < 2:
+            return None
+        base_u = _infer_expression_units(args[0], var_units)
+        if base_u == "<incompatible>":
+            return "<incompatible>"
+        if base_u is None:
+            return None
+        exp = args[1]
+        if isinstance(exp, (int, float)) and not isinstance(exp, bool):
+            try:
+                return base_u ** exp
+            except Exception:
+                return None
+        # Non-literal exponent: can't compose units symbolically
+        return None
+
+    if op == "D":
+        # D(x) with wrt=t → x_units / wrt_units; default wrt='t' (seconds).
+        if not args:
+            return None
+        inner = _infer_expression_units(args[0], var_units)
+        if inner == "<incompatible>":
+            return "<incompatible>"
+        if inner is None:
+            return None
+        wrt = expr.get("wrt", "t")
+        wrt_units = var_units.get(wrt) if isinstance(wrt, str) else None
+        wrt_q = _pint_quantity(wrt_units) if wrt_units else ureg.Quantity(1, "second")
+        if wrt_q is None:
+            return None
+        try:
+            return inner / wrt_q
+        except Exception:
+            return None
+
+    if op in ("neg",):
+        if not args:
+            return None
+        return _infer_expression_units(args[0], var_units)
+
+    if op in ("exp", "ln", "log", "log10", "sin", "cos", "tan",
+             "asin", "acos", "atan", "sinh", "cosh", "tanh"):
+        # Dimensionless result; argument must be dimensionless (flagged elsewhere).
+        return ureg.Quantity(1, "dimensionless")
+
+    if op == "sqrt":
+        if not args:
+            return None
+        inner = _infer_expression_units(args[0], var_units)
+        if inner == "<incompatible>":
+            return "<incompatible>"
+        if inner is None:
+            return None
+        try:
+            return inner ** 0.5
+        except Exception:
+            return None
+
     return None
 
 
@@ -1657,6 +1822,47 @@ def _is_dimensionless_unit(unit: Optional[str]) -> bool:
         return ureg(normalized).dimensionless
     except Exception:
         return False
+
+
+def _expr_has_conversion_literal(expr) -> bool:
+    """
+    Return True if the expression tree contains any dimensionless numeric literal
+    in a position that could represent a unit-conversion constant: i.e., an operand
+    of *, /, +, -, D, or an outer function. Exponents of '^' are exempt because
+    there they must genuinely be dimensionless. Also exempt: small integer stoichiometry-like
+    literals (e.g., 0.5, 2) inside a trivial coefficient are allowed by returning False only
+    for literals that appear with absolute value not equal to a small integer 0/1/2/3. This
+    heuristic is intentionally conservative: its purpose is to avoid false positives on
+    fixtures that embed conversion factors (Avogadro, molar masses, 1eN scale factors) as
+    raw numbers.
+    """
+    def walk(e, in_power_exponent=False):
+        if isinstance(e, bool):
+            return False
+        if isinstance(e, (int, float)):
+            if in_power_exponent:
+                return False
+            try:
+                if abs(float(e)) in (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 0.5):
+                    return False
+            except Exception:
+                pass
+            return True
+        if not isinstance(e, dict):
+            return False
+        op = e.get("op")
+        args = e.get("args", []) or []
+        if op == "^" and len(args) >= 2:
+            return walk(args[0], False) or walk(args[1], True)
+        for a in args:
+            if walk(a, False):
+                return True
+        if "expr" in e:
+            if walk(e["expr"], False):
+                return True
+        return False
+
+    return walk(expr, False)
 
 
 def _walk_expression_for_exponent_checks(
@@ -1697,9 +1903,16 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
     2. Observed variable expressions whose top-level + or - has incompatible operands.
     3. '^' operators whose right operand has non-dimensionless units.
     """
-    var_units = _collect_var_units(tables)
+    global_var_units = _collect_var_units(tables)
 
     for mname, m in data.get("models", {}).items():
+        # Per-model var_units: local model variables win over globals to avoid
+        # name collisions between models (e.g., 'B' in ElectromagneticFields vs. ChemicalKinetics).
+        local_var_units = dict(global_var_units)
+        for vname, vdef in m.get("variables", {}).items():
+            if vdef.get("units") is not None:
+                local_var_units[vname] = vdef["units"]
+        var_units = local_var_units
         # Observed variables: check direct addition/subtraction operand compatibility
         for vname, vdef in m.get("variables", {}).items():
             if vdef.get("type") == "observed" and "expression" in vdef:
@@ -1731,7 +1944,7 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
                         eq[side], var_units, f"models/{mname}/equations[{ei}]/{side}", errors
                     )
 
-        # Equations: only check D(x)/dt = bare_var case
+        # Equations: check D(x)/dt dimensional consistency for bare-var and expression RHS
         for i, eq in enumerate(m.get("equations", [])):
             lhs = eq.get("lhs")
             rhs = eq.get("rhs")
@@ -1743,15 +1956,75 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
             lhs_var_units = var_units.get(inner)
             if not lhs_var_units:
                 continue
-            if not isinstance(rhs, str):
+
+            # Bare-var RHS — preserve existing message for backward compat
+            if isinstance(rhs, str):
+                rhs_units = var_units.get(rhs)
+                if not rhs_units:
+                    continue
+                if not _is_derivative_compatible(lhs_var_units, rhs_units):
+                    errors.append(
+                        f"models/{mname}/equations[{i}]: rhs '{rhs}' units '{rhs_units}' incompatible with time derivative of '{lhs_var_units}'"
+                    )
                 continue
-            rhs_units = var_units.get(rhs)
-            if not rhs_units:
+
+            # Expression RHS — walk tree, compose units, compare to D(LHS)/dt
+            if isinstance(rhs, dict):
+                try:
+                    rhs_q = _infer_expression_units(rhs, var_units)
+                except Exception:
+                    rhs_q = None
+                if rhs_q is None or rhs_q == "<incompatible>":
+                    continue
+                lhs_q = _pint_quantity(lhs_var_units)
+                wrt = lhs.get("wrt", "t")
+                wrt_units = var_units.get(wrt) if isinstance(wrt, str) else None
+                wrt_q = _pint_quantity(wrt_units) if wrt_units else None
+                if lhs_q is None or wrt_q is None:
+                    continue
+                try:
+                    expected = lhs_q / wrt_q
+                    if expected.dimensionality != rhs_q.dimensionality:
+                        expected_s = _format_pint_units(expected) or f"{lhs_var_units}/{wrt_units or 's'}"
+                        actual_s = _format_pint_units(rhs_q) or "<unknown>"
+                        errors.append(
+                            f"models/{mname}/equations[{i}]: Derivative d({inner})/d{wrt} has units '{expected_s}' but assigned expression has units '{actual_s}'"
+                        )
+                except Exception:
+                    pass
+
+        # Observed variables: compare declared units to inferred expression units.
+        # Skip when the expression contains dimensionless numeric literals in
+        # multiplicative/divisor positions, since they may represent implicit
+        # unit-conversion constants (e.g., Avogadro, MW, 1e12 factors) rather
+        # than true dimensionless coefficients. Literals as exponents of '^' are fine.
+        for vname, vdef in m.get("variables", {}).items():
+            if vdef.get("type") != "observed":
                 continue
-            if not _is_derivative_compatible(lhs_var_units, rhs_units):
-                errors.append(
-                    f"models/{mname}/equations[{i}]: rhs '{rhs}' units '{rhs_units}' incompatible with time derivative of '{lhs_var_units}'"
-                )
+            if "expression" not in vdef:
+                continue
+            declared = vdef.get("units")
+            if not declared:
+                continue
+            declared_q = _pint_quantity(declared)
+            if declared_q is None:
+                continue
+            if _expr_has_conversion_literal(vdef["expression"]):
+                continue
+            try:
+                inferred = _infer_expression_units(vdef["expression"], var_units)
+            except Exception:
+                inferred = None
+            if inferred is None or inferred == "<incompatible>":
+                continue
+            try:
+                if declared_q.dimensionality != inferred.dimensionality:
+                    inferred_s = _format_pint_units(inferred) or "<unknown>"
+                    errors.append(
+                        f"models/{mname}/variables/{vname}: observed variable declared units '{declared}' but expression has units '{inferred_s}'"
+                    )
+            except Exception:
+                pass
 
 
 def _check_equation_balance(data: Dict[str, Any], errors: List[str]) -> None:

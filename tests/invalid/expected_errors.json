@@ -2041,5 +2041,45 @@
     ],
     "is_valid": false,
     "notes": "Demonstrates two independent unit inconsistencies (addition of incompatible units, and transcendental function on dimensional argument) in one fixture. Validators may surface one or both depending on coverage; Python's validator currently only surfaces the addition case, while Julia/Rust/TS/Go also surface the transcendental case."
+  },
+
+  "units_dimensional_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadEquationDimensions/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Derivative d(height)/dt has units 'm/s' but assigned expression has units 'm^2/s^2'",
+        "details": {
+          "derivative_variable": "height",
+          "derivative_variable_units": "m",
+          "wrt_variable": "t",
+          "wrt_variable_units": "s",
+          "expected_units": "m/s",
+          "actual_units": "m^2/s^2",
+          "equation_index": 0
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Regression fixture for gt-h1jy: bindings must walk RHS expression trees (+, -, *, /, ^, D) to compute composite units and compare against D(LHS)/dt. Catches D(height)/dt = velocity*velocity (m/s vs m^2/s^2)."
+  },
+
+  "units_observed_expression_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadObservedExpressionDimensions/variables/pressure_drop_bad",
+        "code": "unit_inconsistency",
+        "message": "Observed variable 'pressure_drop_bad' declares units 'Pa' but its expression has units 'kg/s^3'",
+        "details": {
+          "variable": "pressure_drop_bad",
+          "declared_units": "Pa",
+          "expression_units": "kg/s^3"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Regression fixture for gt-h1jy (follow-up to gt-p3v): bindings must walk observed-variable expression trees and compare the composite units to the declared 'units' field. Reconstructs the pre-fix pressure_drop bug in units_propagation.FluidDynamicsModel."
   }
 }

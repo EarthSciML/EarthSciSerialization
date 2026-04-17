@@ -651,7 +651,10 @@ func dimString(u *Unit) string {
 }
 
 // ValidateModelUnits runs dimensional analysis over every equation in a model
-// and appends any warnings it finds to the result.
+// and appends any warnings it finds to the result. Post gt-h1jy: D(x)/dt RHS
+// dimensional mismatches and observed-variable declared-vs-inferred mismatches
+// are promoted to unit_inconsistency structural errors when both sides
+// propagate cleanly and all referenced variables have parseable units.
 func validateModelUnits(modelName string, model *Model, basePath string, result *StructuralValidationResult) {
 	raw := make(map[string]string, len(model.Variables))
 	for name, v := range model.Variables {
@@ -660,18 +663,210 @@ func validateModelUnits(modelName string, model *Model, basePath string, result 
 		}
 	}
 	env, bad := BuildUnitEnv(raw)
-	for name, err := range bad {
+	unitsParseable := make(map[string]bool, len(raw))
+	for name := range raw {
+		unitsParseable[name] = true
+	}
+	for name := range bad {
+		unitsParseable[name] = false
 		result.UnitWarnings = append(result.UnitWarnings, UnitWarning{
 			Path:    fmt.Sprintf("%s.variables.%s.units", basePath, name),
-			Message: fmt.Sprintf("could not parse unit: %v", err),
+			Message: fmt.Sprintf("could not parse unit: %v", bad[name]),
 		})
 	}
+
 	for i, eq := range model.Equations {
 		eqPath := fmt.Sprintf("%s.equations[%d]", basePath, i)
+
+		// Promote D-LHS RHS mismatches to structural errors when both sides
+		// propagate cleanly and all referenced vars have parseable units.
+		isDLHS := false
+		var lhsOp ExprNode
+		switch lhsv := eq.LHS.(type) {
+		case ExprNode:
+			if lhsv.Op == "D" {
+				isDLHS = true
+				lhsOp = lhsv
+			}
+		case *ExprNode:
+			if lhsv != nil && lhsv.Op == "D" {
+				isDLHS = true
+				lhsOp = *lhsv
+			}
+		}
+		if isDLHS {
+			lhsU, lhsErr := PropagateDimension(eq.LHS, env)
+			rhsU, rhsErr := PropagateDimension(eq.RHS, env)
+			if lhsErr == nil && rhsErr == nil && lhsU != nil && rhsU != nil &&
+				!lhsU.Dim.Equal(rhsU.Dim) &&
+				!exprHasConversionLiteral(eq.RHS) &&
+				exprAllVarsHaveParseableUnits(eq.LHS, unitsParseable) &&
+				exprAllVarsHaveParseableUnits(eq.RHS, unitsParseable) {
+				innerName := ""
+				wrt := "t"
+				if len(lhsOp.Args) >= 1 {
+					if s, ok := lhsOp.Args[0].(string); ok {
+						innerName = s
+					}
+				}
+				if lhsOp.Wrt != nil && *lhsOp.Wrt != "" {
+					wrt = *lhsOp.Wrt
+				}
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    fmt.Sprintf("/models/%s/equations/%d", modelName, i),
+					Code:    ErrorUnitInconsistency,
+					Message: fmt.Sprintf("Derivative d(%s)/d%s has units '%s' but assigned expression has units '%s'", innerName, wrt, lhsU.Dim, rhsU.Dim),
+					Details: map[string]interface{}{
+						"equation_index":      i,
+						"derivative_variable": innerName,
+						"wrt_variable":        wrt,
+						"expected_units":      lhsU.Dim.String(),
+						"actual_units":        rhsU.Dim.String(),
+					},
+				})
+				continue
+			}
+		}
+
 		if w := ValidateEquationDimensions(&eq, env, eqPath); w != nil {
 			result.UnitWarnings = append(result.UnitWarnings, *w)
 		}
 	}
+
+	// Observed variables: compare declared units vs expression-composed units.
+	for vname, v := range model.Variables {
+		if v.Type != "observed" || v.Expression == nil || v.Units == nil {
+			continue
+		}
+		declared, err := ParseUnit(*v.Units)
+		if err != nil {
+			continue
+		}
+		if exprHasConversionLiteral(v.Expression) {
+			continue
+		}
+		if !exprAllVarsHaveParseableUnits(v.Expression, unitsParseable) {
+			continue
+		}
+		inferred, ierr := PropagateDimension(v.Expression, env)
+		if ierr != nil || inferred == nil {
+			continue
+		}
+		if !declared.Dim.Equal(inferred.Dim) {
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    fmt.Sprintf("/models/%s/variables/%s", modelName, vname),
+				Code:    ErrorUnitInconsistency,
+				Message: fmt.Sprintf("Observed variable '%s' declares units '%s' but its expression has units '%s'", vname, *v.Units, inferred.Dim),
+				Details: map[string]interface{}{
+					"variable":         vname,
+					"declared_units":   *v.Units,
+					"expression_units": inferred.Dim.String(),
+				},
+			})
+		}
+	}
+}
+
+// exprHasConversionLiteral returns true if the expression tree contains any
+// bare numeric literal in a multiplicative/additive position that could
+// represent an implicit unit-conversion constant (e.g., Avogadro, molar mass,
+// 1eN scale factors). Small integer literals (0-10, 0.5) and literals in '^'
+// exponents are exempt.
+func exprHasConversionLiteral(e Expression) bool {
+	smallSet := map[float64]bool{
+		0: true, 0.5: true, 1: true, 2: true, 3: true, 4: true, 5: true,
+		6: true, 7: true, 8: true, 9: true, 10: true,
+	}
+	var walk func(e Expression, inPowerExponent bool) bool
+	walk = func(e Expression, inPowerExponent bool) bool {
+		switch v := e.(type) {
+		case nil:
+			return false
+		case float64:
+			if inPowerExponent {
+				return false
+			}
+			abs := v
+			if abs < 0 {
+				abs = -abs
+			}
+			return !smallSet[abs]
+		case int:
+			if inPowerExponent {
+				return false
+			}
+			abs := float64(v)
+			if abs < 0 {
+				abs = -abs
+			}
+			return !smallSet[abs]
+		case int32:
+			return walk(float64(v), inPowerExponent)
+		case int64:
+			return walk(float64(v), inPowerExponent)
+		case float32:
+			return walk(float64(v), inPowerExponent)
+		case string:
+			return false
+		case ExprNode:
+			return walkOp(v, inPowerExponent, walk)
+		case *ExprNode:
+			if v == nil {
+				return false
+			}
+			return walkOp(*v, inPowerExponent, walk)
+		}
+		return false
+	}
+	return walk(e, false)
+}
+
+func walkOp(v ExprNode, _ bool, walk func(Expression, bool) bool) bool {
+	if (v.Op == "^" || v.Op == "pow" || v.Op == "power") && len(v.Args) >= 2 {
+		return walk(v.Args[0], false) || walk(v.Args[1], true)
+	}
+	for _, a := range v.Args {
+		if walk(a, false) {
+			return true
+		}
+	}
+	return false
+}
+
+// exprAllVarsHaveParseableUnits returns true if every variable referenced in
+// the expression has an entry in `parseable` that is true, or has no units
+// declared at all.
+func exprAllVarsHaveParseableUnits(e Expression, parseable map[string]bool) bool {
+	switch v := e.(type) {
+	case nil:
+		return true
+	case float64, int, int32, int64, float32:
+		return true
+	case string:
+		ok, present := parseable[v]
+		if !present {
+			return true
+		}
+		return ok
+	case ExprNode:
+		for _, a := range v.Args {
+			if !exprAllVarsHaveParseableUnits(a, parseable) {
+				return false
+			}
+		}
+		return true
+	case *ExprNode:
+		if v == nil {
+			return true
+		}
+		for _, a := range v.Args {
+			if !exprAllVarsHaveParseableUnits(a, parseable) {
+				return false
+			}
+		}
+		return true
+	}
+	return true
 }
 
 // validateReactionSystemUnits runs dimensional analysis over a reaction

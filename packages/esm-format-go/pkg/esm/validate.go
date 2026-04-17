@@ -49,6 +49,7 @@ const (
 	ErrorNullReaction          = "null_reaction"
 	ErrorMissingObservedExpr   = "missing_observed_expr"
 	ErrorEventVarUndeclared    = "event_var_undeclared"
+	ErrorUnitInconsistency     = "unit_inconsistency"
 )
 
 // ValidationMessage represents a single validation issue (for backward compatibility)

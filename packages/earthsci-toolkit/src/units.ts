@@ -132,7 +132,7 @@ export function checkDimensions(
       }
       return { dimensions: divideUnits(get(0), get(1)), warnings }
 
-    case '^':
+    case '^': {
       if (argDims.length !== 2) {
         warnings.push(`Exponentiation requires exactly 2 arguments, got ${argDims.length}`)
         return { dimensions: dimensionless(), warnings }
@@ -140,11 +140,24 @@ export function checkDimensions(
       if (!isDimensionless(get(1))) {
         warnings.push(`Exponent must be dimensionless, got ${formatDims(get(1).dims)}`)
       }
-      // Preserve the base unit unchanged. Applying the exponent would require
-      // extracting the constant value from the second argument, which the
-      // original implementation did not attempt and current tests do not
-      // exercise.
+      // Apply the exponent to the base unit's dimension exponents when the
+      // exponent is a numeric literal (the common case for e.g. `v^2` in
+      // physics expressions). Fall back to the base unchanged if the exponent
+      // is a variable or non-numeric expression.
+      const expArg = args[1]
+      if (typeof expArg === 'number' && Number.isFinite(expArg)) {
+        const base = get(0)
+        const raised: Record<string, number> = {}
+        for (const [k, v] of Object.entries(base.dims)) {
+          const nv = v * expArg
+          if (nv !== 0) {
+            raised[k] = nv
+          }
+        }
+        return { dimensions: { dims: raised, scale: Math.pow(base.scale ?? 1, expArg) }, warnings }
+      }
       return { dimensions: get(0), warnings }
+    }
 
     case 'D': {
       if (args.length !== 1) {
@@ -374,8 +387,18 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
                 w.includes('Unknown variable'),
               )
 
+              // Skip the declared-vs-expression comparison when the expression
+              // tree contains bare numeric literals in multiplicative positions
+              // (they may represent implicit unit-conversion constants like
+              // Avogadro, molar masses, or 1eN factors). Literals as '^'
+              // exponents are exempt.
+              const hasConversionLiteral = expressionHasConversionLiteral(
+                variable.expression,
+              )
+
               if (
                 !hasUnknownVariable &&
+                !hasConversionLiteral &&
                 !dimsEqual(exprResult.dimensions.dims, varDims.dims)
               ) {
                 warnings.push({
@@ -384,11 +407,19 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
                 })
               }
 
-              for (const warning of exprResult.warnings) {
-                warnings.push({
-                  message: warning,
-                  location: `models.${modelName}.variables.${varName}`,
-                })
+              // Sub-warnings from the expression tree (e.g. "Addition requires
+              // same dimensions") are surfaced only when the expression doesn't
+              // contain conversion literals. Fixtures that encode numeric
+              // conversion factors as bare literals (e.g. T+273.15, T_K*9/5+32)
+              // otherwise produce false positives that a pure dimensional
+              // checker can't disambiguate without explicit unit declarations.
+              if (!hasConversionLiteral) {
+                for (const warning of exprResult.warnings) {
+                  warnings.push({
+                    message: warning,
+                    location: `models.${modelName}.variables.${varName}`,
+                  })
+                }
               }
             } catch (error) {
               warnings.push({
@@ -403,6 +434,40 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
   }
 
   return warnings
+}
+
+/**
+ * Return true if the expression tree contains any bare numeric literal in a
+ * multiplicative or additive position, excluding literals that appear as '^'
+ * exponents. Small integer literals (0-10, 0.5) are exempt: they are unlikely
+ * to represent implicit unit-conversion constants.
+ */
+function expressionHasConversionLiteral(expr: unknown): boolean {
+  const smallIntegers = new Set([0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+  const walk = (e: unknown, inPowerExponent: boolean): boolean => {
+    if (typeof e === 'number') {
+      if (inPowerExponent) return false
+      return !smallIntegers.has(Math.abs(e))
+    }
+    if (typeof e === 'string') return false
+    if (!e || typeof e !== 'object') return false
+    const node = e as { op?: string; args?: unknown[]; expr?: unknown }
+    const op = node.op
+    const args = node.args ?? []
+    if (op === '^' || op === 'pow' || op === 'power') {
+      if (args.length >= 2) {
+        return walk(args[0], false) || walk(args[1], true)
+      }
+    }
+    for (const a of args) {
+      if (walk(a, false)) return true
+    }
+    if (node.expr && walk(node.expr, false)) return true
+    return false
+  }
+
+  return walk(expr, false)
 }
 
 function multiplyUnits(units: ParsedUnit[]): ParsedUnit {

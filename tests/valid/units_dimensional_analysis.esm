@@ -205,6 +205,12 @@
           "default": 20.8,
           "description": "Heat capacity at constant volume"
         },
+        "tau": {
+          "type": "parameter",
+          "units": "s",
+          "default": 1.0,
+          "description": "Relaxation timescale for T toward ideal-gas equilibrium"
+        },
         "U": {
           "type": "observed",
           "units": "J",
@@ -373,7 +379,7 @@
                   "T"
                 ]
               },
-              1.0
+              "tau"
             ]
           }
         }
@@ -391,7 +397,8 @@
           "parameter_overrides": {
             "n": 1.0,
             "R": 8.314,
-            "Cv": 20.8
+            "Cv": 20.8,
+            "tau": 1.0
           },
           "time_span": { "start": 0.0, "end": 0.0 },
           "assertions": [

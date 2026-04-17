@@ -379,12 +379,16 @@ func TestValidateModelUnitsIntegration(t *testing.T) {
 	}
 	result := &StructuralValidationResult{}
 	validateModelUnits("M", &model, "$.models.M", result)
-	if len(result.UnitWarnings) != 1 {
-		t.Fatalf("expected 1 unit warning, got %d: %+v", len(result.UnitWarnings), result.UnitWarnings)
+	// Post gt-h1jy: D-LHS dimensional mismatches are structural errors with
+	// code unit_inconsistency. Warnings may or may not also be emitted.
+	found := false
+	for _, e := range result.StructuralErrors {
+		if e.Code == ErrorUnitInconsistency && e.Path == "/models/M/equations/1" {
+			found = true
+		}
 	}
-	w := result.UnitWarnings[0]
-	if w.Path != "$.models.M.equations[1]" {
-		t.Errorf("wrong path: %s", w.Path)
+	if !found {
+		t.Fatalf("expected unit_inconsistency structural error at /models/M/equations/1, got: %+v", result.StructuralErrors)
 	}
 }
 
@@ -410,19 +414,15 @@ func TestValidateFileUnitsEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := ValidateFile(file, jsonStr)
-	if len(result.UnitWarnings) == 0 {
-		t.Fatal("expected dimensional mismatch warning, got none")
-	}
+	// Post gt-h1jy: D-LHS dimensional mismatches surface as unit_inconsistency
+	// structural errors (not just warnings).
 	found := false
-	for _, w := range result.UnitWarnings {
-		if w.Path == "$.models.M.equations[0]" {
+	for _, e := range result.StructuralErrors {
+		if e.Code == ErrorUnitInconsistency && e.Path == "/models/M/equations/0" {
 			found = true
-			if w.LhsUnits == w.RhsUnits {
-				t.Errorf("mismatch warning has matching dims: %+v", w)
-			}
 		}
 	}
 	if !found {
-		t.Errorf("warning not emitted at expected path: %+v", result.UnitWarnings)
+		t.Errorf("expected unit_inconsistency structural error at /models/M/equations/0, got: %+v", result.StructuralErrors)
 	}
 }

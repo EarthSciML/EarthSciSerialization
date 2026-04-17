@@ -87,6 +87,8 @@ pub enum StructuralErrorCode {
     OperatorVariableMissing,
     /// Circular dependency detected
     CircularDependency,
+    /// Dimensional inconsistency in an equation or observed-variable expression
+    UnitInconsistency,
 }
 
 impl std::fmt::Display for StructuralErrorCode {
@@ -106,6 +108,7 @@ impl std::fmt::Display for StructuralErrorCode {
             Self::DataLoaderVariableMissing => "data_loader_variable_missing",
             Self::OperatorVariableMissing => "operator_variable_missing",
             Self::CircularDependency => "circular_dependency",
+            Self::UnitInconsistency => "unit_inconsistency",
         };
         write!(f, "{}", s)
     }
@@ -457,7 +460,59 @@ fn validate_model(
         );
 
         // Validate dimensional consistency of equation via expression-level
-        // propagation over the Expr AST.
+        // propagation over the Expr AST. Only promote a D(x)/dt mismatch to a
+        // structural error when BOTH sides propagate cleanly and the resulting
+        // dimensions differ. Propagation failures (unknown units, exp(arg-with-
+        // units)) or mismatches inside sub-expressions stay as warnings so we
+        // don't misattribute sub-tree issues to a D-LHS mismatch.
+        let is_d_lhs = matches!(
+            &equation.lhs,
+            crate::Expr::Operator(op) if op.op == "D"
+        );
+        if is_d_lhs {
+            let lhs_prop = crate::units::Unit::propagate(&equation.lhs, &unit_env);
+            let rhs_prop = crate::units::Unit::propagate(&equation.rhs, &unit_env);
+            if let (Ok(lhs_u), Ok(rhs_u)) = (&lhs_prop, &rhs_prop) {
+                if !lhs_u.is_compatible(rhs_u)
+                    && !expr_has_conversion_literal(&equation.rhs)
+                    && expr_all_vars_have_parseable_units(&equation.lhs, &model.variables)
+                    && expr_all_vars_have_parseable_units(&equation.rhs, &model.variables)
+                {
+                    let inner_name = if let crate::Expr::Operator(op) = &equation.lhs {
+                        op.args.first().and_then(|a| match a {
+                            crate::Expr::Variable(n) => Some(n.clone()),
+                            _ => None,
+                        })
+                    } else {
+                        None
+                    };
+                    let wrt = if let crate::Expr::Operator(op) = &equation.lhs {
+                        op.wrt.clone().unwrap_or_else(|| "t".to_string())
+                    } else {
+                        "t".to_string()
+                    };
+                    errors.push(StructuralError {
+                        path: eq_path.clone(),
+                        code: StructuralErrorCode::UnitInconsistency,
+                        message: format!(
+                            "Derivative d({})/d{} is dimensionally incompatible with its RHS expression",
+                            inner_name.as_deref().unwrap_or("?"),
+                            wrt
+                        ),
+                        details: serde_json::json!({
+                            "equation_index": eq_idx,
+                            "derivative_variable": inner_name,
+                            "wrt_variable": wrt,
+                        }),
+                    });
+                    // Don't also emit as warning — suppress downstream noise.
+                    continue;
+                }
+            }
+        }
+
+        // For non-D-LHS equations or when propagation fails, surface the
+        // original analyzer output as a warning (existing behavior).
         if let Err(unit_error) = validate_equation_dimensions(equation, &unit_env) {
             warnings.push(format!(
                 "Equation {}: {} (in {})",
@@ -493,6 +548,37 @@ fn validate_model(
                     0,
                     errors,
                 );
+
+                // Compare declared units vs. composed expression units. Skip when:
+                //  - the expression contains bare numeric literals in multiplicative
+                //    positions (likely conversion constants like Avogadro, molar
+                //    masses, 1eN factors), OR
+                //  - any referenced variable has a units string that this binding
+                //    cannot parse (e.g., C, V, T for electromagnetism) — those
+                //    fall back to dimensionless in the env and would otherwise
+                //    produce false positives against declared composite units.
+                if let Some(ref declared_units) = variable.units
+                    && !expr_has_conversion_literal(expr)
+                    && expr_all_vars_have_parseable_units(expr, &model.variables)
+                {
+                    if let Ok(declared) = crate::units::parse_unit(declared_units)
+                        && let Ok(inferred) = crate::units::Unit::propagate(expr, &unit_env)
+                        && !declared.is_compatible(&inferred)
+                    {
+                        errors.push(StructuralError {
+                            path: format!("{}/variables/{}", model_path, var_name),
+                            code: StructuralErrorCode::UnitInconsistency,
+                            message: format!(
+                                "Observed variable '{}' declares units '{}' but expression has incompatible units",
+                                var_name, declared_units
+                            ),
+                            details: serde_json::json!({
+                                "variable": var_name,
+                                "declared_units": declared_units,
+                            }),
+                        });
+                    }
+                }
             }
         }
     }
@@ -511,6 +597,58 @@ fn validate_model(
     //         validate_continuous_event(event, event_idx, &model_path, &defined_vars, errors);
     //     }
     // }
+}
+
+/// Return true if the expression tree contains any bare numeric literal in a
+/// multiplicative/additive position that might represent an implicit unit
+/// conversion constant (e.g., Avogadro, molar mass, 1eN factors). Small integer
+/// literals (0-10, 0.5) are exempt, and literals in `^` exponents are always exempt.
+fn expr_has_conversion_literal(expr: &crate::Expr) -> bool {
+    fn walk(e: &crate::Expr, in_pow_exponent: bool) -> bool {
+        match e {
+            crate::Expr::Number(n) => {
+                if in_pow_exponent {
+                    return false;
+                }
+                let small = [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
+                !small.iter().any(|s| (*s - n.abs()).abs() < f64::EPSILON)
+            }
+            crate::Expr::Variable(_) => false,
+            crate::Expr::Operator(op) => {
+                if (op.op == "^" || op.op == "pow" || op.op == "power") && op.args.len() >= 2 {
+                    return walk(&op.args[0], false) || walk(&op.args[1], true);
+                }
+                op.args.iter().any(|a| walk(a, false))
+            }
+        }
+    }
+    walk(expr, false)
+}
+
+/// Return true if every variable referenced inside `expr` has a declared
+/// `units` string that parses successfully (or has no units, which means
+/// dimensionless by convention). This is used to gate observed-variable
+/// dim mismatches: if any referenced variable's units can't be parsed
+/// (e.g., electromagnetic C/V/T that this binding doesn't decompose), we
+/// skip the mismatch check rather than produce a false positive.
+fn expr_all_vars_have_parseable_units(
+    expr: &crate::Expr,
+    variables: &std::collections::HashMap<String, crate::ModelVariable>,
+) -> bool {
+    match expr {
+        crate::Expr::Number(_) => true,
+        crate::Expr::Variable(name) => match variables.get(name) {
+            Some(v) => match &v.units {
+                Some(u) => crate::units::parse_unit(u).is_ok(),
+                None => true,
+            },
+            None => true, // Unknown variables handled elsewhere
+        },
+        crate::Expr::Operator(op) => op
+            .args
+            .iter()
+            .all(|a| expr_all_vars_have_parseable_units(a, variables)),
+    }
 }
 
 fn count_ode_equations(equations: &[crate::Equation]) -> usize {
@@ -1926,17 +2064,16 @@ mod tests {
         };
 
         let result = validate(&esm_file);
-        // Should still be structurally valid (no structural errors)
-        assert!(result.is_valid, "Structural validation should pass");
-        assert!(result.structural_errors.is_empty());
-        // But should have unit warnings
+        // Post gt-h1jy: D(x)/dt RHS dimensional mismatches are promoted to
+        // structural errors (unit_inconsistency).
+        assert!(!result.is_valid, "Structural validation should fail");
         assert!(
-            !result.unit_warnings.is_empty(),
-            "Should have unit warnings"
-        );
-        assert!(
-            result.unit_warnings[0].contains("Dimension mismatch"),
-            "Should contain dimension mismatch warning"
+            result
+                .structural_errors
+                .iter()
+                .any(|e| matches!(e.code, StructuralErrorCode::UnitInconsistency)),
+            "Should have a unit_inconsistency structural error, got: {:?}",
+            result.structural_errors
         );
     }
 
