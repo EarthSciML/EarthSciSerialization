@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7649123eca85b79717bf3365590e3538cd8dd5559ade4da0edf44215e68dd806 # shrinks to expr = Operator(ExpressionNode { op: "broadcast", args: [Operator(ExpressionNode { op: "or", args: [Number(933525624.2695321), Operator(ExpressionNode { op: "and", args: [Number(-705.0), Variable("a_Ka_rO")], wrt: None, dim: None, expr: None, output_idx: None, ranges: None, reduce: None, regions: None, values: None, shape: None, perm: None, axis: None, broadcast_fn: None })], wrt: None, dim: None, expr: None, output_idx: None, ranges: None, reduce: None, regions: None, values: None, shape: None, perm: None, axis: None, broadcast_fn: None })], wrt: None, dim: None, expr: None, output_idx: None, ranges: None, reduce: None, regions: None, values: None, shape: None, perm: None, axis: None, broadcast_fn: Some("min") })
