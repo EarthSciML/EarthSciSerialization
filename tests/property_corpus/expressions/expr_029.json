@@ -1,0 +1,67 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            {
+              "args": [
+                -284845650.68792236,
+                417258884.7618718,
+                "i5UAC0Mj"
+              ],
+              "axis": 0,
+              "op": "concat"
+            }
+          ],
+          "expr": {
+            "args": [
+              "drh0"
+            ],
+            "op": "sign"
+          },
+          "op": "arrayop",
+          "output_idx": [
+            1
+          ],
+          "ranges": {
+            "m": [
+              3,
+              8,
+              1
+            ],
+            "r": [
+              1,
+              7,
+              2
+            ],
+            "z": [
+              0,
+              4,
+              8
+            ]
+          },
+          "reduce": "min"
+        }
+      ],
+      "op": "abs"
+    },
+    {
+      "args": [
+        {
+          "args": [
+            "nEUKfhLw"
+          ],
+          "expr": 447702474.9619224,
+          "op": "arrayop",
+          "output_idx": [
+            "g"
+          ]
+        }
+      ],
+      "op": "floor"
+    }
+  ],
+  "axis": 2,
+  "op": "concat"
+}

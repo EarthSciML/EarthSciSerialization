@@ -1,0 +1,16 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            "c32zK7rH"
+          ],
+          "op": "not"
+        }
+      ],
+      "op": "abs"
+    }
+  ],
+  "op": "sin"
+}

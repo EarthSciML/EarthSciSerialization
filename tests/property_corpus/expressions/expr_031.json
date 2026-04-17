@@ -1,0 +1,50 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            {
+              "args": [
+                -593836
+              ],
+              "op": "D",
+              "wrt": "iVfG"
+            }
+          ],
+          "op": "sign"
+        }
+      ],
+      "op": "not"
+    },
+    {
+      "args": [
+        {
+          "args": [
+            "b07dhMmk"
+          ],
+          "op": "asin"
+        }
+      ],
+      "op": "ceil"
+    },
+    {
+      "args": [
+        {
+          "args": [
+            {
+              "args": [
+                -105342
+              ],
+              "op": "exp"
+            }
+          ],
+          "op": "atan"
+        }
+      ],
+      "op": "sqrt"
+    }
+  ],
+  "axis": 3,
+  "op": "concat"
+}

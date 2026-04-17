@@ -250,6 +250,28 @@ generate_report() {
     success "Conformance report generated: $OUTPUT_DIR/reports/conformance_report_${TIMESTAMP}.html"
 }
 
+# Run the property-corpus cross-binding round-trip check (gt-3fbf). Each
+# binding reads the shared hypothesis-generated corpus, parses and
+# re-serializes each expression, and the runner diffs the outputs. Writes
+# a per-fixture divergence report alongside the per-language conformance
+# outputs so reviewers can see which expression shapes cause divergence.
+run_property_corpus() {
+    log "Running property-corpus round-trip across bindings..."
+    local corpus="$PROJECT_ROOT/tests/property_corpus/expressions"
+    if [ ! -d "$corpus" ] || [ -z "$(ls "$corpus"/expr_*.json 2>/dev/null)" ]; then
+        warning "Property corpus empty or missing at $corpus — regenerating"
+        python3 "$SCRIPT_DIR/generate-property-corpus.py" --count 50 --out "$corpus"
+    fi
+
+    # --require-divergence guards against the corpus regressing to a shape
+    # where every binding agrees trivially; the phase-2 corpus is meant to
+    # surface divergence. Zero divergences should prompt a corpus refresh.
+    python3 "$SCRIPT_DIR/run-property-corpus-conformance.py" \
+        --corpus "$corpus" \
+        --output "$OUTPUT_DIR/property_corpus_report.json" \
+        --require-divergence
+}
+
 # Main execution
 main() {
     log "Starting cross-language conformance testing..."
@@ -310,6 +332,13 @@ main() {
             success "Conformance report generated successfully"
         else
             error "Report generation failed"
+            exit 1
+        fi
+
+        if run_property_corpus; then
+            success "Property-corpus round-trip completed"
+        else
+            error "Property-corpus round-trip failed"
             exit 1
         fi
 

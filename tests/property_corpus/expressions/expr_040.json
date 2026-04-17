@@ -1,0 +1,25 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            {
+              "args": [
+                0
+              ],
+              "fn": "+",
+              "op": "broadcast"
+            }
+          ],
+          "op": "exp"
+        }
+      ],
+      "op": "-"
+    }
+  ],
+  "op": "transpose",
+  "perm": [
+    0
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "args": [],
+  "op": "makearray",
+  "regions": [
+    [
+      [
+        0,
+        0
+      ]
+    ]
+  ],
+  "values": [
+    0
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            {
+              "args": [
+                2.225073858507203e-309,
+                -77305,
+                166348
+              ],
+              "op": "min"
+            }
+          ],
+          "op": "sin"
+        }
+      ],
+      "op": "exp"
+    }
+  ],
+  "expr": {
+    "args": [
+      {
+        "args": [
+          {
+            "args": [
+              219499290.29858565
+            ],
+            "op": "reshape",
+            "shape": [
+              5,
+              7
+            ]
+          }
+        ],
+        "op": "atan"
+      }
+    ],
+    "op": "log"
+  },
+  "op": "arrayop",
+  "output_idx": [
+    1
+  ],
+  "reduce": "min"
+}

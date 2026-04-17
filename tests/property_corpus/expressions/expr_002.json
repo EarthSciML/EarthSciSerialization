@@ -1,0 +1,19 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            0
+          ],
+          "op": "reshape",
+          "shape": [
+            1
+          ]
+        }
+      ],
+      "op": "log"
+    }
+  ],
+  "op": "ceil"
+}

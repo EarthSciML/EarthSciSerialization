@@ -89,6 +89,9 @@ security-reports/
 # Test results
 results.json
 
+# Cross-language conformance run artifacts
+conformance-results/
+
 # Generated simulation/verification plots (produced by running scripts, not fixtures)
 /atmospheric_chemistry_verification.png
 /packages/earthsci_toolkit/atmospheric_chemistry_simulation.png

@@ -1,0 +1,19 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            532829
+          ],
+          "op": "transpose",
+          "perm": [
+            6
+          ]
+        }
+      ],
+      "op": "floor"
+    }
+  ],
+  "op": "cos"
+}

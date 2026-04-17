@@ -1,0 +1,28 @@
+{
+  "args": [
+    {
+      "args": [
+        {
+          "args": [
+            {
+              "args": [
+                3.097236406132161e-231,
+                "aFDdxMbB",
+                "bFDdxMbB"
+              ],
+              "fn": "*",
+              "op": "broadcast"
+            }
+          ],
+          "op": "exp"
+        }
+      ],
+      "op": "-"
+    }
+  ],
+  "op": "transpose",
+  "perm": [
+    6,
+    0
+  ]
+}
