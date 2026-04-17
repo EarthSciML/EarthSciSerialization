@@ -160,6 +160,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [Event System Types](julia-event-system-types.md)
 - [System Configuration Types](julia-system-configuration-types.md)
 - [Type Hierarchy](julia-type-hierarchy.md)
+- [Units fixtures inline tests execution (gt-dt0o)](julia-units-fixtures-inline-tests-execution--gt-dt0o-.md)
 - [DataLoader EarthSciData coverage fixtures](julia-dataloader-earthscidata-coverage-fixtures.md)
 - [fixture $fname](julia-fixture--fname.md)
 - [Section 4 Editing Operations](julia-section-4-editing-operations.md)
