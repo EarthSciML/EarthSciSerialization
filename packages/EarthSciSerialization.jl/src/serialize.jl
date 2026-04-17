@@ -450,6 +450,14 @@ function serialize_reaction_system(rs::ReactionSystem)::Dict{String,Any}
         result["domain"] = rs.domain
     end
 
+    if rs.tolerance !== nothing
+        result["tolerance"] = serialize_tolerance(rs.tolerance)
+    end
+
+    if !isempty(rs.tests)
+        result["tests"] = [serialize_test(t) for t in rs.tests]
+    end
+
     return result
 end
 

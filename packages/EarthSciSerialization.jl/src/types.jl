@@ -807,11 +807,14 @@ struct ReactionSystem
     parameters::Vector{Parameter}
     subsystems::Dict{String,ReactionSystem}
     domain::Union{String,Nothing}
+    tolerance::Union{Tolerance,Nothing}
+    tests::Vector{Test}
 
     # Constructor with optional parameters and subsystems
     ReactionSystem(species::Vector{Species}, reactions::Vector{Reaction};
-                   parameters=Parameter[], subsystems=Dict{String,ReactionSystem}(), domain=nothing) =
-        new(species, reactions, parameters, subsystems, domain)
+                   parameters=Parameter[], subsystems=Dict{String,ReactionSystem}(),
+                   domain=nothing, tolerance=nothing, tests=Test[]) =
+        new(species, reactions, parameters, subsystems, domain, tolerance, tests)
 end
 
 """

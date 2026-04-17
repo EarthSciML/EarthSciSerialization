@@ -216,7 +216,10 @@ function add_reaction(system::ReactionSystem, reaction::Reaction)::ReactionSyste
         system.species,
         new_reactions,
         parameters=system.parameters,
-        subsystems=system.subsystems
+        subsystems=system.subsystems,
+        domain=system.domain,
+        tolerance=system.tolerance,
+        tests=system.tests,
     )
 end
 
@@ -245,7 +248,10 @@ function remove_reaction(system::ReactionSystem, id::String)::ReactionSystem
         system.species,
         new_reactions,
         parameters=system.parameters,
-        subsystems=system.subsystems
+        subsystems=system.subsystems,
+        domain=system.domain,
+        tolerance=system.tolerance,
+        tests=system.tests,
     )
 end
 
@@ -273,7 +279,10 @@ function add_species(system::ReactionSystem, name::String, species::Species)::Re
         new_species,
         system.reactions,
         parameters=system.parameters,
-        subsystems=system.subsystems
+        subsystems=system.subsystems,
+        domain=system.domain,
+        tolerance=system.tolerance,
+        tests=system.tests,
     )
 end
 
@@ -308,7 +317,10 @@ function remove_species(system::ReactionSystem, name::String)::ReactionSystem
         new_species,
         system.reactions,
         parameters=system.parameters,
-        subsystems=system.subsystems
+        subsystems=system.subsystems,
+        domain=system.domain,
+        tolerance=system.tolerance,
+        tests=system.tests,
     )
 end
 

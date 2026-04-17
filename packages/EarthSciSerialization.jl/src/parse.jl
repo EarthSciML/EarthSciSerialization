@@ -602,7 +602,15 @@ function coerce_reaction_system(data::Any)::ReactionSystem
 
     domain = haskey(data, :domain) && data.domain !== nothing ? string(data.domain) : nothing
 
-    return ReactionSystem(species, reactions, parameters=parameters, domain=domain)
+    # Inline tests / tolerance (schema gt-cc1) — same shape as on Model.
+    tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
+        coerce_tolerance(data.tolerance) : nothing
+    tests = haskey(data, :tests) && data.tests !== nothing ?
+        EarthSciSerialization.Test[coerce_test(t) for t in data.tests] :
+        EarthSciSerialization.Test[]
+
+    return ReactionSystem(species, reactions; parameters=parameters, domain=domain,
+                          tolerance=tolerance, tests=tests)
 end
 
 """

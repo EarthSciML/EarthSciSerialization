@@ -12,7 +12,7 @@
 using Test
 using EarthSciSerialization
 import ModelingToolkit
-import OrdinaryDiffEqDefault
+import OrdinaryDiffEqTsit5
 
 const _ESM_TB = EarthSciSerialization
 const _MTK_TB = ModelingToolkit
@@ -68,7 +68,8 @@ function _run_one_test(simp, system_name::Symbol,
     for (k, v) in u0_map; combined[k] = v; end
     for (k, v) in p_map;  combined[k] = v; end
     prob = _MTK_TB.ODEProblem(simp, combined, tspan)
-    sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-10, abstol=1e-12)
+    sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
+                                    reltol=1e-10, abstol=1e-12)
     @test sol.retcode == _MTK_TB.SciMLBase.ReturnCode.Success
 
     for a in t.assertions
@@ -94,10 +95,6 @@ end
     file = _ESM_TB.load(fixture_path)
     @test file.models !== nothing
 
-    # Sanity: this runner targets Models with inline tests. The Julia
-    # ReactionSystem type does not currently parse `tests`/`tolerance`
-    # (tracked by the ReactionSystem-tests follow-up); that branch is
-    # schema-only for now.
     any_tests = false
     for (mname, model) in file.models
         isempty(model.tests) && continue
@@ -110,5 +107,23 @@ end
             end
         end
     end
+
+    # ReactionSystems with inline tests/tolerance flatten through the same
+    # path: flatten → System → mtkcompile, then per-test ODEProblem solve.
+    if file.reaction_systems !== nothing
+        for (rsname, rsys) in file.reaction_systems
+            isempty(rsys.tests) && continue
+            any_tests = true
+            flat = _ESM_TB.flatten(rsys; name=String(rsname))
+            sys = _MTK_TB.System(flat; name=Symbol(rsname))
+            simp = _MTK_TB.mtkcompile(sys)
+            for t in rsys.tests
+                @testset "$(rsname)/$(t.id)" begin
+                    _run_one_test(simp, Symbol(rsname), rsys.tolerance, t)
+                end
+            end
+        end
+    end
+
     @test any_tests
 end
