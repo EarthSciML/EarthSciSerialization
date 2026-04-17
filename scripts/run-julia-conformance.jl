@@ -21,10 +21,12 @@ Pkg.develop(path=julia_package)
 Pkg.instantiate()
 
 using EarthSciSerialization
+using Dates
 using JSON3
 using Printf
 import ModelingToolkit
 import OrdinaryDiffEqDefault
+import DynamicQuantities  # MTK requires this to be loaded for `t`/`D` symbols
 const _MTK_CONF = ModelingToolkit
 
 struct ConformanceResults
@@ -490,13 +492,20 @@ function main()
     println("Output directory: $output_dir")
 
     errors = String[]
+    # Declare locals up front so they're visible outside each try/catch
+    # (Julia 1.12 soft-scope rules don't leak try-block assignments into
+    # the enclosing function scope unless the variable was defined first).
+    validation_results = Dict{String, Any}()
+    display_results = Dict{String, Any}()
+    substitution_results = Dict{String, Any}()
+    graph_results = Dict{String, Any}()
+    arrayop_results = Dict{String, Any}()
 
     # Run all test categories
     try
         validation_results = run_validation_tests(tests_dir)
         println("✓ Validation tests completed")
     catch e
-        validation_results = Dict{String, Any}()
         push!(errors, "Validation tests failed: $(string(e))")
         println("✗ Validation tests failed: $e")
     end
@@ -505,7 +514,6 @@ function main()
         display_results = run_display_tests(tests_dir)
         println("✓ Display tests completed")
     catch e
-        display_results = Dict{String, Any}()
         push!(errors, "Display tests failed: $(string(e))")
         println("✗ Display tests failed: $e")
     end
@@ -514,7 +522,6 @@ function main()
         substitution_results = run_substitution_tests(tests_dir)
         println("✓ Substitution tests completed")
     catch e
-        substitution_results = Dict{String, Any}()
         push!(errors, "Substitution tests failed: $(string(e))")
         println("✗ Substitution tests failed: $e")
     end
@@ -523,7 +530,6 @@ function main()
         graph_results = run_graph_tests(tests_dir)
         println("✓ Graph tests completed")
     catch e
-        graph_results = Dict{String, Any}()
         push!(errors, "Graph tests failed: $(string(e))")
         println("✗ Graph tests failed: $e")
     end
@@ -532,7 +538,6 @@ function main()
         arrayop_results = run_arrayop_tests(tests_dir)
         println("✓ Arrayop simulation tests completed")
     catch e
-        arrayop_results = Dict{String, Any}()
         push!(errors, "Arrayop tests failed: $(string(e))")
         println("✗ Arrayop tests failed: $e")
     end

@@ -7,7 +7,9 @@
 # Manifest.toml is gitignored; first run runs `Pkg.instantiate()` to resolve.
 
 [deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 EarthSciSerialization = "c7bf5e87-b31b-4281-bdce-ffb8a46ec87c"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
