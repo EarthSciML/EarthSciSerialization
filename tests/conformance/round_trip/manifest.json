@@ -1,0 +1,51 @@
+{
+  "category": "round_trip",
+  "version": "1.0",
+  "description": "Canonical fixtures that every binding MUST round-trip losslessly under the idempotent-re-save contract (see ../README.md). Paths are relative to tests/.",
+  "fixtures": [
+    { "id": "valid/minimal_chemistry",              "path": "valid/minimal_chemistry.esm",              "tags": ["core", "reactions"] },
+    { "id": "valid/model_only",                     "path": "valid/model_only.esm",                     "tags": ["core", "model"] },
+    { "id": "valid/reaction_system_only",           "path": "valid/reaction_system_only.esm",           "tags": ["core", "reactions"] },
+    { "id": "valid/full_model_specification",       "path": "valid/full_model_specification.esm",       "tags": ["core", "model"] },
+    { "id": "valid/full_coupled",                   "path": "valid/full_coupled.esm",                   "tags": ["coupling"] },
+
+    { "id": "valid/metadata_minimal",               "path": "valid/metadata_minimal.esm",               "tags": ["metadata"] },
+    { "id": "valid/metadata_complete",              "path": "valid/metadata_complete.esm",              "tags": ["metadata"] },
+    { "id": "valid/metadata_author_variations",     "path": "valid/metadata_author_variations.esm",     "tags": ["metadata"] },
+    { "id": "valid/metadata_date_formats",          "path": "valid/metadata_date_formats.esm",          "tags": ["metadata"] },
+    { "id": "valid/metadata_reference_types",       "path": "valid/metadata_reference_types.esm",       "tags": ["metadata"] },
+    { "id": "valid/metadata_tags_license",          "path": "valid/metadata_tags_license.esm",          "tags": ["metadata"] },
+    { "id": "valid/metadata_inheritance_coupled",   "path": "valid/metadata_inheritance_coupled.esm",   "tags": ["metadata", "coupling"] },
+
+    { "id": "valid/events_all_types",               "path": "valid/events_all_types.esm",               "tags": ["events"] },
+    { "id": "valid/events_continuous_affect_neg",   "path": "valid/events_continuous_affect_neg.esm",   "tags": ["events"] },
+    { "id": "valid/events_cross_system",            "path": "valid/events_cross_system.esm",            "tags": ["events", "coupling"] },
+    { "id": "valid/events_discrete_periodic",       "path": "valid/events_discrete_periodic.esm",       "tags": ["events"] },
+    { "id": "valid/events_discrete_preset_times",   "path": "valid/events_discrete_preset_times.esm",   "tags": ["events"] },
+
+    { "id": "valid/operators_comprehensive",        "path": "valid/operators_comprehensive.esm",        "tags": ["operators"] },
+    { "id": "valid/basic_interpolation_operators",  "path": "valid/basic_interpolation_operators.esm",  "tags": ["operators", "interpolation"] },
+    { "id": "valid/interpolation_operators_comprehensive", "path": "valid/interpolation_operators_comprehensive.esm", "tags": ["operators", "interpolation"] },
+
+    { "id": "valid/units_conversions",              "path": "valid/units_conversions.esm",              "tags": ["units"] },
+    { "id": "valid/units_dimensional_analysis",     "path": "valid/units_dimensional_analysis.esm",     "tags": ["units"] },
+    { "id": "valid/units_propagation",              "path": "valid/units_propagation.esm",              "tags": ["units"] },
+
+    { "id": "valid/data_loaders_comprehensive",     "path": "valid/data_loaders_comprehensive.esm",     "tags": ["data_loaders"] },
+    { "id": "valid/data_loaders_earthscidata_jl",   "path": "valid/data_loaders_earthscidata_jl.esm",   "tags": ["data_loaders"] },
+
+    { "id": "valid/scoped_refs_coupling",           "path": "valid/scoped_refs_coupling.esm",           "tags": ["scoping"] },
+    { "id": "valid/scoped_refs_nested",             "path": "valid/scoped_refs_nested.esm",             "tags": ["scoping"] },
+
+    { "id": "valid/expr_graphs_variable_deps",      "path": "valid/expr_graphs_variable_deps.esm",      "tags": ["expressions"] },
+    { "id": "valid/tests_examples_comprehensive",   "path": "valid/tests_examples_comprehensive.esm",   "tags": ["tests_blocks"] },
+    { "id": "valid/wildfire_atmosphere_ocean",      "path": "valid/wildfire_atmosphere_ocean.esm",      "tags": ["coupling", "end_to_end"] },
+    { "id": "valid/structural_issues",              "path": "valid/structural_issues.esm",              "tags": ["core"] },
+
+    { "id": "fixtures/arrayop/01_pure_ode_analytical",      "path": "fixtures/arrayop/01_pure_ode_analytical.esm",      "tags": ["arrayop"] },
+    { "id": "fixtures/arrayop/02_mixed_ode_algebraic",      "path": "fixtures/arrayop/02_mixed_ode_algebraic.esm",      "tags": ["arrayop"] },
+    { "id": "fixtures/arrayop/03_1d_stencil_mass_conservation", "path": "fixtures/arrayop/03_1d_stencil_mass_conservation.esm", "tags": ["arrayop"] },
+    { "id": "fixtures/arrayop/04_weno_wide_stencil",        "path": "fixtures/arrayop/04_weno_wide_stencil.esm",        "tags": ["arrayop"] },
+    { "id": "fixtures/arrayop/06_rearranged_algebraic",     "path": "fixtures/arrayop/06_rearranged_algebraic.esm",     "tags": ["arrayop"] }
+  ]
+}
