@@ -86,44 +86,83 @@ function _run_one_test(simp, system_name::Symbol,
     end
 end
 
+# Execute every inline `tests` block / `ReactionSystem` tests list inside
+# a single .esm fixture. Shared by the comprehensive fixture and the
+# tests/simulation/ physics fixtures (gt-l5b).
+function _execute_fixture_tests(fpath::AbstractString; label::AbstractString=basename(fpath))
+    file = _ESM_TB.load(fpath)
+    ran = false
+    if file.models !== nothing
+        for (mname, model) in file.models
+            isempty(model.tests) && continue
+            ran = true
+            sys = _MTK_TB.System(model; name=Symbol(mname))
+            simp = _MTK_TB.mtkcompile(sys)
+            for t in model.tests
+                @testset "$(label)/$(mname)/$(t.id)" begin
+                    _run_one_test(simp, Symbol(mname), model.tolerance, t)
+                end
+            end
+        end
+    end
+    if file.reaction_systems !== nothing
+        for (rsname, rsys) in file.reaction_systems
+            isempty(rsys.tests) && continue
+            ran = true
+            flat = _ESM_TB.flatten(rsys; name=String(rsname))
+            sys = _MTK_TB.System(flat; name=Symbol(rsname))
+            simp = _MTK_TB.mtkcompile(sys)
+            for t in rsys.tests
+                @testset "$(label)/$(rsname)/$(t.id)" begin
+                    _run_one_test(simp, Symbol(rsname), rsys.tolerance, t)
+                end
+            end
+        end
+    end
+    return ran
+end
+
 @testset "Inline tests-block execution runner" begin
     fixture_path = joinpath(@__DIR__, "..", "..", "..",
                             "tests", "valid",
                             "tests_examples_comprehensive.esm")
     @test isfile(fixture_path)
 
-    file = _ESM_TB.load(fixture_path)
-    @test file.models !== nothing
+    any_tests = _execute_fixture_tests(fixture_path; label="tests_examples_comprehensive")
+    @test any_tests
 
-    any_tests = false
-    for (mname, model) in file.models
-        isempty(model.tests) && continue
-        any_tests = true
-        sys = _MTK_TB.System(model; name=Symbol(mname))
-        simp = _MTK_TB.mtkcompile(sys)
-        for t in model.tests
-            @testset "$(mname)/$(t.id)" begin
-                _run_one_test(simp, Symbol(mname), model.tolerance, t)
-            end
-        end
-    end
-
-    # ReactionSystems with inline tests/tolerance flatten through the same
-    # path: flatten → System → mtkcompile, then per-test ODEProblem solve.
-    if file.reaction_systems !== nothing
-        for (rsname, rsys) in file.reaction_systems
-            isempty(rsys.tests) && continue
-            any_tests = true
-            flat = _ESM_TB.flatten(rsys; name=String(rsname))
-            sys = _MTK_TB.System(flat; name=Symbol(rsname))
-            simp = _MTK_TB.mtkcompile(sys)
-            for t in rsys.tests
-                @testset "$(rsname)/$(t.id)" begin
-                    _run_one_test(simp, Symbol(rsname), rsys.tolerance, t)
+    # tests/simulation/ physics fixtures — gt-l5b migrated these from the
+    # filesystem-paired `.esm` + `reference_solutions/*.json` convention to
+    # inline `tests` blocks. Walk the directory so newly-migrated fixtures
+    # are picked up automatically without editing this runner.
+    #
+    # Known-broken fixtures exercise Julia-binding gaps rather than spec
+    # gaps; they stay in the directory (the schema / other bindings can
+    # still use them) but are skipped here until the underlying bugs land.
+    simulation_skip = Dict(
+        # SymbolicContinuousCallback API drift in MTK ext (gt-2ta2).
+        "bouncing_ball.esm" => "gt-2ta2",
+        # Observed variables rejected by mtkcompile (gt-zuwt).
+        "event_chain.esm" => "gt-zuwt",
+    )
+    simulation_dir = joinpath(@__DIR__, "..", "..", "..",
+                              "tests", "simulation")
+    if isdir(simulation_dir)
+        sim_files = sort(filter(f -> endswith(f, ".esm"),
+                                readdir(simulation_dir)))
+        @testset "tests/simulation fixtures" begin
+            for fname in sim_files
+                if haskey(simulation_skip, fname)
+                    @testset "$(fname) [SKIPPED: $(simulation_skip[fname])]" begin
+                        @test_skip false
+                    end
+                    continue
+                end
+                fpath = joinpath(simulation_dir, fname)
+                @testset "$(fname)" begin
+                    _execute_fixture_tests(fpath; label=fname)
                 end
             end
         end
     end
-
-    @test any_tests
 end

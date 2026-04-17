@@ -54,6 +54,52 @@
             ]
           }
         }
+      ],
+      "tolerance": {
+        "rel": 1.0e-6,
+        "abs": 1.0e-10
+      },
+      "tests": [
+        {
+          "id": "analytical_exponential_decay",
+          "description": "Analytical reference for dN/dt = -lambda * N with N0=100, lambda=0.1. Closed-form solution is N(t) = 100 * exp(-0.1 * t); assertions sample t=0, 5, 10, 20, 30, 40, 50 s.",
+          "initial_conditions": {
+            "N": 100.0
+          },
+          "parameter_overrides": {
+            "lambda": 0.1
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 50.0
+          },
+          "assertions": [
+            { "variable": "N", "time": 0.0,  "expected": 100.0 },
+            { "variable": "N", "time": 5.0,  "expected": 60.65306597126334 },
+            { "variable": "N", "time": 10.0, "expected": 36.787944117144235 },
+            { "variable": "N", "time": 20.0, "expected": 13.533528323661267 },
+            { "variable": "N", "time": 30.0, "expected": 4.978706836786395 },
+            { "variable": "N", "time": 40.0, "expected": 1.8315638888734182 },
+            { "variable": "N", "time": 50.0, "expected": 0.6737946999085468 }
+          ]
+        },
+        {
+          "id": "half_life",
+          "description": "Half-life check: N(ln(2)/lambda) = N0/2. With lambda=0.1, half-life = 6.931471805599453 s; N at that time should be 50.0.",
+          "initial_conditions": {
+            "N": 100.0
+          },
+          "parameter_overrides": {
+            "lambda": 0.1
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 7.0
+          },
+          "assertions": [
+            { "variable": "N", "time": 6.931471805599453, "expected": 50.0 }
+          ]
+        }
       ]
     }
   },
