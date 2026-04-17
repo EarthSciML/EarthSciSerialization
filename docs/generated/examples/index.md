@@ -73,6 +73,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [Basic Functionality](julia-basic-functionality.md)
 - [System Information](julia-system-information.md)
 - [Inline tests-block execution runner](julia-inline-tests-block-execution-runner.md)
+- [$(rsname)/$(t.id)](julia---rsname----t-id-.md)
 - [EarthSciSerialization.Expression Operations](julia-earthsciserialization-expression-operations.md)
 - [free_variables function](julia-free_variables-function.md)
 - [contains function](julia-contains-function.md)

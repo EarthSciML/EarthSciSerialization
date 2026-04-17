@@ -11,10 +11,6 @@ fixture_path = joinpath(@__DIR__, "..", "..", "..",
     file = _ESM_TB.load(fixture_path)
     @test file.models !== nothing
 
-    # Sanity: this runner targets Models with inline tests. The Julia
-    # ReactionSystem type does not currently parse `tests`/`tolerance`
-    # (tracked by the ReactionSystem-tests follow-up); that branch is
-    # schema-only for now.
     any_tests = false
     for (mname, model) in file.models
         isempty(model.tests) && continue
