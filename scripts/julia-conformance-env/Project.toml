@@ -1,0 +1,23 @@
+# Julia environment for the cross-language conformance runner's arrayop
+# simulation tests. The main EarthSciSerialization.jl package only declares
+# MTK + OrdinaryDiffEq* as test extras, so the conformance runner cannot
+# reach them from the package's default env. This side env loads the
+# package via `Pkg.develop` and pulls in the solver stack directly.
+#
+# Manifest.toml is gitignored; first run runs `Pkg.instantiate()` to resolve.
+
+[deps]
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+EarthSciSerialization = "c7bf5e87-b31b-4281-bdce-ffb8a46ec87c"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+
+[compat]
+DomainSets = "0.7"
+ModelingToolkit = "11"
+OrdinaryDiffEqDefault = "1"
+Symbolics = "7"
+julia = "1.10"

@@ -38,6 +38,7 @@ class ConformanceResults:
         self.display_results = {}
         self.substitution_results = {}
         self.graph_results = {}
+        self.arrayop_results = {}
         self.errors = []
 
     def to_dict(self):
@@ -48,6 +49,7 @@ class ConformanceResults:
             "display_results": self.display_results,
             "substitution_results": self.substitution_results,
             "graph_results": self.graph_results,
+            "arrayop_results": self.arrayop_results,
             "errors": self.errors
         }
 
@@ -57,7 +59,7 @@ def write_results(output_dir: Path, results: ConformanceResults):
 
     results_file = output_dir / "results.json"
     with open(results_file, 'w') as f:
-        json.dump(results.to_dict(), f, indent=2)
+        json.dump(results.to_dict(), f, indent=2, default=str)
 
     print(f"Python conformance results written to: {results_file}")
 
@@ -303,6 +305,149 @@ def run_graph_tests(tests_dir: Path) -> Dict[str, Any]:
 
     return graph_results
 
+def _merge_tolerance(*tolerances) -> Dict[str, float]:
+    merged: Dict[str, float] = {}
+    for t in tolerances:
+        if t:
+            merged.update(t)
+    return {
+        "rel": float(merged.get("rel", 0.0)),
+        "abs": float(merged.get("abs", 0.0)),
+    }
+
+
+def _lookup_actual(vars_list, y, t_arr, var_key, time) -> float:
+    import numpy as np
+    match_idx = None
+    for i, name in enumerate(vars_list):
+        if name == var_key or name.endswith("." + var_key):
+            match_idx = i
+            break
+    if match_idx is None:
+        raise KeyError(f"variable {var_key!r} not in result vars: {vars_list}")
+    row = y[match_idx, :]
+    if len(t_arr) == 0:
+        raise ValueError("result has no time points")
+    if time <= t_arr[0]:
+        return float(row[0])
+    if time >= t_arr[-1]:
+        return float(row[-1])
+    return float(np.interp(time, t_arr, row))
+
+
+def _assertion_passes(actual, expected, rel, ab) -> bool:
+    diff = abs(actual - expected)
+    if ab > 0 and diff <= ab:
+        return True
+    if rel > 0:
+        denom = max(abs(expected), 1e-12)
+        if diff / denom <= rel:
+            return True
+    if ab == 0 and rel == 0:
+        return diff == 0.0
+    return False
+
+
+def run_arrayop_tests(project_root: Path) -> Dict[str, Any]:
+    """Run every inline test in every arrayop fixture, emit per-fixture results.
+
+    Schema: {fixture: {model: {test_id: {success, message, assertions: [...]}}}}
+    Each assertion records {variable, time, expected, actual, tolerance, passed}
+    — ``actual`` is the scalar the binding produced, used for cross-language
+    agreement diffing downstream.
+    """
+    print("Running arrayop simulation tests...")
+    from earthsci_toolkit.simulation import simulate
+
+    fixtures_dir = project_root / "tests" / "fixtures" / "arrayop"
+    results: Dict[str, Any] = {}
+    if not fixtures_dir.is_dir():
+        return results
+
+    for fixture_path in sorted(fixtures_dir.glob("*.esm")):
+        fixture_key = fixture_path.name
+        with open(fixture_path, "r") as fh:
+            raw = json.load(fh)
+        try:
+            esm_file = earthsci_toolkit.load(fixture_path)
+        except Exception as e:
+            results[fixture_key] = {"__fixture_error": str(e)}
+            continue
+
+        fixture_out: Dict[str, Any] = {}
+        for model_name, model_raw in (raw.get("models") or {}).items():
+            tests = model_raw.get("tests") or []
+            if not tests:
+                continue
+            model_tol = model_raw.get("tolerance") or {}
+            model_out: Dict[str, Any] = {}
+            for test in tests:
+                test_id = test.get("id", "unknown")
+                test_tol = test.get("tolerance") or {}
+                tspan_raw = test.get("time_span") or {}
+                tspan = (float(tspan_raw.get("start", 0.0)), float(tspan_raw.get("end", 0.0)))
+                ics = {k: float(v) for k, v in (test.get("initial_conditions") or {}).items()}
+                params = {k: float(v) for k, v in (test.get("parameter_overrides") or {}).items()}
+
+                sim_ok = True
+                sim_msg = ""
+                sim_result = None
+                try:
+                    sim_result = simulate(
+                        esm_file, tspan=tspan, initial_conditions=ics, parameters=params
+                    )
+                    if not getattr(sim_result, "success", True):
+                        sim_ok = False
+                        sim_msg = getattr(sim_result, "message", "") or ""
+                except Exception as e:
+                    sim_ok = False
+                    sim_msg = f"{type(e).__name__}: {e}"
+
+                assertions_out = []
+                for assertion in test.get("assertions", []):
+                    var_key = assertion["variable"]
+                    time = float(assertion["time"])
+                    expected = float(assertion["expected"])
+                    merged = _merge_tolerance(
+                        model_tol, test_tol, assertion.get("tolerance") or {}
+                    )
+                    rec: Dict[str, Any] = {
+                        "variable": var_key,
+                        "time": time,
+                        "expected": expected,
+                        "tolerance": merged,
+                    }
+                    if sim_ok and sim_result is not None:
+                        try:
+                            actual = _lookup_actual(
+                                sim_result.vars, sim_result.y, sim_result.t,
+                                var_key, time,
+                            )
+                            rec["actual"] = actual
+                            rec["passed"] = _assertion_passes(
+                                actual, expected, merged["rel"], merged["abs"]
+                            )
+                        except Exception as e:
+                            rec["actual"] = None
+                            rec["passed"] = False
+                            rec["error"] = f"{type(e).__name__}: {e}"
+                    else:
+                        rec["actual"] = None
+                        rec["passed"] = False
+                    assertions_out.append(rec)
+
+                model_out[test_id] = {
+                    "success": sim_ok,
+                    "message": sim_msg,
+                    "assertions": assertions_out,
+                }
+            if model_out:
+                fixture_out[model_name] = model_out
+        results[fixture_key] = fixture_out
+
+    return results
+
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python run-python-conformance.py <output_dir>")
@@ -350,6 +495,15 @@ def main():
         results.graph_results = {}
         results.errors.append(f"Graph tests failed: {str(e)}")
         print(f"✗ Graph tests failed: {e}")
+
+    try:
+        results.arrayop_results = run_arrayop_tests(project_root)
+        print("✓ Arrayop simulation tests completed")
+    except Exception as e:
+        results.arrayop_results = {}
+        results.errors.append(f"Arrayop tests failed: {str(e)}")
+        print(f"✗ Arrayop tests failed: {e}")
+        print(traceback.format_exc())
 
     # Write results to file
     write_results(output_dir, results)

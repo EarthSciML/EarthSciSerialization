@@ -22,6 +22,7 @@ class ConformanceAnalysis:
         self.display_analysis = {}
         self.substitution_analysis = {}
         self.graph_analysis = {}
+        self.arrayop_analysis = {}
         self.divergence_summary = {}
         self.overall_status = "PASS"
 
@@ -32,6 +33,7 @@ class ConformanceAnalysis:
             "display_analysis": self.display_analysis,
             "substitution_analysis": self.substitution_analysis,
             "graph_analysis": self.graph_analysis,
+            "arrayop_analysis": self.arrayop_analysis,
             "divergence_summary": self.divergence_summary,
             "overall_status": self.overall_status
         }
@@ -377,6 +379,146 @@ def compare_graph_results(language_results: Dict[str, Dict[str, Any]]) -> Dict[s
 
     return graph_analysis
 
+def compare_arrayop_results(language_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Compare arrayop simulation actuals across languages within tolerance.
+
+    Only fixtures/models/tests/assertions produced by at least two languages
+    are compared — languages that emit empty ``arrayop_results`` (e.g. TS,
+    Rust) don't count against consistency.
+    """
+    print("Comparing arrayop simulation results...")
+
+    arrayop_analysis = {
+        "test_files": [],
+        "divergence": {},
+        "summary": {"total_tests": 0, "consistent_tests": 0, "divergent_tests": 0},
+    }
+
+    # Collect the union of fixture names across languages that produced any
+    # arrayop data. Skip languages whose arrayop_results is empty/absent.
+    per_lang: Dict[str, Dict[str, Any]] = {}
+    for lang, results in language_results.items():
+        ar = results.get("arrayop_results") or {}
+        if ar:
+            per_lang[lang] = ar
+
+    if len(per_lang) < 2:
+        # Not enough languages with arrayop data — nothing meaningful to
+        # compare, but surface which languages emitted data for operators.
+        arrayop_analysis["languages_with_data"] = sorted(per_lang.keys())
+        return arrayop_analysis
+
+    all_fixtures = set()
+    for ar in per_lang.values():
+        all_fixtures.update(ar.keys())
+    arrayop_analysis["test_files"] = sorted(all_fixtures)
+    arrayop_analysis["languages_with_data"] = sorted(per_lang.keys())
+
+    for fixture in sorted(all_fixtures):
+        fixture_divergences = []
+        # Gather assertion tuples per language: {(model, test_id, variable, time): (actual, tol)}
+        per_lang_assertions: Dict[str, Dict[tuple, Dict[str, Any]]] = {}
+        for lang, ar in per_lang.items():
+            fixture_data = ar.get(fixture)
+            if not isinstance(fixture_data, dict):
+                continue
+            entries: Dict[tuple, Dict[str, Any]] = {}
+            for model_name, model_data in fixture_data.items():
+                if not isinstance(model_data, dict):
+                    continue
+                for test_id, test_data in model_data.items():
+                    if not isinstance(test_data, dict):
+                        continue
+                    for a in test_data.get("assertions", []):
+                        key = (model_name, test_id, a.get("variable"), a.get("time"))
+                        entries[key] = a
+            per_lang_assertions[lang] = entries
+
+        if len(per_lang_assertions) < 2:
+            continue
+
+        # Pairwise compare every assertion key that at least two languages
+        # produced.
+        all_keys = set()
+        for entries in per_lang_assertions.values():
+            all_keys.update(entries.keys())
+
+        for key in sorted(all_keys):
+            langs_present = [l for l, e in per_lang_assertions.items() if key in e]
+            if len(langs_present) < 2:
+                continue
+            arrayop_analysis["summary"]["total_tests"] += 1
+            ref_lang = langs_present[0]
+            ref = per_lang_assertions[ref_lang][key]
+            ref_actual = ref.get("actual")
+            ref_tol = ref.get("tolerance") or {}
+
+            divergent = False
+            details = []
+            for lang in langs_present[1:]:
+                other = per_lang_assertions[lang][key]
+                other_actual = other.get("actual")
+                other_tol = other.get("tolerance") or {}
+                # Both-null is "no data" — skip.
+                if ref_actual is None or other_actual is None:
+                    if ref_actual != other_actual:
+                        divergent = True
+                        details.append({
+                            "pair": f"{ref_lang} vs {lang}",
+                            "reason": "one language did not produce an actual",
+                            "reference_actual": ref_actual,
+                            "divergent_actual": other_actual,
+                        })
+                    continue
+                # Use the loosest tolerance from either side to decide
+                # agreement — both languages asserted their own actual
+                # within that bound, so the diff must also fit.
+                rel = max(
+                    float(ref_tol.get("rel") or 0.0),
+                    float(other_tol.get("rel") or 0.0),
+                )
+                ab = max(
+                    float(ref_tol.get("abs") or 0.0),
+                    float(other_tol.get("abs") or 0.0),
+                )
+                diff = abs(ref_actual - other_actual)
+                within = False
+                if ab > 0 and diff <= ab:
+                    within = True
+                if rel > 0:
+                    denom = max(abs(ref_actual), abs(other_actual), 1e-12)
+                    if diff / denom <= rel:
+                        within = True
+                if ab == 0 and rel == 0:
+                    within = diff == 0.0
+                if not within:
+                    divergent = True
+                    details.append({
+                        "pair": f"{ref_lang} vs {lang}",
+                        "reference_actual": ref_actual,
+                        "divergent_actual": other_actual,
+                        "diff": diff,
+                        "tolerance": {"rel": rel, "abs": ab},
+                    })
+
+            if divergent:
+                arrayop_analysis["summary"]["divergent_tests"] += 1
+                fixture_divergences.append({
+                    "model": key[0],
+                    "test_id": key[1],
+                    "variable": key[2],
+                    "time": key[3],
+                    "details": details,
+                })
+            else:
+                arrayop_analysis["summary"]["consistent_tests"] += 1
+
+        if fixture_divergences:
+            arrayop_analysis["divergence"][fixture] = fixture_divergences
+
+    return arrayop_analysis
+
+
 def calculate_divergence_summary(analysis: ConformanceAnalysis) -> Dict[str, Any]:
     """Calculate overall divergence summary across all test categories."""
     summary = {
@@ -390,7 +532,8 @@ def calculate_divergence_summary(analysis: ConformanceAnalysis) -> Dict[str, Any
         ("validation", analysis.validation_analysis),
         ("display", analysis.display_analysis),
         ("substitution", analysis.substitution_analysis),
-        ("graph", analysis.graph_analysis)
+        ("graph", analysis.graph_analysis),
+        ("arrayop", analysis.arrayop_analysis)
     ]
 
     total_score = 0.0
@@ -469,6 +612,7 @@ def main():
     analysis.display_analysis = compare_display_results(language_results)
     analysis.substitution_analysis = compare_substitution_results(language_results)
     analysis.graph_analysis = compare_graph_results(language_results)
+    analysis.arrayop_analysis = compare_arrayop_results(language_results)
 
     # Calculate divergence summary
     analysis.divergence_summary = calculate_divergence_summary(analysis)

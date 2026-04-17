@@ -9,15 +9,23 @@ and generates standardized outputs for comparison with other language implementa
 
 using Pkg
 
-# Ensure we're in the right environment
+# Activate a side env (scripts/julia-conformance-env) that pulls in both the
+# EarthSciSerialization package and the MTK / OrdinaryDiffEqDefault solver
+# stack. The main package declares those as test extras only, so running
+# inside its own env can't reach them.
 project_dir = dirname(dirname(@__FILE__))
 julia_package = joinpath(project_dir, "packages", "EarthSciSerialization.jl")
-cd(julia_package)
-Pkg.activate(".")
+conformance_env = joinpath(project_dir, "scripts", "julia-conformance-env")
+Pkg.activate(conformance_env)
+Pkg.develop(path=julia_package)
+Pkg.instantiate()
 
 using EarthSciSerialization
 using JSON3
 using Printf
+import ModelingToolkit
+import OrdinaryDiffEqDefault
+const _MTK_CONF = ModelingToolkit
 
 struct ConformanceResults
     language::String
@@ -26,6 +34,7 @@ struct ConformanceResults
     display_results::Dict{String, Any}
     substitution_results::Dict{String, Any}
     graph_results::Dict{String, Any}
+    arrayop_results::Dict{String, Any}
     errors::Vector{String}
 end
 
@@ -305,6 +314,167 @@ function run_graph_tests(tests_dir::String)
     return graph_results
 end
 
+# ------------------------------------------------------------------
+# Arrayop fixture runner — walks tests/fixtures/arrayop/*.esm, runs
+# each inline test through the MTK simulate path, records actuals
+# for cross-language diffing.
+# ------------------------------------------------------------------
+
+function _parse_varspec(spec::AbstractString)
+    lb = findfirst('[', spec)
+    lb === nothing && return String(spec), Int[]
+    rb = findfirst(']', spec)
+    rb === nothing && error("unterminated index in '$spec'")
+    base = String(spec[1:(lb - 1)])
+    body = spec[(lb + 1):(rb - 1)]
+    idxs = [parse(Int, strip(t)) for t in split(body, ',')]
+    return base, idxs
+end
+
+function _resolve_on_simp(simp, model_name::Symbol, spec::AbstractString)
+    base, idxs = _parse_varspec(spec)
+    arr = _MTK_CONF.getproperty(simp, Symbol(String(model_name) * "_" * base))
+    return isempty(idxs) ? arr : arr[idxs...]
+end
+
+function _merge_tolerance_jl(model_tol, test_tol, assertion_tol)
+    rel = 0.0
+    ab = 0.0
+    for tol in (model_tol, test_tol, assertion_tol)
+        tol === nothing && continue
+        r = hasproperty(tol, :rel) ? tol.rel : nothing
+        a = hasproperty(tol, :abs) ? tol.abs : nothing
+        if r !== nothing
+            rel = Float64(r)
+        end
+        if a !== nothing
+            ab = Float64(a)
+        end
+    end
+    return rel, ab
+end
+
+function _assertion_passes_jl(actual, expected, rel, ab)
+    diff = abs(actual - expected)
+    if ab > 0 && diff <= ab
+        return true
+    end
+    if rel > 0
+        denom = max(abs(expected), 1e-12)
+        if diff / denom <= rel
+            return true
+        end
+    end
+    if ab == 0 && rel == 0
+        return diff == 0.0
+    end
+    return false
+end
+
+function run_arrayop_tests(tests_dir::String)
+    """Run every inline arrayop fixture test and collect per-assertion actuals."""
+    fixtures_dir = joinpath(tests_dir, "fixtures", "arrayop")
+    results = Dict{String, Any}()
+    if !isdir(fixtures_dir)
+        return results
+    end
+
+    for fname in sort(filter(f -> endswith(f, ".esm"), readdir(fixtures_dir)))
+        fixture_path = joinpath(fixtures_dir, fname)
+        fixture_out = Dict{String, Any}()
+        local file
+        try
+            file = EarthSciSerialization.load(fixture_path)
+        catch e
+            results[fname] = Dict("__fixture_error" => string(e))
+            continue
+        end
+        models_dict = file.models
+        if models_dict === nothing
+            results[fname] = fixture_out
+            continue
+        end
+
+        for (mname, model) in models_dict
+            if isempty(model.tests)
+                continue
+            end
+            local sys, simp
+            try
+                sys = _MTK_CONF.System(model; name=Symbol(mname))
+                simp = _MTK_CONF.mtkcompile(sys)
+            catch e
+                fixture_out[String(mname)] = Dict("__compile_error" => string(e))
+                continue
+            end
+
+            model_out = Dict{String, Any}()
+            for t in model.tests
+                test_id = String(t.id)
+                sim_ok = true
+                sim_msg = ""
+                local sol
+                try
+                    u0_map = Dict{Any, Float64}()
+                    for (spec, val) in t.initial_conditions
+                        handle = _resolve_on_simp(simp, Symbol(mname), spec)
+                        u0_map[handle] = Float64(val)
+                    end
+                    tspan = (Float64(t.time_span.start), Float64(t.time_span.stop))
+                    prob = _MTK_CONF.ODEProblem(simp, u0_map, tspan)
+                    sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-10, abstol=1e-12)
+                    if sol.retcode != _MTK_CONF.SciMLBase.ReturnCode.Success
+                        sim_ok = false
+                        sim_msg = "retcode=$(sol.retcode)"
+                    end
+                catch e
+                    sim_ok = false
+                    sim_msg = string(e)
+                end
+
+                assertions_out = Vector{Dict{String, Any}}()
+                for a in t.assertions
+                    rel, ab = _merge_tolerance_jl(model.tolerance, t.tolerance, a.tolerance)
+                    rec = Dict{String, Any}(
+                        "variable" => String(a.variable),
+                        "time" => Float64(a.time),
+                        "expected" => Float64(a.expected),
+                        "tolerance" => Dict("rel" => rel, "abs" => ab),
+                    )
+                    if sim_ok
+                        try
+                            handle = _resolve_on_simp(simp, Symbol(mname), a.variable)
+                            actual = Float64(sol(a.time, idxs=handle))
+                            rec["actual"] = actual
+                            rec["passed"] = _assertion_passes_jl(actual, rec["expected"], rel, ab)
+                        catch e
+                            rec["actual"] = nothing
+                            rec["passed"] = false
+                            rec["error"] = string(e)
+                        end
+                    else
+                        rec["actual"] = nothing
+                        rec["passed"] = false
+                    end
+                    push!(assertions_out, rec)
+                end
+
+                model_out[test_id] = Dict{String, Any}(
+                    "success" => sim_ok,
+                    "message" => sim_msg,
+                    "assertions" => assertions_out,
+                )
+            end
+            if !isempty(model_out)
+                fixture_out[String(mname)] = model_out
+            end
+        end
+        results[fname] = fixture_out
+    end
+
+    return results
+end
+
 function main()
     if length(ARGS) != 1
         println("Usage: julia run-julia-conformance.jl <output_dir>")
@@ -358,6 +528,15 @@ function main()
         println("✗ Graph tests failed: $e")
     end
 
+    try
+        arrayop_results = run_arrayop_tests(tests_dir)
+        println("✓ Arrayop simulation tests completed")
+    catch e
+        arrayop_results = Dict{String, Any}()
+        push!(errors, "Arrayop tests failed: $(string(e))")
+        println("✗ Arrayop tests failed: $e")
+    end
+
     # Compile results
     results = ConformanceResults(
         "julia",
@@ -366,6 +545,7 @@ function main()
         display_results,
         substitution_results,
         graph_results,
+        arrayop_results,
         errors
     )
 

@@ -39,6 +39,7 @@ class ConformanceResults {
         this.display_results = {};
         this.substitution_results = {};
         this.graph_results = {};
+        this.arrayop_results = {}; // No simulate implementation in TS binding yet
         this.errors = [];
     }
 }
