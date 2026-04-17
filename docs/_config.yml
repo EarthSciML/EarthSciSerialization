@@ -3,8 +3,8 @@
 # Site settings
 title: "ESM Format Documentation"
 description: "Complete documentation for the EarthSciML Serialization Format"
-baseurl: ""
-url: ""
+baseurl: "/EarthSciSerialization"
+url: "https://earthsciml.github.io"
 
 # Build settings
 markdown: kramdown
@@ -33,6 +33,7 @@ exclude:
   - Gemfile.lock
   - node_modules/
   - vendor/
+  - README-DOCS.md
 
 # Code highlighting
 kramdown:
