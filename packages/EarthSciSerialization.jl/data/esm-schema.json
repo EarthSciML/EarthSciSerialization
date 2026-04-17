@@ -458,6 +458,10 @@
         },
         "units": { "type": "string" },
         "default": { "type": "number" },
+        "default_units": {
+          "type": "string",
+          "description": "Units of the default value, if different from the declared units field. When present, validators flag a unit_inconsistency error if these do not match the declared units (including dimensionally incompatible cases like K vs kg, and same-dimension mismatches like K vs degC). Default is the same as `units`."
+        },
         "description": { "type": "string" },
         "expression": {
           "$ref": "#/$defs/Expression",
@@ -558,6 +562,10 @@
       "properties": {
         "units": { "type": "string" },
         "default": { "type": "number" },
+        "default_units": {
+          "type": "string",
+          "description": "Units of the default value, if different from the declared units field. See ModelVariable.default_units for semantics."
+        },
         "description": { "type": "string" }
       }
     },
@@ -569,6 +577,10 @@
       "properties": {
         "units": { "type": "string" },
         "default": { "type": "number" },
+        "default_units": {
+          "type": "string",
+          "description": "Units of the default value, if different from the declared units field. See ModelVariable.default_units for semantics."
+        },
         "description": { "type": "string" }
       }
     },

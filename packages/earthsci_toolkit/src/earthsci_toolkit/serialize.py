@@ -101,6 +101,8 @@ def _serialize_model_variable(variable: ModelVariable) -> Dict[str, Any]:
         result["units"] = variable.units
     if variable.default is not None:
         result["default"] = variable.default
+    if variable.default_units is not None:
+        result["default_units"] = variable.default_units
     if variable.description is not None:
         result["description"] = variable.description
     if variable.expression is not None:
@@ -185,6 +187,10 @@ def _serialize_species(species: Species) -> Dict[str, Any]:
     result = {}
     if species.units is not None:
         result["units"] = species.units
+    if species.default is not None:
+        result["default"] = species.default
+    if species.default_units is not None:
+        result["default_units"] = species.default_units
     if species.description is not None:
         result["description"] = species.description
     return result
@@ -195,6 +201,8 @@ def _serialize_parameter(parameter: Parameter) -> Dict[str, Any]:
     result = {}
     if parameter.units is not None:
         result["units"] = parameter.units
+    if parameter.default_units is not None:
+        result["default_units"] = parameter.default_units
     if parameter.description is not None:
         result["description"] = parameter.description
     if isinstance(parameter.value, (int, float)):

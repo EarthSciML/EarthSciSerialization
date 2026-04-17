@@ -212,6 +212,7 @@ def _parse_model_variable(var_data: Dict[str, Any]) -> ModelVariable:
     var_type = var_data["type"]
     units = var_data.get("units")
     default = var_data.get("default")
+    default_units = var_data.get("default_units")
     description = var_data.get("description")
     expression = None
     if "expression" in var_data:
@@ -221,6 +222,7 @@ def _parse_model_variable(var_data: Dict[str, Any]) -> ModelVariable:
         type=var_type,
         units=units,
         default=default,
+        default_units=default_units,
         description=description,
         expression=expression
     )
@@ -359,6 +361,7 @@ def _parse_species(species_data: Dict[str, Any]) -> Species:
         name="",  # Name comes from the key
         units=species_data.get("units"),
         default=species_data.get("default"),
+        default_units=species_data.get("default_units"),
         description=species_data.get("description")
     )
 
@@ -371,6 +374,7 @@ def _parse_parameter(param_data: Dict[str, Any]) -> Parameter:
         name="",  # Name comes from the key
         value=value,
         units=param_data.get("units"),
+        default_units=param_data.get("default_units"),
         description=param_data.get("description")
     )
 
@@ -1687,6 +1691,68 @@ def _walk_expression_for_exponent_checks(
         _walk_expression_for_exponent_checks(expr["expr"], var_units, f"{path}/expr", errors)
 
 
+def _check_default_units_consistency(data: Dict[str, Any], errors: List[str]) -> None:
+    """
+    Flag variables whose `default_units` disagrees with the declared `units`.
+
+    Emits `unit_inconsistency` when the two unit strings resolve to different
+    pint units — covering both dimensionally incompatible cases (e.g., K vs kg)
+    and same-dimension mismatches (e.g., K vs degC). Absent default_units is a
+    no-op: a default value is presumed to share the declared units.
+    """
+    try:
+        import pint
+        ureg = pint.UnitRegistry()
+    except Exception:
+        return
+
+    def units_match(declared: str, provided: str) -> bool:
+        try:
+            declared_u = ureg(_normalize_unit(declared)).units
+            provided_u = ureg(_normalize_unit(provided)).units
+            return declared_u == provided_u
+        except Exception:
+            # If pint can't parse, fall back to string compare on normalized form
+            return _normalize_unit(declared) == _normalize_unit(provided)
+
+    def check_entry(path: str, declared_units, default_value, provided_default_units):
+        if provided_default_units is None:
+            return
+        if declared_units is None:
+            return
+        if units_match(declared_units, provided_default_units):
+            return
+        errors.append(
+            f"{path}: Parameter default value units do not match declared units "
+            f"(declared='{declared_units}', default={default_value}, default_units='{provided_default_units}')"
+        )
+
+    for mname, m in data.get("models", {}).items():
+        for vname, vdef in m.get("variables", {}).items():
+            check_entry(
+                f"models/{mname}/variables/{vname}",
+                vdef.get("units"),
+                vdef.get("default"),
+                vdef.get("default_units"),
+            )
+
+    for rsname, rs in data.get("reaction_systems", {}).items():
+        for sname, sdef in (rs.get("species") or {}).items():
+            check_entry(
+                f"reaction_systems/{rsname}/species/{sname}",
+                sdef.get("units"),
+                sdef.get("default"),
+                sdef.get("default_units"),
+            )
+        for pname, pdef in (rs.get("parameters") or {}).items():
+            check_entry(
+                f"reaction_systems/{rsname}/parameters/{pname}",
+                pdef.get("units"),
+                pdef.get("default"),
+                pdef.get("default_units"),
+            )
+
+
 def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
     """
     Check unit compatibility in equations.
@@ -1933,6 +1999,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     # Subsystem ref existence/parse is checked by resolve_subsystem_refs after
     # structural validation, which raises SubsystemRefError with richer context.
     _check_unit_consistency(data, tables, errors)
+    _check_default_units_consistency(data, errors)
     _check_event_references(data, tables, errors)
     _check_equation_balance(data, errors)
     _check_operator_state_coverage(data, errors)

@@ -1,0 +1,24 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BadUnitsModel",
+    "description": "Invalid: parameter default value units do not match declared units (K vs degC)",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-04-17T00:00:00Z"
+  },
+
+  "models": {
+    "BadUnitsModel": {
+      "variables": {
+        "temperature": {
+          "type": "parameter",
+          "units": "K",
+          "default": 25.0,
+          "default_units": "degC",
+          "description": "Temperature parameter whose default value is 25 degC but declared in K"
+        }
+      },
+      "equations": []
+    }
+  }
+}

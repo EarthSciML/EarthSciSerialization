@@ -259,14 +259,16 @@ struct ModelVariable
     description::Union{String,Nothing}
     expression::Union{Expr,Nothing}
     units::Union{String,Nothing}
+    default_units::Union{String,Nothing}
 
     # Constructor with optional parameters
     ModelVariable(type::ModelVariableType;
                   default=nothing,
                   description=nothing,
                   expression=nothing,
-                  units=nothing) =
-        new(type, default, description, expression, units)
+                  units=nothing,
+                  default_units=nothing) =
+        new(type, default, description, expression, units, default_units)
 end
 
 """
@@ -426,10 +428,11 @@ struct Species
     units::Union{String,Nothing}
     default::Union{Float64,Nothing}
     description::Union{String,Nothing}
+    default_units::Union{String,Nothing}
 
     # Constructor with optional parameters
-    Species(name::String; units=nothing, default=nothing, description=nothing) =
-        new(name, units, default, description)
+    Species(name::String; units=nothing, default=nothing, description=nothing, default_units=nothing) =
+        new(name, units, default, description, default_units)
 end
 
 """
@@ -442,10 +445,11 @@ struct Parameter
     default::Float64
     description::Union{String,Nothing}
     units::Union{String,Nothing}
+    default_units::Union{String,Nothing}
 
     # Constructor with optional parameters
-    Parameter(name::String, default::Float64; description=nothing, units=nothing) =
-        new(name, default, description, units)
+    Parameter(name::String, default::Float64; description=nothing, units=nothing, default_units=nothing) =
+        new(name, default, description, units, default_units)
 end
 
 

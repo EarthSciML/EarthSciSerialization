@@ -67,6 +67,7 @@ class ModelVariable:
     type: Literal['state', 'parameter', 'observed']
     units: Optional[str] = None
     default: Optional[Any] = None
+    default_units: Optional[str] = None
     description: Optional[str] = None
     expression: Optional[Expr] = None
 
@@ -87,6 +88,7 @@ class Species:
     name: str
     units: Optional[str] = None
     default: Optional[float] = None
+    default_units: Optional[str] = None
     description: Optional[str] = None
     formula: Optional[str] = None  # Chemical formula
 
@@ -97,6 +99,7 @@ class Parameter:
     name: str
     value: Union[float, Expr]
     units: Optional[str] = None
+    default_units: Optional[str] = None
     description: Optional[str] = None
     uncertainty: Optional[float] = None
 

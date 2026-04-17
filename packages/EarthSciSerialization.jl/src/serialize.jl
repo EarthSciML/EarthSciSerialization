@@ -211,6 +211,9 @@ function serialize_model_variable(var::ModelVariable)::Dict{String,Any}
     if var.default !== nothing
         result["default"] = var.default
     end
+    if var.default_units !== nothing
+        result["default_units"] = var.default_units
+    end
     if var.description !== nothing
         result["description"] = var.description
     end
@@ -353,6 +356,9 @@ function serialize_species(species::Species)::Dict{String,Any}
     if species.default !== nothing
         result["default"] = species.default
     end
+    if species.default_units !== nothing
+        result["default_units"] = species.default_units
+    end
     if species.description !== nothing
         result["description"] = species.description
     end
@@ -375,6 +381,9 @@ function serialize_parameter(param::Parameter)::Dict{String,Any}
     end
     if param.units !== nothing
         result["units"] = param.units
+    end
+    if param.default_units !== nothing
+        result["default_units"] = param.default_units
     end
     return result
 end

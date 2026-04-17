@@ -2041,5 +2041,24 @@
     ],
     "is_valid": false,
     "notes": "Demonstrates two independent unit inconsistencies (addition of incompatible units, and transcendental function on dimensional argument) in one fixture. Validators may surface one or both depending on coverage; Python's validator currently only surfaces the addition case, while Julia/Rust/TS/Go also surface the transcendental case."
+  },
+
+  "units_parameter_default_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/temperature",
+        "code": "unit_inconsistency",
+        "message": "Parameter default value units do not match declared units",
+        "details": {
+          "variable": "temperature",
+          "declared_units": "K",
+          "default_value": 25.0,
+          "inferred_default_units": "degC"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Parameter declares units='K' but supplies default_units='degC'. Python's validator flags any difference between the declared and default unit identities (including same-dimension mismatches like K vs degC and dimensionally incompatible pairs like K vs kg). Julia/Rust/TS/Go currently accept the default_units field in the schema but do not yet emit this check — follow-up beads required for full cross-language support."
   }
 }

@@ -442,11 +442,13 @@ function coerce_model_variable(data::Any)::ModelVariable
     default = haskey(data, :default) && data.default !== nothing ? Float64(data.default) : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
     expression = haskey(data, :expression) && data.expression !== nothing ? parse_expression(data.expression) : nothing
+    default_units = haskey(data, :default_units) && data.default_units !== nothing ? string(data.default_units) : nothing
 
     return ModelVariable(var_type,
                         default=default,
                         description=description,
-                        expression=expression)
+                        expression=expression,
+                        default_units=default_units)
 end
 
 """
@@ -612,8 +614,9 @@ function coerce_species(name::String, data::Any)::Species
     units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
     default = haskey(data, :default) && data.default !== nothing ? Float64(data.default) : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    default_units = haskey(data, :default_units) && data.default_units !== nothing ? string(data.default_units) : nothing
 
-    return Species(name, units=units, default=default, description=description)
+    return Species(name, units=units, default=default, description=description, default_units=default_units)
 end
 
 """
@@ -659,8 +662,9 @@ function coerce_parameter(name::String, data::Any)::Parameter
     default = Float64(data.default)
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
     units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
+    default_units = haskey(data, :default_units) && data.default_units !== nothing ? string(data.default_units) : nothing
 
-    return Parameter(name, default, description=description, units=units)
+    return Parameter(name, default, description=description, units=units, default_units=default_units)
 end
 
 """
