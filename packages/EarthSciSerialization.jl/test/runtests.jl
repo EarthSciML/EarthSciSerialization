@@ -18,6 +18,7 @@ using JSON3
     include("mtk_metadata_test.jl")
     include("simulate_e2e_test.jl")
     include("tests_blocks_execution_test.jl")
+    include("units_fixture_consumption_test.jl")
     include("array_ops_test.jl")
     include("catalyst_extension_test.jl")
     include("reference_resolution_test.jl")
