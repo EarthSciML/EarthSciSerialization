@@ -1724,7 +1724,7 @@ Validate data against the ESM schema
 
 ### validateUnits
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:275`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:300`
 
 **Signature:**
 ```typescript
