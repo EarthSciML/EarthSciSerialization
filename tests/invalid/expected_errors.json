@@ -2013,6 +2013,38 @@
     "is_valid": false
   },
 
+  "units_gradient_operator_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/SpatialModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Gradient operator applied to variable with incompatible spatial units",
+        "details": {
+          "operator": "grad",
+          "variable": "c",
+          "variable_units": "mol/m^3",
+          "dim": "x",
+          "coordinate_units": null,
+          "equation_index": 0
+        }
+      },
+      {
+        "path": "/models/SpatialModel/variables/bad_sum",
+        "code": "unit_inconsistency",
+        "message": "Cannot add quantities with different units: 'm' + 'kg'",
+        "details": {
+          "operation": "addition",
+          "left_units": "m",
+          "right_units": "kg",
+          "variable": "bad_sum"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Primary demonstration: grad applied over coordinate 'x' whose units are undeclared in the domain — validators that model grad/div/laplacian must not assume a hardcoded metre denominator. The companion bad_sum observed variable is a secondary demonstration included so bindings that do not yet validate grad/div/laplacian (Julia, Rust, Python, Go) still surface this fixture as invalid. Currently the TypeScript validator is the only binding to surface the grad-specific inconsistency; follow-up beads track gradient support elsewhere."
+  },
+
   "units_mixed_dimensional_operations.esm": {
     "schema_errors": [],
     "structural_errors": [

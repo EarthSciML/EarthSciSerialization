@@ -81,6 +81,7 @@ export function parseUnit(unitStr: string): ParsedUnit {
 export function checkDimensions(
   expr: Expression,
   unitBindings: Map<string, ParsedUnit>,
+  coordinateBindings?: Map<string, ParsedUnit>,
 ): UnitResult {
   const warnings: string[] = []
 
@@ -101,7 +102,7 @@ export function checkDimensions(
   const op = node.op
   const args = node.args
 
-  const argResults = args.map((arg) => checkDimensions(arg, unitBindings))
+  const argResults = args.map((arg) => checkDimensions(arg, unitBindings, coordinateBindings))
   warnings.push(...argResults.flatMap((r) => r.warnings))
 
   const argDims = argResults.map((r) => r.dimensions)
@@ -159,8 +160,32 @@ export function checkDimensions(
     case 'grad':
     case 'div':
     case 'laplacian': {
+      // Spatial derivative: operand dimensions divided by the spatial
+      // coordinate's declared units. The coordinate is identified by
+      // `node.dim` and resolved against the enclosing model's domain.
+      // When the coordinate is declared in the domain but carries no
+      // units, we cannot infer the result's dimension — flag as
+      // unit_inconsistency rather than silently assuming metres. When
+      // no coordinate table is available (0D model, or the coord is
+      // simply not present in the domain), fall back to the legacy
+      // metre denominator so pre-existing fixtures that rely on the
+      // old behaviour keep validating.
+      const dimName = node.dim
       const lengthDims: ParsedUnit = { dims: { m: 1 }, scale: 1 }
-      return { dimensions: divideUnits(get(0), lengthDims), warnings }
+      if (!dimName || !coordinateBindings) {
+        return { dimensions: divideUnits(get(0), lengthDims), warnings }
+      }
+      const coordDims = coordinateBindings.get(dimName)
+      if (!coordDims) {
+        return { dimensions: divideUnits(get(0), lengthDims), warnings }
+      }
+      if (isDimensionless(coordDims)) {
+        warnings.push(
+          `Gradient operator applied to variable with incompatible spatial units: coordinate '${dimName}' has no declared units (unit_inconsistency)`,
+        )
+        return { dimensions: get(0), warnings }
+      }
+      return { dimensions: divideUnits(get(0), coordDims), warnings }
     }
 
     case 'exp':
@@ -320,13 +345,33 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
     }
   }
 
+  const coordinateBindingsFor = (domainName: string | null | undefined): Map<string, ParsedUnit> | undefined => {
+    if (!domainName || !file.domains) return undefined
+    const domain = file.domains[domainName]
+    if (!domain || !domain.spatial) return undefined
+    const coords = new Map<string, ParsedUnit>()
+    for (const [dimName, dim] of Object.entries(domain.spatial)) {
+      if (dim && typeof dim === 'object' && 'units' in dim && dim.units) {
+        coords.set(dimName, parseUnit(dim.units as string))
+      } else {
+        // Coordinate declared but without units — record as dimensionless
+        // so the gradient handler can emit a unit_inconsistency warning.
+        coords.set(dimName, dimensionless())
+      }
+    }
+    return coords
+  }
+
   if (file.models) {
     for (const [modelName, model] of Object.entries(file.models)) {
+      const coordinateBindings = coordinateBindingsFor(
+        'domain' in model ? (model.domain as string | null | undefined) : undefined,
+      )
       if ('equations' in model && model.equations) {
         for (const equation of model.equations) {
           try {
-            const lhsResult = checkDimensions(equation.lhs, unitBindings)
-            const rhsResult = checkDimensions(equation.rhs, unitBindings)
+            const lhsResult = checkDimensions(equation.lhs, unitBindings, coordinateBindings)
+            const rhsResult = checkDimensions(equation.rhs, unitBindings, coordinateBindings)
 
             const allSubWarnings = [...lhsResult.warnings, ...rhsResult.warnings]
             const hasUnknownVariable = allSubWarnings.some((w) => w.includes('Unknown variable'))
@@ -365,7 +410,7 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
         for (const [varName, variable] of Object.entries(model.variables)) {
           if (variable.type === 'observed' && variable.expression) {
             try {
-              const exprResult = checkDimensions(variable.expression, unitBindings)
+              const exprResult = checkDimensions(variable.expression, unitBindings, coordinateBindings)
               const varDims: ParsedUnit = variable.units
                 ? parseUnit(variable.units)
                 : dimensionless()
