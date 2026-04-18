@@ -39,7 +39,7 @@ func TestUnitsFixturesCrossBinding(t *testing.T) {
 			if err != nil {
 				t.Fatalf("load %s: %v", name, err)
 			}
-			if file.Models == nil || len(file.Models) == 0 {
+			if len(file.Models) == 0 {
 				t.Fatalf("%s: expected at least one model", name)
 			}
 			result := ValidateFile(file, string(content))
