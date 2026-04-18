@@ -675,11 +675,11 @@ func validateModelUnits(modelName string, model *Model, basePath string, result 
 }
 
 // validateReactionRateUnits enforces the mass-action dimensional constraint
-// from spec §7.4: rate * prod(substrate^stoich) must have dimensions of
-// species/time. The reference concentration unit is taken from the first
-// substrate, matching the Julia/Python/TS checks. Skipped for dimensionless
-// species (mol/mol, ppm, …) because atmospheric-chemistry rate expressions
-// commonly bake a number-density factor into the rate constant.
+// from spec §7.4: rate dimensions must equal concentration^(1-total_order)/time,
+// where the reference concentration unit is the first substrate's units.
+// Matches the Julia/Python/TS/Rust checks. Skipped for dimensionless species
+// (mol/mol, ppm, …) because atmospheric-chemistry rate expressions commonly
+// bake a number-density factor into the rate constant.
 func validateReactionRateUnits(systemName string, system *ReactionSystem, basePath string, result *StructuralValidationResult) {
 	raw := make(map[string]string)
 	for name, sp := range system.Species {
@@ -717,25 +717,21 @@ func validateReactionRateUnits(systemName string, system *ReactionSystem, basePa
 			continue
 		}
 
-		substrateUnit := Unit{Scale: 1.0}
 		totalOrder := 0
 		resolvable := true
 		for _, sub := range rx.Substrates {
-			spUnit, ok := env[sub.Species]
-			if !ok {
+			if _, ok := env[sub.Species]; !ok {
 				resolvable = false
 				break
 			}
-			substrateUnit = substrateUnit.Multiply(spUnit.Power(sub.Stoichiometry))
 			totalOrder += sub.Stoichiometry
 		}
 		if !resolvable {
 			continue
 		}
 
-		expected := concUnit.Divide(timeUnit)
-		full := rateUnit.Multiply(substrateUnit)
-		if !full.Dim.Equal(expected.Dim) {
+		expectedRateUnit := concUnit.Power(1 - totalOrder).Divide(timeUnit)
+		if !rateUnit.Dim.Equal(expectedRateUnit.Dim) {
 			rateUnitsStr := ""
 			if varName, isVar := rateVarName(rx.Rate); isVar {
 				if p, ok := system.Parameters[varName]; ok && p.Units != nil {
@@ -749,21 +745,97 @@ func validateReactionRateUnits(systemName string, system *ReactionSystem, basePa
 				firstSpUnits = *s.Units
 			}
 			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
-				Path: rxPath,
-				Code: ErrorUnitInconsistency,
-				Message: fmt.Sprintf(
-					"Reaction rate expression has incompatible units for reaction stoichiometry (reaction %s, order %d, substrate species units '%s')",
-					rx.ID, totalOrder, firstSpUnits,
-				),
+				Path:    rxPath,
+				Code:    ErrorUnitInconsistency,
+				Message: "Reaction rate expression has incompatible units for reaction stoichiometry",
 				Details: map[string]interface{}{
-					"reaction_id":             rx.ID,
-					"rate_units":              rateUnitsStr,
-					"reaction_order":          totalOrder,
-					"substrate_species_units": firstSpUnits,
+					"reaction_id":         rx.ID,
+					"rate_units":          rateUnitsStr,
+					"expected_rate_units": formatExpectedRateUnits(firstSpUnits, totalOrder),
+					"reaction_order":      totalOrder,
 				},
 			})
 		}
 	}
+}
+
+// formatExpectedRateUnits composes the canonical rate-unit string from the
+// reference species unit string and total reaction order, matching the
+// contract in tests/invalid/expected_errors.json. Examples:
+//
+//	("mol/L", 2) → "L/(mol*s)"
+//	("mol/L", 1) → "1/s"
+//	("mol/L", 0) → "mol/(L*s)"
+//	("mol/m^3", 2) → "m^3/(mol*s)"
+func formatExpectedRateUnits(speciesUnits string, totalOrder int) string {
+	exp := 1 - totalOrder
+	if exp == 0 {
+		return "1/s"
+	}
+	num, den := splitUnitNumDen(speciesUnits)
+	if exp < 0 {
+		num, den = den, num
+		exp = -exp
+	}
+	numStr := powerFactor(num, exp)
+	denFactors := []string{}
+	if df := powerFactor(den, exp); df != "" {
+		denFactors = append(denFactors, df)
+	}
+	denFactors = append(denFactors, "s")
+	if numStr == "" {
+		numStr = "1"
+	}
+	if len(denFactors) == 1 {
+		return numStr + "/" + denFactors[0]
+	}
+	return numStr + "/(" + strings.Join(denFactors, "*") + ")"
+}
+
+// splitUnitNumDen splits a unit string like "mol/L" into ("mol", "L") or
+// "mol/(L*s)" into ("mol", "L*s"). The split is on the first top-level '/'.
+// Returns ("", "") for an empty string. If no '/' appears, the whole string
+// is the numerator.
+func splitUnitNumDen(s string) (string, string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+	depth := 0
+	for i, r := range s {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '/':
+			if depth == 0 {
+				num := strings.TrimSpace(s[:i])
+				den := strings.TrimSpace(s[i+1:])
+				den = strings.TrimPrefix(den, "(")
+				den = strings.TrimSuffix(den, ")")
+				return num, den
+			}
+		}
+	}
+	return s, ""
+}
+
+// powerFactor raises a unit factor to an integer power, rendering the result
+// as a string. Parenthesizes compound factors for clarity when the power is
+// not 1.
+func powerFactor(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if n == 1 {
+		return s
+	}
+	if strings.ContainsAny(s, "*/") {
+		return fmt.Sprintf("(%s)^%d", s, n)
+	}
+	return fmt.Sprintf("%s^%d", s, n)
 }
 
 // rateVarName returns the variable name if the rate expression is a bare

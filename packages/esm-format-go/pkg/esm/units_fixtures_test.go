@@ -1,6 +1,7 @@
 package esm
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -75,14 +76,33 @@ func TestReactionRateUnitsMismatchFixtureRejected(t *testing.T) {
 	if result.IsValid {
 		t.Fatalf("expected fixture to fail validation, got is_valid=true")
 	}
-	found := false
-	for _, e := range result.StructuralErrors {
+	var found *StructuralError
+	for i, e := range result.StructuralErrors {
 		if e.Code == ErrorUnitInconsistency {
-			found = true
+			found = &result.StructuralErrors[i]
 			break
 		}
 	}
-	if !found {
+	if found == nil {
 		t.Fatalf("expected unit_inconsistency error, got: %+v", result.StructuralErrors)
 	}
+	// Match the contract in tests/invalid/expected_errors.json.
+	if found.Message != "Reaction rate expression has incompatible units for reaction stoichiometry" {
+		t.Errorf("unexpected message: %q", found.Message)
+	}
+	expectDetail := func(key string, want interface{}) {
+		t.Helper()
+		got, ok := found.Details[key]
+		if !ok {
+			t.Errorf("details[%q] missing", key)
+			return
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("details[%q] = %v, want %v", key, got, want)
+		}
+	}
+	expectDetail("reaction_id", "R1")
+	expectDetail("rate_units", "1/s")
+	expectDetail("expected_rate_units", "L/(mol*s)")
+	expectDetail("reaction_order", 2)
 }
