@@ -3665,7 +3665,7 @@ Get a summary of all collected errors and warnings.
 
 ### get_system_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:882`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:976`
 
 **Signature:**
 ```julia
@@ -5551,7 +5551,7 @@ system(...)
 
 ### system_exists_in_file
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:619`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:713`
 
 **Signature:**
 ```julia
@@ -5866,7 +5866,7 @@ validate(...)
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:163`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:164`
 
 **Signature:**
 ```julia
@@ -5886,7 +5886,7 @@ Returns ValidationResult with all errors and warnings.
 
 ### validate_coupling_multi_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:899`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:993`
 
 **Signature:**
 ```julia
@@ -5904,7 +5904,7 @@ Validate coupling interface and lifting fields:
 
 ### validate_coupling_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:328`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:329`
 
 **Signature:**
 ```julia
@@ -5948,7 +5948,7 @@ Checks that the left-hand side and right-hand side have the same dimensions.
 
 ### validate_event_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:650`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:744`
 
 **Signature:**
 ```julia
@@ -5966,7 +5966,7 @@ functional affect refs valid.
 
 ### validate_event_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:482`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:483`
 
 **Signature:**
 ```julia
@@ -5982,7 +5982,7 @@ Validate event variable references.
 
 ### validate_expression_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:289`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:290`
 
 **Signature:**
 ```julia
@@ -6025,7 +6025,7 @@ Returns true if all models and reaction systems pass dimensional validation.
 
 ### validate_interface_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:812`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:906`
 
 **Signature:**
 ```julia
@@ -6042,7 +6042,7 @@ valid dimensions from the domains they belong to.
 
 ### validate_model_balance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:186`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:187`
 
 **Signature:**
 ```julia
@@ -6086,7 +6086,7 @@ Returns true if all equations are dimensionally consistent.
 
 ### validate_model_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:257`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:258`
 
 **Signature:**
 ```julia
@@ -6102,7 +6102,7 @@ Validate variable references within a model.
 
 ### validate_multi_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:732`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:826`
 
 **Signature:**
 ```julia
@@ -6123,7 +6123,7 @@ Validate multi-domain consistency:
 
 ### validate_reaction_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:519`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:520`
 
 **Signature:**
 ```julia
@@ -6135,6 +6135,39 @@ validate_reaction_consistency(rs::ReactionSystem, path::String) -> Vector{Struct
 
 Validate reaction system consistency: species declared, positive stoichiometries,
 no null-null reactions, rate references declared.
+
+---
+
+### validate_reaction_rate_units
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+validate_reaction_rate_units(...)
+```
+
+---
+
+### validate_reaction_rate_units
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:626`
+
+**Signature:**
+```julia
+function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{StructuralError}
+```
+
+**Description:**
+validate_reaction_rate_units(rs::ReactionSystem, path::String) -> Vector{StructuralError}
+
+Enforce the mass-action dimensional constraint from spec §7.4: for each reaction,
+rate * prod(substrate^stoichiometry) must have dimensions of species/time. The
+reference concentration unit is taken from the first substrate (matching TS/Python).
+
+The check is skipped when the reference concentration unit is dimensionless
+(mol/mol, ppm, …) because atmospheric-chemistry rate expressions commonly bake
+a number-density factor into rate constants.
 
 ---
 
@@ -6168,7 +6201,7 @@ For reactions, validates that rate expressions have appropriate dimensions
 
 ### validate_reference_integrity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:234`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:235`
 
 **Signature:**
 ```julia
@@ -6240,7 +6273,7 @@ Each error contains the path, message, and keyword for debugging.
 
 ### validate_single_event_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:678`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:772`
 
 **Signature:**
 ```julia

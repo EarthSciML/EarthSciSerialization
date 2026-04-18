@@ -1896,6 +1896,24 @@ function validate_model_dimensions(model::Model)::Bool
 
 ---
 
+### validate_reaction_rate_units
+
+**Julia:**
+```julia
+validate_reaction_rate_units(...)
+```
+
+**Julia:**
+```julia
+function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{StructuralError}
+```
+
+> validate_reaction_rate_units(rs::ReactionSystem, path::String) -> Vector{StructuralError}
+
+Enforce the mass-action dimensional constraint from spec §7.
+
+---
+
 ### validate_reaction_system_dimensions
 
 **Julia:**
