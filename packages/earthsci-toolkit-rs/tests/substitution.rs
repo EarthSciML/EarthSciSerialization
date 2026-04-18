@@ -399,3 +399,254 @@ fn test_substitution_variable_not_present() {
         "Substitution with non-present variable should return unchanged expression"
     );
 }
+
+// ========================================
+// Edge cases and error handling
+//
+// Substitution semantics documented in CONFORMANCE_SPEC.md §2.2.3:
+// - single-pass (non-transitive): bindings are applied once, not re-applied
+//   to their replacements, so mutual/self references terminate
+// - recursive over AST structure: arbitrary nesting is supported up to
+//   native stack limits
+// - operator nodes with empty args are valid inputs and are preserved
+// - null/None inputs have no Rust equivalent: Expr is a closed enum
+// ========================================
+
+/// Circular bindings must not loop: substitution is single-pass.
+///
+/// Mirrors Python's `test_substitute_circular_reference_detection`
+/// (test_substitute.py:295). With bindings {x -> y, y -> x}, substituting
+/// `x` yields `y` — the replacement `y` is NOT re-resolved via the `y -> x`
+/// binding. This ensures termination for mutually-referential bindings
+/// without needing explicit cycle detection.
+#[test]
+fn test_substitute_circular_reference_single_pass() {
+    let expr = Expr::Variable("x".to_string());
+    let mut substitutions = HashMap::new();
+    substitutions.insert("x".to_string(), Expr::Variable("y".to_string()));
+    substitutions.insert("y".to_string(), Expr::Variable("x".to_string()));
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    // Single-pass: x -> y (the y is NOT re-substituted back to x)
+    assert_eq!(
+        result,
+        Expr::Variable("y".to_string()),
+        "Circular bindings should resolve via single pass, not iterate"
+    );
+}
+
+/// Self-referential binding {x -> x} must terminate with x unchanged.
+#[test]
+fn test_substitute_self_reference_terminates() {
+    let expr = Expr::Variable("x".to_string());
+    let mut substitutions = HashMap::new();
+    substitutions.insert("x".to_string(), Expr::Variable("x".to_string()));
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    assert_eq!(
+        result,
+        Expr::Variable("x".to_string()),
+        "Self-referential binding should yield the same variable (single-pass)"
+    );
+}
+
+/// Self-referential binding inside a nested operator must also terminate.
+#[test]
+fn test_substitute_self_reference_in_nested_expression() {
+    let expr = Expr::Operator(ExpressionNode {
+        op: "+".to_string(),
+        args: vec![
+            Expr::Variable("x".to_string()),
+            Expr::Operator(ExpressionNode {
+                op: "*".to_string(),
+                args: vec![Expr::Variable("x".to_string()), Expr::Number(2.0)],
+                ..Default::default()
+            }),
+        ],
+        ..Default::default()
+    });
+    let mut substitutions = HashMap::new();
+    substitutions.insert(
+        "x".to_string(),
+        Expr::Operator(ExpressionNode {
+            op: "+".to_string(),
+            args: vec![Expr::Variable("x".to_string()), Expr::Number(1.0)],
+            ..Default::default()
+        }),
+    );
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    // Each occurrence of x is replaced once; the inner `x` inside the
+    // replacement is NOT further substituted.
+    if let Expr::Operator(node) = &result {
+        assert_eq!(node.op, "+");
+        assert_eq!(node.args.len(), 2);
+        if let Expr::Operator(inner) = &node.args[0] {
+            assert_eq!(inner.op, "+");
+            assert_eq!(inner.args.len(), 2);
+            assert_eq!(inner.args[0], Expr::Variable("x".to_string()));
+            assert_eq!(inner.args[1], Expr::Number(1.0));
+        } else {
+            panic!("Expected first arg to be operator node");
+        }
+    } else {
+        panic!("Expected operator result");
+    }
+}
+
+/// Mutually-referential bindings applied to a compound expression.
+///
+/// {a -> b, b -> a} applied to `(a + b)` produces `(b + a)` — each
+/// variable is rewritten exactly once.
+#[test]
+fn test_substitute_mutual_reference_compound() {
+    let expr = Expr::Operator(ExpressionNode {
+        op: "+".to_string(),
+        args: vec![
+            Expr::Variable("a".to_string()),
+            Expr::Variable("b".to_string()),
+        ],
+        ..Default::default()
+    });
+    let mut substitutions = HashMap::new();
+    substitutions.insert("a".to_string(), Expr::Variable("b".to_string()));
+    substitutions.insert("b".to_string(), Expr::Variable("a".to_string()));
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    if let Expr::Operator(node) = result {
+        assert_eq!(node.args[0], Expr::Variable("b".to_string()));
+        assert_eq!(node.args[1], Expr::Variable("a".to_string()));
+    } else {
+        panic!("Expected operator result");
+    }
+}
+
+/// Deep nesting must not overflow the stack at reasonable depths.
+///
+/// Mirrors Python's `test_substitute_deep_nesting` (test_substitute.py:310).
+/// Python uses depth 5; we exercise a stronger bound to catch accidental
+/// stack-consumption regressions.
+#[test]
+fn test_substitute_deep_nesting() {
+    const DEPTH: usize = 200;
+
+    // Build: ((((x + v0) + v1) + v2) ... + v{DEPTH-1})
+    let mut expr = Expr::Variable("x".to_string());
+    for i in 0..DEPTH {
+        expr = Expr::Operator(ExpressionNode {
+            op: "+".to_string(),
+            args: vec![expr, Expr::Variable(format!("v{}", i))],
+            ..Default::default()
+        });
+    }
+
+    let mut substitutions = HashMap::new();
+    substitutions.insert("x".to_string(), Expr::Number(1.0));
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    // Verify the innermost `x` was replaced, by walking down the left spine.
+    let mut cursor = &result;
+    for _ in 0..DEPTH {
+        match cursor {
+            Expr::Operator(node) => {
+                assert_eq!(node.op, "+");
+                assert_eq!(node.args.len(), 2);
+                cursor = &node.args[0];
+            }
+            _ => panic!("Expected operator at this depth"),
+        }
+    }
+    assert_eq!(
+        cursor,
+        &Expr::Number(1.0),
+        "Innermost variable x should be replaced with 1.0"
+    );
+}
+
+/// Operator node with empty args is a structurally valid Expr and is
+/// returned unchanged (modulo allocation) — no panic, no error.
+///
+/// Mirrors Python's `test_substitute_with_invalid_expression`
+/// (test_substitute.py:286), which exercises `{"op": "+"}` (missing args).
+/// In Rust, the closest analogue is an `ExpressionNode` with `args: vec![]`.
+#[test]
+fn test_substitute_operator_with_empty_args() {
+    let expr = Expr::Operator(ExpressionNode {
+        op: "+".to_string(),
+        args: vec![],
+        ..Default::default()
+    });
+    let mut substitutions = HashMap::new();
+    substitutions.insert("x".to_string(), Expr::Variable("y".to_string()));
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    if let Expr::Operator(node) = result {
+        assert_eq!(node.op, "+");
+        assert!(
+            node.args.is_empty(),
+            "Empty-args operator should remain empty-args"
+        );
+    } else {
+        panic!("Expected operator result");
+    }
+}
+
+/// Empty substitutions map: every expression is returned structurally equal.
+#[test]
+fn test_substitute_empty_substitutions_on_compound() {
+    let expr = Expr::Operator(ExpressionNode {
+        op: "*".to_string(),
+        args: vec![
+            Expr::Variable("x".to_string()),
+            Expr::Operator(ExpressionNode {
+                op: "+".to_string(),
+                args: vec![Expr::Variable("y".to_string()), Expr::Number(1.0)],
+                ..Default::default()
+            }),
+        ],
+        wrt: Some("t".to_string()),
+        dim: Some("time".to_string()),
+        ..Default::default()
+    });
+    let substitutions: HashMap<String, Expr> = HashMap::new();
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    assert_eq!(
+        serde_json::to_value(&result).unwrap(),
+        serde_json::to_value(&expr).unwrap(),
+        "Empty substitutions should yield structurally equal expression"
+    );
+}
+
+/// Substituting a variable with a number literal preserves wrt/dim on the
+/// enclosing operator node.
+#[test]
+fn test_substitute_preserves_operator_metadata() {
+    let expr = Expr::Operator(ExpressionNode {
+        op: "D".to_string(),
+        args: vec![Expr::Variable("x".to_string())],
+        wrt: Some("t".to_string()),
+        dim: Some("time".to_string()),
+        ..Default::default()
+    });
+    let mut substitutions = HashMap::new();
+    substitutions.insert("x".to_string(), Expr::Number(3.14));
+
+    let result = substitute_in_expression(&expr, &substitutions);
+
+    if let Expr::Operator(node) = result {
+        assert_eq!(node.op, "D");
+        assert_eq!(node.wrt, Some("t".to_string()));
+        assert_eq!(node.dim, Some("time".to_string()));
+        assert_eq!(node.args[0], Expr::Number(3.14));
+    } else {
+        panic!("Expected operator result");
+    }
+}

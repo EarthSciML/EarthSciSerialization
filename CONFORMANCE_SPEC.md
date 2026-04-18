@@ -113,6 +113,43 @@ Examples:
 - `expected`: Expected result after substitution
 - `description`: Test case explanation
 
+**Substitution semantics (normative):**
+
+All implementations MUST implement `substitute` with the following behavior:
+
+1. **Single-pass (non-transitive).** Bindings are applied once; replacements
+   are not themselves re-substituted. Given bindings `{x -> y, y -> x}`,
+   substituting `x` yields `y` (not `x` again). This guarantees termination
+   for self-referential and mutually-referential bindings without requiring
+   explicit cycle detection.
+2. **Recursive over AST structure.** Substitution descends into every
+   `args` child of an operator node. Nesting is bounded only by the host
+   language's native stack; implementations SHOULD support at least 200
+   levels of structural nesting in typical configurations.
+3. **Operator-node metadata is preserved.** Fields such as `wrt`, `dim`
+   (and other sidecar fields like `arrayop`'s `expr`, `output_idx`,
+   `ranges`, `reduce`) are carried through unchanged.
+4. **Empty-args operator nodes are valid inputs.** A node with `"op": "+"`
+   and no `args` (or `args: []`) MUST NOT panic or raise; it is returned
+   structurally equivalent.
+5. **Unbound variables are passed through.** A variable not present in the
+   substitutions map is returned unchanged.
+6. **Empty substitutions map is the identity.** The output is structurally
+   equal to the input.
+7. **Null / missing inputs.** Dynamically-typed implementations (Python)
+   MAY accept `None`/`null` and return it verbatim. Statically-typed
+   implementations (Rust, Julia) use closed expression types where `null`
+   is not representable, so this case does not apply and no conformance
+   test is required.
+
+These semantics are exercised by:
+- Python: `packages/earthsci_toolkit/tests/test_substitute.py`
+  (class `TestSubstitutionErrorHandling`)
+- Rust: `packages/earthsci-toolkit-rs/tests/substitution.rs`
+  (the `edge cases and error handling` section)
+- Julia: `packages/EarthSciSerialization.jl/test/expression_test.jl`
+  (`@testset "substitute edge cases"`)
+
 #### 2.2.4 Graph Generation Tests (`tests/graphs/`)
 
 **Purpose:** Verify system and expression graph generation consistency.

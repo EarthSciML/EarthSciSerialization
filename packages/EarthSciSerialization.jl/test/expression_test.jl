@@ -207,6 +207,107 @@ using EarthSciSerialization
         @test VarExpr("y") in simplified.args
     end
 
+    @testset "substitute edge cases" begin
+        # Substitution semantics (see CONFORMANCE_SPEC.md §2.2.3):
+        # - single-pass (non-transitive): bindings are not re-applied to their
+        #   own replacements, so circular/self-referential bindings terminate
+        # - recursive over AST structure: arbitrary nesting is supported up to
+        #   native stack limits
+        # - OpExpr nodes with empty args are valid inputs and preserved
+        # - null/missing inputs have no Julia equivalent: Expr is a typed union
+
+        # --- Circular references: single-pass, no cycle detection needed ---
+        # Mirrors Python test_substitute_circular_reference_detection
+        # (test_substitute.py:295). With bindings {x => y, y => x}, substituting
+        # `x` yields `y` — the replacement `y` is NOT re-resolved.
+        var_x = VarExpr("x")
+        var_y = VarExpr("y")
+        circular_bindings = Dict{String,EarthSciSerialization.Expr}(
+            "x" => var_y,
+            "y" => var_x,
+        )
+        @test substitute(var_x, circular_bindings) === var_y
+        @test substitute(var_y, circular_bindings) === var_x
+
+        # Self-referential binding {x => x} must terminate with x unchanged.
+        self_bindings = Dict{String,EarthSciSerialization.Expr}("x" => var_x)
+        @test substitute(var_x, self_bindings) === var_x
+
+        # Mutual reference within a compound expression: each var rewritten once.
+        sum_xy = OpExpr("+", EarthSciSerialization.Expr[var_x, var_y])
+        result = substitute(sum_xy, circular_bindings)
+        @test result isa OpExpr
+        @test result.args[1] === var_y
+        @test result.args[2] === var_x
+
+        # Self-reference inside a nested replacement: inner x NOT re-substituted.
+        inner_x_plus_one = OpExpr("+", EarthSciSerialization.Expr[var_x, NumExpr(1.0)])
+        nested_self = Dict{String,EarthSciSerialization.Expr}("x" => inner_x_plus_one)
+        nested_result = substitute(var_x, nested_self)
+        @test nested_result isa OpExpr
+        @test nested_result.op == "+"
+        @test nested_result.args[1] === var_x  # NOT recursed into
+        @test nested_result.args[2] == NumExpr(1.0)
+
+        # --- Deep nesting: recursive, bounded only by Julia's stack ---
+        # Mirrors Python test_substitute_deep_nesting (test_substitute.py:310);
+        # Python uses depth 5, we use a stronger bound.
+        depth = 200
+        deep_expr = var_x
+        for i in 0:(depth - 1)
+            deep_expr = OpExpr("+", EarthSciSerialization.Expr[deep_expr, VarExpr("v$i")])
+        end
+        deep_bindings = Dict{String,EarthSciSerialization.Expr}("x" => NumExpr(1.0))
+        deep_result = substitute(deep_expr, deep_bindings)
+
+        # Walk the left spine down to the innermost x; it should be replaced.
+        cursor = deep_result
+        for _ in 1:depth
+            @test cursor isa OpExpr
+            @test cursor.op == "+"
+            @test length(cursor.args) == 2
+            cursor = cursor.args[1]
+        end
+        @test cursor == NumExpr(1.0)
+
+        # --- Empty OpExpr args: structurally valid, preserved ---
+        # Closest analogue to Python's {"op": "+"} (missing args) — an OpExpr
+        # with empty args is valid and substitution returns an equivalent node.
+        empty_op = OpExpr("+", EarthSciSerialization.Expr[])
+        any_bindings = Dict{String,EarthSciSerialization.Expr}("x" => NumExpr(42.0))
+        empty_result = substitute(empty_op, any_bindings)
+        @test empty_result isa OpExpr
+        @test empty_result.op == "+"
+        @test isempty(empty_result.args)
+
+        # --- Empty bindings: identity on compound expressions ---
+        compound = OpExpr(
+            "*",
+            EarthSciSerialization.Expr[
+                var_x,
+                OpExpr("+", EarthSciSerialization.Expr[var_y, NumExpr(1.0)]),
+            ];
+            wrt="t",
+            dim="time",
+        )
+        empty_bindings = Dict{String,EarthSciSerialization.Expr}()
+        id_result = substitute(compound, empty_bindings)
+        @test id_result isa OpExpr
+        @test id_result.op == "*"
+        @test id_result.wrt == "t"
+        @test id_result.dim == "time"
+        @test id_result.args[1] === var_x
+
+        # --- Metadata preservation through substitution ---
+        d_expr = OpExpr("D", EarthSciSerialization.Expr[var_x]; wrt="t", dim="time")
+        num_bindings = Dict{String,EarthSciSerialization.Expr}("x" => NumExpr(3.14))
+        d_result = substitute(d_expr, num_bindings)
+        @test d_result.op == "D"
+        @test d_result.wrt == "t"
+        @test d_result.dim == "time"
+        @test d_result.args[1] == NumExpr(3.14)
+    end
+
     @testset "Integration tests" begin
         # Test substitute + simplify
         expr = OpExpr("*", EarthSciSerialization.Expr[OpExpr("+", EarthSciSerialization.Expr[VarExpr("x"), NumExpr(0.0)]), VarExpr("y")])
