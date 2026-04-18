@@ -148,6 +148,95 @@ end
         @test haskey(m2.variables, "x")
     end
 
+    # Parity with Python test_substitute.py::TestReactionSystemSubstitution
+    # (packages/earthsci_toolkit/tests/test_substitute.py lines 214-283).
+    # Julia has no substitute_in_reaction_system helper, so we apply
+    # `substitute` directly to each reaction's rate expression, rebuild the
+    # system, and assert that stoichiometry/coupling references are preserved.
+    @testset "substitute rewrites rate expressions (simple)" begin
+        # Rate: k * param_rate, bindings: param_rate -> A
+        rate = OpExpr("*", ESS.Expr[VarExpr("k"), VarExpr("param_rate")])
+        rxn = Reaction("R1", [SE("A", 1)], [SE("B", 1)], rate)
+        sys = ReactionSystem(
+            [Species("A"), Species("B")],
+            [rxn];
+            parameters=[Parameter("k", 0.1)],
+        )
+
+        bindings = Dict{String,ESS.Expr}("param_rate" => VarExpr("A"))
+        new_rate = substitute(sys.reactions[1].rate, bindings)
+
+        @test new_rate isa OpExpr
+        @test new_rate.op == "*"
+        @test new_rate.args[1] isa VarExpr && new_rate.args[1].name == "k"
+        @test new_rate.args[2] isa VarExpr && new_rate.args[2].name == "A"
+
+        # Substituting the rate must not disturb coupling references:
+        # substrates/products still point to "A" / "B" with the original
+        # stoichiometries, and species/parameter lists are unchanged.
+        # Raw field access — `.products`/`.reactants` go through a
+        # backward-compat Dict shim (see types.jl getproperty).
+        @test getfield(sys.reactions[1], :substrates) == [SE("A", 1)]
+        @test getfield(sys.reactions[1], :products) == [SE("B", 1)]
+        @test [s.name for s in sys.species] == ["A", "B"]
+        @test [p.name for p in sys.parameters] == ["k"]
+    end
+
+    @testset "substitute rewrites rate expressions (nested operators)" begin
+        # Rate: k * temp^2, bindings: k -> 0.1, temp -> T
+        inner = OpExpr("^", ESS.Expr[VarExpr("temp"), NumExpr(2.0)])
+        rate = OpExpr("*", ESS.Expr[VarExpr("k"), inner])
+        # Source reaction (no substrates) to mirror the Python fixture shape.
+        rxn = Reaction("R1", nothing, [SE("A", 1)], rate)
+        sys = ReactionSystem([Species("A")], [rxn])
+
+        bindings = Dict{String,ESS.Expr}(
+            "k" => NumExpr(0.1),
+            "temp" => VarExpr("T"),
+        )
+        new_rate = substitute(sys.reactions[1].rate, bindings)
+
+        # Expected: 0.1 * (T ^ 2)
+        @test new_rate isa OpExpr && new_rate.op == "*"
+        @test new_rate.args[1] isa NumExpr && new_rate.args[1].value == 0.1
+        @test new_rate.args[2] isa OpExpr && new_rate.args[2].op == "^"
+        @test new_rate.args[2].args[1] isa VarExpr &&
+              new_rate.args[2].args[1].name == "T"
+        @test new_rate.args[2].args[2] isa NumExpr &&
+              new_rate.args[2].args[2].value == 2.0
+
+        # Source reaction shape preserved: substrates remain `nothing`,
+        # products still reference species "A". Use getfield to bypass the
+        # Dict-returning property shim.
+        @test getfield(sys.reactions[1], :substrates) === nothing
+        @test getfield(sys.reactions[1], :products) == [SE("A", 1)]
+    end
+
+    @testset "substitute preserves reaction-system structure" begin
+        # Rate is a bare variable "param"; binding param -> k swaps the rate
+        # reference onto an existing parameter.
+        rxn = Reaction("R1", nothing, [SE("A", 1)], VarExpr("param"))
+        sys = ReactionSystem(
+            [Species("A", default=18.0)],
+            [rxn];
+            parameters=[Parameter("k", 0.1; units="1/s")],
+        )
+
+        bindings = Dict{String,ESS.Expr}("param" => VarExpr("k"))
+        new_rate = substitute(sys.reactions[1].rate, bindings)
+
+        # Rewritten rate is the bound VarExpr.
+        @test new_rate isa VarExpr && new_rate.name == "k"
+
+        # Species/parameter metadata and reaction identity untouched —
+        # ensures coupling references (species names, parameter names,
+        # reaction ids) remain consistent across substitution.
+        @test sys.species[1].default == 18.0
+        @test sys.parameters[1].units == "1/s"
+        @test sys.reactions[1].id == "R1"
+        @test getfield(sys.reactions[1], :products) == [SE("A", 1)]
+    end
+
     @testset "add_reaction / remove_reaction" begin
         sys = _make_reaction_system()
         @test length(sys.reactions) == 1
