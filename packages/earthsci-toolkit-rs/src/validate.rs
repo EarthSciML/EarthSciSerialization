@@ -761,15 +761,15 @@ fn validate_reaction_rate_units(
 /// expressions because raw-source rendering is not round-trippable here.
 fn reaction_rate_units_str(rate: &crate::Expr, rs: &crate::ReactionSystem) -> String {
     if let crate::Expr::Variable(name) = rate {
-        if let Some(p) = rs.parameters.get(name) {
-            if let Some(u) = &p.units {
-                return u.clone();
-            }
+        if let Some(p) = rs.parameters.get(name)
+            && let Some(u) = &p.units
+        {
+            return u.clone();
         }
-        if let Some(s) = rs.species.get(name) {
-            if let Some(u) = &s.units {
-                return u.clone();
-            }
+        if let Some(s) = rs.species.get(name)
+            && let Some(u) = &s.units
+        {
+            return u.clone();
         }
     }
     String::new()

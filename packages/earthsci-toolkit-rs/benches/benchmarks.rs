@@ -78,6 +78,8 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             description: None,
             discrete_events: None,
             continuous_events: None,
+            tolerance: None,
+            tests: None,
         };
 
         models.insert(format!("model_{}", i), model);

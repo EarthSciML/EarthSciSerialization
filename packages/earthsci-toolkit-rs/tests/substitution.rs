@@ -637,7 +637,7 @@ fn test_substitute_preserves_operator_metadata() {
         ..Default::default()
     });
     let mut substitutions = HashMap::new();
-    substitutions.insert("x".to_string(), Expr::Number(3.14));
+    substitutions.insert("x".to_string(), Expr::Number(2.5));
 
     let result = substitute_in_expression(&expr, &substitutions);
 
@@ -645,7 +645,7 @@ fn test_substitute_preserves_operator_metadata() {
         assert_eq!(node.op, "D");
         assert_eq!(node.wrt, Some("t".to_string()));
         assert_eq!(node.dim, Some("time".to_string()));
-        assert_eq!(node.args[0], Expr::Number(3.14));
+        assert_eq!(node.args[0], Expr::Number(2.5));
     } else {
         panic!("Expected operator result");
     }

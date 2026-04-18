@@ -42,10 +42,12 @@ fn resolve_tol(
     test_tol: Option<&Tolerance>,
     assertion_tol: Option<&Tolerance>,
 ) -> (f64, f64) {
-    for cand in [assertion_tol, test_tol, model_tol] {
-        if let Some(t) = cand {
-            return (t.rel.unwrap_or(0.0), t.abs.unwrap_or(0.0));
-        }
+    if let Some(t) = [assertion_tol, test_tol, model_tol]
+        .into_iter()
+        .flatten()
+        .next()
+    {
+        return (t.rel.unwrap_or(0.0), t.abs.unwrap_or(0.0));
     }
     (1e-6, 0.0)
 }
@@ -79,10 +81,10 @@ fn resolve_observed(model: &Model, bindings: &mut HashMap<String, f64>) {
 fn build_bindings(model: &Model, t: &ModelTest) -> HashMap<String, f64> {
     let mut bindings = HashMap::new();
     for (vname, var) in &model.variables {
-        if matches!(var.var_type, VariableType::Parameter | VariableType::State) {
-            if let Some(d) = var.default {
-                bindings.insert(vname.clone(), d);
-            }
+        if matches!(var.var_type, VariableType::Parameter | VariableType::State)
+            && let Some(d) = var.default
+        {
+            bindings.insert(vname.clone(), d);
         }
     }
     if let Some(ic) = &t.initial_conditions {
