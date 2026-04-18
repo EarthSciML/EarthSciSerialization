@@ -3777,7 +3777,7 @@ infer_variable_units(...)
 
 ### infer_variable_units
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:347`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:376`
 
 **Signature:**
 ```julia
@@ -6009,7 +6009,7 @@ validate_file_dimensions(...)
 
 ### validate_file_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:316`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/units.jl:345`
 
 **Signature:**
 ```julia
