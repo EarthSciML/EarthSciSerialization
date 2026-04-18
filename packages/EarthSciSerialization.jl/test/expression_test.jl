@@ -1,44 +1,61 @@
 using Test
 using EarthSciSerialization
+using JSON3
 
 @testset "EarthSciSerialization.Expression Operations" begin
 
     @testset "substitute function" begin
-        # Test NumExpr (should remain unchanged)
+        # Unit-level behaviors not expressible as fixture cases:
+        # object-identity preservation, wrt/dim passthrough.
         num = NumExpr(3.14)
         bindings = Dict{String,EarthSciSerialization.Expr}("x" => NumExpr(2.0))
         @test substitute(num, bindings) === num
 
-        # Test VarExpr with binding
         var_x = VarExpr("x")
         @test substitute(var_x, bindings) === bindings["x"]
 
-        # Test VarExpr without binding (should remain unchanged)
         var_y = VarExpr("y")
         @test substitute(var_y, bindings) === var_y
 
-        # Test OpExpr substitution
-        sum_expr = OpExpr("+", EarthSciSerialization.Expr[var_x, var_y])
-        result = substitute(sum_expr, bindings)
-        @test result isa OpExpr
-        @test result.op == "+"
-        @test length(result.args) == 2
-        @test result.args[1] === bindings["x"]
-        @test result.args[2] === var_y
-
-        # Test nested OpExpr substitution
-        nested = OpExpr("*", EarthSciSerialization.Expr[OpExpr("+", EarthSciSerialization.Expr[var_x, NumExpr(1.0)]), var_y])
-        result = substitute(nested, bindings)
-        @test result isa OpExpr
-        @test result.op == "*"
-        @test result.args[1] isa OpExpr
-        @test result.args[1].args[1] === bindings["x"]
-
-        # Test OpExpr with wrt and dim fields
         diff_expr = OpExpr("D", EarthSciSerialization.Expr[var_x], wrt="t", dim="time")
         result = substitute(diff_expr, bindings)
         @test result.wrt == "t"
         @test result.dim == "time"
+    end
+
+    @testset "substitute fixtures" begin
+        # Fixture-driven cases shared with Rust (packages/earthsci-toolkit-rs/tests/substitution.rs)
+        # and Python (packages/earthsci_toolkit/tests/test_substitute.py). A new fixture case
+        # lights up all three bindings at once.
+        fixtures_dir = joinpath(@__DIR__, "..", "..", "..", "tests", "substitution")
+        fixture_files = ["simple_var_replace.json", "nested_substitution.json", "scoped_reference.json"]
+
+        for filename in fixture_files
+            filepath = joinpath(fixtures_dir, filename)
+            @testset "$filename" begin
+                @test isfile(filepath)
+                cases = JSON3.read(read(filepath, String))
+                @test cases isa JSON3.Array
+                @test !isempty(cases)
+
+                for (i, case) in enumerate(cases)
+                    label = haskey(case, :description) ? String(case[:description]) : "case $i"
+                    @testset "$label" begin
+                        input_expr = EarthSciSerialization.parse_expression(case[:input])
+                        bindings = Dict{String,EarthSciSerialization.Expr}(
+                            string(k) => EarthSciSerialization.parse_expression(v)
+                            for (k, v) in pairs(case[:bindings])
+                        )
+                        expected = EarthSciSerialization.parse_expression(case[:expected])
+                        result = substitute(input_expr, bindings)
+                        # Expr structs have no `==` method, so compare via the
+                        # canonical JSON-serialized form.
+                        @test EarthSciSerialization.serialize_expression(result) ==
+                              EarthSciSerialization.serialize_expression(expected)
+                    end
+                end
+            end
+        end
     end
 
     @testset "free_variables function" begin

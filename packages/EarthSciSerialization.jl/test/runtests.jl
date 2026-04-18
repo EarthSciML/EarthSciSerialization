@@ -202,60 +202,8 @@ using JSON3
             end
         end
 
-        @testset "Substitution Tests" begin
-            # Test substitution functionality with fixture data
-            substitution_fixtures_dir = joinpath(@__DIR__, "..", "..", "..", "tests", "substitution")
-
-            if isdir(substitution_fixtures_dir)
-                substitution_files = filter(f -> endswith(f, ".json"), readdir(substitution_fixtures_dir))
-                @info "Testing $(length(substitution_files)) substitution fixture files"
-
-                for filename in substitution_files
-                    filepath = joinpath(substitution_fixtures_dir, filename)
-                    @testset "Substitution: $filename" begin
-                        try
-                            subst_data = JSON3.read(read(filepath, String))
-
-                            # Fixtures are arrays of {input, bindings, expected} cases.
-                            # Accept object-with-"tests" shape too for forward compatibility.
-                            cases = if subst_data isa JSON3.Array
-                                subst_data
-                            elseif subst_data isa JSON3.Object && haskey(subst_data, :tests)
-                                subst_data[:tests]
-                            else
-                                []
-                            end
-
-                            for test_case in cases
-                                test_case isa JSON3.Object || continue
-                                input_key = haskey(test_case, :input) ? :input :
-                                    (haskey(test_case, :expression) ? :expression : nothing)
-                                bindings_key = haskey(test_case, :bindings) ? :bindings :
-                                    (haskey(test_case, :substitutions) ? :substitutions : nothing)
-                                if input_key === nothing || bindings_key === nothing
-                                    continue
-                                end
-
-                                expr = EarthSciSerialization.parse_expression(test_case[input_key])
-                                substitutions = Dict{String, EarthSciSerialization.Expr}(
-                                    string(k) => EarthSciSerialization.parse_expression(v)
-                                    for (k, v) in pairs(test_case[bindings_key])
-                                )
-                                result = EarthSciSerialization.substitute(expr, substitutions)
-                                @test result isa EarthSciSerialization.Expr
-                            end
-
-                            @info "✓ Substitution test passed for $filename"
-                        catch e
-                            @warn "Substitution test failed for $filename: $e"
-                            @test false
-                        end
-                    end
-                end
-            else
-                @warn "Substitution fixtures directory not found: $substitution_fixtures_dir"
-            end
-        end
+        # Substitution fixture tests live in expression_test.jl, where they
+        # assert each case's expected output (not just that substitute runs).
     end
 
     @testset "Expression Types" begin
