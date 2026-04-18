@@ -1,0 +1,52 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BadReactions",
+    "description": "Invalid: rate constant units '1/s' do not match the 2nd-order reaction A + B -> C (expected L/(mol*s))",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-04-18T00:00:00Z"
+  },
+
+  "reaction_systems": {
+    "BadReactions": {
+      "species": {
+        "A": {
+          "units": "mol/L",
+          "default": 1.0,
+          "description": "Reactant A (concentration)"
+        },
+        "B": {
+          "units": "mol/L",
+          "default": 1.0,
+          "description": "Reactant B (concentration)"
+        },
+        "C": {
+          "units": "mol/L",
+          "default": 0.0,
+          "description": "Product C (concentration)"
+        }
+      },
+      "parameters": {
+        "k": {
+          "units": "1/s",
+          "default": 0.1,
+          "description": "Rate constant declared with 1st-order units (1/s) but used as the rate of a 2nd-order reaction, which requires units of 1/(M*s)"
+        }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "A_B_to_C",
+          "substrates": [
+            {"species": "A", "stoichiometry": 1},
+            {"species": "B", "stoichiometry": 1}
+          ],
+          "products": [
+            {"species": "C", "stoichiometry": 1}
+          ],
+          "rate": "k"
+        }
+      ]
+    }
+  }
+}

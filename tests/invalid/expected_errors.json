@@ -2060,5 +2060,24 @@
     ],
     "is_valid": false,
     "notes": "Parameter declares units='K' but supplies default_units='degC'. Python's validator flags any difference between the declared and default unit identities (including same-dimension mismatches like K vs degC and dimensionally incompatible pairs like K vs kg). Julia/Rust/TS/Go currently accept the default_units field in the schema but do not yet emit this check — follow-up beads required for full cross-language support."
+  },
+
+  "units_reaction_rate_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/reaction_systems/BadReactions/reactions/0",
+        "code": "unit_inconsistency",
+        "message": "Reaction rate expression has incompatible units for reaction stoichiometry",
+        "details": {
+          "reaction_id": "R1",
+          "rate_units": "1/s",
+          "expected_rate_units": "L/(mol*s)",
+          "reaction_order": 2
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "2nd-order reaction A + B -> C whose rate parameter 'k' is declared with 1/s units (appropriate for a 1st-order rate constant) instead of 1/(M*s). Julia's validate_reaction_system_dimensions compares the observed rate dimension to concentration^(1-total_order)/time derived from the first substrate's units and fails with @warn on mismatch. Rust/Python/TS/Go currently ignore this check — follow-up beads required for full cross-language support."
   }
 }

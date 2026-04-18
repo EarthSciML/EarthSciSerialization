@@ -1972,5 +1972,24 @@
       }
     ],
     "is_valid": false
+  },
+
+  "units_reaction_rate_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/reaction_systems/BadReactions/reactions/0",
+        "code": "unit_inconsistency",
+        "message": "Reaction rate expression has incompatible units for reaction stoichiometry",
+        "details": {
+          "reaction_id": "R1",
+          "rate_units": "1/s",
+          "expected_rate_units": "L/(mol*s)",
+          "reaction_order": 2
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Julia's validate_reaction_system_dimensions enforces this check; Python/Rust/TS/Go currently accept the file without this error. Follow-up beads required for full cross-language support."
   }
 }

@@ -296,9 +296,38 @@ function validate_reaction_system_dimensions(rxn_sys::ReactionSystem)::Bool
             # For second-order: 1/(concentration*time)
             expected_conc_power = 1 - total_order
 
-            # This is a simplified check - in practice, rate constant units depend on reaction order
             @debug "Reaction $i rate dimensions: $(dimension(rate_dim))"
             @debug "Reaction $i total order: $total_order, expected concentration power: $expected_conc_power"
+
+            # Derive the reference concentration unit from the first substrate
+            # species (falling back to the first species in the system). Only
+            # run the stoichiometric dimension check when that unit carries a
+            # real dimension — dimensionless mole-fraction species (mol/mol,
+            # ppm, …) leave the rate-constant convention ambiguous because
+            # authors commonly bake a number-density factor into the rate
+            # expression, and we would otherwise emit false positives for
+            # well-formed atmospheric-chemistry fixtures.
+            conc_ref_unit_str = ""
+            if reaction.substrates !== nothing && !isempty(reaction.substrates)
+                conc_ref_unit_str = get(var_units, reaction.substrates[1].species, "")
+            end
+            if isempty(conc_ref_unit_str) && !isempty(rxn_sys.species)
+                first_sp = rxn_sys.species[1]
+                conc_ref_unit_str = first_sp.units !== nothing ? first_sp.units : ""
+            end
+            conc_unit = parse_units(conc_ref_unit_str)
+            time_unit = parse_units("s")
+
+            if conc_unit !== nothing && time_unit !== nothing &&
+               dimension(conc_unit) != dimension(Unitful.NoUnits)
+                expected_rate_dim = conc_unit^expected_conc_power / time_unit
+                if dimension(rate_dim) != dimension(expected_rate_dim)
+                    @warn "Reaction $i ($(reaction.id)) rate expression has incompatible units for reaction stoichiometry"
+                    @warn "  Observed rate dimensions: $(dimension(rate_dim))"
+                    @warn "  Expected rate dimensions: $(dimension(expected_rate_dim)) (total order $total_order)"
+                    all_valid = false
+                end
+            end
         else
             @warn "Cannot determine dimensions for reaction $i rate expression"
             all_valid = false
