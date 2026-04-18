@@ -132,7 +132,7 @@ function to_python_code(file::EsmFile)
         end
     end
 
-    # Generate simulation stub
+    # Generate simulation setup
     push!(lines, "# Simulation setup")
     push!(lines, "tspan = (0, 10)  # time span")
     push!(lines, "parameters = {}  # parameter values")
@@ -251,24 +251,6 @@ function generate_reaction_system_code(name::String, reaction_system::ReactionSy
     # Generate @named ReactionSystem
     push!(lines, "")
     push!(lines, "@named $(name)_system = ReactionSystem(rxs)")
-
-    return lines
-end
-
-function generate_event_code(name::String, event::Union{ContinuousEvent,DiscreteEvent})
-    lines = String[]
-
-    if event isa ContinuousEvent
-        push!(lines, "# Continuous Event: $name")
-        condition = format_expression(event.condition)
-        affect = format_affect(event.affect)
-        push!(lines, "$(name)_event = SymbolicContinuousCallback($condition, $affect)")
-    else
-        push!(lines, "# Discrete Event: $name")
-        trigger = format_discrete_trigger(event.trigger)
-        affect = format_affect(event.affect)
-        push!(lines, "$(name)_event = DiscreteCallback($trigger, $affect)")
-    end
 
     return lines
 end
@@ -452,45 +434,6 @@ function format_expression_node(node::OpExpr)
         # For other operators, use function call syntax
         return "$op($(join(map(format_expression, args), ", ")))"
     end
-end
-
-function format_affect(affect)
-    if isa(affect, Vector)
-        return "[$(join(map(format_affect_equation, affect), ", "))]"
-    elseif !isnothing(affect)
-        return format_affect_equation(affect)
-    else
-        return "nothing"
-    end
-end
-
-function format_affect_equation(affect::AffectEquation)
-    lhs_expr = affect.lhs  # This is a String for variable name
-    rhs_expr = format_expression(affect.rhs)
-    return "$lhs_expr ~ $rhs_expr"
-end
-
-function format_affect_equation(affect)
-    # Fallback for other affect types
-    return "nothing"
-end
-
-function format_discrete_trigger(trigger::ConditionTrigger)
-    return format_expression(trigger.expression)
-end
-
-function format_discrete_trigger(trigger::PeriodicTrigger)
-    return "periodic_trigger($(trigger.period), $(trigger.phase))"
-end
-
-function format_discrete_trigger(trigger::PresetTimesTrigger)
-    times_str = join(string.(trigger.times), ", ")
-    return "preset_times_trigger([$times_str])"
-end
-
-function format_discrete_trigger(trigger)
-    # Fallback for other trigger types
-    return "true"
 end
 
 function extract_parameter_names(expr::Expr)
