@@ -83,6 +83,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [contains function](julia-contains-function.md)
 - [evaluate function](julia-evaluate-function.md)
 - [simplify function](julia-simplify-function.md)
+- [substitute edge cases](julia-substitute-edge-cases.md)
 - [Integration tests](julia-integration-tests.md)
 - [Display Tests](julia-display-tests.md)
 - [Chemical Formula Formatting](julia-chemical-formula-formatting.md)
