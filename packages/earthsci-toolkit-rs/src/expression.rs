@@ -142,14 +142,20 @@ fn evaluate_operator_with_unbound_tracking(
     match op {
         // Arithmetic operators
         "+" => {
-            if args.len() != 2 {
-                return Err(());
+            // n-ary addition: sum all args (matches Julia/Python/TS/Go).
+            // Empty args yields 0.0 (the additive identity).
+            let mut had_error = false;
+            let mut sum = 0.0;
+            for arg in args {
+                match evaluate_with_unbound_tracking(arg, bindings, unbound_vars) {
+                    Ok(v) => sum += v,
+                    Err(_) => had_error = true,
+                }
             }
-            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
-            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
-            match (a_result, b_result) {
-                (Ok(a), Ok(b)) => Ok(a + b),
-                _ => Err(()),
+            if had_error {
+                Err(())
+            } else {
+                Ok(sum)
             }
         }
         "-" => {
@@ -171,14 +177,20 @@ fn evaluate_operator_with_unbound_tracking(
             }
         }
         "*" => {
-            if args.len() != 2 {
-                return Err(());
+            // n-ary multiplication: product of all args (matches Julia/Python/TS/Go).
+            // Empty args yields 1.0 (the multiplicative identity).
+            let mut had_error = false;
+            let mut product = 1.0;
+            for arg in args {
+                match evaluate_with_unbound_tracking(arg, bindings, unbound_vars) {
+                    Ok(v) => product *= v,
+                    Err(_) => had_error = true,
+                }
             }
-            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
-            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
-            match (a_result, b_result) {
-                (Ok(a), Ok(b)) => Ok(a * b),
-                _ => Err(()),
+            if had_error {
+                Err(())
+            } else {
+                Ok(product)
             }
         }
         "/" => {
@@ -868,6 +880,48 @@ mod tests {
         let mut unbound_vars = result.unwrap_err();
         unbound_vars.sort();
         assert_eq!(unbound_vars, vec!["x", "y"]);
+    }
+
+    #[test]
+    fn test_evaluate_nary_add_and_mul() {
+        let bindings = HashMap::new();
+
+        // 3-ary +
+        let expr = Expr::Operator(ExpressionNode {
+            op: "+".to_string(),
+            args: vec![Expr::Number(1.0), Expr::Number(2.0), Expr::Number(3.0)],
+            ..Default::default()
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 6.0);
+
+        // 4-ary *
+        let expr = Expr::Operator(ExpressionNode {
+            op: "*".to_string(),
+            args: vec![
+                Expr::Number(2.0),
+                Expr::Number(3.0),
+                Expr::Number(4.0),
+                Expr::Number(5.0),
+            ],
+            ..Default::default()
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 120.0);
+
+        // 1-ary + (returns the arg, matches Julia unary plus)
+        let expr = Expr::Operator(ExpressionNode {
+            op: "+".to_string(),
+            args: vec![Expr::Number(7.0)],
+            ..Default::default()
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 7.0);
+
+        // 1-ary * (returns the arg)
+        let expr = Expr::Operator(ExpressionNode {
+            op: "*".to_string(),
+            args: vec![Expr::Number(7.0)],
+            ..Default::default()
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 7.0);
     }
 
     #[test]

@@ -11,15 +11,10 @@
 //!
 //! Corrupting an expected value in any fixture — or reverting the
 //! `pressure_drop` fix from gt-p3v — must cause this suite to fail.
-//!
-//! A local `eval_expr` is used instead of the crate's [`evaluate`]
-//! because the shared implementation rejects n-ary `+` / `*` (arity 2
-//! only), and the `total_pressure` observed in
-//! `units_dimensional_analysis.esm::FluidMechanics` is a 3-ary sum that
-//! the Julia/Python/TypeScript bindings all accept. Extending the Rust
-//! evaluator to match is tracked separately.
 
-use earthsci_toolkit::{load, EsmFile, Expr, Model, ModelTest, Tolerance, VariableType};
+use earthsci_toolkit::{
+    evaluate, load, EsmFile, Expr, Model, ModelTest, Tolerance, VariableType,
+};
 use std::collections::HashMap;
 
 const UNITS_FIXTURES: &[(&str, &str)] = &[
@@ -37,46 +32,11 @@ const UNITS_FIXTURES: &[(&str, &str)] = &[
     ),
 ];
 
-/// Local expression evaluator that accepts the shapes used in the
-/// cross-binding units fixtures (binary arithmetic, n-ary `+` / `*`,
-/// unary `-`, powers, log/exp/sqrt, trig). Returns `None` when any
-/// variable reference is unbound; the caller uses that signal to defer
-/// observed resolution.
+/// Evaluate an expression using the crate's shared [`evaluate`].
+/// Returns `None` when any variable reference is unbound; the caller
+/// uses that signal to defer observed resolution.
 fn eval_expr(expr: &Expr, bindings: &HashMap<String, f64>) -> Option<f64> {
-    match expr {
-        Expr::Number(n) => Some(*n),
-        Expr::Variable(name) => bindings.get(name).copied(),
-        Expr::Operator(node) => {
-            let args: Option<Vec<f64>> =
-                node.args.iter().map(|a| eval_expr(a, bindings)).collect();
-            let args = args?;
-            match node.op.as_str() {
-                "+" => Some(args.iter().copied().sum()),
-                "-" => match args.len() {
-                    1 => Some(-args[0]),
-                    2 => Some(args[0] - args[1]),
-                    _ => panic!("'-' needs 1 or 2 args, got {}", args.len()),
-                },
-                "*" => Some(args.iter().copied().product()),
-                "/" => {
-                    assert_eq!(args.len(), 2, "'/' needs 2 args");
-                    Some(args[0] / args[1])
-                }
-                "^" => {
-                    assert_eq!(args.len(), 2, "'^' needs 2 args");
-                    Some(args[0].powf(args[1]))
-                }
-                "log" => Some(args[0].ln()),
-                "exp" => Some(args[0].exp()),
-                "sqrt" => Some(args[0].sqrt()),
-                "sin" => Some(args[0].sin()),
-                "cos" => Some(args[0].cos()),
-                "tan" => Some(args[0].tan()),
-                "abs" => Some(args[0].abs()),
-                other => panic!("unsupported op in units fixtures: {}", other),
-            }
-        }
-    }
+    evaluate(expr, bindings).ok()
 }
 
 fn resolve_tol(
