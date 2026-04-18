@@ -67,7 +67,7 @@ def test_roundtrip_reaction_system():
                     "C": {"units": "mol", "description": "Product C"}
                 },
                 "parameters": {
-                    "k1": {"units": "1/s", "default": 0.1, "description": "Rate constant"},
+                    "k1": {"units": "1/(mol*s)", "default": 0.1, "description": "Rate constant"},
                     "k2": {"units": "1/s", "default": 0.05}
                 },
                 "reactions": [

@@ -1948,6 +1948,105 @@ def _check_reaction_systems(data: Dict[str, Any], errors: List[str]) -> None:
                         )
 
 
+def _check_reaction_rate_units(data: Dict[str, Any], errors: List[str]) -> None:
+    """
+    Check dimensional consistency of reaction rate expressions.
+
+    Per the spec (§7.4), the rate expression must be the *effective rate*: applying
+    mass action (rate * prod(substrate^stoich)) must yield ODE tendency units of
+    species_units/time. For a bare-string rate referencing a declared parameter or
+    species, this reduces to dimensional compatibility between the rate symbol's
+    units and species_units^(1-n) / time, where n is the total substrate order.
+
+    Conservative scope:
+    - Only bare-string rate references (parameter or local species).
+    - Only when the referenced symbol and all reaction species have declared units.
+    - Compound rate expressions (dicts) are skipped because numeric constants in
+      atmospheric-chemistry rate laws commonly carry implicit units (e.g.
+      1.8e-12 cm^3/molec/s), which defeats literal dimensional analysis.
+    """
+    try:
+        import pint
+    except ImportError:
+        return
+    ureg = pint.UnitRegistry()
+
+    def parse_dim(unit_str: str):
+        if unit_str is None:
+            return None
+        try:
+            return ureg(_normalize_unit(unit_str)).dimensionality
+        except Exception:
+            return None
+
+    time_dim = ureg("second").dimensionality
+
+    for rsname, rs in data.get("reaction_systems", {}).items():
+        species_defs = rs.get("species", {}) or {}
+        param_defs = rs.get("parameters", {}) or {}
+        for ri, reaction in enumerate(rs.get("reactions", [])):
+            rate = reaction.get("rate")
+            if not isinstance(rate, str):
+                continue
+            if "." in rate or rate in _BUILTIN_SYMBOLS:
+                continue
+            if rate in param_defs:
+                rate_units_str = param_defs[rate].get("units")
+            elif rate in species_defs:
+                rate_units_str = species_defs[rate].get("units")
+            else:
+                continue  # undefined refs flagged elsewhere
+            rate_dim = parse_dim(rate_units_str)
+            if rate_dim is None:
+                continue
+
+            substrates = reaction.get("substrates") or []
+            substrate_entries = [s for s in substrates if isinstance(s, dict)]
+            if not substrate_entries:
+                continue
+
+            substrate_dim = ureg("").dimensionality  # dimensionless start
+            species_dim = None
+            resolvable = True
+            order = 0.0
+            for s in substrate_entries:
+                sp_name = s.get("species")
+                stoich = s.get("stoichiometry", 1)
+                try:
+                    stoich_f = float(stoich)
+                except (TypeError, ValueError):
+                    resolvable = False
+                    break
+                sp_def = species_defs.get(sp_name)
+                if not sp_def:
+                    resolvable = False
+                    break
+                sp_units = sp_def.get("units")
+                sp_dim = parse_dim(sp_units)
+                if sp_dim is None:
+                    resolvable = False
+                    break
+                if species_dim is None:
+                    species_dim = sp_dim
+                substrate_dim = substrate_dim * (sp_dim ** stoich_f)
+                order += stoich_f
+            if not resolvable or species_dim is None:
+                continue
+
+            expected_dim = species_dim / time_dim
+            full_dim = rate_dim * substrate_dim
+            if full_dim != expected_dim:
+                rid = reaction.get("id", ri)
+                first_sp = substrate_entries[0].get("species")
+                first_sp_units = species_defs.get(first_sp, {}).get("units")
+                errors.append(
+                    f"reaction_systems/{rsname}/reactions[{ri}] (id={rid}): "
+                    f"rate '{rate}' units '{rate_units_str}' incompatible with "
+                    f"order-{order:g} reaction for species units '{first_sp_units}' "
+                    f"(expected rate*substrates to have dimensions of species/time)"
+                )
+
+
 def _check_event_references(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
     """Check that event affects/conditions reference declared variables."""
     for mname, m in data.get("models", {}).items():
@@ -2004,6 +2103,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     _check_equation_balance(data, errors)
     _check_operator_state_coverage(data, errors)
     _check_reaction_systems(data, errors)
+    _check_reaction_rate_units(data, errors)
 
     if errors:
         raise SchemaValidationError(

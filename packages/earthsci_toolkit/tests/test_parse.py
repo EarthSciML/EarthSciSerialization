@@ -123,7 +123,7 @@ def test_load_reaction_system():
                     "C": {"units": "mol"}
                 },
                 "parameters": {
-                    "k1": {"units": "1/s", "default": 0.1}
+                    "k1": {"units": "1/(mol*s)", "default": 0.1}
                 },
                 "reactions": [
                     {
@@ -161,7 +161,7 @@ def test_load_reaction_system():
     assert len(rs.parameters) == 1
     param = rs.parameters[0]
     assert param.name == "k1"
-    assert param.units == "1/s"
+    assert param.units == "1/(mol*s)"
     assert param.value == 0.1
 
     # Check reactions
