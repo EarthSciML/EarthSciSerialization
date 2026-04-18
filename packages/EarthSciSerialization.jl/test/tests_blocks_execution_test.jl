@@ -142,8 +142,6 @@ end
     simulation_skip = Dict(
         # SymbolicContinuousCallback API drift in MTK ext (gt-2ta2).
         "bouncing_ball.esm" => "gt-2ta2",
-        # Observed variables rejected by mtkcompile (gt-zuwt).
-        "event_chain.esm" => "gt-zuwt",
     )
     simulation_dir = joinpath(@__DIR__, "..", "..", "..",
                               "tests", "simulation")

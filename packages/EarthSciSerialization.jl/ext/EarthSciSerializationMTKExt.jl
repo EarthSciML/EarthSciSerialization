@@ -726,6 +726,14 @@ function ModelingToolkit.System(flat::FlattenedSystem;
         push!(eqs, lhs ~ rhs)
     end
 
+    # Observed variables need to appear in the unknowns (dvs) list so that
+    # references to them elsewhere in the equations pass MTK's structural
+    # check. Their defining equation (`obs ~ expr`) stays in the main
+    # equation list; `mtkcompile`'s alias elimination pass moves them to
+    # the compiled system's `observed` section automatically.
+    dvs = copy(states)
+    append!(dvs, observed)
+
     cont_cbs = _build_continuous_events(flat, var_dict, t_sym, dim_dict)
     disc_cbs = _build_discrete_events(flat, var_dict, t_sym, dim_dict)
 
@@ -739,18 +747,18 @@ function ModelingToolkit.System(flat::FlattenedSystem;
     sys_name = name isa Symbol ? name : Symbol(name)
 
     sys = if !isempty(cont_cbs) && !isempty(disc_cbs)
-        ModelingToolkit.System(eqs, t_sym, states, parameters;
+        ModelingToolkit.System(eqs, t_sym, dvs, parameters;
             name=sys_name,
             continuous_events=cont_cbs,
             discrete_events=disc_cbs, extra_kwargs..., kwargs...)
     elseif !isempty(cont_cbs)
-        ModelingToolkit.System(eqs, t_sym, states, parameters;
+        ModelingToolkit.System(eqs, t_sym, dvs, parameters;
             name=sys_name, continuous_events=cont_cbs, extra_kwargs..., kwargs...)
     elseif !isempty(disc_cbs)
-        ModelingToolkit.System(eqs, t_sym, states, parameters;
+        ModelingToolkit.System(eqs, t_sym, dvs, parameters;
             name=sys_name, discrete_events=disc_cbs, extra_kwargs..., kwargs...)
     else
-        ModelingToolkit.System(eqs, t_sym, states, parameters;
+        ModelingToolkit.System(eqs, t_sym, dvs, parameters;
             name=sys_name, extra_kwargs..., kwargs...)
     end
     return sys
@@ -887,6 +895,7 @@ function ModelingToolkit.PDESystem(flat::FlattenedSystem;
     sys_name = name isa Symbol ? name : Symbol(name)
 
     dvars = [Num(v) for v in states]
+    append!(dvars, Num(v) for v in observed)
 
     return ModelingToolkit.PDESystem(eqs, bcs, domain_spec, iv_syms, dvars,
                                      parameters; name=sys_name, kwargs...)
