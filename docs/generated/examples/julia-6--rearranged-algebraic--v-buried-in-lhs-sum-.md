@@ -31,7 +31,7 @@ N = 5
         u_handle = _arr(simp, :Rearranged, "u")
         u0 = [u_handle[i] => Float64(i) for i in 1:N]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 1.0))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         @test sol.retcode == ModelingToolkit.SciMLBase.ReturnCode.Success
 ```
 

@@ -33,7 +33,7 @@ N = 10
         u_handle = _arr(simp, :Diff1D, "u")
         u0 = [u_handle[i] => (i == 5 ? 1.0 : 0.0) for i in 1:N]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 0.5))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         @test sol.retcode == ModelingToolkit.SciMLBase.ReturnCode.Success
 
         # Mass conservation sanity: diffusion preserves the total.

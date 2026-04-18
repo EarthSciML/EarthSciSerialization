@@ -21,7 +21,7 @@ M, Nd = 4, 3
         u_handle = _arr(simp, :ODE2D, "u")
         u0 = [u_handle[i, j] => Float64(i + j) for i in 1:M for j in 1:Nd]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 1.0))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         for i in 1:M, j in 1:Nd
             @test sol[u_handle[i, j]][
 ```
