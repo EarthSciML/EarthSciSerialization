@@ -1,8 +1,26 @@
 using Test
 using EarthSciSerialization
+using JSON3
 
 const ESS = EarthSciSerialization
 const SE = EarthSciSerialization.StoichiometryEntry
+
+# Structural equality for Expr trees. OpExpr's Vector{Expr} field makes
+# default struct `==` (which falls back to `===`) fail for freshly-built
+# equal trees — compare field-by-field recursively instead.
+_expr_equal(a::NumExpr, b::NumExpr) = a.value == b.value
+_expr_equal(a::VarExpr, b::VarExpr) = a.name == b.name
+function _expr_equal(a::OpExpr, b::OpExpr)
+    a.op == b.op || return false
+    a.wrt == b.wrt || return false
+    a.dim == b.dim || return false
+    length(a.args) == length(b.args) || return false
+    for (x, y) in zip(a.args, b.args)
+        _expr_equal(x, y) || return false
+    end
+    return true
+end
+_expr_equal(::ESS.Expr, ::ESS.Expr) = false
 
 # Small helpers so each testset can build a fresh fixture.
 function _make_eq(lhs_name::String, coef::Float64)
@@ -339,6 +357,150 @@ end
         ex = @test_logs (:warn,) match_mode=:any ESS.extract(file, "Missing")
         @test isempty(ex.models)
         @test isempty(ex.coupling)
+    end
+
+    # Model-level substitution — ported from Python's TestModelSubstitution
+    # (bindings/python/tests/test_substitute.py). Exercises the typed-model
+    # analog (substitute_in_equations + rename_variable) against the shared
+    # substitution fixtures to ensure cross-language parity.
+    @testset "substitute-in-model (ported from Python)" begin
+
+        @testset "shared fixtures drive model-level substitute" begin
+            fixtures_dir = joinpath(@__DIR__, "..", "..", "..", "tests", "substitution")
+            fixture_file = joinpath(fixtures_dir, "simple_var_replace.json")
+            @test isfile(fixture_file)
+
+            cases = JSON3.read(read(fixture_file, String))
+            # simple_var_replace.json is a flat array of {input, bindings, expected}
+            @test cases isa JSON3.Array
+            @test !isempty(cases)
+
+            for case in cases
+                input_expr = ESS.parse_expression(case[:input])
+                expected_expr = ESS.parse_expression(case[:expected])
+                bindings = Dict{String, ESS.Expr}(
+                    string(k) => ESS.parse_expression(v)
+                    for (k, v) in pairs(case[:bindings])
+                )
+
+                # Wrap the fixture expression as the RHS of a lone equation in
+                # a minimal model. The LHS references a state variable the
+                # bindings won't touch so we can isolate RHS substitution.
+                vars = Dict{String,ModelVariable}(
+                    "out" => ModelVariable(StateVariable, default=0.0),
+                )
+                eq = Equation(VarExpr("out"), input_expr)
+                model = Model(vars, Equation[eq])
+
+                result = substitute_in_equations(model, bindings)
+                @test length(result.equations) == 1
+                @test _expr_equal(result.equations[1].lhs, VarExpr("out"))
+                @test _expr_equal(result.equations[1].rhs, expected_expr)
+                # variables dict is preserved verbatim
+                @test result.variables == model.variables
+            end
+        end
+
+        @testset "substitute_in_equations preserves variable metadata" begin
+            vars = Dict{String,ModelVariable}(
+                "x" => ModelVariable(StateVariable,
+                                     default=1.0,
+                                     description="state var",
+                                     units="kg"),
+                "param" => ModelVariable(ParameterVariable,
+                                         default=0.5,
+                                         description="rate",
+                                         units="1/s"),
+            )
+            # D(x) = param
+            lhs = OpExpr("D", ESS.Expr[VarExpr("x")], wrt="t")
+            rhs = VarExpr("param")
+            model = Model(vars, Equation[Equation(lhs, rhs)])
+
+            bindings = Dict{String,ESS.Expr}("param" => NumExpr(0.5))
+            result = substitute_in_equations(model, bindings)
+
+            # Equations rewritten
+            @test length(result.equations) == 1
+            @test result.equations[1].rhs == NumExpr(0.5)
+            # Variables dict and all per-variable metadata preserved (attribute-
+            # preservation analog of Python's test_substitute_in_model_with_metadata)
+            @test result.variables == model.variables
+            x = result.variables["x"]
+            @test x.type == StateVariable
+            @test x.default == 1.0
+            @test x.description == "state var"
+            @test x.units == "kg"
+            p = result.variables["param"]
+            @test p.default == 0.5
+            @test p.units == "1/s"
+            @test p.description == "rate"
+            # Events/subsystems/domain/tolerance containers preserved
+            @test result.discrete_events === model.discrete_events
+            @test result.continuous_events === model.continuous_events
+            @test result.subsystems === model.subsystems
+            @test result.domain === model.domain
+            @test result.tolerance === model.tolerance
+        end
+
+        @testset "substitute_in_equations on empty-equations model" begin
+            vars = Dict{String,ModelVariable}(
+                "x" => ModelVariable(StateVariable, default=1.0),
+            )
+            model = Model(vars, Equation[])
+
+            result = substitute_in_equations(model, Dict{String,ESS.Expr}("a" => VarExpr("b")))
+            @test isempty(result.equations)
+            @test result.variables == model.variables
+        end
+
+        @testset "rename_variable across a model" begin
+            # Model with two equations that both reference the variable being
+            # renamed, plus a parameter that should survive untouched.
+            vars = Dict{String,ModelVariable}(
+                "C" => ModelVariable(StateVariable,
+                                     default=1.0,
+                                     description="concentration",
+                                     units="mol/m^3"),
+                "k" => ModelVariable(ParameterVariable, default=0.1, units="1/s"),
+            )
+            eq1 = Equation(
+                OpExpr("D", ESS.Expr[VarExpr("C")], wrt="t"),
+                OpExpr("*", ESS.Expr[NumExpr(-1.0), VarExpr("k"), VarExpr("C")]),
+            )
+            eq2 = Equation(
+                VarExpr("C"),
+                OpExpr("*", ESS.Expr[NumExpr(2.0), VarExpr("C")]),
+            )
+            model = Model(vars, Equation[eq1, eq2])
+
+            renamed = rename_variable(model, "C", "O3")
+
+            # Variable dict: old name gone, new name present, metadata carried over
+            @test !haskey(renamed.variables, "C")
+            @test haskey(renamed.variables, "O3")
+            o3 = renamed.variables["O3"]
+            @test o3.type == StateVariable
+            @test o3.default == 1.0
+            @test o3.description == "concentration"
+            @test o3.units == "mol/m^3"
+            # Unrelated variable untouched
+            @test renamed.variables["k"].default == 0.1
+            @test renamed.variables["k"].units == "1/s"
+
+            # Equation rewriting: every VarExpr("C") → VarExpr("O3")
+            @test length(renamed.equations) == 2
+            @test _expr_equal(renamed.equations[1].lhs.args[1], VarExpr("O3"))
+            mul = renamed.equations[1].rhs
+            @test _expr_equal(mul.args[3], VarExpr("O3"))
+            @test _expr_equal(mul.args[2], VarExpr("k"))  # other vars untouched
+            @test _expr_equal(renamed.equations[2].lhs, VarExpr("O3"))
+            @test _expr_equal(renamed.equations[2].rhs.args[2], VarExpr("O3"))
+
+            # Original model is not mutated
+            @test haskey(model.variables, "C")
+            @test !haskey(model.variables, "O3")
+        end
     end
 
 end
