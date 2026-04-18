@@ -8,7 +8,7 @@ using EarthSciSerialization
 using OrderedCollections: OrderedDict
 import ModelingToolkit
 import Symbolics
-import OrdinaryDiffEqDefault
+import OrdinaryDiffEqTsit5
 
 const ESM2 = EarthSciSerialization
 const MTK2 = ModelingToolkit
@@ -61,7 +61,7 @@ function _build_and_solve(model::ESM2.Model, name::Symbol,
     sys = MTK2.System(model; name=name)
     simp = MTK2.mtkcompile(sys)
     prob = MTK2.ODEProblem(simp, u0_map, tspan)
-    sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+    sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
     return sol, simp
 end
 
@@ -129,7 +129,7 @@ function _run_fixture_test(simp, model_name::Symbol,
     end
     tspan = (t.time_span.start, t.time_span.stop)
     prob = MTK2.ODEProblem(simp, u0_map, tspan)
-    sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-10, abstol=1e-12)
+    sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-10, abstol=1e-12)
     @test sol.retcode == ModelingToolkit.SciMLBase.ReturnCode.Success
     for a in t.assertions
         handle = _resolve_on_simp(simp, model_name, a.variable)
@@ -185,7 +185,7 @@ end
         u_handle = _arr(simp, :PureODE, "u")
         u0 = [u_handle[i] => Float64(i) for i in 1:N]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 1.0))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         for i in 1:N
             @test sol[u_handle[i]][end] ≈ Float64(i) * exp(-1.0) rtol=1e-6
         end
@@ -217,7 +217,7 @@ end
         u_handle = _arr(simp, :MixedODEAlg, "u")
         u0 = [u_handle[i] => Float64(i) for i in 1:N]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 1.0))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         for i in 1:N
             @test sol[u_handle[i]][end] ≈ Float64(i) * exp(-1.0) rtol=1e-6
         end
@@ -261,7 +261,7 @@ end
         u_handle = _arr(simp, :Diff1D, "u")
         u0 = [u_handle[i] => (i == 5 ? 1.0 : 0.0) for i in 1:N]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 0.5))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         @test sol.retcode == ModelingToolkit.SciMLBase.ReturnCode.Success
 
         # Mass conservation sanity: diffusion preserves the total.
@@ -305,7 +305,7 @@ end
         u_handle = _arr(simp, :Rearranged, "u")
         u0 = [u_handle[i] => Float64(i) for i in 1:N]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 1.0))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         @test sol.retcode == ModelingToolkit.SciMLBase.ReturnCode.Success
     end
 
@@ -332,7 +332,7 @@ end
         u_handle = _arr(simp, :ODE2D, "u")
         u0 = [u_handle[i, j] => Float64(i + j) for i in 1:M for j in 1:Nd]
         prob = MTK2.ODEProblem(simp, u0, (0.0, 1.0))
-        sol = OrdinaryDiffEqDefault.solve(prob; reltol=1e-8, abstol=1e-10)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5(); reltol=1e-8, abstol=1e-10)
         for i in 1:M, j in 1:Nd
             @test sol[u_handle[i, j]][end] ≈ Float64(i + j) * exp(-1.0) rtol=1e-6
         end
