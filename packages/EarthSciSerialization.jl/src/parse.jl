@@ -22,6 +22,20 @@ struct ParseError <: Exception
 end
 
 
+# Recursively convert JSON3 parse results (JSON3.Object / JSON3.Array) into
+# native Julia containers (Dict{String,Any} / Vector{Any}). JSONSchema.jl's
+# `type: array` check does not recognize JSON3.Array as an array, so free-form
+# fields that are round-tripped through schema validation must be converted.
+function _to_native_json(x)
+    if x isa JSON3.Array
+        return Any[_to_native_json(v) for v in x]
+    elseif x isa JSON3.Object || x isa AbstractDict
+        return Dict{String,Any}(string(k) => _to_native_json(v) for (k, v) in pairs(x))
+    else
+        return x
+    end
+end
+
 """
     parse_expression(data::Any) -> Expr
 
@@ -777,7 +791,7 @@ function coerce_data_loader(data::Any)::DataLoader
     reference = haskey(data, :reference) && data.reference !== nothing ?
                 coerce_reference(data.reference) : nothing
     metadata = haskey(data, :metadata) && data.metadata !== nothing ?
-               Dict{String,Any}(string(k) => v for (k, v) in pairs(data.metadata)) : nothing
+               _to_native_json(data.metadata) : nothing
 
     return DataLoader(kind, source, variables;
                       temporal=temporal,

@@ -220,9 +220,13 @@ function _build_arrayop(expr::OpExpr, var_dict::Dict{String,Any},
                              range_opts..., reduce_opt)
 
     # Wrap in a let binding so Symbols referring to free variables resolve
-    # to the actual Symbolics objects in var_dict.
+    # to the actual Symbolics objects in var_dict. Also bind `D` to
+    # `Differential(t_sym)` so D(u[i]) inside the arrayop body resolves to a
+    # real time-differential, not ModelingToolkit.D (which requires
+    # DynamicQuantities.jl to be loaded into the caller's scope).
     bindings = [Core.Expr(:(=), binding_names[i], binding_vals[i])
                 for i in 1:length(binding_names)]
+    push!(bindings, Core.Expr(:(=), :D, Differential(t_sym)))
     let_block = Core.Expr(:block, bindings..., arrayop_call)
     let_expr = Core.Expr(:let, Core.Expr(:block), let_block)
 
@@ -295,9 +299,10 @@ function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
             args_ast = [_esm_to_julia_ast(a, var_name_to_sym) for a in expr.args]
             return Core.Expr(:call, Symbol(op), args_ast...)
         elseif op == "D"
-            # D(u[i]) inside an @arrayop body: use MTK's `D` shortcut.
+            # D(u[i]) inside an @arrayop body: emit a bare `D` symbol; the
+            # let-block wrapping the macro call binds `D = Differential(t_sym)`.
             inner = _esm_to_julia_ast(expr.args[1], var_name_to_sym)
-            return Core.Expr(:call, GlobalRef(ModelingToolkit, :D), inner)
+            return Core.Expr(:call, :D, inner)
         else
             error("Unsupported operator inside arrayop body: $op")
         end

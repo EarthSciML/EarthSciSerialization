@@ -161,9 +161,10 @@ Complete validation combining schema, structural, and unit validation.
 Returns ValidationResult with all errors and warnings.
 """
 function validate(file::EsmFile)::ValidationResult
-    # Convert EsmFile to dict for schema validation
-    # This is a simplified approach - in practice, we'd need proper serialization
-    data = Dict("esm" => file.esm, "metadata" => Dict("name" => file.metadata.name))
+    # Schema validation requires the full serialized document: the schema's
+    # top-level `anyOf` requires either `models` or `reaction_systems`, so a
+    # stub dict with just `esm` and `metadata.name` would always fail.
+    data = serialize_esm_file(file)
 
     schema_errors = validate_schema(data)
     structural_errors = validate_structural(file)
