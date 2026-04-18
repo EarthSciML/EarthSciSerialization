@@ -268,4 +268,65 @@ using EarthSciSerialization
         end
     end
 
+    @testset "Reaction rate units: mass-action dimensional check" begin
+        metadata = EarthSciSerialization.Metadata("test-rxn-units")
+
+        @testset "Second-order reaction with 1/s rate constant is rejected" begin
+            # A + B -> C with concentrations in mol/L but rate constant in 1/s
+            # (should be L/(mol*s)). Mirrors tests/invalid/units_reaction_rate_mismatch.esm.
+            species = [
+                EarthSciSerialization.Species("A"; units="mol/L", default=1.0),
+                EarthSciSerialization.Species("B"; units="mol/L", default=1.0),
+                EarthSciSerialization.Species("C"; units="mol/L", default=0.0),
+            ]
+            parameters = [EarthSciSerialization.Parameter("k", 0.1; units="1/s")]
+            reactions = [
+                EarthSciSerialization.Reaction(
+                    "R1",
+                    [EarthSciSerialization.StoichiometryEntry("A", 1), EarthSciSerialization.StoichiometryEntry("B", 1)],
+                    [EarthSciSerialization.StoichiometryEntry("C", 1)],
+                    EarthSciSerialization.VarExpr("k"),
+                ),
+            ]
+            rs = EarthSciSerialization.ReactionSystem(species, reactions; parameters=parameters)
+            errors = EarthSciSerialization.validate_reaction_rate_units(rs, "/reaction_systems/Bad")
+            @test length(errors) == 1
+            @test errors[1].error_type == "unit_inconsistency"
+            @test errors[1].path == "/reaction_systems/Bad/reactions/0"
+        end
+
+        @testset "Correctly-dimensioned second-order rate constant passes" begin
+            species = [
+                EarthSciSerialization.Species("A"; units="mol/L", default=1.0),
+                EarthSciSerialization.Species("B"; units="mol/L", default=1.0),
+                EarthSciSerialization.Species("C"; units="mol/L", default=0.0),
+            ]
+            parameters = [EarthSciSerialization.Parameter("k", 0.1; units="L/(mol*s)")]
+            reactions = [
+                EarthSciSerialization.Reaction(
+                    "R1",
+                    [EarthSciSerialization.StoichiometryEntry("A", 1), EarthSciSerialization.StoichiometryEntry("B", 1)],
+                    [EarthSciSerialization.StoichiometryEntry("C", 1)],
+                    EarthSciSerialization.VarExpr("k"),
+                ),
+            ]
+            rs = EarthSciSerialization.ReactionSystem(species, reactions; parameters=parameters)
+            errors = EarthSciSerialization.validate_reaction_rate_units(rs, "/reaction_systems/Good")
+            @test isempty(errors)
+        end
+
+        @testset "Invalid fixture units_reaction_rate_mismatch.esm is rejected" begin
+            fixture_path = joinpath(@__DIR__, "..", "..", "..", "tests", "invalid", "units_reaction_rate_mismatch.esm")
+            if isfile(fixture_path)
+                esm_data = EarthSciSerialization.load(fixture_path)
+                result = EarthSciSerialization.validate(esm_data)
+                @test !result.is_valid
+                @test any(e -> e.error_type == "unit_inconsistency", result.structural_errors)
+            else
+                @warn "Fixture not found: $fixture_path"
+                @test_broken false
+            end
+        end
+    end
+
 end

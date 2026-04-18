@@ -685,3 +685,21 @@ fn test_valid_cross_model_references() {
         }
     }
 }
+
+/// units_reaction_rate_mismatch.esm declares a 2nd-order reaction A + B -> C
+/// with species in mol/L and rate parameter k in 1/s (should be L/(mol*s)).
+/// Must be rejected as a structural error across all bindings (gt-zs9o).
+#[test]
+fn test_reaction_rate_units_mismatch_fixture_rejected() {
+    let fixture = include_str!("../../../tests/invalid/units_reaction_rate_mismatch.esm");
+    let esm_file = load(fixture).expect("fixture should parse and schema-validate");
+    let result = validate(&esm_file);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|err| matches!(err.code, StructuralErrorCode::UnitInconsistency)),
+        "expected UnitInconsistency error for units_reaction_rate_mismatch.esm, got: {:?}",
+        result.errors()
+    );
+}

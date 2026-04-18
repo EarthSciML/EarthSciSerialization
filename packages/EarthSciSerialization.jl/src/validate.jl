@@ -126,6 +126,7 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
     if file.reaction_systems !== nothing
         for (rs_name, rs) in file.reaction_systems
             append!(errors, validate_reaction_consistency(rs, "reaction_systems.$rs_name"))
+            append!(errors, validate_reaction_rate_units(rs, "/reaction_systems/$rs_name"))
         end
     end
 
@@ -606,6 +607,99 @@ function validate_reaction_consistency(rs::ReactionSystem, path::String)::Vector
     # Recursively check subsystems
     for (subsys_name, subsys) in rs.subsystems
         append!(errors, validate_reaction_consistency(subsys, "$path.subsystems.$subsys_name"))
+    end
+
+    return errors
+end
+
+"""
+    validate_reaction_rate_units(rs::ReactionSystem, path::String) -> Vector{StructuralError}
+
+Enforce the mass-action dimensional constraint from spec §7.4: for each reaction,
+rate * prod(substrate^stoichiometry) must have dimensions of species/time. The
+reference concentration unit is taken from the first substrate (matching TS/Python).
+
+The check is skipped when the reference concentration unit is dimensionless
+(mol/mol, ppm, …) because atmospheric-chemistry rate expressions commonly bake
+a number-density factor into rate constants.
+"""
+function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    # Build name → unit-string map using ONLY explicitly declared units.
+    # Mirrors Python's conservative scope: skip when any relevant unit is
+    # absent, so we do not surface false positives on partially-annotated
+    # fixtures (e.g. tests that omit units to exercise other rules).
+    species_units = Dict{String, String}()
+    for species in rs.species
+        species.units !== nothing && (species_units[species.name] = species.units)
+    end
+    param_units = Dict{String, String}()
+    for param in rs.parameters
+        param.units !== nothing && (param_units[param.name] = param.units)
+    end
+
+    time_unit = parse_units("s")
+
+    for (i, reaction) in enumerate(rs.reactions)
+        # Only check bare-variable rate references whose symbol has declared
+        # units. Compound rate expressions are skipped because atmospheric-
+        # chemistry rate constants routinely carry implicit units on numeric
+        # literals, which defeats literal dimensional analysis.
+        isa(reaction.rate, VarExpr) || continue
+        rate_name = reaction.rate.name
+        rate_units_str = get(param_units, rate_name, get(species_units, rate_name, nothing))
+        rate_units_str === nothing && continue
+        rate_dim = parse_units(rate_units_str)
+        rate_dim === nothing && continue
+
+        substrates_field = getfield(reaction, :substrates)
+        (substrates_field === nothing || isempty(substrates_field)) && continue
+
+        # Require every referenced substrate to have declared units.
+        resolvable = true
+        substrate_dim = Unitful.NoUnits
+        species_dim = nothing
+        total_order = 0
+        for substrate in substrates_field
+            sp_units_str = get(species_units, substrate.species, nothing)
+            if sp_units_str === nothing
+                resolvable = false
+                break
+            end
+            sp_dim = parse_units(sp_units_str)
+            if sp_dim === nothing
+                resolvable = false
+                break
+            end
+            species_dim === nothing && (species_dim = sp_dim)
+            substrate_dim = substrate_dim * (sp_dim^substrate.stoichiometry)
+            total_order += substrate.stoichiometry
+        end
+        (!resolvable || species_dim === nothing) && continue
+        time_unit === nothing && continue
+
+        # Skip when the reference concentration unit is dimensionless
+        # (mol/mol, ppm, …) — mass-action convention is ambiguous there.
+        dimension(species_dim) == dimension(Unitful.NoUnits) && continue
+
+        expected_dim = species_dim / time_unit
+        full_dim = rate_dim * substrate_dim
+        if dimension(full_dim) != dimension(expected_dim)
+            first_sp_units = get(species_units, substrates_field[1].species, "")
+            push!(errors, StructuralError(
+                "$path/reactions/$(i-1)",
+                "Reaction $(reaction.id) rate '$rate_name' units '$rate_units_str' " *
+                "incompatible with order-$total_order reaction for species units " *
+                "'$first_sp_units' (expected rate*substrates to have dimensions of species/time)",
+                "unit_inconsistency",
+            ))
+        end
+    end
+
+    # Recurse into subsystems
+    for (subsys_name, subsys) in rs.subsystems
+        append!(errors, validate_reaction_rate_units(subsys, "$path/subsystems/$subsys_name"))
     end
 
     return errors

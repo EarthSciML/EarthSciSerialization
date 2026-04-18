@@ -87,6 +87,8 @@ pub enum StructuralErrorCode {
     OperatorVariableMissing,
     /// Circular dependency detected
     CircularDependency,
+    /// Reaction rate expression has incompatible units for reaction stoichiometry
+    UnitInconsistency,
 }
 
 impl std::fmt::Display for StructuralErrorCode {
@@ -106,6 +108,7 @@ impl std::fmt::Display for StructuralErrorCode {
             Self::DataLoaderVariableMissing => "data_loader_variable_missing",
             Self::OperatorVariableMissing => "operator_variable_missing",
             Self::CircularDependency => "circular_dependency",
+            Self::UnitInconsistency => "unit_inconsistency",
         };
         write!(f, "{}", s)
     }
@@ -633,7 +636,143 @@ fn validate_reaction_system(
         );
     }
 
+    // Stoichiometric rate-dimension check (spec §7.4).
+    validate_reaction_rate_units(rs_name, rs, errors);
+
     // Note: Event validation would go here when ReactionSystem types support events
+}
+
+/// Enforce that each reaction's rate expression, multiplied by the product of
+/// substrate species raised to their stoichiometry, has dimensions of
+/// species/time. Mirrors the Julia/Python/TS checks so the same invalid
+/// fixtures are rejected across all bindings. Skipped when the reference
+/// concentration (first substrate) is dimensionless — mole-fraction and ppm
+/// species commonly bake a number-density factor into the rate constant.
+fn validate_reaction_rate_units(
+    rs_name: &str,
+    rs: &crate::ReactionSystem,
+    errors: &mut Vec<StructuralError>,
+) {
+    use crate::units::{Unit, parse_unit};
+
+    // Build unit environment: species + parameters → Unit.
+    let mut env: HashMap<String, Unit> = HashMap::new();
+    for (name, species) in &rs.species {
+        let unit = match &species.units {
+            Some(s) => match parse_unit(s) {
+                Ok(u) => u,
+                Err(_) => continue,
+            },
+            None => continue,
+        };
+        env.insert(name.clone(), unit);
+    }
+    for (name, param) in &rs.parameters {
+        let unit = match &param.units {
+            Some(s) => match parse_unit(s) {
+                Ok(u) => u,
+                Err(_) => continue,
+            },
+            None => continue,
+        };
+        env.insert(name.clone(), unit);
+    }
+
+    let time = Unit::base(crate::units::Dimension::Time, 1, 1.0);
+
+    for (rxn_idx, reaction) in rs.reactions.iter().enumerate() {
+        let rxn_path = format!("/reaction_systems/{}/reactions/{}", rs_name, rxn_idx);
+        let reaction_label = reaction
+            .id
+            .as_deref()
+            .or(reaction.name.as_deref())
+            .unwrap_or("unnamed");
+
+        // Rate dimension from expression propagation.
+        let rate_unit = match Unit::propagate(&reaction.rate, &env) {
+            Ok(u) => u,
+            Err(_) => continue,
+        };
+
+        let substrates = match reaction.substrates.as_ref() {
+            Some(s) if !s.is_empty() => s,
+            _ => continue,
+        };
+
+        // Reference concentration unit = first substrate's species units.
+        let first_sp_name = &substrates[0].species;
+        let conc_unit = match env.get(first_sp_name) {
+            Some(u) => u.clone(),
+            None => continue,
+        };
+        if conc_unit.is_dimensionless() {
+            continue;
+        }
+
+        // Compute product(substrate^stoich).
+        let mut substrate_unit = Unit::dimensionless();
+        let mut total_order: u32 = 0;
+        let mut resolvable = true;
+        for entry in substrates {
+            let sp_unit = match env.get(&entry.species) {
+                Some(u) => u.clone(),
+                None => {
+                    resolvable = false;
+                    break;
+                }
+            };
+            substrate_unit = substrate_unit.multiply(&sp_unit.power(entry.coefficient as i32));
+            total_order += entry.coefficient;
+        }
+        if !resolvable {
+            continue;
+        }
+
+        let expected = conc_unit.divide(&time);
+        let full = rate_unit.multiply(&substrate_unit);
+        if !full.is_compatible(&expected) {
+            let rate_units_str = reaction_rate_units_str(&reaction.rate, rs);
+            let first_sp_units = rs
+                .species
+                .get(first_sp_name)
+                .and_then(|s| s.units.clone())
+                .unwrap_or_default();
+            errors.push(StructuralError {
+                path: rxn_path,
+                code: StructuralErrorCode::UnitInconsistency,
+                message: format!(
+                    "Reaction rate expression has incompatible units for reaction stoichiometry \
+                     (reaction {}, order {}, substrate species units '{}')",
+                    reaction_label, total_order, first_sp_units
+                ),
+                details: serde_json::json!({
+                    "reaction_id": reaction_label,
+                    "rate_units": rate_units_str,
+                    "reaction_order": total_order,
+                    "substrate_species_units": first_sp_units,
+                }),
+            });
+        }
+    }
+}
+
+/// Best-effort rendering of a rate expression's declared units when the rate
+/// is a bare variable reference. Returns an empty string for compound
+/// expressions because raw-source rendering is not round-trippable here.
+fn reaction_rate_units_str(rate: &crate::Expr, rs: &crate::ReactionSystem) -> String {
+    if let crate::Expr::Variable(name) = rate {
+        if let Some(p) = rs.parameters.get(name) {
+            if let Some(u) = &p.units {
+                return u.clone();
+            }
+        }
+        if let Some(s) = rs.species.get(name) {
+            if let Some(u) = &s.units {
+                return u.clone();
+            }
+        }
+    }
+    String::new()
 }
 
 fn validate_rate_expression(

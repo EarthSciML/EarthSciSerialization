@@ -51,3 +51,38 @@ func TestUnitsFixturesCrossBinding(t *testing.T) {
 		})
 	}
 }
+
+// TestReactionRateUnitsMismatchFixtureRejected verifies that the shared
+// tests/invalid/units_reaction_rate_mismatch.esm fixture (2nd-order reaction
+// A + B -> C whose rate parameter is declared with 1/s units) is rejected
+// as a structural error with code "unit_inconsistency". This mirrors the
+// Python/TS/Julia/Rust checks so all five bindings agree (gt-zs9o).
+func TestReactionRateUnitsMismatchFixtureRejected(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "tests", "invalid", "units_reaction_rate_mismatch.esm")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	file, err := LoadString(string(content))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	result := ValidateFile(file, string(content))
+	if result.IsValid {
+		t.Fatalf("expected fixture to fail validation, got is_valid=true")
+	}
+	found := false
+	for _, e := range result.StructuralErrors {
+		if e.Code == ErrorUnitInconsistency {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected unit_inconsistency error, got: %+v", result.StructuralErrors)
+	}
+}

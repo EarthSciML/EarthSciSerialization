@@ -69,6 +69,7 @@ export
     serialize_coupling_entry, coerce_coupling_entry,
     # Structural validation
     StructuralError, ValidationResult, validate_structural, validate,
+    validate_reaction_rate_units,
     # Expression operations
     substitute, free_variables, contains, evaluate, simplify, UnboundVariableError,
     # Qualified reference resolution

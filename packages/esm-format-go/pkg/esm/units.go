@@ -674,6 +674,107 @@ func validateModelUnits(modelName string, model *Model, basePath string, result 
 	}
 }
 
+// validateReactionRateUnits enforces the mass-action dimensional constraint
+// from spec §7.4: rate * prod(substrate^stoich) must have dimensions of
+// species/time. The reference concentration unit is taken from the first
+// substrate, matching the Julia/Python/TS checks. Skipped for dimensionless
+// species (mol/mol, ppm, …) because atmospheric-chemistry rate expressions
+// commonly bake a number-density factor into the rate constant.
+func validateReactionRateUnits(systemName string, system *ReactionSystem, basePath string, result *StructuralValidationResult) {
+	raw := make(map[string]string)
+	for name, sp := range system.Species {
+		if sp.Units != nil {
+			raw[name] = *sp.Units
+		}
+	}
+	for name, p := range system.Parameters {
+		if p.Units != nil {
+			raw[name] = *p.Units
+		}
+	}
+	env, _ := BuildUnitEnv(raw)
+
+	timeUnit := Unit{Dim: Dimension{dimTime: 1}, Scale: 1.0}
+
+	for i, rx := range system.Reactions {
+		rxPath := fmt.Sprintf("%s/reactions/%d", basePath, i)
+
+		rateUnit, err := PropagateDimension(rx.Rate, env)
+		if err != nil || rateUnit == nil {
+			continue
+		}
+
+		if len(rx.Substrates) == 0 {
+			continue
+		}
+
+		firstSp := rx.Substrates[0].Species
+		concUnit, ok := env[firstSp]
+		if !ok {
+			continue
+		}
+		if concUnit.Dim.IsDimensionless() {
+			continue
+		}
+
+		substrateUnit := Unit{Scale: 1.0}
+		totalOrder := 0
+		resolvable := true
+		for _, sub := range rx.Substrates {
+			spUnit, ok := env[sub.Species]
+			if !ok {
+				resolvable = false
+				break
+			}
+			substrateUnit = substrateUnit.Multiply(spUnit.Power(sub.Stoichiometry))
+			totalOrder += sub.Stoichiometry
+		}
+		if !resolvable {
+			continue
+		}
+
+		expected := concUnit.Divide(timeUnit)
+		full := rateUnit.Multiply(substrateUnit)
+		if !full.Dim.Equal(expected.Dim) {
+			rateUnitsStr := ""
+			if varName, isVar := rateVarName(rx.Rate); isVar {
+				if p, ok := system.Parameters[varName]; ok && p.Units != nil {
+					rateUnitsStr = *p.Units
+				} else if s, ok := system.Species[varName]; ok && s.Units != nil {
+					rateUnitsStr = *s.Units
+				}
+			}
+			firstSpUnits := ""
+			if s, ok := system.Species[firstSp]; ok && s.Units != nil {
+				firstSpUnits = *s.Units
+			}
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path: rxPath,
+				Code: ErrorUnitInconsistency,
+				Message: fmt.Sprintf(
+					"Reaction rate expression has incompatible units for reaction stoichiometry (reaction %s, order %d, substrate species units '%s')",
+					rx.ID, totalOrder, firstSpUnits,
+				),
+				Details: map[string]interface{}{
+					"reaction_id":             rx.ID,
+					"rate_units":              rateUnitsStr,
+					"reaction_order":          totalOrder,
+					"substrate_species_units": firstSpUnits,
+				},
+			})
+		}
+	}
+}
+
+// rateVarName returns the variable name if the rate expression is a bare
+// variable reference, otherwise ("", false).
+func rateVarName(rate Expression) (string, bool) {
+	if s, ok := rate.(string); ok {
+		return s, true
+	}
+	return "", false
+}
+
 // validateReactionSystemUnits runs dimensional analysis over a reaction
 // system. Rate expressions whose dimensions cannot be determined are skipped;
 // rate expressions that surface a concrete inconsistency produce a warning.

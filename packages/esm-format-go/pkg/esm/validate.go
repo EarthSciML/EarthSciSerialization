@@ -49,6 +49,7 @@ const (
 	ErrorNullReaction          = "null_reaction"
 	ErrorMissingObservedExpr   = "missing_observed_expr"
 	ErrorEventVarUndeclared    = "event_var_undeclared"
+	ErrorUnitInconsistency     = "unit_inconsistency"
 )
 
 // ValidationMessage represents a single validation issue (for backward compatibility)
@@ -189,6 +190,7 @@ func ValidateStructuralWithCodes(file *EsmFile) *StructuralValidationResult {
 	for systemName, system := range file.ReactionSystems {
 		validateReactionSystemWithCodes(systemName, &system, result, file)
 		validateReactionSystemUnits(systemName, &system, fmt.Sprintf("$.reaction_systems.%s", systemName), result)
+		validateReactionRateUnits(systemName, &system, fmt.Sprintf("/reaction_systems/%s", systemName), result)
 	}
 
 	// Validate coupling references
