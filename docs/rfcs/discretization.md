@@ -1,7 +1,7 @@
 # RFC — Language-agnostic Discretization in ESM
 
-**Status:** Draft (v2, revised per review gt-tlw2)
-**Bead:** gt-dq0f (v1), gt-yx9y (v2 revision)
+**Status:** Draft v2.1 (v2.1 addenda per dual review gt-j6do + gt-adhm)
+**Bead:** gt-dq0f (v1), gt-yx9y (v2 revision), gt-woe1 (v2.1 addenda)
 **Affects spec version:** 0.1.0 → 0.2.0 (**breaking**; see §10 and §16 for migration)
 **Scope:** Spatial discretization only. Time integration remains a runtime concern.
 
@@ -158,11 +158,22 @@ serializable. A rule object has three fields:
 |---|---|---|
 | `pattern` | AST with `$`-prefixed pattern variables | Matches an input expression |
 | `where` | array of guard objects | Optional constraints on pattern variables |
-| `replacement` | AST over the same pattern variables (or `use:<scheme>`) | Output expression |
+| `replacement` | AST over the same pattern variables | Inline replacement expression. Mutually exclusive with `use`. |
+| `use` | string — a scheme name from `discretizations.<name>` | Use the named scheme; its `applies_to` is matched as a guard (§7.2.1). Mutually exclusive with `replacement`. |
+| `produces` | array of `{kind, emit|value, ...}` entries | Optional; emits additional equations or ghost variables (§9.4). A rule with `produces` alone (no `replacement`/`use`) is legal and means "leave the matched subtree alone and emit these side equations". |
+| `region` | string (optional) | Informational tag naming the region of the grid this rule targets (`"interior"`, `"xmin_boundary"`, `"panel_seam"`, author-defined). The tag is advisory: it does NOT participate in matching (no runtime check), it is NOT schema-validated against a closed set, and bindings MAY use it for authoring UX (grouping rules in an editor) but MUST NOT let it affect rewrite output. Two rules that differ only in `region` tag are otherwise equivalent. This preserves the v1 authoring idiom (see §5.2.6 example) without adding a normative region-dispatch mechanism. |
 
 Pattern variables are strings prefixed by `$`: `"$u"`, `"$x"`. The sub-language
 is a closed AST shape, not a DSL string; every binding can load it with its
 ordinary JSON parser.
+
+**`replacement` vs `use`.** The two forms are alternative syntaxes for
+the same rewrite. Use `replacement` when the output is a small, inline
+AST (e.g. `{op: "index", ...}` for periodic wrap); use `use` when the
+output is a structured stencil expansion that belongs in
+`discretizations.<name>`. Both produce the same rewritten AST after
+§7.2 expansion. A second worked example using `replacement` is the
+periodic-wrap rule in §9.2.1.
 
 #### 5.2.1 What a pattern variable binds to
 
@@ -232,15 +243,34 @@ checks).
 
 The engine is a fixed-point loop over passes. Each pass walks every equation's
 AST top-down; at each subtree, each rule is tried in `rules`-listing order;
-the first match fires; after a rewrite, **the rewritten subtree is not
-re-matched by any rule for the remainder of the current pass** (rule (i) in
-review C5.5). A new pass begins once the previous pass completes; a pass that
-produces no rewrites terminates the loop.
+the first match fires; after a rewrite, **the rewritten subtree is sealed
+for the remainder of the current pass**: the walker does **not** descend
+into the rewritten subtree's children, nor re-attempt any rule at the
+rewritten node, until the next pass begins at the root (rule (i) in
+review C5.5; option (a) in gt-adhm C5). This is normative: option (b)
+(descend into the rewrite) and option (c) (skip to post-order sibling)
+are both non-conforming. A new pass begins once the previous pass
+completes; a pass that produces no rewrites terminates the loop.
+
+A fresh pass walks the current AST from the root and may re-enter
+subtrees that were rewritten in a prior pass; those subtrees are sealed
+only within the pass that produced them, not across passes.
 
 If the iteration count exceeds `max_passes = 32` without converging, the
 engine must abort with error code `E_RULES_NOT_CONVERGED`. Authors may raise
 the limit via a model-level `rules.max_passes` override; this is a spec-level
-field, not a runtime flag.
+field, not a runtime flag. The default of 32 is chosen as roughly 2× the
+depth of the deepest MVP-scheme chain (BC → ghost rewrite → canonicalize
+→ fuse); authors whose rule sets chain deeper set the override explicitly.
+
+**Rule ordering under `rules`.** `rules` is authored as a JSON map keyed by
+rule name, but the iteration order is the **declaration order of the
+keys** in the source `.esm` file. Loaders MUST preserve insertion order
+when reading `rules`; bindings whose default JSON parsers do not preserve
+object-key order must wrap `rules` in an order-preserving container at
+load time. Authors who need portable ordering may alternatively write
+`rules` as a JSON array of `{name, pattern, where, replacement, produces}`
+objects; both forms are legal and a loader MUST accept both.
 
 #### 5.2.6 Worked example (one-page)
 
@@ -297,9 +327,46 @@ This resolves review question Q6 (coupling ∘ rewrite interaction): rewrite
 runs post-coupling (§11 pipeline), and cross-grid index expressions must be
 wrapped in `regrid`.
 
-`method` names a regridding algorithm that the target binding recognizes
-(e.g. `"bilinear"`, `"conservative"`, `"nearest"`); the set of algorithms is
-not schema-validated beyond being a string.
+`method` names a regridding algorithm; the v0.2.0 spec defines a **closed
+set** of legal method names with normative semantics (resolves gt-adhm
+M1 / gt-j6do open question 3). Any binding emitting a `regrid` node on
+the canonical wire MUST use one of these names; bindings parsing a
+`regrid` node MUST reject an unknown `method` at load time with error
+code `E_UNKNOWN_REGRID_METHOD`.
+
+| `method` | Semantics (normative) |
+|---|---|
+| `"nearest"` | Nearest-neighbor in the target's index space. Ties broken by lexicographic comparison of source indices. No interpolation; no extrapolation. |
+| `"bilinear"` | Bilinear interpolation over the four surrounding source cells when both source and target are structured; extended to simplex-barycentric on unstructured source meshes. Outside the source convex hull, extrapolation is NOT performed; the result is undefined and bindings MUST either clip to boundary or error (`E_REGRID_OUTSIDE_HULL`). |
+| `"conservative"` | First-order area-weighted conservative remap (preserves integral of the source field over the target cell). Implementations MUST match the reference area-overlap formulation; higher-order conservative schemes require a spec-version bump. |
+| `"panel_seam"` | Cubed-sphere-only: resolves the (panel, i, j) → (panel', i', j') mapping at a panel seam via `panel_connectivity.neighbors` and `axis_flip` (§6.4.1). Emitted automatically by the `panel` selector's materialization when the stencil crosses a seam (§7.2 panel row, §6.4.2 worked example). Not usable outside cubed_sphere. |
+
+`"custom"` and any other author-supplied method name are **out of MVP**
+and MUST be rejected. Adding a new method name is a minor version bump
+(0.2.x).
+
+**Where `method` comes from at rewrite time (resolves gt-adhm M1).** A
+`regrid` node emitted by scheme expansion (§7.2) carries a method
+supplied by the **selector**, not by the author at rule-write time.
+Specifically:
+
+- `panel` selectors emit `method: "panel_seam"` on any cross-seam
+  reference. The selector itself does not expose a `method` field;
+  `"panel_seam"` is fixed for this selector kind.
+- `cartesian`, `indirect`, and `reduction` selectors do NOT emit
+  `regrid` wrappers on their own — they address the same grid.
+- When a **coupling** resolves to a cross-grid reference (§11 step 4),
+  the `coupling.<c>` entry MUST declare `coupling.<c>.regrid_method`
+  (one of the four names above); the resolver copies that method into
+  any `regrid` wrapper it emits. This field is new; see §10.1 below
+  for the minor schema addition.
+- Authors writing a `regrid` node literally in a `.esm` expression MUST
+  supply a `method` from the closed set; the loader validates at parse
+  time.
+
+This ties `method` determinism to the emitter (selector or coupling
+resolver), so bit-identity across bindings holds whenever both
+bindings read the same `.esm` file.
 
 ### 5.4 Canonical AST form (normative, new; resolves C3)
 
@@ -335,16 +402,31 @@ For `+` and `*`, nested same-op children are flattened: `+(+(a,b), c)` →
 
 #### 5.4.4 Zero / identity elimination
 
-- `+(0, x, ...)` → `+(x, ...)`. If only `0` remains, replace with `0`.
+- `+(0, x, ...)` → `+(x, ...)`. Zero-elimination iterates until no numeric
+  zero child remains; integer `0` and float `0.0` both qualify as
+  eliminable zeros, and both are removed in the same pass (addresses
+  gt-adhm m3). If only `0` remains, replace with `0`.
 - `+()` → `0`. `+(x)` → `x`.
 - `*(1, x, ...)` → `*(x, ...)`. Similar singleton rules.
 - `*(0, ...)` → `0` (zero annihilates).
 - `/(x, 1)` → `x`. `-(0)` → `0`. `-(x, 0)` → `x`.
 
-`0` and `1` are compared by numeric value across integer/float, matching
-§5.4.1's non-promotion rule (the canonical form of `*(1.0, x)` is `x`, and
-the resulting expression has no type tag — type is inferred from the
-surviving operand).
+**Type-preserving identity elimination (fixes gt-j6do New C1(c)).** Identity
+elimination `*(1, x, ...) → *(x, ...)` and `+(0, x, ...) → +(x, ...)`
+applies **only when the eliminated operand and the surviving operand(s)
+have the same numeric type class** (both integer, or both float, or the
+eliminated operand is of the same class as all surviving numeric
+literals). If types differ — e.g. `*(1.0, x)` where `x` is a bare integer
+variable reference — the identity is **not** eliminated; the canonical
+form retains `*(1.0, x)`. This preserves the information that evaluation
+will promote to float. Rationale: dropping a typed identity erases
+type information that `evaluate` must honor (§5.4.1's non-promotion
+rule is about literal-to-literal arithmetic; cross-type identity
+elimination would effectively demote the type and is forbidden).
+
+Zero-annihilation `*(0, ...) → 0` **preserves the numeric type of the
+zero**: `*(0.0, x) → 0.0`, `*(0, x) → 0`. Signed zero is preserved:
+`*(-0.0, x) → -0.0` (see §5.4.6 for NaN/Inf/signed-zero handling).
 
 #### 5.4.5 String-vs-number in variable references
 
@@ -353,7 +435,139 @@ JSON numbers. A name that happens to be all digits (`"0"` as a variable)
 requires the authoring tool to quote it unambiguously; the canonicalizer
 does not disambiguate.
 
-#### 5.4.6 Worked example
+#### 5.4.6 Normative JSON number formatting (resolves gt-j6do New C1 / gt-adhm C1)
+
+Without a pinned textual form for numeric literals, the byte-comparison
+strategy of §5.4.2 and §13's bit-identity claim are infeasible: Julia
+`JSON3`, Rust `serde_json`, Python `json`, Go `encoding/json`, and
+TypeScript `JSON.stringify` all produce divergent representations of
+the same `Float64`. This subsection pins the canonical number format
+normatively. All bindings MUST emit numeric literals in canonical form
+when producing a canonical AST; all bindings MUST accept any valid
+JSON number when parsing (lenient parse, strict emit).
+
+**Baseline: RFC 8785 JCS number format, with additions.** Adopt RFC 8785
+(JSON Canonicalization Scheme) §3.2.2.3 number-serialization as the
+normative float-formatting rule:
+<https://datatracker.ietf.org/doc/html/rfc8785#section-3.2.2.3>.
+JCS references ECMAScript 2019 §7.1.12.1 `ToString(Number)`, which is
+the shortest-round-trip decimal string that round-trips bit-identically
+to the source IEEE-754 double.
+
+Additional rules specific to this RFC:
+
+- **Integer literals** are emitted without a decimal point:
+  `42`, `-1`, `0`. The canonical form never produces `42.0` for an
+  integer-typed node.
+- **Float literals that are integer-valued** (e.g. `1.0`, `-3.0`) are
+  emitted as **`1`**, **`-3`** **iff the literal's type tag is integer**
+  (impossible under §5.4.1 — integer and float are distinct nodes). A
+  literal whose node type is *float* and whose value is integer-valued
+  is emitted with the JCS form of that float: JCS §3.2.2.3 emits `1`
+  for the float value `1.0` (ECMAScript `ToString`), so the on-wire
+  form is `1` — **but the node remains a float node** in the AST. Two
+  float nodes both containing `1.0` serialize to the string `1`, and
+  canonical-form equality compares the *node kind* first, the *value*
+  second. A float node with value `1.0` is NOT AST-equal to an integer
+  node with value `1` (§5.4.1).
+- **Shortest round-trip for non-integer floats.** The shortest decimal
+  string that parses back to the exact IEEE-754 double. For example,
+  `0.1 + 0.2` (which rounds to `0.30000000000000004`) canonicalizes to
+  the 17-digit form `0.30000000000000004`, not `0.3`. This matches
+  Rust `ryu`, Go `strconv.FormatFloat(f, 'g', -1, 64)`, and Python
+  `repr(float)` on 3.1+.
+- **Exponent form.** For magnitudes `|x| < 1e-6` or `|x| ≥ 1e21`, use
+  exponent notation with lowercase `e` and no leading `+` on the
+  exponent: `1e-7`, `3.14e25`, `-5e-300`. For magnitudes inside
+  `[1e-6, 1e21)`, use plain decimal notation. These breakpoints match
+  ECMAScript `ToString(Number)` (and thus JCS).
+- **Zero.** Positive zero is `0` (integer node) or `0` on the wire
+  (float node — see integer-valued float rule above). Negative zero
+  `-0.0` in a float node is spelled `-0` on the wire. Integer nodes
+  cannot hold negative zero.
+- **Subnormals.** IEEE-754 subnormals (`|x| < 2^-1022` for double) are
+  serialized by the same shortest-round-trip rule; all shortest-round-trip
+  algorithms (Grisu3, Ryu, Dragon4) produce identical output for
+  subnormals. Example: the smallest positive subnormal `5e-324`
+  canonicalizes to `5e-324`. Subnormals are **valid** in canonical form.
+- **NaN and Infinity are NOT representable in canonical form.** Any
+  canonicalization pass that encounters a NaN or ±Inf literal MUST
+  abort with error code `E_CANONICAL_NONFINITE` and the path to the
+  offending node. Rationale: JSON does not represent NaN/Inf; each
+  binding's encoder produces a different non-JSON spelling (`null`,
+  `"NaN"`, `"Infinity"`, `{"op":"special", ...}`, …); no canonical
+  form is possible without inventing a new AST node, which is out of
+  scope for 0.2.0. Authors who need NaN/Inf as sentinel values MUST
+  represent them explicitly (e.g. as a parameter with a binding-side
+  resolution); canonical ASTs are finite.
+
+**Worked example:** Consider two ASTs that differ only in float
+representation:
+
+Input A: `{"op":"+", "args":[1.0, 2.5]}` (Julia `JSON3.write` default)
+Input B: `{"op":"+", "args":[1, 2.5]}` (Go `encoding/json` default)
+
+If both `args[0]` are **float nodes** with value `1.0`, they canonicalize
+to the same on-wire form: `{"op":"+","args":[1,2.5]}`. If `args[0]` in A
+is a float node and in B is an integer node, they are **not** AST-equal
+(§5.4.1), and the canonicalized output preserves the distinction.
+
+Two ASTs representing `3.14159e-10` (subnormal regime is not reached
+here, but floating-point): both canonicalize to
+`{"op":"/","args":[1,<float 3.14159e-10>]}` → on wire, the number is
+`3.14159e-10`. A binding that emits `3.14159E-10` (capital E) or
+`+3.14159e-10` (leading `+`) is non-conforming.
+
+**Spec preservation of integer/float distinction.** §5.4.1 says integer
+and float literals are distinct AST nodes. This subsection confirms
+that distinction survives canonicalization: the ON-WIRE decimal for
+float `1.0` is the string `1`, but the *node* carries a `type: "float"`
+tag (implied by the AST-kind slot; see the spec's primitive-literal
+encoding). Canonical-form equality compares node kind first.
+
+#### 5.4.7 Canonicalization for `-`, `/`, unary `neg` (resolves gt-adhm M6)
+
+§5.4.2 and §5.4.3 specify ordering and flattening for `+` and `*` only.
+This subsection pins the canonical form for the remaining arithmetic
+ops.
+
+**Binary `-`.** `{op:"-", args:[a, b]}` is **kept as a distinct op**;
+it is NOT rewritten to `+(a, *(-1, b))`. `-` is non-commutative: the
+canonicalizer preserves argument order (`args[0]` is the minuend,
+`args[1]` is the subtrahend). Nested same-op `-` is NOT flattened:
+`-(a, -(b, c))` canonicalizes to `-(canonicalize(a), -(canonicalize(b),
+canonicalize(c)))`, not to `+(a, -b, c)`. Identity rules: `-(x, 0)` →
+`x`, `-(0, 0)` → `0`. `-(x, x)` is NOT simplified to `0` (that is an
+algebraic rewrite, not a canonical-form operation; see §5.4 closing
+paragraph).
+
+**Unary `-` (unary negation, `neg`).** The spec permits both a dedicated
+`{op:"neg", args:[x]}` node and a binary `-` applied with a literal
+zero minuend (`{op:"-", args:[0, x]}`). The canonical form picks **the
+dedicated `neg` node** when the operand is not itself a literal: any
+`{op:"-", args:[0, x]}` canonicalizes to `{op:"neg", args:[x]}`. A
+numeric literal that happens to be negative is kept as the literal
+itself (no `neg` wrapper around numerics): `{op:"neg", args:[5]}`
+canonicalizes to `-5` (a literal integer or float node with negative
+value). Identity rules: `neg(0) → 0`, `neg(0.0) → 0.0`,
+`neg(neg(x)) → x`.
+
+**Binary `/`.** `{op:"/", args:[a, b]}` is **kept as a distinct op**;
+it is NOT rewritten to `*(a, inv(b))` (no `inv` node exists in the
+MVP). `/` is non-commutative: argument order is preserved (numerator,
+denominator). Nested same-op `/` is NOT flattened: `/(/(a, b), c)`
+stays as-is. Identity rules: `/(x, 1)` → `x`, `/(0, x)` → `0` (only
+when `x` is not itself `0`; `/(0, 0)` is undefined — the canonicalizer
+emits `E_CANONICAL_DIVBY_ZERO` and aborts). `/(x, x)` is NOT simplified
+to `1`.
+
+**No new AST ops.** `neg` is already permitted by the base spec's op
+taxonomy; this subsection pins its role. No new node types are
+introduced. Bindings that internally represent unary minus as a binary
+`-` with implicit `0` minuend MUST serialize as `{op:"neg", args:[x]}`
+on the canonical wire.
+
+#### 5.4.8 Worked example
 
 Input: `{op:"+", args:[{op:"*", args:["a", 0]}, "b", {op:"+", args:["a", 1]}]}`
 
@@ -367,7 +581,18 @@ Input: `{op:"+", args:[{op:"*", args:["a", 0]}, "b", {op:"+", args:["a", 1]}]}`
 Every binding must produce exactly this output. The conformance harness
 compares post-canonicalization JSON byte-wise (keys sorted, no optional
 whitespace). Algebraic equivalence beyond this list (e.g. distributivity,
-factoring) is **not** part of canonical form.
+factoring, `-(x,x)→0`, `/(x,x)→1`) is **not** part of canonical form.
+
+#### 5.4.9 Implementation note — memoize serialization during comparator (gt-adhm m1)
+
+§5.4.2's comparator recursively canonicalizes and JSON-serializes each
+operand to compare as byte strings. A naive implementation re-serializes
+at each comparator call, giving O(N² log N) in total AST size. Bindings
+SHOULD memoize the canonical JSON serialization at each canonicalized
+node so each subtree is serialized at most once per sort. This is an
+implementation note, not a conformance requirement — any implementation
+whose output matches the canonical form is conforming regardless of
+complexity.
 
 ### 5.5 No other new calculus ops
 
@@ -546,7 +771,12 @@ is non-conforming.
 The `{kind:"builtin", "name": ...}` generator encodes that these tables are
 produced by a well-known algorithm rather than a file; the set of legal
 `builtin` names is closed (`gnomonic_c6_neighbors`, `gnomonic_c6_d4_action`
-are the only two defined in v0.2.0).
+are the only two defined in v0.2.0). **Versioning policy** (resolves
+gt-j6do new-m8): adding a new `builtin.name` is a **minor version bump**
+(0.2.x), mirroring the `mesh.topology` policy in §8.A. Removing or
+changing the semantics of an existing builtin is a major version bump.
+Each binding MUST validate `builtin.name` against the closed set at
+load time and MUST reject unknown names with `E_UNKNOWN_BUILTIN`.
 
 #### 6.4.2 Worked panel-selector example (resolves m2)
 
@@ -568,12 +798,19 @@ A centered gradient along `i` at target `[p, i, j]`, when `i = Nc-1` (so the
 ]}
 ```
 
-`apply_axis_flip` is **not** a new AST op — it is an alias for the table
-lookup in §6.4.1, emitted as the canonical JSON form of the case `a ∈ {0..7}`
-expanded into a piecewise expression. (Bindings may internalize it; the
-canonical on-wire form is the piecewise expansion. The `apply_axis_flip`
-spelling above is illustrative; the materialized form is deterministic per
-§6.4.1's enumerated table.)
+**Illustrative, not on-wire** (resolves gt-j6do new-m5). `apply_axis_flip`
+shown above is **NOT a canonical AST op** and MUST NOT appear on the
+canonical wire. It is pedagogical shorthand for the piecewise expansion
+of the D₄ action from §6.4.1. The canonical on-wire form of the
+`+i`-neighbor's (Δi, Δj) substitution at `i = Nc-1` is a `case`
+expression (or equivalent nested `cond` tree) dispatching on the
+`axis_flip[p, 1]` value 0..7, with each branch substituting the
+rotated/reflected (Δi, Δj) per the §6.4.1 table. A worked canonical
+expansion appears in Appendix A (to be filed as a follow-up bead);
+v0.2.0 conformance fixtures under
+`tests/conformance/discretization/step4_cubed_sphere/` carry the full
+piecewise form. Bindings MAY internalize the D₄ action as a callable
+helper but MUST emit the piecewise form at canonicalization time.
 
 ### 6.5 Metric-array generators
 
@@ -642,22 +879,87 @@ expressions may reference the grid's metric arrays (as bare strings or
 `index` nodes), the grid's parameters, pattern variables bound by
 `applies_to`, and the reserved `$target` components (see below).
 
-#### 7.1.1 `$target` and implicit location indices (resolves M3)
+#### 7.1.1 `$target` and implicit location indices (resolves M3; refines per gt-j6do New M3 and gt-adhm C2/C3/M4)
 
 `$target` names the LHS index of the equation being rewritten, decomposed
 per the grid family:
 
 | Grid family | `$target` components |
 |---|---|
-| `cartesian` | `[i, j, k, ...]` — one per dimension |
+| `cartesian` | `[i, j, k, l, m, ...]` — one per dimension, in declaration order of `dimensions` |
 | `cubed_sphere` | `[p, i, j]` (panel, panel-i, panel-j) |
-| `unstructured` | one of `c` (cell), `e` (edge), `v` (vertex) — chosen by the operand's `location` |
+| `unstructured` | **scalar** — one of `c` (cell), `e` (edge), `v` (vertex); the choice is pinned by the rule below |
+
+**`$target` chooser on unstructured grids (resolves gt-adhm C2).** The
+scalar value of `$target` for an unstructured scheme is:
+
+- if the scheme declares `emits_location`, the target binds to the
+  enumeration letter of `emits_location` (`cell_center` → `c`,
+  `edge_normal` → `e`, `vertex` → `v`);
+- otherwise, the target binds to the enumeration letter of the
+  operand's `location` (from `requires_locations` if singular; otherwise
+  the operand's variable-level `location`).
+
+The §7.3 MPAS divergence example's scheme sets `emits_location:
+"cell_center"`, so `$target` binds to `c` — consistent with that
+section's worked expansion. Every other worked example in this RFC has
+been re-verified under this rule.
+
+**Operand references inside a scheme (resolves gt-adhm C2 follow-on).**
+On unstructured grids, `$target` alone does not locate the operand when
+the operand's location differs from the emit location. References to
+the operand variable inside the scheme's `coeff` or `stencil.selector`
+go via a connectivity table: `index(operand_var, index(<table>, $target,
+<k>))` — not `index(operand_var, $target)`. The `reduction` selector's
+`materialize` row (§7.2) encodes this convention: the materialized
+operand reference is `index(operand, table[$target, k])`, where `table`
+is declared on the selector and `k` is the reduction index.
+
+**`k_bound` as a second in-scope index (resolves gt-j6do new-m7 and
+gt-adhm M4).** A `reduction` selector's `k_bound` field names an
+iteration variable that becomes **in scope inside the scheme's `coeff`
+tree alongside `$target`**. The name is a string identifier (typically
+`"k"`); the `coeff` may reference it as a bare string (which the
+engine binds to the `arrayop`'s index variable at materialization time,
+§7.2), exactly like `$target`. The `k_bound` identifier is **not**
+prefixed with `$` — it is a local binding, not a pattern variable. The
+following are reserved local index names per grid family (not available
+as user variable names within a scheme):
+
+| Grid family | Reserved local names |
+|---|---|
+| `cartesian` | `i, j, k, l, m` (up to five dims; deeper requires spec bump) |
+| `cubed_sphere` | `p, i, j` |
+| `unstructured` | `c, e, v` (target letter) plus any `k_bound` name introduced by a `reduction` selector |
+
+If a scheme needs >5 cartesian dimensions it must bump the spec version.
+
+**Dimension-name → `$target`-component mapping (resolves gt-adhm C3).**
+For cartesian grids, axis `A` in a scheme's selector binds to the
+`$target` component at index `dimensions.indexOf(A)`, using the canonical
+component names `[i, j, k, l, m]` in the enumeration order of
+`dimensions`. Example: a grid declared as `dimensions: ["lat", "lon",
+"lev"]` exposes `$target = [i, j, k]` with `lat → i`, `lon → j`,
+`lev → k`. A scheme selector `{kind: "cartesian", axis: "$x",
+offset: -1}` with `$x := "lon"` materializes at `$target` by replacing
+`j` with `j - 1`; the other components are unchanged.
 
 Within a scheme, authors may reference `$target`'s components by their
 canonical names above; the component names are reserved keywords and may
 not be used as user variable names within a scheme. The v1 `mpas_edge_grad`
 example's `$e` is an implicit binding to `$target` for an edge-operand
 scheme; `$e` in that position is synonymous with `$target`.
+
+**`dim` overloading on unstructured grids (resolves gt-adhm M7).** The
+guard `dim_is_spatial_dim_of` (§5.2.4) and the pattern's `dim` sibling
+field name spatial axes on cartesian grids (`x`, `y`, `z`) but
+topological/emit-location names on unstructured grids (`cell`, `edge`,
+`vertex`). This dual meaning is intentional: `dim` always names *the
+axis along which the operator acts*, which for cartesian is a spatial
+coordinate and for unstructured is a topological location. The guard
+name is unchanged for v0.2.0 (renaming breaks every existing pattern);
+authors authoring unstructured schemes should read `dim` as "along
+which location does the operator reduce/emit".
 
 ### 7.2 Expansion semantics
 
@@ -682,6 +984,59 @@ expressions:
 | `reduction` | Lower to an `arrayop` over the index `k` running `0 .. count_expr - 1`, with element `coeff · index(operand, table[target, k])`, reducing via `combine`. |
 
 All cases are pure AST transforms; no runtime array data is touched.
+
+### 7.2.1 Scheme `applies_to` vs rule `pattern` — expansion protocol (resolves gt-adhm C4 / gt-j6do new-m6 / m8)
+
+The rule engine (§5.2) and scheme expansion (§7.2) are **sequential,
+not interleaved**. The protocol is:
+
+1. **Rule match.** A rule's `pattern` is tried against each AST subtree
+   during a rule-engine pass (§5.2.5). The first rule whose `pattern`
+   matches (and whose `where` guards pass) fires. This produces pattern-
+   variable bindings: `$u`, `$target`, `$x`, … are bound to AST
+   subtrees or bare strings per §5.2.1.
+2. **Scheme selection.** If the rule's replacement is `use: <scheme>`,
+   the named scheme is retrieved from `discretizations.<scheme>`.
+   If the replacement is an inline AST (the `replacement` field), no
+   scheme is involved and this step is skipped.
+3. **`applies_to` guard check.** The scheme's `applies_to` pattern is
+   matched against the **rule-matched subtree**, using the rule's
+   pattern-variable bindings as the starting substitution. This match
+   is a **guard only**, not a rebinder: its purpose is to verify that
+   the rule and the scheme agree on the operator class and variable
+   positions. Pattern-variable bindings from the rule **dominate**;
+   the scheme's `applies_to` neither introduces new bindings nor
+   shadows existing ones.
+   - If `applies_to` **matches**, expansion proceeds with the rule's
+     bindings.
+   - If `applies_to` **fails to match**, the engine aborts with error
+     code `E_SCHEME_MISMATCH`, identifying the rule, scheme, and
+     mismatched field. This is an **authoring error** — the rule and
+     scheme do not agree on the operator class — and is caught at
+     rewrite time (not at loader time), because the rule may have
+     bound pattern variables that the scheme's shallower pattern would
+     not have constrained.
+4. **Pattern-variable name alignment.** Pattern variables flow by
+   **name** from rule into scheme. If the rule binds `$u` and the
+   scheme references `$u`, the binding flows. If the rule binds `$X`
+   and the scheme references `$u`, the scheme's `$u` is **unbound**
+   at expansion, and the engine aborts with `E_SCHEME_MISMATCH`. There
+   is no implicit renaming. Authors are expected to use consistent
+   pattern-variable names across the rule and the scheme.
+5. **Expansion.** The scheme's `stencil`, `combine`, and `coeff`
+   entries are materialized per §7.2 using the inherited bindings.
+   The resulting AST replaces the matched subtree.
+
+**`applies_to` depth (resolves gt-adhm m5).** An `applies_to` pattern
+is syntactically **depth-1** in v0.2.0: the top-level op and its
+immediate children only. Deeper patterns require authors to use the
+rule's `pattern` field. This keeps scheme authorship simple and keeps
+the cost of the `applies_to` guard check bounded.
+
+**No second pass of rule matching.** `applies_to` is NOT a sibling of
+the rule `pattern` in the fixed-point loop. The engine does not match
+schemes against unmatched subtrees. A scheme is invoked only via a
+rule that names it.
 
 ### 7.3 Worked MPAS divergence (resolves M2 / C4)
 
@@ -717,31 +1072,60 @@ Scheme:
 }
 ```
 
-Expansion at cell `c` lowers (§7.2 `reduction` row) to:
+Expansion at cell `c` lowers (§7.2 `reduction` row) to the following,
+which conforms **exactly** to base-spec §4.3.1 `arrayop` (resolves
+gt-j6do New C2):
 
 ```json
 { "op": "arrayop",
-  "idx": ["k"],
-  "ranges": { "k": { "lo": 0, "hi": { "op": "-", "args": [ { "op": "index", "args": ["nEdgesOnCell", "c"] }, 1 ] } } },
-  "reduce": { "op": "+", "init": 0 },
+  "output_idx": [],
   "expr": { "op": "*", "args": [
       { "op": "/", "args": [
           { "op": "index", "args": ["dvEdge", { "op": "index", "args": ["edgesOnCell", "c", "k"] } ] },
           { "op": "index", "args": ["areaCell", "c"] } ] },
       { "op": "index", "args": [ "F", { "op": "index", "args": ["edgesOnCell", "c", "k"] } ] }
-  ]}
+  ]},
+  "ranges": {
+    "k": [ 0, { "op": "-", "args": [ { "op": "index", "args": ["nEdgesOnCell", "c"] }, 1 ] } ]
+  },
+  "reduce": "+",
+  "args": ["F", "dvEdge", "areaCell", "edgesOnCell", "nEdgesOnCell"]
 }
 ```
+
+**Field-by-field base-spec conformance check** (self-validation note,
+per gt-j6do New C2):
+
+- `output_idx: []` — empty list because the expansion at fixed cell `c`
+  produces a scalar; the outer per-cell iteration is implicit in the
+  equation's `$target`-parameterized LHS.
+- `expr` — the per-iteration element expression over the contracted
+  index `k`. Matches base-spec §4.3.1's `expr` slot.
+- `ranges` — uses the `[start, stop]` integer-pair form (base spec
+  §4.3.1 L210–213). `stop` here is an expression; the base-spec
+  matrix-multiply example uses integer literals, and the spec explicitly
+  permits complex offsets inside `expr` (L218). The expression form of
+  `stop` is within the stated non-affine-offset convention.
+- `reduce: "+"` — string op, matching the base-spec column-sum example
+  (L227). The v2 draft's object-shaped `{op: "+", init: 0}` form is
+  dropped.
+- `args` — lists every array referenced in `expr` or `ranges` by bare
+  name, as the base-spec matmul example does (L214, L228). `k` is not
+  listed (it is an index variable, not an array).
+
+This is the same `arrayop` shape the existing spec §4.3.1 supports; no new
+AST node is introduced for the reduction. The MPAS worked example **parses
+against the base-spec `arrayop` schema** — a conformance fixture under
+`tests/conformance/discretization/step3_mpas/` MUST include a JSON-schema
+validation assertion that this lowered form validates against
+`esm-schema.json`'s `arrayop` definition. MPAS thus "reduces to" the stencil
+template after one lowering step to `arrayop`, consistent with §4's
+architectural claim.
 
 The inner `index` on `edgesOnCell` is a dynamic index: `k` is a symbolic
 index variable valid inside `arrayop.expr` (per spec §4.3.3), so `"k"` as a
 bare string is permitted and resolves to the arrayop index variable — no
 `regrid` is needed because we remain on grid `mpas_cvmesh`.
-
-This is the same `arrayop` shape the existing spec §4.3.1 supports; no new
-AST node is introduced for the reduction. MPAS thus "reduces to" the stencil
-template after one lowering step to `arrayop`, consistent with §4's
-architectural claim.
 
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
@@ -875,6 +1259,99 @@ same way they rewrite interior equations. A BC pattern is matched via
 entry's `{variable, kind, side}` (synthetic `op: "bc"` node; the entry's
 `value` is carried as the sole Expression arg after `$u`).
 
+### 9.2.1 Worked periodic BC (resolves gt-adhm M2)
+
+Periodic BCs were previously declared at domain level (v0.1). In v0.2,
+they are declared in `models.<M>.boundary_conditions` like any other
+BC. Periodicity is inherently a **pair** relationship between a pair
+of opposing sides, not a side-local property; this subsection pins the
+authoring convention and the rule rewrite.
+
+**Authoring: declare once, at either side of the periodic pair.** A
+model with periodic BC on the `x` axis declares ONE `boundary_conditions`
+entry with `kind: "periodic"` on either `xmin` or `xmax` (authors choose;
+the canonical form is `xmin`). The paired side is implicit. Declaring
+the same periodic pair at both sides is accepted but redundant; the
+loader normalizes to the single-side form (emit a warning if both
+sides are declared and differ in any field).
+
+**Example — 1D advection on `[0, L]` with periodic BC:**
+
+```json
+{
+  "models": {
+    "adv_1d": {
+      "domain": "line",
+      "grid":   "x_uniform",
+      "variables": {
+        "u": { "shape": ["x"], "location": "cell_center" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [ { "op": "-", "args": ["v_adv"] }, { "op": "grad", "args": ["u"], "dim": "x" } ] } }
+      ],
+      "boundary_conditions": {
+        "u_periodic_x": {
+          "variable": "u",
+          "side":     "xmin",
+          "kind":     "periodic"
+        }
+      }
+    }
+  }
+}
+```
+
+**Rewrite rule.** A BC rule matches the `bc` node and rewrites each
+edge-cell stencil that would reach outside the domain to use the
+periodic-wrapped neighbor. For a cartesian grid with `N = Nx` cells,
+the rule is:
+
+```json
+{
+  "rules": {
+    "periodic_wrap_x": {
+      "pattern": { "op": "index", "args": ["$u", "$expr_i", "$rest"] },
+      "where":   [ { "guard": "dim_is_periodic", "pvar": "x", "grid": "$g" },
+                   { "guard": "var_has_grid", "pvar": "$u", "grid": "$g" } ],
+      "replacement": { "op": "index", "args": ["$u",
+          { "op": "mod", "args": [ { "op": "+", "args": ["$expr_i", "Nx"] }, "Nx" ] },
+          "$rest" ] }
+    }
+  }
+}
+```
+
+Under the `centered_2nd_uniform` scheme at `i = 0`, the neighbor index
+`{op:"-", args:["i", 1]}` evaluates to `-1`; the periodic rule
+rewrites the `index` node to wrap via `mod(i - 1 + Nx, Nx)`. At
+`i = Nx - 1`, the `+1` neighbor wraps to `0`. Canonical-form output at
+`i = 0` is:
+
+```json
+{ "op": "+",
+  "args": [
+    { "op": "*", "args": [
+       { "op": "/", "args": [ -1, { "op": "*", "args": [ 2, "dx" ] } ] },
+       { "op": "index", "args": [ "u",
+           { "op": "mod", "args": [ { "op": "+", "args": [ { "op": "-", "args": ["i", 1] }, "Nx" ] }, "Nx" ] } ] } ] },
+    { "op": "*", "args": [
+       { "op": "/", "args": [  1, { "op": "*", "args": [ 2, "dx" ] } ] },
+       { "op": "index", "args": [ "u",
+           { "op": "mod", "args": [ { "op": "+", "args": [ { "op": "+", "args": ["i", 1] }, "Nx" ] }, "Nx" ] } ] } ] }
+  ]
+}
+```
+
+After canonicalization (§5.4) the double-wrapped form stays; the
+canonicalizer does not collapse `mod(i-1+Nx, Nx)` to `Nx-1` symbolically
+(that would require knowing `i = 0`, which is a per-equation lowering,
+not canonicalization).
+
+**Conformance fixture.** `tests/conformance/discretization/step1b/
+rect_1d_advection_centered_periodic.esm` exercises this path end-to-end;
+§13.1 Step 1b acceptance requires Julia + Rust bit-identical output.
+
 ### 9.3 Components as BC contributors
 
 Per owner decision 3(c): a model-level component (deposition, emissions,
@@ -892,7 +1369,7 @@ A rule may emit additional equations via `produces[k]`:
 | `kind` | Meaning |
 |---|---|
 | `algebraic` | Emit the `emit`/`value` expression as an algebraic constraint (= 0). |
-| `ghost_var` | Declare a new ghost-cell variable with indices; the rule body defines it. Ghost variables are local to the discretized output and are not visible to `free_variables` on the original continuous model (validation rule: loader must reject a pre-discretization `.esm` that references a `ghost_var`). |
+| `ghost_var` | Declare a new ghost-cell variable with indices; the rule body defines it. Ghost variables are local to the discretized output and are not visible to `free_variables` on the original continuous model (validation rule: loader must reject a pre-discretization `.esm` that references a `ghost_var`). **Naming discipline** (resolves gt-j6do open question 5): ghost variable names are **scheme-scoped** and MUST follow the pattern `<scheme_name>__<logical_name>__<side>` — double-underscore separated, where `<scheme_name>` is the containing `discretizations.<name>` key, `<logical_name>` is author-supplied (typically the variable being ghosted, e.g. `u`), and `<side>` is the BC side (`xmin`, `xmax`, `panel_seam`, …) or `interior` if the ghost is not side-specific. Two schemes declaring `ghost_u_xmin` collide unless the scheme names differ; the `<scheme_name>__` prefix makes collisions impossible at the spec level. The canonical on-wire form uses this naming; a scheme author who writes a bare `ghost_u_xmin` has it rewritten to `<scheme>__u__xmin` at loader time, with a warning. |
 
 The v1 `state_var` option is **removed** from the MVP (resolves m9); there
 was no compelling worked example. It can be re-added with a spec-version
@@ -908,7 +1385,7 @@ bump if a use case surfaces.
 | `models.<M>.equations` | Equations stay continuous. Discretization is an out-of-band operation (§11). |
 | `data_loaders` | Extended with `kind: "mesh"` (§8.A). |
 | `interfaces` | Unchanged. Regridding between domains continues to use `interfaces.<I>.regridding`. For grid-to-grid regridding *within* a rewrite, use the §5.3 `regrid` op. |
-| `coupling` | Unchanged. Cross-system coupling still refers to continuous variables; the discretized pipeline applies rules *post-coupling* (§11). Cross-grid indices in a coupled expression must be wrapped in `regrid`. |
+| `coupling` | **Extended** with a new optional field `coupling.<c>.regrid_method` (string from the §5.3 closed set). The coupling resolver uses this method when wrapping cross-grid references at §11 Step 4. If the field is absent and the coupling does not cross grids, behavior is unchanged; if absent and the coupling DOES cross grids, the loader emits `E_MISSING_REGRID_METHOD`. Cross-system coupling still refers to continuous variables; the discretized pipeline applies rules *post-coupling* (§11). |
 | `variables.<name>` | Gains optional `shape` (list of dimension names) and `location` fields (spec §6.1 amendment below). |
 
 ### 10.1 Breaking-change summary (version 0.1 → 0.2)
@@ -920,6 +1397,8 @@ bump if a use case surfaces.
    `location: "cell_center"` when a grid is attached).
 3. `data_loaders.<ℓ>.kind` accepts `"mesh"`. Pre-0.2 files without it are
    unaffected.
+4. `coupling.<c>.regrid_method` (new optional field, v2.1 addenda §10 row)
+   is additive; pre-0.2 files without it remain valid.
 
 A file carrying `spec.version: "0.1"` is not loadable by a 0.2-only
 binding; it must be migrated with the `spec.migrate_0_1_to_0_2` convention
@@ -956,10 +1435,20 @@ discretized ODE/DAE system via the following deterministic pipeline:
    `loader` or `builtin`, record the handle; do not materialize bulk data.
 4. **Apply couplings** — resolve `coupling.<c>.variable_map.transforms`
    on continuous variables. After this step the equation system is on
-   possibly-multiple grids. Cross-grid references are wrapped with `regrid`.
+   possibly-multiple grids. **The coupling resolver** is responsible
+   for wrapping any cross-grid reference it emits in a `regrid` node,
+   using the `coupling.<c>.regrid_method` field (§5.3 closed set). This
+   is the one place where cross-grid wrapping is emitted during Step 4
+   (resolves gt-adhm m6).
 5. **Rewrite** — apply the rule engine (§5.2) to every equation in
    `models.*` and to every entry of `models.*.boundary_conditions`. Emit
-   additional equations from `rules[*].produces`.
+   additional equations from `rules[*].produces`. **The rule engine**
+   is responsible for wrapping any cross-grid `index` expression it
+   emits (e.g. a scheme's cross-panel stencil reference) in a `regrid`
+   node with `method` supplied by the emitting selector (§5.3,
+   §7.2). A rule that emits a cross-grid reference without a `regrid`
+   wrapper is a scheme bug and MUST be flagged by the loader's validator
+   with `E_MISSING_REGRID`.
 6. **Canonicalize** — apply §5.4 canonical form to every emitted AST.
 7. **Check rule coverage** — for every equation, if `models.<M>.grid` is
    set and the post-rewrite AST still contains a PDE operator on a gridded
@@ -995,6 +1484,37 @@ is **non-conforming**.
 Spec-level contract: if a binding advertises discretization support without
 DAE support, that is the binding's bug, not the model author's problem.
 Each binding's documentation must state its DAE assembler.
+
+**Error code pinned.** The error code name is exactly
+`E_NO_DAE_SUPPORT` (upper-case, ASCII, with a single underscore between
+each word). Bindings MUST emit this exact string, not a paraphrase.
+
+**Conformance test (resolves gt-j6do New M5 / bead F10).** The
+conformance harness ships a fixture at
+`tests/conformance/discretization/dae-missing/algebraic_fixture.esm`
+containing a model whose rule set emits `produces: algebraic` on at
+least one equation. The harness:
+
+1. Loads the fixture under each binding with DAE support enabled —
+   expects the binding to produce a DAE-assembled system and return
+   exit code 0.
+2. Loads the fixture under each binding with DAE support
+   **explicitly disabled** (via an env var or a binding-specific flag
+   that each binding documents) — expects the binding to emit exit
+   code ≠ 0 and an error message containing the string
+   `E_NO_DAE_SUPPORT`.
+3. **Silent success (exit code 0 with no DAE assembly) is a test
+   failure.** Demotion of an algebraic constraint to an ODE residual
+   is also a test failure — the harness inspects the binding's emitted
+   system (via a binding-provided introspection verb) and asserts the
+   algebraic equations are present as constraints, not as ODE terms.
+
+Binding coverage: Julia and Rust MUST implement both the success and
+the disabled-DAE paths. Python, Go, and TS MAY stub the DAE-success
+path (return `E_NO_DAE_SUPPORT` always) in v0.2.0; they MUST still
+emit the exact error code on the failure path. Bindings that gain DAE
+support in subsequent minor versions extend the success-path coverage
+without a spec change.
 
 ## 13. Conformance
 
@@ -1034,15 +1554,40 @@ identical discretized expressions (post-canonicalization).
   with at least three input files carrying `domains.<d>.boundary_conditions`
   and their expected 0.2-form equivalents.
 
-**Acceptance:**
+**Acceptance (extended per gt-j6do New M2):**
 
 - All five bindings parse, canonicalize, and serialize every fixture in
   `tests/conformance/discretization/infra/` to the byte-identical canonical
   form.
 - `esm migrate` on the three schema-migration fixtures produces expected
   output (tests/conformance/migration/0_1_to_0_2/*).
-- No `rules` / `discretizations` / `grids` section is exercised yet — Step 1
-  is pure infrastructure.
+- **Rule-engine exercise.** Fixtures under
+  `tests/conformance/discretization/infra/rule_engine/` load a trivial
+  rule (e.g. `{pattern: {op:"+", args:["$a", 0]}, replacement: "$a"}`)
+  plus a seed AST, and assert that all five bindings produce the
+  expected post-rewrite AST byte-identically. At least three fixtures:
+  a pattern that matches once, a pattern that fixed-points, and a
+  pattern that hits `E_RULES_NOT_CONVERGED` at `max_passes = 3`.
+- **`regrid` canonicalization exercise.** A fixture under
+  `tests/conformance/discretization/infra/regrid/` contains a `regrid`
+  node with `method: "bilinear"`; all bindings must round-trip it
+  through canonicalization without mutation and must reject
+  `method: "unknown"` with `E_UNKNOWN_REGRID_METHOD`.
+- **`passthrough` annotation exercise.** A fixture under
+  `tests/conformance/discretization/infra/passthrough/` contains a
+  gridded equation still carrying `grad`; with `passthrough: true`,
+  all bindings pass the rule-coverage check; without it, all bindings
+  emit `E_UNREWRITTEN_PDE_OP`.
+- **Canonical form — numeric-literal fixtures** (resolves gt-j6do New C1
+  / gt-adhm C1). Fixtures under
+  `tests/conformance/discretization/infra/numbers/` assert byte-
+  identical serialization of: integer-valued floats, shortest-round-trip
+  floats, subnormals, negative zero. A fixture containing NaN or Inf
+  MUST be rejected with `E_CANONICAL_NONFINITE`.
+- No `discretizations` / `grids` / model-equation-rewrite fixtures are
+  exercised yet — Step 1 ships only the infrastructure (rule engine,
+  canonicalizer, migration tool, schema additions). Scheme work begins
+  in Step 1b.
 
 #### Step 1b — Rectangular grids, first scheme set (absorbs prior Step 1 schemes)
 
@@ -1246,6 +1791,9 @@ acceptance of this RFC:
   - Model-level `boundary_conditions` (per §9)
   - `data_loaders.<ℓ>.kind: "mesh"` (per §8.A)
   - `rules.max_passes`, `passthrough` flags (per §5.2.5, §11)
+  - `coupling.<c>.regrid_method` (v2.1 addenda; closed set per §5.3)
+  - Closed `regrid.method` enum per §5.3 (v2.1 addenda)
+  - Closed `builtin.name` enum per §6.4.1 versioning policy (v2.1 addenda)
 - `esm-spec.md` gains:
   - A new top-level section §16 "Discretization" that cross-references
     this RFC for rationale and §6/§7/§5 for normative grammar.
@@ -1381,6 +1929,151 @@ diff quickly.
 - **Q6 (coupling × rewrite).** §11 Step 4 runs coupling before rewrite;
   §5.3 `regrid` wraps cross-grid references.
 
+### 17.1 v2.1 addenda — resolution of dual-review findings (gt-j6do + gt-adhm)
+
+v2.1 applies targeted fixes on top of v2 per the dual review of v2
+(brahmin self-review `discretization-review-v2.md` and ghoul parallel
+review `discretization-review-v2-parallel.md`). All edits land in place;
+the spec version stays at 0.2.0. Each fix below cites the review
+findings it resolves and the section(s) that carry the normative text.
+
+**Blocking fixes (F1–F10 from gt-woe1):**
+
+- **F1 — §7.3 MPAS worked example.** Two independent bugs closed in a
+  single pass:
+  - Arrayop schema now conforms to base-spec §4.3.1 (`output_idx: []`,
+    `[start, stop]` ranges, string `reduce`, explicit `args` list).
+    Resolves gt-j6do **New C2**. §7.3 now carries a self-validation
+    note requiring the conformance fixture to assert JSON-schema
+    validation against the base-spec `arrayop`.
+  - `$target` chooser for unstructured grids now reads "emits_location
+    if set, else operand's location" (§7.1.1). §7.3 conforms:
+    `emits_location: cell_center` → `$target = c`. Every `index`
+    reference inside the expanded `arrayop` uses connectivity tables
+    (`index(edgesOnCell, c, k)`) rather than bare `$target` for edge
+    operands. Resolves gt-adhm **C2**.
+
+- **F2 — §5.4.6 normative JSON number formatting.** New subsection
+  adopts RFC 8785 JCS (<https://datatracker.ietf.org/doc/html/rfc8785>
+  §3.2.2.3) as the canonical number format. Adds explicit rules for
+  integer-valued floats, shortest round-trip non-integer floats,
+  subnormals, negative zero, and NaN/Inf (forbidden in canonical form;
+  `E_CANONICAL_NONFINITE`). Preserves §5.4.1's integer/float node
+  distinction: a float node with integer value still serializes as
+  `1` on the wire but remains type-tagged as float in the AST.
+  Resolves gt-j6do **New C1** and gt-adhm **C1**.
+
+- **F3 — §7.1.1 `$target` chooser + dim→component mapping.** Adds
+  the emits-location-first rule for unstructured grids; adds the
+  cartesian dim-name → component-letter mapping by `dimensions.indexOf`;
+  extends the reserved-letter table to five cartesian dimensions
+  (`i, j, k, l, m`); documents `k_bound` as a second in-scope index
+  introduced by `reduction` selectors; clarifies `dim` overloading
+  on unstructured grids (gt-adhm M7). Resolves gt-j6do **New M3**
+  and gt-adhm **C2, C3, M4, M7**.
+
+- **F4 — §7.2.1 scheme `applies_to` vs rule `pattern` protocol.** New
+  subsection pins the five-step expansion protocol: rule match →
+  scheme selection → `applies_to` guard check → name-aligned binding
+  flow → expansion. `applies_to` is guard-only, not a rebinder;
+  mismatch raises `E_SCHEME_MISMATCH` at rewrite time. Pattern variables
+  flow by name; missing bindings are errors, not implicit renames.
+  `applies_to` depth is fixed at 1. Resolves gt-adhm **C4** and
+  gt-j6do **new-m6, m8**.
+
+- **F5 — §5.2.5 post-rewrite walker.** Pinned to option (a): rewritten
+  subtrees are sealed for the remainder of the current pass; the
+  walker does not descend into them, nor re-attempt any rule at the
+  rewritten node, until the next pass begins at the root. Options (b)
+  and (c) are explicitly non-conforming. Cross-pass re-entry is
+  permitted. Adds `max_passes = 32` justification (2× the deepest
+  MVP scheme chain) and the `rules` ordering rule (insertion order;
+  array form also permitted). Resolves gt-adhm **C5** and gt-j6do
+  **open question 4, m7**.
+
+- **F6 — §5.4.7 canonicalization for `-`, `/`, unary `neg`.** New
+  subsection. Binary `-` and `/` kept as distinct non-commutative
+  ops; args order preserved; no flattening; identity rules enumerated.
+  Unary negation canonicalized as `{op:"neg", args:[x]}`; numeric
+  literals absorb the sign. No new AST ops. Resolves gt-adhm **M6**.
+
+- **F7 — §5.3 / §7.2 `regrid.method` closed set.** `method` now
+  validates against a closed enum (`"nearest"`, `"bilinear"`,
+  `"conservative"`, `"panel_seam"`) with normative semantics.
+  Unknown methods raise `E_UNKNOWN_REGRID_METHOD` at load.
+  Emitter discipline pinned: `panel` selectors emit `"panel_seam"`
+  fixedly; couplings supply method via new `coupling.<c>.regrid_method`
+  field; authored literals validate at parse. Resolves gt-adhm **M1**
+  and gt-j6do **open question 3**.
+
+- **F8 — §9.2.1 worked periodic-BC example.** New subsection. Periodic
+  declared once at the canonical side (xmin); the pair is implicit.
+  Includes a 1D advection fixture, the periodic-wrap rule (using
+  `replacement`, not `use`), and the canonical-form output at
+  `i = 0` with `mod(i - 1 + Nx, Nx)`. Resolves gt-adhm **M2**.
+
+- **F9 — §13.1 Step 1 rule-engine acceptance.** Acceptance extended
+  from "parse/canonicalize/serialize" to include rule-engine exercise
+  (three fixtures: single match, fixed-point, non-convergence),
+  `regrid` canonicalization + unknown-method rejection,
+  `passthrough` behavior, and numeric-literal corner cases
+  (integer-valued float, shortest round-trip, subnormals, negative
+  zero, NaN/Inf rejection). Resolves gt-j6do **New M2**.
+
+- **F10 — §12 DAE-abort conformance test.** Error code pinned as
+  exactly `E_NO_DAE_SUPPORT`. Conformance test under
+  `tests/conformance/discretization/dae-missing/` exercises both the
+  success path (DAE enabled) and the disabled path (exit ≠ 0 with
+  the error string). Silent success and constraint demotion are
+  explicit test failures. Binding coverage: Julia/Rust must implement
+  both paths; Python/Go/TS may stub the success path but must emit
+  the exact error on the failure path. Resolves gt-j6do **New M5**.
+
+**Editorial cleanup rolled in:**
+
+- §9.4 ghost-variable naming discipline (scheme-scoped,
+  `<scheme>__<logical>__<side>`). Resolves gt-j6do **open question 5**.
+- §5.2 rule-field table adds `use`, `produces`, and `region`; defines
+  `region` as advisory. Resolves gt-j6do **new-m2, new-m3, new-m4**.
+- §6.4.2 `apply_axis_flip` clarified as **not** an on-wire op; the
+  canonical form is the piecewise expansion. Resolves gt-j6do **new-m5**.
+- §6.4.1 builtin versioning policy pinned: adding a name is a minor
+  version bump. Resolves gt-j6do **new-m8**.
+- §5.4.9 comparator-memoization implementation note. Resolves gt-adhm **m1**.
+- §5.4.4 zero-elimination iterates across integer and float zeros
+  together. Resolves gt-adhm **m3**.
+- §11 Step 4 / Step 5 pin **where** `regrid` wrapping happens
+  (coupling resolver vs rule engine). Resolves gt-adhm **m6**.
+- §5.2.5 `max_passes = 32` justified (2× deepest MVP scheme chain).
+  Resolves gt-adhm **m7**.
+- §10 `coupling.<c>.regrid_method` added; §10.1 extended; §16 deliverable
+  list extended accordingly.
+
+**Findings explicitly deferred to later minor versions:**
+
+- gt-j6do **New M1** (three mesh-loader field paths) — addressed by
+  documentation, not schema collapse; a `mesh_fields` unification is a
+  minor-bump candidate in 0.2.x.
+- gt-j6do **New M3** (per-op `args` leaf-vs-subtree table for
+  `grad`/`div`/`laplacian`) — convention continues to be "leaf-class
+  on calculus ops"; an explicit table lands with the next rule-engine
+  amendment.
+- gt-j6do **New M4** (loader `determinism.temporal_interpolation`) —
+  in scope for Step 2 when time-varying loader BCs land.
+- gt-j6do **New M6** (shape-mismatched couplings) — in scope for
+  Step 2/Step 3 when cross-grid couplings are authored.
+- gt-j6do **new-m1** (≥4D cartesian component names beyond `i, j, k,
+  l, m`) — deferred; current v2.1 caps at 5 dimensions.
+- gt-adhm **M3** (extended bare-string resolution for `face_coords` /
+  `independent_variable`) — spec text already allows this in §8.A.3
+  and §9.2; a §5.1 enumeration update will land with the Step 2
+  schema additions.
+- gt-adhm **M5** (axis-specific schemes vs axis-parameterized metric
+  lookup) — continue the one-scheme-per-axis convention in v0.2.0;
+  an axis-parameterized metric op is a 0.3 candidate.
+- gt-adhm **M8** (Python/Go/TS Step 2–4 disposition) — §13.1 Step 2
+  acceptance language to be refined when Step 2 fixtures are authored.
+
 ---
 
-*End of v2.*
+*End of v2.1.*
