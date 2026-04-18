@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 
 use earthsci_toolkit::types::Expr;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn roundtrip_one(path: &Path) -> Value {
     let raw = match fs::read_to_string(path) {

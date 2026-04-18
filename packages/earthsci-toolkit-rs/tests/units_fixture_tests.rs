@@ -12,9 +12,7 @@
 //! Corrupting an expected value in any fixture — or reverting the
 //! `pressure_drop` fix from gt-p3v — must cause this suite to fail.
 
-use earthsci_toolkit::{
-    evaluate, load, EsmFile, Expr, Model, ModelTest, Tolerance, VariableType,
-};
+use earthsci_toolkit::{EsmFile, Expr, Model, ModelTest, Tolerance, VariableType, evaluate, load};
 use std::collections::HashMap;
 
 const UNITS_FIXTURES: &[(&str, &str)] = &[

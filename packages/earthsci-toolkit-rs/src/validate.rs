@@ -1118,7 +1118,6 @@ fn validate_scoped_reference(
     }
 }
 
-
 /// Check for circular dependencies between models
 fn check_circular_dependencies_in_models(
     models: &HashMap<String, crate::Model>,

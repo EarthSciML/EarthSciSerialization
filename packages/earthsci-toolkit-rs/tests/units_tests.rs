@@ -85,8 +85,7 @@ fn propagate_dh_equals_v() {
         rhs: Expr::Variable("v".to_string()),
     };
 
-    validate_equation_dimensions(&eq, &env)
-        .expect("D(h)/dt should match v (both are m/s)");
+    validate_equation_dimensions(&eq, &env).expect("D(h)/dt should match v (both are m/s)");
 }
 
 /// Loading the fixture `units_propagation.esm` and validating it should
@@ -118,8 +117,8 @@ fn validate_units_propagation_fixture_warning_free() {
 #[test]
 fn esm_mole_fraction_family_is_dimensionless() {
     for unit_str in &["ppm", "ppmv", "ppb", "ppbv", "ppt", "pptv"] {
-        let u = parse_unit(unit_str)
-            .unwrap_or_else(|e| panic!("Failed to parse {}: {}", unit_str, e));
+        let u =
+            parse_unit(unit_str).unwrap_or_else(|e| panic!("Failed to parse {}: {}", unit_str, e));
         assert!(
             u.is_dimensionless(),
             "{} should be dimensionless per ESM standard",
@@ -128,9 +127,21 @@ fn esm_mole_fraction_family_is_dimensionless() {
     }
     // Aliases must share dimension with their base form — cross-binding
     // agreement depends on `ppmv + ppm` not flagging a mismatch.
-    assert!(parse_unit("ppm").unwrap().is_compatible(&parse_unit("ppmv").unwrap()));
-    assert!(parse_unit("ppb").unwrap().is_compatible(&parse_unit("ppbv").unwrap()));
-    assert!(parse_unit("ppt").unwrap().is_compatible(&parse_unit("pptv").unwrap()));
+    assert!(
+        parse_unit("ppm")
+            .unwrap()
+            .is_compatible(&parse_unit("ppmv").unwrap())
+    );
+    assert!(
+        parse_unit("ppb")
+            .unwrap()
+            .is_compatible(&parse_unit("ppbv").unwrap())
+    );
+    assert!(
+        parse_unit("ppt")
+            .unwrap()
+            .is_compatible(&parse_unit("pptv").unwrap())
+    );
 }
 
 #[test]
@@ -163,7 +174,10 @@ fn esm_molec_count_atom_composes() {
 fn esm_dobson_is_areal_number_density() {
     let dobson = parse_unit("Dobson").expect("Failed to parse Dobson");
     // Standard: NOT dimensionless — Length^-2 (since molec is a count atom).
-    assert!(!dobson.is_dimensionless(), "Dobson must not be dimensionless");
+    assert!(
+        !dobson.is_dimensionless(),
+        "Dobson must not be dimensionless"
+    );
     let molec_per_m2 = parse_unit("molec/m^2").expect("Failed to parse molec/m^2");
     assert!(
         dobson.is_compatible(&molec_per_m2),

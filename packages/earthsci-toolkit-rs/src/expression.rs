@@ -152,11 +152,7 @@ fn evaluate_operator_with_unbound_tracking(
                     Err(_) => had_error = true,
                 }
             }
-            if had_error {
-                Err(())
-            } else {
-                Ok(sum)
-            }
+            if had_error { Err(()) } else { Ok(sum) }
         }
         "-" => {
             if args.len() == 1 {
@@ -187,11 +183,7 @@ fn evaluate_operator_with_unbound_tracking(
                     Err(_) => had_error = true,
                 }
             }
-            if had_error {
-                Err(())
-            } else {
-                Ok(product)
-            }
+            if had_error { Err(()) } else { Ok(product) }
         }
         "/" => {
             if args.len() != 2 {

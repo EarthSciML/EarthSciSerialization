@@ -489,9 +489,10 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             // Elementwise map over arrays with `fn` naming the scalar
             // operator. Construct a synthetic scalar node and recurse so we
             // reuse the same dimensional rules.
-            let fn_name = op.broadcast_fn.as_deref().ok_or_else(|| {
-                UnitError::ParseError("'broadcast' requires 'fn'".to_string())
-            })?;
+            let fn_name = op
+                .broadcast_fn
+                .as_deref()
+                .ok_or_else(|| UnitError::ParseError("'broadcast' requires 'fn'".to_string()))?;
             let synthetic = ExpressionNode {
                 op: fn_name.to_string(),
                 args: op.args.clone(),
@@ -513,9 +514,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
 ///
 /// Unparseable unit strings are skipped. Variables without declared units are
 /// treated as dimensionless.
-pub fn build_unit_env(
-    variables: &HashMap<String, crate::ModelVariable>,
-) -> HashMap<String, Unit> {
+pub fn build_unit_env(variables: &HashMap<String, crate::ModelVariable>) -> HashMap<String, Unit> {
     let mut env = HashMap::new();
     for (name, var) in variables {
         let unit = match &var.units {
@@ -961,7 +960,10 @@ mod tests {
     #[test]
     fn propagate_addition_matches() {
         let env = env_of(&[("h1", "m"), ("h2", "cm")]);
-        let e = op("+", vec![Expr::Variable("h1".into()), Expr::Variable("h2".into())]);
+        let e = op(
+            "+",
+            vec![Expr::Variable("h1".into()), Expr::Variable("h2".into())],
+        );
         let u = Unit::propagate(&e, &env).unwrap();
         assert_eq!(u.dimensions.get(&Dimension::Length), Some(&1));
     }
@@ -969,7 +971,10 @@ mod tests {
     #[test]
     fn propagate_addition_mismatch_errors() {
         let env = env_of(&[("h", "m"), ("t", "s")]);
-        let e = op("+", vec![Expr::Variable("h".into()), Expr::Variable("t".into())]);
+        let e = op(
+            "+",
+            vec![Expr::Variable("h".into()), Expr::Variable("t".into())],
+        );
         let err = Unit::propagate(&e, &env).unwrap_err();
         assert!(matches!(err, UnitError::DimensionMismatch(_)));
     }
@@ -977,7 +982,10 @@ mod tests {
     #[test]
     fn propagate_multiplication_combines_dims() {
         let env = env_of(&[("rho", "kg/m^3"), ("v", "m/s")]);
-        let e = op("*", vec![Expr::Variable("rho".into()), Expr::Variable("v".into())]);
+        let e = op(
+            "*",
+            vec![Expr::Variable("rho".into()), Expr::Variable("v".into())],
+        );
         let u = Unit::propagate(&e, &env).unwrap();
         assert_eq!(u.dimensions.get(&Dimension::Mass), Some(&1));
         assert_eq!(u.dimensions.get(&Dimension::Length), Some(&-2));
@@ -987,7 +995,10 @@ mod tests {
     #[test]
     fn propagate_division_subtracts_dims() {
         let env = env_of(&[("m1", "kg"), ("V", "m^3")]);
-        let e = op("/", vec![Expr::Variable("m1".into()), Expr::Variable("V".into())]);
+        let e = op(
+            "/",
+            vec![Expr::Variable("m1".into()), Expr::Variable("V".into())],
+        );
         let u = Unit::propagate(&e, &env).unwrap();
         assert_eq!(u.dimensions.get(&Dimension::Mass), Some(&1));
         assert_eq!(u.dimensions.get(&Dimension::Length), Some(&-3));
@@ -1005,7 +1016,10 @@ mod tests {
     fn propagate_power_rejects_dimensional_exponent() {
         // h ^ t is invalid: exponent must be dimensionless.
         let env = env_of(&[("h", "m"), ("t", "s")]);
-        let e = op("^", vec![Expr::Variable("h".into()), Expr::Variable("t".into())]);
+        let e = op(
+            "^",
+            vec![Expr::Variable("h".into()), Expr::Variable("t".into())],
+        );
         let err = Unit::propagate(&e, &env).unwrap_err();
         assert!(matches!(err, UnitError::DimensionMismatch(_)));
     }
@@ -1056,7 +1070,10 @@ mod tests {
     #[test]
     fn propagate_comparison_requires_matching_dims() {
         let env = env_of(&[("h", "m"), ("x", "s")]);
-        let e = op(">", vec![Expr::Variable("h".into()), Expr::Variable("x".into())]);
+        let e = op(
+            ">",
+            vec![Expr::Variable("h".into()), Expr::Variable("x".into())],
+        );
         assert!(matches!(
             Unit::propagate(&e, &env).unwrap_err(),
             UnitError::DimensionMismatch(_)
@@ -1095,7 +1112,10 @@ mod tests {
     #[test]
     fn propagate_index_inherits_from_source() {
         let env = env_of(&[("arr", "kg")]);
-        let node = op("index", vec![Expr::Variable("arr".into()), Expr::Number(0.0)]);
+        let node = op(
+            "index",
+            vec![Expr::Variable("arr".into()), Expr::Number(0.0)],
+        );
         let u = Unit::propagate(&node, &env).unwrap();
         assert_eq!(u.dimensions.get(&Dimension::Mass), Some(&1));
     }
