@@ -865,7 +865,7 @@ symbolic coefficients.
 
 | Field | Required | Description |
 |---|---|---|
-| `applies_to` | ✓ | A shallow AST pattern (§5.2 syntax) identifying the operator this scheme discretizes. Pattern variables in `applies_to` are visible to `stencil` and `coeff`. |
+| `applies_to` | ✓ | A shallow AST pattern (§5.2 syntax; depth-1, per §7.2.1) identifying the operator this scheme discretizes. It is a **guard only** — pattern-variable bindings flow from the triggering rule by name (§7.2.1); `applies_to` does not itself introduce bindings, and `stencil` / `coeff` see the rule's bindings. |
 | `grid_family` | ✓ | `"cartesian"`, `"cubed_sphere"`, or `"unstructured"` |
 | `combine` | | `"+"` (default), `"*"`, `"min"`, or `"max"` — how stencil entries are combined. |
 | `stencil` | ✓ | Array of `{ selector, coeff }` entries (see §4). Exactly one entry for a `reduction` selector; one-or-more for the others. |
@@ -876,10 +876,10 @@ symbolic coefficients.
 
 The `stencil` entries' `selector.kind` must match `grid_family`. `coeff`
 expressions may reference the grid's metric arrays (as bare strings or
-`index` nodes), the grid's parameters, pattern variables bound by
-`applies_to`, and the reserved `$target` components (see below).
+`index` nodes), the grid's parameters, pattern variables bound by the
+triggering rule (§7.2.1), and the reserved `$target` components (see below).
 
-#### 7.1.1 `$target` and implicit location indices (resolves M3; refines per gt-j6do New M3 and gt-adhm C2/C3/M4)
+#### 7.1.1 `$target` and implicit location indices (resolves M3; refines per gt-j6do new-m7 and gt-adhm C2/C3/M4)
 
 `$target` names the LHS index of the equation being rewritten, decomposed
 per the grid family:
@@ -1969,7 +1969,7 @@ findings it resolves and the section(s) that carry the normative text.
   extends the reserved-letter table to five cartesian dimensions
   (`i, j, k, l, m`); documents `k_bound` as a second in-scope index
   introduced by `reduction` selectors; clarifies `dim` overloading
-  on unstructured grids (gt-adhm M7). Resolves gt-j6do **New M3**
+  on unstructured grids (gt-adhm M7). Resolves gt-j6do **new-m7**
   and gt-adhm **C2, C3, M4, M7**.
 
 - **F4 — §7.2.1 scheme `applies_to` vs rule `pattern` protocol.** New
