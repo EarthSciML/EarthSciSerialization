@@ -35,6 +35,7 @@ include("edit.jl")
 include("codegen.jl")
 include("canonicalize.jl")
 include("rule_engine.jl")
+include("mtk_export.jl")
 
 export
     # Expression types
@@ -109,6 +110,8 @@ export
     # Rule engine (RFC §5.2)
     Rule, Guard, RuleContext, RuleEngineError,
     match_pattern, apply_bindings, rewrite, check_guards, check_guard,
-    parse_rule, parse_rules, check_unrewritten_pde_ops
+    parse_rule, parse_rules, check_unrewritten_pde_ops,
+    # MTK → ESM export (gt-dod2; Phase 1 migration tooling)
+    mtk2esm, mtk2esm_gaps, GapReport
 
 end # module EarthSciSerialization

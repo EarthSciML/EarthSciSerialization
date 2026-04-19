@@ -32,6 +32,7 @@ using JSON3
     include("rule_engine_test.jl")
     include("rule_engine_conformance_test.jl")
     include("grids_test.jl")
+    include("mtk_export_test.jl")
 
     # Comprehensive test suite for full verification
     @testset "Comprehensive Test Suite" begin

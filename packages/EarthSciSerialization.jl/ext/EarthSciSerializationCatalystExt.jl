@@ -4,7 +4,8 @@ using EarthSciSerialization
 using EarthSciSerialization: Expr, NumExpr, IntExpr, VarExpr, OpExpr, Reaction,
     ReactionSystem, Species, Parameter, Equation, ContinuousEvent,
     DiscreteEvent, AffectEquation, FunctionalAffect, ConditionTrigger,
-    PeriodicTrigger, PresetTimesTrigger
+    PeriodicTrigger, PresetTimesTrigger,
+    GapReport, mtk2esm, mtk2esm_gaps
 using ModelingToolkit
 using Symbolics
 using Catalyst
@@ -237,6 +238,133 @@ function _catalyst_rate_to_esm(expr)
         end
     end
     return VarExpr(string(expr))
+end
+
+# ========================================
+# MTK → ESM export for Catalyst.ReactionSystem (gt-dod2)
+# ========================================
+
+"""
+    mtk2esm(rs::Catalyst.ReactionSystem; metadata=(;)) -> Dict
+
+Walk a Catalyst `ReactionSystem` and emit a schema-valid ESM `Dict` with a
+top-level `reaction_systems.<name>` entry. See the plain-MTK `mtk2esm`
+method in `EarthSciSerializationMTKExt` for the general contract.
+
+Fields populated from the reactions:
+- `species` (from `Catalyst.species(rs)`)
+- `parameters` (from `Catalyst.parameters(rs)`)
+- `reactions` (id + substrates/products + rate expression)
+
+Placeholders filled in Phase 2: `description`, `version`, `reference`,
+`tests`, `examples`, `metadata.tags`, `metadata.source_ref`.
+"""
+function mtk2esm(rs::Catalyst.ReactionSystem; metadata=(;))
+    gaps = GapReport[]
+
+    # Resolve system name
+    name_kw = try
+        getproperty(metadata, :name)
+    catch
+        nothing
+    end
+    sys_name = if name_kw !== nothing
+        String(name_kw)
+    else
+        try
+            sn = String(nameof(rs))
+            sn == "" ? "UnnamedReactionSystem" : sn
+        catch
+            "UnnamedReactionSystem"
+        end
+    end
+
+    # Build the ESM ReactionSystem via the existing reverse method, which
+    # already handles species / parameters / reactions / rate expressions.
+    esm_rs = try
+        EarthSciSerialization.ReactionSystem(rs)
+    catch e
+        push!(gaps, GapReport("unknown",
+            "failed to convert Catalyst.ReactionSystem: $(sprint(showerror, e))",
+            "reaction_system"))
+        # Build an empty ESM reaction system so the output stays schema-valid.
+        ReactionSystem(Species[], Reaction[])
+    end
+
+    rs_dict = EarthSciSerialization.serialize_reaction_system(esm_rs)
+
+    # Attach placeholder fields
+    rs_dict["description"] = _rmeta_string(metadata, :description, "")
+    rs_dict["version"] = _rmeta_string(metadata, :version, "0.1.0")
+    rs_dict["reference"] = Dict{String,Any}()
+    rs_dict["tests"] = Any[]
+    rs_dict["examples"] = Any[]
+
+    rs_meta = Dict{String,Any}()
+    tags_val = _rmeta_vec_string(metadata, :tags)
+    if tags_val !== nothing
+        rs_meta["tags"] = tags_val
+    end
+    source_ref = _rmeta_string(metadata, :source_ref, "")
+    if !isempty(source_ref)
+        rs_meta["source_ref"] = source_ref
+    end
+    if !isempty(gaps)
+        rs_meta["notes"] = ["TODO_GAP: $(g.bead_id) - $(g.description) @ $(g.where)"
+                             for g in gaps]
+    end
+    if !isempty(rs_meta)
+        rs_dict["metadata"] = rs_meta
+    end
+
+    # Top-level EsmFile-shaped dict
+    file_meta = Dict{String,Any}("name" => sys_name)
+    file_desc = _rmeta_string(metadata, :description, "")
+    if !isempty(file_desc)
+        file_meta["description"] = file_desc
+    end
+    authors = _rmeta_vec_string(metadata, :authors)
+    if authors !== nothing
+        file_meta["authors"] = authors
+    end
+    ftags = _rmeta_vec_string(metadata, :tags)
+    if ftags !== nothing
+        file_meta["tags"] = ftags
+    end
+
+    out = Dict{String,Any}(
+        "esm" => "0.1.0",
+        "metadata" => file_meta,
+        "reaction_systems" => Dict{String,Any}(sys_name => rs_dict),
+    )
+
+    if !isempty(gaps)
+        gap_lines = join(["  - [$(g.bead_id)] $(g.description) @ $(g.where)"
+                          for g in gaps], "\n")
+        @warn "mtk2esm: $(length(gaps)) schema-gap construct(s) in " *
+              "ReactionSystem $(sys_name):\n$(gap_lines)"
+    end
+
+    return out
+end
+
+function _rmeta_string(metadata, key::Symbol, default::String)
+    try
+        v = getproperty(metadata, key)
+        return v === nothing ? default : String(v)
+    catch
+        return default
+    end
+end
+
+function _rmeta_vec_string(metadata, key::Symbol)
+    try
+        v = getproperty(metadata, key)
+        v === nothing && return nothing
+        return [String(x) for x in v]
+    catch
+        return nothing
+    end
 end
 
 end # module EarthSciSerializationCatalystExt
