@@ -3297,6 +3297,80 @@ export interface Graph<N, E> {
 
 ---
 
+### Grid
+
+**Julia:**
+```julia
+struct Grid
+```
+
+> Grid
+
+Top-level grid definition (RFC §6).
+
+**Python:**
+```python
+class Grid:
+```
+
+> Top-level grid declaration (RFC §6).
+
+---
+
+### GridConnectivity
+
+**Python:**
+```python
+class GridConnectivity:
+```
+
+> Grid connectivity table / panel_connectivity entry (RFC §6.
+
+**Typescript:**
+```typescript
+export interface GridConnectivity {
+```
+
+> Unstructured-grid connectivity table (e.
+
+---
+
+### GridExtent
+
+**Python:**
+```python
+class GridExtent:
+```
+
+> Cartesian grid extent per dimension (RFC §6.
+
+**Typescript:**
+```typescript
+export interface GridExtent {
+```
+
+> Per-dimension extent for cartesian or cubed_sphere grids.
+
+---
+
+### GridMetricArray
+
+**Python:**
+```python
+class GridMetricArray:
+```
+
+> A grid metric array (e.
+
+**Typescript:**
+```typescript
+export interface GridMetricArray {
+```
+
+> A named metric array declared on a grid (e.
+
+---
+
 ### Interface
 
 **Julia:**
