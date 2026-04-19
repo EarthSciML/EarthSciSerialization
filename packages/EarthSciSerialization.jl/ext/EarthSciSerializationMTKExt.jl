@@ -715,7 +715,29 @@ end
 # Event conversion
 # ========================================
 
-function _affect_to_eq(affect, var_dict::Dict{String,Any}, t_sym, dim_dict)
+# Substitute every state variable reference in `expr` with
+# `ModelingToolkit.Pre(var)`. Required on event-affect RHS expressions:
+# current MTK interprets an un-`Pre`-wrapped affect equation as an
+# algebraic constraint to hold after the callback, which renders
+# assignments like `x ~ x + dose` unsatisfiable (see
+# ModelingToolkit/callbacks.jl:85 warning). Parameters are left alone —
+# they don't vary across the affect, and wrapping them would force the
+# discrete-parameter machinery for no gain.
+function _wrap_pre_states(expr, state_syms)
+    isempty(state_syms) && return expr
+    subs = Dict{Any,Any}()
+    for sv in state_syms
+        u = Symbolics.unwrap(sv)
+        subs[u] = ModelingToolkit.Pre(sv)
+    end
+    if expr isa AbstractArray
+        return map(e -> Symbolics.substitute(e, subs), expr)
+    end
+    return Symbolics.substitute(expr, subs)
+end
+
+function _affect_to_eq(affect, var_dict::Dict{String,Any}, t_sym, dim_dict,
+                      state_syms)
     if affect isa AffectEquation
         if !haskey(var_dict, affect.lhs)
             @warn "Target variable $(affect.lhs) not found for event affect"
@@ -723,6 +745,7 @@ function _affect_to_eq(affect, var_dict::Dict{String,Any}, t_sym, dim_dict)
         end
         target = var_dict[affect.lhs]
         rhs = _esm_to_symbolic(affect.rhs, var_dict, t_sym, dim_dict)
+        rhs = _wrap_pre_states(rhs, state_syms)
         return target ~ rhs
     elseif affect isa FunctionalAffect
         if !haskey(var_dict, affect.target)
@@ -731,12 +754,16 @@ function _affect_to_eq(affect, var_dict::Dict{String,Any}, t_sym, dim_dict)
         end
         target = var_dict[affect.target]
         rhs = _esm_to_symbolic(affect.expression, var_dict, t_sym, dim_dict)
+        rhs = _wrap_pre_states(rhs, state_syms)
+        # For compound operations the LHS target also appears on the RHS
+        # and must refer to its pre-affect value.
+        pre_target = ModelingToolkit.Pre(target)
         if affect.operation == "set"
             return target ~ rhs
         elseif affect.operation == "add"
-            return target ~ target + rhs
+            return target ~ pre_target + rhs
         elseif affect.operation == "multiply"
-            return target ~ target * rhs
+            return target ~ pre_target * rhs
         else
             @warn "Unknown affect operation: $(affect.operation)"
             return target ~ rhs
@@ -745,12 +772,14 @@ function _affect_to_eq(affect, var_dict::Dict{String,Any}, t_sym, dim_dict)
     return nothing
 end
 
-function _build_continuous_events(flat::FlattenedSystem, var_dict, t_sym, dim_dict)
+function _build_continuous_events(flat::FlattenedSystem, var_dict, t_sym, dim_dict,
+                                  state_syms)
     cbs = Any[]
     for ev in flat.continuous_events
         conds = [_esm_to_symbolic(c, var_dict, t_sym, dim_dict) for c in ev.conditions]
         affects = filter(!isnothing,
-                         [_affect_to_eq(a, var_dict, t_sym, dim_dict) for a in ev.affects])
+                         [_affect_to_eq(a, var_dict, t_sym, dim_dict, state_syms)
+                          for a in ev.affects])
         isempty(conds) || isempty(affects) && continue
         cb = ModelingToolkit.SymbolicContinuousCallback(conds[1], affects)
         push!(cbs, cb)
@@ -758,11 +787,13 @@ function _build_continuous_events(flat::FlattenedSystem, var_dict, t_sym, dim_di
     return cbs
 end
 
-function _build_discrete_events(flat::FlattenedSystem, var_dict, t_sym, dim_dict)
+function _build_discrete_events(flat::FlattenedSystem, var_dict, t_sym, dim_dict,
+                                state_syms)
     cbs = Any[]
     for ev in flat.discrete_events
         affects = filter(!isnothing,
-                         [_affect_to_eq(a, var_dict, t_sym, dim_dict) for a in ev.affects])
+                         [_affect_to_eq(a, var_dict, t_sym, dim_dict, state_syms)
+                          for a in ev.affects])
         isempty(affects) && continue
         if ev.trigger isa ConditionTrigger
             cond = _esm_to_symbolic(ev.trigger.expression, var_dict, t_sym, dim_dict)
@@ -837,8 +868,11 @@ function ModelingToolkit.System(flat::FlattenedSystem;
     dvs = copy(states)
     append!(dvs, observed)
 
-    cont_cbs = _build_continuous_events(flat, var_dict, t_sym, dim_dict)
-    disc_cbs = _build_discrete_events(flat, var_dict, t_sym, dim_dict)
+    # Symbolic handles for state variables (not their array-scalarized
+    # elements) drive `Pre`-wrapping in affect equations.
+    state_syms = Any[var_dict[vname] for vname in keys(flat.state_variables)]
+    cont_cbs = _build_continuous_events(flat, var_dict, t_sym, dim_dict, state_syms)
+    disc_cbs = _build_discrete_events(flat, var_dict, t_sym, dim_dict, state_syms)
 
     # Array-op equations must bypass MTK's structural checks — the LHS and
     # RHS are typically `ArrayOp`-wrapped expressions whose scalar form is
