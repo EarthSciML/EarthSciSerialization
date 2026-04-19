@@ -97,7 +97,8 @@ end
 
     @test length(model_dict["equations"]) == 3
 
-    @test model_dict["version"] == "0.1.0"
+    # Placeholders: tests/examples arrays, reference is omitted when
+    # there is nothing to say (default version, no gaps, no source_ref).
     @test model_dict["tests"] == []
     @test model_dict["examples"] == []
 end
@@ -118,10 +119,14 @@ end
     @test out["metadata"]["tags"] == ["migration", "toy"]
 
     m = out["models"]["Tagged"]
-    @test m["version"] == "0.2.0"
-    @test m["description"] == "toy decay chain"
-    @test m["metadata"]["tags"] == ["migration", "toy"]
-    @test m["metadata"]["source_ref"] == "earthsciml/UnitTests.jl@abc123"
+    # Per-model description + version + source_ref are folded into
+    # `reference.notes` — the Model schema has `additionalProperties: false`
+    # and only Reference.notes is a schema-sanctioned free-form text slot.
+    @test haskey(m, "reference")
+    notes = m["reference"]["notes"]
+    @test occursin("version: 0.2.0", notes)
+    @test occursin("toy decay chain", notes)
+    @test occursin("source_ref: earthsciml/UnitTests.jl@abc123", notes)
 end
 
 @testset "mtk2esm: JSON-serializable output" begin
