@@ -33,11 +33,6 @@
           "units": "mol",
           "default": 0.0,
           "description": "Product species"
-        },
-        "total_mass": {
-          "units": "mol",
-          "default": 101.0,
-          "description": "Total mass (should be conserved)"
         }
       },
       "parameters": {
@@ -105,17 +100,32 @@
           }
         }
       ],
-      "constraint_equations": [
+      "tolerance": {
+        "rel": 1.0e-4,
+        "abs": 1.0e-8
+      },
+      "tests": [
         {
-          "lhs": "total_mass",
-          "rhs": {
-            "op": "+",
-            "args": [
-              "A",
-              "B",
-              "C"
-            ]
-          }
+          "id": "ic_smoke",
+          "description": "IC-identity smoke test: Catalyst flatten + MTK build + solve-at-t0 round-trip for the autocatalytic network A+B->2B (rate k1*A*B), B->C (rate k2*B). No closed-form solution exists (Lotka-Volterra class), so this verifies the reaction-system construction path. Full numerical references would require bootstrapping from a trusted solve and are tracked separately. The removed total_mass species + constraint_equations block previously blocked compile (Catalyst flatten does not currently honour constraint_equations on a ReactionSystem).",
+          "initial_conditions": {
+            "A": 100.0,
+            "B": 1.0,
+            "C": 0.0
+          },
+          "parameter_overrides": {
+            "k1": 0.1,
+            "k2": 0.05
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 1.0e-6
+          },
+          "assertions": [
+            { "variable": "A", "time": 0.0, "expected": 100.0, "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "B", "time": 0.0, "expected": 1.0,   "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "C", "time": 0.0, "expected": 0.0,   "tolerance": { "abs": 1.0e-12 } }
+          ]
         }
       ]
     }

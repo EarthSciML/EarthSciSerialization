@@ -14,9 +14,9 @@
     ]
   },
   "models": {
-    "Oscillator1": {
+    "CoupledOscillators": {
       "reference": {
-        "notes": "First harmonic oscillator: x1'' + k1*x1 = coupling_force"
+        "notes": "Two linearly-coupled harmonic oscillators merged into a single model because the Julia subsystem 'coupling.variable_map' mechanism cannot currently bind a free cross-model reference (coupling_force referenced in both Oscillator1 and Oscillator2 equations without a producing model). Equations: x1'' = -k1*x1 + kc*(x2-x1); x2'' = -k2*x2 - kc*(x2-x1)."
       },
       "variables": {
         "x1": {
@@ -31,11 +31,53 @@
           "default": 0.0,
           "description": "Velocity of oscillator 1"
         },
+        "x2": {
+          "type": "state",
+          "units": "m",
+          "default": -0.5,
+          "description": "Position of oscillator 2"
+        },
+        "v2": {
+          "type": "state",
+          "units": "m/s",
+          "default": 0.0,
+          "description": "Velocity of oscillator 2"
+        },
         "k1": {
           "type": "parameter",
           "units": "1/s^2",
           "default": 1.0,
           "description": "Spring constant 1"
+        },
+        "k2": {
+          "type": "parameter",
+          "units": "1/s^2",
+          "default": 1.0,
+          "description": "Spring constant 2"
+        },
+        "kc": {
+          "type": "parameter",
+          "units": "1/s^2",
+          "default": 0.5,
+          "description": "Coupling spring constant"
+        },
+        "coupling_force": {
+          "type": "observed",
+          "units": "1/s^2",
+          "expression": {
+            "op": "*",
+            "args": [
+              "kc",
+              {
+                "op": "-",
+                "args": [
+                  "x2",
+                  "x1"
+                ]
+              }
+            ]
+          },
+          "description": "Coupling force (mass-scaled): kc*(x2-x1)"
         }
       },
       "equations": [
@@ -75,34 +117,7 @@
               "coupling_force"
             ]
           }
-        }
-      ]
-    },
-    "Oscillator2": {
-      "reference": {
-        "notes": "Second harmonic oscillator: x2'' + k2*x2 = -coupling_force"
-      },
-      "variables": {
-        "x2": {
-          "type": "state",
-          "units": "m",
-          "default": -0.5,
-          "description": "Position of oscillator 2"
         },
-        "v2": {
-          "type": "state",
-          "units": "m/s",
-          "default": 0.0,
-          "description": "Velocity of oscillator 2"
-        },
-        "k2": {
-          "type": "parameter",
-          "units": "1/s^2",
-          "default": 1.5,
-          "description": "Spring constant 2"
-        }
-      },
-      "equations": [
         {
           "lhs": {
             "op": "D",
@@ -122,7 +137,7 @@
             "wrt": "t"
           },
           "rhs": {
-            "op": "+",
+            "op": "-",
             "args": [
               {
                 "op": "*",
@@ -136,36 +151,89 @@
                   "x2"
                 ]
               },
-              {
-                "op": "-",
-                "args": [
-                  "coupling_force"
-                ]
-              }
+              "coupling_force"
             ]
           }
+        }
+      ],
+      "tolerance": {
+        "rel": 1.0e-6,
+        "abs": 1.0e-10
+      },
+      "tests": [
+        {
+          "id": "symmetric_mode",
+          "description": "Symmetric-mode normal mode: with k1=k2=1 and x1(0)=x2(0)=1, v1(0)=v2(0)=0, the coupling term kc*(x2-x1) vanishes for all t (x1=x2 identically). Both oscillators follow x(t)=cos(t), v(t)=-sin(t) regardless of kc. Sampled at quarter-period phases through one full period.",
+          "initial_conditions": {
+            "x1": 1.0,
+            "v1": 0.0,
+            "x2": 1.0,
+            "v2": 0.0
+          },
+          "parameter_overrides": {
+            "k1": 1.0,
+            "k2": 1.0,
+            "kc": 0.5
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 6.283185307179586
+          },
+          "assertions": [
+            { "variable": "x1", "time": 0.0,                "expected": 1.0 },
+            { "variable": "x2", "time": 0.0,                "expected": 1.0 },
+            { "variable": "x1", "time": 1.5707963267948966, "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x2", "time": 1.5707963267948966, "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x1", "time": 3.141592653589793,  "expected": -1.0 },
+            { "variable": "x2", "time": 3.141592653589793,  "expected": -1.0 },
+            { "variable": "x1", "time": 6.283185307179586,  "expected": 1.0 },
+            { "variable": "x2", "time": 6.283185307179586,  "expected": 1.0 },
+            { "variable": "v1", "time": 1.5707963267948966, "expected": -1.0 },
+            { "variable": "v2", "time": 1.5707963267948966, "expected": -1.0 }
+          ]
+        },
+        {
+          "id": "antisymmetric_mode",
+          "description": "Antisymmetric-mode normal mode: with k1=k2=1 and x1(0)=1, x2(0)=-1, v1(0)=v2(0)=0, kc=0.5, the motion is x1(t)=cos(omega_a*t), x2(t)=-cos(omega_a*t) where omega_a=sqrt(k+2*kc)=sqrt(2). Period T_a = 2*pi/sqrt(2) = pi*sqrt(2) ~= 4.442882938158366. Sampled at quarter-period phases.",
+          "initial_conditions": {
+            "x1": 1.0,
+            "v1": 0.0,
+            "x2": -1.0,
+            "v2": 0.0
+          },
+          "parameter_overrides": {
+            "k1": 1.0,
+            "k2": 1.0,
+            "kc": 0.5
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 4.442882938158366
+          },
+          "assertions": [
+            { "variable": "x1", "time": 0.0,                "expected": 1.0 },
+            { "variable": "x2", "time": 0.0,                "expected": -1.0 },
+            { "variable": "x1", "time": 1.1107207345395915, "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x2", "time": 1.1107207345395915, "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x1", "time": 2.221441469079183,  "expected": -1.0 },
+            { "variable": "x2", "time": 2.221441469079183,  "expected": 1.0 },
+            { "variable": "x1", "time": 4.442882938158366,  "expected": 1.0 },
+            { "variable": "x2", "time": 4.442882938158366,  "expected": -1.0 }
+          ]
         }
       ]
     }
   },
-  "coupling": [
-    {
-      "type": "variable_map",
-      "from": "coupling_force",
-      "transform": "param_to_var",
-      "to": "unknown.var"
-    }
-  ],
   "domains": {
     "default": {
       "temporal": {},
       "initial_conditions": {
         "type": "per_variable",
         "values": {
-          "Oscillator1.x1": 1.0,
-          "Oscillator1.v1": 0.0,
-          "Oscillator2.x2": -0.5,
-          "Oscillator2.v2": 0.0
+          "CoupledOscillators.x1": 1.0,
+          "CoupledOscillators.v1": 0.0,
+          "CoupledOscillators.x2": -0.5,
+          "CoupledOscillators.v2": 0.0
         }
       }
     }

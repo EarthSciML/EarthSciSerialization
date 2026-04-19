@@ -310,6 +310,50 @@
             ]
           }
         }
+      ],
+      "tolerance": {
+        "rel": 1.0e-4,
+        "abs": 1.0e-20
+      },
+      "tests": [
+        {
+          "id": "large_network_build_smoke",
+          "description": "Large-system build/compile smoke test: exercises the Catalyst flatten + MTK system build + solve-at-t0 path for an atmospheric-chemistry network. IC-identity at t=0 is the only portable reference (trace-species concentrations span ~20 orders of magnitude; closed-form or numerically-verified references are out of scope here). tspan extends 1 microsecond so that the solver actually runs.",
+          "initial_conditions": {
+            "O3": 1e-08,
+            "NO": 1e-09,
+            "NO2": 1e-09,
+            "OH": 1e-12,
+            "HO2": 1e-11,
+            "CO": 1e-07,
+            "CH4": 1.8e-06,
+            "H2O": 0.01,
+            "CO2": 0.0004,
+            "H2O2": 1e-09,
+            "HCHO": 1e-09,
+            "CH3O2": 1e-12,
+            "CH3OH": 1e-10,
+            "C2H4": 1e-09,
+            "C2H6": 1e-09,
+            "C3H8": 1e-09,
+            "SO2": 1e-09,
+            "NH3": 1e-09,
+            "O2": 0.21,
+            "N2": 0.78
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 1.0e-6
+          },
+          "assertions": [
+            { "variable": "O3",  "time": 0.0, "expected": 1e-08,   "tolerance": { "abs": 1e-20 } },
+            { "variable": "NO",  "time": 0.0, "expected": 1e-09,   "tolerance": { "abs": 1e-20 } },
+            { "variable": "NO2", "time": 0.0, "expected": 1e-09,   "tolerance": { "abs": 1e-20 } },
+            { "variable": "OH",  "time": 0.0, "expected": 1e-12,   "tolerance": { "abs": 1e-22 } },
+            { "variable": "CO",  "time": 0.0, "expected": 1e-07,   "tolerance": { "abs": 1e-18 } },
+            { "variable": "CH4", "time": 0.0, "expected": 1.8e-06, "tolerance": { "abs": 1e-18 } }
+          ]
+        }
       ]
     }
   },

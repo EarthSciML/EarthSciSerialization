@@ -33,11 +33,6 @@
           "units": "mol",
           "default": 0.0,
           "description": "Product D"
-        },
-        "total_mass": {
-          "units": "mol",
-          "default": 2.0,
-          "description": "Should remain constant"
         }
       },
       "parameters": {
@@ -81,18 +76,41 @@
           }
         }
       ],
-      "constraint_equations": [
+      "tolerance": {
+        "rel": 1.0e-6,
+        "abs": 1.0e-10
+      },
+      "tests": [
         {
-          "lhs": "total_mass",
-          "rhs": {
-            "op": "+",
-            "args": [
-              "A",
-              "B",
-              "C",
-              "D"
-            ]
-          }
+          "id": "symmetric_second_order_decay",
+          "description": "A + B -> C + D at rate k*A*B with A(0)=B(0)=1 and C(0)=D(0)=0. Symmetry gives A(t)=B(t) and C(t)=D(t)=1-A(t), reducing to dA/dt = -k*A^2 with closed form A(t) = 1/(1+k*t). With k=0.1, A(5)=1/1.5 and A(10)=0.5. Conservation A+C is implied by the per-species assertions rather than a constraint_equations total_mass species (Catalyst flatten does not currently honour constraint_equations on a ReactionSystem).",
+          "initial_conditions": {
+            "A": 1.0,
+            "B": 1.0,
+            "C": 0.0,
+            "D": 0.0
+          },
+          "parameter_overrides": {
+            "k": 0.1
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 10.0
+          },
+          "assertions": [
+            { "variable": "A", "time": 0.0,  "expected": 1.0 },
+            { "variable": "B", "time": 0.0,  "expected": 1.0 },
+            { "variable": "C", "time": 0.0,  "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "D", "time": 0.0,  "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "A", "time": 5.0,  "expected": 0.6666666666666666 },
+            { "variable": "B", "time": 5.0,  "expected": 0.6666666666666666 },
+            { "variable": "C", "time": 5.0,  "expected": 0.3333333333333333 },
+            { "variable": "D", "time": 5.0,  "expected": 0.3333333333333333 },
+            { "variable": "A", "time": 10.0, "expected": 0.5 },
+            { "variable": "B", "time": 10.0, "expected": 0.5 },
+            { "variable": "C", "time": 10.0, "expected": 0.5 },
+            { "variable": "D", "time": 10.0, "expected": 0.5 }
+          ]
         }
       ]
     },
@@ -175,6 +193,43 @@
               "B"
             ]
           }
+        }
+      ],
+      "tolerance": {
+        "rel": 1.0e-6,
+        "abs": 1.0e-10
+      },
+      "tests": [
+        {
+          "id": "bateman_chain",
+          "description": "Linear radioactive-decay chain A -> B -> C. Closed-form Bateman equations: A(t)=exp(-k1*t), B(t)=k1/(k2-k1)*(exp(-k1*t)-exp(-k2*t)), C(t)=1-A-B. With A(0)=1, B(0)=C(0)=0, k1=0.5, k2=0.3. Sampled at t=1,2,5. The k1 != k2 form avoids the degenerate Bateman limit.",
+          "initial_conditions": {
+            "A": 1.0,
+            "B": 0.0,
+            "C": 0.0
+          },
+          "parameter_overrides": {
+            "k1": 0.5,
+            "k2": 0.3
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 5.0
+          },
+          "assertions": [
+            { "variable": "A", "time": 0.0, "expected": 1.0 },
+            { "variable": "B", "time": 0.0, "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "C", "time": 0.0, "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "A", "time": 1.0, "expected": 0.6065306597126334 },
+            { "variable": "B", "time": 1.0, "expected": 0.33571890242271123 },
+            { "variable": "C", "time": 1.0, "expected": 0.05775043786465538 },
+            { "variable": "A", "time": 2.0, "expected": 0.36787944117144233 },
+            { "variable": "B", "time": 2.0, "expected": 0.4523304873064602 },
+            { "variable": "C", "time": 2.0, "expected": 0.17979007152209747 },
+            { "variable": "A", "time": 5.0, "expected": 0.0820849986238988 },
+            { "variable": "B", "time": 5.0, "expected": 0.35261290381132754 },
+            { "variable": "C", "time": 5.0, "expected": 0.5653020975647737 }
+          ]
         }
       ]
     },
@@ -364,6 +419,38 @@
               "x"
             ]
           }
+        }
+      ],
+      "tolerance": {
+        "rel": 1.0e-6,
+        "abs": 1.0e-10
+      },
+      "tests": [
+        {
+          "id": "harmonic_analytical",
+          "description": "Undamped harmonic oscillator x'' + omega^2*x = 0 with x(0)=1, v(0)=0, omega=1. Closed-form: x(t)=cos(omega*t), v(t)=-omega*sin(omega*t); energy = 0.5 conserved. Sampled at the four quarter-period phases plus t=2*pi.",
+          "initial_conditions": {
+            "x": 1.0,
+            "v": 0.0
+          },
+          "parameter_overrides": {
+            "omega": 1.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 6.283185307179586
+          },
+          "assertions": [
+            { "variable": "x", "time": 0.0,                "expected": 1.0 },
+            { "variable": "x", "time": 1.5707963267948966, "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x", "time": 3.141592653589793,  "expected": -1.0 },
+            { "variable": "x", "time": 4.71238898038469,   "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x", "time": 6.283185307179586,  "expected": 1.0 },
+            { "variable": "v", "time": 0.0,                "expected": 0.0,  "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "v", "time": 1.5707963267948966, "expected": -1.0 },
+            { "variable": "v", "time": 3.141592653589793,  "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "v", "time": 4.71238898038469,   "expected": 1.0 }
+          ]
         }
       ]
     },

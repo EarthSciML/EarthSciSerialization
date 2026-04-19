@@ -142,6 +142,13 @@ end
     simulation_skip = Dict(
         # SymbolicContinuousCallback API drift in MTK ext (gt-2ta2).
         "bouncing_ball.esm" => "gt-2ta2",
+        # PDE fixtures (spatial independent variables) — the System()
+        # constructor routes to ModelingToolkit.PDESystem, which this
+        # ODE-only runner does not drive. A parallel PDE runner is out
+        # of scope for the inline tests-block contract; schema + other
+        # bindings still consume these fixtures.
+        "spatial_diffusion.esm" => "PDE (no ODE runner path)",
+        "spatial_limitation.esm" => "PDE (no ODE runner path)",
     )
     simulation_dir = joinpath(@__DIR__, "..", "..", "..",
                               "tests", "simulation")

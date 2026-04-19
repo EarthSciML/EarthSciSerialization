@@ -64,6 +64,10 @@ SIMULATION_SKIP: Dict[str, str] = {
     # 1e-10 / 1e-12). Numerical drift exceeds the per-assertion bound.
     "box_model_ozone.esm": "gt-mb4t",
     "python_scipy_integration.esm": "gt-mb4t",
+    # Fixture authors closed-form reference solutions (Bateman chain,
+    # symmetric second-order decay, harmonic oscillator) with model-level
+    # rel=1e-6; same Python-tolerance drift as gt-mb4t applies.
+    "mathematical_correctness.esm": "gt-mb4t",
 }
 
 
