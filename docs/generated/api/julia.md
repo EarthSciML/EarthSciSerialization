@@ -1192,7 +1192,7 @@ Reaction(...)
 
 ### Reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1140`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1149`
 
 **Signature:**
 ```julia
@@ -1545,7 +1545,7 @@ with the `from` variable in every flattened equation. For `param_to_var` and
 
 ### _canonical_ref
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1239`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1247`
 
 **Signature:**
 ```julia
@@ -1723,7 +1723,7 @@ both `d_a` and `d_b` (order-insensitive).
 
 ### _load_local_ref
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1252`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1260`
 
 **Signature:**
 ```julia
@@ -1739,7 +1739,7 @@ Load a locally referenced ESM file.
 
 ### _load_ref
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1209`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1217`
 
 **Signature:**
 ```julia
@@ -1760,7 +1760,7 @@ Load a referenced ESM file from a local path or URL, with circular reference det
 
 ### _load_remote_ref
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1277`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1285`
 
 **Signature:**
 ```julia
@@ -1811,7 +1811,7 @@ Return true when the flattened system has spatial independent variables
 
 ### _resolve_model_refs!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1178`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1186`
 
 **Signature:**
 ```julia
@@ -1827,7 +1827,7 @@ Recursively resolve subsystem references within a Model's subsystems.
 
 ### _resolve_reaction_system_refs!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1191`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1199`
 
 **Signature:**
 ```julia
@@ -1843,7 +1843,7 @@ Recursively resolve subsystem references within a ReactionSystem's subsystems.
 
 ### _resolve_refs_in_file!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1157`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1165`
 
 **Signature:**
 ```julia
@@ -2131,7 +2131,7 @@ and(...)
 
 ### coerce_affect_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:587`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:595`
 
 **Signature:**
 ```julia
@@ -2163,7 +2163,7 @@ Parse a schema `Assertion` object.
 
 ### coerce_callback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:964`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:972`
 
 **Signature:**
 ```julia
@@ -2179,7 +2179,7 @@ Parse callback coupling entry.
 
 ### coerce_continuous_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:562`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:570`
 
 **Signature:**
 ```julia
@@ -2199,7 +2199,7 @@ but their presence must not cause load to fail.
 
 ### coerce_couple
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:884`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:892`
 
 **Signature:**
 ```julia
@@ -2226,7 +2226,7 @@ coerce_coupling_entry(...)
 
 ### coerce_coupling_entry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:830`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:838`
 
 **Signature:**
 ```julia
@@ -2242,7 +2242,7 @@ Coerce JSON data into concrete CouplingEntry subtype based on the 'type' field.
 
 ### coerce_data_loader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:776`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:784`
 
 **Signature:**
 ```julia
@@ -2258,7 +2258,7 @@ Coerce JSON data into the STAC-like DataLoader type.
 
 ### coerce_data_loader_regridding
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:765`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:773`
 
 **Signature:**
 ```julia
@@ -2272,7 +2272,7 @@ coerce_data_loader_regridding(data::Any) -> DataLoaderRegridding
 
 ### coerce_data_loader_source
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:697`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:705`
 
 **Signature:**
 ```julia
@@ -2288,7 +2288,7 @@ Coerce JSON data into a DataLoaderSource.
 
 ### coerce_data_loader_spatial
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:727`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:735`
 
 **Signature:**
 ```julia
@@ -2302,7 +2302,7 @@ coerce_data_loader_spatial(data::Any) -> DataLoaderSpatial
 
 ### coerce_data_loader_temporal
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:707`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:715`
 
 **Signature:**
 ```julia
@@ -2316,7 +2316,7 @@ coerce_data_loader_temporal(data::Any) -> DataLoaderTemporal
 
 ### coerce_data_loader_variable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:745`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:753`
 
 **Signature:**
 ```julia
@@ -2330,7 +2330,7 @@ coerce_data_loader_variable(data::Any) -> DataLoaderVariable
 
 ### coerce_discrete_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:509`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:517`
 
 **Signature:**
 ```julia
@@ -2355,7 +2355,7 @@ symbolically, but parsing does not fail.
 
 ### coerce_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1046`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1054`
 
 **Signature:**
 ```julia
@@ -2371,7 +2371,7 @@ Coerce JSON data into Domain type.
 
 ### coerce_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:473`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:481`
 
 **Signature:**
 ```julia
@@ -2403,7 +2403,7 @@ Coerce raw JSON data into properly typed EsmFile with custom union type handling
 
 ### coerce_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:485`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:493`
 
 **Signature:**
 ```julia
@@ -2419,7 +2419,7 @@ Coerce JSON data into EventType (ContinuousEvent or DiscreteEvent).
 
 ### coerce_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:987`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:995`
 
 **Signature:**
 ```julia
@@ -2435,7 +2435,7 @@ Parse event coupling entry.
 
 ### coerce_functional_affect
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:598`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:606`
 
 **Signature:**
 ```julia
@@ -2451,7 +2451,7 @@ Coerce JSON data into FunctionalAffect type.
 
 ### coerce_interface
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1058`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1066`
 
 **Signature:**
 ```julia
@@ -2515,7 +2515,7 @@ Coerce JSON data into ModelVariable type.
 
 ### coerce_operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:809`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:817`
 
 **Signature:**
 ```julia
@@ -2531,7 +2531,7 @@ Coerce JSON data into Operator type.
 
 ### coerce_operator_apply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:948`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:956`
 
 **Signature:**
 ```julia
@@ -2547,7 +2547,7 @@ Parse operator_apply coupling entry.
 
 ### coerce_operator_compose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:859`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:867`
 
 **Signature:**
 ```julia
@@ -2563,7 +2563,7 @@ Parse operator_compose coupling entry.
 
 ### coerce_parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:683`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:691`
 
 **Signature:**
 ```julia
@@ -2579,7 +2579,7 @@ Coerce JSON data into Parameter type with explicit name.
 
 ### coerce_reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:649`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:657`
 
 **Signature:**
 ```julia
@@ -2595,7 +2595,7 @@ Coerce JSON data into Reaction type.
 
 ### coerce_reaction_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:610`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:618`
 
 **Signature:**
 ```julia
@@ -2627,7 +2627,7 @@ Coerce JSON data into Reference type.
 
 ### coerce_species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:635`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:643`
 
 **Signature:**
 ```julia
@@ -2691,7 +2691,7 @@ Parse a schema `Tolerance` object into the Julia `Tolerance` struct.
 
 ### coerce_variable_map
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:915`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:923`
 
 **Signature:**
 ```julia
@@ -2891,7 +2891,7 @@ Create a JSON parse error with fix suggestions.
 
 ### create_model_with_mixed_events
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:400`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:409`
 
 **Signature:**
 ```julia
@@ -2989,7 +2989,7 @@ system's metadata.
 
 ### dict_to_stoichiometry_entries
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1122`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1131`
 
 **Signature:**
 ```julia
@@ -3195,7 +3195,7 @@ fallbacks(...)
 
 ### find_subsystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1012`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1021`
 
 **Signature:**
 ```julia
@@ -3212,7 +3212,7 @@ Returns the subsystem or nothing if not found.
 
 ### find_top_level_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:982`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:991`
 
 **Signature:**
 ```julia
@@ -3617,7 +3617,7 @@ Get performance report.
 
 ### get_products_dict
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1170`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1179`
 
 **Signature:**
 ```julia
@@ -3633,7 +3633,7 @@ Get products as dictionary for backward compatibility.
 
 ### get_reactants_dict
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1155`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1164`
 
 **Signature:**
 ```julia
@@ -3804,7 +3804,7 @@ is_valid_identifier(...)
 
 ### is_valid_identifier
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1093`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1102`
 
 **Signature:**
 ```julia
@@ -3862,7 +3862,7 @@ load(...)
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1074`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1082`
 
 **Signature:**
 ```julia
@@ -3883,7 +3883,7 @@ to the directory containing the file.
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1089`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1097`
 
 **Signature:**
 ```julia
@@ -4512,7 +4512,7 @@ resolve_qualified_reference(...)
 
 ### resolve_qualified_reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:927`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:936`
 
 **Signature:**
 ```julia
@@ -4557,7 +4557,7 @@ resolve_subsystem_refs!(...)
 
 ### resolve_subsystem_refs!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1147`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1155`
 
 **Signature:**
 ```julia
@@ -4599,7 +4599,7 @@ save(...)
 
 ### save
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:890`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:896`
 
 **Signature:**
 ```julia
@@ -4620,7 +4620,7 @@ Accepts either argument order for ergonomics (file, path) or (path, file).
 
 ### save
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:903`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:909`
 
 **Signature:**
 ```julia
@@ -4666,7 +4666,7 @@ Serialize AffectEquation to JSON-compatible format.
 
 ### serialize_assertion
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:307`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:313`
 
 **Signature:**
 ```julia
@@ -4680,7 +4680,7 @@ serialize_assertion(a::Assertion) -> Dict{String,Any}
 
 ### serialize_callback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:707`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:713`
 
 **Signature:**
 ```julia
@@ -4712,7 +4712,7 @@ Serialize ContinuousEvent to JSON-compatible format.
 
 ### serialize_couple
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:638`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:644`
 
 **Signature:**
 ```julia
@@ -4739,7 +4739,7 @@ serialize_coupling_entry(...)
 
 ### serialize_coupling_entry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:591`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:597`
 
 **Signature:**
 ```julia
@@ -4755,7 +4755,7 @@ Serialize CouplingEntry to JSON-compatible format based on concrete type.
 
 ### serialize_data_loader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:535`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:541`
 
 **Signature:**
 ```julia
@@ -4771,7 +4771,7 @@ Serialize DataLoader to JSON-compatible format (STAC-like shape).
 
 ### serialize_data_loader_regridding
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:523`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:529`
 
 **Signature:**
 ```julia
@@ -4785,7 +4785,7 @@ serialize_data_loader_regridding(r::DataLoaderRegridding) -> Dict{String,Any}
 
 ### serialize_data_loader_source
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:467`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:473`
 
 **Signature:**
 ```julia
@@ -4799,7 +4799,7 @@ serialize_data_loader_source(src::DataLoaderSource) -> Dict{String,Any}
 
 ### serialize_data_loader_spatial
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:492`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:498`
 
 **Signature:**
 ```julia
@@ -4813,7 +4813,7 @@ serialize_data_loader_spatial(s::DataLoaderSpatial) -> Dict{String,Any}
 
 ### serialize_data_loader_temporal
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:478`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:484`
 
 **Signature:**
 ```julia
@@ -4827,7 +4827,7 @@ serialize_data_loader_temporal(t::DataLoaderTemporal) -> Dict{String,Any}
 
 ### serialize_data_loader_variable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:506`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:512`
 
 **Signature:**
 ```julia
@@ -4876,7 +4876,7 @@ Alias for serialize_trigger for backward compatibility.
 
 ### serialize_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:817`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:823`
 
 **Signature:**
 ```julia
@@ -4892,7 +4892,7 @@ Serialize Domain to JSON-compatible format.
 
 ### serialize_equation
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:231`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:237`
 
 **Signature:**
 ```julia
@@ -4908,7 +4908,7 @@ Serialize Equation to JSON-compatible format.
 
 ### serialize_esm_file
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:852`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:858`
 
 **Signature:**
 ```julia
@@ -4940,7 +4940,7 @@ Serialize EventType to JSON-compatible format.
 
 ### serialize_event
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:725`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:731`
 
 **Signature:**
 ```julia
@@ -4989,7 +4989,7 @@ Serialize FunctionalAffect to JSON-compatible format.
 
 ### serialize_interface
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:833`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:839`
 
 **Signature:**
 ```julia
@@ -5005,7 +5005,7 @@ Serialize Interface to JSON-compatible format.
 
 ### serialize_metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:784`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:790`
 
 **Signature:**
 ```julia
@@ -5021,7 +5021,7 @@ Serialize Metadata to JSON-compatible format.
 
 ### serialize_model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:247`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:253`
 
 **Signature:**
 ```julia
@@ -5069,7 +5069,7 @@ Serialize ModelVariableType enum to string.
 
 ### serialize_operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:566`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:572`
 
 **Signature:**
 ```julia
@@ -5085,7 +5085,7 @@ Serialize Operator to JSON-compatible format.
 
 ### serialize_operator_apply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:692`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:698`
 
 **Signature:**
 ```julia
@@ -5101,7 +5101,7 @@ Serialize operator_apply coupling entry.
 
 ### serialize_operator_compose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:614`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:620`
 
 **Signature:**
 ```julia
@@ -5117,7 +5117,7 @@ Serialize operator_compose coupling entry.
 
 ### serialize_parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:374`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:380`
 
 **Signature:**
 ```julia
@@ -5134,7 +5134,7 @@ Note: Parameter name is the key in the parameters dictionary, not a property of 
 
 ### serialize_reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:396`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:402`
 
 **Signature:**
 ```julia
@@ -5150,7 +5150,7 @@ Serialize Reaction to JSON-compatible format.
 
 ### serialize_reaction_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:442`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:448`
 
 **Signature:**
 ```julia
@@ -5166,7 +5166,7 @@ Serialize ReactionSystem to JSON-compatible format.
 
 ### serialize_reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:762`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:768`
 
 **Signature:**
 ```julia
@@ -5182,7 +5182,7 @@ Serialize Reference to JSON-compatible format.
 
 ### serialize_species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:351`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:357`
 
 **Signature:**
 ```julia
@@ -5199,7 +5199,7 @@ Note: Species name is the key in the species dictionary, not a property of the S
 
 ### serialize_test
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:322`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:328`
 
 **Signature:**
 ```julia
@@ -5213,7 +5213,7 @@ serialize_test(t::Test) -> Dict{String,Any}
 
 ### serialize_time_span
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:300`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:306`
 
 **Signature:**
 ```julia
@@ -5227,7 +5227,7 @@ serialize_time_span(span::TimeSpan) -> Dict{String,Any}
 
 ### serialize_tolerance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:286`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:292`
 
 **Signature:**
 ```julia
@@ -5257,7 +5257,7 @@ Serialize DiscreteEventTrigger to JSON-compatible format.
 
 ### serialize_variable_map
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:663`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/serialize.jl:669`
 
 **Signature:**
 ```julia
@@ -5379,7 +5379,7 @@ stoichiometric_matrix(...)
 
 ### stoichiometry_entries_to_dict
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1131`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1140`
 
 **Signature:**
 ```julia
@@ -6228,7 +6228,7 @@ validate_reference_syntax(...)
 
 ### validate_reference_syntax
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1062`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1071`
 
 **Signature:**
 ```julia
@@ -6340,7 +6340,7 @@ validation(...)
 
 ### variable_exists_in_system
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1030`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:1039`
 
 **Signature:**
 ```julia
@@ -6380,7 +6380,7 @@ Assignment equation for discrete events.
 
 ### Assertion
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:302`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:311`
 
 **Definition:**
 ```julia
@@ -6479,7 +6479,7 @@ Event triggered by zero-crossing of condition expressions.
 
 ### CouplingCallback
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:552`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:561`
 
 **Definition:**
 ```julia
@@ -6498,7 +6498,7 @@ Register a callback for simulation events.
 
 ### CouplingCouple
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:505`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:514`
 
 **Definition:**
 ```julia
@@ -6537,7 +6537,7 @@ Edge representing coupling between components.
 
 ### CouplingEvent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:566`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:575`
 
 **Definition:**
 ```julia
@@ -6553,7 +6553,7 @@ Cross-system event involving variables from multiple coupled systems.
 
 ### CouplingOperatorApply
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:539`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:548`
 
 **Definition:**
 ```julia
@@ -6572,7 +6572,7 @@ Register an Operator to run during simulation.
 
 ### CouplingOperatorCompose
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:489`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:498`
 
 **Definition:**
 ```julia
@@ -6591,7 +6591,7 @@ Match LHS time derivatives and add RHS terms together.
 
 ### CouplingVariableMap
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:521`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:530`
 
 **Definition:**
 ```julia
@@ -6633,7 +6633,7 @@ axis).
 
 ### DataLoader
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:687`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:696`
 
 **Definition:**
 ```julia
@@ -6667,7 +6667,7 @@ Fields:
 
 ### DataLoaderRegridding
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:660`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:669`
 
 **Definition:**
 ```julia
@@ -6687,7 +6687,7 @@ Structural regridding configuration for a DataLoader.
 
 ### DataLoaderSource
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:591`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:600`
 
 **Definition:**
 ```julia
@@ -6710,7 +6710,7 @@ gives ordered fallback templates.
 
 ### DataLoaderSpatial
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:623`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:632`
 
 **Definition:**
 ```julia
@@ -6730,7 +6730,7 @@ Spatial grid description for a DataLoader.
 
 ### DataLoaderTemporal
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:604`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:613`
 
 **Definition:**
 ```julia
@@ -6750,7 +6750,7 @@ Temporal coverage and record layout for a DataLoader.
 
 ### DataLoaderVariable
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:641`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:650`
 
 **Definition:**
 ```julia
@@ -6829,7 +6829,7 @@ Event triggered by discrete triggers with functional affects.
 
 ### Domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:739`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:748`
 
 **Definition:**
 ```julia
@@ -6975,7 +6975,7 @@ Additional context information for errors.
 
 ### EsmFile
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:852`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:861`
 
 **Definition:**
 ```julia
@@ -7126,7 +7126,7 @@ Generic graph structure with nodes and edges.
 
 ### Interface
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:754`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:763`
 
 **Definition:**
 ```julia
@@ -7147,7 +7147,7 @@ and regridding strategy.
 
 ### Metadata
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:825`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:834`
 
 **Definition:**
 ```julia
@@ -7251,7 +7251,7 @@ Fields:
 
 ### Model
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:347`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:356`
 
 **Definition:**
 ```julia
@@ -7345,7 +7345,7 @@ Operator expression node containing:
 
 ### Operator
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:713`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:722`
 
 **Definition:**
 ```julia
@@ -7366,7 +7366,7 @@ Platform-specific computational kernels and operations.
 
 ### Parameter
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:443`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:452`
 
 **Definition:**
 ```julia
@@ -7452,7 +7452,7 @@ Trigger that fires at preset times.
 
 ### QualifiedReferenceError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:885`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:894`
 
 **Definition:**
 ```julia
@@ -7469,7 +7469,7 @@ Contains detailed error information.
 
 ### Reaction
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:784`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:793`
 
 **Definition:**
 ```julia
@@ -7489,7 +7489,7 @@ Chemical reaction with substrates, products, and rate expression.
 
 ### ReactionSystem
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:804`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:813`
 
 **Definition:**
 ```julia
@@ -7509,7 +7509,7 @@ Collection of chemical reactions with associated species, supporting hierarchica
 
 ### Reference
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:466`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:475`
 
 **Definition:**
 ```julia
@@ -7529,7 +7529,7 @@ Academic citation or data source reference.
 
 ### ReferenceResolution
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:897`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:906`
 
 **Definition:**
 ```julia
@@ -7608,7 +7608,7 @@ declared domain extent.
 
 ### Species
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:426`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:435`
 
 **Definition:**
 ```julia
@@ -7628,7 +7628,7 @@ Chemical species definition with name and optional properties.
 
 ### StoichiometryEntry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:771`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:780`
 
 **Definition:**
 ```julia
@@ -7667,7 +7667,7 @@ Contains path, message, and error type for structural issues.
 
 ### SubsystemRefError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1126`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/parse.jl:1134`
 
 **Definition:**
 ```julia
@@ -7686,7 +7686,7 @@ Exception thrown when subsystem reference resolution fails.
 
 ### Test
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:320`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:329`
 
 **Definition:**
 ```julia
@@ -7707,7 +7707,7 @@ span — and a list of scalar assertions that must hold.
 
 ### TimeSpan
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:279`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:288`
 
 **Definition:**
 ```julia
@@ -7726,7 +7726,7 @@ Simulation time interval for inline model tests and examples (§gt-cc1).
 
 ### Tolerance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:290`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:299`
 
 **Definition:**
 ```julia
