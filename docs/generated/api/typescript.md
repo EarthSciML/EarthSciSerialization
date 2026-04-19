@@ -353,7 +353,7 @@ Check if an expression contains a specific variable
 
 ### convertUnits
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:219`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:221`
 
 **Signature:**
 ```typescript
@@ -1174,7 +1174,7 @@ promise.
 
 ### parseUnitForConversion
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:138`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:140`
 
 **Signature:**
 ```typescript
@@ -1693,7 +1693,7 @@ Format an expression as Unicode mathematical notation
 
 ### unitsCompatible
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:238`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/unit-conversion.ts:240`
 
 **Signature:**
 ```typescript
@@ -1709,7 +1709,7 @@ A non-throwing companion to `convertUnits`.
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:1055`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:1140`
 
 **Signature:**
 ```typescript
