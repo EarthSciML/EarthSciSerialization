@@ -22,10 +22,6 @@ fixture_path = joinpath(@__DIR__, "..", "..", "..",
     simulation_skip = Dict(
         # SymbolicContinuousCallback API drift in MTK ext (gt-2ta2).
         "bouncing_ball.esm" => "gt-2ta2",
-    )
-    simulation_dir = joinpath(@__DIR__, "..", "..", "..",
-                              "tests", "simulation")
-    if isdir(simulation_dir)
-        sim_files = sort(filter(f ->
+        # PDE fixtures (spatial indep
 ```
 
