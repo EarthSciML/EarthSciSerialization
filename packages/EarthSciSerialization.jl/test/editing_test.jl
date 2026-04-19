@@ -9,6 +9,7 @@ const SE = EarthSciSerialization.StoichiometryEntry
 # default struct `==` (which falls back to `===`) fail for freshly-built
 # equal trees — compare field-by-field recursively instead.
 _expr_equal(a::NumExpr, b::NumExpr) = a.value == b.value
+_expr_equal(a::IntExpr, b::IntExpr) = a.value == b.value
 _expr_equal(a::VarExpr, b::VarExpr) = a.name == b.name
 function _expr_equal(a::OpExpr, b::OpExpr)
     a.op == b.op || return false
