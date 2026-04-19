@@ -5,7 +5,9 @@ using EarthSciSerialization: Expr, NumExpr, IntExpr, VarExpr, OpExpr, Reaction,
     ReactionSystem, Species, Parameter, Equation, ContinuousEvent,
     DiscreteEvent, AffectEquation, FunctionalAffect, ConditionTrigger,
     PeriodicTrigger, PresetTimesTrigger,
-    GapReport, mtk2esm, mtk2esm_gaps
+    GapReport
+# Explicit import so we can add a method to this generic.
+import EarthSciSerialization: mtk2esm, mtk2esm_gaps
 using ModelingToolkit
 using Symbolics
 using Catalyst
@@ -293,29 +295,32 @@ function mtk2esm(rs::Catalyst.ReactionSystem; metadata=(;))
 
     rs_dict = EarthSciSerialization.serialize_reaction_system(esm_rs)
 
-    # Attach placeholder fields
-    rs_dict["description"] = _rmeta_string(metadata, :description, "")
-    rs_dict["version"] = _rmeta_string(metadata, :version, "0.1.0")
-    rs_dict["reference"] = Dict{String,Any}()
-    rs_dict["tests"] = Any[]
-    rs_dict["examples"] = Any[]
-
-    rs_meta = Dict{String,Any}()
-    tags_val = _rmeta_vec_string(metadata, :tags)
-    if tags_val !== nothing
-        rs_meta["tags"] = tags_val
-    end
+    # Per-RS reference.notes carries description + source_ref + TODO_GAPs
+    # (same convention as the ODE Model branch). Reference is the only
+    # schema-sanctioned free-form text slot at the reaction_system level.
+    ref_notes_lines = String[]
     source_ref = _rmeta_string(metadata, :source_ref, "")
     if !isempty(source_ref)
-        rs_meta["source_ref"] = source_ref
+        push!(ref_notes_lines, "source_ref: $source_ref")
+    end
+    version_str = _rmeta_string(metadata, :version, "0.1.0")
+    if version_str != "0.1.0"
+        push!(ref_notes_lines, "version: $version_str")
+    end
+    mod_desc = _rmeta_string(metadata, :description, "")
+    if !isempty(mod_desc)
+        push!(ref_notes_lines, mod_desc)
     end
     if !isempty(gaps)
-        rs_meta["notes"] = ["TODO_GAP: $(g.bead_id) - $(g.description) @ $(g.where)"
-                             for g in gaps]
+        for g in gaps
+            push!(ref_notes_lines, "TODO_GAP: $(g.bead_id) - $(g.description) @ $(g.where)")
+        end
     end
-    if !isempty(rs_meta)
-        rs_dict["metadata"] = rs_meta
+    if !isempty(ref_notes_lines)
+        rs_dict["reference"] = Dict{String,Any}("notes" => join(ref_notes_lines, "\n"))
     end
+    rs_dict["tests"] = Any[]
+    rs_dict["examples"] = Any[]
 
     # Top-level EsmFile-shaped dict
     file_meta = Dict{String,Any}("name" => sys_name)

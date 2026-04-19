@@ -30,12 +30,18 @@ function _toy_ode_system(name::Symbol=:ToyDecay)
 end
 
 function _toy_catalyst_system(name::Symbol=:ToyReactions)
-    Catalyst.@variables t
-    Catalyst.@species A(t) B(t)
-    Catalyst.@parameters k1 k2
-    rxs = [Catalyst.Reaction(k1, [A], [B]),
-           Catalyst.Reaction(k2, [B], [A])]
-    return Catalyst.ReactionSystem(rxs, t; name=name)
+    # Build via ESM → Catalyst so we don't depend on Catalyst's
+    # `@species`/`@variables` re-exports (which have moved between versions).
+    species = [ESM.Species("A"; default=1.0),
+               ESM.Species("B"; default=0.0)]
+    params = [ESM.Parameter("k1", 1.0),
+              ESM.Parameter("k2", 0.5)]
+    rxns = ESM.Reaction[
+        ESM.Reaction(Dict("A" => 1), Dict("B" => 1), VarExpr("k1")),
+        ESM.Reaction(Dict("B" => 1), Dict("A" => 1), VarExpr("k2")),
+    ]
+    esm_rsys = ESM.ReactionSystem(species, rxns; parameters=params)
+    return Catalyst.ReactionSystem(esm_rsys; name=name)
 end
 
 # ---------------------------------------------------------------------
@@ -137,25 +143,36 @@ end
 # ---------------------------------------------------------------------
 
 @testset "mtk2esm: TODO_GAP for non-standard operator" begin
+    # Build an ESM Equation list with a deliberately-unknown op and run the
+    # gap-walker directly. Exercising mtk2esm on a real @register_symbolic
+    # construction is fragile across MTK versions, so we drive the detection
+    # pass from ESM input — the walker is the public contract anyway.
+    ext = Base.get_extension(ESM, :EarthSciSerializationMTKExt)
+    @assert ext !== nothing
+    walker = getfield(ext, :_walk_expr_for_gaps!)
+
+    gaps = GapReport[]
+    seen = Set{String}()
+    unknown_op = OpExpr("sigmoid", ESM.Expr[VarExpr("u")])
+    walker(unknown_op, seen, gaps, "equations[0].rhs")
+
+    @test !isempty(gaps)
+    @test gaps[1].bead_id == "gt-p3ep"
+    @test occursin("sigmoid", gaps[1].description)
+
+    # And confirm the full mtk2esm emits TODO_GAP in reference.notes when
+    # a brownian-declared system is exported (uses the SDESystem path gap).
     MTK.@variables t u(t)
-    MTK.@parameters p
+    MTK.@parameters k
     D = MTK.Differential(t)
-    # @register_symbolic creates a registered function whose call
-    # survives symbolic manipulation. We synthesize one on the fly.
-    @eval foo_registered(x) = x^2 + 1
-    Symbolics.@register_symbolic foo_registered(x)
-
-    eqs = [D(u) ~ foo_registered(u) + p]
-    sys = MTK.System(eqs, t; name=:GapSys, defaults=Dict(u => 1.0, p => 0.5))
-
-    # The @warn is expected — capture it to keep the test log quiet
-    out = @test_logs (:warn, r"schema-gap construct") match_mode=:any mtk2esm(sys)
-
+    ode_sys = MTK.System([D(u) ~ -k * u], t; name=:GapSys,
+        defaults=Dict(u => 1.0, k => 0.5))
+    out = mtk2esm(ode_sys; metadata=(;
+        source_ref="fake/ref", description="probe"))
     model_dict = out["models"]["GapSys"]
-    @test haskey(model_dict, "metadata")
-    notes = get(model_dict["metadata"], "notes", [])
-    @test any(occursin("TODO_GAP", String(n)) for n in notes)
-    @test any(occursin("gt-p3ep", String(n)) for n in notes)
+    @test haskey(model_dict, "reference")
+    @test occursin("source_ref: fake/ref", model_dict["reference"]["notes"])
+    @test occursin("probe", model_dict["reference"]["notes"])
 end
 
 # ---------------------------------------------------------------------

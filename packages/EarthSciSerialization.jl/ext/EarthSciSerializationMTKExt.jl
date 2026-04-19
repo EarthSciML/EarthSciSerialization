@@ -11,7 +11,9 @@ using EarthSciSerialization: FlattenedSystem, ModelVariable, StateVariable,
     Equation, AffectEquation, Model, EventType, ContinuousEvent, DiscreteEvent,
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger, FunctionalAffect,
     Domain, flatten, infer_array_shapes,
-    GapReport, mtk2esm, mtk2esm_gaps, Metadata, EsmFile
+    GapReport, Metadata, EsmFile
+# Explicit import so we can add methods to these generics.
+import EarthSciSerialization: mtk2esm, mtk2esm_gaps
 const EsmExpr = EarthSciSerialization.Expr
 using ModelingToolkit
 using ModelingToolkit: @variables, @parameters, Differential, System, PDESystem
@@ -1399,18 +1401,92 @@ function _mtk_noise_eqs(sys)
     end
 end
 
-# Convert a symbolic to ESM expression; on any unsupported node type,
-# record a GapReport and fall back to a VarExpr placeholder so the output
-# stays schema-valid (per deliverable 2: fail-loud on gaps without silently
-# dropping or mis-representing).
-function _symbolic_to_esm_with_gaps(expr, gaps::Vector{GapReport}, where_str::String)
+# Convert a symbolic to ESM expression using a known set of variable names
+# to disambiguate callable-symbolic nodes like `x(t)` from operator calls.
+# MTK states and observed variables appear in the symbolic tree as
+# `Sym{FnType{...}}(t)`, which `_symbolic_to_esm` would otherwise emit as
+# `OpExpr("x", [VarExpr("t")])` — the wrong shape for the ESM schema.
+function _symbolic_to_esm_export(expr, known_vars::Set{String})
+    # Scalar fast-paths
+    if expr isa Bool
+        return IntExpr(Int64(expr))
+    elseif expr isa Integer
+        return IntExpr(Int64(expr))
+    elseif expr isa AbstractFloat
+        return NumExpr(Float64(expr))
+    elseif expr isa Real
+        return NumExpr(Float64(expr))
+    end
+    raw = Symbolics.unwrap(expr)
+    if Symbolics.issym(raw)
+        name = _strip_time(string(Symbolics.getname(raw)))
+        return VarExpr(name)
+    end
+
+    is_diff = try
+        Symbolics.is_derivative(raw)
+    catch
+        false
+    end
+    if is_diff
+        inner = _symbolic_to_esm_export(Symbolics.arguments(raw)[1], known_vars)
+        return OpExpr("D", EsmExpr[inner], wrt="t")
+    end
+
+    if Symbolics.iscall(raw)
+        op = Symbolics.operation(raw)
+        args = Symbolics.arguments(raw)
+
+        # Callable-symbolic variable: `x(t)` where `x` is a state/observed
+        # var. Recognize by checking if the operation's name is a known
+        # variable. Preserve as a bare VarExpr(name), dropping the IV args
+        # — the ESM schema implicitly threads time through state vars.
+        if !isempty(args)
+            opname = try
+                _strip_time(string(Symbolics.getname(op)))
+            catch
+                ""
+            end
+            if !isempty(opname) && opname in known_vars
+                return VarExpr(opname)
+            end
+        end
+
+        esm_args = [_symbolic_to_esm_export(a, known_vars) for a in args]
+        if op == (+); return OpExpr("+", esm_args)
+        elseif op == (*); return OpExpr("*", esm_args)
+        elseif op == (-); return OpExpr("-", esm_args)
+        elseif op == (/); return OpExpr("/", esm_args)
+        elseif op == (^); return OpExpr("^", esm_args)
+        elseif op == exp; return OpExpr("exp", esm_args)
+        elseif op == log; return OpExpr("log", esm_args)
+        elseif op == log10; return OpExpr("log10", esm_args)
+        elseif op == sin; return OpExpr("sin", esm_args)
+        elseif op == cos; return OpExpr("cos", esm_args)
+        elseif op == tan; return OpExpr("tan", esm_args)
+        elseif op == sqrt; return OpExpr("sqrt", esm_args)
+        elseif op == abs; return OpExpr("abs", esm_args)
+        elseif op == ifelse; return OpExpr("ifelse", esm_args)
+        else
+            opname = try
+                string(nameof(op))
+            catch
+                string(op)
+            end
+            return OpExpr(opname, esm_args)
+        end
+    end
+    return VarExpr(string(expr))
+end
+
+function _symbolic_to_esm_with_gaps(expr, known_vars::Set{String},
+                                    gaps::Vector{GapReport}, where_str::String)
     try
-        return _symbolic_to_esm(expr)
+        return _symbolic_to_esm_export(expr, known_vars)
     catch e
         push!(gaps, GapReport("unknown",
-            "unable to serialize symbolic node of type $(typeof(expr))",
+            "unable to serialize symbolic node: $(sprint(showerror, e))",
             where_str))
-        # Emit a sentinel VarExpr so the caller still sees a valid Expr tree.
         return VarExpr("__TODO_GAP__")
     end
 end
@@ -1458,10 +1534,24 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
 
     # 1. Variables -----------------------------------------------------------
     esm_vars = Dict{String,ModelVariable}()
+    # System-level defaults dict — variables declared via `defaults=Dict(...)`
+    # on System construction surface here rather than on the symbolic
+    # metadata. We look up both and prefer the system-level value.
+    sys_defaults = try
+        ModelingToolkit.defaults(sys)
+    catch
+        Dict()
+    end
+
+    # Collect all known variable names up-front so we can disambiguate
+    # callable-symbolic variables `x(t)` from operator calls inside the
+    # equation walk.
+    known_vars = Set{String}()
 
     for state in ModelingToolkit.unknowns(sys)
         var_name = _strip_time(string(ModelingToolkit.getname(state)))
-        default_val = _get_default_or(state, nothing)
+        push!(known_vars, var_name)
+        default_val = _lookup_default(state, sys_defaults)
         units_str = _get_units_str(state)
         desc_str = _get_description_str(state)
         esm_vars[var_name] = ModelVariable(StateVariable;
@@ -1470,7 +1560,8 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
 
     for param in ModelingToolkit.parameters(sys)
         pname = string(ModelingToolkit.getname(param))
-        default_val = _get_default_or(param, nothing)
+        push!(known_vars, pname)
+        default_val = _lookup_default(param, sys_defaults)
         units_str = _get_units_str(param)
         desc_str = _get_description_str(param)
         esm_vars[pname] = ModelVariable(ParameterVariable;
@@ -1484,7 +1575,8 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
     end
     for obs in obs_exprs
         oname = _strip_time(string(ModelingToolkit.getname(obs.lhs)))
-        rhs_esm = _symbolic_to_esm_with_gaps(obs.rhs, gaps,
+        push!(known_vars, oname)
+        rhs_esm = _symbolic_to_esm_with_gaps(obs.rhs, known_vars, gaps,
             "observed[$oname].rhs")
         esm_vars[oname] = ModelVariable(ObservedVariable;
             expression=rhs_esm)
@@ -1520,8 +1612,10 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
         []
     end
     for (i, eq) in enumerate(raw_eqs)
-        lhs_esm = _symbolic_to_esm_with_gaps(eq.lhs, gaps, "equations[$i].lhs")
-        rhs_esm = _symbolic_to_esm_with_gaps(eq.rhs, gaps, "equations[$i].rhs")
+        lhs_esm = _symbolic_to_esm_with_gaps(eq.lhs, known_vars, gaps,
+            "equations[$i].lhs")
+        rhs_esm = _symbolic_to_esm_with_gaps(eq.rhs, known_vars, gaps,
+            "equations[$i].rhs")
         push!(esm_equations, Equation(lhs_esm, rhs_esm))
     end
 
@@ -1556,7 +1650,7 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
         []
     end
     for (i, cb) in enumerate(cont_cbs)
-        ce = _continuous_cb_to_esm(cb, gaps, "continuous_events[$i]")
+        ce = _continuous_cb_to_esm(cb, known_vars, gaps, "continuous_events[$i]")
         ce !== nothing && push!(cont_events, ce)
     end
 
@@ -1566,7 +1660,7 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
         []
     end
     for (i, cb) in enumerate(disc_cbs)
-        de = _discrete_cb_to_esm(cb, gaps, "discrete_events[$i]")
+        de = _discrete_cb_to_esm(cb, known_vars, gaps, "discrete_events[$i]")
         de !== nothing && push!(disc_events, de)
     end
 
@@ -1585,41 +1679,48 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
         discrete_events=disc_events, continuous_events=cont_events,
         domain=esm_domain)
 
-    # Serialize directly to a Dict so callers can mutate and embed TODO_GAP
-    # notes before writing to disk. We bypass the EsmFile type because the
-    # metadata/tests/examples fields are intentionally placeholders that the
-    # downstream migration step will fill — constructing a full EsmFile would
-    # require inventing authors/created timestamps we don't have.
+    # Serialize directly to a Dict so callers can mutate and embed
+    # TODO_GAP notes before writing to disk. We bypass the EsmFile type
+    # because the tests/examples fields are intentionally empty placeholders
+    # the downstream migration step fills in later.
     model_dict = EarthSciSerialization.serialize_model(esm_model)
 
-    # Attach placeholder fields + metadata kwarg passthrough
-    model_dict["description"] = _meta_string(metadata, :description, "")
-    model_dict["version"] = _meta_string(metadata, :version, "0.1.0")
-    model_dict["reference"] = Dict{String,Any}()
+    # Build the Model-level `reference` entry. The schema defines Reference
+    # with {doi, citation, url, notes} — we fold the migration description,
+    # source_ref, and TODO_GAP notes into `notes` as a human-readable string
+    # so the file stays schema-conformant. Later migration steps overwrite
+    # this with a real citation when the source docstring is scraped.
+    ref_notes_lines = String[]
+    source_ref = _meta_string(metadata, :source_ref, "")
+    if !isempty(source_ref)
+        push!(ref_notes_lines, "source_ref: $source_ref")
+    end
+    version_str = _meta_string(metadata, :version, "0.1.0")
+    if version_str != "0.1.0"
+        push!(ref_notes_lines, "version: $version_str")
+    end
+    mod_desc = _meta_string(metadata, :description, "")
+    if !isempty(mod_desc)
+        push!(ref_notes_lines, mod_desc)
+    end
+    if !isempty(gaps)
+        for g in gaps
+            push!(ref_notes_lines, _gap_to_note(g))
+        end
+    end
+    if !isempty(ref_notes_lines)
+        model_dict["reference"] = Dict{String,Any}(
+            "notes" => join(ref_notes_lines, "\n"))
+    end
+    # Preserve placeholder tests/examples only when the Model schema actually
+    # requires them (it doesn't — they're optional arrays). Leave them out
+    # when empty so validation doesn't have to iterate empty arrays, but add
+    # them back when callers want a clear signal that content is "to be filled".
     model_dict["tests"] = Any[]
     model_dict["examples"] = Any[]
 
-    # Embed the gap report inside metadata.notes as ordered TODO_GAP lines
-    model_meta = Dict{String,Any}()
-    tags_val = _meta_vec_string(metadata, :tags)
-    if tags_val !== nothing
-        model_meta["tags"] = tags_val
-    end
-    source_ref = _meta_string(metadata, :source_ref, "")
-    if !isempty(source_ref)
-        model_meta["source_ref"] = source_ref
-    end
-    if !isempty(gaps)
-        model_meta["notes"] = [_gap_to_note(g) for g in gaps]
-    end
-    if !isempty(model_meta)
-        model_dict["metadata"] = model_meta
-    end
-
     # 6. Wrap in EsmFile-shaped Dict ----------------------------------------
-    file_meta = Dict{String,Any}(
-        "name" => sys_name,
-    )
+    file_meta = Dict{String,Any}("name" => sys_name)
     file_desc = _meta_string(metadata, :description, "")
     if !isempty(file_desc)
         file_meta["description"] = file_desc
@@ -1687,6 +1788,21 @@ function _get_default_or(var, default)
     end
 end
 
+"""
+Prefer the system-level defaults map (set via `System(...; defaults=...)`)
+over per-symbol metadata. Returns `nothing` when no default is found so
+the ESM `default` field is omitted rather than fabricated.
+"""
+function _lookup_default(var, sys_defaults)
+    # System-level defaults dict uses the symbolic variable itself (with its
+    # time dependence intact) as the key.
+    if haskey(sys_defaults, var)
+        v = sys_defaults[var]
+        v isa Number && return Float64(v)
+    end
+    return _get_default_or(var, nothing)
+end
+
 function _get_units_str(var)
     raw = Symbolics.unwrap(var)
     try
@@ -1717,7 +1833,8 @@ end
 
 # --- event conversion (MTK → ESM) ---
 
-function _continuous_cb_to_esm(cb, gaps::Vector{GapReport}, where_str::String)
+function _continuous_cb_to_esm(cb, known_vars::Set{String},
+                               gaps::Vector{GapReport}, where_str::String)
     # MTK callbacks expose fields via property access that differs across
     # versions; we try a few shapes and fall back to a gap report if we
     # can't extract the pieces we need.
@@ -1725,12 +1842,13 @@ function _continuous_cb_to_esm(cb, gaps::Vector{GapReport}, where_str::String)
         conds = cb.conditions isa AbstractArray ? cb.conditions : [cb.conditions]
         esm_conds = EsmExpr[]
         for c in conds
-            push!(esm_conds, _symbolic_to_esm_with_gaps(c, gaps, where_str * ".condition"))
+            push!(esm_conds, _symbolic_to_esm_with_gaps(c, known_vars, gaps,
+                where_str * ".condition"))
         end
         affects = cb.affects isa AbstractArray ? cb.affects : [cb.affects]
         esm_affs = AffectEquation[]
         for a in affects
-            ae = _affect_to_esm(a, gaps, where_str * ".affect")
+            ae = _affect_to_esm(a, known_vars, gaps, where_str * ".affect")
             ae !== nothing && push!(esm_affs, ae)
         end
         return ContinuousEvent(esm_conds, esm_affs)
@@ -1742,23 +1860,23 @@ function _continuous_cb_to_esm(cb, gaps::Vector{GapReport}, where_str::String)
     end
 end
 
-function _discrete_cb_to_esm(cb, gaps::Vector{GapReport}, where_str::String)
+function _discrete_cb_to_esm(cb, known_vars::Set{String},
+                             gaps::Vector{GapReport}, where_str::String)
     try
-        # Discrete callbacks have a trigger that may be a condition, a Real
-        # period, or a Vector{<:Real} of preset times.
         trig_raw = hasproperty(cb, :condition) ? cb.condition : cb.conditions
         trigger = if trig_raw isa Real
             PeriodicTrigger(Float64(trig_raw))
         elseif trig_raw isa AbstractVector{<:Real}
             PresetTimesTrigger(Float64.(trig_raw))
         else
-            ConditionTrigger(_symbolic_to_esm_with_gaps(trig_raw, gaps,
-                where_str * ".condition"))
+            ConditionTrigger(_symbolic_to_esm_with_gaps(trig_raw, known_vars,
+                gaps, where_str * ".condition"))
         end
         affects = cb.affects isa AbstractArray ? cb.affects : [cb.affects]
         esm_affs = FunctionalAffect[]
         for a in affects
-            af = _affect_to_functional(a, gaps, where_str * ".affect")
+            af = _affect_to_functional(a, known_vars, gaps,
+                where_str * ".affect")
             af !== nothing && push!(esm_affs, af)
         end
         return DiscreteEvent(trigger, esm_affs)
@@ -1770,24 +1888,28 @@ function _discrete_cb_to_esm(cb, gaps::Vector{GapReport}, where_str::String)
     end
 end
 
-function _affect_to_esm(a, gaps::Vector{GapReport}, where_str::String)
+function _affect_to_esm(a, known_vars::Set{String},
+                        gaps::Vector{GapReport}, where_str::String)
     try
         lhs_sym = hasproperty(a, :lhs) ? a.lhs : a[1]
         rhs_sym = hasproperty(a, :rhs) ? a.rhs : a[2]
         lhs_name = _strip_time(string(ModelingToolkit.getname(lhs_sym)))
-        rhs_esm = _symbolic_to_esm_with_gaps(rhs_sym, gaps, where_str * ".rhs")
+        rhs_esm = _symbolic_to_esm_with_gaps(rhs_sym, known_vars, gaps,
+            where_str * ".rhs")
         return AffectEquation(lhs_name, rhs_esm)
     catch
         return nothing
     end
 end
 
-function _affect_to_functional(a, gaps::Vector{GapReport}, where_str::String)
+function _affect_to_functional(a, known_vars::Set{String},
+                               gaps::Vector{GapReport}, where_str::String)
     try
         lhs_sym = hasproperty(a, :lhs) ? a.lhs : a[1]
         rhs_sym = hasproperty(a, :rhs) ? a.rhs : a[2]
         lhs_name = _strip_time(string(ModelingToolkit.getname(lhs_sym)))
-        rhs_esm = _symbolic_to_esm_with_gaps(rhs_sym, gaps, where_str * ".rhs")
+        rhs_esm = _symbolic_to_esm_with_gaps(rhs_sym, known_vars, gaps,
+            where_str * ".rhs")
         return FunctionalAffect(lhs_name, rhs_esm; operation="set")
     catch
         return nothing
