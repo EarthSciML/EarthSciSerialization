@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import warnings
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -59,10 +60,29 @@ SIMULATION_SKIP: Dict[str, str] = {
     # into the SciPy backend's state-reset step; the ball never actually
     # bounces. Tracked alongside Julia's SymbolicContinuousCallback skip.
     "bouncing_ball.esm": "gt-i7e1",
-    # gt-mfo2: AnalyticalODE harmonic oscillator fails because simulate()
-    # clips all state to >= 0 (y_clipped = max(y, 0)). v legitimately goes
-    # negative, gets clamped to 0, so x never evolves.
-    "mathematical_correctness.esm": "gt-mfo2",
+}
+
+
+# Per-component skips. Keyed by ``(fixture, "models"|"reaction_systems",
+# component_name)``. Use when one component in a multi-component fixture is
+# broken but other components should still execute. Each entry points at the
+# tracking bead so the skip is self-documenting.
+COMPONENT_SKIP: Dict[Tuple[str, str, str], str] = {
+    # gt-pcj5: reaction-rate lowering bug in simulate()'s flatten path —
+    # explicit rate expressions (e.g. k*A) get multiplied by substrate
+    # concentrations again during mass-action lowering, producing k*A*A.
+    # Affects every reaction_system in mathematical_correctness.esm.
+    # Julia runs the same fixtures correctly.
+    (
+        "mathematical_correctness.esm",
+        "reaction_systems",
+        "MassConservationTest",
+    ): "gt-pcj5",
+    (
+        "mathematical_correctness.esm",
+        "reaction_systems",
+        "LinearChain",
+    ): "gt-pcj5",
 }
 
 
@@ -205,10 +225,15 @@ def test_simulation_fixture_tests_blocks(fixture: str) -> None:
     file = load(path)
 
     any_executed = False
+    xfail_reasons: list[str] = []
 
     for mname, mraw in (raw.get("models") or {}).items():
         tests = mraw.get("tests") or []
         if not tests:
+            continue
+        skip_bead = COMPONENT_SKIP.get((fixture, "models", mname))
+        if skip_bead is not None:
+            xfail_reasons.append(f"models/{mname}: {skip_bead}")
             continue
         subset = _single_model_subset(file, mname)
         _execute_component_tests(
@@ -224,6 +249,10 @@ def test_simulation_fixture_tests_blocks(fixture: str) -> None:
         tests = rraw.get("tests") or []
         if not tests:
             continue
+        skip_bead = COMPONENT_SKIP.get((fixture, "reaction_systems", rsname))
+        if skip_bead is not None:
+            xfail_reasons.append(f"reaction_systems/{rsname}: {skip_bead}")
+            continue
         subset = _single_rs_subset(file, rsname)
         _execute_component_tests(
             label=f"{fixture}/reaction_systems/{rsname}",
@@ -234,6 +263,15 @@ def test_simulation_fixture_tests_blocks(fixture: str) -> None:
         )
         any_executed = True
 
+    for reason in xfail_reasons:
+        warnings.warn(
+            f"{fixture}: component skipped ({reason})",
+            stacklevel=1,
+        )
+    if xfail_reasons and not any_executed:
+        pytest.xfail(
+            f"{fixture}: all components blocked — " + "; ".join(xfail_reasons)
+        )
     if not any_executed:
         pytest.skip(f"{fixture}: no inline tests blocks to execute")
 
