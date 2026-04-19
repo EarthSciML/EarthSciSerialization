@@ -1406,7 +1406,8 @@ end
 # MTK states and observed variables appear in the symbolic tree as
 # `Sym{FnType{...}}(t)`, which `_symbolic_to_esm` would otherwise emit as
 # `OpExpr("x", [VarExpr("t")])` — the wrong shape for the ESM schema.
-function _symbolic_to_esm_export(expr, known_vars::Set{String})
+function _symbolic_to_esm_export(expr, known_vars::Set{String},
+                                 strip_ns::Function=identity)
     # Scalar fast-paths
     if expr isa Bool
         return IntExpr(Int64(expr))
@@ -1418,8 +1419,24 @@ function _symbolic_to_esm_export(expr, known_vars::Set{String})
         return NumExpr(Float64(expr))
     end
     raw = Symbolics.unwrap(expr)
+
+    # Symbolic constants (e.g. `-1` produced by SymbolicUtils' multiplication
+    # simplification `-k*x`) arrive as `BasicSymbolic{Int}` / `...{Real}`
+    # with issym=false AND iscall=false. `Symbolics.value` extracts the
+    # underlying Julia number without touching variable paths.
+    if !Symbolics.issym(raw) && !Symbolics.iscall(raw)
+        try
+            val = Symbolics.value(raw)
+            if val isa Bool;       return IntExpr(Int64(val))
+            elseif val isa Integer; return IntExpr(Int64(val))
+            elseif val isa Real;    return NumExpr(Float64(val))
+            end
+        catch
+        end
+    end
+
     if Symbolics.issym(raw)
-        name = _strip_time(string(Symbolics.getname(raw)))
+        name = strip_ns(_strip_time(string(Symbolics.getname(raw))))
         return VarExpr(name)
     end
 
@@ -1429,7 +1446,8 @@ function _symbolic_to_esm_export(expr, known_vars::Set{String})
         false
     end
     if is_diff
-        inner = _symbolic_to_esm_export(Symbolics.arguments(raw)[1], known_vars)
+        inner = _symbolic_to_esm_export(Symbolics.arguments(raw)[1],
+                                         known_vars, strip_ns)
         return OpExpr("D", EsmExpr[inner], wrt="t")
     end
 
@@ -1443,7 +1461,7 @@ function _symbolic_to_esm_export(expr, known_vars::Set{String})
         # — the ESM schema implicitly threads time through state vars.
         if !isempty(args)
             opname = try
-                _strip_time(string(Symbolics.getname(op)))
+                strip_ns(_strip_time(string(Symbolics.getname(op))))
             catch
                 ""
             end
@@ -1452,7 +1470,7 @@ function _symbolic_to_esm_export(expr, known_vars::Set{String})
             end
         end
 
-        esm_args = [_symbolic_to_esm_export(a, known_vars) for a in args]
+        esm_args = [_symbolic_to_esm_export(a, known_vars, strip_ns) for a in args]
         if op == (+); return OpExpr("+", esm_args)
         elseif op == (*); return OpExpr("*", esm_args)
         elseif op == (-); return OpExpr("-", esm_args)
@@ -1480,9 +1498,10 @@ function _symbolic_to_esm_export(expr, known_vars::Set{String})
 end
 
 function _symbolic_to_esm_with_gaps(expr, known_vars::Set{String},
-                                    gaps::Vector{GapReport}, where_str::String)
+                                    gaps::Vector{GapReport}, where_str::String;
+                                    strip_ns::Function=identity)
     try
-        return _symbolic_to_esm_export(expr, known_vars)
+        return _symbolic_to_esm_export(expr, known_vars, strip_ns)
     catch e
         push!(gaps, GapReport("unknown",
             "unable to serialize symbolic node: $(sprint(showerror, e))",
@@ -1543,13 +1562,22 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
         Dict()
     end
 
+    # When an MTK System was built via our ESM.Model → MTK.System path, the
+    # flatten step sanitizes names as "<SystemName>_<var>" (dots → underscores).
+    # We strip that prefix so the exported ESM names round-trip back to the
+    # same bare names they had in the source Model. Direct-Symbolics-built
+    # systems without the prefix pass through untouched.
+    sys_name_prefix = sys_name * "_"
+    strip_ns = s -> startswith(s, sys_name_prefix) ?
+        s[length(sys_name_prefix)+1:end] : s
+
     # Collect all known variable names up-front so we can disambiguate
     # callable-symbolic variables `x(t)` from operator calls inside the
     # equation walk.
     known_vars = Set{String}()
 
     for state in ModelingToolkit.unknowns(sys)
-        var_name = _strip_time(string(ModelingToolkit.getname(state)))
+        var_name = strip_ns(_strip_time(string(ModelingToolkit.getname(state))))
         push!(known_vars, var_name)
         default_val = _lookup_default(state, sys_defaults)
         units_str = _get_units_str(state)
@@ -1559,7 +1587,7 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
     end
 
     for param in ModelingToolkit.parameters(sys)
-        pname = string(ModelingToolkit.getname(param))
+        pname = strip_ns(string(ModelingToolkit.getname(param)))
         push!(known_vars, pname)
         default_val = _lookup_default(param, sys_defaults)
         units_str = _get_units_str(param)
@@ -1574,10 +1602,10 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
         []
     end
     for obs in obs_exprs
-        oname = _strip_time(string(ModelingToolkit.getname(obs.lhs)))
+        oname = strip_ns(_strip_time(string(ModelingToolkit.getname(obs.lhs))))
         push!(known_vars, oname)
         rhs_esm = _symbolic_to_esm_with_gaps(obs.rhs, known_vars, gaps,
-            "observed[$oname].rhs")
+            "observed[$oname].rhs"; strip_ns=strip_ns)
         esm_vars[oname] = ModelVariable(ObservedVariable;
             expression=rhs_esm)
     end
@@ -1613,9 +1641,9 @@ function mtk2esm(sys::ModelingToolkit.AbstractSystem; metadata=(;))
     end
     for (i, eq) in enumerate(raw_eqs)
         lhs_esm = _symbolic_to_esm_with_gaps(eq.lhs, known_vars, gaps,
-            "equations[$i].lhs")
+            "equations[$i].lhs"; strip_ns=strip_ns)
         rhs_esm = _symbolic_to_esm_with_gaps(eq.rhs, known_vars, gaps,
-            "equations[$i].rhs")
+            "equations[$i].rhs"; strip_ns=strip_ns)
         push!(esm_equations, Equation(lhs_esm, rhs_esm))
     end
 

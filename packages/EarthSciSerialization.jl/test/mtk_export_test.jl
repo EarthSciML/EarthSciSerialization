@@ -18,15 +18,35 @@ Construct a 3-equation toy ODESystem via MTK macros (analogous to what a
 per-model migration would touch). Returns the parent system.
 """
 function _toy_ode_system(name::Symbol=:ToyDecay)
-    MTK.@variables t x(t) y(t) z(t)
-    MTK.@parameters k1 k2 k3
-    D = MTK.Differential(t)
-    eqs = [D(x) ~ -k1 * x,
-           D(y) ~ k1 * x - k2 * y,
-           D(z) ~ k2 * y - k3 * z]
-    defaults = Dict(x => 1.0, y => 0.0, z => 0.0,
-                    k1 => 0.5, k2 => 0.3, k3 => 0.1)
-    return MTK.System(eqs, t; name=name, defaults=defaults)
+    # Build an ESM Model first and lower it to MTK.System — same approach
+    # as the existing real_mtk_integration_test and simulate_e2e_test. MTK
+    # v11 doesn't accept the short `System(eqs, iv; defaults=...)` path.
+    vars = Dict{String,ESM.ModelVariable}(
+        "x" => ESM.ModelVariable(ESM.StateVariable; default=1.0),
+        "y" => ESM.ModelVariable(ESM.StateVariable; default=0.0),
+        "z" => ESM.ModelVariable(ESM.StateVariable; default=0.0),
+        "k1" => ESM.ModelVariable(ESM.ParameterVariable; default=0.5),
+        "k2" => ESM.ModelVariable(ESM.ParameterVariable; default=0.3),
+        "k3" => ESM.ModelVariable(ESM.ParameterVariable; default=0.1),
+    )
+    eqs = ESM.Equation[
+        ESM.Equation(
+            OpExpr("D", ESM.Expr[VarExpr("x")], wrt="t"),
+            OpExpr("*", ESM.Expr[OpExpr("-", ESM.Expr[VarExpr("k1")]),
+                                 VarExpr("x")])),
+        ESM.Equation(
+            OpExpr("D", ESM.Expr[VarExpr("y")], wrt="t"),
+            OpExpr("-", ESM.Expr[
+                OpExpr("*", ESM.Expr[VarExpr("k1"), VarExpr("x")]),
+                OpExpr("*", ESM.Expr[VarExpr("k2"), VarExpr("y")])])),
+        ESM.Equation(
+            OpExpr("D", ESM.Expr[VarExpr("z")], wrt="t"),
+            OpExpr("-", ESM.Expr[
+                OpExpr("*", ESM.Expr[VarExpr("k2"), VarExpr("y")]),
+                OpExpr("*", ESM.Expr[VarExpr("k3"), VarExpr("z")])])),
+    ]
+    model = ESM.Model(vars, eqs)
+    return MTK.System(model; name=name)
 end
 
 function _toy_catalyst_system(name::Symbol=:ToyReactions)
@@ -162,11 +182,18 @@ end
 
     # And confirm the full mtk2esm emits TODO_GAP in reference.notes when
     # a brownian-declared system is exported (uses the SDESystem path gap).
-    MTK.@variables t u(t)
-    MTK.@parameters k
-    D = MTK.Differential(t)
-    ode_sys = MTK.System([D(u) ~ -k * u], t; name=:GapSys,
-        defaults=Dict(u => 1.0, k => 0.5))
+    vars = Dict{String,ESM.ModelVariable}(
+        "u" => ESM.ModelVariable(ESM.StateVariable; default=1.0),
+        "k" => ESM.ModelVariable(ESM.ParameterVariable; default=0.5),
+    )
+    eqs = ESM.Equation[
+        ESM.Equation(
+            OpExpr("D", ESM.Expr[VarExpr("u")], wrt="t"),
+            OpExpr("*", ESM.Expr[OpExpr("-", ESM.Expr[VarExpr("k")]),
+                                 VarExpr("u")])),
+    ]
+    model = ESM.Model(vars, eqs)
+    ode_sys = MTK.System(model; name=:GapSys)
     out = mtk2esm(ode_sys; metadata=(;
         source_ref="fake/ref", description="probe"))
     model_dict = out["models"]["GapSys"]
