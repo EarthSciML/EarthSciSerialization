@@ -7111,6 +7111,7 @@ Assertion(variable::String, time::Float64, expected::Float64, tolerance::Union{T
 A scalar `(variable, time, expected)` check used inside a `Test`.
 
 **Available in other languages:**
+- [Python](python.md#assertion)
 - [Typescript](typescript.md#assertion)
 
 ---
@@ -8595,6 +8596,7 @@ configuration — initial conditions, parameter overrides, simulation time
 span — and a list of scalar assertions that must hold.
 
 **Available in other languages:**
+- [Python](python.md#test)
 - [Typescript](typescript.md#test)
 
 ---
@@ -8614,6 +8616,7 @@ TimeSpan(start::Float64, stop::Float64)
 Simulation time interval for inline model tests and examples (§gt-cc1).
 
 **Available in other languages:**
+- [Python](python.md#timespan)
 - [Typescript](typescript.md#timespan)
 
 ---
@@ -8634,6 +8637,7 @@ Numerical comparison tolerance. Either or both of `abs` / `rel` may be
 set; an assertion passes when any set bound is satisfied.
 
 **Available in other languages:**
+- [Python](python.md#tolerance)
 - [Typescript](typescript.md#tolerance)
 
 ---

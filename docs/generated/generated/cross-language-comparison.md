@@ -2326,6 +2326,13 @@ struct Assertion
 
 A scalar `(variable, time, expected)` check used inside a `Test`.
 
+**Python:**
+```python
+class Assertion:
+```
+
+> A scalar (variable, time, expected) check used inside a Test.
+
 **Typescript:**
 ```typescript
 export interface Assertion {
@@ -3107,6 +3114,24 @@ model='{"variables": {.
 
 ---
 
+### Example
+
+**Python:**
+```python
+class Example:
+```
+
+> Inline illustrative example of how to run a component.
+
+**Typescript:**
+```typescript
+export interface Example {
+```
+
+> An inline illustrative example of how to run the enclosing component.
+
+---
+
 ### ExprNode
 
 **Python:**
@@ -3418,6 +3443,96 @@ export interface Parameter {
 ```
 
 > A parameter in a reaction system.
+
+---
+
+### ParameterSweep
+
+**Python:**
+```python
+class ParameterSweep:
+```
+
+> Parameter sweep specification (currently only Cartesian).
+
+**Typescript:**
+```typescript
+export interface ParameterSweep {
+```
+
+> Optional parameter sweep.
+
+---
+
+### Plot
+
+**Python:**
+```python
+class Plot:
+```
+
+> A plot specification associated with an example.
+
+**Typescript:**
+```typescript
+export interface Plot {
+```
+
+> A plot specification associated with an example.
+
+---
+
+### PlotAxis
+
+**Python:**
+```python
+class PlotAxis:
+```
+
+> Axis specification for a plot.
+
+**Typescript:**
+```typescript
+export interface PlotAxis {
+```
+
+> Axis specification: any state variable, observed variable, parameter name, or swept parameter may be used.
+
+---
+
+### PlotSeries
+
+**Python:**
+```python
+class PlotSeries:
+```
+
+> Single named series for multi-series line or scatter plots.
+
+**Typescript:**
+```typescript
+export interface PlotSeries {
+```
+
+> A single named series for multi-series line or scatter plots.
+
+---
+
+### PlotValue
+
+**Python:**
+```python
+class PlotValue:
+```
+
+> Scalar value derived from a trajectory (e.
+
+**Typescript:**
+```typescript
+export interface PlotValue {
+```
+
+> Required for heatmap; defines the color channel.
 
 ---
 
@@ -3736,6 +3851,24 @@ class SubsystemRefError:
 
 ---
 
+### SweepRange
+
+**Python:**
+```python
+class SweepRange:
+```
+
+> Generated range of parameter values.
+
+**Typescript:**
+```typescript
+export interface SweepRange {
+```
+
+> Generated range; mutually exclusive with values.
+
+---
+
 ### Test
 
 **Julia:**
@@ -3746,6 +3879,13 @@ struct Test
 > Test(id, time_span, assertions; description, initial_conditions, parameter_overrides, tolerance)
 
 Inline validation test for a Model (schema gt-cc1).
+
+**Python:**
+```python
+class Test:
+```
+
+> Inline validation test for a Model or ReactionSystem.
 
 **Typescript:**
 ```typescript
@@ -3783,6 +3923,13 @@ struct TimeSpan
 
 Simulation time interval for inline model tests and examples (§gt-cc1).
 
+**Python:**
+```python
+class TimeSpan:
+```
+
+> Simulation time interval expressed in the component's time units.
+
 **Typescript:**
 ```typescript
 export interface TimeSpan {
@@ -3802,6 +3949,13 @@ struct Tolerance
 > Tolerance(abs::Union{Float64,Nothing}, rel::Union{Float64,Nothing})
 
 Numerical comparison tolerance.
+
+**Python:**
+```python
+class Tolerance:
+```
+
+> Numerical comparison tolerance.
 
 **Typescript:**
 ```typescript

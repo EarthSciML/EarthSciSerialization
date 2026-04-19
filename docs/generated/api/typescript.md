@@ -1989,6 +1989,7 @@ A single scalar check at a (variable, time) point.
 
 **Available in other languages:**
 - [Julia](julia.md#assertion)
+- [Python](python.md#assertion)
 
 ---
 
@@ -2861,6 +2862,9 @@ export interface Example {
 An inline illustrative example of how to run the enclosing component. Defines the run configuration and one or more plots derived from the result.
 /
 
+**Available in other languages:**
+- [Python](python.md#example)
+
 ---
 
 ### ExpressionLocation
@@ -3234,6 +3238,9 @@ export interface ParameterSweep {
 Optional parameter sweep. When present, the example represents a family of runs (one per Cartesian combination) rather than a single trajectory.
 /
 
+**Available in other languages:**
+- [Python](python.md#parametersweep)
+
 ---
 
 ### ParsedUnit
@@ -3260,6 +3267,9 @@ export interface Plot {
 A plot specification associated with an example. Only structural information is recorded — axes, series selection, and value reductions. Styling (colors, fonts, legends, themes) is the viewer's concern.
 /
 
+**Available in other languages:**
+- [Python](python.md#plot)
+
 ---
 
 ### PlotAxis
@@ -3274,6 +3284,9 @@ export interface PlotAxis {
 **Description:**
 Axis specification: any state variable, observed variable, parameter name, or swept parameter may be used.
 /
+
+**Available in other languages:**
+- [Python](python.md#plotaxis)
 
 ---
 
@@ -3290,6 +3303,9 @@ export interface PlotSeries {
 A single named series for multi-series line or scatter plots.
 /
 
+**Available in other languages:**
+- [Python](python.md#plotseries)
+
 ---
 
 ### PlotValue
@@ -3304,6 +3320,9 @@ export interface PlotValue {
 **Description:**
 Required for heatmap; defines the color channel. Ignored for line/scatter.
 /
+
+**Available in other languages:**
+- [Python](python.md#plotvalue)
 
 ---
 
@@ -3517,6 +3536,9 @@ export interface SweepRange {
 Generated range; mutually exclusive with values.
 /
 
+**Available in other languages:**
+- [Python](python.md#sweeprange)
+
 ---
 
 ### Test
@@ -3534,6 +3556,7 @@ An inline validation test for the enclosing model or reaction system. Defines th
 
 **Available in other languages:**
 - [Julia](julia.md#test)
+- [Python](python.md#test)
 
 ---
 
@@ -3552,6 +3575,7 @@ Simulation time interval expressed in the component's time units.
 
 **Available in other languages:**
 - [Julia](julia.md#timespan)
+- [Python](python.md#timespan)
 
 ---
 
@@ -3570,6 +3594,7 @@ Model-level default numerical tolerance for tests, used when a test or assertion
 
 **Available in other languages:**
 - [Julia](julia.md#tolerance)
+- [Python](python.md#tolerance)
 
 ---
 
