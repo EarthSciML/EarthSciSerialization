@@ -2174,14 +2174,14 @@ export interface Assertion {
 class BoundaryCondition:
 ```
 
-> Boundary condition specification.
+> Model-level boundary condition entry (v0.
 
 **Typescript:**
 ```typescript
 export interface BoundaryCondition {
 ```
 
-> Boundary condition for one or more dimensions.
+> Model-level boundary condition entry (v0.
 
 ---
 
