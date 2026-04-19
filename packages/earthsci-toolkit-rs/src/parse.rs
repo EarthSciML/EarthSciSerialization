@@ -114,10 +114,35 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     // cross-language conformance agrees.
     validate_structural_json(&json_value)?;
 
+    // Emit deprecation warnings for any domain-level boundary_conditions
+    // (v0.2.0 transitional shim per RFC §10.1 + gt-2fvs mayor decision).
+    warn_deprecated_domain_bc(&json_value);
+
     // Deserialize into our types
     let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;
 
     Ok(esm_file)
+}
+
+/// Check for v0.1.0 domain-level boundary_conditions and emit
+/// E_DEPRECATED_DOMAIN_BC via `log::warn!` (or `eprintln!` if the `log`
+/// feature is not configured). A follow-up bead will flip this to a hard
+/// error once the migration tool (gt-fmrq) lands and in-tree fixtures are
+/// migrated.
+fn warn_deprecated_domain_bc(json_value: &Value) {
+    let Some(domains) = json_value.get("domains").and_then(|v| v.as_object()) else {
+        return;
+    };
+    for (domain_name, domain) in domains {
+        if domain.get("boundary_conditions").is_some() {
+            eprintln!(
+                "[E_DEPRECATED_DOMAIN_BC] domains.{}.boundary_conditions is \
+                 deprecated; migrate to models.<M>.boundary_conditions \
+                 (docs/rfcs/discretization.md §9).",
+                domain_name
+            );
+        }
+    }
 }
 
 /// Load an ESM file from a filesystem path.

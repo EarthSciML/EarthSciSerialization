@@ -189,6 +189,13 @@ def _serialize_model(model: Model) -> Dict[str, Any]:
     if model.equations:
         result["equations"] = [_serialize_equation(eq) for eq in model.equations]
 
+    # Serialize model-level boundary conditions (v0.2.0, RFC §9).
+    if model.boundary_conditions:
+        result["boundary_conditions"] = {
+            bc_id: _serialize_boundary_condition(bc)
+            for bc_id, bc in model.boundary_conditions.items()
+        }
+
     return result
 
 
@@ -382,22 +389,45 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
 
         result["initial_conditions"] = ic_data
 
-    # Serialize boundary conditions
-    if domain.boundary_conditions:
-        bc_data = []
-        for bc in domain.boundary_conditions:
-            bc_dict = {
-                "type": bc.type.value,
-                "dimensions": bc.dimensions
-            }
-            if bc.value is not None:
-                bc_dict["value"] = bc.value
-            if bc.function is not None:
-                bc_dict["function"] = bc.function
-            bc_data.append(bc_dict)
-        result["boundary_conditions"] = bc_data
+    # v0.2.0: model-level BCs are serialized by _serialize_model (RFC §9).
+    # Domain-level boundary_conditions is deprecated but retained in a
+    # transitional window (gt-2fvs mayor decision). If a file was loaded with
+    # domain-level BCs, they are stashed in domain.boundaries under the key
+    # '_deprecated_v01_boundary_conditions' so round-trip preserves them.
+    legacy_bc = None
+    if isinstance(domain.boundaries, dict):
+        legacy_bc = domain.boundaries.get("_deprecated_v01_boundary_conditions")
+    if legacy_bc:
+        result["boundary_conditions"] = list(legacy_bc)
 
     return result
+
+
+def _serialize_boundary_condition(bc: BoundaryCondition) -> Dict[str, Any]:
+    """Serialize a model-level BoundaryCondition (RFC §9.2)."""
+    bc_dict: Dict[str, Any] = {
+        "variable": bc.variable,
+        "side": bc.side,
+        "kind": bc.kind.value,
+    }
+    if bc.value is not None:
+        bc_dict["value"] = bc.value
+    if bc.robin_alpha is not None:
+        bc_dict["robin_alpha"] = bc.robin_alpha
+    if bc.robin_beta is not None:
+        bc_dict["robin_beta"] = bc.robin_beta
+    if bc.robin_gamma is not None:
+        bc_dict["robin_gamma"] = bc.robin_gamma
+    if bc.face_coords is not None:
+        bc_dict["face_coords"] = list(bc.face_coords)
+    if bc.contributed_by is not None:
+        cb: Dict[str, Any] = {"component": bc.contributed_by.component}
+        if bc.contributed_by.flux_sign != "+":
+            cb["flux_sign"] = bc.contributed_by.flux_sign
+        bc_dict["contributed_by"] = cb
+    if bc.description is not None:
+        bc_dict["description"] = bc.description
+    return bc_dict
 
 
 def _serialize_data_loader_source(source: DataLoaderSource) -> Dict[str, Any]:

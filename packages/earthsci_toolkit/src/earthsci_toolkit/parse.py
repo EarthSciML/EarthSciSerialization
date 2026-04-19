@@ -42,7 +42,7 @@ from .esm_types import (
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
-    InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionType
+    InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionKind, BCContributedBy
 )
 
 
@@ -366,9 +366,65 @@ def _parse_model(model_data: Dict[str, Any]) -> Model:
                 sub_model.name = sub_name
                 subsystems[sub_name] = sub_model
 
+    # Parse model-level boundary conditions (v0.2.0, RFC §9).
+    boundary_conditions: Dict[str, BoundaryCondition] = {}
+    if "boundary_conditions" in model_data:
+        bc_map = model_data["boundary_conditions"]
+        if not isinstance(bc_map, dict):
+            raise ValueError(
+                "Model 'boundary_conditions' must be an object keyed by BC id "
+                "(v0.2.0, RFC §9.1). Got: " + type(bc_map).__name__
+            )
+        for bc_id, bc_data in bc_map.items():
+            boundary_conditions[bc_id] = _parse_boundary_condition(bc_id, bc_data)
+
     model = Model(name="", variables=variables, equations=equations,
-                  subsystems=subsystems)
+                  subsystems=subsystems,
+                  boundary_conditions=boundary_conditions)
     return model
+
+
+def _parse_boundary_condition(bc_id: str, bc_data: Dict[str, Any]) -> BoundaryCondition:
+    """Parse a model-level boundary condition entry (RFC §9.2)."""
+    # Required fields
+    for required in ("variable", "side", "kind"):
+        if required not in bc_data:
+            raise ValueError(
+                f"boundary_conditions['{bc_id}']: missing required field '{required}' "
+                f"(RFC §9.2)"
+            )
+    try:
+        kind = BoundaryConditionKind(bc_data["kind"])
+    except ValueError:
+        valid = ", ".join(k.value for k in BoundaryConditionKind)
+        raise ValueError(
+            f"boundary_conditions['{bc_id}']: invalid kind "
+            f"'{bc_data['kind']}' (valid: {valid})"
+        )
+    contributed_by = None
+    cb_data = bc_data.get("contributed_by")
+    if cb_data is not None:
+        if "component" not in cb_data:
+            raise ValueError(
+                f"boundary_conditions['{bc_id}'].contributed_by: "
+                f"missing required field 'component'"
+            )
+        contributed_by = BCContributedBy(
+            component=cb_data["component"],
+            flux_sign=cb_data.get("flux_sign", "+"),
+        )
+    return BoundaryCondition(
+        variable=bc_data["variable"],
+        side=bc_data["side"],
+        kind=kind,
+        value=bc_data.get("value"),
+        robin_alpha=bc_data.get("robin_alpha"),
+        robin_beta=bc_data.get("robin_beta"),
+        robin_gamma=bc_data.get("robin_gamma"),
+        face_coords=bc_data.get("face_coords"),
+        contributed_by=contributed_by,
+        description=bc_data.get("description"),
+    )
 
 
 def _parse_species(species_data: Dict[str, Any]) -> Species:
@@ -844,20 +900,28 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
             data_source=data_source
         )
 
-    # Parse boundary conditions
+    # v0.2.0 deprecation warning: domain-level boundary_conditions is retained
+    # for the transitional window only (RFC §10.1 + mayor decision per gt-2fvs).
+    # Model-level boundary_conditions is the canonical form. When the migration
+    # tool (gt-fmrq) lands and in-tree fixtures are migrated, this will flip to
+    # a hard error in a follow-up bead.
     if "boundary_conditions" in domain_data:
-        for bc_data in domain_data["boundary_conditions"]:
-            bc_type = BoundaryConditionType(bc_data["type"])
-            bc = BoundaryCondition(
-                type=bc_type,
-                dimensions=bc_data["dimensions"],
-                value=bc_data.get("value"),
-                function=bc_data.get("function"),
-                robin_alpha=bc_data.get("robin_alpha"),
-                robin_beta=bc_data.get("robin_beta"),
-                robin_gamma=bc_data.get("robin_gamma")
-            )
-            domain.boundary_conditions.append(bc)
+        import warnings
+        warnings.warn(
+            "[E_DEPRECATED_DOMAIN_BC] domains.<d>.boundary_conditions is "
+            "deprecated in ESM v0.2.0; migrate to models.<M>.boundary_conditions "
+            "(docs/rfcs/discretization.md §9). This field will be removed in a "
+            "future release.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        # Domain-level BCs are preserved on the dataclass for round-trip
+        # fidelity during the transitional window. They are stored untyped on
+        # the legacy 'boundaries' field rather than on a typed field, so that
+        # downstream code that relies on model-level BCs is not misled into
+        # consuming old-form entries.
+        domain.boundaries = {"_deprecated_v01_boundary_conditions":
+                             list(domain_data["boundary_conditions"])}
 
     return domain
 
@@ -907,13 +971,6 @@ def _validate_domain(domain: Domain) -> None:
                 if dim not in domain.spatial:
                     errors.append(f"Coordinate transform '{transform.id}': references undefined dimension '{dim}'")
 
-    # Validate boundary conditions reference valid dimensions
-    if domain.boundary_conditions and domain.spatial:
-        for bc in domain.boundary_conditions:
-            for dim in bc.dimensions:
-                if dim not in domain.spatial:
-                    errors.append(f"Boundary condition: references undefined dimension '{dim}'")
-
     # Validate initial conditions have required fields
     if domain.initial_conditions:
         ic = domain.initial_conditions
@@ -923,16 +980,6 @@ def _validate_domain(domain: Domain) -> None:
             errors.append("Initial condition type 'function' requires a function specification")
         elif ic.type == InitialConditionType.DATA and ic.data_source is None:
             errors.append("Initial condition type 'data' requires a data source")
-
-    # Validate boundary conditions have required fields
-    for i, bc in enumerate(domain.boundary_conditions):
-        if bc.type in [BoundaryConditionType.CONSTANT, BoundaryConditionType.DIRICHLET] and bc.value is None:
-            errors.append(f"Boundary condition {i+1}: type '{bc.type.value}' requires a value")
-        elif bc.type == BoundaryConditionType.ROBIN:
-            if bc.robin_alpha is None or bc.robin_beta is None:
-                errors.append(f"Boundary condition {i+1}: Robin boundary condition requires robin_alpha and robin_beta coefficients")
-            if bc.robin_gamma is None:
-                errors.append(f"Boundary condition {i+1}: Robin boundary condition requires robin_gamma value")
 
     if errors:
         raise ValueError("Domain validation failed:\n" + "\n".join(f"  - {error}" for error in errors))

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://earthsciml.org/schemas/esm/0.1.0/esm.schema.json",
+  "$id": "https://earthsciml.org/schemas/esm/0.2.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.1.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration.",
+  "description": "EarthSciML Serialization Format (v0.2.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.2.0 promotes boundary_conditions from a domain property to a first-class model-level section (see docs/rfcs/discretization.md §9). Files declaring domains.<d>.boundary_conditions are no longer valid under this schema and must be migrated via the spec.migrate_0_1_to_0_2 convention (RFC §16.1).",
   "type": "object",
   "required": ["esm", "metadata"],
   "additionalProperties": false,
@@ -139,7 +139,7 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "call"
+            "call", "bc"
           ]
         },
         "args": {
@@ -233,6 +233,15 @@
         "handler_id": {
           "type": "string",
           "description": "For call: the identifier of a registered function (a key in the top-level `registered_functions` map). The handler receives the evaluated `args` positionally."
+        },
+        "kind": {
+          "type": "string",
+          "description": "For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib'). See RFC §9.2.",
+          "enum": ["constant", "dirichlet", "neumann", "robin", "zero_gradient", "periodic", "flux_contrib"]
+        },
+        "side": {
+          "type": "string",
+          "description": "For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2."
         }
       },
       "additionalProperties": false,
@@ -260,6 +269,10 @@
         {
           "if": { "properties": { "op": { "const": "call" } }, "required": ["op"] },
           "then": { "required": ["handler_id"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "bc" } }, "required": ["op"] },
+          "then": { "required": ["kind", "side"] }
         }
       ]
     },
@@ -575,6 +588,11 @@
           "type": "array",
           "description": "Inline illustrative examples of how to run this model. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
           "items": { "$ref": "#/$defs/Example" }
+        },
+        "boundary_conditions": {
+          "type": "object",
+          "description": "Model-level boundary conditions, keyed by user-supplied id (see docs/rfcs/discretization.md §9). v0.2.0 breaking change: domains.<d>.boundary_conditions was removed in favor of this field; files from v0.1.0 carrying the old field must be migrated via spec.migrate_0_1_to_0_2 (RFC §16.1).",
+          "additionalProperties": { "$ref": "#/$defs/BoundaryCondition" }
         }
       }
     },
@@ -1644,41 +1662,107 @@
       ]
     },
 
-    "BoundaryCondition": {
+    "DeprecatedDomainBoundaryCondition": {
       "type": "object",
-      "description": "Boundary condition for one or more dimensions.",
+      "description": "DEPRECATED v0.1.0 domain-level boundary condition entry. Retained for the v0.2.0 transitional window only (RFC §10.1). Loaders emit E_DEPRECATED_DOMAIN_BC when encountering it; use Model.boundary_conditions (keyed map of BoundaryCondition entries) instead.",
+      "deprecated": true,
       "required": ["type", "dimensions"],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["constant", "zero_gradient", "periodic", "dirichlet", "neumann", "robin"],
-          "description": "constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n = 0; periodic = wrap-around; robin = αu + β∂u/∂n = γ."
+          "enum": ["constant", "zero_gradient", "periodic", "dirichlet", "neumann", "robin"]
         },
         "dimensions": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 1
         },
-        "value": {
-          "type": "number",
-          "description": "Boundary value (for constant type)."
-        },
-        "function": {
+        "value": { "type": "number" },
+        "function": { "type": "string" },
+        "robin_alpha": { "type": "number" },
+        "robin_beta": { "type": "number" },
+        "robin_gamma": { "type": "number" }
+      }
+    },
+
+    "BoundaryCondition": {
+      "type": "object",
+      "description": "Model-level boundary condition entry (v0.2.0). Constrains one model variable on one boundary side. See docs/rfcs/discretization.md §9.2 for full semantics. This object lives under models.<M>.boundary_conditions keyed by user-supplied id; it replaces the v0.1.0 domains.<d>.boundary_conditions list.",
+      "required": ["variable", "side", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
           "type": "string",
-          "description": "Function specification for time/space-varying boundaries."
+          "description": "Name of the model variable the BC constrains. Must resolve to a variable declared in the enclosing model's variables map (or a dot-qualified subsystem variable)."
+        },
+        "side": {
+          "type": "string",
+          "description": "Boundary side the BC applies to. Closed-vocabulary axis sides ('xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'tmin', 'tmax'), grid-family-specific seams ('panel_seam' for cubed-sphere), or generic unstructured boundary markers ('mesh_boundary'). Authors MAY introduce additional named sides (e.g., 'north', 'surface') provided the grid they reference declares them."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["constant", "dirichlet", "neumann", "robin", "zero_gradient", "periodic", "flux_contrib"],
+          "description": "BC kind. constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n-based; robin = αu + β∂u/∂n = γ; periodic = pair-side wraparound (declare once per periodic pair on either min or max side); flux_contrib = a component-contributed flux summand that the rewrite engine aggregates with other flux_contrib entries for the same (variable, side) pair before applying the enclosing neumann/robin template."
+        },
+        "value": {
+          "description": "BC value: numeric literal, variable/parameter reference string, or expression AST. Required for kind='constant' and kind='dirichlet'; semantics for other kinds per RFC §9.2.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
         },
         "robin_alpha": {
-          "type": "number",
-          "description": "Robin BC coefficient α for u term in αu + β∂u/∂n = γ."
+          "description": "Robin BC coefficient α for the u term in αu + β∂u/∂n = γ.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
         },
         "robin_beta": {
-          "type": "number",
-          "description": "Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ."
+          "description": "Robin BC coefficient β for the ∂u/∂n term in αu + β∂u/∂n = γ.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
         },
         "robin_gamma": {
-          "type": "number",
-          "description": "Robin BC RHS value γ in αu + β∂u/∂n = γ."
+          "description": "Robin BC RHS value γ in αu + β∂u/∂n = γ.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
+        },
+        "face_coords": {
+          "type": "array",
+          "description": "Reduced face-coordinate index names used when `value` contains an `index` op into a loader-provided time-varying field (§9.2 / §8.A.3). E.g., for side='zmin' on a 3D grid, face_coords: ['i', 'j']. Omit when `value` does not index into a time-varying loader field.",
+          "items": { "type": "string" }
+        },
+        "contributed_by": {
+          "type": "object",
+          "description": "Optional component-contribution marker identifying the model component (deposition, emissions, surface-flux scheme) providing this flux. The rewrite engine sums all flux_contrib entries for the same (variable, side) pair into a single aggregated flux, then applies the enclosing kind's BC template. See RFC §9.3.",
+          "additionalProperties": false,
+          "required": ["component"],
+          "properties": {
+            "component": {
+              "type": "string",
+              "description": "Name of the contributing component."
+            },
+            "flux_sign": {
+              "type": "string",
+              "enum": ["+", "-"],
+              "description": "Sign of the contribution in the aggregated flux sum. Default '+'.",
+              "default": "+"
+            }
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the BC."
         }
       }
     },
@@ -1718,7 +1802,9 @@
         "initial_conditions": { "$ref": "#/$defs/InitialConditions" },
         "boundary_conditions": {
           "type": "array",
-          "items": { "$ref": "#/$defs/BoundaryCondition" }
+          "description": "DEPRECATED (v0.2.0, RFC §10.1): domain-level boundary_conditions is superseded by model-level boundary_conditions (models.<M>.boundary_conditions). Retained in the schema only as a transitional compatibility shim; loaders MUST emit E_DEPRECATED_DOMAIN_BC when this field is present. A follow-up release will remove this field entirely.",
+          "deprecated": true,
+          "items": { "$ref": "#/$defs/DeprecatedDomainBoundaryCondition" }
         },
         "element_type": {
           "type": "string",

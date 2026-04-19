@@ -213,6 +213,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     })
 }
 

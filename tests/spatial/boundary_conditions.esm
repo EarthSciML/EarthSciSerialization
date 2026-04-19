@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "BoundaryConditionTests",
-    "description": "Test boundary condition implementation for atmospheric models",
+    "description": "Test boundary condition implementation for atmospheric models (ESM v0.2.0 — model-level BCs per docs/rfcs/discretization.md §9)",
     "authors": [
       "ESM Test Suite"
     ],
@@ -54,7 +54,30 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "concentration_zero_gradient_xmin": {
+          "variable": "concentration",
+          "side": "xmin",
+          "kind": "zero_gradient",
+          "description": "Zero-gradient Neumann on x=0"
+        },
+        "concentration_zero_gradient_xmax": {
+          "variable": "concentration",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "concentration_zero_gradient_ymin": {
+          "variable": "concentration",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "concentration_zero_gradient_ymax": {
+          "variable": "concentration",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "DirichletBoundary": {
       "reference": {
@@ -101,11 +124,25 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "tracer_dirichlet_xmin": {
+          "variable": "tracer",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": "boundary_value"
+        },
+        "tracer_dirichlet_xmax": {
+          "variable": "tracer",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": "boundary_value"
+        }
+      }
     },
     "PeriodicBoundary": {
       "reference": {
-        "notes": "Test periodic boundary conditions: C(0) = C(L) for global atmospheric models"
+        "notes": "Test periodic boundary conditions: C(0) = C(L) for global atmospheric models. Per RFC \u00a79.2.1, declare once on xmin; the xmax side is implicit."
       },
       "variables": {
         "global_tracer": {
@@ -149,11 +186,71 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "global_tracer_periodic_lon": {
+          "variable": "global_tracer",
+          "side": "xmin",
+          "kind": "periodic",
+          "description": "Periodic x-axis wrap (declared once on xmin per RFC \u00a79.2.1)"
+        }
+      }
+    },
+    "RobinBoundary": {
+      "reference": {
+        "notes": "Test Robin boundary conditions: \u03b1u + \u03b2\u2202u/\u2202n = \u03b3 at the domain edge."
+      },
+      "variables": {
+        "temperature": {
+          "type": "state",
+          "units": "K",
+          "default": 288.15
+        },
+        "htc": {
+          "type": "parameter",
+          "units": "W/m^2/K",
+          "default": 25.0
+        },
+        "t_ambient": {
+          "type": "parameter",
+          "units": "K",
+          "default": 295.0
+        }
+      },
+      "equations": [
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "temperature"
+            ],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "laplacian",
+            "args": [
+              "temperature"
+            ]
+          }
+        }
+      ],
+      "boundary_conditions": {
+        "temperature_robin_xmin": {
+          "variable": "temperature",
+          "side": "xmin",
+          "kind": "robin",
+          "robin_alpha": "htc",
+          "robin_beta": 1.0,
+          "robin_gamma": {
+            "op": "*",
+            "args": ["htc", "t_ambient"]
+          }
+        }
+      }
     },
     "MixedBoundaries": {
       "reference": {
-        "notes": "Test mixed boundary conditions: different BC types on different domain edges"
+        "notes": "Test mixed BCs: a flux_contrib from a dry deposition component and an emission flux_contrib on the same (variable, side) pair — the rewrite engine aggregates both into the zmin Neumann template (RFC \u00a79.3)."
       },
       "variables": {
         "pollution": {
@@ -185,25 +282,48 @@
             "wrt": "t"
           },
           "rhs": {
-            "op": "+",
+            "op": "laplacian",
             "args": [
-              "surface_emission",
-              {
-                "op": "*",
-                "args": [
-                  {
-                    "op": "-",
-                    "args": [
-                      "deposition_velocity"
-                    ]
-                  },
-                  "pollution"
-                ]
-              }
+              "pollution"
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "pollution_neumann_zmin": {
+          "variable": "pollution",
+          "side": "zmin",
+          "kind": "neumann",
+          "value": 0.0,
+          "description": "Enclosing neumann template; flux_contrib entries aggregate into this side's flux."
+        },
+        "pollution_deposition_zmin": {
+          "variable": "pollution",
+          "side": "zmin",
+          "kind": "flux_contrib",
+          "value": {
+            "op": "*",
+            "args": [
+              {"op": "-", "args": ["deposition_velocity"]},
+              "pollution"
+            ]
+          },
+          "contributed_by": {
+            "component": "dry_deposition",
+            "flux_sign": "-"
+          }
+        },
+        "pollution_emission_zmin": {
+          "variable": "pollution",
+          "side": "zmin",
+          "kind": "flux_contrib",
+          "value": "surface_emission",
+          "contributed_by": {
+            "component": "emissions",
+            "flux_sign": "+"
+          }
+        }
+      }
     }
   },
   "domains": {
@@ -239,38 +359,10 @@
           "concentration": 1e-08,
           "tracer": 0.0,
           "global_tracer": 1e-09,
-          "pollution": 0.0
+          "pollution": 0.0,
+          "temperature": 288.15
         }
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "x",
-            "y"
-          ]
-        },
-        {
-          "type": "constant",
-          "dimensions": [
-            "x",
-            "y"
-          ],
-          "value": 1e-06
-        },
-        {
-          "type": "periodic",
-          "dimensions": [
-            "lon"
-          ]
-        },
-        {
-          "type": "robin",
-          "dimensions": [
-            "x"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }

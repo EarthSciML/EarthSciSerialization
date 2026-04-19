@@ -58,8 +58,8 @@ const schema = {
   "properties": {
     "esm": {
       "type": "string",
-      "const": "0.1.0",
-      "description": "Format version string (semver)."
+      "enum": ["0.1.0", "0.2.0"],
+      "description": "Format version string (semver). v0.2.0 adds model-level boundary_conditions (RFC §9)."
     },
     "metadata": { "$ref": "#/$defs/Metadata" },
     "models": {
@@ -193,7 +193,8 @@ const schema = {
             "Pre",
             "sign",
             "index",
-            "call"
+            "call",
+            "bc"
           ]
         },
         "args": {
@@ -212,6 +213,15 @@ const schema = {
         "handler_id": {
           "type": "string",
           "description": "For call: id of a registered function (esm-spec §4.4)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["constant", "dirichlet", "neumann", "robin", "zero_gradient", "periodic", "flux_contrib"],
+          "description": "For the 'bc' pattern-match op: BC kind to match (RFC §9.2)."
+        },
+        "side": {
+          "type": "string",
+          "description": "For the 'bc' pattern-match op: BC side to match (RFC §9.2)."
         }
       },
       "additionalProperties": false,
@@ -520,7 +530,69 @@ const schema = {
         "examples": {
           "type": "array",
           "items": { "$ref": "#/$defs/Example" }
+        },
+        "boundary_conditions": {
+          "type": "object",
+          "description": "Model-level boundary conditions keyed by user-supplied id (v0.2.0, RFC §9). Replaces the v0.1.0 domain-level list; old-style files emit E_DEPRECATED_DOMAIN_BC.",
+          "additionalProperties": { "$ref": "#/$defs/ModelBoundaryCondition" }
         }
+      }
+    },
+
+    "ModelBoundaryCondition": {
+      "type": "object",
+      "description": "Model-level boundary condition entry (v0.2.0, RFC §9.2).",
+      "required": ["variable", "side", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "variable": { "type": "string" },
+        "side": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": ["constant", "dirichlet", "neumann", "robin", "zero_gradient", "periodic", "flux_contrib"]
+        },
+        "value": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
+        },
+        "robin_alpha": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
+        },
+        "robin_beta": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
+        },
+        "robin_gamma": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
+        },
+        "face_coords": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "contributed_by": {
+          "type": "object",
+          "required": ["component"],
+          "additionalProperties": false,
+          "properties": {
+            "component": { "type": "string" },
+            "flux_sign": { "type": "string", "enum": ["+", "-"] }
+          }
+        },
+        "description": { "type": "string" }
       }
     },
 
@@ -1866,6 +1938,29 @@ export function load(input: string | object): EsmFile {
   // Step 4: Clean up unknown fields for forward compatibility and type coercion
   const cleanedData = removeUnknownFields(data)
   const typedData = coerceTypes(cleanedData) as EsmFile
+
+  // Step 4a: Emit E_DEPRECATED_DOMAIN_BC for any v0.1.0-style domain-level
+  // boundary_conditions (v0.2.0 transitional shim per RFC §10.1 +
+  // gt-2fvs mayor decision). A follow-up bead flips this to a hard error.
+  if (typedData && typeof typedData === 'object' && 'domains' in typedData) {
+    const domains = (typedData as Record<string, unknown>).domains
+    if (domains && typeof domains === 'object') {
+      for (const [domainName, domain] of Object.entries(domains)) {
+        if (
+          domain &&
+          typeof domain === 'object' &&
+          'boundary_conditions' in (domain as Record<string, unknown>)
+        ) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[E_DEPRECATED_DOMAIN_BC] domains.${domainName}.boundary_conditions ` +
+              `is deprecated in ESM v0.2.0; migrate to ` +
+              `models.<M>.boundary_conditions (docs/rfcs/discretization.md §9).`
+          )
+        }
+      }
+    }
+  }
 
   // Step 5: Dimensional analysis — emit warnings but never fail the load.
   // Mirrors the Julia @warn behavior so TS callers get the same signal

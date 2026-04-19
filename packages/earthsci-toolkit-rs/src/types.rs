@@ -326,6 +326,13 @@ pub struct Model {
     /// Inline validation tests that exercise this model in isolation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tests: Option<Vec<ModelTest>>,
+
+    /// Model-level boundary conditions, keyed by user-supplied id. New in ESM
+    /// v0.2.0 (breaking change per docs/rfcs/discretization.md §9 / §10.1).
+    /// Held as a raw JSON map pending downstream consumers; downstream code
+    /// may deserialize each entry into a typed BC struct as needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boundary_conditions: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// Variable within a model
@@ -1102,8 +1109,11 @@ pub struct Domain {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_conditions: Option<serde_json::Value>,
 
-    /// Boundary conditions
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// DEPRECATED v0.1.0 domain-level boundary conditions. Retained as a
+    /// transitional shim (RFC §10.1 + gt-2fvs mayor decision); loaders emit
+    /// E_DEPRECATED_DOMAIN_BC when this field is present. Model-level BCs
+    /// (Model::boundary_conditions) are the canonical v0.2.0 form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boundary_conditions: Option<serde_json::Value>,
 
     /// Floating point precision

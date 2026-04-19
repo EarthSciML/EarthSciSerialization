@@ -1192,6 +1192,11 @@ function load(io::IO)::EsmFile
             throw(SchemaValidationError(error_msg, schema_errors))
         end
 
+        # Emit E_DEPRECATED_DOMAIN_BC for any v0.1.0-style domain-level
+        # boundary_conditions (v0.2.0 transitional shim per RFC §10.1 +
+        # gt-2fvs mayor decision). A follow-up bead flips this to a hard error.
+        _warn_deprecated_domain_bc(raw_data)
+
         # Coerce types and return
         return coerce_esm_file(raw_data)
 
@@ -1202,6 +1207,30 @@ function load(io::IO)::EsmFile
             rethrow(e)
         end
     end
+end
+
+"""
+    _warn_deprecated_domain_bc(raw_data)
+
+Emit an `@warn` for each `domains.<d>.boundary_conditions` encountered.
+This is the v0.2.0 transitional shim introduced by gt-2fvs; the canonical
+form is `models.<M>.boundary_conditions` (RFC §9). A follow-up bead will
+turn the warning into a schema-level hard error.
+"""
+function _warn_deprecated_domain_bc(raw_data)
+    domains = get(raw_data, :domains, nothing)
+    domains === nothing && return
+    for (domain_name, domain) in domains
+        if haskey(domain, :boundary_conditions)
+            @warn string(
+                "[E_DEPRECATED_DOMAIN_BC] domains.", domain_name,
+                ".boundary_conditions is deprecated in ESM v0.2.0; migrate ",
+                "to models.<M>.boundary_conditions ",
+                "(docs/rfcs/discretization.md §9)."
+            )
+        end
+    end
+    return
 end
 
 # ========================================

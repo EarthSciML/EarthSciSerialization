@@ -150,6 +150,7 @@ fn make_model(
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     }
 }
 

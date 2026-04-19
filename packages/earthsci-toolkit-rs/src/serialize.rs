@@ -144,6 +144,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                boundary_conditions: None,
             },
         );
 

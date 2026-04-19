@@ -98,6 +98,8 @@ class Model:
     equations: List[Equation] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     subsystems: Dict[str, 'Model'] = field(default_factory=dict)
+    # v0.2.0: model-level boundary conditions keyed by user-supplied id (RFC §9).
+    boundary_conditions: Dict[str, 'BoundaryCondition'] = field(default_factory=dict)
 
 
 @dataclass
@@ -440,32 +442,51 @@ class InitialCondition:
     data_source: Optional[str] = None
 
 
-class BoundaryConditionType(Enum):
-    """Types of boundary conditions."""
-    ZERO_GRADIENT = "zero_gradient"
+class BoundaryConditionKind(Enum):
+    """BC kind enum (RFC §9.2)."""
     CONSTANT = "constant"
-    PERIODIC = "periodic"
     DIRICHLET = "dirichlet"
     NEUMANN = "neumann"
     ROBIN = "robin"
+    ZERO_GRADIENT = "zero_gradient"
+    PERIODIC = "periodic"
+    FLUX_CONTRIB = "flux_contrib"
+
+
+@dataclass
+class BCContributedBy:
+    """Component-contribution marker for flux_contrib BC entries (RFC §9.3)."""
+    component: str
+    flux_sign: str = "+"  # "+" or "-"
 
 
 @dataclass
 class BoundaryCondition:
-    """Boundary condition specification."""
-    type: BoundaryConditionType
-    dimensions: List[str]
+    """Model-level boundary condition entry (v0.2.0). See docs/rfcs/discretization.md §9.2.
+
+    This replaces the v0.1.0 domain-level BoundaryCondition; files that declare
+    ``domains.<d>.boundary_conditions`` must be migrated via
+    ``spec.migrate_0_1_to_0_2`` (RFC §16.1) before loading.
+    """
+    variable: str
+    side: str
+    kind: BoundaryConditionKind
     value: Optional[Union[float, Expr]] = None
-    function: Optional[str] = None
-    # Robin boundary condition parameters (αu + β∂u/∂n = γ)
-    robin_alpha: Optional[float] = None  # Coefficient for u
-    robin_beta: Optional[float] = None   # Coefficient for ∂u/∂n
-    robin_gamma: Optional[Union[float, Expr]] = None  # RHS value/expression
+    robin_alpha: Optional[Union[float, Expr]] = None
+    robin_beta: Optional[Union[float, Expr]] = None
+    robin_gamma: Optional[Union[float, Expr]] = None
+    face_coords: Optional[List[str]] = None
+    contributed_by: Optional[BCContributedBy] = None
+    description: Optional[str] = None
 
 
 @dataclass
 class Domain:
-    """Comprehensive computational domain specification."""
+    """Comprehensive computational domain specification.
+
+    v0.2.0 breaking change: ``boundary_conditions`` is no longer a Domain field;
+    it moved to ``Model.boundary_conditions`` per docs/rfcs/discretization.md §9.
+    """
     name: Optional[str] = None
     independent_variable: Optional[str] = None
     temporal: Optional[TemporalDomain] = None
@@ -473,7 +494,6 @@ class Domain:
     coordinate_transforms: List[CoordinateTransform] = field(default_factory=list)
     spatial_ref: Optional[str] = None
     initial_conditions: Optional[InitialCondition] = None
-    boundary_conditions: List[BoundaryCondition] = field(default_factory=list)
 
     # Legacy support for backwards compatibility
     dimensions: Optional[Dict[str, Any]] = None

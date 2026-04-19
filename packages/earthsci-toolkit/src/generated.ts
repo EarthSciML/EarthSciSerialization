@@ -491,6 +491,12 @@ export interface Model {
    * Inline illustrative examples of how to run this model. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.
    */
   examples?: Example[];
+  /**
+   * Model-level boundary conditions, keyed by user-supplied id (v0.2.0 breaking change per docs/rfcs/discretization.md §9 and §10.1).
+   */
+  boundary_conditions?: {
+    [k: string]: BoundaryCondition;
+  };
 }
 /**
  * An equation: lhs = rhs (or lhs ~ rhs in MTK notation).
@@ -1309,7 +1315,6 @@ export interface Domain {
    */
   spatial_ref?: string;
   initial_conditions?: InitialConditions;
-  boundary_conditions?: BoundaryCondition[];
   /**
    * Floating point precision.
    */
@@ -1334,37 +1339,50 @@ export interface CoordinateTransform {
   dimensions?: string[];
 }
 /**
- * Boundary condition for one or more dimensions.
+ * Model-level boundary condition entry (v0.2.0). Constrains one model variable on one boundary
+ * side. See docs/rfcs/discretization.md §9.2. Replaces the v0.1.0 domain-level BoundaryCondition.
  */
 export interface BoundaryCondition {
   /**
-   * constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n = 0; periodic = wrap-around; robin = αu + β∂u/∂n = γ.
+   * Name of the model variable the BC constrains.
    */
-  type: "constant" | "zero_gradient" | "periodic" | "dirichlet" | "neumann" | "robin";
+  variable: string;
   /**
-   * @minItems 1
+   * Boundary side (e.g., 'xmin', 'xmax', 'panel_seam', 'mesh_boundary').
    */
-  dimensions: [string, ...string[]];
+  side: string;
   /**
-   * Boundary value (for constant type).
+   * BC kind.
    */
-  value?: number;
+  kind: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib";
   /**
-   * Function specification for time/space-varying boundaries.
+   * BC value: numeric, variable-reference string, or expression AST. Required for 'constant' and 'dirichlet'.
    */
-  function?: string;
+  value?: number | string | ExpressionNode;
   /**
-   * Robin BC coefficient α for u term in αu + β∂u/∂n = γ.
+   * Robin BC coefficient α.
    */
-  robin_alpha?: number;
+  robin_alpha?: number | string | ExpressionNode;
   /**
-   * Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ.
+   * Robin BC coefficient β.
    */
-  robin_beta?: number;
+  robin_beta?: number | string | ExpressionNode;
   /**
-   * Robin BC RHS value γ in αu + β∂u/∂n = γ.
+   * Robin BC RHS γ.
    */
-  robin_gamma?: number;
+  robin_gamma?: number | string | ExpressionNode;
+  /**
+   * Reduced face-coordinate index names (for loader-indexed time-varying fields).
+   */
+  face_coords?: string[];
+  /**
+   * Component-contribution marker (RFC §9.3).
+   */
+  contributed_by?: {
+    component: string;
+    flux_sign?: "+" | "-";
+  };
+  description?: string;
 }
 /**
  * Geometric connection between two domains of potentially different dimensionality.

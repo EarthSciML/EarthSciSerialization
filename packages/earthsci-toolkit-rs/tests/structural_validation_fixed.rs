@@ -43,6 +43,7 @@ fn test_undefined_variable_in_model() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     let mut models = HashMap::new();
@@ -143,6 +144,7 @@ fn test_equation_count_mismatch() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     let mut models = HashMap::new();
@@ -339,6 +341,7 @@ fn test_valid_file_passes() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     let mut models = HashMap::new();

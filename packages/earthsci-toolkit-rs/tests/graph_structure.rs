@@ -49,6 +49,7 @@ fn test_component_graph_generation() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     let mut models = HashMap::new();
@@ -150,6 +151,7 @@ fn test_component_graph_exports() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     let mut models = HashMap::new();
@@ -264,6 +266,7 @@ fn test_model_expression_graph() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     // Generate expression graph
@@ -399,6 +402,7 @@ fn test_component_existence() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     let mut models = HashMap::new();
@@ -525,6 +529,7 @@ fn test_expected_graph_outputs() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     let expr_graph = expression_graph(&model);

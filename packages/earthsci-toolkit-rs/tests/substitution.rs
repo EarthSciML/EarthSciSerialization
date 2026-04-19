@@ -228,6 +228,7 @@ fn test_model_substitution() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
 
     // Create substitutions

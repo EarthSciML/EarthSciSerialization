@@ -622,7 +622,7 @@ describe('Schema Edge Cases', () => {
   describe('schema evolution compatibility', () => {
     it('should handle version compatibility for minor version differences', () => {
       const minorVersionUpgrade = {
-        esm: "0.2.0", // Minor version upgrade - should be accepted with warnings
+        esm: "0.2.0", // Minor version upgrade - accepted by v0.2.0 schema (gt-2fvs).
         metadata: { name: "test" },
         models: {
           "test": {
@@ -632,11 +632,12 @@ describe('Schema Edge Cases', () => {
         }
       }
 
-      // Schema validation catches version mismatch (const: "0.1.0")
+      // v0.2.0 is a first-class accepted version; the schema's esm enum now
+      // lists 0.1.0 and 0.2.0 (no schema error expected).
       const errors = validateSchema(minorVersionUpgrade)
-      expect(errors.length).toBeGreaterThan(0)
+      expect(errors.length).toBe(0)
 
-      // But load function should succeed via version compatibility
+      // Load succeeds.
       const result = load(minorVersionUpgrade)
       expect(result.esm).toBe("0.2.0")
       expect(result.metadata.name).toBe("test")
@@ -678,9 +679,10 @@ describe('Schema Edge Cases', () => {
       const errors = validateSchema(invalidVersionFormat)
       expect(errors.length).toBeGreaterThan(0)
 
-      // Should find pattern validation error
+      // Should find pattern/const/enum validation error (the esm field is
+      // constrained by an enum of supported versions as of gt-2fvs).
       const patternError = errors.find(error =>
-        error.keyword === 'pattern' || error.keyword === 'const'
+        error.keyword === 'pattern' || error.keyword === 'const' || error.keyword === 'enum'
       )
       expect(patternError).toBeDefined()
 

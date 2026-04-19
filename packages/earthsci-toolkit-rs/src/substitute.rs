@@ -219,6 +219,7 @@ pub fn substitute_in_model(
         description: model.description.clone(),
         tolerance: model.tolerance.clone(),
         tests: model.tests.clone(),
+        boundary_conditions: model.boundary_conditions.clone(),
     }
 }
 
@@ -516,6 +517,7 @@ pub fn substitute_in_model_with_context(
         description: model.description.clone(),
         tolerance: model.tolerance.clone(),
         tests: model.tests.clone(),
+        boundary_conditions: model.boundary_conditions.clone(),
     }
 }
 
@@ -811,6 +813,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                boundary_conditions: None,
             },
         );
 
@@ -885,6 +888,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                boundary_conditions: None,
             },
         );
 
@@ -962,6 +966,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                boundary_conditions: None,
             },
         );
 
@@ -1053,6 +1058,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                boundary_conditions: None,
             },
         );
 
@@ -1272,6 +1278,7 @@ mod tests {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         };
 
         let result = substitute_in_model(&model, &substitutions);

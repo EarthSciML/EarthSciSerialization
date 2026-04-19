@@ -5,12 +5,29 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/xeipuuv/gojsonschema"
 )
+
+// DeprecationWarningCode identifies a specific deprecation warning emitted at load time.
+type DeprecationWarningCode string
+
+const (
+	// DeprecatedDomainBC is emitted when a file declares
+	// domains.<d>.boundary_conditions. The field moved to
+	// models.<M>.boundary_conditions in v0.2.0 (RFC §9 / §10.1).
+	DeprecatedDomainBC DeprecationWarningCode = "E_DEPRECATED_DOMAIN_BC"
+)
+
+// DeprecationWarningLogger is invoked once per deprecation the loader detects.
+// Default is to log via the standard `log` package; set to nil to silence.
+var DeprecationWarningLogger = func(code DeprecationWarningCode, message string) {
+	log.Printf("[%s] %s", code, message)
+}
 
 //go:embed esm-schema.json
 var embeddedSchema []byte
@@ -70,6 +87,21 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 	// round-trip parse rule: a token containing '.', 'e', or 'E' is a float;
 	// otherwise it is an integer.
 	normalizeNumericLiterals(&esmFile)
+
+	// Emit deprecation warnings for any domain-level boundary_conditions
+	// encountered. v0.2.0 supersedes this field with Model.BoundaryConditions
+	// (RFC §9 / §10.1); a follow-up bead will turn this into a hard error.
+	if DeprecationWarningLogger != nil {
+		for domainName, domain := range esmFile.Domains {
+			if len(domain.BoundaryConditions) > 0 {
+				DeprecationWarningLogger(DeprecatedDomainBC, fmt.Sprintf(
+					"domains.%s.boundary_conditions is deprecated; "+
+						"migrate to models.<M>.boundary_conditions (RFC §9).",
+					domainName,
+				))
+			}
+		}
+	}
 
 	// According to spec Section 2.1a: load() should succeed for valid JSON that
 	// passes schema validation but fails structural validation. Structural issues

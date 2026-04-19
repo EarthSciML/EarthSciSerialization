@@ -71,13 +71,16 @@ type ModelVariable struct {
 
 // Model represents an ODE system
 type Model struct {
-	CoupleType        *string                   `json:"coupletype,omitempty"`
-	Reference         *Reference                `json:"reference,omitempty"`
-	Variables         map[string]ModelVariable  `json:"variables"`
-	Equations         []Equation                `json:"equations"`
-	DiscreteEvents    []DiscreteEvent           `json:"discrete_events,omitempty"`
-	ContinuousEvents  []ContinuousEvent         `json:"continuous_events,omitempty"`
-	Subsystems        map[string]interface{}    `json:"subsystems,omitempty"`
+	CoupleType         *string                       `json:"coupletype,omitempty"`
+	Reference          *Reference                    `json:"reference,omitempty"`
+	Variables          map[string]ModelVariable      `json:"variables"`
+	Equations          []Equation                    `json:"equations"`
+	DiscreteEvents     []DiscreteEvent               `json:"discrete_events,omitempty"`
+	ContinuousEvents   []ContinuousEvent             `json:"continuous_events,omitempty"`
+	Subsystems         map[string]interface{}        `json:"subsystems,omitempty"`
+	// BoundaryConditions holds model-level BC entries keyed by user-supplied id.
+	// New in ESM v0.2.0; see docs/rfcs/discretization.md §9.
+	BoundaryConditions map[string]BoundaryCondition  `json:"boundary_conditions,omitempty"`
 }
 
 // ========================================
@@ -367,17 +370,39 @@ type ConnectorEquation struct {
 // 7. Domain
 // ========================================
 
-// Domain represents the spatiotemporal domain
+// Domain represents the spatiotemporal domain.
+// v0.2.0: boundary conditions have moved to Model.BoundaryConditions (RFC §9).
+// Domain.BoundaryConditions (the deprecated v0.1.0 list form) is retained as a
+// transitional compatibility shim; loaders emit E_DEPRECATED_DOMAIN_BC when it
+// is present. A follow-up release will remove it entirely.
 type Domain struct {
-	IndependentVariable   *string                      `json:"independent_variable,omitempty"`
-	Temporal              *TemporalDomain              `json:"temporal,omitempty"`
-	Spatial               map[string]SpatialDimension  `json:"spatial,omitempty"`
-	CoordinateTransforms  []CoordinateTransform        `json:"coordinate_transforms,omitempty"`
-	SpatialRef            *string                      `json:"spatial_ref,omitempty"`
-	InitialConditions     InitialConditions            `json:"initial_conditions,omitempty"`
-	BoundaryConditions    []BoundaryCondition          `json:"boundary_conditions,omitempty"`
-	ElementType           *string                      `json:"element_type,omitempty"`
-	ArrayType             *string                      `json:"array_type,omitempty"`
+	IndependentVariable   *string                       `json:"independent_variable,omitempty"`
+	Temporal              *TemporalDomain               `json:"temporal,omitempty"`
+	Spatial               map[string]SpatialDimension   `json:"spatial,omitempty"`
+	CoordinateTransforms  []CoordinateTransform         `json:"coordinate_transforms,omitempty"`
+	SpatialRef            *string                       `json:"spatial_ref,omitempty"`
+	InitialConditions     InitialConditions             `json:"initial_conditions,omitempty"`
+	// Deprecated: v0.2.0 moves BCs to Model.BoundaryConditions. This field is
+	// kept for transitional round-trip; loading a file with this field emits
+	// E_DEPRECATED_DOMAIN_BC (see LoadString).
+	BoundaryConditions    []DomainBoundaryConditionDeprecated          `json:"boundary_conditions,omitempty"`
+	ElementType           *string                       `json:"element_type,omitempty"`
+	ArrayType             *string                       `json:"array_type,omitempty"`
+}
+
+// DomainBoundaryConditionDeprecated is the legacy v0.1.0 domain-level boundary-condition
+// entry. Kept in the v0.2.0 schema strictly as a transitional shim; use
+// Model.BoundaryConditions (map keyed by BC id) for new code.
+//
+// Deprecated: use BoundaryCondition on Model.BoundaryConditions instead.
+type DomainBoundaryConditionDeprecated struct {
+	Type        string      `json:"type"`
+	Dimensions  []string    `json:"dimensions"`
+	Value       interface{} `json:"value,omitempty"`
+	Function    *string     `json:"function,omitempty"`
+	RobinAlpha  *float64    `json:"robin_alpha,omitempty"`
+	RobinBeta   *float64    `json:"robin_beta,omitempty"`
+	RobinGamma  *float64    `json:"robin_gamma,omitempty"`
 }
 
 // TemporalDomain represents temporal bounds
@@ -411,11 +436,38 @@ type InitialConditions struct {
 	Format *string                `json:"format,omitempty"`
 }
 
-// BoundaryCondition represents boundary condition specification
+// BoundaryCondition is a model-level BC entry (v0.2.0, RFC §9.2).
+// It constrains one model variable on one boundary side. Replaces the v0.1.0
+// domain-level form.
 type BoundaryCondition struct {
-	Type       string   `json:"type"` // "constant", "zero_gradient", "periodic"
-	Dimensions []string `json:"dimensions"`
-	Value      interface{} `json:"value,omitempty"`
+	// Variable is the name of the model variable the BC constrains.
+	Variable string `json:"variable"`
+	// Side identifies the boundary side (e.g. "xmin", "xmax", "panel_seam").
+	Side string `json:"side"`
+	// Kind is the BC kind: "constant", "dirichlet", "neumann", "robin",
+	// "zero_gradient", "periodic", or "flux_contrib".
+	Kind string `json:"kind"`
+	// Value is the BC value (numeric literal, variable reference, or Expression
+	// AST). Required for kind="constant" or "dirichlet"; see RFC §9.2.
+	Value interface{} `json:"value,omitempty"`
+	// RobinAlpha/Beta/Gamma hold coefficients for kind="robin" (αu + β∂u/∂n = γ).
+	RobinAlpha interface{} `json:"robin_alpha,omitempty"`
+	RobinBeta  interface{} `json:"robin_beta,omitempty"`
+	RobinGamma interface{} `json:"robin_gamma,omitempty"`
+	// FaceCoords declares reduced face-coordinate index names used when Value
+	// contains an index op into a loader-provided time-varying field.
+	FaceCoords []string `json:"face_coords,omitempty"`
+	// ContributedBy identifies the component providing a flux contribution
+	// (kind="flux_contrib"). See RFC §9.3.
+	ContributedBy *BCContributedBy `json:"contributed_by,omitempty"`
+	// Description is a human-readable description.
+	Description *string `json:"description,omitempty"`
+}
+
+// BCContributedBy identifies the contributing component for a flux_contrib BC.
+type BCContributedBy struct {
+	Component string  `json:"component"`
+	FluxSign  *string `json:"flux_sign,omitempty"` // "+" or "-"
 }
 
 // ========================================

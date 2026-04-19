@@ -213,6 +213,7 @@ fn flatten_mixed_model_and_reaction_system() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
 
@@ -397,6 +398,7 @@ fn flatten_conflicting_derivative_raises_error() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
 
@@ -506,6 +508,7 @@ fn flatten_operator_compose_sums_matched_rhses() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
     models.insert(
@@ -532,6 +535,7 @@ fn flatten_operator_compose_sums_matched_rhses() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
 
@@ -646,6 +650,7 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
     models.insert(
@@ -663,6 +668,7 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
 
@@ -737,6 +743,7 @@ fn flatten_couple_includes_connector_equations() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
     // Connector with one equation: lhs Variable "bridge", rhs Variable "A.x"
@@ -810,6 +817,7 @@ fn flatten_model_wraps_and_namespaces_under_declared_name() {
         description: None,
         tolerance: None,
         tests: None,
+        boundary_conditions: None,
     };
     let flat = flatten_model(&model).unwrap();
     assert!(flat.state_variables.contains_key("Nested.q"));
@@ -862,6 +870,7 @@ fn flatten_rejects_spatial_operators() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
     let file = EsmFile {
@@ -923,6 +932,7 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
             description: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
         },
     );
     let file = EsmFile {
