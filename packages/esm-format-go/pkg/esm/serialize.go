@@ -6,6 +6,23 @@ import (
 	"os"
 )
 
+// marshalCanonical pre-processes v with canonicalizeForJSON so every float
+// is emitted in discretization RFC §5.4.6 form (trailing ".0" for
+// integer-valued magnitudes in [−1e21+1, 1e21−1], exponent form outside
+// that range) before running encoding/json. Without this pass Go emits
+// float64(1.0) as "1", which collides with int64(1) on the wire and
+// breaks the round-trip int/float node distinction.
+func marshalCanonical(v interface{}, indent bool) ([]byte, error) {
+	canonical, err := canonicalizeForJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	if indent {
+		return json.MarshalIndent(canonical, "", "  ")
+	}
+	return json.Marshal(canonical)
+}
+
 // Save serializes an ESM file to JSON string
 func Save(file *EsmFile) (string, error) {
 	if file == nil {
@@ -17,8 +34,7 @@ func Save(file *EsmFile) (string, error) {
 		return "", fmt.Errorf("validation failed before serialization: %w", err)
 	}
 
-	// Marshal to JSON with indentation for readability
-	jsonData, err := json.MarshalIndent(file, "", "  ")
+	jsonData, err := marshalCanonical(file, true)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal ESM file to JSON: %w", err)
 	}
@@ -37,8 +53,7 @@ func SaveCompact(file *EsmFile) (string, error) {
 		return "", fmt.Errorf("validation failed before serialization: %w", err)
 	}
 
-	// Marshal to compact JSON
-	jsonData, err := json.Marshal(file)
+	jsonData, err := marshalCanonical(file, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal ESM file to JSON: %w", err)
 	}
@@ -83,7 +98,7 @@ func writeFile(filepath string, data []byte) error {
 
 // SerializeExpression serializes just an expression to JSON
 func SerializeExpression(expr Expression) (string, error) {
-	jsonData, err := json.MarshalIndent(expr, "", "  ")
+	jsonData, err := marshalCanonical(expr, true)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize expression: %w", err)
 	}
@@ -92,7 +107,7 @@ func SerializeExpression(expr Expression) (string, error) {
 
 // SerializeExpressionCompact serializes just an expression to compact JSON
 func SerializeExpressionCompact(expr Expression) (string, error) {
-	jsonData, err := json.Marshal(expr)
+	jsonData, err := marshalCanonical(expr, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize expression: %w", err)
 	}
@@ -105,7 +120,7 @@ func SerializeModel(model *Model) (string, error) {
 		return "", fmt.Errorf("cannot serialize nil model")
 	}
 
-	jsonData, err := json.MarshalIndent(model, "", "  ")
+	jsonData, err := marshalCanonical(model, true)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize model: %w", err)
 	}
@@ -118,7 +133,7 @@ func SerializeReactionSystem(system *ReactionSystem) (string, error) {
 		return "", fmt.Errorf("cannot serialize nil reaction system")
 	}
 
-	jsonData, err := json.MarshalIndent(system, "", "  ")
+	jsonData, err := marshalCanonical(system, true)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize reaction system: %w", err)
 	}

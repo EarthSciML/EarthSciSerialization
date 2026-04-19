@@ -511,7 +511,7 @@ func (e *EsmFile) Validate() error {
 
 // ToJSON converts the ESM file to JSON
 func (e *EsmFile) ToJSON() ([]byte, error) {
-	return json.MarshalIndent(e, "", "  ")
+	return marshalCanonical(e, true)
 }
 
 // FromJSON creates an ESM file from JSON data
