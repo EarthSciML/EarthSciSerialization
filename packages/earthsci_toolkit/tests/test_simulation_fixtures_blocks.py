@@ -59,11 +59,6 @@ SIMULATION_SKIP: Dict[str, str] = {
     # into the SciPy backend's state-reset step; the ball never actually
     # bounces. Tracked alongside Julia's SymbolicContinuousCallback skip.
     "bouncing_ball.esm": "gt-i7e1",
-    # gt-vozd: LogisticGrowth fixture assertions in python_scipy_integration
-    # drift ~1e-4 from the closed-form analytical solution — Python matches
-    # the analytical form exactly but the fixture values look like Julia
-    # solver output.
-    "python_scipy_integration.esm": "gt-vozd",
     # gt-mfo2: AnalyticalODE harmonic oscillator fails because simulate()
     # clips all state to >= 0 (y_clipped = max(y, 0)). v legitimately goes
     # negative, gets clamped to 0, so x never evolves.

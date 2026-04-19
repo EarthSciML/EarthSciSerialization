@@ -193,10 +193,10 @@
           },
           "assertions": [
             { "variable": "population", "time": 0.0,   "expected": 0.1 },
-            { "variable": "population", "time": 10.0,  "expected": 0.2319416897192268 },
-            { "variable": "population", "time": 20.0,  "expected": 0.45078030754938094 },
-            { "variable": "population", "time": 50.0,  "expected": 0.9427548370970797 },
-            { "variable": "population", "time": 100.0, "expected": 0.999591671410288 }
+            { "variable": "population", "time": 10.0,  "expected": 0.23196931668407392 },
+            { "variable": "population", "time": 20.0,  "expected": 0.4508530603792838 },
+            { "variable": "population", "time": 50.0,  "expected": 0.9428256185740149 },
+            { "variable": "population", "time": 100.0, "expected": 0.9995915675173918 }
           ]
         }
       ]

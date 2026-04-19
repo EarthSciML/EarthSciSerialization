@@ -45,10 +45,11 @@ fn simulation_skip(name: &str) -> Option<&'static str> {
         "bouncing_ball.esm" => Some("gt-2ta2"),
         // Discrete events similarly rejected.
         "periodic_dosing.esm" => Some("gt-2ta2"),
-        // gt-05p9: fixture's LogisticGrowth expected values drift ~3e-5 from
-        // the analytical closed form but the model declares rel=1e-6, so the
-        // Rust solver (which matches analytical to 1e-10) trips the bound.
-        "python_scipy_integration.esm" => Some("gt-05p9"),
+        // gt-xyhc: ExponentialDecay's analytical_solution observed expression
+        // references the independent variable `t`, which the Rust compiler
+        // rejects with "Unknown variable ExponentialDecay.t". Python/Julia
+        // handle this. LogisticGrowth in the same fixture compiles fine.
+        "python_scipy_integration.esm" => Some("gt-xyhc"),
         _ => None,
     }
 }
