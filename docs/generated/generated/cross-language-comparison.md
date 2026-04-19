@@ -1124,12 +1124,13 @@ Load and parse an ESM file from an IO stream.
 
 **Typescript:**
 ```typescript
-export function load(input: string | object): EsmFile {
+export function load(input: string | object, options?: LoadOptions): EsmFile {
 ```
 
 > Load an ESM file from a JSON string or pre-parsed object
 
 @param input - JSON string or pre-parsed JavaScript object
+@param options - Optional load-time settings (see {@link LoadOptions})
 @returns Typed EsmFile object
 @throws {ParseError} When JSON parsing fails or version is incompatible
 @throws {SchemaValidationError} When schema validation fails
