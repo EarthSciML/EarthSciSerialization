@@ -134,6 +134,7 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
     if file.models !== nothing
         for (model_name, model) in file.models
             append!(errors, validate_event_consistency(model, "models.$model_name"))
+            append!(errors, validate_model_gradient_units(file, model, "/models/$model_name"))
         end
     end
 
@@ -702,6 +703,117 @@ function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{
         append!(errors, validate_reaction_rate_units(subsys, "$path/subsystems/$subsys_name"))
     end
 
+    return errors
+end
+
+"""
+    validate_model_gradient_units(file::EsmFile, model::Model, path::String) -> Vector{StructuralError}
+
+Flag `grad` / `div` / `laplacian` operators whose spatial coordinate is declared
+in the enclosing model's domain but carries no units. Mirrors the TypeScript
+binding's coordinate-resolution path (see `packages/earthsci-toolkit/src/units.ts`):
+the coordinate is identified by the operator node's `dim` and looked up in
+`file.domains[model.domain].spatial`. Coordinates absent from the domain map
+are left alone (fallback to the legacy metre denominator behaviour); coordinates
+that are declared without units are dimensionally ambiguous and surface as
+`unit_inconsistency`. Recurses into subsystems.
+"""
+function validate_model_gradient_units(file::EsmFile, model::Model, path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    # Build coordinate → units-string map from the enclosing domain. A missing
+    # domain reference, missing domain entry, or missing `spatial` table all
+    # short-circuit: we cannot resolve coordinates and therefore fall back to
+    # legacy behaviour for child operators. Subsystems still recurse so they
+    # can pick up their own domain (none currently override, but the recursion
+    # mirrors the other *_consistency validators).
+    coord_units = _collect_coordinate_units(file, model)
+
+    if coord_units !== nothing
+        for (i, eq) in enumerate(model.equations)
+            eq_path = "$path/equations/$(i-1)"
+            append!(errors, _check_gradient_ops(eq.lhs, coord_units, eq_path, i-1))
+            append!(errors, _check_gradient_ops(eq.rhs, coord_units, eq_path, i-1))
+        end
+    end
+
+    for (subsys_name, subsys) in model.subsystems
+        append!(errors, validate_model_gradient_units(file, subsys, "$path/subsystems/$subsys_name"))
+    end
+
+    return errors
+end
+
+# Returns a Dict{String, Union{String,Nothing}} mapping dim-name → declared
+# units (or `nothing` if the coordinate entry has no units field), or `nothing`
+# when no resolvable domain/spatial table exists.
+function _collect_coordinate_units(file::EsmFile, model::Model)::Union{Dict{String,Union{String,Nothing}},Nothing}
+    model.domain === nothing && return nothing
+    file.domains === nothing && return nothing
+    haskey(file.domains, model.domain) || return nothing
+    spatial = file.domains[model.domain].spatial
+    spatial === nothing && return nothing
+
+    coords = Dict{String,Union{String,Nothing}}()
+    for (dim_name, dim) in spatial
+        coords[dim_name] = _lookup_units_field(dim)
+    end
+    return coords
+end
+
+# Look up a `units` field on a coord descriptor produced by either path:
+# parse.jl preserves the raw JSON3 object (symbol keys) in Dict{String,Any}
+# values, while test-time constructors pass plain Dict{String,String} for
+# ergonomics. Check Symbol first (JSON3 path), then fall back to String.
+function _lookup_units_field(dim)::Union{String,Nothing}
+    for key in (:units, "units")
+        local ok, val
+        try
+            ok = haskey(dim, key)
+        catch
+            ok = false
+        end
+        ok || continue
+        try
+            val = dim[key]
+        catch
+            continue
+        end
+        val === nothing && continue
+        s = String(val)
+        isempty(s) || return s
+    end
+    return nothing
+end
+
+function _check_gradient_ops(expr::Expr, coord_units::Dict{String,Union{String,Nothing}},
+                             eq_path::String, eq_index::Int)::Vector{StructuralError}
+    errors = StructuralError[]
+    if expr isa OpExpr
+        if expr.op in ("grad", "div", "laplacian") && expr.dim !== nothing
+            dim_name = expr.dim
+            if haskey(coord_units, dim_name) && coord_units[dim_name] === nothing
+                # Describe the operand for the error message: use the variable
+                # name if it's a bare reference, otherwise fall back to the
+                # operator's own label. Matches the TS binding's user-visible
+                # framing without committing to a fully-rendered expression.
+                operand_label = if !isempty(expr.args) && expr.args[1] isa VarExpr
+                    "variable '$(expr.args[1].name)'"
+                else
+                    "$(expr.op) operand"
+                end
+                push!(errors, StructuralError(
+                    eq_path,
+                    "Gradient operator applied to $operand_label with incompatible spatial " *
+                    "units: coordinate '$dim_name' has no declared units",
+                    "unit_inconsistency",
+                ))
+            end
+        end
+        for arg in expr.args
+            append!(errors, _check_gradient_ops(arg, coord_units, eq_path, eq_index))
+        end
+    end
     return errors
 end
 
