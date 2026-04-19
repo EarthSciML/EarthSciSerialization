@@ -103,12 +103,93 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 		}
 	}
 
+	// Validate grid cross-references (§6). Schema already handles shape, but we
+	// check that loader-kind generators/connectivity point at a real data_loaders
+	// entry and that builtin names are in the closed set §6.4.1 defines.
+	if err := validateGrids(&esmFile); err != nil {
+		return nil, err
+	}
+
 	// According to spec Section 2.1a: load() should succeed for valid JSON that
 	// passes schema validation but fails structural validation. Structural issues
 	// should only be reported by the separate validate() function.
 	// Therefore, we skip the structural validation here.
 
 	return &esmFile, nil
+}
+
+// knownGridBuiltins is the closed set of grid builtin generator names per
+// docs/rfcs/discretization.md §6.4.1. Adding a new name is a minor version
+// bump.
+var knownGridBuiltins = map[string]struct{}{
+	"gnomonic_c6_neighbors":  {},
+	"gnomonic_c6_d4_action":  {},
+}
+
+// validateGrids checks grid cross-references against top-level data_loaders
+// and the closed builtin set (RFC §6.4 / §6.5).
+func validateGrids(esmFile *EsmFile) error {
+	for gridName, grid := range esmFile.Grids {
+		// Metric arrays
+		for arrName, arr := range grid.MetricArrays {
+			if err := validateGridGenerator(
+				fmt.Sprintf("grids.%s.metric_arrays.%s.generator", gridName, arrName),
+				&arr.Generator, esmFile); err != nil {
+				return err
+			}
+		}
+		// Unstructured connectivity
+		for cName, c := range grid.Connectivity {
+			if err := validateGridConnectivity(
+				fmt.Sprintf("grids.%s.connectivity.%s", gridName, cName),
+				&c, esmFile); err != nil {
+				return err
+			}
+		}
+		// Cubed-sphere panel_connectivity
+		for cName, c := range grid.PanelConnectivity {
+			if err := validateGridConnectivity(
+				fmt.Sprintf("grids.%s.panel_connectivity.%s", gridName, cName),
+				&c, esmFile); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateGridGenerator(path string, g *GridMetricGenerator, esmFile *EsmFile) error {
+	switch g.Kind {
+	case "loader":
+		if g.Loader == nil || *g.Loader == "" {
+			return fmt.Errorf("%s: kind=loader requires a loader name", path)
+		}
+		if _, ok := esmFile.DataLoaders[*g.Loader]; !ok {
+			return fmt.Errorf("%s: loader %q not found in top-level data_loaders", path, *g.Loader)
+		}
+	case "builtin":
+		if g.Name == nil || *g.Name == "" {
+			return fmt.Errorf("%s: kind=builtin requires a name", path)
+		}
+		if _, ok := knownGridBuiltins[*g.Name]; !ok {
+			return fmt.Errorf("%s: E_UNKNOWN_BUILTIN: unknown grid builtin %q (allowed: gnomonic_c6_neighbors, gnomonic_c6_d4_action)", path, *g.Name)
+		}
+	}
+	return nil
+}
+
+func validateGridConnectivity(path string, c *GridConnectivity, esmFile *EsmFile) error {
+	if c.Loader != nil && *c.Loader != "" {
+		if _, ok := esmFile.DataLoaders[*c.Loader]; !ok {
+			return fmt.Errorf("%s: loader %q not found in top-level data_loaders", path, *c.Loader)
+		}
+	}
+	if c.Generator != nil {
+		if err := validateGridGenerator(path+".generator", c.Generator, esmFile); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // normalizeJSONNumber converts a json.Number to int64 (no '.', no 'e'/'E') or

@@ -46,7 +46,16 @@ from .esm_types import (
     Tolerance, TimeSpan, Assertion, Test,
     PlotAxis, PlotValue, PlotSeries, Plot,
     SweepRange, SweepDimension, ParameterSweep, Example,
+    Grid, GridExtent, GridMetricArray, GridMetricGenerator, GridConnectivity,
 )
+
+
+# Valid names for the ``builtin`` grid metric/connectivity generator kind
+# (RFC §6.5, §6.4.1). Keep in sync with schema $defs/GridMetricGenerator.
+_GRID_BUILTIN_NAMES = frozenset({
+    "gnomonic_c6_neighbors",
+    "gnomonic_c6_d4_action",
+})
 
 
 class SchemaValidationError(Exception):
@@ -1124,6 +1133,197 @@ def _validate_domain(domain: Domain) -> None:
         raise ValueError("Domain validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
 
 
+def _parse_grid_metric_generator(
+    gen_data: Dict[str, Any],
+    *,
+    context: str,
+    data_loaders: Dict[str, Any],
+) -> GridMetricGenerator:
+    """Parse a grid metric / connectivity generator (RFC §6.5).
+
+    Validates loader references against the top-level ``data_loaders`` map
+    and builtin names against the known set (raises with E_UNKNOWN_BUILTIN
+    / E_UNKNOWN_LOADER-style messages otherwise).
+    """
+    if "kind" not in gen_data:
+        raise ValueError(f"{context}: generator missing required 'kind' field (RFC §6.5)")
+    kind = gen_data["kind"]
+    if kind == "expression":
+        if "expr" not in gen_data:
+            raise ValueError(f"{context}: generator kind='expression' requires 'expr' field")
+        expr = _parse_expression(gen_data["expr"])
+        return GridMetricGenerator(kind="expression", expr=expr)
+    elif kind == "loader":
+        loader = gen_data.get("loader")
+        field_name = gen_data.get("field")
+        if loader is None or field_name is None:
+            raise ValueError(
+                f"{context}: generator kind='loader' requires 'loader' and 'field' fields"
+            )
+        if loader not in data_loaders:
+            raise ValueError(
+                f"[E_UNKNOWN_LOADER] {context}: generator references unknown data_loader "
+                f"'{loader}' (not declared in top-level data_loaders)"
+            )
+        return GridMetricGenerator(kind="loader", loader=loader, field=field_name)
+    elif kind == "builtin":
+        name = gen_data.get("name")
+        if name is None:
+            raise ValueError(f"{context}: generator kind='builtin' requires 'name' field")
+        if name not in _GRID_BUILTIN_NAMES:
+            valid = ", ".join(sorted(_GRID_BUILTIN_NAMES))
+            raise ValueError(
+                f"[E_UNKNOWN_BUILTIN] {context}: generator name='{name}' is not a known "
+                f"builtin (valid: {valid})"
+            )
+        return GridMetricGenerator(kind="builtin", name=name)
+    else:
+        raise ValueError(
+            f"{context}: generator kind='{kind}' is invalid "
+            f"(valid: expression, loader, builtin)"
+        )
+
+
+def _parse_grid_metric_array(
+    array_id: str,
+    array_data: Dict[str, Any],
+    *,
+    grid_name: str,
+    data_loaders: Dict[str, Any],
+) -> GridMetricArray:
+    """Parse a grid metric_array entry (RFC §6.5)."""
+    if "rank" not in array_data:
+        raise ValueError(
+            f"grids['{grid_name}'].metric_arrays['{array_id}']: missing required 'rank'"
+        )
+    if "generator" not in array_data:
+        raise ValueError(
+            f"grids['{grid_name}'].metric_arrays['{array_id}']: missing required 'generator'"
+        )
+    gen = _parse_grid_metric_generator(
+        array_data["generator"],
+        context=f"grids['{grid_name}'].metric_arrays['{array_id}']",
+        data_loaders=data_loaders,
+    )
+    return GridMetricArray(
+        rank=array_data["rank"],
+        generator=gen,
+        dim=array_data.get("dim"),
+        dims=array_data.get("dims"),
+        shape=array_data.get("shape"),
+    )
+
+
+def _parse_grid_connectivity(
+    conn_id: str,
+    conn_data: Dict[str, Any],
+    *,
+    grid_name: str,
+    section: str,
+    data_loaders: Dict[str, Any],
+) -> GridConnectivity:
+    """Parse a grid connectivity / panel_connectivity entry (RFC §6.3–§6.4)."""
+    context = f"grids['{grid_name}'].{section}['{conn_id}']"
+    if "shape" not in conn_data:
+        raise ValueError(f"{context}: missing required 'shape'")
+    if "rank" not in conn_data:
+        raise ValueError(f"{context}: missing required 'rank'")
+    loader = conn_data.get("loader")
+    field_name = conn_data.get("field")
+    generator = None
+    if "generator" in conn_data:
+        generator = _parse_grid_metric_generator(
+            conn_data["generator"],
+            context=context,
+            data_loaders=data_loaders,
+        )
+    if loader is not None and loader not in data_loaders:
+        raise ValueError(
+            f"[E_UNKNOWN_LOADER] {context}: references unknown data_loader '{loader}' "
+            f"(not declared in top-level data_loaders)"
+        )
+    return GridConnectivity(
+        shape=list(conn_data["shape"]),
+        rank=conn_data["rank"],
+        loader=loader,
+        field=field_name,
+        generator=generator,
+    )
+
+
+def _parse_grid_extent(extent_data: Dict[str, Any]) -> GridExtent:
+    """Parse a single cartesian grid extent entry (RFC §6.2)."""
+    return GridExtent(
+        n=extent_data["n"],
+        spacing=extent_data.get("spacing"),
+    )
+
+
+def _parse_grid(
+    grid_name: str,
+    grid_data: Dict[str, Any],
+    *,
+    data_loaders: Dict[str, Any],
+) -> Grid:
+    """Parse a top-level grid declaration (RFC §6)."""
+    for required in ("family", "dimensions"):
+        if required not in grid_data:
+            raise ValueError(
+                f"grids['{grid_name}']: missing required field '{required}' (RFC §6)"
+            )
+    family = grid_data["family"]
+    valid_families = {"cartesian", "unstructured", "cubed_sphere"}
+    if family not in valid_families:
+        raise ValueError(
+            f"grids['{grid_name}']: invalid family '{family}' "
+            f"(valid: {', '.join(sorted(valid_families))})"
+        )
+
+    metric_arrays: Dict[str, GridMetricArray] = {}
+    for array_id, array_data in (grid_data.get("metric_arrays") or {}).items():
+        metric_arrays[array_id] = _parse_grid_metric_array(
+            array_id, array_data, grid_name=grid_name, data_loaders=data_loaders,
+        )
+
+    parameters: Dict[str, Parameter] = {}
+    for pname, pdata in (grid_data.get("parameters") or {}).items():
+        param = _parse_parameter(pdata)
+        param.name = pname
+        parameters[pname] = param
+
+    extents: Dict[str, GridExtent] = {}
+    for ename, edata in (grid_data.get("extents") or {}).items():
+        extents[ename] = _parse_grid_extent(edata)
+
+    connectivity: Dict[str, GridConnectivity] = {}
+    for cname, cdata in (grid_data.get("connectivity") or {}).items():
+        connectivity[cname] = _parse_grid_connectivity(
+            cname, cdata, grid_name=grid_name, section="connectivity",
+            data_loaders=data_loaders,
+        )
+
+    panel_connectivity: Dict[str, GridConnectivity] = {}
+    for cname, cdata in (grid_data.get("panel_connectivity") or {}).items():
+        panel_connectivity[cname] = _parse_grid_connectivity(
+            cname, cdata, grid_name=grid_name, section="panel_connectivity",
+            data_loaders=data_loaders,
+        )
+
+    return Grid(
+        family=family,
+        dimensions=list(grid_data["dimensions"]),
+        name=grid_name,
+        description=grid_data.get("description"),
+        locations=grid_data.get("locations"),
+        metric_arrays=metric_arrays,
+        parameters=parameters,
+        domain=grid_data.get("domain"),
+        extents=extents,
+        connectivity=connectivity,
+        panel_connectivity=panel_connectivity,
+    )
+
+
 def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
     """Parse ESM data from validated JSON."""
     # Parse metadata
@@ -1181,6 +1381,21 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         for coupling_data in data["coupling"]:
             coupling.append(_parse_coupling_entry(coupling_data))
 
+    # Parse grids (RFC §6). Must happen after data_loaders so loader-kind
+    # generators can be validated against the declared loaders.
+    grids: Dict[str, Grid] = {}
+    if "grids" in data:
+        grids_map = data["grids"]
+        if not isinstance(grids_map, dict):
+            raise ValueError(
+                "Top-level 'grids' must be an object keyed by grid id (RFC §6). "
+                f"Got: {type(grids_map).__name__}"
+            )
+        for grid_name, grid_data in grids_map.items():
+            grids[grid_name] = _parse_grid(
+                grid_name, grid_data, data_loaders=data_loaders,
+            )
+
     # Collect events from models and reaction systems
     events = []
 
@@ -1215,6 +1430,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         registered_functions=registered_functions,
         coupling=coupling,
         domains=domains,
+        grids=grids,
     )
 
 

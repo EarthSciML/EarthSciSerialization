@@ -838,6 +838,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -913,6 +914,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -991,6 +993,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -1083,6 +1086,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);

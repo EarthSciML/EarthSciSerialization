@@ -64,7 +64,7 @@ export
     UnsupportedMappingError, DomainUnitMismatchError,
     DomainExtentMismatchError, SliceOutOfDomainError, CyclicPromotionError,
     # System types
-    Domain, Interface, Reference, Metadata, EsmFile,
+    Domain, Interface, Grid, Reference, Metadata, EsmFile,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
     # Subsystem reference resolution

@@ -2253,6 +2253,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         // Test the display output

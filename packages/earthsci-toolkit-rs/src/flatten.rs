@@ -391,6 +391,7 @@ pub fn flatten_model(model: &Model) -> Result<FlattenedSystem, FlattenError> {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     };
 
     flatten(&file)
@@ -990,6 +991,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         }
     }
 

@@ -1605,6 +1605,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -1681,6 +1682,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -1784,6 +1786,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -1826,6 +1829,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -1898,6 +1902,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -2026,6 +2031,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -2193,6 +2199,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -2298,6 +2305,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -2402,6 +2410,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -2495,6 +2504,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = validate(&esm_file);
@@ -2544,6 +2554,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         // JSON that should fail schema validation (has invalid variable type)

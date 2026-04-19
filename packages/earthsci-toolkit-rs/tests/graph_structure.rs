@@ -96,6 +96,7 @@ fn test_component_graph_generation() {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     };
 
     // Generate component graph
@@ -169,6 +170,7 @@ fn test_component_graph_exports() {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     };
 
     let comp_graph = component_graph(&esm_file);
@@ -420,6 +422,7 @@ fn test_component_existence() {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     };
 
     // Test component existence

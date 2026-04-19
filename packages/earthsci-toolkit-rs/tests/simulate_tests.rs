@@ -53,6 +53,7 @@ fn esm_with_model(model_name: &str, model: Model) -> EsmFile {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     }
 }
 

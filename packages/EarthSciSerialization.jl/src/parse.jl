@@ -302,6 +302,12 @@ function coerce_esm_file(data::Any)::EsmFile
         nothing
     end
 
+    grids = if haskey(data, :grids) && data.grids !== nothing
+        coerce_grids(data.grids, data_loaders)
+    else
+        nothing
+    end
+
     return EsmFile(esm, metadata,
                   models=models,
                   reaction_systems=reaction_systems,
@@ -310,7 +316,104 @@ function coerce_esm_file(data::Any)::EsmFile
                   registered_functions=registered_functions,
                   coupling=coupling,
                   domains=domains,
-                  interfaces=interfaces)
+                  interfaces=interfaces,
+                  grids=grids)
+end
+
+# Closed set of allowed builtin generator names (RFC §6.4.1).
+# Adding to this set is a minor version bump.
+const _GRID_BUILTIN_NAMES = Set([
+    "gnomonic_c6_neighbors",
+    "gnomonic_c6_d4_action",
+])
+
+"""
+    coerce_grids(data, data_loaders) -> Dict{String,Grid}
+
+Coerce the top-level `grids` section (RFC §6) into `Dict{String,Grid}`.
+Each grid is preserved opaquely as a `Dict{String,Any}` (lossless round-trip).
+After coercion, this function walks each grid and enforces the semantic
+constraints not captured by JSON Schema:
+
+* `metric_arrays[*].generator.kind == "loader"` — the referenced `loader`
+  name must be present in the top-level `data_loaders` section
+  (E_UNKNOWN_LOADER).
+* `metric_arrays[*].generator.kind == "builtin"` — the `name` must be one
+  of the canonical builtins in `_GRID_BUILTIN_NAMES` (E_UNKNOWN_BUILTIN).
+* `connectivity[*]` and `panel_connectivity[*]` generators get the same
+  treatment (loader → must exist; builtin → must be canonical). Flat
+  connectivity entries that use top-level `loader`/`field` keys (the
+  unstructured pattern) are also validated.
+
+`data_loaders` is the already-coerced `Dict{String,DataLoader}` (or `nothing`).
+"""
+function coerce_grids(data, data_loaders)::Dict{String,Grid}
+    loader_names = data_loaders === nothing ? Set{String}() : Set(keys(data_loaders))
+    grids = Dict{String,Grid}()
+    for (gname, gdata) in pairs(data)
+        grid_dict = _to_native_json(gdata)::Dict{String,Any}
+        _validate_grid_refs(string(gname), grid_dict, loader_names)
+        grids[string(gname)] = Grid(grid_dict)
+    end
+    return grids
+end
+
+# Walk a single grid's opaque dict and enforce semantic constraints.
+function _validate_grid_refs(gname::String, grid::Dict{String,Any}, loader_names::Set{String})
+    # metric_arrays: generator has kind + (loader|name|expr)
+    if haskey(grid, "metric_arrays")
+        for (maname, ma) in grid["metric_arrays"]
+            ma isa AbstractDict || continue
+            if haskey(ma, "generator") && ma["generator"] isa AbstractDict
+                _validate_grid_generator(
+                    "grids.$(gname).metric_arrays.$(maname).generator",
+                    ma["generator"], loader_names)
+            end
+        end
+    end
+
+    # connectivity: either flat loader/field form, or a generator subdict.
+    for cfield in ("connectivity", "panel_connectivity")
+        if haskey(grid, cfield) && grid[cfield] isa AbstractDict
+            for (cname, centry) in grid[cfield]
+                centry isa AbstractDict || continue
+                if haskey(centry, "generator") && centry["generator"] isa AbstractDict
+                    _validate_grid_generator(
+                        "grids.$(gname).$(cfield).$(cname).generator",
+                        centry["generator"], loader_names)
+                elseif haskey(centry, "loader")
+                    lname = string(centry["loader"])
+                    if !(lname in loader_names)
+                        throw(ParseError(
+                            "[E_UNKNOWN_LOADER] grids.$(gname).$(cfield).$(cname).loader " *
+                            "refers to unknown data_loaders entry '$lname'"))
+                    end
+                end
+            end
+        end
+    end
+    return
+end
+
+function _validate_grid_generator(path::String, gen::AbstractDict, loader_names::Set{String})
+    kind = get(gen, "kind", nothing)
+    kind === nothing && return
+    if kind == "loader"
+        lname = string(get(gen, "loader", ""))
+        if isempty(lname) || !(lname in loader_names)
+            throw(ParseError(
+                "[E_UNKNOWN_LOADER] $(path).loader refers to unknown " *
+                "data_loaders entry '$lname'"))
+        end
+    elseif kind == "builtin"
+        bname = string(get(gen, "name", ""))
+        if !(bname in _GRID_BUILTIN_NAMES)
+            throw(ParseError(
+                "[E_UNKNOWN_BUILTIN] $(path).name is '$bname'; must be one of " *
+                join(sort!(collect(_GRID_BUILTIN_NAMES)), ", ")))
+        end
+    end
+    return
 end
 
 """

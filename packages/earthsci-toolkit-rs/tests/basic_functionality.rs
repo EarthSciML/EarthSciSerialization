@@ -122,6 +122,7 @@ fn test_structural_validation() {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -267,6 +268,7 @@ fn test_component_graph() {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     };
 
     let graph = component_graph(&esm_file);

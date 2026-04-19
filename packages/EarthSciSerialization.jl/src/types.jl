@@ -827,6 +827,25 @@ struct Domain
 end
 
 """
+    Grid
+
+Top-level grid definition (RFC §6). Minimal typed wrapper: the full grid
+tree is preserved as an opaque `Dict{String,Any}` so round-trips are
+lossless, while the schema (already loaded by `validate_schema`) enforces
+structural constraints (family, metric_arrays, connectivity, generators,
+etc.). Post-parse validation in `coerce_grids` enforces the semantic
+constraints not expressible in pure JSON Schema: loader-refs must point
+at existing `data_loaders` entries, and `kind: "builtin"` names must be
+from the closed set {gnomonic_c6_neighbors, gnomonic_c6_d4_action}
+(RFC §6.4.1).
+"""
+struct Grid
+    data::Dict{String,Any}
+
+    Grid(data::Dict{String,Any}) = new(data)
+end
+
+"""
     Interface
 
 Defines the geometric relationship between two domains of potentially different
@@ -942,6 +961,7 @@ struct EsmFile
     coupling::Vector{CouplingEntry}
     domains::Union{Dict{String,Domain},Nothing}
     interfaces::Union{Dict{String,Interface},Nothing}
+    grids::Union{Dict{String,Grid},Nothing}
 
     # Constructor with optional parameters
     EsmFile(esm::String, metadata::Metadata;
@@ -952,9 +972,10 @@ struct EsmFile
             registered_functions=nothing,
             coupling=CouplingEntry[],
             domains=nothing,
-            interfaces=nothing) =
+            interfaces=nothing,
+            grids=nothing) =
         new(esm, metadata, models, reaction_systems, data_loaders, operators,
-            registered_functions, coupling, domains, interfaces)
+            registered_functions, coupling, domains, interfaces, grids)
 end
 
 # ========================================

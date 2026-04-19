@@ -938,8 +938,22 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     if file.interfaces !== nothing
         result["interfaces"] = Dict(k => serialize_interface(v) for (k, v) in file.interfaces)
     end
+    if file.grids !== nothing
+        result["grids"] = Dict(k => serialize_grid(v) for (k, v) in file.grids)
+    end
 
     return result
+end
+
+"""
+    serialize_grid(grid::Grid) -> Dict{String,Any}
+
+Serialize a Grid back to its JSON-compatible dict. The Grid wraps an opaque
+`Dict{String,Any}` populated by `coerce_grids`, so serialization is a direct
+handoff (round-trip lossless).
+"""
+function serialize_grid(grid::Grid)::Dict{String,Any}
+    return grid.data
 end
 
 """

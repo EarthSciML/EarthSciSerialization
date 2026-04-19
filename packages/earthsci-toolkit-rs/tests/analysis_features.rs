@@ -157,6 +157,7 @@ fn test_analysis_features_integration() {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
     };
 
     // Test component graph

@@ -23,6 +23,7 @@ from .esm_types import (
     Tolerance, TimeSpan, Assertion, Test,
     PlotAxis, PlotValue, PlotSeries, Plot,
     SweepRange, SweepDimension, ParameterSweep, Example,
+    Grid, GridExtent, GridMetricArray, GridMetricGenerator, GridConnectivity,
 )
 
 
@@ -803,6 +804,97 @@ def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
     return result
 
 
+def _serialize_grid_metric_generator(gen: GridMetricGenerator) -> Dict[str, Any]:
+    """Serialize a grid metric / connectivity generator (RFC §6.5)."""
+    result: Dict[str, Any] = {"kind": gen.kind}
+    if gen.kind == "expression":
+        if gen.expr is not None:
+            result["expr"] = _serialize_expression(gen.expr)
+    elif gen.kind == "loader":
+        if gen.loader is not None:
+            result["loader"] = gen.loader
+        if gen.field is not None:
+            result["field"] = gen.field
+    elif gen.kind == "builtin":
+        if gen.name is not None:
+            result["name"] = gen.name
+    return result
+
+
+def _serialize_grid_metric_array(array: GridMetricArray) -> Dict[str, Any]:
+    """Serialize a grid metric_array entry (RFC §6.5)."""
+    result: Dict[str, Any] = {"rank": array.rank}
+    if array.dim is not None:
+        result["dim"] = array.dim
+    if array.dims is not None:
+        result["dims"] = list(array.dims)
+    if array.shape is not None:
+        result["shape"] = list(array.shape)
+    result["generator"] = _serialize_grid_metric_generator(array.generator)
+    return result
+
+
+def _serialize_grid_connectivity(conn: GridConnectivity) -> Dict[str, Any]:
+    """Serialize a grid connectivity / panel_connectivity entry (RFC §6.3–§6.4)."""
+    result: Dict[str, Any] = {
+        "shape": list(conn.shape),
+        "rank": conn.rank,
+    }
+    if conn.loader is not None:
+        result["loader"] = conn.loader
+    if conn.field is not None:
+        result["field"] = conn.field
+    if conn.generator is not None:
+        result["generator"] = _serialize_grid_metric_generator(conn.generator)
+    return result
+
+
+def _serialize_grid_extent(extent: GridExtent) -> Dict[str, Any]:
+    """Serialize a cartesian grid extent entry (RFC §6.2)."""
+    result: Dict[str, Any] = {"n": extent.n}
+    if extent.spacing is not None:
+        result["spacing"] = extent.spacing
+    return result
+
+
+def _serialize_grid(grid: Grid) -> Dict[str, Any]:
+    """Serialize a top-level grid declaration (RFC §6)."""
+    result: Dict[str, Any] = {
+        "family": grid.family,
+    }
+    if grid.description is not None:
+        result["description"] = grid.description
+    result["dimensions"] = list(grid.dimensions)
+    if grid.extents:
+        result["extents"] = {
+            name: _serialize_grid_extent(e) for name, e in grid.extents.items()
+        }
+    if grid.locations is not None:
+        result["locations"] = list(grid.locations)
+    if grid.connectivity:
+        result["connectivity"] = {
+            name: _serialize_grid_connectivity(c)
+            for name, c in grid.connectivity.items()
+        }
+    if grid.panel_connectivity:
+        result["panel_connectivity"] = {
+            name: _serialize_grid_connectivity(c)
+            for name, c in grid.panel_connectivity.items()
+        }
+    if grid.metric_arrays:
+        result["metric_arrays"] = {
+            name: _serialize_grid_metric_array(a)
+            for name, a in grid.metric_arrays.items()
+        }
+    if grid.parameters:
+        result["parameters"] = {
+            name: _serialize_parameter(p) for name, p in grid.parameters.items()
+        }
+    if grid.domain is not None:
+        result["domain"] = grid.domain
+    return result
+
+
 def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     """Serialize an ESM file to JSON-compatible format."""
     result = {
@@ -869,6 +961,12 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             _serialize_coupling_entry(coupling)
             for coupling in esm_file.coupling
         ]
+
+    # Serialize top-level grids (RFC §6).
+    if getattr(esm_file, "grids", None):
+        result["grids"] = {
+            name: _serialize_grid(g) for name, g in esm_file.grids.items()
+        }
 
     # Serialize events at the top level. The schema only allows events nested
     # inside models/reaction_systems, but EsmFile.events stores them flat after

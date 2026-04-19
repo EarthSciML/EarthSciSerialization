@@ -41,6 +41,7 @@ use crate::{EsmFile, error::EsmError};
 ///     coupling: None,
 ///     domains: None,
 ///     interfaces: None,
+///     grids: None,
 /// };
 ///
 /// let json = save(&esm_file).expect("Failed to serialize ESM file");
@@ -97,6 +98,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = save(&esm_file);
@@ -169,6 +171,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = save(&esm_file);
@@ -204,6 +207,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let result = save_compact(&esm_file);
