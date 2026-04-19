@@ -16,6 +16,10 @@ import {
     type CanonicalDims,
     type ParsedUnit,
 } from './units.js';
+import {
+    convertUnits,
+    parseUnitForConversion,
+} from './unit-conversion.js';
 import type {
     EsmFile,
     Model,
@@ -1002,6 +1006,115 @@ function validateTemporalResolution(esmFile: EsmFile): StructuralError[] {
 }
 
 /**
+ * Flag observed expressions of the form `<numeric> * <var>` (or `<var> * <numeric>`)
+ * where the declared output units and the source variable's units are
+ * dimensionally compatible but the numeric literal disagrees with the correct
+ * linear scale factor (e.g., `50000 * p_atm` assigned to a Pa variable when
+ * the correct factor is 101325 Pa/atm).
+ *
+ * Mirrors Python's `parse._check_conversion_factor_consistency`. Only linear
+ * (non-affine) scale conversions are checked — offset-bearing conversions like
+ * degC→K are skipped. Compound expressions, matching units, and unparseable
+ * units are silently ignored to stay conservative.
+ */
+function validateConversionFactorConsistency(esmFile: EsmFile): StructuralError[] {
+    const errors: StructuralError[] = [];
+    if (!esmFile.models) return errors;
+
+    const linearFactor = (fromUnit: string, toUnit: string): number | null => {
+        try {
+            const q0 = convertUnits(0, fromUnit, toUnit);
+            const q1 = convertUnits(1, fromUnit, toUnit);
+            if (Math.abs(q0) > 1e-12) return null; // affine (e.g., degC → K)
+            return q1;
+        } catch {
+            return null;
+        }
+    };
+
+    const sameDims = (a: string, b: string): boolean => {
+        try {
+            const ap = parseUnitForConversion(a);
+            const bp = parseUnitForConversion(b);
+            return dimsEqual(ap.dims, bp.dims);
+        } catch {
+            return false;
+        }
+    };
+
+    const visit = (model: Model, modelPath: string): void => {
+        const variables = model.variables || {};
+        const varUnits = new Map<string, string | undefined>();
+        for (const [name, vdef] of Object.entries(variables)) {
+            varUnits.set(name, vdef.units);
+        }
+
+        for (const [vname, vdef] of Object.entries(variables)) {
+            if (vdef.type !== 'observed') continue;
+            const lhsUnits = vdef.units;
+            if (!lhsUnits) continue;
+            const expr = vdef.expression;
+            if (!expr || typeof expr !== 'object' || Array.isArray(expr)) continue;
+            const node = expr as ExpressionNode;
+            if (node.op !== '*') continue;
+            const args = node.args;
+            if (!Array.isArray(args) || args.length !== 2) continue;
+
+            let numeric: number | null = null;
+            let varRef: string | null = null;
+            for (const a of args) {
+                if (typeof a === 'number' && Number.isFinite(a)) {
+                    numeric = a;
+                } else if (typeof a === 'string') {
+                    varRef = a;
+                }
+            }
+            if (numeric === null || varRef === null) continue;
+
+            const srcUnits = varUnits.get(varRef);
+            if (!srcUnits) continue;
+
+            // Identical (normalized) units — no conversion to check.
+            if (srcUnits === lhsUnits) continue;
+            if (!sameDims(srcUnits, lhsUnits)) continue; // dimensional mismatch handled elsewhere
+
+            const factor = linearFactor(srcUnits, lhsUnits);
+            if (factor === null || factor === 0) continue;
+
+            const tol = 1e-9 * Math.max(Math.abs(factor), 1);
+            if (Math.abs(numeric - factor) <= tol) continue;
+
+            errors.push({
+                path: `${modelPath}/variables/${vname}`,
+                code: 'unit_inconsistency',
+                message: 'Unit conversion factor is incorrect for specified unit transformation',
+                details: {
+                    variable: vname,
+                    declared_units: lhsUnits,
+                    source_units: srcUnits,
+                    declared_factor: numeric,
+                    expected_factor: factor,
+                },
+            });
+        }
+
+        if (model.subsystems) {
+            for (const [subName, sub] of Object.entries(model.subsystems)) {
+                if (sub && typeof sub === 'object' && 'variables' in (sub as any)) {
+                    visit(sub as Model, `${modelPath}/subsystems/${subName}`);
+                }
+            }
+        }
+    };
+
+    for (const [modelName, model] of Object.entries(esmFile.models)) {
+        visit(model, `/models/${modelName}`);
+    }
+
+    return errors;
+}
+
+/**
  * Promote unit validation errors to structural errors for invalid files.
  * Units warnings become errors when they indicate incompatible assignments or additions.
  */
@@ -1113,6 +1226,9 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
 
     // Validate temporal resolution in data loaders
     errors.push(...validateTemporalResolution(esmFile));
+
+    // Check observed expressions for numeric conversion-factor errors
+    errors.push(...validateConversionFactorConsistency(esmFile));
 
     return errors;
 }
