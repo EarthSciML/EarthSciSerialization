@@ -830,6 +830,17 @@ Graph(...)
 
 ---
 
+### Guard
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Guard(...)
+```
+
+---
+
 ### IntExpr
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1250,6 +1261,17 @@ RFC(...)
 
 ---
 
+### RFC
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RFC(...)
+```
+
+---
+
 ### Reaction
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1367,6 +1389,50 @@ RegisteredFunctionSignature(...)
 
 **Available in other languages:**
 - [Python](python.md#registeredfunctionsignature)
+
+---
+
+### Rule
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Rule(...)
+```
+
+---
+
+### Rule
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Rule(...)
+```
+
+---
+
+### RuleContext
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RuleContext(...)
+```
+
+---
+
+### RuleEngineError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RuleEngineError(...)
+```
 
 ---
 
@@ -2267,6 +2333,35 @@ and(...)
 
 ---
 
+### apply_bindings
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+apply_bindings(...)
+```
+
+---
+
+### apply_bindings
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:170`
+
+**Signature:**
+```julia
+function apply_bindings(template::Expr, b::Dict{String,Expr})::Expr
+```
+
+**Description:**
+apply_bindings(template::Expr, bindings::Dict{String,Expr}) -> Expr
+
+Substitute pattern variables in `template` with their bound values.
+Throws [`RuleEngineError`](@ref) if `template` references a pattern
+variable that is not in `bindings`.
+
+---
+
 ### canonical_json
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -2329,6 +2424,97 @@ NaN/Inf or `0/0`.
 
 **Available in other languages:**
 - [Typescript](typescript.md#canonicalize)
+
+---
+
+### check_guard
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+check_guard(...)
+```
+
+---
+
+### check_guard
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:262`
+
+**Signature:**
+```julia
+function check_guard(g::Guard, b::Dict{String,Expr}, ctx::RuleContext)
+```
+
+**Description:**
+check_guard(guard, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
+
+Evaluate a single guard per §5.2.4. Returns an extended binding map on
+success (possibly the same `bindings` if no new pvar was bound), or
+`nothing` on failure.
+
+---
+
+### check_guards
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+check_guards(...)
+```
+
+---
+
+### check_guards
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:245`
+
+**Signature:**
+```julia
+function check_guards(guards::Vector{Guard}, bindings::Dict{String,Expr},
+```
+
+**Description:**
+check_guards(guards, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
+
+Evaluate the guard list left-to-right, threading bindings. Each guard
+may read or extend the binding map; a guard whose pvar-valued `grid`
+field is unbound at entry binds it to the variable's actual grid
+(§9.2.1 example pattern). Returns the extended bindings on success,
+`nothing` on any failure.
+
+---
+
+### check_unrewritten_pde_ops
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+check_unrewritten_pde_ops(...)
+```
+
+---
+
+### check_unrewritten_pde_ops
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:581`
+
+**Signature:**
+```julia
+function check_unrewritten_pde_ops(expr::Expr)
+```
+
+**Description:**
+check_unrewritten_pde_ops(expr) -> Nothing
+
+Scan `expr` for leftover PDE ops (`grad`, `div`, `laplacian`, `D`, `bc`)
+and throw [`RuleEngineError`](@ref) `E_UNREWRITTEN_PDE_OP` if any are
+found. Authors opt out by marking an equation `passthrough: true` at the
+pipeline layer (§11); this check is run only on non-passthrough
+equations.
 
 ---
 
@@ -3257,6 +3443,17 @@ function end_timer!(profiler::PerformanceProfiler, operation::String)
 end_timer!(profiler, operation)
 
 End timing an operation and return duration.
+
+---
+
+### engine
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+engine(...)
+```
 
 ---
 
@@ -4288,6 +4485,41 @@ mass_action_rate(...)
 
 ---
 
+### match_pattern
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+match_pattern(...)
+```
+
+---
+
+### match_pattern
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:93`
+
+**Signature:**
+```julia
+function match_pattern(pattern::Expr, expr::Expr)::Union{Dict{String,Expr},Nothing}
+```
+
+**Description:**
+match_pattern(pattern::Expr, expr::Expr) -> Union{Dict{String,Expr}, Nothing}
+
+Attempt to match `pattern` against `expr`. On success, returns a
+substitution mapping each pattern-variable name (including the leading
+`\$`) to the AST or bare name it binds. Bare-name bindings (for sibling
+fields like `wrt`, `dim`) are wrapped as [`VarExpr`](@ref) so the
+substitution has a uniform type. On failure, returns `nothing`.
+
+Non-linear patterns (§5.2.2): a pattern variable that appears in
+multiple positions must bind to canonically-equal values at every
+occurrence.
+
+---
+
 ### merge
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4454,6 +4686,65 @@ function parse_model_variable_type(data::String)::ModelVariableType
 parse_model_variable_type(data::String) -> ModelVariableType
 
 Parse string into ModelVariableType enum.
+
+---
+
+### parse_rule
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+parse_rule(...)
+```
+
+---
+
+### parse_rule
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:457`
+
+**Signature:**
+```julia
+function parse_rule(name::AbstractString, obj)::Rule
+```
+
+**Description:**
+parse_rule(obj) -> Rule
+    parse_rule(name::AbstractString, obj) -> Rule
+
+Build a [`Rule`](@ref) from a decoded JSON object (a `Dict` or similar).
+The object must contain `pattern` and `replacement` fields. Optional:
+`where` (array of guard objects), `region` (string).
+
+---
+
+### parse_rules
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+parse_rules(...)
+```
+
+---
+
+### parse_rules
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:490`
+
+**Signature:**
+```julia
+function parse_rules(obj)::Vector{Rule}
+```
+
+**Description:**
+parse_rules(obj) -> Vector{Rule}
+
+Parse the `rules` section of a model into an ordered vector of
+[`Rule`](@ref). Accepts either the JSON-object-keyed-by-name form or the
+JSON-array form per RFC §5.2.5.
 
 ---
 
@@ -4903,6 +5194,39 @@ Circular references are detected and raise a `SubsystemRefError`.
 # Arguments
 - `file::EsmFile`: the parsed ESM file to resolve references in
 - `base_path::String`: directory path for resolving relative file references
+
+---
+
+### rewrite
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+rewrite(...)
+```
+
+---
+
+### rewrite
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:405`
+
+**Signature:**
+```julia
+function rewrite(expr::Expr, rules::Vector{Rule}, ctx::RuleContext=RuleContext();
+```
+
+**Description:**
+rewrite(expr, rules, ctx; max_passes=32) -> Expr
+
+Run the rule engine on `expr` per RFC §5.2.5: each pass walks top-down,
+the first rule whose pattern matches fires, the rewritten subtree is
+sealed for the remainder of the pass (walker does NOT descend into the
+rewrite), then we continue with siblings. A pass that produces no
+rewrites terminates the loop. If `max_passes` is reached without
+convergence, throws [`RuleEngineError`](@ref) with code
+`E_RULES_NOT_CONVERGED`.
 
 ---
 
@@ -7539,6 +7863,24 @@ Generic graph structure with nodes and edges.
 
 ---
 
+### Guard
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:40`
+
+**Definition:**
+```julia
+struct Guard
+```
+
+**Description:**
+Guard(name::String, params::Dict{String,Any})
+
+A single constraint on pattern-variable bindings. `name` is one of the
+§5.2.4 closed-set guard names; `params` carries the fields from the JSON
+guard object (`pvar`, `grid`, `location`, `rank`, …).
+
+---
+
 ### IntExpr
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:40`
@@ -8025,6 +8367,74 @@ Calling convention for a [`RegisteredFunction`](@ref). See esm-spec §9.2.
 
 **Available in other languages:**
 - [Python](python.md#registeredfunctionsignature)
+
+---
+
+### Rule
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:53`
+
+**Definition:**
+```julia
+struct Rule
+```
+
+**Description:**
+Rule(name, pattern, where, replacement, region)
+
+A rewrite rule. `pattern` is an AST with `\$`-prefixed pattern variables;
+`where` is a vector of [`Guard`](@ref) constraints; `replacement` is an
+AST over the pattern variables. The MVP supports only the inline
+`replacement` form; `use:<scheme>` is reserved for Step 1b.
+
+---
+
+### RuleContext
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:228`
+
+**Definition:**
+```julia
+struct RuleContext
+```
+
+**Description:**
+RuleContext(grids, variables)
+
+Context supplied to [`rewrite`](@ref) and guard evaluation. Holds the
+grid metadata and variable table needed by the closed-set guards in
+§5.2.4. Callers build this by projecting the relevant pieces of an
+`EsmFile` model.
+
+- `grids::Dict{String, Dict{String,Any}}`: per-grid metadata. Each entry
+  may carry `"spatial_dims"` (Vector{String}), `"periodic_dims"`
+  (Vector{String}), `"nonuniform_dims"` (Vector{String}).
+- `variables::Dict{String, Dict{String,Any}}`: per-variable metadata.
+  Each entry may carry `"grid"` (String), `"location"` (String),
+  `"shape"` (Vector or Vector{String}).
+
+---
+
+### RuleEngineError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:25`
+
+**Definition:**
+```julia
+struct RuleEngineError <: Exception
+```
+
+**Description:**
+RuleEngineError(code::String, message::String)
+
+Error raised by the rule engine. The `code` field carries one of the
+RFC §5.2 / §11 stable error codes:
+
+- `E_RULES_NOT_CONVERGED` — fixed-point loop exceeded `max_passes`.
+- `E_UNREWRITTEN_PDE_OP` — a PDE op (`grad`, `div`, `laplacian`, `D`, `bc`)
+  remained after rewriting on an equation not annotated `passthrough: true`.
+- `E_SCHEME_MISMATCH` — rule/scheme `applies_to` disagreement (reserved for
+  the `use:` rule form; not emitted in the MVP).
 
 ---
 

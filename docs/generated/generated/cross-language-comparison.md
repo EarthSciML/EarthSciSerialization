@@ -199,6 +199,11 @@ RFC(...)
 RFC(...)
 ```
 
+**Julia:**
+```julia
+RFC(...)
+```
+
 ---
 
 ### Reaction
@@ -221,6 +226,20 @@ function Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate:
 > Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false) -> Reaction
 
 Legacy constructor for backward compatibility.
+
+---
+
+### Rule
+
+**Julia:**
+```julia
+Rule(...)
+```
+
+**Julia:**
+```julia
+Rule(...)
+```
 
 ---
 
@@ -537,6 +556,24 @@ function adjacency(graph::Graph{N, E}, node::N) where {N, E}
 
 ---
 
+### apply_bindings
+
+**Julia:**
+```julia
+apply_bindings(...)
+```
+
+**Julia:**
+```julia
+function apply_bindings(template::Expr, b::Dict{String,Expr})::Expr
+```
+
+> apply_bindings(template::Expr, bindings::Dict{String,Expr}) -> Expr
+
+Substitute pattern variables in `template` with their bound values.
+
+---
+
 ### build
 
 **Python:**
@@ -589,6 +626,62 @@ Canonicalize an expression tree per discretization RFC §5.
 ```typescript
 export function canonicalize(expr: Expr): Expr {
 ```
+
+---
+
+### check_guard
+
+**Julia:**
+```julia
+check_guard(...)
+```
+
+**Julia:**
+```julia
+function check_guard(g::Guard, b::Dict{String,Expr}, ctx::RuleContext)
+```
+
+> check_guard(guard, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
+
+Evaluate a single guard per §5.
+
+---
+
+### check_guards
+
+**Julia:**
+```julia
+check_guards(...)
+```
+
+**Julia:**
+```julia
+function check_guards(guards::Vector{Guard}, bindings::Dict{String,Expr},
+```
+
+> check_guards(guards, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
+
+Evaluate the guard list left-to-right, threading bindings.
+
+---
+
+### check_unrewritten_pde_ops
+
+**Julia:**
+```julia
+check_unrewritten_pde_ops(...)
+```
+
+**Julia:**
+```julia
+function check_unrewritten_pde_ops(expr::Expr)
+```
+
+> check_unrewritten_pde_ops(expr) -> Nothing
+
+Scan `expr` for leftover PDE ops (`grad`, `div`, `laplacian`, `D`, `bc`)
+and throw [`RuleEngineError`](@ref) `E_UNREWRITTEN_PDE_OP` if any are
+found.
 
 ---
 
@@ -1229,6 +1322,24 @@ variable reference `from` into `to`.
 
 ---
 
+### match_pattern
+
+**Julia:**
+```julia
+match_pattern(...)
+```
+
+**Julia:**
+```julia
+function match_pattern(pattern::Expr, expr::Expr)::Union{Dict{String,Expr},Nothing}
+```
+
+> match_pattern(pattern::Expr, expr::Expr) -> Union{Dict{String,Expr}, Nothing}
+
+Attempt to match `pattern` against `expr`.
+
+---
+
 ### merge
 
 **Julia:**
@@ -1336,6 +1447,44 @@ operations(...)
 ```julia
 operations(...)
 ```
+
+---
+
+### parse_rule
+
+**Julia:**
+```julia
+parse_rule(...)
+```
+
+**Julia:**
+```julia
+function parse_rule(name::AbstractString, obj)::Rule
+```
+
+> parse_rule(obj) -> Rule
+    parse_rule(name::AbstractString, obj) -> Rule
+
+Build a [`Rule`](@ref) from a decoded JSON object (a `Dict` or similar).
+
+---
+
+### parse_rules
+
+**Julia:**
+```julia
+parse_rules(...)
+```
+
+**Julia:**
+```julia
+function parse_rules(obj)::Vector{Rule}
+```
+
+> parse_rules(obj) -> Vector{Rule}
+
+Parse the `rules` section of a model into an ordered vector of
+[`Rule`](@ref).
 
 ---
 
@@ -1578,6 +1727,24 @@ function resolve_subsystem_refs!(file::EsmFile, base_path::String)
 > resolve_subsystem_refs!(file::EsmFile, base_path::String)
 
 Resolve all subsystem references in-place.
+
+---
+
+### rewrite
+
+**Julia:**
+```julia
+rewrite(...)
+```
+
+**Julia:**
+```julia
+function rewrite(expr::Expr, rules::Vector{Rule}, ctx::RuleContext=RuleContext();
+```
+
+> rewrite(expr, rules, ctx; max_passes=32) -> Expr
+
+Run the rule engine on `expr` per RFC §5.
 
 ---
 
