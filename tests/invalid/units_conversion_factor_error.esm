@@ -1,0 +1,29 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "BadUnitsModel",
+    "description": "Invalid: conversion factor 50000 is wrong for atm → Pa (should be 101325)",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-04-19T00:00:00Z"
+  },
+
+  "models": {
+    "BadUnitsModel": {
+      "variables": {
+        "p_atm": {
+          "type": "parameter",
+          "units": "atm",
+          "default": 1.0,
+          "description": "Pressure in atmospheres"
+        },
+        "converted_pressure": {
+          "type": "observed",
+          "units": "Pa",
+          "expression": { "op": "*", "args": [50000, "p_atm"] },
+          "description": "Pressure in Pa computed from p_atm; numeric factor 50000 is wrong (correct Pa/atm = 101325)"
+        }
+      },
+      "equations": []
+    }
+  }
+}

@@ -1991,5 +1991,25 @@
     ],
     "is_valid": false,
     "notes": "Julia's validate_reaction_system_dimensions enforces this check; Python/Rust/TS/Go currently accept the file without this error. Follow-up beads required for full cross-language support."
+  },
+
+  "units_conversion_factor_error.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/converted_pressure",
+        "code": "unit_inconsistency",
+        "message": "Unit conversion factor is incorrect for specified unit transformation",
+        "details": {
+          "variable": "converted_pressure",
+          "declared_units": "Pa",
+          "source_units": "atm",
+          "declared_factor": 50000.0,
+          "expected_factor": 101325.0
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Observed variable declared in Pa is assigned '50000 * p_atm' where p_atm is in atm; dimensions match but the numeric scale factor should be 101325 Pa/atm. Python's parse._check_conversion_factor_consistency compares the numeric literal in a '*' expression against pint's computed conversion factor. Affine conversions (e.g., degC→K) are excluded. Julia/Rust/TS/Go currently accept the file without this error — follow-up beads required for full cross-language support."
   }
 }

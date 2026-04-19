@@ -1830,6 +1830,89 @@ def _check_default_units_consistency(data: Dict[str, Any], errors: List[str]) ->
             )
 
 
+def _check_conversion_factor_consistency(data: Dict[str, Any], errors: List[str]) -> None:
+    """
+    Flag observed expressions of the form `<numeric> * <var>` (or `<var> * <numeric>`)
+    where the declared output units and the source variable's units are
+    dimensionally compatible but the numeric literal disagrees with the correct
+    linear scale factor (e.g., assigning `50000 * p_atm` to a Pa variable when
+    the correct factor is 101325 Pa/atm).
+
+    Emits `unit_inconsistency` with `declared_factor` and `expected_factor` in
+    the error text. Only linear (non-affine) scale conversions are checked —
+    affine conversions like degC→K require an offset and are skipped.
+    Compound expressions, matching units, and unparseable units are silently
+    ignored to stay conservative.
+    """
+    try:
+        import pint
+        ureg = pint.UnitRegistry()
+    except Exception:
+        return
+
+    def linear_factor(from_unit: str, to_unit: str):
+        try:
+            q0 = ureg.Quantity(0.0, from_unit).to(to_unit).magnitude
+            q1 = ureg.Quantity(1.0, from_unit).to(to_unit).magnitude
+        except Exception:
+            return None
+        if abs(q0) > 1e-12:
+            return None  # affine (e.g., degC -> K)
+        return q1
+
+    for mname, m in data.get("models", {}).items():
+        var_units_map = {
+            vname: vdef.get("units")
+            for vname, vdef in m.get("variables", {}).items()
+        }
+        for vname, vdef in m.get("variables", {}).items():
+            if vdef.get("type") != "observed":
+                continue
+            lhs_units = vdef.get("units")
+            if not lhs_units:
+                continue
+            expr = vdef.get("expression")
+            if not isinstance(expr, dict) or expr.get("op") != "*":
+                continue
+            args = expr.get("args") or []
+            if len(args) != 2:
+                continue
+            numeric = None
+            var_ref = None
+            for a in args:
+                if isinstance(a, bool):
+                    continue
+                if isinstance(a, (int, float)):
+                    numeric = float(a)
+                elif isinstance(a, str):
+                    var_ref = a
+            if numeric is None or var_ref is None:
+                continue
+            src_units = var_units_map.get(var_ref)
+            if not src_units:
+                continue
+            n_src = _normalize_unit(src_units)
+            n_lhs = _normalize_unit(lhs_units)
+            if n_src == n_lhs:
+                continue  # identical — no conversion to check
+            try:
+                if ureg(n_src).dimensionality != ureg(n_lhs).dimensionality:
+                    continue  # dimensional mismatch — handled by other checks
+            except Exception:
+                continue
+            factor = linear_factor(n_src, n_lhs)
+            if factor is None or factor == 0:
+                continue
+            if abs(numeric - factor) <= 1e-9 * max(abs(factor), 1.0):
+                continue  # matches within tolerance
+            errors.append(
+                f"models/{mname}/variables/{vname}: Unit conversion factor is incorrect "
+                f"for specified unit transformation "
+                f"(declared_factor={numeric}, expected_factor={factor}, "
+                f"source_units='{src_units}', declared_units='{lhs_units}')"
+            )
+
+
 def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
     """
     Check unit compatibility in equations.
@@ -2188,6 +2271,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     # structural validation, which raises SubsystemRefError with richer context.
     _check_unit_consistency(data, tables, errors)
     _check_default_units_consistency(data, errors)
+    _check_conversion_factor_consistency(data, errors)
     _check_event_references(data, tables, errors)
     _check_equation_balance(data, errors)
     _check_operator_state_coverage(data, errors)

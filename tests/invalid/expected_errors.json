@@ -2111,5 +2111,25 @@
     ],
     "is_valid": false,
     "notes": "2nd-order reaction A + B -> C whose rate parameter 'k' is declared with 1/s units (appropriate for a 1st-order rate constant) instead of 1/(M*s). Julia's validate_reaction_system_dimensions compares the observed rate dimension to concentration^(1-total_order)/time derived from the first substrate's units and fails with @warn on mismatch. Rust/Python/TS/Go currently ignore this check — follow-up beads required for full cross-language support."
+  },
+
+  "units_conversion_factor_error.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/converted_pressure",
+        "code": "unit_inconsistency",
+        "message": "Unit conversion factor is incorrect for specified unit transformation",
+        "details": {
+          "variable": "converted_pressure",
+          "declared_units": "Pa",
+          "source_units": "atm",
+          "declared_factor": 50000.0,
+          "expected_factor": 101325.0
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Observed variable declared in Pa is assigned '50000 * p_atm' where p_atm is in atm; dimensions match but the numeric scale factor should be 101325 Pa/atm. Python's validator (parse._check_conversion_factor_consistency) detects linear-scale conversion errors by comparing the numeric literal in a '*' expression against pint's computed conversion factor. Affine conversions (e.g., degC→K) are excluded. Julia/Rust/TS/Go currently accept the file without this error — follow-up beads required for full cross-language support."
   }
 }
