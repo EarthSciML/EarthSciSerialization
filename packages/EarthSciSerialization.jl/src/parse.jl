@@ -870,7 +870,11 @@ function coerce_operator_compose(data::AbstractDict)::CouplingOperatorCompose
     end
 
     systems = Vector{String}(data["systems"])
-    translate = get(data, "translate", nothing)
+    # JSON3.Object keys are Symbols — convert to String explicitly so the
+    # Dict{String,Any} field doesn't choke on Symbol→String conversion.
+    translate_raw = get(data, "translate", nothing)
+    translate = translate_raw === nothing ? nothing :
+                Dict{String,Any}(string(k) => v for (k, v) in pairs(translate_raw))
     description = get(data, "description", nothing)
     interface = get(data, "interface", nothing)
     if interface !== nothing
@@ -1002,13 +1006,13 @@ function coerce_event(data::AbstractDict)::CouplingEvent
     # Parse conditions for continuous events
     conditions = nothing
     if haskey(data, "conditions")
-        conditions = [coerce_expression(c) for c in data["conditions"]]
+        conditions = Expr[parse_expression(c) for c in data["conditions"]]
     end
 
     # Parse trigger for discrete events
     trigger = nothing
     if haskey(data, "trigger")
-        trigger = coerce_discrete_event_trigger(data["trigger"])
+        trigger = parse_trigger(data["trigger"])
     end
 
     # Parse affects (required)
