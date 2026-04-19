@@ -478,6 +478,7 @@ function coerce_model_variable(data::Any)::ModelVariable
     default = haskey(data, :default) && data.default !== nothing ? Float64(data.default) : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
     expression = haskey(data, :expression) && data.expression !== nothing ? parse_expression(data.expression) : nothing
+    units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
     default_units = haskey(data, :default_units) && data.default_units !== nothing ? string(data.default_units) : nothing
     shape = if haskey(data, :shape) && data.shape !== nothing
         String[string(d) for d in data.shape]
@@ -492,6 +493,7 @@ function coerce_model_variable(data::Any)::ModelVariable
                         default=default,
                         description=description,
                         expression=expression,
+                        units=units,
                         default_units=default_units,
                         shape=shape,
                         location=location,

@@ -714,3 +714,36 @@ fn test_reaction_rate_units_mismatch_fixture_rejected() {
     assert_eq!(err.details["expected_rate_units"], "L/(mol*s)");
     assert_eq!(err.details["reaction_order"], 2);
 }
+
+/// units_dimensional_constant_error.esm declares the ideal gas constant `R`
+/// with units `kcal/mol` — missing the temperature dimension (canonical is
+/// `J/(mol*K)`). Must be rejected as a structural unit_inconsistency error
+/// across all bindings, reported at the usage site `gas_law_calculation`
+/// (mirrors Python's `_check_physical_constant_units`, gt-3tgv).
+#[test]
+fn test_physical_constant_dimensional_error_fixture_rejected() {
+    let fixture = include_str!("../../../tests/invalid/units_dimensional_constant_error.esm");
+    let esm_file = load(fixture).expect("fixture should parse and schema-validate");
+    let result = validate(&esm_file);
+    let err = result
+        .errors()
+        .into_iter()
+        .find(|e| {
+            matches!(e.code, StructuralErrorCode::UnitInconsistency)
+                && e.message == "Physical constant used with incorrect dimensional analysis"
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected UnitInconsistency (physical constant) for units_dimensional_constant_error.esm, got: {:?}",
+                result.errors()
+            )
+        });
+    assert_eq!(
+        err.path,
+        "/models/ConstantUnitsModel/variables/gas_law_calculation"
+    );
+    assert_eq!(err.details["constant_name"], "R");
+    assert_eq!(err.details["constant_description"], "ideal gas constant");
+    assert_eq!(err.details["declared_units"], "kcal/mol");
+    assert_eq!(err.details["canonical_units"], "J/(mol*K)");
+}

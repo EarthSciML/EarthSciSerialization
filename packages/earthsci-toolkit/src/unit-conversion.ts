@@ -96,6 +96,8 @@ const UNIT_TABLE: Record<string, UnitSpec> = {
   N: { dims: { kg: 1, m: 1, s: -2 }, scale: 1 },
   J: { dims: { kg: 1, m: 2, s: -2 }, scale: 1 },
   kJ: { dims: { kg: 1, m: 2, s: -2 }, scale: 1000 },
+  cal: { dims: { kg: 1, m: 2, s: -2 }, scale: 4.184 },
+  kcal: { dims: { kg: 1, m: 2, s: -2 }, scale: 4184 },
   W: { dims: { kg: 1, m: 2, s: -3 }, scale: 1 },
   Pa: { dims: { kg: 1, m: -1, s: -2 }, scale: 1 },
   hPa: { dims: { kg: 1, m: -1, s: -2 }, scale: 100 },

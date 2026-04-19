@@ -676,6 +676,89 @@ function validateReactionRateUnits(
 }
 
 /**
+ * Well-known physical constants whose declared units can be dimensionally
+ * verified against a canonical form. Conservative on purpose — names chosen
+ * to minimize collision with common non-constant uses (e.g., no `c` for
+ * speed of light, which conflicts with concentration). Mirrors Python's
+ * `_KNOWN_PHYSICAL_CONSTANTS` (gt-j91l / gt-3tgv).
+ */
+const KNOWN_PHYSICAL_CONSTANTS: Array<{
+    name: string;
+    canonical: string;
+    description: string;
+}> = [
+    { name: 'R', canonical: 'J/(mol*K)', description: 'ideal gas constant' },
+    { name: 'k_B', canonical: 'J/K', description: 'Boltzmann constant' },
+    { name: 'N_A', canonical: '1/mol', description: 'Avogadro constant' },
+];
+
+/**
+ * Return true if the expression tree references a variable by exact name
+ * (string leaf match).
+ */
+function expressionReferencesName(expr: Expression | undefined, name: string): boolean {
+    if (expr === undefined || expr === null) return false;
+    if (typeof expr === 'string') return expr === name;
+    if (typeof expr === 'number') return false;
+    if (typeof expr === 'object' && 'op' in expr) {
+        const node = expr as ExpressionNode;
+        if (node.args) {
+            for (const arg of node.args) {
+                if (expressionReferencesName(arg, name)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Flag parameters whose name matches a well-known physical constant but whose
+ * declared units are dimensionally incompatible with the canonical form (e.g.,
+ * `R` declared as `kcal/mol` — missing temperature — instead of `J/(mol*K)`).
+ * Reports at the first observed-variable usage site in the same model;
+ * otherwise at the declaration. Mirrors Python's
+ * `parse._check_physical_constant_units`.
+ */
+function validatePhysicalConstantUnits(model: Model, modelPath: string): StructuralError[] {
+    const errors: StructuralError[] = [];
+    const variables = model.variables || {};
+
+    for (const { name, canonical, description } of KNOWN_PHYSICAL_CONSTANTS) {
+        const declaration = variables[name];
+        if (!declaration) continue;
+        if (declaration.type !== 'parameter') continue;
+        const declared = declaration.units;
+        if (!declared) continue;
+
+        const declaredUnit = parseUnit(declared);
+        const canonicalUnit = parseUnit(canonical);
+        if (dimsEqual(declaredUnit.dims, canonicalUnit.dims)) continue;
+
+        let usageName: string | undefined;
+        for (const [otherName, otherVar] of Object.entries(variables)) {
+            if (otherVar.type !== 'observed') continue;
+            if (expressionReferencesName(otherVar.expression, name)) {
+                usageName = otherName;
+                break;
+            }
+        }
+        const targetName = usageName ?? name;
+        errors.push({
+            path: `${modelPath}/variables/${targetName}`,
+            code: 'unit_inconsistency',
+            message: 'Physical constant used with incorrect dimensional analysis',
+            details: {
+                constant_name: name,
+                constant_description: description,
+                declared_units: declared,
+                canonical_units: canonical,
+            },
+        });
+    }
+    return errors;
+}
+
+/**
  * Check coupling entries reference integrity
  */
 function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
@@ -983,6 +1066,7 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
                 errors.push(...validateReferenceIntegrity(model, modelPath, esmFile));
             }
             errors.push(...validateEventConsistency(model, modelPath));
+            errors.push(...validatePhysicalConstantUnits(model, modelPath));
 
             // Recursively validate subsystems
             if (model.subsystems) {
@@ -993,6 +1077,7 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
                         errors.push(...validateReferenceIntegrity(subsystem, subsystemPath, esmFile));
                     }
                     errors.push(...validateEventConsistency(subsystem, subsystemPath));
+                    errors.push(...validatePhysicalConstantUnits(subsystem, subsystemPath));
                 }
             }
         }

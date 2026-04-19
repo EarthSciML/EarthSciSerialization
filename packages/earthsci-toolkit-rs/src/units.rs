@@ -704,12 +704,19 @@ fn get_base_units() -> HashMap<String, Unit> {
     units.insert("Pa".to_string(), pascal);
 
     // Energy: kg*m^2/s^2 (Joule)
-    units.insert(
-        "J".to_string(),
-        Unit::base(Dimension::Mass, 1, 1.0)
-            .multiply(&Unit::base(Dimension::Length, 2, 1.0))
-            .divide(&Unit::base(Dimension::Time, 2, 1.0)),
-    );
+    let joule = Unit::base(Dimension::Mass, 1, 1.0)
+        .multiply(&Unit::base(Dimension::Length, 2, 1.0))
+        .divide(&Unit::base(Dimension::Time, 2, 1.0));
+    units.insert("J".to_string(), joule.clone());
+    let mut kj = joule.clone();
+    kj.scale *= 1000.0;
+    units.insert("kJ".to_string(), kj);
+    let mut cal = joule.clone();
+    cal.scale *= 4.184;
+    units.insert("cal".to_string(), cal);
+    let mut kcal = joule.clone();
+    kcal.scale *= 4184.0;
+    units.insert("kcal".to_string(), kcal);
 
     // Power: kg*m^2/s^3 (Watt)
     units.insert(

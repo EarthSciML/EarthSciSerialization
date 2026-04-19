@@ -182,6 +182,9 @@ func buildUnitRegistry() map[string]Unit {
 	r["N"] = r["kg"].Multiply(r["m"]).Divide(r["s"].Power(2))
 	r["Pa"] = r["N"].Divide(r["m"].Power(2))
 	r["J"] = r["N"].Multiply(r["m"])
+	r["kJ"] = Unit{Dim: r["J"].Dim, Scale: 1000}
+	r["cal"] = Unit{Dim: r["J"].Dim, Scale: 4.184}
+	r["kcal"] = Unit{Dim: r["J"].Dim, Scale: 4184}
 	r["W"] = r["J"].Divide(r["s"])
 
 	r["atm"] = Unit{Dim: r["Pa"].Dim, Scale: 101325}
@@ -675,6 +678,107 @@ func validateModelUnits(modelName string, model *Model, basePath string, result 
 		}
 	}
 	checkConversionFactorConsistency(modelName, model, result)
+	checkPhysicalConstantUnits(modelName, model, result)
+}
+
+// knownPhysicalConstant pairs a canonical unit string with a human description.
+type knownPhysicalConstant struct {
+	canonical   string
+	description string
+}
+
+// knownPhysicalConstants lists well-known physical constants whose declared
+// units can be dimensionally verified. Conservative on purpose — names chosen
+// to minimize collision with common non-constant uses. Mirrors Python's
+// _KNOWN_PHYSICAL_CONSTANTS.
+var knownPhysicalConstants = map[string]knownPhysicalConstant{
+	"R":   {"J/(mol*K)", "ideal gas constant"},
+	"k_B": {"J/K", "Boltzmann constant"},
+	"N_A": {"1/mol", "Avogadro constant"},
+}
+
+// checkPhysicalConstantUnits flags parameters whose name matches a well-known
+// physical constant but whose declared units are dimensionally incompatible
+// with the canonical form (e.g., R declared as 'kcal/mol' — missing temperature
+// — instead of 'J/(mol*K)'). Reports at the first observed-variable usage
+// site in the same model; otherwise at the declaration.
+//
+// Mirrors Python's parse._check_physical_constant_units (gt-3tgv).
+func checkPhysicalConstantUnits(modelName string, model *Model, result *StructuralValidationResult) {
+	for vname, vdef := range model.Variables {
+		if vdef.Type != "parameter" {
+			continue
+		}
+		constant, ok := knownPhysicalConstants[vname]
+		if !ok {
+			continue
+		}
+		if vdef.Units == nil || *vdef.Units == "" {
+			continue
+		}
+		declared := *vdef.Units
+		declaredU, err := ParseUnit(declared)
+		if err != nil {
+			continue
+		}
+		canonicalU, err := ParseUnit(constant.canonical)
+		if err != nil {
+			continue
+		}
+		if declaredU.Dim.Equal(canonicalU.Dim) {
+			continue
+		}
+		usageName := ""
+		for otherName, otherDef := range model.Variables {
+			if otherDef.Type != "observed" || otherDef.Expression == nil {
+				continue
+			}
+			if exprReferencesName(otherDef.Expression, vname) {
+				usageName = otherName
+				break
+			}
+		}
+		target := usageName
+		if target == "" {
+			target = vname
+		}
+		result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+			Path:    fmt.Sprintf("/models/%s/variables/%s", modelName, target),
+			Code:    ErrorUnitInconsistency,
+			Message: "Physical constant used with incorrect dimensional analysis",
+			Details: map[string]interface{}{
+				"constant_name":        vname,
+				"constant_description": constant.description,
+				"declared_units":       declared,
+				"canonical_units":      constant.canonical,
+			},
+		})
+	}
+}
+
+// exprReferencesName reports whether the expression tree references a variable
+// by exact name (string leaf match).
+func exprReferencesName(e Expression, name string) bool {
+	switch v := e.(type) {
+	case string:
+		return v == name
+	case ExprNode:
+		for _, a := range v.Args {
+			if exprReferencesName(a, name) {
+				return true
+			}
+		}
+	case *ExprNode:
+		if v == nil {
+			return false
+		}
+		for _, a := range v.Args {
+			if exprReferencesName(a, name) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkConversionFactorConsistency flags observed variables whose expression

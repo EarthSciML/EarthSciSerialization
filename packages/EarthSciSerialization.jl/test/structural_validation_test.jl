@@ -327,6 +327,34 @@ using EarthSciSerialization
                 @test_broken false
             end
         end
+
+        # units_dimensional_constant_error.esm declares the ideal gas constant 'R'
+        # with units 'kcal/mol' — missing the temperature dimension (canonical is
+        # 'J/(mol*K)'). Must be rejected as a structural unit_inconsistency error
+        # at the usage site `gas_law_calculation` (mirrors Python's
+        # parse._check_physical_constant_units, gt-3tgv).
+        @testset "Invalid fixture units_dimensional_constant_error.esm is rejected" begin
+            fixture_path = joinpath(@__DIR__, "..", "..", "..", "tests", "invalid", "units_dimensional_constant_error.esm")
+            if isfile(fixture_path)
+                esm_data = EarthSciSerialization.load(fixture_path)
+                result = EarthSciSerialization.validate(esm_data)
+                @test !result.is_valid
+                matching = filter(e -> e.error_type == "unit_inconsistency" &&
+                                       occursin("Physical constant used with incorrect dimensional analysis", e.message),
+                                  result.structural_errors)
+                @test length(matching) >= 1
+                if !isempty(matching)
+                    err = matching[1]
+                    @test err.path == "/models/ConstantUnitsModel/variables/gas_law_calculation"
+                    @test occursin("R", err.message)
+                    @test occursin("kcal/mol", err.message)
+                    @test occursin("J/(mol*K)", err.message)
+                end
+            else
+                @warn "Fixture not found: $fixture_path"
+                @test_broken false
+            end
+        end
     end
 
     @testset "Gradient operator spatial units (gt-sosg)" begin

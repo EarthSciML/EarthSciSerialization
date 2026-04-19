@@ -2,7 +2,7 @@
 
 use crate::EsmFile;
 use crate::parse::{load, validate_schema};
-use crate::units::{build_unit_env, validate_equation_dimensions};
+use crate::units::{build_unit_env, parse_unit, validate_equation_dimensions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -507,6 +507,8 @@ fn validate_model(
         }
     }
 
+    check_physical_constant_units(model_name, model, errors);
+
     // Validate continuous events
     // TODO: Implement validate_continuous_event function
     // if let Some(ref continuous_events) = model.continuous_events {
@@ -514,6 +516,98 @@ fn validate_model(
     //         validate_continuous_event(event, event_idx, &model_path, &defined_vars, errors);
     //     }
     // }
+}
+
+/// Well-known physical constants whose declared units can be dimensionally
+/// verified against a canonical form. Conservative on purpose — names chosen
+/// to minimize collision with common non-constant uses (e.g., no `c` for
+/// speed of light, which conflicts with concentration). Mirrors Python's
+/// `_KNOWN_PHYSICAL_CONSTANTS`.
+fn known_physical_constants() -> &'static [(&'static str, &'static str, &'static str)] {
+    &[
+        ("R", "J/(mol*K)", "ideal gas constant"),
+        ("k_B", "J/K", "Boltzmann constant"),
+        ("N_A", "1/mol", "Avogadro constant"),
+    ]
+}
+
+/// Flag parameters whose name matches a well-known physical constant but whose
+/// declared units are dimensionally incompatible with the canonical form
+/// (e.g., `R` declared as `kcal/mol` — missing temperature — instead of
+/// `J/(mol*K)`). Reports at the first observed-variable usage site in the
+/// same model; otherwise at the declaration. Mirrors Python's
+/// `parse._check_physical_constant_units` (gt-j91l / gt-3tgv).
+fn check_physical_constant_units(
+    model_name: &str,
+    model: &crate::Model,
+    errors: &mut Vec<StructuralError>,
+) {
+    for (constant_name, canonical, description) in known_physical_constants() {
+        let Some(var) = model.variables.get(*constant_name) else {
+            continue;
+        };
+        if var.var_type != crate::VariableType::Parameter {
+            continue;
+        }
+        let Some(declared) = var.units.as_deref() else {
+            continue;
+        };
+        if declared.is_empty() {
+            continue;
+        }
+        let Ok(declared_unit) = parse_unit(declared) else {
+            continue;
+        };
+        let Ok(canonical_unit) = parse_unit(canonical) else {
+            continue;
+        };
+        if declared_unit.is_compatible(&canonical_unit) {
+            continue;
+        }
+        let mut usage_site: Option<&str> = None;
+        for (other_name, other_var) in &model.variables {
+            if other_var.var_type != crate::VariableType::Observed {
+                continue;
+            }
+            let Some(expr) = other_var.expression.as_ref() else {
+                continue;
+            };
+            if expr_references_name(expr, constant_name) {
+                usage_site = Some(other_name);
+                break;
+            }
+        }
+        let target = usage_site.unwrap_or(constant_name);
+        errors.push(StructuralError {
+            path: format!("/models/{}/variables/{}", model_name, target),
+            code: StructuralErrorCode::UnitInconsistency,
+            message: "Physical constant used with incorrect dimensional analysis".to_string(),
+            details: serde_json::json!({
+                "constant_name": constant_name,
+                "constant_description": description,
+                "declared_units": declared,
+                "canonical_units": canonical,
+            }),
+        });
+    }
+}
+
+/// Returns true if the expression references a variable by exact name
+/// (string leaf match). Walks operator arg lists recursively.
+fn expr_references_name(expr: &crate::Expr, name: &str) -> bool {
+    match expr {
+        crate::Expr::Variable(v) => v == name,
+        crate::Expr::Operator(node) => {
+            if node.args.iter().any(|a| expr_references_name(a, name)) {
+                return true;
+            }
+            if let Some(inner) = node.expr.as_ref() {
+                return expr_references_name(inner, name);
+            }
+            false
+        }
+        crate::Expr::Number(_) => false,
+    }
 }
 
 fn count_ode_equations(equations: &[crate::Equation]) -> usize {

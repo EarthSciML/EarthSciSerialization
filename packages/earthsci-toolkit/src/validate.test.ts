@@ -3,6 +3,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { validate } from './validate.js';
 
 describe('Structural validation', () => {
@@ -324,5 +326,26 @@ describe('Structural validation', () => {
 
     const result = validate(data);
     expect(result.structural_errors.some(e => e.code === 'unit_inconsistency')).toBe(false);
+  });
+
+  // units_dimensional_constant_error.esm declares the ideal gas constant 'R'
+  // with units 'kcal/mol' — missing the temperature dimension (canonical is
+  // 'J/(mol*K)'). Must be rejected as a structural unit_inconsistency error
+  // at the usage site `gas_law_calculation` (mirrors Python's
+  // parse._check_physical_constant_units, gt-3tgv).
+  it('should reject units_dimensional_constant_error.esm with unit_inconsistency at usage site', () => {
+    const fixturePath = join(__dirname, '..', '..', '..', 'tests', 'invalid', 'units_dimensional_constant_error.esm');
+    const content = readFileSync(fixturePath, 'utf-8');
+    const result = validate(content);
+    expect(result.is_valid).toBe(false);
+    const err = result.structural_errors.find(
+      e => e.code === 'unit_inconsistency' && e.message === 'Physical constant used with incorrect dimensional analysis'
+    );
+    expect(err).toBeDefined();
+    expect(err!.path).toBe('/models/ConstantUnitsModel/variables/gas_law_calculation');
+    expect(err!.details.constant_name).toBe('R');
+    expect(err!.details.constant_description).toBe('ideal gas constant');
+    expect(err!.details.declared_units).toBe('kcal/mol');
+    expect(err!.details.canonical_units).toBe('J/(mol*K)');
   });
 });

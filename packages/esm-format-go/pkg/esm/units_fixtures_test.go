@@ -163,3 +163,56 @@ func TestConversionFactorErrorFixtureRejected(t *testing.T) {
 	expectDetail("declared_factor", 50000.0)
 	expectDetail("expected_factor", 101325.0)
 }
+
+// TestPhysicalConstantDimensionalErrorFixtureRejected verifies that
+// tests/invalid/units_dimensional_constant_error.esm (ideal gas constant 'R'
+// declared with units 'kcal/mol' — missing temperature dimension) is rejected
+// as a structural unit_inconsistency error at the usage site. Mirrors Python's
+// parse._check_physical_constant_units (gt-j91l / gt-3tgv).
+func TestPhysicalConstantDimensionalErrorFixtureRejected(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "tests", "invalid", "units_dimensional_constant_error.esm")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	file, err := LoadString(string(content))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	result := ValidateFile(file, string(content))
+	if result.IsValid {
+		t.Fatalf("expected fixture to fail validation, got is_valid=true")
+	}
+	var found *StructuralError
+	for i, e := range result.StructuralErrors {
+		if e.Code == ErrorUnitInconsistency && e.Message == "Physical constant used with incorrect dimensional analysis" {
+			found = &result.StructuralErrors[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected unit_inconsistency error for physical constant, got: %+v", result.StructuralErrors)
+	}
+	if found.Path != "/models/ConstantUnitsModel/variables/gas_law_calculation" {
+		t.Errorf("unexpected path: %q", found.Path)
+	}
+	expectDetail := func(key string, want interface{}) {
+		t.Helper()
+		got, ok := found.Details[key]
+		if !ok {
+			t.Errorf("details[%q] missing", key)
+			return
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("details[%q] = %v, want %v", key, got, want)
+		}
+	}
+	expectDetail("constant_name", "R")
+	expectDetail("constant_description", "ideal gas constant")
+	expectDetail("declared_units", "kcal/mol")
+	expectDetail("canonical_units", "J/(mol*K)")
+}

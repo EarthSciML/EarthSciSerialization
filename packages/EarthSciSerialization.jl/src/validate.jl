@@ -135,6 +135,7 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
         for (model_name, model) in file.models
             append!(errors, validate_event_consistency(model, "models.$model_name"))
             append!(errors, validate_model_gradient_units(file, model, "/models/$model_name"))
+            append!(errors, validate_physical_constant_units(model, "/models/$model_name"))
         end
     end
 
@@ -1164,6 +1165,89 @@ function validate_coupling_multi_domain(file::EsmFile, coupling_entry::CouplingE
                 "invalid_lifting"
             ))
         end
+    end
+
+    return errors
+end
+
+"""
+Well-known physical constants whose declared units can be dimensionally
+verified against a canonical form. Conservative on purpose — names chosen
+to minimize collision with common non-constant uses (e.g., no `c` for
+speed of light, which conflicts with concentration). Mirrors Python's
+`_KNOWN_PHYSICAL_CONSTANTS` (gt-j91l / gt-3tgv).
+
+Each tuple is (name, canonical_units, description).
+"""
+const _KNOWN_PHYSICAL_CONSTANTS = (
+    ("R", "J/(mol*K)", "ideal gas constant"),
+    ("k_B", "J/K", "Boltzmann constant"),
+    ("N_A", "1/mol", "Avogadro constant"),
+)
+
+# Returns true when the expression tree references a variable by exact name
+# (string leaf match). Walks operator arg lists recursively.
+function _expr_references_name(expr, name::String)::Bool
+    if expr isa VarExpr
+        return expr.name == name
+    elseif expr isa OpExpr
+        for arg in expr.args
+            if _expr_references_name(arg, name)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+"""
+    validate_physical_constant_units(model::Model, path::String) -> Vector{StructuralError}
+
+Flag parameters whose name matches a well-known physical constant but whose
+declared units are dimensionally incompatible with the canonical form (e.g.,
+`R` declared as `kcal/mol` — missing temperature — instead of `J/(mol*K)`).
+Reports at the first observed-variable usage site in the same model;
+otherwise at the declaration. Mirrors Python's
+`parse._check_physical_constant_units` (gt-3tgv). Recurses into subsystems.
+"""
+function validate_physical_constant_units(model::Model, path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    for (constant_name, canonical, description) in _KNOWN_PHYSICAL_CONSTANTS
+        haskey(model.variables, constant_name) || continue
+        var = model.variables[constant_name]
+        var.type == ParameterVariable || continue
+        declared_str = var.units
+        (declared_str === nothing || isempty(declared_str)) && continue
+
+        declared_unit = parse_units(String(declared_str))
+        canonical_unit = parse_units(canonical)
+        (declared_unit === nothing || canonical_unit === nothing) && continue
+        dimension(declared_unit) == dimension(canonical_unit) && continue
+
+        usage_name = nothing
+        for (other_name, other_var) in model.variables
+            other_var.type == ObservedVariable || continue
+            other_var.expression === nothing && continue
+            if _expr_references_name(other_var.expression, constant_name)
+                usage_name = other_name
+                break
+            end
+        end
+        target = usage_name === nothing ? constant_name : usage_name
+
+        push!(errors, StructuralError(
+            "$path/variables/$target",
+            "Physical constant used with incorrect dimensional analysis " *
+            "(constant '$constant_name' ($description) declared with units '$declared_str', " *
+            "expected dimensions compatible with '$canonical')",
+            "unit_inconsistency",
+        ))
+    end
+
+    # Recurse into subsystems
+    for (subsys_name, subsys) in model.subsystems
+        append!(errors, validate_physical_constant_units(subsys, "$path/subsystems/$subsys_name"))
     end
 
     return errors
