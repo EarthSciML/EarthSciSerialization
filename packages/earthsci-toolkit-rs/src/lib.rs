@@ -36,6 +36,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+pub mod canonicalize;
 pub mod display;
 pub mod edit;
 pub mod error;
@@ -64,6 +65,7 @@ pub mod simulate;
 pub mod simulate_array;
 
 // Re-export main types
+pub use canonicalize::{CanonicalizeError, canonical_json, canonicalize, format_canonical_float};
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};
 pub use flatten::{

@@ -606,7 +606,7 @@ fn expr_references_name(expr: &crate::Expr, name: &str) -> bool {
             }
             false
         }
-        crate::Expr::Number(_) => false,
+        crate::Expr::Number(_) | crate::Expr::Integer(_) => false,
     }
 }
 
