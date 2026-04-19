@@ -905,6 +905,24 @@ export function flatten(file: EsmFile): FlattenedSystem {
 
 ---
 
+### formatCanonicalFloat
+
+**Typescript:**
+```typescript
+export function formatCanonicalFloat(f: number): string {
+```
+
+> Format a finite `number` per RFC §5.
+
+**Typescript:**
+```typescript
+export function formatCanonicalFloat(value: number): string {
+```
+
+> Emit a float per RFC §5.
+
+---
+
 ### format_canonical_float
 
 **Julia:**

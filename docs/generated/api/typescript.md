@@ -357,7 +357,7 @@ Compose two systems using a coupling entry
 
 ### contains
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:67`
 
 **Signature:**
 ```typescript
@@ -637,7 +637,7 @@ Estimate the cost savings from factoring out common subexpressions
 
 ### evaluate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:85`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:87`
 
 **Signature:**
 ```typescript
@@ -885,6 +885,17 @@ The algorithm:
 
 ---
 
+### floatLit
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:50`
+
+**Signature:**
+```typescript
+export function floatLit(value: number): NumericLiteral {
+```
+
+---
+
 ### formatCanonicalFloat
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:254`
@@ -901,6 +912,27 @@ Note: the trailing `.0` for integer-valued magnitudes applies because TS
 has no int/float distinction (every numeric literal is a float). Once
 gt-ca2u introduces typed integer nodes, integer values should serialize
 without the suffix.
+/
+
+---
+
+### formatCanonicalFloat
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:409`
+
+**Signature:**
+```typescript
+export function formatCanonicalFloat(value: number): string {
+```
+
+**Description:**
+Emit a float per RFC §5.4.6: ECMAScript `ToString(Number)` with a
+trailing `.0` override when the result is an integer-valued
+plain-decimal token.
+
+Exported for use by canonicalize() and downstream consumers that
+need to emit individual float tokens outside of a full JSON
+document (e.g. debug logs, custom formatters).
 /
 
 ---
@@ -933,7 +965,7 @@ export function formatUserFriendly(error: ESMError): string {
 
 ### freeParameters
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:47`
 
 **Signature:**
 ```typescript
@@ -951,7 +983,7 @@ Extract free parameters from an expression within a model context
 
 ### freeVariables
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:20`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:22`
 
 **Signature:**
 ```typescript
@@ -1079,6 +1111,17 @@ Compute higher-order derivatives
 
 ---
 
+### intLit
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:40`
+
+**Signature:**
+```typescript
+export function intLit(value: number): NumericLiteral {
+```
+
+---
+
 ### isDifferentiable
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/differentiation.ts:527`
@@ -1108,6 +1151,39 @@ export function isDimensionless(unit: ParsedUnit): boolean {
 
 ---
 
+### isFloatLit
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:74`
+
+**Signature:**
+```typescript
+export function isFloatLit(x: unknown): x is NumericLiteral & { kind: 'float' } {
+```
+
+---
+
+### isIntLit
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:70`
+
+**Signature:**
+```typescript
+export function isIntLit(x: unknown): x is NumericLiteral & { kind: 'int' } {
+```
+
+---
+
+### isNumericLiteral
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:62`
+
+**Signature:**
+```typescript
+export function isNumericLiteral(x: unknown): x is NumericLiteral {
+```
+
+---
+
 ### load
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1845`
@@ -1130,6 +1206,59 @@ Load an ESM file from a JSON string or pre-parsed object
 - [Julia](julia.md#load)
 - [Julia](julia.md#load)
 - [Julia](julia.md#load)
+
+---
+
+### losslessJsonParse
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:111`
+
+**Signature:**
+```typescript
+export function losslessJsonParse(text: string): unknown {
+```
+
+**Description:**
+Parse a JSON document, preserving the integer-vs-float distinction
+of every numeric token per RFC §5.4.6: a token containing `.`, `e`,
+or `E` becomes `NumericLiteral{kind:'float'}`; otherwise it becomes
+`NumericLiteral{kind:'int'}`. All other JSON values (strings, bools,
+null, arrays, objects) decode to their native JS equivalents.
+
+Integer-grammar tokens outside the safe-integer range fall back to
+`float` kind to avoid silent precision loss, matching the Go
+binding's `normalizeJSONNumber` behavior.
+/
+
+---
+
+### losslessJsonStringify
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:345`
+
+**Signature:**
+```typescript
+export function losslessJsonStringify(value: unknown): string {
+```
+
+**Description:**
+Stringify a value to JSON, emitting `NumericLiteral` leaves per RFC
+§5.4.6:
+
+- `kind: 'int'`  → JSON-integer token (no `.`, no `e`).
+- `kind: 'float'` with integer-valued magnitude in
+`[−(1e21 − 1), 1e21 − 1]` → `ToString(Number)` with trailing
+`.0` appended so the token cannot be confused with an integer
+on parse-back (e.g. `1.0`, `-3.0`, `0.0`).
+- `kind: 'float'` otherwise → native `ToString(Number)` (which is
+already distinguishable via `.` or `e`).
+- `-0.0` float → `-0.0`.
+- NaN or ±Infinity → throws `CanonicalNonfiniteError`.
+
+Plain JS `number` values are serialized with `JSON.stringify`'s
+default rules (no trailing `.0` override); callers that want
+canonical emission must tag literals via `intLit` / `floatLit`.
+/
 
 ---
 
@@ -1190,6 +1319,23 @@ Migrate an ESM file from its current schema version to the target version.
 
 **Available in other languages:**
 - [Python](python.md#migrate)
+
+---
+
+### numericValue
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:83`
+
+**Signature:**
+```typescript
+export function numericValue(x: unknown): number | undefined {
+```
+
+**Description:**
+Return the underlying numeric value of a plain `number` or a
+`NumericLiteral`. Returns `undefined` for anything else. Use this
+at the boundary between kind-aware and kind-agnostic code.
+/
 
 ---
 
@@ -1489,7 +1635,7 @@ export function setupErrorLogging(config: ErrorLoggerConfig = { logLevel: 'info'
 
 ### simplify
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:210`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/expression.ts:215`
 
 **Signature:**
 ```typescript
@@ -2994,6 +3140,17 @@ An ODE system — a fully specified set of time-dependent equations.
 **Available in other languages:**
 - [Julia](julia.md#model)
 - [Python](python.md#model)
+
+---
+
+### NumericLiteral
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/numeric-literal.ts:29`
+
+**Definition:**
+```typescript
+export interface NumericLiteral {
+```
 
 ---
 
