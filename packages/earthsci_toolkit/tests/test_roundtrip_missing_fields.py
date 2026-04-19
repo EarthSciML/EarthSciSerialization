@@ -285,3 +285,34 @@ def test_roundtrip_preserves_all_missing_fields():
     assert "operator" in data["operators"]
     assert len(data["coupling"]) == 1
     assert len(data["continuous_events"]) == 1
+
+
+def test_parse_domain_with_empty_temporal_block():
+    """An empty 'temporal': {} block must parse to a TemporalDomain with start/end None
+    (schema permits it; several simulation fixtures use this). Regression for gt-qgui."""
+    from earthsci_toolkit.parse import _parse_domain
+
+    domain = _parse_domain({"temporal": {}})
+    assert domain.temporal is not None
+    assert domain.temporal.start is None
+    assert domain.temporal.end is None
+    assert domain.temporal.reference_time is None
+
+
+def test_roundtrip_preserves_empty_temporal_block():
+    """Serializing a domain with an empty TemporalDomain must emit 'temporal': {}
+    rather than injecting nulls for start/end. Regression for gt-qgui."""
+    from earthsci_toolkit.esm_types import Domain, TemporalDomain
+    from earthsci_toolkit.parse import _parse_domain
+    from earthsci_toolkit.serialize import _serialize_domain
+
+    domain = Domain()
+    domain.temporal = TemporalDomain()
+
+    serialized = _serialize_domain(domain)
+    assert serialized["temporal"] == {}
+
+    reparsed = _parse_domain(serialized)
+    assert reparsed.temporal is not None
+    assert reparsed.temporal.start is None
+    assert reparsed.temporal.end is None

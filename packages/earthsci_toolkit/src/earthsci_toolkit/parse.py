@@ -785,8 +785,8 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
     if "temporal" in domain_data:
         temporal_data = domain_data["temporal"]
         domain.temporal = TemporalDomain(
-            start=temporal_data["start"],
-            end=temporal_data["end"],
+            start=temporal_data.get("start"),
+            end=temporal_data.get("end"),
             reference_time=temporal_data.get("reference_time")
         )
 
@@ -867,7 +867,7 @@ def _validate_domain(domain: Domain) -> None:
     errors = []
 
     # Validate temporal domain
-    if domain.temporal:
+    if domain.temporal and domain.temporal.start is not None and domain.temporal.end is not None:
         try:
             from datetime import datetime
             start_dt = datetime.fromisoformat(domain.temporal.start.replace('Z', '+00:00'))

@@ -328,10 +328,11 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
 
     # Serialize temporal domain
     if domain.temporal:
-        temporal_data = {
-            "start": domain.temporal.start,
-            "end": domain.temporal.end
-        }
+        temporal_data: Dict[str, Any] = {}
+        if domain.temporal.start is not None:
+            temporal_data["start"] = domain.temporal.start
+        if domain.temporal.end is not None:
+            temporal_data["end"] = domain.temporal.end
         if domain.temporal.reference_time:
             temporal_data["reference_time"] = domain.temporal.reference_time
         result["temporal"] = temporal_data

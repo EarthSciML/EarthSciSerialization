@@ -400,8 +400,8 @@ CouplingEntry = Union[
 @dataclass
 class TemporalDomain:
     """Temporal domain specification."""
-    start: str  # ISO datetime string
-    end: str    # ISO datetime string
+    start: Optional[str] = None  # ISO datetime string
+    end: Optional[str] = None    # ISO datetime string
     reference_time: Optional[str] = None  # ISO datetime string
 
 
