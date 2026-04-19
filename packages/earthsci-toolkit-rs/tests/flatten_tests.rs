@@ -64,6 +64,7 @@ fn collect_vars(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Variable(n) => out.push(n.clone()),
         Expr::Number(_) => {}
+        Expr::Integer(_) => {}
         Expr::Operator(node) => {
             for a in &node.args {
                 collect_vars(a, out);
