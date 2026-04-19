@@ -6,11 +6,13 @@
  */
 
 import type { Expression, ExpressionNode, Model } from './types.js'
+import { isNumericLiteral, type NumericLiteral } from './numeric-literal.js'
 
 /**
- * Type alias for better readability
+ * Type alias for better readability. Widened to accept `NumericLiteral`
+ * leaves (per discretization RFC §5.4.1) alongside plain JS numbers.
  */
-export type Expr = Expression
+export type Expr = Expression | NumericLiteral
 
 /**
  * Extract all variable references from an expression
@@ -22,13 +24,13 @@ export function freeVariables(expr: Expr): Set<string> {
 
   if (typeof expr === 'string') {
     variables.add(expr)
-  } else if (typeof expr === 'number') {
-    // Numbers contain no variables
+  } else if (typeof expr === 'number' || isNumericLiteral(expr)) {
+    // Numeric literals contain no variables
     return variables
-  } else if (typeof expr === 'object' && expr.op) {
+  } else if (typeof expr === 'object' && (expr as ExpressionNode).op) {
     // ExpressionNode - recursively analyze arguments
-    for (const arg of expr.args) {
-      const childVars = freeVariables(arg)
+    for (const arg of (expr as ExpressionNode).args) {
+      const childVars = freeVariables(arg as Expr)
       childVars.forEach(v => variables.add(v))
     }
   }
@@ -65,11 +67,11 @@ export function freeParameters(expr: Expr, model: Model): Set<string> {
 export function contains(expr: Expr, varName: string): boolean {
   if (typeof expr === 'string') {
     return expr === varName
-  } else if (typeof expr === 'number') {
+  } else if (typeof expr === 'number' || isNumericLiteral(expr)) {
     return false
-  } else if (typeof expr === 'object' && expr.op) {
+  } else if (typeof expr === 'object' && (expr as ExpressionNode).op) {
     // ExpressionNode - recursively check arguments
-    return expr.args.some(arg => contains(arg, varName))
+    return (expr as ExpressionNode).args.some(arg => contains(arg as Expr, varName))
   }
 
   return false
@@ -85,17 +87,20 @@ export function contains(expr: Expr, varName: string): boolean {
 export function evaluate(expr: Expr, bindings: Map<string, number>): number {
   if (typeof expr === 'number') {
     return expr
+  } else if (isNumericLiteral(expr)) {
+    return expr.value
   } else if (typeof expr === 'string') {
     if (bindings.has(expr)) {
       return bindings.get(expr)!
     } else {
       throw new Error(`Unbound variable: ${expr}`)
     }
-  } else if (typeof expr === 'object' && expr.op) {
+  } else if (typeof expr === 'object' && (expr as ExpressionNode).op) {
     // ExpressionNode - evaluate based on operator
-    const args = expr.args.map(arg => evaluate(arg, bindings))
+    const node = expr as any
+    const args: any = node.args.map((arg: any) => evaluate(arg, bindings))
 
-    switch (expr.op) {
+    switch (node.op) {
       case '+':
         return args.reduce((sum, val) => sum + val, 0)
       case '-':
@@ -195,7 +200,7 @@ export function evaluate(expr: Expr, bindings: Map<string, number>): number {
         if (args.length !== 3) throw new Error('ifelse requires exactly 3 arguments')
         return args[0] !== 0 ? args[1] : args[2]
       default:
-        throw new Error(`Unsupported operator: ${expr.op}`)
+        throw new Error(`Unsupported operator: ${node.op}`)
     }
   }
 
@@ -212,7 +217,14 @@ export function simplify(expr: Expr): Expr {
     return expr
   }
 
-  if (typeof expr === 'object' && expr.op) {
+  if (isNumericLiteral(expr)) {
+    // NumericLiteral leaves carry a kind tag that simplify is not
+    // responsible for folding. Canonical int/float folding lives in
+    // canonicalize() per RFC §5.4. Return unchanged.
+    return expr
+  }
+
+  if (typeof expr === 'object' && (expr as ExpressionNode).op) {
     // First simplify all arguments recursively
     const simplifiedArgs = expr.args.map(arg => simplify(arg))
 
