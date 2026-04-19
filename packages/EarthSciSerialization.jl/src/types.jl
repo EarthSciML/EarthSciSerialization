@@ -362,14 +362,15 @@ struct Model
     domain::Union{String,Nothing}
     tolerance::Union{Tolerance,Nothing}
     tests::Vector{Test}
+    version::Union{String,Nothing}
 
     # Primary constructor with separate event arrays
     Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
           subsystems::Dict{String,Model};
-          domain=nothing, tolerance=nothing, tests=Test[]) =
+          domain=nothing, tolerance=nothing, tests=Test[], version=nothing) =
         new(variables, equations, discrete_events, continuous_events, subsystems,
-            domain, tolerance, tests)
+            domain, tolerance, tests, version)
 
     # Convenience constructor with optional events and subsystems.
     # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
@@ -382,7 +383,8 @@ struct Model
                    subsystems=Dict{String,Model}(),
                    domain=nothing,
                    tolerance=nothing,
-                   tests=Test[])
+                   tests=Test[],
+                   version=nothing)
         if events !== nothing
             discrete_events = DiscreteEvent[]
             continuous_events = ContinuousEvent[]
@@ -397,7 +399,7 @@ struct Model
             end
         end
         return new(variables, equations, discrete_events, continuous_events, subsystems,
-                   domain, tolerance, tests)
+                   domain, tolerance, tests, version)
     end
 end
 
@@ -702,6 +704,7 @@ struct DataLoader
     regridding::Union{DataLoaderRegridding,Nothing}
     reference::Union{Reference,Nothing}
     metadata::Union{Dict{String,Any},Nothing}
+    version::Union{String,Nothing}
 
     DataLoader(kind::String, source::DataLoaderSource,
                variables::Dict{String,DataLoaderVariable};
@@ -709,8 +712,9 @@ struct DataLoader
                spatial=nothing,
                regridding=nothing,
                reference=nothing,
-               metadata=nothing) =
-        new(kind, source, temporal, spatial, variables, regridding, reference, metadata)
+               metadata=nothing,
+               version=nothing) =
+        new(kind, source, temporal, spatial, variables, regridding, reference, metadata, version)
 end
 
 """
@@ -726,14 +730,16 @@ struct Operator
     needed_vars::Vector{String}
     modifies::Union{Vector{String},Nothing}
     description::Union{String,Nothing}
+    version::Union{String,Nothing}
 
     # Constructor with optional parameters
     Operator(operator_id::String, needed_vars::Vector{String};
              reference=nothing,
              config=nothing,
              modifies=nothing,
-             description=nothing) =
-        new(operator_id, reference, config, needed_vars, modifies, description)
+             description=nothing,
+             version=nothing) =
+        new(operator_id, reference, config, needed_vars, modifies, description, version)
 end
 
 # ========================================
@@ -748,9 +754,10 @@ Spatial and temporal domain specification.
 struct Domain
     spatial::Union{Dict{String,Any},Nothing}
     temporal::Union{Dict{String,Any},Nothing}
+    version::Union{String,Nothing}
 
     # Constructor with optional parameters
-    Domain(; spatial=nothing, temporal=nothing) = new(spatial, temporal)
+    Domain(; spatial=nothing, temporal=nothing, version=nothing) = new(spatial, temporal, version)
 end
 
 """
@@ -765,11 +772,12 @@ struct Interface
     domains::Vector{String}
     dimension_mapping::Dict{String,Any}
     regridding::Union{Dict{String,Any},Nothing}
+    version::Union{String,Nothing}
 
     # Constructor with optional parameters
     Interface(domains::Vector{String}, dimension_mapping::Dict{String,Any};
-              description=nothing, regridding=nothing) =
-        new(description, domains, dimension_mapping, regridding)
+              description=nothing, regridding=nothing, version=nothing) =
+        new(description, domains, dimension_mapping, regridding, version)
 end
 
 """
@@ -818,12 +826,13 @@ struct ReactionSystem
     domain::Union{String,Nothing}
     tolerance::Union{Tolerance,Nothing}
     tests::Vector{Test}
+    version::Union{String,Nothing}
 
     # Constructor with optional parameters and subsystems
     ReactionSystem(species::Vector{Species}, reactions::Vector{Reaction};
                    parameters=Parameter[], subsystems=Dict{String,ReactionSystem}(),
-                   domain=nothing, tolerance=nothing, tests=Test[]) =
-        new(species, reactions, parameters, subsystems, domain, tolerance, tests)
+                   domain=nothing, tolerance=nothing, tests=Test[], version=nothing) =
+        new(species, reactions, parameters, subsystems, domain, tolerance, tests, version)
 end
 
 """

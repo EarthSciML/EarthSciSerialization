@@ -2222,6 +2222,7 @@ mod tests {
         );
 
         let reaction_system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,

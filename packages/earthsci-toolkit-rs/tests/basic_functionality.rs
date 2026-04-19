@@ -80,6 +80,7 @@ fn test_structural_validation() {
     // Create a model with equations but no variables (should fail structural validation)
     let variables = HashMap::new();
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -200,6 +201,7 @@ fn test_stoichiometric_matrix() {
     }];
 
     let rs = ReactionSystem {
+        version: None,
         subsystems: None,
         domain: None,
         coupletype: None,
@@ -234,6 +236,7 @@ fn test_component_graph() {
     };
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -298,6 +301,7 @@ fn test_pretty_printing() {
 #[test]
 fn test_editing() {
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,

@@ -26,6 +26,7 @@ fn test_undefined_variable_in_model() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -114,6 +115,7 @@ fn test_equation_count_mismatch() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -210,6 +212,7 @@ fn test_undefined_species_in_reaction() {
     }];
 
     let rs = ReactionSystem {
+        version: None,
         subsystems: None,
         domain: None,
         coupletype: None,
@@ -313,6 +316,7 @@ fn test_valid_file_passes() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,

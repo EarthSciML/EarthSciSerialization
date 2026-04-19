@@ -58,6 +58,10 @@ type ModelVariable struct {
 
 // Model represents an ODE system
 type Model struct {
+	// Optional per-component semver identifying this component's content
+	// revision. Distinct from the top-level "esm" field, which versions the
+	// spec/format.
+	Version           *string                   `json:"version,omitempty"`
 	CoupleType        *string                   `json:"coupletype,omitempty"`
 	Reference         *Reference                `json:"reference,omitempty"`
 	Variables         map[string]ModelVariable  `json:"variables"`
@@ -103,6 +107,7 @@ type Reaction struct {
 
 // ReactionSystem represents a chemical reaction network
 type ReactionSystem struct {
+	Version             *string                   `json:"version,omitempty"`
 	CoupleType          *string                   `json:"coupletype,omitempty"`
 	Reference           *Reference                `json:"reference,omitempty"`
 	Species             map[string]Species        `json:"species"`
@@ -168,6 +173,7 @@ type ContinuousEvent struct {
 // to files, describe spatial and variable semantics, and regrid — rather
 // than pointing at a runtime handler. Shape matches the schema under gt-q4k.
 type DataLoader struct {
+	Version    *string                       `json:"version,omitempty"`
 	Kind       string                        `json:"kind"` // "grid", "points", or "static"
 	Source     DataLoaderSource              `json:"source"`
 	Temporal   *DataLoaderTemporal           `json:"temporal,omitempty"`
@@ -223,6 +229,7 @@ type DataLoaderRegridding struct {
 
 // Operator represents a runtime-specific operator
 type Operator struct {
+	Version     *string                `json:"version,omitempty"`
 	OperatorID  string                 `json:"operator_id"`
 	Reference   *Reference             `json:"reference,omitempty"`
 	Config      map[string]interface{} `json:"config,omitempty"`
@@ -335,6 +342,7 @@ type ConnectorEquation struct {
 
 // Domain represents the spatiotemporal domain
 type Domain struct {
+	Version               *string                      `json:"version,omitempty"`
 	IndependentVariable   *string                      `json:"independent_variable,omitempty"`
 	Temporal              *TemporalDomain              `json:"temporal,omitempty"`
 	Spatial               map[string]SpatialDimension  `json:"spatial,omitempty"`
@@ -390,6 +398,7 @@ type BoundaryCondition struct {
 
 // Interface represents a geometric connection between two domains
 type Interface struct {
+	Version          *string          `json:"version,omitempty"`
 	Description      *string          `json:"description,omitempty"`
 	Domains          [2]string        `json:"domains"`
 	DimensionMapping DimensionMapping `json:"dimension_mapping"`

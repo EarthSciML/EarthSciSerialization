@@ -168,7 +168,10 @@ def _serialize_discrete_event(event: DiscreteEvent) -> Dict[str, Any]:
 
 def _serialize_model(model: Model) -> Dict[str, Any]:
     """Serialize a model to JSON-compatible format."""
-    result = {}
+    result: Dict[str, Any] = {}
+
+    if getattr(model, "version", None) is not None:
+        result["version"] = model.version
 
     # Serialize variables (required by schema)
     result["variables"] = {}
@@ -250,7 +253,10 @@ def _serialize_reaction(reaction: Reaction) -> Dict[str, Any]:
 
 def _serialize_reaction_system(rs: ReactionSystem) -> Dict[str, Any]:
     """Serialize a reaction system to JSON-compatible format."""
-    result = {}
+    result: Dict[str, Any] = {}
+
+    if getattr(rs, "version", None) is not None:
+        result["version"] = rs.version
 
     # Serialize species
     if rs.species:
@@ -315,7 +321,10 @@ def _serialize_metadata(metadata: Metadata) -> Dict[str, Any]:
 
 def _serialize_domain(domain: Domain) -> Dict[str, Any]:
     """Serialize a domain to JSON-compatible format."""
-    result = {}
+    result: Dict[str, Any] = {}
+
+    if getattr(domain, "version", None) is not None:
+        result["version"] = domain.version
 
     if domain.independent_variable:
         result["independent_variable"] = domain.independent_variable
@@ -464,6 +473,8 @@ def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
             for vname, vdef in loader.variables.items()
         },
     }
+    if getattr(loader, "version", None) is not None:
+        result["version"] = loader.version
     if loader.temporal is not None:
         temporal_dict = _serialize_data_loader_temporal(loader.temporal)
         if temporal_dict:
@@ -484,7 +495,10 @@ def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
 
 def _serialize_operator(operator: Operator) -> Dict[str, Any]:
     """Serialize an operator to JSON-compatible format."""
-    result = {}
+    result: Dict[str, Any] = {}
+
+    if getattr(operator, "version", None) is not None:
+        result["version"] = operator.version
 
     # Schema requires operator_id
     result["operator_id"] = operator.operator_id

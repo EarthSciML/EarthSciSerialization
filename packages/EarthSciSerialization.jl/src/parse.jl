@@ -370,12 +370,15 @@ function coerce_model(data::Any)::Model
         EarthSciSerialization.Test[coerce_test(t) for t in data.tests] :
         EarthSciSerialization.Test[]
 
+    version = haskey(data, :version) && data.version !== nothing ? string(data.version) : nothing
+
     return Model(variables, equations;
                  discrete_events=discrete_events,
                  continuous_events=continuous_events,
                  domain=domain,
                  tolerance=tolerance,
-                 tests=tests)
+                 tests=tests,
+                 version=version)
 end
 
 """
@@ -631,8 +634,10 @@ function coerce_reaction_system(data::Any)::ReactionSystem
         EarthSciSerialization.Test[coerce_test(t) for t in data.tests] :
         EarthSciSerialization.Test[]
 
+    version = haskey(data, :version) && data.version !== nothing ? string(data.version) : nothing
+
     return ReactionSystem(species, reactions; parameters=parameters, domain=domain,
-                          tolerance=tolerance, tests=tests)
+                          tolerance=tolerance, tests=tests, version=version)
 end
 
 """
@@ -801,12 +806,15 @@ function coerce_data_loader(data::Any)::DataLoader
     metadata = haskey(data, :metadata) && data.metadata !== nothing ?
                _to_native_json(data.metadata) : nothing
 
+    version = haskey(data, :version) && data.version !== nothing ? string(data.version) : nothing
+
     return DataLoader(kind, source, variables;
                       temporal=temporal,
                       spatial=spatial,
                       regridding=regridding,
                       reference=reference,
-                      metadata=metadata)
+                      metadata=metadata,
+                      version=version)
 end
 
 """
@@ -823,11 +831,14 @@ function coerce_operator(data::Any)::Operator
     modifies = haskey(data, :modifies) && data.modifies !== nothing ? [string(v) for v in data.modifies] : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
 
+    version = haskey(data, :version) && data.version !== nothing ? string(data.version) : nothing
+
     return Operator(operator_id, needed_vars,
                    reference=reference,
                    config=config,
                    modifies=modifies,
-                   description=description)
+                   description=description,
+                   version=version)
 end
 
 """
@@ -1054,8 +1065,9 @@ Coerce JSON data into Domain type.
 function coerce_domain(data::Any)::Domain
     spatial = haskey(data, :spatial) && data.spatial !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.spatial)) : nothing
     temporal = haskey(data, :temporal) && data.temporal !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.temporal)) : nothing
+    version = haskey(data, :version) && data.version !== nothing ? string(data.version) : nothing
 
-    return Domain(spatial=spatial, temporal=temporal)
+    return Domain(spatial=spatial, temporal=temporal, version=version)
 end
 
 """
@@ -1068,8 +1080,9 @@ function coerce_interface(data::Any)::Interface
     dimension_mapping = Dict{String,Any}(string(k) => v for (k, v) in pairs(data.dimension_mapping))
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
     regridding = haskey(data, :regridding) && data.regridding !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.regridding)) : nothing
+    version = haskey(data, :version) && data.version !== nothing ? string(data.version) : nothing
 
-    return Interface(domains, dimension_mapping; description=description, regridding=regridding)
+    return Interface(domains, dimension_mapping; description=description, regridding=regridding, version=version)
 end
 
 """

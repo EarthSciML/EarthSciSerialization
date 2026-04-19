@@ -199,6 +199,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     let equations = lower_reactions_to_equations(&system.reactions, &system.species)?;
 
     Ok(Model {
+        version: None,
         name: None,
         domain: system.domain.clone(),
         coupletype: system.coupletype.clone(),
@@ -456,6 +457,7 @@ pub struct LinearInvariant {
 ///
 /// // Create an empty reaction system
 /// let system = ReactionSystem {
+///     version: None,
 ///     domain: None,
 ///     coupletype: None,
 ///     reference: None,
@@ -967,6 +969,7 @@ mod tests {
     #[test]
     fn test_derive_odes_simple() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1025,6 +1028,7 @@ mod tests {
     #[test]
     fn test_stoichiometric_matrix() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1084,6 +1088,7 @@ mod tests {
     #[test]
     fn test_stoichiometric_matrix_empty() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1103,6 +1108,7 @@ mod tests {
     #[test]
     fn test_derive_odes_empty_system() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1123,6 +1129,7 @@ mod tests {
     #[test]
     fn test_derive_odes_unknown_species_error() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1154,6 +1161,7 @@ mod tests {
     #[test]
     fn test_derive_odes_mass_action_kinetics() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1210,6 +1218,7 @@ mod tests {
     #[test]
     fn test_derive_odes_source_reaction() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1242,6 +1251,7 @@ mod tests {
     #[test]
     fn test_derive_odes_sink_reaction() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1285,6 +1295,7 @@ mod tests {
     #[test]
     fn test_derive_odes_higher_order_reaction() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1336,6 +1347,7 @@ mod tests {
     #[test]
     fn test_derive_odes_reactions_with_no_substrates_and_products() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1367,6 +1379,7 @@ mod tests {
     #[test]
     fn test_derive_odes_complex_reaction_network() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1453,6 +1466,7 @@ mod tests {
         use std::collections::HashMap;
 
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1515,6 +1529,7 @@ mod tests {
     #[test]
     fn test_conservation_detection_balanced_system() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1569,6 +1584,7 @@ mod tests {
     #[test]
     fn test_conservation_detection_unbalanced_reaction() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1614,6 +1630,7 @@ mod tests {
     #[test]
     fn test_conservation_detection_complex_network() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1669,6 +1686,7 @@ mod tests {
     #[test]
     fn test_conservation_detection_empty_system() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1706,6 +1724,7 @@ mod tests {
     #[test]
     fn test_conservation_detection_source_sink() {
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,
@@ -1749,6 +1768,7 @@ mod tests {
     fn test_linear_invariant_calculation() {
         // Test system where A + B = constant
         let system = ReactionSystem {
+            version: None,
             domain: None,
             coupletype: None,
             reference: None,

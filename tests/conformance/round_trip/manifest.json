@@ -42,6 +42,8 @@
     { "id": "valid/wildfire_atmosphere_ocean",      "path": "valid/wildfire_atmosphere_ocean.esm",      "tags": ["coupling", "end_to_end"] },
     { "id": "valid/structural_issues",              "path": "valid/structural_issues.esm",              "tags": ["core"] },
 
+    { "id": "valid/versioned_components",           "path": "valid/versioned_components.esm",           "tags": ["core", "versioning"] },
+
     { "id": "fixtures/arrayop/01_pure_ode_analytical",      "path": "fixtures/arrayop/01_pure_ode_analytical.esm",      "tags": ["arrayop"] },
     { "id": "fixtures/arrayop/02_mixed_ode_algebraic",      "path": "fixtures/arrayop/02_mixed_ode_algebraic.esm",      "tags": ["arrayop"] },
     { "id": "fixtures/arrayop/03_1d_stencil_mass_conservation", "path": "fixtures/arrayop/03_1d_stencil_mass_conservation.esm", "tags": ["arrayop"] },

@@ -192,6 +192,7 @@ fn test_model_substitution() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -290,6 +291,7 @@ fn test_reaction_system_substitution() {
     }];
 
     let rs = ReactionSystem {
+        version: None,
         subsystems: None,
         domain: None,
         coupletype: None,

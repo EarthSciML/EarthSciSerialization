@@ -35,6 +35,7 @@ fn test_component_graph_generation() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -66,6 +67,7 @@ fn test_component_graph_generation() {
     };
 
     let rs = ReactionSystem {
+        version: None,
         subsystems: None,
         domain: None,
         coupletype: None,
@@ -134,6 +136,7 @@ fn test_component_graph_exports() {
     };
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -224,6 +227,7 @@ fn test_model_expression_graph() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -332,6 +336,7 @@ fn test_reaction_system_expression_graph() {
     }];
 
     let rs = ReactionSystem {
+        version: None,
         subsystems: None,
         domain: None,
         coupletype: None,
@@ -377,6 +382,7 @@ fn test_component_existence() {
     };
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -499,6 +505,7 @@ fn test_expected_graph_outputs() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,

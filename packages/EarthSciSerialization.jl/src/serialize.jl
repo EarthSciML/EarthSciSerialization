@@ -256,6 +256,10 @@ function serialize_model(model::Model)::Dict{String,Any}
         "equations" => [serialize_equation(eq) for eq in model.equations]
     )
 
+    if model.version !== nothing
+        result["version"] = model.version
+    end
+
     # Serialize discrete events if present
     if !isempty(model.discrete_events)
         result["discrete_events"] = [serialize_discrete_event(ev) for ev in model.discrete_events]
@@ -452,6 +456,10 @@ function serialize_reaction_system(rs::ReactionSystem)::Dict{String,Any}
         "reactions" => [serialize_reaction(r) for r in rs.reactions]
     )
 
+    if rs.version !== nothing
+        result["version"] = rs.version
+    end
+
     if rs.domain !== nothing
         result["domain"] = rs.domain
     end
@@ -546,6 +554,9 @@ function serialize_data_loader(loader::DataLoader)::Dict{String,Any}
             k => serialize_data_loader_variable(v) for (k, v) in loader.variables
         ),
     )
+    if loader.version !== nothing
+        result["version"] = loader.version
+    end
     if loader.temporal !== nothing
         result["temporal"] = serialize_data_loader_temporal(loader.temporal)
     end
@@ -574,6 +585,9 @@ function serialize_operator(op::Operator)::Dict{String,Any}
         "operator_id" => op.operator_id,
         "needed_vars" => op.needed_vars
     )
+    if op.version !== nothing
+        result["version"] = op.version
+    end
     if op.reference !== nothing
         result["reference"] = serialize_reference(op.reference)
     end
@@ -822,6 +836,9 @@ Serialize Domain to JSON-compatible format.
 """
 function serialize_domain(domain::Domain)::Dict{String,Any}
     result = Dict{String,Any}()
+    if domain.version !== nothing
+        result["version"] = domain.version
+    end
     if domain.spatial !== nothing
         result["spatial"] = domain.spatial
     end
@@ -841,6 +858,9 @@ function serialize_interface(iface::Interface)::Dict{String,Any}
         "domains" => iface.domains,
         "dimension_mapping" => iface.dimension_mapping
     )
+    if iface.version !== nothing
+        result["version"] = iface.version
+    end
     if iface.description !== nothing
         result["description"] = iface.description
     end

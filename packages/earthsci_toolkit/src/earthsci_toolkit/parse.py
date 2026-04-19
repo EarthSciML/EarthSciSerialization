@@ -357,7 +357,8 @@ def _parse_model(model_data: Dict[str, Any]) -> Model:
                 subsystems[sub_name] = sub_model
 
     model = Model(name="", variables=variables, equations=equations,
-                  subsystems=subsystems)
+                  subsystems=subsystems,
+                  version=model_data.get("version"))
     return model
 
 
@@ -467,6 +468,7 @@ def _parse_reaction_system(rs_data: Dict[str, Any]) -> ReactionSystem:
         reactions=reactions,
         constraint_equations=constraint_equations,
         subsystems=subsystems,
+        version=rs_data.get("version"),
     )
 
 
@@ -590,6 +592,7 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
         regridding=regridding,
         reference=reference,
         metadata=metadata,
+        version=loader_data.get("version"),
     )
 
 
@@ -611,7 +614,8 @@ def _parse_operator(operator_data: Dict[str, Any]) -> Operator:
         modifies=modifies,
         reference=reference,
         config=config,
-        description=description
+        description=description,
+        version=operator_data.get("version"),
     )
 
 
@@ -739,6 +743,9 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
 def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
     """Parse domain configuration from JSON data."""
     domain = Domain()
+
+    if "version" in domain_data:
+        domain.version = domain_data["version"]
 
     if "independent_variable" in domain_data:
         domain.independent_variable = domain_data["independent_variable"]

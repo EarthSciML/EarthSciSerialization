@@ -265,6 +265,12 @@ pub struct Model {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
+    /// Optional per-component semver identifying this component's content
+    /// revision. Distinct from the top-level `esm` field, which versions the
+    /// spec/format.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+
     /// Name of a domain from the `domains` section (or null for 0D models)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
@@ -503,6 +509,10 @@ pub enum RootFindDirection {
 /// Reaction network component
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReactionSystem {
+    /// Optional per-component semver identifying this system's content revision.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+
     /// Domain name (key in EsmFile.domains)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
@@ -625,6 +635,11 @@ fn default_stoichiometry() -> u32 {
 /// tuning are runtime-only and not part of the schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataLoader {
+    /// Optional per-component semver identifying this data loader's content
+    /// revision.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+
     /// Structural kind of the dataset. Scientific role (emissions,
     /// meteorology, elevation, ...) is not schema-validated and belongs in
     /// `metadata.tags`.
@@ -863,6 +878,10 @@ pub struct DataLoaderMetadata {
 /// Runtime operator reference
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Operator {
+    /// Optional per-component semver identifying this operator's content revision.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+
     /// Registered identifier the runtime uses to find the implementation
     pub operator_id: String,
 
@@ -998,6 +1017,10 @@ pub struct VariableMapping {
 /// Spatial/temporal domain specification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Domain {
+    /// Optional per-component semver identifying this domain's content revision.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+
     /// Name of the independent (time) variable
     #[serde(skip_serializing_if = "Option::is_none")]
     pub independent_variable: Option<String>,

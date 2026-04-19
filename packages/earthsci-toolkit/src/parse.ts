@@ -444,6 +444,11 @@ const schema = {
       "required": ["variables", "equations"],
       "additionalProperties": false,
       "properties": {
+        "version": {
+          "type": "string",
+          "description": "Optional per-component semver string identifying this component's content revision. Distinct from the top-level 'esm' field, which versions the spec/format. Authors set this when shipping a component intended for reuse so other files can pin to a specific revision.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
         "domain": {
           "description": "Domain this model belongs to.",
           "oneOf": [
@@ -577,6 +582,11 @@ const schema = {
       "required": ["species", "parameters", "reactions"],
       "additionalProperties": false,
       "properties": {
+        "version": {
+          "type": "string",
+          "description": "Optional per-component semver string identifying this component's content revision. Distinct from the top-level 'esm' field, which versions the spec/format.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
         "coupletype": {
           "description": "Coupling type name for couple dispatch.",
           "oneOf": [
@@ -785,6 +795,11 @@ const schema = {
       "required": ["kind", "source", "variables"],
       "additionalProperties": false,
       "properties": {
+        "version": {
+          "type": "string",
+          "description": "Optional per-component semver string identifying this data loader's content revision.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
         "kind": {
           "type": "string",
           "enum": ["grid", "points", "static"],
@@ -821,6 +836,11 @@ const schema = {
       "required": ["operator_id", "needed_vars"],
       "additionalProperties": false,
       "properties": {
+        "version": {
+          "type": "string",
+          "description": "Optional per-component semver string identifying this operator's content revision.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
         "operator_id": {
           "type": "string",
           "description": "Registered identifier the runtime uses to find the implementation."
@@ -1206,6 +1226,11 @@ const schema = {
       "description": "A coupling interface between domains.",
       "additionalProperties": true,
       "properties": {
+        "version": {
+          "type": "string",
+          "description": "Optional per-component semver string identifying this interface's content revision.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
         "description": { "type": "string" },
         "domains": {
           "type": "array",
@@ -1230,6 +1255,11 @@ const schema = {
       "description": "Spatiotemporal domain specification (DomainInfo).",
       "additionalProperties": false,
       "properties": {
+        "version": {
+          "type": "string",
+          "description": "Optional per-component semver string identifying this domain's content revision.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
         "independent_variable": {
           "type": "string",
           "description": "Name of the independent (time) variable.",

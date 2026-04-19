@@ -958,6 +958,7 @@ mod tests {
         models.insert(
             "model1".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -975,6 +976,7 @@ mod tests {
         models.insert(
             "model2".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1029,6 +1031,7 @@ mod tests {
         models.insert(
             "test_model".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1075,6 +1078,7 @@ mod tests {
         models.insert(
             "test_model".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1094,6 +1098,7 @@ mod tests {
         reaction_systems.insert(
             "test_rs".to_string(),
             ReactionSystem {
+                version: None,
                 domain: None,
                 coupletype: None,
                 reference: None,
@@ -1220,6 +1225,7 @@ mod tests {
         models.insert(
             "source".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1237,6 +1243,7 @@ mod tests {
         models.insert(
             "target".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,

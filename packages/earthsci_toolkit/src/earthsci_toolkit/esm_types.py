@@ -86,6 +86,9 @@ class Model:
     equations: List[Equation] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     subsystems: Dict[str, 'Model'] = field(default_factory=dict)
+    # Optional per-component semver identifying this component's content revision.
+    # Distinct from the top-level 'esm' field, which versions the spec/format.
+    version: Optional[str] = None
 
 
 @dataclass
@@ -129,6 +132,7 @@ class ReactionSystem:
     reactions: List[Reaction] = field(default_factory=list)
     constraint_equations: List[Equation] = field(default_factory=list)
     subsystems: Dict[str, 'ReactionSystem'] = field(default_factory=dict)
+    version: Optional[str] = None
 
 
 # ========================================
@@ -248,6 +252,7 @@ class DataLoader:
     regridding: Optional[DataLoaderRegridding] = None
     reference: Optional['Reference'] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    version: Optional[str] = None
 
 
 @dataclass
@@ -259,6 +264,7 @@ class Operator:
     reference: Optional['Reference'] = None
     config: Dict[str, Any] = field(default_factory=dict)
     description: Optional[str] = None
+    version: Optional[str] = None
 
 
 class CouplingType(Enum):
@@ -446,6 +452,9 @@ class Domain:
     dimensions: Optional[Dict[str, Any]] = None
     coordinates: Dict[str, List[float]] = field(default_factory=dict)
     boundaries: Dict[str, Any] = field(default_factory=dict)
+
+    # Optional per-component semver identifying this domain's content revision.
+    version: Optional[str] = None
 
 
 # ========================================

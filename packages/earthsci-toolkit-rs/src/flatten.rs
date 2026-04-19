@@ -1002,6 +1002,7 @@ mod tests {
         models.insert(
             "sys".to_string(),
             Model {
+                version: None,
                 name: Some("System".to_string()),
                 domain: None,
                 coupletype: None,

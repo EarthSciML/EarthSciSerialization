@@ -1460,6 +1460,7 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1553,6 +1554,7 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1672,6 +1674,7 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1782,6 +1785,7 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -1933,6 +1937,7 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -2040,6 +2045,7 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -2137,6 +2143,7 @@ mod tests {
         models.insert(
             "test_model".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,
@@ -2219,6 +2226,7 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
+                version: None,
                 reference: None,
                 domain: None,
                 coupletype: None,

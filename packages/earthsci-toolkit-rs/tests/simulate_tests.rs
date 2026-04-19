@@ -132,6 +132,7 @@ fn make_model(
         variables.insert(n, v);
     }
     Model {
+        version: None,
         name: Some(name.to_string()),
         domain: None,
         coupletype: None,

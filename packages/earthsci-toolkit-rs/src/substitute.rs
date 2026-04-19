@@ -196,6 +196,7 @@ pub fn substitute_in_model(
         .collect();
 
     Model {
+        version: None,
         name: model.name.clone(),
         domain: model.domain.clone(),
         coupletype: model.coupletype.clone(),
@@ -249,6 +250,7 @@ pub fn substitute_in_reaction_system(
         .collect();
 
     ReactionSystem {
+        version: None,
         domain: reaction_system.domain.clone(),
         coupletype: reaction_system.coupletype.clone(),
         reference: reaction_system.reference.clone(),
@@ -488,6 +490,7 @@ pub fn substitute_in_model_with_context(
         .collect();
 
     Model {
+        version: None,
         name: model.name.clone(),
         domain: model.domain.clone(),
         coupletype: model.coupletype.clone(),
@@ -692,6 +695,7 @@ pub fn substitute_in_reaction_system_with_context(
         .collect();
 
     ReactionSystem {
+        version: None,
         domain: reaction_system.domain.clone(),
         coupletype: reaction_system.coupletype.clone(),
         reference: reaction_system.reference.clone(),
@@ -795,6 +799,7 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
+                version: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 coupletype: None,
@@ -865,6 +870,7 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
+                version: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 coupletype: None,
@@ -938,6 +944,7 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
+                version: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 coupletype: None,
@@ -1023,6 +1030,7 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
+                version: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 coupletype: None,
@@ -1197,6 +1205,7 @@ mod tests {
 
         // Create a model with discrete and continuous events
         let model = Model {
+            version: None,
             name: Some("TestModel".to_string()),
             domain: None,
             coupletype: None,

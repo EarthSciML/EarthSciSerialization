@@ -1,0 +1,148 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "VersionedComponents",
+    "description": "Round-trip fixture exercising the optional per-component 'version' field on every component type (models, reaction_systems, data_loaders, operators, domains, interfaces). Mixes versioned and unversioned entries to verify backwards compatibility: files that omit the field must still parse, and files that include it must round-trip losslessly.",
+    "authors": [
+      "gt-0vq7"
+    ],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": [
+      "version",
+      "per-component",
+      "round-trip"
+    ],
+    "license": "MIT"
+  },
+  "domains": {
+    "AtmosphereDomain": {
+      "version": "1.2.0",
+      "independent_variable": "t",
+      "temporal": {
+        "start": "2020-01-01T00:00:00Z",
+        "end": "2020-01-02T00:00:00Z"
+      },
+      "spatial": {
+        "x": { "min": 0.0, "max": 1000.0, "units": "m" }
+      }
+    },
+    "OceanDomain": {
+      "independent_variable": "t",
+      "spatial": {
+        "x": { "min": 0.0, "max": 500.0, "units": "m" }
+      }
+    }
+  },
+  "interfaces": {
+    "AtmoOceanSurface": {
+      "version": "0.3.1",
+      "description": "Shared x between atmosphere and ocean surface.",
+      "domains": ["AtmosphereDomain", "OceanDomain"],
+      "dimension_mapping": {
+        "shared": { "AtmosphereDomain.x": "OceanDomain.x" }
+      }
+    },
+    "UnversionedInterface": {
+      "description": "Interface without an explicit version tag.",
+      "domains": ["AtmosphereDomain", "OceanDomain"],
+      "dimension_mapping": {
+        "shared": { "AtmosphereDomain.x": "OceanDomain.x" }
+      }
+    }
+  },
+  "models": {
+    "VersionedDecay": {
+      "version": "2.5.1",
+      "variables": {
+        "x": { "type": "state", "units": "mol/m^3", "default": 1.0, "description": "Concentration" },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.1, "description": "Decay rate" }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["x"], "wrt": "t" }, "rhs": { "op": "*", "args": [-1.0, { "op": "*", "args": ["k", "x"] }] } }
+      ]
+    },
+    "UnversionedModel": {
+      "variables": {
+        "y": { "type": "state", "units": "mol/m^3", "default": 2.0 }
+      },
+      "equations": [
+        { "lhs": { "op": "D", "args": ["y"], "wrt": "t" }, "rhs": 0.0 }
+      ]
+    }
+  },
+  "reaction_systems": {
+    "VersionedChemistry": {
+      "version": "0.4.2",
+      "species": {
+        "A": { "units": "mol/m^3", "default": 1.0, "description": "Substrate" },
+        "B": { "units": "mol/m^3", "default": 0.0, "description": "Product" }
+      },
+      "parameters": {
+        "k1": { "units": "1/s", "default": 0.2 }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [{ "species": "A", "stoichiometry": 1 }],
+          "products":   [{ "species": "B", "stoichiometry": 1 }],
+          "rate": "k1"
+        }
+      ]
+    },
+    "UnversionedChemistry": {
+      "species": {
+        "C": { "units": "mol/m^3", "default": 1.0 }
+      },
+      "parameters": {
+        "k2": { "units": "1/s", "default": 0.05 }
+      },
+      "reactions": [
+        {
+          "id": "R2",
+          "substrates": [{ "species": "C", "stoichiometry": 1 }],
+          "products":   null,
+          "rate": "k2"
+        }
+      ]
+    }
+  },
+  "data_loaders": {
+    "VersionedEmissions": {
+      "version": "3.0.0",
+      "kind": "grid",
+      "source": {
+        "url_template": "s3://bucket/emissions/{date:%Y%m%d}.nc"
+      },
+      "variables": {
+        "NOx": {
+          "file_variable": "no_x_flux",
+          "units": "kg/m^2/s"
+        }
+      }
+    },
+    "UnversionedEmissions": {
+      "kind": "grid",
+      "source": {
+        "url_template": "s3://bucket/other/{date:%Y%m%d}.nc"
+      },
+      "variables": {
+        "SO2": {
+          "file_variable": "so2_flux",
+          "units": "kg/m^2/s"
+        }
+      }
+    }
+  },
+  "operators": {
+    "VersionedDryDeposition": {
+      "version": "1.1.0",
+      "operator_id": "dry_deposition",
+      "needed_vars": ["x"],
+      "modifies": ["x"]
+    },
+    "UnversionedOperator": {
+      "operator_id": "wet_scavenging",
+      "needed_vars": ["y"]
+    }
+  }
+}

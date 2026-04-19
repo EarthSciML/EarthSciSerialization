@@ -43,6 +43,7 @@ fn test_analysis_features_integration() {
     );
 
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,
@@ -125,6 +126,7 @@ fn test_analysis_features_integration() {
     }];
 
     let rs = ReactionSystem {
+        version: None,
         subsystems: None,
         domain: None,
         coupletype: None,
@@ -208,6 +210,7 @@ fn test_editing_operations() {
 
     // Create a simple model
     let model = Model {
+        version: None,
         domain: None,
         coupletype: None,
         subsystems: None,

@@ -629,6 +629,7 @@ mod tests {
 
     fn create_simple_model() -> Model {
         Model {
+            version: None,
             reference: None,
             domain: None,
             coupletype: None,
