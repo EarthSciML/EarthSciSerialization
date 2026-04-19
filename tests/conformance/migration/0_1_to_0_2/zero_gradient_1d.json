@@ -1,0 +1,112 @@
+{
+  "id": "zero_gradient_1d",
+  "description": "Simple zero_gradient on axis 'x': the closed-short-axis fanout produces 'xmin' and 'xmax' entries, one per state variable.",
+  "input": {
+    "esm": "0.1.0",
+    "metadata": {
+      "name": "ZG1D",
+      "description": "zg 1d",
+      "authors": [
+        "ESM"
+      ],
+      "created": "2026-01-01T00:00:00Z"
+    },
+    "models": {
+      "M": {
+        "variables": {
+          "u": {
+            "type": "state",
+            "default": 0.0
+          }
+        },
+        "equations": []
+      }
+    },
+    "domains": {
+      "default": {
+        "independent_variable": "t",
+        "temporal": {
+          "start": "2024-01-01T00:00:00Z",
+          "end": "2024-01-01T01:00:00Z"
+        },
+        "spatial": {
+          "x": {
+            "min": 0.0,
+            "max": 1.0,
+            "units": "m"
+          }
+        },
+        "initial_conditions": {
+          "type": "constant",
+          "value": 0.0
+        },
+        "boundary_conditions": [
+          {
+            "type": "zero_gradient",
+            "dimensions": [
+              "x"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "expected": {
+    "esm": "0.2.0",
+    "metadata": {
+      "name": "ZG1D",
+      "description": "zg 1d\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
+      "authors": [
+        "ESM"
+      ],
+      "created": "2026-01-01T00:00:00Z",
+      "tags": [
+        "migrated_from_v01"
+      ]
+    },
+    "models": {
+      "M": {
+        "variables": {
+          "u": {
+            "type": "state",
+            "default": 0.0
+          }
+        },
+        "equations": [],
+        "boundary_conditions": {
+          "u_zero_gradient_xmin": {
+            "variable": "u",
+            "side": "xmin",
+            "kind": "zero_gradient"
+          },
+          "u_zero_gradient_xmax": {
+            "variable": "u",
+            "side": "xmax",
+            "kind": "zero_gradient"
+          }
+        }
+      }
+    },
+    "domains": {
+      "default": {
+        "independent_variable": "t",
+        "temporal": {
+          "start": "2024-01-01T00:00:00Z",
+          "end": "2024-01-01T01:00:00Z"
+        },
+        "spatial": {
+          "x": {
+            "min": 0.0,
+            "max": 1.0,
+            "units": "m"
+          }
+        },
+        "initial_conditions": {
+          "type": "constant",
+          "value": 0.0
+        }
+      }
+    }
+  },
+  "tags": []
+}

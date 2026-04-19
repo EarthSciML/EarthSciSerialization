@@ -193,6 +193,7 @@ from .codegen import (
 # Migration functionality
 from .migration import (
     migrate,
+    migrate_file_0_1_to_0_2,
     can_migrate,
     get_supported_migration_targets,
     MigrationError,
