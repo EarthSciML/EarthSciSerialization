@@ -3665,7 +3665,7 @@ Get a summary of all collected errors and warnings.
 
 ### get_system_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:976`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:1088`
 
 **Signature:**
 ```julia
@@ -5551,7 +5551,7 @@ system(...)
 
 ### system_exists_in_file
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:713`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:825`
 
 **Signature:**
 ```julia
@@ -5866,7 +5866,7 @@ validate(...)
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:164`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:165`
 
 **Signature:**
 ```julia
@@ -5886,7 +5886,7 @@ Returns ValidationResult with all errors and warnings.
 
 ### validate_coupling_multi_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:993`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:1105`
 
 **Signature:**
 ```julia
@@ -5904,7 +5904,7 @@ Validate coupling interface and lifting fields:
 
 ### validate_coupling_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:329`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:330`
 
 **Signature:**
 ```julia
@@ -5948,7 +5948,7 @@ Checks that the left-hand side and right-hand side have the same dimensions.
 
 ### validate_event_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:744`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:856`
 
 **Signature:**
 ```julia
@@ -5966,7 +5966,7 @@ functional affect refs valid.
 
 ### validate_event_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:483`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:484`
 
 **Signature:**
 ```julia
@@ -5982,7 +5982,7 @@ Validate event variable references.
 
 ### validate_expression_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:290`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:291`
 
 **Signature:**
 ```julia
@@ -6025,7 +6025,7 @@ Returns true if all models and reaction systems pass dimensional validation.
 
 ### validate_interface_dimensions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:906`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:1018`
 
 **Signature:**
 ```julia
@@ -6042,7 +6042,7 @@ valid dimensions from the domains they belong to.
 
 ### validate_model_balance
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:187`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:188`
 
 **Signature:**
 ```julia
@@ -6084,9 +6084,43 @@ Returns true if all equations are dimensionally consistent.
 
 ---
 
+### validate_model_gradient_units
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+validate_model_gradient_units(...)
+```
+
+---
+
+### validate_model_gradient_units
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:721`
+
+**Signature:**
+```julia
+function validate_model_gradient_units(file::EsmFile, model::Model, path::String)::Vector{StructuralError}
+```
+
+**Description:**
+validate_model_gradient_units(file::EsmFile, model::Model, path::String) -> Vector{StructuralError}
+
+Flag `grad` / `div` / `laplacian` operators whose spatial coordinate is declared
+in the enclosing model's domain but carries no units. Mirrors the TypeScript
+binding's coordinate-resolution path (see `packages/earthsci-toolkit/src/units.ts`):
+the coordinate is identified by the operator node's `dim` and looked up in
+`file.domains[model.domain].spatial`. Coordinates absent from the domain map
+are left alone (fallback to the legacy metre denominator behaviour); coordinates
+that are declared without units are dimensionally ambiguous and surface as
+`unit_inconsistency`. Recurses into subsystems.
+
+---
+
 ### validate_model_references
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:258`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:259`
 
 **Signature:**
 ```julia
@@ -6102,7 +6136,7 @@ Validate variable references within a model.
 
 ### validate_multi_domain
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:826`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:938`
 
 **Signature:**
 ```julia
@@ -6123,7 +6157,7 @@ Validate multi-domain consistency:
 
 ### validate_reaction_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:520`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:521`
 
 **Signature:**
 ```julia
@@ -6151,7 +6185,7 @@ validate_reaction_rate_units(...)
 
 ### validate_reaction_rate_units
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:626`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:627`
 
 **Signature:**
 ```julia
@@ -6201,7 +6235,7 @@ For reactions, validates that rate expressions have appropriate dimensions
 
 ### validate_reference_integrity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:235`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:236`
 
 **Signature:**
 ```julia
@@ -6273,7 +6307,7 @@ Each error contains the path, message, and keyword for debugging.
 
 ### validate_single_event_consistency
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:772`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/validate.jl:884`
 
 **Signature:**
 ```julia

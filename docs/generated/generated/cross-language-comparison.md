@@ -1896,6 +1896,25 @@ function validate_model_dimensions(model::Model)::Bool
 
 ---
 
+### validate_model_gradient_units
+
+**Julia:**
+```julia
+validate_model_gradient_units(...)
+```
+
+**Julia:**
+```julia
+function validate_model_gradient_units(file::EsmFile, model::Model, path::String)::Vector{StructuralError}
+```
+
+> validate_model_gradient_units(file::EsmFile, model::Model, path::String) -> Vector{StructuralError}
+
+Flag `grad` / `div` / `laplacian` operators whose spatial coordinate is declared
+in the enclosing model's domain but carries no units.
+
+---
+
 ### validate_reaction_rate_units
 
 **Julia:**
