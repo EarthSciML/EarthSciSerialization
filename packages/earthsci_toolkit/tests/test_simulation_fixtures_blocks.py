@@ -59,15 +59,15 @@ SIMULATION_SKIP: Dict[str, str] = {
     # into the SciPy backend's state-reset step; the ball never actually
     # bounces. Tracked alongside Julia's SymbolicContinuousCallback skip.
     "bouncing_ball.esm": "gt-i7e1",
-    # gt-mb4t: Python simulate() solver tolerances (rtol=1e-6, atol=1e-8) are
-    # looser than the fixture assertion tolerances (calibrated for Julia's
-    # 1e-10 / 1e-12). Numerical drift exceeds the per-assertion bound.
-    "box_model_ozone.esm": "gt-mb4t",
-    "python_scipy_integration.esm": "gt-mb4t",
-    # Fixture authors closed-form reference solutions (Bateman chain,
-    # symmetric second-order decay, harmonic oscillator) with model-level
-    # rel=1e-6; same Python-tolerance drift as gt-mb4t applies.
-    "mathematical_correctness.esm": "gt-mb4t",
+    # gt-vozd: LogisticGrowth fixture assertions in python_scipy_integration
+    # drift ~1e-4 from the closed-form analytical solution — Python matches
+    # the analytical form exactly but the fixture values look like Julia
+    # solver output.
+    "python_scipy_integration.esm": "gt-vozd",
+    # gt-mfo2: AnalyticalODE harmonic oscillator fails because simulate()
+    # clips all state to >= 0 (y_clipped = max(y, 0)). v legitimately goes
+    # negative, gets clamped to 0, so x never evolves.
+    "mathematical_correctness.esm": "gt-mfo2",
 }
 
 

@@ -542,8 +542,10 @@ def simulate(
     tspan: Tuple[float, float],
     parameters: Optional[Dict[str, float]] = None,
     initial_conditions: Optional[Dict[str, float]] = None,
-    method: str = 'BDF',
+    method: str = 'LSODA',
     file: Optional[EsmFile] = None,
+    rtol: float = 1e-10,
+    atol: float = 1e-14,
 ) -> SimulationResult:
     """Simulate an ESM model via the flattened representation (spec §4.7.5).
 
@@ -567,6 +569,11 @@ def simulate(
         back to the variable's default when not provided.
     method:
         SciPy ODE solver method (default ``'BDF'``).
+    rtol, atol:
+        Relative and absolute solver tolerances forwarded to
+        :func:`scipy.integrate.solve_ivp`. Defaults are ``1e-10`` / ``1e-12``,
+        matching Julia's ``reltol`` / ``abstol`` so fixture assertions calibrated
+        against the Julia reference hold under the Python backend.
 
     Raises
     ------
@@ -620,7 +627,8 @@ def simulate(
     )
     if has_array:
         return _simulate_with_numpy(
-            flat, tspan, parameters, initial_conditions, method
+            flat, tspan, parameters, initial_conditions, method,
+            rtol=rtol, atol=atol,
         )
 
     try:
@@ -672,18 +680,20 @@ def simulate(
 
         solver_options: Dict[str, Any] = {
             "method": method,
-            "rtol": 1e-6,
-            "atol": 1e-8,
-            "dense_output": False,
+            "rtol": rtol,
+            "atol": atol,
+            "dense_output": True,
         }
         if event_functions:
             solver_options["events"] = event_functions
 
         sol = solve_ivp(fun=rhs_function, t_span=tspan, y0=y0, **solver_options)
 
+        t_out, y_out = _densify_solution(sol, tspan)
+
         return SimulationResult(
-            t=sol.t,
-            y=sol.y,
+            t=t_out,
+            y=y_out,
             vars=state_names,
             success=sol.success,
             message=sol.message,
@@ -729,6 +739,30 @@ def _linear_pos(shape: Tuple[int, ...], one_based: List[int]) -> int:
             )
         lin = lin * shape[d] + zero
     return lin
+
+
+def _densify_solution(
+    sol: Any, tspan: Tuple[float, float], min_points: int = 10001
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Resample a ``solve_ivp`` result onto a dense uniform grid.
+
+    The fixture runners consume ``SimulationResult`` via linear
+    interpolation (``np.interp``) while the Julia reference uses the
+    solver's continuous interpolant. SciPy's native step points are too
+    sparse for ``np.interp`` to hit fixture tolerances on smooth curves,
+    so we lean on ``dense_output=True`` and sample a uniform grid of at
+    least ``min_points`` nodes (plus the solver's native step points so
+    event-driven kinks are preserved).
+    """
+    if not sol.success or getattr(sol, "sol", None) is None:
+        return sol.t, sol.y
+    t0, t1 = float(tspan[0]), float(tspan[1])
+    n = max(min_points, int(len(sol.t)) * 4)
+    grid = np.linspace(t0, t1, n)
+    t_out = np.unique(np.concatenate([grid, np.asarray(sol.t, dtype=float)]))
+    t_out = t_out[(t_out >= t0) & (t_out <= t1)]
+    y_out = sol.sol(t_out)
+    return t_out, y_out
 
 
 def _element_names(
@@ -1035,6 +1069,8 @@ def _simulate_with_numpy(
     parameters: Dict[str, float],
     initial_conditions: Dict[str, float],
     method: str,
+    rtol: float = 1e-10,
+    atol: float = 1e-12,
 ) -> SimulationResult:
     """Simulate a flattened system containing array ops via the NumPy interpreter."""
     try:
@@ -1119,16 +1155,17 @@ def _simulate_with_numpy(
             t_span=tspan,
             y0=y0,
             method=method,
-            rtol=1e-8,
-            atol=1e-10,
+            rtol=rtol,
+            atol=atol,
             dense_output=True,
         )
 
         elem_names = _element_names(state_names, shapes)
+        t_out, y_out = _densify_solution(sol, tspan)
 
         return SimulationResult(
-            t=sol.t,
-            y=sol.y,
+            t=t_out,
+            y=y_out,
             vars=elem_names,
             success=sol.success,
             message=sol.message,
