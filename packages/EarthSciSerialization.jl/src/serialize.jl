@@ -76,6 +76,8 @@ function serialize_model_variable_type(var_type::ModelVariableType)::String
         return "parameter"
     elseif var_type == ObservedVariable
         return "observed"
+    elseif var_type == BrownianVariable
+        return "brownian"
     else
         throw(ArgumentError("Unknown ModelVariableType: $(var_type)"))
     end
@@ -225,6 +227,12 @@ function serialize_model_variable(var::ModelVariable)::Dict{String,Any}
     end
     if var.location !== nothing
         result["location"] = var.location
+    end
+    if var.noise_kind !== nothing
+        result["noise_kind"] = var.noise_kind
+    end
+    if var.correlation_group !== nothing
+        result["correlation_group"] = var.correlation_group
     end
     return result
 end

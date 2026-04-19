@@ -144,6 +144,8 @@ function parse_model_variable_type(data::String)::ModelVariableType
         return ParameterVariable
     elseif data == "observed" || data == "ObservedVariable"
         return ObservedVariable
+    elseif data == "brownian" || data == "BrownianVariable"
+        return BrownianVariable
     else
         throw(ParseError("Invalid ModelVariableType: $data"))
     end
@@ -463,6 +465,8 @@ function coerce_model_variable(data::Any)::ModelVariable
         nothing
     end
     location = haskey(data, :location) && data.location !== nothing ? string(data.location) : nothing
+    noise_kind = haskey(data, :noise_kind) && data.noise_kind !== nothing ? string(data.noise_kind) : nothing
+    correlation_group = haskey(data, :correlation_group) && data.correlation_group !== nothing ? string(data.correlation_group) : nothing
 
     return ModelVariable(var_type,
                         default=default,
@@ -470,7 +474,9 @@ function coerce_model_variable(data::Any)::ModelVariable
                         expression=expression,
                         default_units=default_units,
                         shape=shape,
-                        location=location)
+                        location=location,
+                        noise_kind=noise_kind,
+                        correlation_group=correlation_group)
 end
 
 """

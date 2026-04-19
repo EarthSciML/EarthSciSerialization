@@ -447,14 +447,14 @@
 
     "ModelVariable": {
       "type": "object",
-      "description": "A variable in an ODE model.",
+      "description": "A variable in an ODE/SDE model.",
       "required": ["type"],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["state", "parameter", "observed"],
-          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity."
+          "enum": ["state", "parameter", "observed", "brownian"],
+          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity; brownian = stochastic noise process (Wiener) that drives an SDE — the presence of any brownian variable promotes the enclosing model from an ODE system to an SDE system."
         },
         "units": { "type": "string" },
         "default": { "type": "number" },
@@ -475,14 +475,28 @@
         "location": {
           "type": "string",
           "description": "Staggered-grid location tag (e.g., \"cell_center\", \"edge_normal\", \"x_face\", \"vertex\"). Omitted indicates no explicit staggering; the spatialization step defaults to \"cell_center\" when the variable's model has a grid (discretization RFC §10.2, §11 step 2)."
+        },
+        "noise_kind": {
+          "type": "string",
+          "enum": ["wiener"],
+          "default": "wiener",
+          "description": "Brownian-only: kind of stochastic process. Currently only \"wiener\" (zero-mean unit-variance Gaussian increments) is supported; reserved for future extension to \"colored\", \"correlated\", etc."
+        },
+        "correlation_group": {
+          "type": "string",
+          "description": "Brownian-only: optional opaque tag used to group correlated noise sources. Brownian variables sharing a group label are interpreted by the runtime as drawn from a joint multivariate normal whose correlation matrix is supplied externally. Brownian variables without a group label are independent. The spec does not currently encode the correlation matrix itself; that is left to a future extension."
         }
       },
-      "if": {
-        "properties": { "type": { "const": "observed" } }
-      },
-      "then": {
-        "required": ["expression"]
-      }
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "observed" } }, "required": ["type"] },
+          "then": { "required": ["expression"] }
+        },
+        {
+          "if": { "not": { "properties": { "type": { "const": "brownian" } }, "required": ["type"] } },
+          "then": { "not": { "anyOf": [{ "required": ["noise_kind"] }, { "required": ["correlation_group"] }] } }
+        }
+      ]
     },
 
     "Model": {

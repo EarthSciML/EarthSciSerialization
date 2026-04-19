@@ -31,6 +31,8 @@ fn test_component_graph_generation() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 
@@ -208,6 +210,8 @@ fn test_model_expression_graph() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
     variables.insert(
@@ -220,6 +224,8 @@ fn test_model_expression_graph() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 
@@ -495,6 +501,8 @@ fn test_expected_graph_outputs() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 

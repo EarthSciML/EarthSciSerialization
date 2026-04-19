@@ -312,6 +312,8 @@ pub enum VariableKind {
     Parameter,
     /// Observed quantity (computed)
     Observed,
+    /// Brownian (Wiener) noise source — any present promotes model to SDE
+    Brownian,
     /// Chemical species
     Species,
 }
@@ -592,6 +594,7 @@ fn extract_from_model(
             crate::VariableType::State => VariableKind::State,
             crate::VariableType::Parameter => VariableKind::Parameter,
             crate::VariableType::Observed => VariableKind::Observed,
+            crate::VariableType::Brownian => VariableKind::Brownian,
         };
 
         nodes.push(VariableNode {
@@ -847,6 +850,7 @@ impl ExpressionGraph {
                 VariableKind::State => "ellipse",
                 VariableKind::Parameter => "box",
                 VariableKind::Observed => "diamond",
+                VariableKind::Brownian => "doubleoctagon",
                 VariableKind::Species => "circle",
             };
 
@@ -890,6 +894,7 @@ impl ExpressionGraph {
                 VariableKind::State => ("(", ")"),
                 VariableKind::Parameter => ("[", "]"),
                 VariableKind::Observed => ("{", "}"),
+                VariableKind::Brownian => ("{{", "}}"),
                 VariableKind::Species => ("((", "))"),
             };
 

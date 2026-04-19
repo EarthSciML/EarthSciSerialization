@@ -47,6 +47,8 @@ export interface FlattenedSystem {
   stateVariables: string[]
   /** All parameter names (dot-namespaced) */
   parameters: string[]
+  /** All brownian (Wiener) noise variables (dot-namespaced). Any brownian => SDE system. */
+  brownianVariables: string[]
   /** Observed/derived variables: namespaced name -> expression string */
   variables: Record<string, string>
   /** All equations from all systems, with namespaced references */
@@ -70,6 +72,7 @@ export interface FlattenedSystem {
 export function flatten(file: EsmFile): FlattenedSystem {
   const stateVariables: string[] = []
   const parameters: string[] = []
+  const brownianVariables: string[] = []
   const variables: Record<string, string> = {}
   const equations: FlattenedEquation[] = []
   const sourceSystems: string[] = []
@@ -79,7 +82,7 @@ export function flatten(file: EsmFile): FlattenedSystem {
   if (file.models) {
     for (const [systemName, model] of Object.entries(file.models)) {
       sourceSystems.push(systemName)
-      flattenModel(systemName, model, stateVariables, parameters, variables, equations)
+      flattenModel(systemName, model, stateVariables, parameters, brownianVariables, variables, equations)
     }
   }
 
@@ -101,6 +104,7 @@ export function flatten(file: EsmFile): FlattenedSystem {
   return {
     stateVariables,
     parameters,
+    brownianVariables,
     variables,
     equations,
     metadata: {
@@ -118,6 +122,7 @@ function flattenModel(
   model: Model,
   stateVariables: string[],
   parameters: string[],
+  brownianVariables: string[],
   variables: Record<string, string>,
   equations: FlattenedEquation[]
 ): void {
@@ -134,6 +139,9 @@ function flattenModel(
         break
       case 'parameter':
         parameters.push(namespacedName)
+        break
+      case 'brownian':
+        brownianVariables.push(namespacedName)
         break
       case 'observed':
         if (variable.expression !== undefined) {
@@ -155,7 +163,7 @@ function flattenModel(
   // Recursively process subsystems
   if (model.subsystems) {
     for (const [subName, subModel] of Object.entries(model.subsystems)) {
-      flattenModel(`${prefix}.${subName}`, subModel, stateVariables, parameters, variables, equations)
+      flattenModel(`${prefix}.${subName}`, subModel, stateVariables, parameters, brownianVariables, variables, equations)
     }
   }
 }

@@ -65,6 +65,8 @@ fn state(name: &str, default: f64) -> (String, ModelVariable) {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     )
 }
@@ -80,6 +82,8 @@ fn param(name: &str, default: f64) -> (String, ModelVariable) {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     )
 }
@@ -764,6 +768,8 @@ fn test_error_missing_initial_condition() {
         expression: None,
         shape: None,
         location: None,
+            noise_kind: None,
+            correlation_group: None,
     };
     // Force a state with no default
     state_x.default = None;
@@ -799,6 +805,7 @@ fn dummy_flat() -> FlattenedSystem {
         state_variables: IndexMap::new(),
         parameters: IndexMap::new(),
         observed_variables: IndexMap::new(),
+        brownian_variables: IndexMap::new(),
         equations: Vec::new(),
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),

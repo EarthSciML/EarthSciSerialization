@@ -63,8 +63,14 @@ class AffectEquation:
 
 @dataclass
 class ModelVariable:
-    """A variable in a mathematical model."""
-    type: Literal['state', 'parameter', 'observed']
+    """A variable in a mathematical model.
+
+    The "brownian" type denotes a stochastic noise source (Wiener process); the
+    presence of any brownian variable promotes the enclosing model from an ODE
+    system to an SDE system. The optional ``noise_kind`` and
+    ``correlation_group`` fields apply only to brownian variables.
+    """
+    type: Literal['state', 'parameter', 'observed', 'brownian']
     units: Optional[str] = None
     default: Optional[Any] = None
     default_units: Optional[str] = None
@@ -76,6 +82,10 @@ class ModelVariable:
     # Staggered-grid location tag (e.g. "cell_center", "edge_normal",
     # "vertex"). None means no explicit staggering. See RFC §10.2.
     location: Optional[str] = None
+    # Brownian-only: kind of stochastic process. Currently only "wiener".
+    noise_kind: Optional[str] = None
+    # Brownian-only: opaque tag grouping correlated noise sources.
+    correlation_group: Optional[str] = None
 
 
 @dataclass

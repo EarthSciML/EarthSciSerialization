@@ -54,6 +54,9 @@
     { "id": "fixtures/arrayed_vars/scalar_explicit", "path": "fixtures/arrayed_vars/scalar_explicit.esm", "tags": ["arrayed_vars"] },
     { "id": "fixtures/arrayed_vars/one_d",           "path": "fixtures/arrayed_vars/one_d.esm",           "tags": ["arrayed_vars", "discretization"] },
     { "id": "fixtures/arrayed_vars/two_d_faces",     "path": "fixtures/arrayed_vars/two_d_faces.esm",     "tags": ["arrayed_vars", "discretization", "staggered"] },
-    { "id": "fixtures/arrayed_vars/vertex_located",  "path": "fixtures/arrayed_vars/vertex_located.esm",  "tags": ["arrayed_vars", "discretization", "vertex"] }
+    { "id": "fixtures/arrayed_vars/vertex_located",  "path": "fixtures/arrayed_vars/vertex_located.esm",  "tags": ["arrayed_vars", "discretization", "vertex"] },
+
+    { "id": "fixtures/sde/ornstein_uhlenbeck",       "path": "fixtures/sde/ornstein_uhlenbeck.esm",       "tags": ["sde", "brownian"] },
+    { "id": "fixtures/sde/correlated_noise",         "path": "fixtures/sde/correlated_noise.esm",         "tags": ["sde", "brownian", "correlated"] }
   ]
 }

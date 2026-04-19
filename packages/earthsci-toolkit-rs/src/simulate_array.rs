@@ -270,6 +270,15 @@ impl ArrayCompiled {
                 VariableType::State => state_vars.push(name),
                 VariableType::Parameter => param_vars.push(name),
                 VariableType::Observed => observed_vars.push((name, var)),
+                VariableType::Brownian => {
+                    return Err(CompileError::UnsupportedFeatureError {
+                        feature: "brownian".to_string(),
+                        message: format!(
+                            "Rust simulation backend does not support SDE (brownian) models; variable '{}' is brownian",
+                            name
+                        ),
+                    });
+                }
             }
         }
 

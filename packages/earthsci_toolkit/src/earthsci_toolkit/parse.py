@@ -222,6 +222,9 @@ def _parse_model_variable(var_data: Dict[str, Any]) -> ModelVariable:
         shape = list(shape)
     location = var_data.get("location")
 
+    noise_kind = var_data.get("noise_kind")
+    correlation_group = var_data.get("correlation_group")
+
     return ModelVariable(
         type=var_type,
         units=units,
@@ -231,6 +234,8 @@ def _parse_model_variable(var_data: Dict[str, Any]) -> ModelVariable:
         expression=expression,
         shape=shape,
         location=location,
+        noise_kind=noise_kind,
+        correlation_group=correlation_group,
     )
 
 

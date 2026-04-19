@@ -160,6 +160,11 @@ pub struct FlattenedSystem {
     pub parameters: IndexMap<String, ModelVariable>,
     /// Dot-namespaced observed variables.
     pub observed_variables: IndexMap<String, ModelVariable>,
+    /// Dot-namespaced brownian noise sources (Wiener processes). Non-empty
+    /// implies the flattened system is an SDE rather than an ODE — runtimes
+    /// that consume this should target an SDESystem (Julia/MTK) or equivalent.
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub brownian_variables: IndexMap<String, ModelVariable>,
     /// Flattened equations in processing order. Every variable reference is
     /// dot-namespaced.
     pub equations: Vec<Equation>,
@@ -298,6 +303,7 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
     let mut state_variables: IndexMap<String, ModelVariable> = IndexMap::new();
     let mut parameters: IndexMap<String, ModelVariable> = IndexMap::new();
     let mut observed_variables: IndexMap<String, ModelVariable> = IndexMap::new();
+    let mut brownian_variables: IndexMap<String, ModelVariable> = IndexMap::new();
     let mut equations: Vec<Equation> = Vec::new();
     let mut continuous_events: Vec<ContinuousEvent> = Vec::new();
     let mut discrete_events: Vec<DiscreteEvent> = Vec::new();
@@ -311,6 +317,9 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
         }
         for (name, var) in block.observed_vars {
             observed_variables.insert(name, var);
+        }
+        for (name, var) in block.brownian_vars {
+            brownian_variables.insert(name, var);
         }
         equations.extend(block.equations);
         continuous_events.extend(block.continuous_events);
@@ -333,6 +342,7 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
         state_variables,
         parameters,
         observed_variables,
+        brownian_variables,
         equations,
         continuous_events,
         discrete_events,
@@ -398,6 +408,7 @@ struct SystemBlock {
     state_vars: IndexMap<String, ModelVariable>,
     parameters: IndexMap<String, ModelVariable>,
     observed_vars: IndexMap<String, ModelVariable>,
+    brownian_vars: IndexMap<String, ModelVariable>,
     equations: Vec<Equation>,
     continuous_events: Vec<ContinuousEvent>,
     discrete_events: Vec<DiscreteEvent>,
@@ -407,6 +418,7 @@ fn build_model_block(system_name: &str, model: &Model) -> Result<SystemBlock, Fl
     let mut state_vars = IndexMap::new();
     let mut parameters = IndexMap::new();
     let mut observed_vars = IndexMap::new();
+    let mut brownian_vars = IndexMap::new();
 
     let mut var_names: Vec<&String> = model.variables.keys().collect();
     var_names.sort();
@@ -426,6 +438,9 @@ fn build_model_block(system_name: &str, model: &Model) -> Result<SystemBlock, Fl
             }
             VariableType::Observed => {
                 observed_vars.insert(namespaced, cloned);
+            }
+            VariableType::Brownian => {
+                brownian_vars.insert(namespaced, cloned);
             }
         }
     }
@@ -459,6 +474,7 @@ fn build_model_block(system_name: &str, model: &Model) -> Result<SystemBlock, Fl
         state_vars,
         parameters,
         observed_vars,
+        brownian_vars,
         equations,
         continuous_events,
         discrete_events,
@@ -487,6 +503,8 @@ fn build_reaction_block(
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
     }
@@ -506,6 +524,8 @@ fn build_reaction_block(
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
     }
@@ -524,6 +544,7 @@ fn build_reaction_block(
         state_vars,
         parameters,
         observed_vars: IndexMap::new(),
+        brownian_vars: IndexMap::new(),
         equations,
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),
@@ -874,6 +895,7 @@ fn apply_couple(
             state_vars: IndexMap::new(),
             parameters: IndexMap::new(),
             observed_vars: IndexMap::new(),
+            brownian_vars: IndexMap::new(),
             equations: new_equations,
             continuous_events: Vec::new(),
             discrete_events: Vec::new(),
@@ -983,6 +1005,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
         vars.insert(
@@ -995,6 +1019,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 

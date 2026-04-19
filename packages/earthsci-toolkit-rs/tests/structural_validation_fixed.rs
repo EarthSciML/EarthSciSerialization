@@ -22,6 +22,8 @@ fn test_undefined_variable_in_model() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 
@@ -98,6 +100,8 @@ fn test_equation_count_mismatch() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
     variables.insert(
@@ -110,6 +114,8 @@ fn test_equation_count_mismatch() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 
@@ -309,6 +315,8 @@ fn test_valid_file_passes() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 

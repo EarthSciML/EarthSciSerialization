@@ -192,6 +192,8 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
     }

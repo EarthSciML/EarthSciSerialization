@@ -13,9 +13,166 @@ export type ESMFormat1 = {
   [k: string]: unknown;
 };
 /**
+ * A variable in an ODE/SDE model.
+ */
+export type ModelVariable = ModelVariable1 & {
+  /**
+   * state = time-dependent unknown; parameter = externally set constant; observed = derived quantity; brownian = stochastic noise process (Wiener) that drives an SDE — the presence of any brownian variable promotes the enclosing model from an ODE system to an SDE system.
+   */
+  type: "state" | "parameter" | "observed" | "brownian";
+  units?: string;
+  default?: number;
+  /**
+   * Units of the default value, if different from the declared units field. When present, validators flag a unit_inconsistency error if these do not match the declared units (including dimensionally incompatible cases like K vs kg, and same-dimension mismatches like K vs degC). Default is the same as `units`.
+   */
+  default_units?: string;
+  description?: string;
+  /**
+   * Defining expression for observed variables.
+   */
+  expression?: number | string | ExpressionNode;
+  /**
+   * Arrayed-variable shape: ordered list of dimension names (drawn from the enclosing model's domain.spatial). Omitted or null indicates a scalar. Introduced in spec 0.2 (discretization RFC §10.2).
+   */
+  shape?: string[];
+  /**
+   * Staggered-grid location tag (e.g., "cell_center", "edge_normal", "x_face", "vertex"). Omitted indicates no explicit staggering; the spatialization step defaults to "cell_center" when the variable's model has a grid (discretization RFC §10.2, §11 step 2).
+   */
+  location?: string;
+  /**
+   * Brownian-only: kind of stochastic process. Currently only "wiener" (zero-mean unit-variance Gaussian increments) is supported; reserved for future extension to "colored", "correlated", etc.
+   */
+  noise_kind?: "wiener";
+  /**
+   * Brownian-only: optional opaque tag used to group correlated noise sources. Brownian variables sharing a group label are interpreted by the runtime as drawn from a joint multivariate normal whose correlation matrix is supplied externally. Brownian variables without a group label are independent. The spec does not currently encode the correlation matrix itself; that is left to a future extension.
+   */
+  correlation_group?: string;
+};
+export type ModelVariable1 = {
+  [k: string]: unknown;
+};
+/**
+ * An operation in the expression AST.
+ */
+export type ExpressionNode = ExpressionNode1 & {
+  /**
+   * Operator name.
+   */
+  op:
+    | "+"
+    | "-"
+    | "*"
+    | "/"
+    | "^"
+    | "D"
+    | "grad"
+    | "div"
+    | "laplacian"
+    | "exp"
+    | "log"
+    | "log10"
+    | "sqrt"
+    | "abs"
+    | "sin"
+    | "cos"
+    | "tan"
+    | "asin"
+    | "acos"
+    | "atan"
+    | "atan2"
+    | "min"
+    | "max"
+    | "floor"
+    | "ceil"
+    | "ifelse"
+    | ">"
+    | "<"
+    | ">="
+    | "<="
+    | "=="
+    | "!="
+    | "and"
+    | "or"
+    | "not"
+    | "Pre"
+    | "sign"
+    | "arrayop"
+    | "makearray"
+    | "index"
+    | "broadcast"
+    | "reshape"
+    | "transpose"
+    | "concat";
+  /**
+   * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
+   *
+   * @minItems 0
+   */
+  args: Expression[];
+  /**
+   * Differentiation variable for D operator (e.g., "t").
+   */
+  wrt?: string;
+  /**
+   * Spatial dimension for grad operator (e.g., "x", "y", "z").
+   */
+  dim?: string;
+  /**
+   * For arrayop: the result's index signature. Each entry is either a string (a symbolic index variable like "i", "j") or the integer 1 (a literal singleton dimension for reshape/broadcast). Mirrors SymbolicUtils.ArrayOp.output_idx.
+   */
+  output_idx?: (string | 1)[];
+  /**
+   * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
+   */
+  expr?: number | string | ExpressionNode1;
+  /**
+   * For arrayop: the reduction operator applied to any index symbol that appears in expr but not in output_idx. Default is "+".
+   */
+  reduce?: "+" | "*" | "max" | "min";
+  /**
+   * For arrayop: optional map from index symbol name to the range it iterates over. Each value is either a 2-element array [start, stop] (unit step) or a 3-element array [start, step, stop]. Indices not present are inferred from the domain / operand shapes at runtime. Mirrors SymbolicUtils.ArrayOp.ranges.
+   */
+  ranges?: {
+    /**
+     * @minItems 2
+     * @maxItems 3
+     */
+    [k: string]: [number, number] | [number, number, number];
+  };
+  /**
+   * For makearray: list of sub-region boxes of the output array. Each region is an array of [start, stop] pairs, one per output dimension. The nth region is filled with the nth entry of values. Overlapping regions are permitted; later regions overwrite earlier ones. Mirrors SymbolicUtils.ArrayMaker.regions.
+   */
+  regions?: [[number, number], ...[number, number][]][];
+  /**
+   * For makearray: list of expressions, one per entry in regions. Each value may be a scalar expression (broadcast across the region) or an array-valued expression whose shape matches the region (excluding singleton dimensions). Mirrors SymbolicUtils.ArrayMaker.values.
+   */
+  values?: Expression[];
+  /**
+   * For reshape: the target shape. Each entry is either an integer (a concrete length) or a string (a symbolic dimension reference).
+   *
+   * @minItems 1
+   */
+  shape?: [number | string, ...(number | string)[]];
+  /**
+   * For transpose: optional axis permutation. A list of 0-based axis indices giving the new order. If omitted, the matrix-transpose convention is used (reverse axes).
+   */
+  perm?: number[];
+  /**
+   * For concat: the 0-based axis along which to concatenate the operand arrays. All operands must have identical shape on every other axis.
+   */
+  axis?: number;
+  /**
+   * For broadcast: the name of the scalar operator to apply element-wise to the operands in args. Must be an ExpressionNode op name drawn from the scalar subset (arithmetic, elementary functions, comparisons, etc.).
+   */
+  fn?: string;
+};
+export type ExpressionNode1 = {
+  [k: string]: unknown;
+};
+/**
  * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
  */
-export type Expression = number | string | ExpressionNode;
+export type Expression = number | string | ExpressionNode1;
 /**
  * Fires when a boolean condition is true at end of a timestep, or at preset/periodic times. Maps to MTK SymbolicDiscreteCallback.
  */
@@ -325,88 +482,6 @@ export interface Model {
   examples?: Example[];
 }
 /**
- * A variable in an ODE model.
- */
-export interface ModelVariable {
-  /**
-   * state = time-dependent unknown; parameter = externally set constant; observed = derived quantity.
-   */
-  type: "state" | "parameter" | "observed";
-  units?: string;
-  default?: number;
-  description?: string;
-  /**
-   * Defining expression for observed variables.
-   */
-  expression?: number | string | ExpressionNode;
-  /**
-   * Arrayed-variable shape: ordered list of dimension names (drawn from the enclosing model's domain.spatial). Omitted or null indicates a scalar. Introduced in spec 0.2 (discretization RFC §10.2).
-   */
-  shape?: string[];
-  /**
-   * Staggered-grid location tag (e.g., "cell_center", "edge_normal", "x_face", "vertex"). Omitted indicates no explicit staggering; the spatialization step defaults to "cell_center" when the variable's model has a grid (discretization RFC §10.2, §11 step 2).
-   */
-  location?: string;
-}
-/**
- * An operation in the expression AST.
- */
-export interface ExpressionNode {
-  /**
-   * Operator name.
-   */
-  op:
-    | "+"
-    | "-"
-    | "*"
-    | "/"
-    | "^"
-    | "D"
-    | "grad"
-    | "div"
-    | "laplacian"
-    | "exp"
-    | "log"
-    | "log10"
-    | "sqrt"
-    | "abs"
-    | "sin"
-    | "cos"
-    | "tan"
-    | "asin"
-    | "acos"
-    | "atan"
-    | "atan2"
-    | "min"
-    | "max"
-    | "floor"
-    | "ceil"
-    | "ifelse"
-    | ">"
-    | "<"
-    | ">="
-    | "<="
-    | "=="
-    | "!="
-    | "and"
-    | "or"
-    | "not"
-    | "Pre"
-    | "sign";
-  /**
-   * @minItems 1
-   */
-  args: [Expression, ...Expression[]];
-  /**
-   * Differentiation variable for D operator (e.g., "t").
-   */
-  wrt?: string;
-  /**
-   * Spatial dimension for grad operator (e.g., "x", "y", "z").
-   */
-  dim?: string;
-}
-/**
  * An equation: lhs = rhs (or lhs ~ rhs in MTK notation).
  */
 export interface Equation {
@@ -425,7 +500,7 @@ export interface AffectEquation {
   /**
    * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
    */
-  rhs: number | string | ExpressionNode;
+  rhs: number | string | ExpressionNode1;
 }
 /**
  * Registered functional affect handler (alternative to symbolic affects).
@@ -775,6 +850,10 @@ export interface ReactionSystem {
 export interface Species {
   units?: string;
   default?: number;
+  /**
+   * Units of the default value, if different from the declared units field. See ModelVariable.default_units for semantics.
+   */
+  default_units?: string;
   description?: string;
 }
 /**
@@ -783,6 +862,10 @@ export interface Species {
 export interface Parameter {
   units?: string;
   default?: number;
+  /**
+   * Units of the default value, if different from the declared units field. See ModelVariable.default_units for semantics.
+   */
+  default_units?: string;
   description?: string;
 }
 /**
@@ -805,7 +888,7 @@ export interface Reaction {
   /**
    * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
    */
-  rate: number | string | ExpressionNode;
+  rate: number | string | ExpressionNode1;
   reference?: Reference;
 }
 /**
@@ -1063,7 +1146,7 @@ export interface ConnectorEquation {
   /**
    * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
    */
-  expression?: number | string | ExpressionNode;
+  expression?: number | string | ExpressionNode1;
 }
 /**
  * Replace a parameter in one system with a variable from another.

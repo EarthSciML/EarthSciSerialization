@@ -169,9 +169,12 @@ function generate_model_code(name::String, model::Model)
 
     push!(lines, "# Model: $name")
 
-    # Collect state variables and parameters
+    # Collect state variables, parameters, and brownian (Wiener) noise sources.
+    # Brownian variables map to MTK `@brownians` and promote the system to
+    # an SDESystem (vs ODESystem). See spec ModelVariable.type = "brownian".
     state_vars = Tuple{String, ModelVariable}[]
     parameters = Tuple{String, ModelVariable}[]
+    brownians = Tuple{String, ModelVariable}[]
 
     if !isnothing(model.variables) && !isempty(model.variables)
         for (var_name, variable) in model.variables
@@ -179,6 +182,8 @@ function generate_model_code(name::String, model::Model)
                 push!(state_vars, (var_name, variable))
             elseif variable.type == ParameterVariable
                 push!(parameters, (var_name, variable))
+            elseif variable.type == BrownianVariable
+                push!(brownians, (var_name, variable))
             end
         end
     end
@@ -195,6 +200,11 @@ function generate_model_code(name::String, model::Model)
         push!(lines, "@parameters $param_decls")
     end
 
+    # Generate @brownians declaration (MTK Wiener processes)
+    if !isempty(brownians)
+        push!(lines, "@brownians $(join(first.(brownians), " "))")
+    end
+
     # Generate equations
     if !isnothing(model.equations) && !isempty(model.equations)
         push!(lines, "")
@@ -205,9 +215,13 @@ function generate_model_code(name::String, model::Model)
         push!(lines, "]")
     end
 
-    # Generate @named ODESystem
+    # Generate @named system. Brownian variables present => SDESystem; otherwise ODESystem.
     push!(lines, "")
-    push!(lines, "@named $(name)_system = ODESystem(eqs)")
+    if !isempty(brownians)
+        push!(lines, "@named $(name)_system = SDESystem(eqs, t)")
+    else
+        push!(lines, "@named $(name)_system = ODESystem(eqs)")
+    end
 
     return lines
 end

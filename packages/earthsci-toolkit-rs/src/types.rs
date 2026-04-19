@@ -342,6 +342,14 @@ pub struct ModelVariable {
     /// See discretization RFC §10.2.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+
+    /// Brownian-only: kind of stochastic process. Currently only "wiener".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise_kind: Option<String>,
+
+    /// Brownian-only: opaque tag grouping correlated noise sources.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub correlation_group: Option<String>,
 }
 
 /// Type of model variable
@@ -354,6 +362,10 @@ pub enum VariableType {
     Parameter,
     /// Observed quantity (computed from state/parameters)
     Observed,
+    /// Brownian noise source (Wiener process). The presence of any brownian
+    /// variable promotes the enclosing model from an ODE system to an SDE
+    /// system. Maps to MTK `@brownians` and an `SDESystem`.
+    Brownian,
 }
 
 /// Differential equation

@@ -330,3 +330,74 @@ fn test_model_tests_tolerance_round_trip() {
         "save/load must be a fixed point on typed round-tripped EsmFile"
     );
 }
+
+/// Round-trip the Ornstein-Uhlenbeck SDE fixture, asserting that the
+/// brownian variable type and its `noise_kind` field survive load/save.
+#[test]
+fn test_ornstein_uhlenbeck_sde_round_trip() {
+    let fixture = include_str!("../../../tests/fixtures/sde/ornstein_uhlenbeck.esm");
+
+    let parsed: EsmFile = load(fixture).expect("failed to parse OU SDE fixture");
+    let model = parsed.models.as_ref().and_then(|m| m.get("OU")).expect("OU model missing");
+    let bw = model.variables.get("Bw").expect("Bw variable missing");
+    assert_eq!(bw.var_type, VariableType::Brownian);
+    assert_eq!(bw.noise_kind.as_deref(), Some("wiener"));
+
+    let serialized = save(&parsed).expect("failed to serialize OU SDE");
+    let reparsed: EsmFile = load(&serialized).expect("failed to reparse OU SDE");
+
+    // Serialization must preserve the brownian type and noise_kind.
+    let rbw = reparsed
+        .models
+        .as_ref()
+        .and_then(|m| m.get("OU"))
+        .and_then(|m| m.variables.get("Bw"))
+        .expect("Bw missing after round-trip");
+    assert_eq!(rbw.var_type, VariableType::Brownian);
+    assert_eq!(rbw.noise_kind.as_deref(), Some("wiener"));
+
+    // Idempotency.
+    let serialized_again = save(&reparsed).expect("second serialize");
+    assert_eq!(
+        serde_json::to_value(&parsed).expect("parsed as value"),
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+        "typed OU SDE round-trip must be a fixed point"
+    );
+    let reparsed_again: EsmFile = load(&serialized_again).expect("second reparse");
+    assert_eq!(
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+        serde_json::to_value(&reparsed_again).expect("reparsed_again as value"),
+    );
+}
+
+/// Correlated-noise SDE fixture: two brownian vars sharing a `correlation_group`.
+#[test]
+fn test_correlated_noise_sde_round_trip() {
+    let fixture = include_str!("../../../tests/fixtures/sde/correlated_noise.esm");
+
+    let parsed: EsmFile = load(fixture).expect("failed to parse correlated-noise fixture");
+    let model = parsed
+        .models
+        .as_ref()
+        .and_then(|m| m.get("TwoBody"))
+        .expect("TwoBody model missing");
+    for name in ["Bx", "By"] {
+        let bv = model.variables.get(name).unwrap_or_else(|| panic!("{} missing", name));
+        assert_eq!(bv.var_type, VariableType::Brownian);
+        assert_eq!(bv.correlation_group.as_deref(), Some("wind"));
+    }
+
+    let serialized = save(&parsed).expect("failed to serialize");
+    let reparsed: EsmFile = load(&serialized).expect("failed to reparse");
+    assert_eq!(
+        serde_json::to_value(&parsed).expect("parsed as value"),
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+    );
+
+    // Flattening must surface brownians in their own collection.
+    use earthsci_toolkit::flatten::flatten;
+    let flat = flatten(&parsed).expect("flatten");
+    assert_eq!(flat.brownian_variables.len(), 2);
+    assert!(flat.brownian_variables.contains_key("TwoBody.Bx"));
+    assert!(flat.brownian_variables.contains_key("TwoBody.By"));
+}

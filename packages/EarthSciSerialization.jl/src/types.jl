@@ -241,17 +241,25 @@ Type enumeration for model variables:
 - StateVariable: differential state variables
 - ParameterVariable: constant parameters
 - ObservedVariable: derived/computed variables
+- BrownianVariable: stochastic noise sources (Wiener processes). The presence
+  of any brownian variable promotes the enclosing model from an ODE system to
+  an SDE system. Maps to MTK `@brownians` and an `SDESystem`.
 """
 @enum ModelVariableType begin
     StateVariable
     ParameterVariable
     ObservedVariable
+    BrownianVariable
 end
 
 """
     ModelVariable
 
 Structure defining a model variable with its type, default value, and optional expression.
+
+Brownian-only fields:
+- `noise_kind`: stochastic process kind (currently only `"wiener"`).
+- `correlation_group`: opaque tag grouping correlated noise sources.
 """
 struct ModelVariable
     type::ModelVariableType
@@ -267,6 +275,8 @@ struct ModelVariable
     # Staggered-grid location tag (e.g. "cell_center", "edge_normal",
     # "vertex"). `nothing` means no explicit staggering. See RFC §10.2.
     location::Union{String,Nothing}
+    noise_kind::Union{String,Nothing}
+    correlation_group::Union{String,Nothing}
 
     # Constructor with optional parameters
     ModelVariable(type::ModelVariableType;
@@ -276,8 +286,11 @@ struct ModelVariable
                   units=nothing,
                   default_units=nothing,
                   shape=nothing,
-                  location=nothing) =
-        new(type, default, description, expression, units, default_units, shape, location)
+                  location=nothing,
+                  noise_kind=nothing,
+                  correlation_group=nothing) =
+        new(type, default, description, expression, units, default_units,
+            shape, location, noise_kind, correlation_group)
 end
 
 """

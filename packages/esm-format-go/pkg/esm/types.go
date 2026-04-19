@@ -39,9 +39,14 @@ type AffectEquation struct {
 // 2. Model Components
 // ========================================
 
-// ModelVariable represents a variable in a mathematical model
+// ModelVariable represents a variable in a mathematical model.
+//
+// Type "brownian" denotes a stochastic noise source (Wiener process); the
+// presence of any brownian variable promotes the enclosing model from an ODE
+// system to an SDE system. NoiseKind and CorrelationGroup apply only to
+// brownian variables.
 type ModelVariable struct {
-	Type        string      `json:"type"` // "state", "parameter", or "observed"
+	Type        string      `json:"type"` // "state", "parameter", "observed", or "brownian"
 	Units       *string     `json:"units,omitempty"`
 	Default     interface{} `json:"default,omitempty"`
 	Description *string     `json:"description,omitempty"`
@@ -54,6 +59,12 @@ type ModelVariable struct {
 	// (e.g., "cell_center", "edge_normal", "vertex"). Empty means
 	// no explicit staggering. See discretization RFC §10.2.
 	Location string `json:"location,omitempty"`
+	// NoiseKind is brownian-only: kind of stochastic process. Currently only
+	// "wiener" is supported.
+	NoiseKind string `json:"noise_kind,omitempty"`
+	// CorrelationGroup is brownian-only: optional opaque tag grouping
+	// correlated noise sources.
+	CorrelationGroup string `json:"correlation_group,omitempty"`
 }
 
 // Model represents an ODE system
@@ -627,13 +638,15 @@ func (r *Reaction) UnmarshalJSON(data []byte) error {
 // Custom JSON unmarshaling for ModelVariable
 func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
 	type TempModelVariable struct {
-		Type        string          `json:"type"`
-		Units       *string         `json:"units,omitempty"`
-		Default     interface{}     `json:"default,omitempty"`
-		Description *string         `json:"description,omitempty"`
-		Expression  json.RawMessage `json:"expression,omitempty"`
-		Shape       []string        `json:"shape,omitempty"`
-		Location    string          `json:"location,omitempty"`
+		Type             string          `json:"type"`
+		Units            *string         `json:"units,omitempty"`
+		Default          interface{}     `json:"default,omitempty"`
+		Description      *string         `json:"description,omitempty"`
+		Expression       json.RawMessage `json:"expression,omitempty"`
+		Shape            []string        `json:"shape,omitempty"`
+		Location         string          `json:"location,omitempty"`
+		NoiseKind        string          `json:"noise_kind,omitempty"`
+		CorrelationGroup string          `json:"correlation_group,omitempty"`
 	}
 
 	var temp TempModelVariable
@@ -647,6 +660,8 @@ func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
 	mv.Description = temp.Description
 	mv.Shape = temp.Shape
 	mv.Location = temp.Location
+	mv.NoiseKind = temp.NoiseKind
+	mv.CorrelationGroup = temp.CorrelationGroup
 
 	// Unmarshal Expression if present
 	if len(temp.Expression) > 0 && string(temp.Expression) != "null" {

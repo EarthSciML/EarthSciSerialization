@@ -1531,6 +1531,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -1612,6 +1614,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
         variables.insert(
@@ -1624,6 +1628,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -1743,6 +1749,8 @@ mod tests {
                 expression: None, // Missing expression
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -1816,6 +1824,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -1830,6 +1840,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -1853,6 +1865,8 @@ mod tests {
                 })),
                 shape: None,
                 location: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
 
@@ -1990,6 +2004,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -2004,6 +2020,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -2097,6 +2115,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -2111,6 +2131,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -2194,6 +2216,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -2208,6 +2232,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -2290,6 +2316,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 

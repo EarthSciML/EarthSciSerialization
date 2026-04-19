@@ -12,8 +12,8 @@ import type { ComponentNode, VariableNode, Graph } from '../graph.js';
 export interface DependencyNode {
   /** Variable name */
   name: string;
-  /** Type of variable (state, parameter, observed, species) */
-  kind: 'state' | 'parameter' | 'observed' | 'species';
+  /** Type of variable (state, parameter, observed, brownian, species) */
+  kind: 'state' | 'parameter' | 'observed' | 'brownian' | 'species';
   /** System/model this variable belongs to */
   system: string;
   /** Units if specified */

@@ -118,6 +118,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 

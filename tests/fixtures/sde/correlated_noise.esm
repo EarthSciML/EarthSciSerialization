@@ -1,0 +1,53 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CorrelatedNoise",
+    "description": "SDE with two correlated Wiener noise sources (same correlation_group tag) driving two state variables. Exercises the correlation_group field and multiple brownians in one model.",
+    "authors": ["gt-kuxo"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["sde", "brownian", "correlated"]
+  },
+  "models": {
+    "TwoBody": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 0.0 },
+        "y": { "type": "state", "units": "1", "default": 0.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 1.0 },
+        "sx": { "type": "parameter", "units": "1/s^0.5", "default": 0.3 },
+        "sy": { "type": "parameter", "units": "1/s^0.5", "default": 0.4 },
+        "Bx": {
+          "type": "brownian",
+          "noise_kind": "wiener",
+          "correlation_group": "wind"
+        },
+        "By": {
+          "type": "brownian",
+          "noise_kind": "wiener",
+          "correlation_group": "wind"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["k"] }, "x"] },
+              { "op": "*", "args": ["sx", "Bx"] }
+            ]
+          }
+        },
+        {
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["k"] }, "y"] },
+              { "op": "*", "args": ["sy", "By"] }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

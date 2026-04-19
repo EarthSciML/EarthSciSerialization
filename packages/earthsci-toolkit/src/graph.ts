@@ -76,7 +76,7 @@ export interface VariableNode {
   /** Unique identifier for this variable (scoped, e.g., "Transport.temperature") */
   name: string;
   /** Type of variable */
-  kind: 'state' | 'parameter' | 'observed' | 'species';
+  kind: 'state' | 'parameter' | 'observed' | 'brownian' | 'species';
   /** Units if specified */
   units?: string;
   /** System/component this variable belongs to */
@@ -732,6 +732,10 @@ export function toDot<N, E>(graph: Graph<N, E>): string {
           shape = 'box';
           color = 'lightyellow';
           break;
+        case 'brownian':
+          shape = 'diamond';
+          color = 'lightgrey';
+          break;
         case 'species':
           shape = 'ellipse';
           color = 'lightcoral';
@@ -859,6 +863,9 @@ export function toMermaid<N, E>(graph: Graph<N, E>): string {
         case 'parameter':
         case 'species':
           shape = `((${nodeLabel}))`; // Circle
+          break;
+        case 'brownian':
+          shape = `{${nodeLabel}}`; // Diamond-like
           break;
         default:
           shape = `[${nodeLabel}]`;

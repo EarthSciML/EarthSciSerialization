@@ -1,0 +1,51 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "OrnsteinUhlenbeck",
+    "description": "Minimal SDE: Ornstein–Uhlenbeck process driven by a single Wiener noise source. Exercises the brownian variable type and its promotion of the enclosing model to an SDE system.",
+    "authors": ["gt-kuxo"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["sde", "brownian", "regression"]
+  },
+  "models": {
+    "OU": {
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "OU state variable"
+        },
+        "theta": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 1.0,
+          "description": "Mean-reversion rate"
+        },
+        "sigma": {
+          "type": "parameter",
+          "units": "1/s^0.5",
+          "default": 0.5,
+          "description": "Noise amplitude"
+        },
+        "Bw": {
+          "type": "brownian",
+          "description": "Wiener noise source driving x",
+          "noise_kind": "wiener"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["theta"] }, "x"] },
+              { "op": "*", "args": ["sigma", "Bw"] }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

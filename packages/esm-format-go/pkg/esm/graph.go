@@ -46,7 +46,7 @@ type CouplingEdge struct {
 // VariableNode represents a node in the expression graph
 type VariableNode struct {
 	Name   string  `json:"name"`
-	Kind   string  `json:"kind"` // "state", "parameter", "observed", "species"
+	Kind   string  `json:"kind"` // "state", "parameter", "observed", "brownian", "species"
 	Units  *string `json:"units,omitempty"`
 	System string  `json:"system"`
 }

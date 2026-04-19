@@ -404,14 +404,14 @@ const schema = {
 
     "ModelVariable": {
       "type": "object",
-      "description": "A variable in an ODE model.",
+      "description": "A variable in an ODE/SDE model.",
       "required": ["type"],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["state", "parameter", "observed"],
-          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity."
+          "enum": ["state", "parameter", "observed", "brownian"],
+          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity; brownian = stochastic noise source (Wiener) that drives an SDE."
         },
         "units": { "type": "string" },
         "default": { "type": "number" },
@@ -428,14 +428,28 @@ const schema = {
         "location": {
           "type": "string",
           "description": "Staggered-grid location tag (e.g., cell_center, edge_normal, vertex)."
+        },
+        "noise_kind": {
+          "type": "string",
+          "enum": ["wiener"],
+          "default": "wiener",
+          "description": "Brownian-only: kind of stochastic process."
+        },
+        "correlation_group": {
+          "type": "string",
+          "description": "Brownian-only: opaque tag grouping correlated noise sources."
         }
       },
-      "if": {
-        "properties": { "type": { "const": "observed" } }
-      },
-      "then": {
-        "required": ["expression"]
-      }
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "observed" } }, "required": ["type"] },
+          "then": { "required": ["expression"] }
+        },
+        {
+          "if": { "not": { "properties": { "type": { "const": "brownian" } }, "required": ["type"] } },
+          "then": { "not": { "anyOf": [{ "required": ["noise_kind"] }, { "required": ["correlation_group"] }] } }
+        }
+      ]
     },
 
     "Model": {

@@ -27,6 +27,8 @@ fn test_analysis_features_integration() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
     variables.insert(
@@ -39,6 +41,8 @@ fn test_analysis_features_integration() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 
@@ -231,6 +235,8 @@ fn test_editing_operations() {
         expression: None,
         shape: None,
         location: None,
+            noise_kind: None,
+            correlation_group: None,
     };
 
     let updated_model = add_variable(&model, "test_k", new_var).expect("Failed to add variable");

@@ -321,6 +321,8 @@ fn test_editing() {
         expression: None,
         shape: None,
         location: None,
+            noise_kind: None,
+            correlation_group: None,
     };
 
     let updated_model = add_variable(&model, "k", new_var).expect("Failed to add variable");

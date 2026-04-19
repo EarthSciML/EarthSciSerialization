@@ -8,12 +8,13 @@ import (
 
 // FlattenedSystem represents a coupled system flattened into a single system
 type FlattenedSystem struct {
-	StateVariables []string            // dot-namespaced state variable names
-	Parameters     []string            // dot-namespaced parameter names
-	Variables      map[string]string   // dot-namespaced variable name -> type
-	Equations      []FlattenedEquation // all equations with namespaced vars
-	Events         []interface{}       // events with namespaced references
-	Metadata       FlattenMetadata     // which systems were flattened
+	StateVariables    []string            // dot-namespaced state variable names
+	Parameters        []string            // dot-namespaced parameter names
+	BrownianVariables []string            // dot-namespaced brownian (Wiener) noise variables
+	Variables         map[string]string   // dot-namespaced variable name -> type
+	Equations         []FlattenedEquation // all equations with namespaced vars
+	Events            []interface{}       // events with namespaced references
+	Metadata          FlattenMetadata     // which systems were flattened
 }
 
 // FlattenedEquation represents a single equation in the flattened system
@@ -76,6 +77,8 @@ func Flatten(file *EsmFile) (*FlattenedSystem, error) {
 				flat.StateVariables = append(flat.StateVariables, nsName)
 			case "parameter":
 				flat.Parameters = append(flat.Parameters, nsName)
+			case "brownian":
+				flat.BrownianVariables = append(flat.BrownianVariables, nsName)
 			}
 		}
 
@@ -154,9 +157,10 @@ func Flatten(file *EsmFile) (*FlattenedSystem, error) {
 		}
 	}
 
-	// Sort state variables and parameters for deterministic output
+	// Sort state variables, parameters, and brownians for deterministic output
 	sort.Strings(flat.StateVariables)
 	sort.Strings(flat.Parameters)
+	sort.Strings(flat.BrownianVariables)
 
 	// ---------------------------------------------------------------
 	// Step 3: Apply coupling rules

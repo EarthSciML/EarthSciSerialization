@@ -111,6 +111,10 @@ def _serialize_model_variable(variable: ModelVariable) -> Dict[str, Any]:
         result["shape"] = list(variable.shape)
     if variable.location is not None:
         result["location"] = variable.location
+    if variable.noise_kind is not None:
+        result["noise_kind"] = variable.noise_kind
+    if variable.correlation_group is not None:
+        result["correlation_group"] = variable.correlation_group
     return result
 
 

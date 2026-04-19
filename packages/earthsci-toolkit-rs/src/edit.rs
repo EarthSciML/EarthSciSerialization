@@ -685,6 +685,8 @@ mod tests {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         };
 
         let result = add_variable(&model, "test_var", variable);
@@ -707,6 +709,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
+            noise_kind: None,
+            correlation_group: None,
             },
         );
 
@@ -718,6 +722,8 @@ mod tests {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         };
 
         let result = add_variable(&model, "existing_var", variable);

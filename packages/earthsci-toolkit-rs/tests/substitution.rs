@@ -164,6 +164,8 @@ fn test_model_substitution() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
     variables.insert(
@@ -176,6 +178,8 @@ fn test_model_substitution() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
     variables.insert(
@@ -188,6 +192,8 @@ fn test_model_substitution() {
             expression: None,
             shape: None,
             location: None,
+            noise_kind: None,
+            correlation_group: None,
         },
     );
 
