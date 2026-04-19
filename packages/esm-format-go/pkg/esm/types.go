@@ -81,6 +81,13 @@ type Model struct {
 	// BoundaryConditions holds model-level BC entries keyed by user-supplied id.
 	// New in ESM v0.2.0; see docs/rfcs/discretization.md §9.
 	BoundaryConditions map[string]BoundaryCondition  `json:"boundary_conditions,omitempty"`
+	// Tolerance is the model-level default numerical tolerance applied to
+	// inline tests that do not override it (esm-spec §6.6).
+	Tolerance *Tolerance `json:"tolerance,omitempty"`
+	// Tests are inline validation tests for this model (esm-spec §6.6).
+	Tests []Test `json:"tests,omitempty"`
+	// Examples are inline illustrative runs + plot specs (esm-spec §6.7).
+	Examples []Example `json:"examples,omitempty"`
 }
 
 // ========================================
@@ -128,6 +135,113 @@ type ReactionSystem struct {
 	DiscreteEvents      []DiscreteEvent           `json:"discrete_events,omitempty"`
 	ContinuousEvents    []ContinuousEvent         `json:"continuous_events,omitempty"`
 	Subsystems          map[string]interface{}    `json:"subsystems,omitempty"`
+	// Tolerance is the component-level default numerical tolerance for inline
+	// tests (esm-spec §6.6).
+	Tolerance *Tolerance `json:"tolerance,omitempty"`
+	// Tests are inline validation tests for this reaction system (esm-spec §6.6).
+	Tests []Test `json:"tests,omitempty"`
+	// Examples are inline illustrative runs + plot specs (esm-spec §6.7).
+	Examples []Example `json:"examples,omitempty"`
+}
+
+// ========================================
+// 3b. Inline Tests, Examples, and Plots (esm-spec §6.6 / §6.7)
+// ========================================
+
+// Tolerance is a numerical comparison tolerance. Any of Abs/Rel may be set; an
+// assertion passes when any set bound is satisfied.
+type Tolerance struct {
+	Abs *float64 `json:"abs,omitempty"`
+	Rel *float64 `json:"rel,omitempty"`
+}
+
+// TimeSpan is a simulation time interval expressed in the component's time units.
+type TimeSpan struct {
+	Start float64 `json:"start"`
+	End   float64 `json:"end"`
+}
+
+// Assertion is a single scalar (variable, time, expected) check inside a Test.
+type Assertion struct {
+	Variable  string     `json:"variable"`
+	Time      float64    `json:"time"`
+	Expected  float64    `json:"expected"`
+	Tolerance *Tolerance `json:"tolerance,omitempty"`
+}
+
+// Test is an inline validation test for a Model or ReactionSystem.
+type Test struct {
+	ID                 string             `json:"id"`
+	Description        *string            `json:"description,omitempty"`
+	InitialConditions  map[string]float64 `json:"initial_conditions,omitempty"`
+	ParameterOverrides map[string]float64 `json:"parameter_overrides,omitempty"`
+	TimeSpan           TimeSpan           `json:"time_span"`
+	Tolerance          *Tolerance         `json:"tolerance,omitempty"`
+	Assertions         []Assertion        `json:"assertions"`
+}
+
+// PlotAxis is an axis specification for a plot.
+type PlotAxis struct {
+	Variable string  `json:"variable"`
+	Label    *string `json:"label,omitempty"`
+}
+
+// PlotValue is a scalar value derived from a trajectory, used for heatmap
+// color channels.
+type PlotValue struct {
+	Variable string   `json:"variable"`
+	AtTime   *float64 `json:"at_time,omitempty"`
+	Reduce   *string  `json:"reduce,omitempty"`
+}
+
+// PlotSeries is a single named series for multi-series line/scatter plots.
+type PlotSeries struct {
+	Name     string `json:"name"`
+	Variable string `json:"variable"`
+}
+
+// Plot is a plot specification associated with an Example.
+type Plot struct {
+	ID          string       `json:"id"`
+	Type        string       `json:"type"` // "line" | "scatter" | "heatmap"
+	Description *string      `json:"description,omitempty"`
+	X           PlotAxis     `json:"x"`
+	Y           PlotAxis     `json:"y"`
+	Value       *PlotValue   `json:"value,omitempty"`
+	Series      []PlotSeries `json:"series,omitempty"`
+}
+
+// SweepRange is a generated range of parameter values.
+type SweepRange struct {
+	Start float64 `json:"start"`
+	Stop  float64 `json:"stop"`
+	Count int     `json:"count"`
+	Scale *string `json:"scale,omitempty"` // "linear" | "log"
+}
+
+// SweepDimension is one axis of a parameter sweep; exactly one of Values or
+// Range is set.
+type SweepDimension struct {
+	Parameter string      `json:"parameter"`
+	Values    []float64   `json:"values,omitempty"`
+	Range     *SweepRange `json:"range,omitempty"`
+}
+
+// ParameterSweep is a parameter sweep specification (currently only cartesian).
+type ParameterSweep struct {
+	Type       string           `json:"type"` // "cartesian"
+	Dimensions []SweepDimension `json:"dimensions"`
+}
+
+// Example is an inline illustrative example of how to run a component.
+type Example struct {
+	ID             string             `json:"id"`
+	Description    *string            `json:"description,omitempty"`
+	InitialState   *InitialConditions `json:"initial_state,omitempty"`
+	Parameters     map[string]float64 `json:"parameters,omitempty"`
+	TimeSpan       TimeSpan           `json:"time_span"`
+	ParameterSweep *ParameterSweep    `json:"parameter_sweep,omitempty"`
+	Plots          []Plot             `json:"plots,omitempty"`
 }
 
 // ========================================

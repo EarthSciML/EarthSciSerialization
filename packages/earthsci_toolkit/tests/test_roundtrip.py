@@ -352,3 +352,87 @@ def test_roundtrip_preserves_int_float_distinction():
     assert type(eqs[2]["rhs"]["args"][1]) is float
     assert type(eqs[3]["rhs"]["args"][0]) is float
     assert type(eqs[3]["rhs"]["args"][1]) is float
+
+def test_roundtrip_tests_and_examples_fixture():
+    """Round-trip the tests_examples_comprehensive fixture: inline Test/Assertion/
+    Example/Plot/ParameterSweep blocks must survive parse -> serialize (gt-krpg)."""
+    fixture_path = (
+        Path(__file__).resolve().parents[3]
+        / "tests" / "valid" / "tests_examples_comprehensive.esm"
+    )
+    original = fixture_path.read_text()
+    orig_obj = json.loads(original)
+
+    esm = load(original)
+    dumped = save(esm)
+    esm2 = load(dumped)
+    dumped2 = save(esm2)
+
+    # Idempotence under re-save (spec §2.1a).
+    assert json.loads(dumped) == json.loads(dumped2)
+
+    # Every tests/examples block from the input survives to the output.
+    out = json.loads(dumped)
+    for comp_kind in ("models", "reaction_systems"):
+        for comp_name, comp in orig_obj.get(comp_kind, {}).items():
+            if "tolerance" in comp:
+                assert out[comp_kind][comp_name]["tolerance"] == comp["tolerance"]
+            if "tests" in comp:
+                assert len(out[comp_kind][comp_name]["tests"]) == len(comp["tests"])
+            if "examples" in comp:
+                assert len(out[comp_kind][comp_name]["examples"]) == len(comp["examples"])
+
+    # Spot-check full structure: heatmap-over-sweep assertion values.
+    sweep_example = next(
+        e for e in out["models"]["LogisticGrowth"]["examples"]
+        if e["id"] == "rK_heatmap_sweep"
+    )
+    assert len(sweep_example["parameter_sweep"]["dimensions"]) == 2
+    assert sweep_example["plots"][0]["value"] == {"variable": "N", "reduce": "final"}
+    assert sweep_example["plots"][2]["value"] == {"variable": "N", "at_time": 10.0}
+
+    # PlotSeries survives (multi-series line plot on ReactionSystem).
+    rs_example = out["reaction_systems"]["SimpleDecay"]["examples"][0]
+    series = rs_example["plots"][0]["series"]
+    assert [s["name"] for s in series] == ["A", "B"]
+
+
+def test_roundtrip_typed_test_assertion():
+    """Construct Test/Assertion directly and ensure they round-trip to the wire."""
+    from earthsci_toolkit.esm_types import (
+        EsmFile, Metadata, Model, ModelVariable, Equation,
+        Tolerance, TimeSpan, Assertion, Test,
+    )
+
+    esm = EsmFile(
+        version="0.1.0",
+        metadata=Metadata(title="T"),
+        models={
+            "M": Model(
+                name="M",
+                variables={"x": ModelVariable(type="state", default=0.0)},
+                equations=[Equation(lhs="x", rhs=1)],
+                tolerance=Tolerance(rel=1e-6),
+                tests=[
+                    Test(
+                        id="t1",
+                        time_span=TimeSpan(start=0.0, end=10.0),
+                        tolerance=Tolerance(abs=1e-4),
+                        assertions=[
+                            Assertion(variable="x", time=10.0, expected=1.0,
+                                      tolerance=Tolerance(abs=1e-8)),
+                        ],
+                    ),
+                ],
+            ),
+        },
+    )
+
+    dumped = save(esm)
+    data = json.loads(dumped)
+    t = data["models"]["M"]["tests"][0]
+    assert t["id"] == "t1"
+    assert t["time_span"] == {"start": 0.0, "end": 10.0}
+    assert t["tolerance"] == {"abs": 1e-4}
+    assert t["assertions"][0]["tolerance"] == {"abs": 1e-8}
+    assert data["models"]["M"]["tolerance"] == {"rel": 1e-6}

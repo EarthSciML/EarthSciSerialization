@@ -19,7 +19,10 @@ from .esm_types import (
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
-    InitialCondition, BoundaryCondition
+    InitialCondition, BoundaryCondition,
+    Tolerance, TimeSpan, Assertion, Test,
+    PlotAxis, PlotValue, PlotSeries, Plot,
+    SweepRange, SweepDimension, ParameterSweep, Example,
 )
 
 
@@ -172,6 +175,138 @@ def _serialize_discrete_event(event: DiscreteEvent) -> Dict[str, Any]:
     return result
 
 
+def _serialize_tolerance(t: Tolerance) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
+    if t.abs is not None:
+        result["abs"] = t.abs
+    if t.rel is not None:
+        result["rel"] = t.rel
+    return result
+
+
+def _serialize_time_span(ts: TimeSpan) -> Dict[str, Any]:
+    return {"start": ts.start, "end": ts.end}
+
+
+def _serialize_assertion(a: Assertion) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "variable": a.variable,
+        "time": a.time,
+        "expected": a.expected,
+    }
+    if a.tolerance is not None:
+        result["tolerance"] = _serialize_tolerance(a.tolerance)
+    return result
+
+
+def _serialize_test(t: Test) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"id": t.id}
+    if t.description is not None:
+        result["description"] = t.description
+    if t.initial_conditions:
+        result["initial_conditions"] = dict(t.initial_conditions)
+    if t.parameter_overrides:
+        result["parameter_overrides"] = dict(t.parameter_overrides)
+    result["time_span"] = _serialize_time_span(t.time_span)
+    if t.tolerance is not None:
+        result["tolerance"] = _serialize_tolerance(t.tolerance)
+    result["assertions"] = [_serialize_assertion(a) for a in t.assertions]
+    return result
+
+
+def _serialize_plot_axis(axis: PlotAxis) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"variable": axis.variable}
+    if axis.label is not None:
+        result["label"] = axis.label
+    return result
+
+
+def _serialize_plot_value(v: PlotValue) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"variable": v.variable}
+    if v.at_time is not None:
+        result["at_time"] = v.at_time
+    if v.reduce is not None:
+        result["reduce"] = v.reduce
+    return result
+
+
+def _serialize_plot_series(s: PlotSeries) -> Dict[str, Any]:
+    return {"name": s.name, "variable": s.variable}
+
+
+def _serialize_plot(p: Plot) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "id": p.id,
+        "type": p.type,
+    }
+    if p.description is not None:
+        result["description"] = p.description
+    result["x"] = _serialize_plot_axis(p.x)
+    result["y"] = _serialize_plot_axis(p.y)
+    if p.value is not None:
+        result["value"] = _serialize_plot_value(p.value)
+    if p.series:
+        result["series"] = [_serialize_plot_series(s) for s in p.series]
+    return result
+
+
+def _serialize_sweep_range(r: SweepRange) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"start": r.start, "stop": r.stop, "count": r.count}
+    if r.scale is not None:
+        result["scale"] = r.scale
+    return result
+
+
+def _serialize_sweep_dimension(d: SweepDimension) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"parameter": d.parameter}
+    if d.values is not None:
+        result["values"] = list(d.values)
+    if d.range is not None:
+        result["range"] = _serialize_sweep_range(d.range)
+    return result
+
+
+def _serialize_parameter_sweep(ps: ParameterSweep) -> Dict[str, Any]:
+    return {
+        "type": ps.type,
+        "dimensions": [_serialize_sweep_dimension(d) for d in ps.dimensions],
+    }
+
+
+def _serialize_example_initial_state(ic: InitialCondition) -> Dict[str, Any]:
+    """Serialize an Example.initial_state block (mirrors top-level InitialConditions)."""
+    # Map enum back to wire-format string. Domain's serializer uses ic.type.value
+    # directly, but InitialConditionType.DATA's value is "data" while the schema
+    # wants "from_file" — handle that here.
+    value = ic.type.value
+    if value == "data":
+        value = "from_file"
+    result: Dict[str, Any] = {"type": value}
+    if ic.value is not None:
+        result["value"] = ic.value
+    if ic.values is not None:
+        result["values"] = dict(ic.values)
+    if ic.data_source is not None:
+        result["path"] = ic.data_source
+    return result
+
+
+def _serialize_example(e: Example) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"id": e.id}
+    if e.description is not None:
+        result["description"] = e.description
+    if e.initial_state is not None:
+        result["initial_state"] = _serialize_example_initial_state(e.initial_state)
+    if e.parameters:
+        result["parameters"] = dict(e.parameters)
+    result["time_span"] = _serialize_time_span(e.time_span)
+    if e.parameter_sweep is not None:
+        result["parameter_sweep"] = _serialize_parameter_sweep(e.parameter_sweep)
+    if e.plots:
+        result["plots"] = [_serialize_plot(p) for p in e.plots]
+    return result
+
+
 def _serialize_model(model: Model) -> Dict[str, Any]:
     """Serialize a model to JSON-compatible format."""
     result = {}
@@ -195,6 +330,16 @@ def _serialize_model(model: Model) -> Dict[str, Any]:
             bc_id: _serialize_boundary_condition(bc)
             for bc_id, bc in model.boundary_conditions.items()
         }
+
+    # Inline tests, examples, and model-level tolerance (esm-spec §6.6 / §6.7).
+    if model.tolerance is not None:
+        tol = _serialize_tolerance(model.tolerance)
+        if tol:
+            result["tolerance"] = tol
+    if model.tests:
+        result["tests"] = [_serialize_test(t) for t in model.tests]
+    if model.examples:
+        result["examples"] = [_serialize_example(e) for e in model.examples]
 
     return result
 
@@ -288,6 +433,16 @@ def _serialize_reaction_system(rs: ReactionSystem) -> Dict[str, Any]:
         result["reactions"] = [_serialize_reaction(reaction) for reaction in rs.reactions]
     else:
         result["reactions"] = []
+
+    # Inline tests, examples, and component-level tolerance (esm-spec §6.6 / §6.7).
+    if rs.tolerance is not None:
+        tol = _serialize_tolerance(rs.tolerance)
+        if tol:
+            result["tolerance"] = tol
+    if rs.tests:
+        result["tests"] = [_serialize_test(t) for t in rs.tests]
+    if rs.examples:
+        result["examples"] = [_serialize_example(e) for e in rs.examples]
 
     return result
 

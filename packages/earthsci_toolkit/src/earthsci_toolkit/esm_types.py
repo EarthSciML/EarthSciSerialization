@@ -100,6 +100,12 @@ class Model:
     subsystems: Dict[str, 'Model'] = field(default_factory=dict)
     # v0.2.0: model-level boundary conditions keyed by user-supplied id (RFC §9).
     boundary_conditions: Dict[str, 'BoundaryCondition'] = field(default_factory=dict)
+    # Model-level default numerical tolerance for inline tests (esm-spec §6.6).
+    tolerance: Optional['Tolerance'] = None
+    # Inline validation tests (esm-spec §6.6).
+    tests: List['Test'] = field(default_factory=list)
+    # Inline illustrative examples (esm-spec §6.7).
+    examples: List['Example'] = field(default_factory=list)
 
 
 @dataclass
@@ -144,6 +150,123 @@ class ReactionSystem:
     reactions: List[Reaction] = field(default_factory=list)
     constraint_equations: List[Equation] = field(default_factory=list)
     subsystems: Dict[str, 'ReactionSystem'] = field(default_factory=dict)
+    # Component-level default numerical tolerance for inline tests (esm-spec §6.6).
+    tolerance: Optional['Tolerance'] = None
+    # Inline validation tests (esm-spec §6.6).
+    tests: List['Test'] = field(default_factory=list)
+    # Inline illustrative examples (esm-spec §6.7).
+    examples: List['Example'] = field(default_factory=list)
+
+
+# ========================================
+# 2b. Inline Tests, Examples, and Plots (esm-spec §6.6 / §6.7)
+# ========================================
+
+
+@dataclass
+class Tolerance:
+    """Numerical comparison tolerance. abs and/or rel may be set; an assertion
+    passes when any set bound is satisfied."""
+    abs: Optional[float] = None
+    rel: Optional[float] = None
+
+
+@dataclass
+class TimeSpan:
+    """Simulation time interval expressed in the component's time units."""
+    start: float
+    end: float
+
+
+@dataclass
+class Assertion:
+    """A scalar (variable, time, expected) check used inside a Test."""
+    variable: str
+    time: float
+    expected: float
+    tolerance: Optional[Tolerance] = None
+
+
+@dataclass
+class Test:
+    """Inline validation test for a Model or ReactionSystem."""
+    id: str
+    time_span: TimeSpan
+    assertions: List[Assertion] = field(default_factory=list)
+    description: Optional[str] = None
+    initial_conditions: Dict[str, float] = field(default_factory=dict)
+    parameter_overrides: Dict[str, float] = field(default_factory=dict)
+    tolerance: Optional[Tolerance] = None
+
+
+@dataclass
+class PlotAxis:
+    """Axis specification for a plot."""
+    variable: str
+    label: Optional[str] = None
+
+
+@dataclass
+class PlotValue:
+    """Scalar value derived from a trajectory (e.g., for heatmap color)."""
+    variable: str
+    at_time: Optional[float] = None
+    reduce: Optional[str] = None  # "max" | "min" | "mean" | "integral" | "final"
+
+
+@dataclass
+class PlotSeries:
+    """Single named series for multi-series line or scatter plots."""
+    name: str
+    variable: str
+
+
+@dataclass
+class Plot:
+    """A plot specification associated with an example."""
+    id: str
+    type: str  # "line" | "scatter" | "heatmap"
+    x: PlotAxis
+    y: PlotAxis
+    description: Optional[str] = None
+    value: Optional[PlotValue] = None
+    series: List[PlotSeries] = field(default_factory=list)
+
+
+@dataclass
+class SweepRange:
+    """Generated range of parameter values."""
+    start: float
+    stop: float
+    count: int
+    scale: Optional[str] = None  # "linear" | "log"
+
+
+@dataclass
+class SweepDimension:
+    """One axis of a parameter sweep; exactly one of values or range is set."""
+    parameter: str
+    values: Optional[List[float]] = None
+    range: Optional[SweepRange] = None
+
+
+@dataclass
+class ParameterSweep:
+    """Parameter sweep specification (currently only Cartesian)."""
+    type: str  # "cartesian"
+    dimensions: List[SweepDimension] = field(default_factory=list)
+
+
+@dataclass
+class Example:
+    """Inline illustrative example of how to run a component."""
+    id: str
+    time_span: TimeSpan
+    description: Optional[str] = None
+    initial_state: Optional['InitialCondition'] = None
+    parameters: Dict[str, float] = field(default_factory=dict)
+    parameter_sweep: Optional[ParameterSweep] = None
+    plots: List[Plot] = field(default_factory=list)
 
 
 # ========================================

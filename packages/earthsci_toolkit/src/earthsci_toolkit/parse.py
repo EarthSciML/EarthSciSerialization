@@ -42,7 +42,10 @@ from .esm_types import (
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
     Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
-    InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionKind, BCContributedBy
+    InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionKind, BCContributedBy,
+    Tolerance, TimeSpan, Assertion, Test,
+    PlotAxis, PlotValue, PlotSeries, Plot,
+    SweepRange, SweepDimension, ParameterSweep, Example,
 )
 
 
@@ -340,6 +343,125 @@ def _parse_discrete_event(event_data: Dict[str, Any]) -> DiscreteEvent:
     )
 
 
+def _parse_tolerance(data: Dict[str, Any]) -> Tolerance:
+    return Tolerance(abs=data.get("abs"), rel=data.get("rel"))
+
+
+def _parse_time_span(data: Dict[str, Any]) -> TimeSpan:
+    return TimeSpan(start=float(data["start"]), end=float(data["end"]))
+
+
+def _parse_assertion(data: Dict[str, Any]) -> Assertion:
+    tol = _parse_tolerance(data["tolerance"]) if "tolerance" in data else None
+    return Assertion(
+        variable=data["variable"],
+        time=float(data["time"]),
+        expected=float(data["expected"]),
+        tolerance=tol,
+    )
+
+
+def _parse_test(data: Dict[str, Any]) -> Test:
+    return Test(
+        id=data["id"],
+        time_span=_parse_time_span(data["time_span"]),
+        assertions=[_parse_assertion(a) for a in data.get("assertions", [])],
+        description=data.get("description"),
+        initial_conditions=dict(data.get("initial_conditions", {})),
+        parameter_overrides=dict(data.get("parameter_overrides", {})),
+        tolerance=_parse_tolerance(data["tolerance"]) if "tolerance" in data else None,
+    )
+
+
+def _parse_plot_axis(data: Dict[str, Any]) -> PlotAxis:
+    return PlotAxis(variable=data["variable"], label=data.get("label"))
+
+
+def _parse_plot_value(data: Dict[str, Any]) -> PlotValue:
+    return PlotValue(
+        variable=data["variable"],
+        at_time=data.get("at_time"),
+        reduce=data.get("reduce"),
+    )
+
+
+def _parse_plot_series(data: Dict[str, Any]) -> PlotSeries:
+    return PlotSeries(name=data["name"], variable=data["variable"])
+
+
+def _parse_plot(data: Dict[str, Any]) -> Plot:
+    return Plot(
+        id=data["id"],
+        type=data["type"],
+        x=_parse_plot_axis(data["x"]),
+        y=_parse_plot_axis(data["y"]),
+        description=data.get("description"),
+        value=_parse_plot_value(data["value"]) if "value" in data else None,
+        series=[_parse_plot_series(s) for s in data.get("series", [])],
+    )
+
+
+def _parse_sweep_range(data: Dict[str, Any]) -> SweepRange:
+    return SweepRange(
+        start=float(data["start"]),
+        stop=float(data["stop"]),
+        count=int(data["count"]),
+        scale=data.get("scale"),
+    )
+
+
+def _parse_sweep_dimension(data: Dict[str, Any]) -> SweepDimension:
+    return SweepDimension(
+        parameter=data["parameter"],
+        values=list(data["values"]) if "values" in data else None,
+        range=_parse_sweep_range(data["range"]) if "range" in data else None,
+    )
+
+
+def _parse_parameter_sweep(data: Dict[str, Any]) -> ParameterSweep:
+    return ParameterSweep(
+        type=data["type"],
+        dimensions=[_parse_sweep_dimension(d) for d in data.get("dimensions", [])],
+    )
+
+
+def _parse_example_initial_state(data: Dict[str, Any]) -> InitialCondition:
+    """Parse an Example.initial_state block. Mirrors the top-level
+    InitialConditions schema (constant / per_variable / from_file)."""
+    type_str = data["type"]
+    type_mapping = {
+        "constant": InitialConditionType.CONSTANT,
+        "per_variable": InitialConditionType.PER_VARIABLE,
+        "from_file": InitialConditionType.DATA,
+    }
+    ic_type = type_mapping.get(type_str, InitialConditionType.CONSTANT)
+    return InitialCondition(
+        type=ic_type,
+        value=data.get("value"),
+        values=data.get("values"),
+        function=None,
+        data_source=data.get("path"),
+    )
+
+
+def _parse_example(data: Dict[str, Any]) -> Example:
+    initial_state = None
+    if "initial_state" in data:
+        initial_state = _parse_example_initial_state(data["initial_state"])
+    sweep = None
+    if "parameter_sweep" in data:
+        sweep = _parse_parameter_sweep(data["parameter_sweep"])
+    return Example(
+        id=data["id"],
+        time_span=_parse_time_span(data["time_span"]),
+        description=data.get("description"),
+        initial_state=initial_state,
+        parameters=dict(data.get("parameters", {})),
+        parameter_sweep=sweep,
+        plots=[_parse_plot(p) for p in data.get("plots", [])],
+    )
+
+
 def _parse_model(model_data: Dict[str, Any]) -> Model:
     """Parse a model from JSON data."""
     # Extract variables
@@ -381,6 +503,14 @@ def _parse_model(model_data: Dict[str, Any]) -> Model:
     model = Model(name="", variables=variables, equations=equations,
                   subsystems=subsystems,
                   boundary_conditions=boundary_conditions)
+
+    if "tolerance" in model_data:
+        model.tolerance = _parse_tolerance(model_data["tolerance"])
+    if "tests" in model_data:
+        model.tests = [_parse_test(t) for t in model_data["tests"]]
+    if "examples" in model_data:
+        model.examples = [_parse_example(e) for e in model_data["examples"]]
+
     return model
 
 
@@ -528,7 +658,7 @@ def _parse_reaction_system(rs_data: Dict[str, Any]) -> ReactionSystem:
                 sub_rs.name = sub_name
                 subsystems[sub_name] = sub_rs
 
-    return ReactionSystem(
+    rs = ReactionSystem(
         name="",  # Name comes from the key
         species=species,
         parameters=parameters,
@@ -536,6 +666,15 @@ def _parse_reaction_system(rs_data: Dict[str, Any]) -> ReactionSystem:
         constraint_equations=constraint_equations,
         subsystems=subsystems,
     )
+
+    if "tolerance" in rs_data:
+        rs.tolerance = _parse_tolerance(rs_data["tolerance"])
+    if "tests" in rs_data:
+        rs.tests = [_parse_test(t) for t in rs_data["tests"]]
+    if "examples" in rs_data:
+        rs.examples = [_parse_example(e) for e in rs_data["examples"]]
+
+    return rs
 
 
 def _parse_reference(ref_data: Dict[str, Any]) -> Reference:
