@@ -1,0 +1,36 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ScalarExplicit",
+    "description": "Arrayed-variable schema (RFC §10.2): a scalar variable declared with an explicit empty shape. Bindings must preserve the empty-list form.",
+    "authors": ["gt-dzdi"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["arrayed_vars", "scalar"]
+  },
+  "models": {
+    "ScalarExplicit": {
+      "variables": {
+        "mass": {
+          "type": "state",
+          "units": "kg",
+          "default": 1.0,
+          "description": "Total mass — explicitly scalar (empty shape)",
+          "shape": []
+        },
+        "T_ref": {
+          "type": "parameter",
+          "units": "K",
+          "default": 298.15,
+          "description": "Reference temperature — scalar with explicit empty shape and no staggering",
+          "shape": []
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["mass"], "wrt": "t" },
+          "rhs": 0.0
+        }
+      ]
+    }
+  }
+}

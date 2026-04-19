@@ -70,6 +70,12 @@ class ModelVariable:
     default_units: Optional[str] = None
     description: Optional[str] = None
     expression: Optional[Expr] = None
+    # Arrayed-variable shape: ordered dimension names from the enclosing
+    # model's domain.spatial. None means scalar. See discretization RFC §10.2.
+    shape: Optional[List[str]] = None
+    # Staggered-grid location tag (e.g. "cell_center", "edge_normal",
+    # "vertex"). None means no explicit staggering. See RFC §10.2.
+    location: Optional[str] = None
 
 
 @dataclass

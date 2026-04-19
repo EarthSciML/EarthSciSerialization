@@ -260,6 +260,13 @@ struct ModelVariable
     expression::Union{Expr,Nothing}
     units::Union{String,Nothing}
     default_units::Union{String,Nothing}
+    # Arrayed-variable shape: ordered dimension names drawn from the
+    # enclosing model's domain.spatial. `nothing` means scalar.
+    # See discretization RFC §10.2.
+    shape::Union{Vector{String},Nothing}
+    # Staggered-grid location tag (e.g. "cell_center", "edge_normal",
+    # "vertex"). `nothing` means no explicit staggering. See RFC §10.2.
+    location::Union{String,Nothing}
 
     # Constructor with optional parameters
     ModelVariable(type::ModelVariableType;
@@ -267,8 +274,10 @@ struct ModelVariable
                   description=nothing,
                   expression=nothing,
                   units=nothing,
-                  default_units=nothing) =
-        new(type, default, description, expression, units, default_units)
+                  default_units=nothing,
+                  shape=nothing,
+                  location=nothing) =
+        new(type, default, description, expression, units, default_units, shape, location)
 end
 
 """

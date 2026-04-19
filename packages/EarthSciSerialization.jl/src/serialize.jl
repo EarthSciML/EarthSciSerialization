@@ -220,6 +220,12 @@ function serialize_model_variable(var::ModelVariable)::Dict{String,Any}
     if var.expression !== nothing
         result["expression"] = serialize_expression(var.expression)
     end
+    if var.shape !== nothing
+        result["shape"] = String[d for d in var.shape]
+    end
+    if var.location !== nothing
+        result["location"] = var.location
+    end
     return result
 end
 

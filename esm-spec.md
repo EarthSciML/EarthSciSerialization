@@ -821,6 +821,13 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `parameter` | Values set externally or held constant during integration |
 | `observed` | Derived quantities; must include an `expression` field |
 
+Optional arrayed-variable fields (introduced in spec 0.2, discretization RFC §10.2):
+
+| Field | Description |
+|---|---|
+| `shape` | Ordered list of dimension names drawn from the enclosing model's domain `spatial` map. Omitted or null means the variable is scalar. Used by the discretization pipeline and validated by `index` in discretization RFC §5.1. |
+| `location` | Staggered-grid location tag (e.g., `"cell_center"`, `"edge_normal"`, `"x_face"`, `"vertex"`). Omitted means no explicit staggering; spatialization (discretization RFC §11 step 2) defaults this to `"cell_center"` when the variable's model has a grid. |
+
 ### 6.4 Advection Model Example
 
 Advection is a model like any other — fully specified:

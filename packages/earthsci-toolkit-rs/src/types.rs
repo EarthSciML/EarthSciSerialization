@@ -330,6 +330,18 @@ pub struct ModelVariable {
     /// Defining expression for observed variables
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expression: Option<Expr>,
+
+    /// Arrayed-variable shape: ordered dimension names drawn from the
+    /// enclosing model's domain.spatial. `None` means scalar.
+    /// See discretization RFC §10.2.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shape: Option<Vec<String>>,
+
+    /// Staggered-grid location tag (e.g., "cell_center", "edge_normal",
+    /// "vertex"). `None` means no explicit staggering.
+    /// See discretization RFC §10.2.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
 }
 
 /// Type of model variable

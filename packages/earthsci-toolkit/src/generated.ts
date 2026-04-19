@@ -339,6 +339,14 @@ export interface ModelVariable {
    * Defining expression for observed variables.
    */
   expression?: number | string | ExpressionNode;
+  /**
+   * Arrayed-variable shape: ordered list of dimension names (drawn from the enclosing model's domain.spatial). Omitted or null indicates a scalar. Introduced in spec 0.2 (discretization RFC §10.2).
+   */
+  shape?: string[];
+  /**
+   * Staggered-grid location tag (e.g., "cell_center", "edge_normal", "x_face", "vertex"). Omitted indicates no explicit staggering; the spatialization step defaults to "cell_center" when the variable's model has a grid (discretization RFC §10.2, §11 step 2).
+   */
+  location?: string;
 }
 /**
  * An operation in the expression AST.

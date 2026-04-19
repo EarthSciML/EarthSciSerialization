@@ -107,6 +107,10 @@ def _serialize_model_variable(variable: ModelVariable) -> Dict[str, Any]:
         result["description"] = variable.description
     if variable.expression is not None:
         result["expression"] = _serialize_expression(variable.expression)
+    if variable.shape is not None:
+        result["shape"] = list(variable.shape)
+    if variable.location is not None:
+        result["location"] = variable.location
     return result
 
 

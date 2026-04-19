@@ -190,6 +190,8 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
                 default: species.default,
                 description: species.description.clone(),
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
     }

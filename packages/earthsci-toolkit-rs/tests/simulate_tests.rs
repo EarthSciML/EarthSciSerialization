@@ -63,6 +63,8 @@ fn state(name: &str, default: f64) -> (String, ModelVariable) {
             default: Some(default),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     )
 }
@@ -76,6 +78,8 @@ fn param(name: &str, default: f64) -> (String, ModelVariable) {
             default: Some(default),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     )
 }
@@ -758,6 +762,8 @@ fn test_error_missing_initial_condition() {
         default: None,
         description: None,
         expression: None,
+        shape: None,
+        location: None,
     };
     // Force a state with no default
     state_x.default = None;

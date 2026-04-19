@@ -162,6 +162,8 @@ fn test_model_substitution() {
             default: Some(1.0),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     );
     variables.insert(
@@ -172,6 +174,8 @@ fn test_model_substitution() {
             default: Some(0.1),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     );
     variables.insert(
@@ -182,6 +186,8 @@ fn test_model_substitution() {
             default: Some(0.0),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     );
 

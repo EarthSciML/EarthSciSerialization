@@ -217,6 +217,10 @@ def _parse_model_variable(var_data: Dict[str, Any]) -> ModelVariable:
     expression = None
     if "expression" in var_data:
         expression = _parse_expression(var_data["expression"])
+    shape = var_data.get("shape")
+    if shape is not None:
+        shape = list(shape)
+    location = var_data.get("location")
 
     return ModelVariable(
         type=var_type,
@@ -224,7 +228,9 @@ def _parse_model_variable(var_data: Dict[str, Any]) -> ModelVariable:
         default=default,
         default_units=default_units,
         description=description,
-        expression=expression
+        expression=expression,
+        shape=shape,
+        location=location,
     )
 
 

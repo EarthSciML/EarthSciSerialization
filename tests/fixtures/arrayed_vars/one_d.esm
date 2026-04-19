@@ -1,0 +1,50 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "OneDArrayed",
+    "description": "Arrayed-variable schema (RFC §10.2): a 1-D cell-centered state variable on the x axis.",
+    "authors": ["gt-dzdi"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["arrayed_vars", "1d"]
+  },
+  "models": {
+    "Diffusion1D": {
+      "domain": "line",
+      "variables": {
+        "c": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 0.0,
+          "description": "Concentration along x",
+          "shape": ["x"],
+          "location": "cell_center"
+        },
+        "D": {
+          "type": "parameter",
+          "units": "m^2/s",
+          "default": 1e-05,
+          "description": "Diffusion coefficient"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["c"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "D",
+              { "op": "laplacian", "args": ["c"] }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "domains": {
+    "line": {
+      "spatial": {
+        "x": { "min": 0.0, "max": 1.0, "grid_spacing": 0.01, "units": "m" }
+      }
+    }
+  }
+}

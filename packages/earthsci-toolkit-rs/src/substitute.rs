@@ -787,6 +787,8 @@ mod tests {
                 default: Some(298.15),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -855,6 +857,8 @@ mod tests {
                 default: Some(298.15),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -926,6 +930,8 @@ mod tests {
                 default: Some(298.15),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -997,6 +1003,8 @@ mod tests {
                 default: Some(40e-9),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
         model_variables.insert(
@@ -1007,6 +1015,8 @@ mod tests {
                 default: Some(1.8e-12),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -1202,6 +1212,8 @@ mod tests {
                         default: Some(0.0),
                         description: None,
                         expression: None,
+                        shape: None,
+                        location: None,
                     },
                 );
                 vars

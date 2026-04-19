@@ -1452,6 +1452,8 @@ mod tests {
                 default: None,
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -1531,6 +1533,8 @@ mod tests {
                 default: None,
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
         variables.insert(
@@ -1541,6 +1545,8 @@ mod tests {
                 default: None,
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -1658,6 +1664,8 @@ mod tests {
                 default: None,
                 description: None,
                 expression: None, // Missing expression
+                shape: None,
+                location: None,
             },
         );
 
@@ -1729,6 +1737,8 @@ mod tests {
                 default: Some(1.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -1741,6 +1751,8 @@ mod tests {
                 default: Some(0.1),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -1762,6 +1774,8 @@ mod tests {
                     dim: None,
                     ..Default::default()
                 })),
+                shape: None,
+                location: None,
             },
         );
 
@@ -1897,6 +1911,8 @@ mod tests {
                 default: Some(1.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -1909,6 +1925,8 @@ mod tests {
                 default: Some(0.1),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -2000,6 +2018,8 @@ mod tests {
                 default: Some(1.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -2012,6 +2032,8 @@ mod tests {
                 default: Some(0.1),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -2093,6 +2115,8 @@ mod tests {
                 default: Some(0.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -2105,6 +2129,8 @@ mod tests {
                 default: Some(1.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -2185,6 +2211,8 @@ mod tests {
                 default: Some(1.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 

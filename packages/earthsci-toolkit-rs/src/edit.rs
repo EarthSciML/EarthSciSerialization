@@ -683,6 +683,8 @@ mod tests {
             default: Some(1.0),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         };
 
         let result = add_variable(&model, "test_var", variable);
@@ -703,6 +705,8 @@ mod tests {
                 default: None,
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 
@@ -712,6 +716,8 @@ mod tests {
             default: Some(1.0),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         };
 
         let result = add_variable(&model, "existing_var", variable);

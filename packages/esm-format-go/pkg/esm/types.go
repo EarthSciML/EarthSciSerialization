@@ -46,6 +46,14 @@ type ModelVariable struct {
 	Default     interface{} `json:"default,omitempty"`
 	Description *string     `json:"description,omitempty"`
 	Expression  Expression  `json:"expression,omitempty"` // for observed variables
+	// Shape lists dimension names (drawn from the enclosing model's
+	// domain.spatial) for arrayed variables. Nil means scalar.
+	// See discretization RFC §10.2.
+	Shape []string `json:"shape,omitempty"`
+	// Location tags the variable's staggered-grid location
+	// (e.g., "cell_center", "edge_normal", "vertex"). Empty means
+	// no explicit staggering. See discretization RFC §10.2.
+	Location string `json:"location,omitempty"`
 }
 
 // Model represents an ODE system
@@ -624,6 +632,8 @@ func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
 		Default     interface{}     `json:"default,omitempty"`
 		Description *string         `json:"description,omitempty"`
 		Expression  json.RawMessage `json:"expression,omitempty"`
+		Shape       []string        `json:"shape,omitempty"`
+		Location    string          `json:"location,omitempty"`
 	}
 
 	var temp TempModelVariable
@@ -635,6 +645,8 @@ func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
 	mv.Units = temp.Units
 	mv.Default = temp.Default
 	mv.Description = temp.Description
+	mv.Shape = temp.Shape
+	mv.Location = temp.Location
 
 	// Unmarshal Expression if present
 	if len(temp.Expression) > 0 && string(temp.Expression) != "null" {

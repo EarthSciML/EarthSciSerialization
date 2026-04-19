@@ -485,6 +485,8 @@ fn build_reaction_block(
                 default: species.default,
                 description: species.description.clone(),
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
     }
@@ -502,6 +504,8 @@ fn build_reaction_block(
                 default: param.default,
                 description: param.description.clone(),
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
     }
@@ -977,6 +981,8 @@ mod tests {
                 default: Some(0.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
         vars.insert(
@@ -987,6 +993,8 @@ mod tests {
                 default: Some(1.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 

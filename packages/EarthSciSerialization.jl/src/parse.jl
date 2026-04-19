@@ -457,12 +457,20 @@ function coerce_model_variable(data::Any)::ModelVariable
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
     expression = haskey(data, :expression) && data.expression !== nothing ? parse_expression(data.expression) : nothing
     default_units = haskey(data, :default_units) && data.default_units !== nothing ? string(data.default_units) : nothing
+    shape = if haskey(data, :shape) && data.shape !== nothing
+        String[string(d) for d in data.shape]
+    else
+        nothing
+    end
+    location = haskey(data, :location) && data.location !== nothing ? string(data.location) : nothing
 
     return ModelVariable(var_type,
                         default=default,
                         description=description,
                         expression=expression,
-                        default_units=default_units)
+                        default_units=default_units,
+                        shape=shape,
+                        location=location)
 end
 
 """

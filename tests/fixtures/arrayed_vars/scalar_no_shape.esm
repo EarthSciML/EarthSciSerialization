@@ -1,0 +1,40 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ScalarNoShape",
+    "description": "Regression guard: a pre-0.2 model with no shape/location fields must still parse and round-trip unchanged.",
+    "authors": ["gt-dzdi"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["arrayed_vars", "regression", "scalar"]
+  },
+  "models": {
+    "Scalar0D": {
+      "variables": {
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "Scalar state variable"
+        },
+        "k": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 1.0,
+          "description": "Decay rate"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              { "op": "-", "args": ["k"] },
+              "x"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

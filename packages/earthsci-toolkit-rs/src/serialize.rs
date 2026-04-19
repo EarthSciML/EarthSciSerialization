@@ -116,6 +116,8 @@ mod tests {
                 default: Some(0.0),
                 description: None,
                 expression: None,
+                shape: None,
+                location: None,
             },
         );
 

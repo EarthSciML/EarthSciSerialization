@@ -419,6 +419,15 @@ const schema = {
         "expression": {
           "$ref": "#/$defs/Expression",
           "description": "Defining expression for observed variables."
+        },
+        "shape": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Arrayed-variable shape: ordered dimension names from the enclosing model's domain.spatial."
+        },
+        "location": {
+          "type": "string",
+          "description": "Staggered-grid location tag (e.g., cell_center, edge_normal, vertex)."
         }
       },
       "if": {

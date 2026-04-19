@@ -29,6 +29,8 @@ fn test_component_graph_generation() {
             default: Some(1.0),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     );
 
@@ -204,6 +206,8 @@ fn test_model_expression_graph() {
             default: Some(1.0),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     );
     variables.insert(
@@ -214,6 +218,8 @@ fn test_model_expression_graph() {
             default: Some(0.1),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     );
 
@@ -487,6 +493,8 @@ fn test_expected_graph_outputs() {
             default: Some(1.0),
             description: None,
             expression: None,
+            shape: None,
+            location: None,
         },
     );
 

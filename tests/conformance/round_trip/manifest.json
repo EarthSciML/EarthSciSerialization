@@ -48,6 +48,12 @@
     { "id": "fixtures/arrayop/04_weno_wide_stencil",        "path": "fixtures/arrayop/04_weno_wide_stencil.esm",        "tags": ["arrayop"] },
     { "id": "fixtures/arrayop/06_rearranged_algebraic",     "path": "fixtures/arrayop/06_rearranged_algebraic.esm",     "tags": ["arrayop"] },
 
-    { "id": "indexing/idx_outside_arrayop",                 "path": "indexing/idx_outside_arrayop.esm",                 "tags": ["indexing", "rfc-discretization-5.1"] }
+    { "id": "indexing/idx_outside_arrayop",                 "path": "indexing/idx_outside_arrayop.esm",                 "tags": ["indexing", "rfc-discretization-5.1"] },
+
+    { "id": "fixtures/arrayed_vars/scalar_no_shape", "path": "fixtures/arrayed_vars/scalar_no_shape.esm", "tags": ["arrayed_vars", "regression"] },
+    { "id": "fixtures/arrayed_vars/scalar_explicit", "path": "fixtures/arrayed_vars/scalar_explicit.esm", "tags": ["arrayed_vars"] },
+    { "id": "fixtures/arrayed_vars/one_d",           "path": "fixtures/arrayed_vars/one_d.esm",           "tags": ["arrayed_vars", "discretization"] },
+    { "id": "fixtures/arrayed_vars/two_d_faces",     "path": "fixtures/arrayed_vars/two_d_faces.esm",     "tags": ["arrayed_vars", "discretization", "staggered"] },
+    { "id": "fixtures/arrayed_vars/vertex_located",  "path": "fixtures/arrayed_vars/vertex_located.esm",  "tags": ["arrayed_vars", "discretization", "vertex"] }
   ]
 }
