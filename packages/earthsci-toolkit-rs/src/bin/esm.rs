@@ -645,6 +645,7 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
 fn expr_to_julia(expr: &earthsci_toolkit::Expr) -> String {
     match expr {
         earthsci_toolkit::Expr::Number(n) => n.to_string(),
+        earthsci_toolkit::Expr::Integer(n) => n.to_string(),
         earthsci_toolkit::Expr::Variable(name) => name.clone(),
         earthsci_toolkit::Expr::Operator(node) => {
             match node.op.as_str() {
@@ -702,6 +703,7 @@ fn expr_to_julia(expr: &earthsci_toolkit::Expr) -> String {
 fn expr_to_python(expr: &earthsci_toolkit::Expr) -> String {
     match expr {
         earthsci_toolkit::Expr::Number(n) => n.to_string(),
+        earthsci_toolkit::Expr::Integer(n) => n.to_string(),
         earthsci_toolkit::Expr::Variable(name) => name.clone(),
         earthsci_toolkit::Expr::Operator(node) => {
             match node.op.as_str() {
@@ -803,7 +805,7 @@ fn collect_unit_types(esm_file: &earthsci_toolkit::EsmFile) -> Vec<String> {
 #[cfg(feature = "cli")]
 fn expression_depth(expr: &earthsci_toolkit::Expr) -> usize {
     match expr {
-        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Variable(_) => 1,
+        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) | earthsci_toolkit::Expr::Variable(_) => 1,
         earthsci_toolkit::Expr::Operator(node) => {
             1 + node.args.iter().map(expression_depth).max().unwrap_or(0)
         }
@@ -813,7 +815,7 @@ fn expression_depth(expr: &earthsci_toolkit::Expr) -> usize {
 #[cfg(feature = "cli")]
 fn count_expression_nodes(expr: &earthsci_toolkit::Expr) -> usize {
     match expr {
-        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Variable(_) => 1,
+        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) | earthsci_toolkit::Expr::Variable(_) => 1,
         earthsci_toolkit::Expr::Operator(node) => {
             1 + node.args.iter().map(count_expression_nodes).sum::<usize>()
         }
@@ -1214,14 +1216,14 @@ fn collect_variables(expr: &earthsci_toolkit::Expr, vars: &mut std::collections:
                 collect_variables(arg, vars);
             }
         }
-        earthsci_toolkit::Expr::Number(_) => {}
+        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) => {}
     }
 }
 
 #[cfg(feature = "cli")]
 fn count_operations(expr: &earthsci_toolkit::Expr) -> usize {
     match expr {
-        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Variable(_) => 0,
+        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) | earthsci_toolkit::Expr::Variable(_) => 0,
         earthsci_toolkit::Expr::Operator(node) => {
             1 + node.args.iter().map(count_operations).sum::<usize>()
         }
@@ -1600,7 +1602,7 @@ fn count_numerical_values(esm_file: &earthsci_toolkit::EsmFile, count: &mut usiz
 #[cfg(feature = "cli")]
 fn count_numbers_in_expression(expr: &earthsci_toolkit::Expr, count: &mut usize) {
     match expr {
-        earthsci_toolkit::Expr::Number(_) => *count += 1,
+        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) => *count += 1,
         earthsci_toolkit::Expr::Operator(node) => {
             for arg in &node.args {
                 count_numbers_in_expression(arg, count);

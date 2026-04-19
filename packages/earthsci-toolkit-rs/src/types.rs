@@ -99,12 +99,23 @@ pub struct Metadata {
     pub references: Option<Vec<Reference>>,
 }
 
-/// Mathematical expression: a number literal, variable reference, or operator node
+/// Mathematical expression: a number literal, variable reference, or operator node.
+///
+/// Per discretization RFC §5.4.1, integer and float literals are distinct AST
+/// node kinds. On the wire (§5.4.6 round-trip parse rule), a JSON-number
+/// token containing `.`, `e`, or `E` deserializes to [`Expr::Number`]; a token
+/// matching the integer grammar `-?(0|[1-9][0-9]*)` deserializes to
+/// [`Expr::Integer`]. `#[serde(untagged)]` tries variants in order; `Integer`
+/// appears before `Number` so that the strict integer JSON tokens bind to
+/// `Integer` and float tokens fall through to `Number`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
 pub enum Expr {
-    /// Number literal
+    /// Integer literal (JSON integer token, no `.`, no `e`/`E`).
+    Integer(i64),
+
+    /// Float literal (JSON number token with `.`, `e`, or `E`).
     Number(f64),
 
     /// Variable or parameter reference string

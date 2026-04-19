@@ -203,7 +203,7 @@ function mass_action_rate(reaction::Reaction, species::Vector{Species})::EarthSc
         else
             push!(mass_action_terms, OpExpr("^",
                 EarthSciSerialization.Expr[species_expr,
-                                           NumExpr(Float64(entry.stoichiometry))]))
+                                           IntExpr(Int64(entry.stoichiometry))]))
         end
     end
 

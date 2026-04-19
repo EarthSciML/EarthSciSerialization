@@ -64,7 +64,7 @@ This performs dimensional analysis to determine the units that result from
 evaluating an expression, assuming all variables have known units.
 """
 function get_expression_dimensions(expr::EarthSciSerialization.Expr, var_units::Dict{String, String})::Union{Unitful.Units, Nothing}
-    if expr isa NumExpr
+    if expr isa NumExpr || expr isa IntExpr
         # Numbers are dimensionless unless specified otherwise
         return Unitful.NoUnits
     elseif expr isa VarExpr
@@ -144,7 +144,9 @@ function get_expression_dimensions(expr::EarthSciSerialization.Expr, var_units::
                 end
 
                 # For now, assume integer powers - could be extended for fractional powers
-                if expr.args[2] isa NumExpr
+                if expr.args[2] isa IntExpr
+                    return base_dim^Int(expr.args[2].value)
+                elseif expr.args[2] isa NumExpr
                     power = expr.args[2].value
                     if power isa Number && isinteger(power)
                         return base_dim^Int(power)

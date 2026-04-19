@@ -203,7 +203,7 @@ fn model_has_array_ops(model: &Model) -> bool {
 
 fn expr_has_array_op(expr: &Expr) -> bool {
     match expr {
-        Expr::Number(_) | Expr::Variable(_) => false,
+        Expr::Number(_) | Expr::Integer(_) | Expr::Variable(_) => false,
         Expr::Operator(node) => {
             if ARRAY_OP_NAMES.contains(&node.op.as_str()) {
                 return true;
@@ -905,6 +905,7 @@ struct EvalCtx<'a> {
 fn eval(expr: &Expr, ctx: &mut EvalCtx) -> Value {
     match expr {
         Expr::Number(n) => Value::Scalar(*n),
+        Expr::Integer(n) => Value::Scalar(*n as f64),
         Expr::Variable(name) => lookup_variable(name, ctx),
         Expr::Operator(node) => eval_op(node, ctx),
     }
@@ -1597,7 +1598,7 @@ fn walk_for_shapes(
     loop_ranges: &HashMap<String, (i64, i64)>,
 ) {
     match expr {
-        Expr::Number(_) | Expr::Variable(_) => {}
+        Expr::Number(_) | Expr::Integer(_) | Expr::Variable(_) => {}
         Expr::Operator(node) => {
             if node.op == "index" {
                 if let Some(Expr::Variable(var)) = node.args.first()
@@ -1696,6 +1697,7 @@ fn walk_for_shapes(
 /// bound to a loop, and `(i + k)` / `(i - k)` / `(k + i)` arithmetic.
 fn evaluate_index_range(expr: &Expr, loop_ranges: &HashMap<String, (i64, i64)>) -> (i64, i64) {
     match expr {
+        Expr::Integer(n) => (*n, *n),
         Expr::Number(n) => {
             let v = *n as i64;
             (v, v)

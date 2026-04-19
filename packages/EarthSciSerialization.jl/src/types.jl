@@ -20,10 +20,25 @@ abstract type Expr end
 """
     NumExpr(value::Float64)
 
-Numeric literal expression containing a floating-point value.
+Floating-point numeric literal expression. Represents a JSON-number token that
+contains `.` or `e`/`E` on the wire (per discretization RFC §5.4.6 round-trip
+parse rule). For integer literals use `IntExpr`.
 """
 struct NumExpr <: Expr
     value::Float64
+end
+
+"""
+    IntExpr(value::Int64)
+
+Integer numeric literal expression. Represents a JSON-number token that matches
+the integer grammar `-?(0|[1-9][0-9]*)` on the wire (per discretization RFC
+§5.4.6 round-trip parse rule). The AST distinguishes integer and float nodes:
+`IntExpr(1)` and `NumExpr(1.0)` are different values, and canonicalization
+never auto-promotes one to the other (RFC §5.4.1).
+"""
+struct IntExpr <: Expr
+    value::Int64
 end
 
 """

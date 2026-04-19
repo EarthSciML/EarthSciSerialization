@@ -558,6 +558,7 @@ fn build_reaction_block(
 fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
+        Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(name) => {
             if name.contains('.') {
                 Expr::Variable(name.clone())
@@ -651,7 +652,7 @@ fn namespace_plain(name: &str, system_name: &str) -> String {
 /// simulator is ODE-only.
 fn reject_spatial_operators(expr: &Expr) -> Result<(), FlattenError> {
     match expr {
-        Expr::Number(_) | Expr::Variable(_) => Ok(()),
+        Expr::Number(_) | Expr::Integer(_) | Expr::Variable(_) => Ok(()),
         Expr::Operator(node) => {
             match node.op.as_str() {
                 "grad" | "div" | "laplacian" | "curl" | "∇" => {
@@ -937,6 +938,7 @@ fn apply_variable_map(
 fn substitute_var(expr: &Expr, target: &str, replacement: &Expr) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
+        Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(name) if name == target => replacement.clone(),
         Expr::Variable(name) => Expr::Variable(name.clone()),
         Expr::Operator(node) => Expr::Operator(ExpressionNode {

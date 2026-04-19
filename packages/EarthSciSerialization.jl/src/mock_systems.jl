@@ -129,7 +129,9 @@ Render an ESM Expr tree as a readable string. Shared helper for mock
 system equation rendering.
 """
 function _expr_to_string(expr::Expr)
-    if expr isa NumExpr
+    if expr isa IntExpr
+        return string(expr.value)
+    elseif expr isa NumExpr
         return string(expr.value)
     elseif expr isa VarExpr
         return expr.name

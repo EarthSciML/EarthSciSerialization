@@ -205,3 +205,55 @@ func TestValidateJSONSchemaValidDocument(t *testing.T) {
 	assert.True(t, result.IsValid, "Valid JSON should pass schema validation")
 	assert.Empty(t, result.SchemaErrors)
 }
+
+// TestLoadPreservesIntFloatDistinction verifies that discretization RFC §5.4.1
+// / §5.4.6 round-trip parse rule is honored: a JSON token with no '.' and no
+// 'e'/'E' parses to int64; a token with '.' or 'e' parses to float64.
+func TestLoadPreservesIntFloatDistinction(t *testing.T) {
+	validJSON := `{
+		"esm": "0.1.0",
+		"metadata": {"name": "int-float-distinction"},
+		"models": {
+			"m": {
+				"variables": {
+					"x": {"type": "state"},
+					"y": {"type": "state"}
+				},
+				"equations": [
+					{"lhs": "x", "rhs": 1},
+					{"lhs": "y", "rhs": 1.0},
+					{"lhs": "x", "rhs": {"op": "+", "args": [1, 2.5]}}
+				]
+			}
+		}
+	}`
+
+	ef, err := LoadString(validJSON)
+	assert.NoError(t, err)
+
+	m := ef.Models["m"]
+
+	// Integer literal: 1 → int64
+	rhs0 := m.Equations[0].RHS
+	if _, ok := rhs0.(int64); !ok {
+		t.Errorf("expected equations[0].rhs int64, got %T (%v)", rhs0, rhs0)
+	}
+
+	// Float literal: 1.0 → float64
+	rhs1 := m.Equations[1].RHS
+	if _, ok := rhs1.(float64); !ok {
+		t.Errorf("expected equations[1].rhs float64, got %T (%v)", rhs1, rhs1)
+	}
+
+	// Mixed operator node: args[0]=1 → int64, args[1]=2.5 → float64
+	node, ok := m.Equations[2].RHS.(ExprNode)
+	if !ok {
+		t.Fatalf("expected equations[2].rhs ExprNode, got %T", m.Equations[2].RHS)
+	}
+	if _, ok := node.Args[0].(int64); !ok {
+		t.Errorf("expected args[0] int64, got %T (%v)", node.Args[0], node.Args[0])
+	}
+	if _, ok := node.Args[1].(float64); !ok {
+		t.Errorf("expected args[1] float64, got %T (%v)", node.Args[1], node.Args[1])
+	}
+}

@@ -36,7 +36,9 @@ include("codegen.jl")
 
 export
     # Expression types
-    Expr, NumExpr, VarExpr, OpExpr,
+    Expr, NumExpr, IntExpr, VarExpr, OpExpr,
+    # Literal predicates (RFC §5.4.1 int/float distinction)
+    is_literal, literal_value,
     # Equation types
     Equation, AffectEquation,
     # Model component types

@@ -229,6 +229,7 @@ impl Expr {
     fn to_unicode_with_precedence(&self, parent_prec: i32) -> String {
         match self {
             Expr::Number(n) => format_number_unicode(*n),
+            Expr::Integer(n) => n.to_string(),
             Expr::Variable(name) => format_chemical_subscripts(name),
             Expr::Operator(node) => {
                 format_operator_unicode(&node.op, &node.args, &node.wrt, &node.dim, parent_prec)
@@ -893,6 +894,7 @@ pub fn to_unicode(expr: &Expr) -> String {
 /// Convert an expression to LaTeX notation
 pub fn to_latex(expr: &Expr) -> String {
     match expr {
+        Expr::Integer(n) => n.to_string(),
         Expr::Number(n) => {
             // Special handling for 0.0 - display as "0.0" instead of "0"
             if *n == 0.0 {
@@ -1505,6 +1507,7 @@ fn format_operator_latex(
 /// Convert an expression to ASCII representation
 pub fn to_ascii(expr: &Expr) -> String {
     match expr {
+        Expr::Integer(n) => n.to_string(),
         Expr::Number(n) => {
             // Special handling for 0.0 - display as "0.0" instead of "0"
             if *n == 0.0 {

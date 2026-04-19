@@ -19,7 +19,7 @@ func collectVariables(expr Expression, variables map[string]bool) {
 	case string:
 		// String is a variable name
 		variables[e] = true
-	case float64, int:
+	case float64, int, int64:
 		// Numbers don't contribute variables
 		return
 	case ExprNode:
@@ -49,7 +49,7 @@ func Contains(expr Expression, varName string) bool {
 // Simplify performs constant folding and basic algebraic simplification
 func Simplify(expr Expression) Expression {
 	switch e := expr.(type) {
-	case string, float64, int:
+	case string, float64, int, int64:
 		// Atomic expressions are already simplified
 		return expr
 	case ExprNode:
@@ -318,6 +318,8 @@ func Evaluate(expr Expression, bindings map[string]float64) (float64, error) {
 	case float64:
 		return e, nil
 	case int:
+		return float64(e), nil
+	case int64:
 		return float64(e), nil
 	case string:
 		// Variable lookup

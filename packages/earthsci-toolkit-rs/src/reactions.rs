@@ -286,7 +286,7 @@ fn enhance_rate_with_mass_action(
 fn contains_variable(expr: &Expr, var_name: &str) -> bool {
     match expr {
         Expr::Variable(name) => name == var_name,
-        Expr::Number(_) => false,
+        Expr::Number(_) | Expr::Integer(_) => false,
         Expr::Operator(node) => node.args.iter().any(|arg| contains_variable(arg, var_name)),
     }
 }

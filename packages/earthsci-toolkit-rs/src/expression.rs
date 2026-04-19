@@ -48,7 +48,7 @@ pub fn contains(expr: &Expr, var_name: &str) -> bool {
     match expr {
         Expr::Variable(name) => name == var_name,
         Expr::Operator(op_node) => op_node.args.iter().any(|arg| contains(arg, var_name)),
-        Expr::Number(_) => false,
+        Expr::Number(_) | Expr::Integer(_) => false,
     }
 }
 
@@ -79,6 +79,8 @@ fn evaluate_with_unbound_tracking(
 ) -> Result<f64, ()> {
     match expr {
         Expr::Number(n) => Ok(*n),
+        // RFC §5.4.1: promotion happens only in evaluate, not in simplify.
+        Expr::Integer(n) => Ok(*n as f64),
         Expr::Variable(name) => {
             if let Some(value) = bindings.get(name) {
                 Ok(*value)
@@ -108,6 +110,7 @@ fn evaluate_with_unbound_tracking(
 pub fn simplify(expr: &Expr) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
+        Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(name) => Expr::Variable(name.clone()),
         Expr::Operator(op_node) => {
             let simplified_args: Vec<Expr> = op_node.args.iter().map(simplify).collect();
@@ -127,7 +130,7 @@ fn collect_variables(expr: &Expr, vars: &mut HashSet<String>) {
                 collect_variables(arg, vars);
             }
         }
-        Expr::Number(_) => {
+        Expr::Number(_) | Expr::Integer(_) => {
             // Numbers don't contain variables
         }
     }

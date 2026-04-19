@@ -319,6 +319,10 @@ function namespace_expr(expr::NumExpr, prefix::String, local_names::Set{String})
     return expr
 end
 
+function namespace_expr(expr::IntExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
+    return expr
+end
+
 function namespace_expr(expr::VarExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
     if occursin('.', expr.name)
         return expr
@@ -373,7 +377,7 @@ True if the expression contains any spatial operator (`grad`, `div`,
 `laplacian`, or `D` with `wrt != "t"`).
 """
 function has_spatial_operator(expr::EarthSciSerialization.Expr)::Bool
-    if expr isa NumExpr || expr isa VarExpr
+    if expr isa NumExpr || expr isa IntExpr || expr isa VarExpr
         return false
     end
     if expr isa OpExpr
@@ -931,7 +935,7 @@ function _substitute_placeholder(expr::EarthSciSerialization.Expr,
                                  placeholder::Union{String, Nothing},
                                  target::String)::EarthSciSerialization.Expr
     placeholder === nothing && return expr
-    if expr isa NumExpr
+    if expr isa NumExpr || expr isa IntExpr
         return expr
     elseif expr isa VarExpr
         if expr.name == "_var" || expr.name == placeholder ||
@@ -1307,7 +1311,7 @@ end
 function _scan_shape!(shapes::Dict{String,Vector{UnitRange{Int}}},
                       expr::Expr,
                       idx_env::Dict{String,UnitRange{Int}})
-    if expr isa NumExpr || expr isa VarExpr
+    if expr isa NumExpr || expr isa IntExpr || expr isa VarExpr
         return
     end
     expr isa OpExpr || return
@@ -1405,7 +1409,10 @@ end
 # operand order. Returns a UnitRange representing the range that expression
 # sweeps, or `nothing` if the shape cannot be inferred from this node alone.
 function _eval_index_range(idx_expr::Expr, idx_env::Dict{String,UnitRange{Int}})
-    if idx_expr isa NumExpr
+    if idx_expr isa IntExpr
+        v = Int(idx_expr.value)
+        return v:v
+    elseif idx_expr isa NumExpr
         v = Int(idx_expr.value)
         return v:v
     elseif idx_expr isa VarExpr
@@ -1426,7 +1433,11 @@ function _eval_index_range(idx_expr::Expr, idx_env::Dict{String,UnitRange{Int}})
 end
 
 function _split_affine(a::Expr, b::Expr)
-    if a isa VarExpr && b isa NumExpr
+    if a isa VarExpr && b isa IntExpr
+        return a.name, Int(b.value)
+    elseif a isa IntExpr && b isa VarExpr
+        return b.name, Int(a.value)
+    elseif a isa VarExpr && b isa NumExpr
         return a.name, Int(b.value)
     elseif a isa NumExpr && b isa VarExpr
         return b.name, Int(a.value)

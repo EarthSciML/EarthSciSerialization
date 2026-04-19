@@ -6,7 +6,7 @@ using EarthSciSerialization
 # `Symbolics.@variables` macro call we use for programmatic variable creation
 # (the macro's generated code references Core.Expr).
 using EarthSciSerialization: FlattenedSystem, ModelVariable, StateVariable,
-    ParameterVariable, ObservedVariable, NumExpr, VarExpr, OpExpr,
+    ParameterVariable, ObservedVariable, NumExpr, IntExpr, VarExpr, OpExpr,
     Equation, AffectEquation, Model, EventType, ContinuousEvent, DiscreteEvent,
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger, FunctionalAffect,
     Domain, flatten, infer_array_shapes
@@ -32,11 +32,12 @@ Spatial dimension symbols are created on demand and cached in `dim_dict`.
 """
 function _esm_to_symbolic(expr::EsmExpr, var_dict::Dict{String,Any},
                           t_sym, dim_dict::Dict{String,Any})
-    if expr isa NumExpr
-        # Whole-valued literals are promoted to Int so expressions like
-        # `i - 1` inside an arrayop body (where `i` is an integer index)
-        # stay integer-typed and can be used as an array subscript. Fractional
-        # values pass through unchanged.
+    if expr isa IntExpr
+        return expr.value
+    elseif expr isa NumExpr
+        # Integer-valued NumExpr is promoted to Int so arrayop index
+        # expressions like `i - 1` stay integer-typed when fixtures
+        # still encode whole numbers as NumExpr.
         v = expr.value
         return v == floor(v) ? Int(v) : v
     elseif expr isa VarExpr
@@ -329,7 +330,10 @@ end
 # we still handle `index` nodes since those are the primary way variables
 # are indexed inside an `@arrayop` body.
 function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
-    if expr isa NumExpr
+    if expr isa IntExpr
+        # Integer literal — emit as Int for index offsets etc.
+        return Int(expr.value)
+    elseif expr isa NumExpr
         # Prefer integer literals when the value is whole — this matters for
         # expressions like `u[i-1]` where the macro's offset-range inference
         # needs integer offsets, not 1.0 floats.
@@ -415,7 +419,9 @@ function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
     arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
     idxs = Any[]
     for a in expr.args[2:end]
-        if a isa NumExpr
+        if a isa IntExpr
+            push!(idxs, Int(a.value))
+        elseif a isa NumExpr
             push!(idxs, Int(a.value))
         else
             push!(idxs, _esm_to_symbolic(a, var_dict, t_sym, dim_dict))
@@ -1096,7 +1102,7 @@ end
 function _substitute_varname(expr::EsmExpr, old::AbstractString, new::AbstractString)
     if expr isa VarExpr
         return expr.name == old ? VarExpr(String(new)) : expr
-    elseif expr isa NumExpr
+    elseif expr isa NumExpr || expr isa IntExpr
         return expr
     elseif expr isa OpExpr
         new_args = EsmExpr[_substitute_varname(a, old, new) for a in expr.args]
@@ -1262,7 +1268,14 @@ end
 _strip_time(s::AbstractString) = endswith(s, "(t)") ? s[1:end-3] : s
 
 function _symbolic_to_esm(expr)
-    if expr isa Real || expr isa Integer || expr isa AbstractFloat
+    # Distinguish integer from float at the round-trip boundary (RFC §5.4.1).
+    if expr isa Bool
+        return IntExpr(Int64(expr))  # defensive; shouldn't happen in ESM exprs
+    elseif expr isa Integer
+        return IntExpr(Int64(expr))
+    elseif expr isa AbstractFloat
+        return NumExpr(Float64(expr))
+    elseif expr isa Real
         return NumExpr(Float64(expr))
     end
     raw = Symbolics.unwrap(expr)

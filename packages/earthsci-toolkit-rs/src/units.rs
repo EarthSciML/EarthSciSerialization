@@ -158,7 +158,7 @@ impl Unit {
     /// * `env`  - Map from variable name to its [`Unit`].
     pub fn propagate(expr: &Expr, env: &HashMap<String, Unit>) -> Result<Unit, UnitError> {
         match expr {
-            Expr::Number(_) => Ok(Unit::dimensionless()),
+            Expr::Number(_) | Expr::Integer(_) => Ok(Unit::dimensionless()),
             Expr::Variable(name) => {
                 if let Some(unit) = env.get(name) {
                     Ok(unit.clone())

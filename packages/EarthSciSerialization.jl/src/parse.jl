@@ -43,7 +43,15 @@ Parse JSON data into an Expression (NumExpr, VarExpr, or OpExpr).
 Handles the oneOf discriminated union based on JSON structure.
 """
 function parse_expression(data::Any)::Expr
-    if isa(data, Number)
+    # Bool <: Integer in Julia, so screen it first (JSON booleans should not
+    # become integer literals — they do not appear in valid ESM expressions).
+    if isa(data, Bool)
+        throw(ParseError("Boolean literal is not a valid expression node"))
+    elseif isa(data, Integer)
+        # JSON integer token (no '.', no 'e') → IntExpr (RFC §5.4.6 parse rule)
+        return IntExpr(Int64(data))
+    elseif isa(data, AbstractFloat)
+        # JSON float token (has '.' or 'e') → NumExpr (float node)
         return NumExpr(Float64(data))
     elseif isa(data, String)
         return VarExpr(data)

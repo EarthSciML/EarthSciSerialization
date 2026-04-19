@@ -269,7 +269,7 @@ end
 Check if parentheses are needed around a subexpression.
 """
 function needs_parentheses(parent_op::String, child::Expr, is_right_operand::Bool=false)
-    if isa(child, NumExpr) || isa(child, VarExpr)
+    if isa(child, NumExpr) || isa(child, IntExpr) || isa(child, VarExpr)
         return false
     end
 
@@ -339,6 +339,10 @@ function format_expression_unicode(expr::Expr)
         return format_number(expr.value, :unicode)
     end
 
+    if isa(expr, IntExpr)
+        return string(expr.value)
+    end
+
     if isa(expr, VarExpr)
         return format_chemical_subscripts(expr.name, :unicode)
     end
@@ -360,6 +364,10 @@ function format_expression_latex(expr::Expr)
         return format_number(expr.value, :latex)
     end
 
+    if isa(expr, IntExpr)
+        return string(expr.value)
+    end
+
     if isa(expr, VarExpr)
         return format_chemical_subscripts(expr.name, :latex)
     end
@@ -379,6 +387,10 @@ Format an expression as plain ASCII mathematical notation.
 function format_expression_ascii(expr::Expr)
     if isa(expr, NumExpr)
         return format_number(expr.value, :ascii)
+    end
+
+    if isa(expr, IntExpr)
+        return string(expr.value)
     end
 
     if isa(expr, VarExpr)
@@ -457,6 +469,8 @@ function format_operator_expression(node::OpExpr, format::Symbol)
         elseif op == "^"
             if format == :latex
                 return "$(format_arg(left))^{$(format_expression_latex(right))}"
+            elseif format == :unicode && isa(right, IntExpr)
+                return "$(format_arg(left))$(to_superscript(string(right.value)))"
             elseif format == :unicode && isa(right, NumExpr) && isinteger(right.value)
                 return "$(format_arg(left))$(to_superscript(string(Int(right.value))))"
             elseif format == :ascii

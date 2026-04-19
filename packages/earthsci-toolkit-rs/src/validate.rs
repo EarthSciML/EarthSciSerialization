@@ -888,7 +888,7 @@ fn validate_rate_expression(
                 );
             }
         }
-        crate::Expr::Number(_) => {
+        crate::Expr::Number(_) | crate::Expr::Integer(_) => {
             // Numbers are always valid
         }
     }
@@ -981,7 +981,7 @@ fn validate_expression_references_with_systems(
                 );
             }
         }
-        crate::Expr::Number(_) => {
+        crate::Expr::Number(_) | crate::Expr::Integer(_) => {
             // Numbers are always valid
         }
     }
@@ -1118,7 +1118,7 @@ fn validate_event_expression(
                 );
             }
         }
-        crate::Expr::Number(_) => {
+        crate::Expr::Number(_) | crate::Expr::Integer(_) => {
             // Numbers are always valid
         }
     }
@@ -1405,7 +1405,7 @@ fn extract_model_dependencies(expr: &crate::Expr, deps: &mut HashSet<String>) {
                 extract_model_dependencies(arg, deps);
             }
         }
-        crate::Expr::Number(_) => {
+        crate::Expr::Number(_) | crate::Expr::Integer(_) => {
             // Numbers don't reference models
         }
     }

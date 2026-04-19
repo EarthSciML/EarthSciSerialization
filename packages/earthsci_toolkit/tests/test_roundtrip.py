@@ -303,3 +303,52 @@ def test_roundtrip_index_outside_arrayop():
     composite_idx = eqs[2]["rhs"]["args"][1]
     assert isinstance(composite_idx, dict)
     assert composite_idx["op"] == "+"
+
+
+def test_roundtrip_preserves_int_float_distinction():
+    """Integer and float literals must round-trip as distinct kinds.
+
+    Per discretization RFC §5.4.1, an integer literal and a float literal
+    are distinct AST nodes. Python natively preserves this through `int`
+    vs `float` union members; this test pins the invariant.
+    """
+    original_json = {
+        "esm": "0.1.0",
+        "metadata": {"name": "int-float-distinction"},
+        "models": {
+            "m": {
+                "variables": {
+                    "x": {"type": "state"},
+                    "y": {"type": "state"},
+                },
+                "equations": [
+                    {"lhs": "x", "rhs": 1},        # integer literal
+                    {"lhs": "y", "rhs": 1.0},      # float literal
+                    {"lhs": "x", "rhs": {"op": "+", "args": [1, 2.5]}},
+                    {"lhs": "y", "rhs": {"op": "+", "args": [1.0, 2.5]}},
+                ],
+            }
+        },
+    }
+
+    json_str = json.dumps(original_json)
+    esm_file = load(json_str)
+    json_str2 = save(esm_file)
+    data = json.loads(json_str2)
+
+    eqs = data["models"]["m"]["equations"]
+
+    # Integer literal survives as JSON integer (type(int), not type(float)).
+    assert type(eqs[0]["rhs"]) is int
+    assert eqs[0]["rhs"] == 1
+
+    # Float literal survives as JSON float. `1.0` serializes as "1.0".
+    assert type(eqs[1]["rhs"]) is float
+    assert eqs[1]["rhs"] == 1.0
+    assert "1.0" in json_str2  # ensures trailing .0 is emitted for integer-valued float
+
+    # Inside an operator node: mixed int/float preserves each arg's kind.
+    assert type(eqs[2]["rhs"]["args"][0]) is int
+    assert type(eqs[2]["rhs"]["args"][1]) is float
+    assert type(eqs[3]["rhs"]["args"][0]) is float
+    assert type(eqs[3]["rhs"]["args"][1]) is float

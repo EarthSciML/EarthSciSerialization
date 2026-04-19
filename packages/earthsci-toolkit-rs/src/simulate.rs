@@ -808,6 +808,7 @@ fn resolve_expr(
 ) -> Result<ResolvedExpr, CompileError> {
     match expr {
         Expr::Number(n) => Ok(ResolvedExpr::Number(*n)),
+        Expr::Integer(n) => Ok(ResolvedExpr::Number(*n as f64)),
         Expr::Variable(name) => {
             if name == "t" {
                 Ok(ResolvedExpr::Time)
@@ -855,7 +856,7 @@ fn collect_observed_refs(
     out: &mut HashSet<usize>,
 ) {
     match expr {
-        Expr::Number(_) => {}
+        Expr::Number(_) | Expr::Integer(_) => {}
         Expr::Variable(name) => {
             if let Some(&i) = observed_index.get(name) {
                 out.insert(i);

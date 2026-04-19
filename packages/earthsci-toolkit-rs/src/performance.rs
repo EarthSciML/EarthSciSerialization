@@ -340,6 +340,11 @@ impl CompactExpr {
             Expr::Number(n) => {
                 nodes.push(CompactNode::Number(*n));
             }
+            Expr::Integer(n) => {
+                // Compact representation currently stores float only; promote
+                // per §5.4.1 at the perf-path boundary (evaluate semantics).
+                nodes.push(CompactNode::Number(*n as f64));
+            }
             Expr::Variable(name) => {
                 let index = var_cache.len();
                 var_cache.entry(name.clone()).or_insert(index);

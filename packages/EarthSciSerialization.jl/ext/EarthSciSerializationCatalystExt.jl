@@ -1,7 +1,7 @@
 module EarthSciSerializationCatalystExt
 
 using EarthSciSerialization
-using EarthSciSerialization: Expr, NumExpr, VarExpr, OpExpr, Reaction,
+using EarthSciSerialization: Expr, NumExpr, IntExpr, VarExpr, OpExpr, Reaction,
     ReactionSystem, Species, Parameter, Equation, ContinuousEvent,
     DiscreteEvent, AffectEquation, FunctionalAffect, ConditionTrigger,
     PeriodicTrigger, PresetTimesTrigger
@@ -14,7 +14,9 @@ using Catalyst
 # ========================================
 
 function _esm_to_symbolic(expr::Expr, var_dict::Dict{String,Any})
-    if expr isa NumExpr
+    if expr isa IntExpr
+        return expr.value
+    elseif expr isa NumExpr
         return expr.value
     elseif expr isa VarExpr
         if haskey(var_dict, expr.name)
@@ -208,7 +210,13 @@ end
 _strip_time(s::AbstractString) = endswith(s, "(t)") ? s[1:end-3] : s
 
 function _catalyst_rate_to_esm(expr)
-    if expr isa Real
+    if expr isa Bool
+        return IntExpr(Int64(expr))  # defensive
+    elseif expr isa Integer
+        return IntExpr(Int64(expr))
+    elseif expr isa AbstractFloat
+        return NumExpr(Float64(expr))
+    elseif expr isa Real
         return NumExpr(Float64(expr))
     end
     raw = Symbolics.unwrap(expr)

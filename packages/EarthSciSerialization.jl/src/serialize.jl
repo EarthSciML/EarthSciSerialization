@@ -13,7 +13,13 @@ Serialize an Expression to JSON-compatible format.
 Handles the union type discrimination.
 """
 function serialize_expression(expr::Expr)
-    if isa(expr, NumExpr)
+    if isa(expr, IntExpr)
+        # Int64 → JSON3 emits as integer token (no decimal). Preserves §5.4.6
+        # round-trip: on parse, a token without '.'/'e' recovers as IntExpr.
+        return expr.value
+    elseif isa(expr, NumExpr)
+        # Float64 → JSON3 emits with trailing .0 for integer-valued floats and
+        # exponent form for |x| outside [1e-6, 1e21). Satisfies RFC §5.4.6.
         return expr.value
     elseif isa(expr, VarExpr)
         return expr.name

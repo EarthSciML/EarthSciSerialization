@@ -732,7 +732,7 @@ fn collect_variables(expr: &crate::Expr, vars: &mut Vec<String>) {
                 collect_variables(arg, vars);
             }
         }
-        crate::Expr::Number(_) => {
+        crate::Expr::Number(_) | crate::Expr::Integer(_) => {
             // Numbers are not variables, skip
         }
     }

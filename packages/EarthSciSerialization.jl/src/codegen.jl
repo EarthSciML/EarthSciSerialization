@@ -386,7 +386,9 @@ function format_reaction(reaction::Reaction)
 end
 
 function format_expression(expr::Expr)
-    if isa(expr, NumExpr)
+    if isa(expr, IntExpr)
+        return string(expr.value)
+    elseif isa(expr, NumExpr)
         return string(expr.value)
     elseif isa(expr, VarExpr)
         return expr.name
@@ -621,7 +623,9 @@ function generate_python_domain_placeholder(name::String, domain::Domain)
 end
 
 function format_python_expression(expr::Expr)
-    if isa(expr, NumExpr)
+    if isa(expr, IntExpr)
+        return string(expr.value)
+    elseif isa(expr, NumExpr)
         return string(expr.value)
     elseif isa(expr, VarExpr)
         return expr.name

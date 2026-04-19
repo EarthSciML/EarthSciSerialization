@@ -1,6 +1,7 @@
 package esm
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -508,12 +509,16 @@ func FromJSON(data []byte) (*EsmFile, error) {
 // 11. Helper Functions for Expression Handling
 // ========================================
 
-// UnmarshalExpression handles the custom unmarshaling for Expression union type
+// UnmarshalExpression handles the custom unmarshaling for Expression union
+// type. Numeric literals preserve the RFC §5.4.6 round-trip parse rule:
+// a JSON-number token with '.', 'e', or 'E' parses to float64; otherwise to
+// int64 (falling back to float64 if out of int64 range).
 func UnmarshalExpression(data []byte) (Expression, error) {
-	// Try to unmarshal as number first
-	var num float64
+	// Try to unmarshal as number first (via json.Number to preserve int/float
+	// distinction).
+	var num json.Number
 	if err := json.Unmarshal(data, &num); err == nil {
-		return num, nil
+		return normalizeJSONNumber(num), nil
 	}
 
 	// Try to unmarshal as string
@@ -522,18 +527,23 @@ func UnmarshalExpression(data []byte) (Expression, error) {
 		return str, nil
 	}
 
-	// Must be an object (ExprNode)
+	// Must be an object (ExprNode). Decode via UseNumber so nested literals in
+	// Args keep their int/float shape.
 	var node ExprNode
-	if err := json.Unmarshal(data, &node); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&node); err != nil {
 		return nil, fmt.Errorf("expression must be number, string, or object: %w", err)
 	}
 
-	// Recursively unmarshal Args if they contain expressions
+	// Recursively normalize Args, handling nested expressions and literals.
 	if node.Args != nil {
 		for i, arg := range node.Args {
-			if argMap, ok := arg.(map[string]interface{}); ok {
-				// This is likely another ExprNode that needs to be unmarshaled properly
-				argBytes, err := json.Marshal(argMap)
+			switch a := arg.(type) {
+			case json.Number:
+				node.Args[i] = normalizeJSONNumber(a)
+			case map[string]interface{}:
+				argBytes, err := json.Marshal(a)
 				if err != nil {
 					return nil, fmt.Errorf("failed to marshal arg for re-processing: %w", err)
 				}

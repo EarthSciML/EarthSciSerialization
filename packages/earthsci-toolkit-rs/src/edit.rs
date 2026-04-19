@@ -387,6 +387,7 @@ pub fn update_model_metadata(
 pub fn substitute_in_expression(expr: &Expr, substitutions: &HashMap<String, Expr>) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
+        Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(var) => {
             if let Some(replacement) = substitutions.get(var) {
                 replacement.clone()

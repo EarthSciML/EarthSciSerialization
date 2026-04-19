@@ -43,6 +43,10 @@ function substitute(expr::NumExpr, bindings::Dict{String,Expr})::Expr
     return expr  # Numeric literals are unchanged
 end
 
+function substitute(expr::IntExpr, bindings::Dict{String,Expr})::Expr
+    return expr  # Integer literals are unchanged
+end
+
 function substitute(expr::VarExpr, bindings::Dict{String,Expr})::Expr
     return get(bindings, expr.name, expr)  # Replace if bound, otherwise keep original
 end
@@ -76,6 +80,10 @@ vars = free_variables(nested)  # Set(["x", "y"])
 """
 function free_variables(expr::NumExpr)::Set{String}
     return Set{String}()  # No variables in numeric literals
+end
+
+function free_variables(expr::IntExpr)::Set{String}
+    return Set{String}()  # No variables in integer literals
 end
 
 function free_variables(expr::VarExpr)::Set{String}
@@ -116,6 +124,10 @@ contains(sum_expr, "x")  # true
 contains(sum_expr, "z")  # false
 ```
 """
+function contains(expr::IntExpr, var::String)::Bool
+    return false  # Integer literals don't contain variables
+end
+
 function contains(expr::NumExpr, var::String)::Bool
     return false  # Numeric literals don't contain variables
 end
@@ -182,6 +194,12 @@ result = evaluate(sum_expr, bindings)  # 5.0
 """
 function evaluate(expr::NumExpr, bindings::Dict{String,Float64})::Float64
     return expr.value
+end
+
+function evaluate(expr::IntExpr, bindings::Dict{String,Float64})::Float64
+    # Integer literals promote to Float64 at evaluation time only (RFC §5.4.1:
+    # "Promotion happens only in evaluate, not in simplify/canonicalize").
+    return Float64(expr.value)
 end
 
 function evaluate(expr::VarExpr, bindings::Dict{String,Float64})::Float64
@@ -339,9 +357,28 @@ function simplify(expr::NumExpr)::Expr
     return expr  # Already simplified
 end
 
+function simplify(expr::IntExpr)::Expr
+    return expr  # Already simplified
+end
+
 function simplify(expr::VarExpr)::Expr
     return expr  # Already simplified
 end
+
+"""
+    is_literal(expr::Expr)::Bool
+
+True iff `expr` is a numeric literal (either integer or float node).
+"""
+is_literal(expr::Expr)::Bool = isa(expr, NumExpr) || isa(expr, IntExpr)
+
+"""
+    literal_value(expr::Expr)
+
+Return the numeric value of a literal node, as `Float64`. Throws on non-literals.
+"""
+literal_value(expr::NumExpr) = expr.value
+literal_value(expr::IntExpr) = Float64(expr.value)
 
 function simplify(expr::OpExpr)::Expr
     # First recursively simplify all arguments
@@ -349,22 +386,34 @@ function simplify(expr::OpExpr)::Expr
 
     op = expr.op
 
-    # Try constant folding first - if all arguments are numeric, evaluate
-    if all(arg -> isa(arg, NumExpr), simplified_args)
+    # Try constant folding first - if all arguments are numeric, evaluate.
+    # Per RFC §5.4.1, promotion happens only in evaluate, not simplify;
+    # so when mixed int/float inputs fold, the result is a float literal.
+    # When all inputs are integer, preserve integer result (for ops whose
+    # integer result is representable — fall back to float on non-integer).
+    if all(is_literal, simplified_args)
         try
-            # Convert to bindings for evaluation
             bindings = Dict{String,Float64}()
             result_value = evaluate(OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim), bindings)
+            all_int = all(arg -> isa(arg, IntExpr), simplified_args)
+            if all_int && isfinite(result_value) && result_value == trunc(result_value) &&
+               abs(result_value) <= Float64(typemax(Int64))
+                return IntExpr(Int64(result_value))
+            end
             return NumExpr(result_value)
         catch
             # If evaluation fails, continue with algebraic simplification
         end
     end
 
+    # Helper: true when arg is a numeric literal equal to v (compared by value).
+    is_lit_val(arg, v) = (isa(arg, NumExpr) && arg.value == v) ||
+                         (isa(arg, IntExpr) && Float64(arg.value) == v)
+
     # Algebraic simplification rules
     if op == "+"
         # Remove zeros: x + 0 = x, 0 + x = x
-        non_zero_args = filter(arg -> !(isa(arg, NumExpr) && arg.value == 0.0), simplified_args)
+        non_zero_args = filter(arg -> !is_lit_val(arg, 0.0), simplified_args)
         if length(non_zero_args) == 0
             return NumExpr(0.0)
         elseif length(non_zero_args) == 1
@@ -376,13 +425,13 @@ function simplify(expr::OpExpr)::Expr
     elseif op == "*"
         # Check for zeros: x * 0 = 0, 0 * x = 0
         for arg in simplified_args
-            if isa(arg, NumExpr) && arg.value == 0.0
+            if is_lit_val(arg, 0.0)
                 return NumExpr(0.0)
             end
         end
 
         # Remove ones: x * 1 = x, 1 * x = x
-        non_one_args = filter(arg -> !(isa(arg, NumExpr) && arg.value == 1.0), simplified_args)
+        non_one_args = filter(arg -> !is_lit_val(arg, 1.0), simplified_args)
         if length(non_one_args) == 0
             return NumExpr(1.0)
         elseif length(non_one_args) == 1
@@ -396,22 +445,22 @@ function simplify(expr::OpExpr)::Expr
         exponent = simplified_args[2]
 
         # x^0 = 1
-        if isa(exponent, NumExpr) && exponent.value == 0.0
+        if is_lit_val(exponent, 0.0)
             return NumExpr(1.0)
         end
 
         # x^1 = x
-        if isa(exponent, NumExpr) && exponent.value == 1.0
+        if is_lit_val(exponent, 1.0)
             return base
         end
 
         # 0^x = 0 (for x > 0)
-        if isa(base, NumExpr) && base.value == 0.0 && isa(exponent, NumExpr) && exponent.value > 0.0
+        if is_lit_val(base, 0.0) && is_literal(exponent) && literal_value(exponent) > 0.0
             return NumExpr(0.0)
         end
 
         # 1^x = 1
-        if isa(base, NumExpr) && base.value == 1.0
+        if is_lit_val(base, 1.0)
             return NumExpr(1.0)
         end
 
@@ -419,7 +468,7 @@ function simplify(expr::OpExpr)::Expr
 
     elseif op == "-" && length(simplified_args) == 2
         # x - 0 = x
-        if isa(simplified_args[2], NumExpr) && simplified_args[2].value == 0.0
+        if is_lit_val(simplified_args[2], 0.0)
             return simplified_args[1]
         end
 
@@ -427,7 +476,7 @@ function simplify(expr::OpExpr)::Expr
 
     elseif op == "/" && length(simplified_args) == 2
         # x / 1 = x
-        if isa(simplified_args[2], NumExpr) && simplified_args[2].value == 1.0
+        if is_lit_val(simplified_args[2], 1.0)
             return simplified_args[1]
         end
 

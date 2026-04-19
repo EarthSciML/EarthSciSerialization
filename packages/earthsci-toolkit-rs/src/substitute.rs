@@ -20,6 +20,7 @@ use std::collections::HashMap;
 pub fn substitute(expr: &Expr, substitutions: &std::collections::HashMap<String, Expr>) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
+        Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(var_name) => {
             if let Some(replacement) = substitutions.get(var_name) {
                 replacement.clone()
@@ -426,6 +427,7 @@ pub fn substitute_with_context(
 ) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
+        Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(var_name) => {
             // First try direct substitution
             if let Some(replacement) = substitutions.get(var_name) {
