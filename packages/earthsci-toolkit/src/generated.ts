@@ -6,7 +6,7 @@
  */
 
 /**
- * EarthSciML Serialization Format (v0.1.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration.
+ * EarthSciML Serialization Format (v0.2.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.2.0 promotes boundary_conditions from a domain property to a first-class model-level section (see docs/rfcs/discretization.md §9). Files declaring domains.<d>.boundary_conditions are no longer valid under this schema and must be migrated via the spec.migrate_0_1_to_0_2 convention (RFC §16.1).
  */
 export type ESMFormat = ESMFormat1 & ESMFormat2;
 export type ESMFormat1 = {
@@ -103,7 +103,8 @@ export type ExpressionNode = ExpressionNode1 & {
     | "reshape"
     | "transpose"
     | "concat"
-    | "call";
+    | "call"
+    | "bc";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
    *
@@ -170,6 +171,14 @@ export type ExpressionNode = ExpressionNode1 & {
    * For call: the identifier of a registered function (a key in the top-level `registered_functions` map). The handler receives the evaluated `args` positionally.
    */
   handler_id?: string;
+  /**
+   * For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib'). See RFC §9.2.
+   */
+  kind?: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib";
+  /**
+   * For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2.
+   */
+  side?: string;
 };
 export type ExpressionNode1 = {
   [k: string]: unknown;
@@ -366,6 +375,106 @@ export type InitialConditions =
       path: string;
       format?: string;
     };
+/**
+ * A named discretization grid. The `family` selects one of three topologies (cartesian / unstructured / cubed_sphere) per docs/rfcs/discretization.md §6.1-§6.4. Each grid also carries optional staggering locations, metric array declarations, and its own parameter block reusing the ordinary ESM Parameter schema.
+ */
+export type Grid = Grid1 & {
+  family: "cartesian" | "unstructured" | "cubed_sphere";
+  description?: string;
+  /**
+   * Ordered list of logical dimension names.
+   *
+   * @minItems 1
+   */
+  dimensions: [string, ...string[]];
+  /**
+   * Declared stagger locations used by variables on this grid (see §11).
+   */
+  locations?: string[];
+  metric_arrays?: {
+    [k: string]: GridMetricArray;
+  };
+  /**
+   * Grid-level parameters. Reuses the ordinary ESM Parameter schema. Parameters with value='from_loader' are resolved at load time from a referenced data_loaders entry (§6.6).
+   */
+  parameters?: {
+    [k: string]: Parameter;
+  };
+  /**
+   * Optional name of the domains entry this grid refines. If a domain declares grid_spacing for the same dimension, the grid's extents.<dim>.spacing wins (§6.1).
+   */
+  domain?: string;
+  /**
+   * Per-dimension extents. Required for 'cartesian' and 'cubed_sphere'; not used by 'unstructured'.
+   */
+  extents?: {
+    [k: string]: GridExtent;
+  };
+  /**
+   * Unstructured-family connectivity tables. Keys are table names (e.g., cellsOnEdge). Required for 'unstructured'; forbidden otherwise.
+   */
+  connectivity?: {
+    [k: string]: GridConnectivity;
+  };
+  /**
+   * Cubed-sphere panel_connectivity tables (e.g., neighbors, axis_flip). Required for 'cubed_sphere'; forbidden otherwise. Typically built from the gnomonic_c6_* builtins.
+   */
+  panel_connectivity?: {
+    [k: string]: GridConnectivity;
+  };
+};
+export type Grid1 = {
+  [k: string]: unknown;
+};
+/**
+ * Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently 'gnomonic_c6_neighbors' and 'gnomonic_c6_d4_action'; adding a new builtin is a minor version bump per §6.4.1).
+ */
+export type GridMetricGenerator = GridMetricGenerator1 & {
+  kind: "expression" | "loader" | "builtin";
+  /**
+   * For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.
+   */
+  expr?: number | string | ExpressionNode1;
+  /**
+   * For kind='loader': name of a data_loaders entry that produces the array.
+   */
+  loader?: string;
+  /**
+   * For kind='loader': named field within the referenced loader's output.
+   */
+  field?: string;
+  /**
+   * For kind='builtin': canonical name from the closed set defined in §6.4 (currently 'gnomonic_c6_neighbors', 'gnomonic_c6_d4_action'). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN.
+   */
+  name?: string;
+};
+export type GridMetricGenerator1 = {
+  [k: string]: unknown;
+};
+/**
+ * Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently 'gnomonic_c6_neighbors' and 'gnomonic_c6_d4_action'; adding a new builtin is a minor version bump per §6.4.1).
+ */
+export type GridMetricGenerator2 = {
+  [k: string]: unknown;
+} & {
+  kind: "expression" | "loader" | "builtin";
+  /**
+   * For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.
+   */
+  expr?: number | string | ExpressionNode1;
+  /**
+   * For kind='loader': name of a data_loaders entry that produces the array.
+   */
+  loader?: string;
+  /**
+   * For kind='loader': named field within the referenced loader's output.
+   */
+  field?: string;
+  /**
+   * For kind='builtin': canonical name from the closed set defined in §6.4 (currently 'gnomonic_c6_neighbors', 'gnomonic_c6_d4_action'). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN.
+   */
+  name?: string;
+};
 
 export interface ESMFormat2 {
   /**
@@ -418,6 +527,12 @@ export interface ESMFormat2 {
    */
   interfaces?: {
     [k: string]: Interface;
+  };
+  /**
+   * Named discretization grids (v0.2.0). Each entry declares a cartesian/unstructured/cubed_sphere topology with dimensions, staggering locations, metric arrays, and (for unstructured/cubed-sphere) connectivity tables. See docs/rfcs/discretization.md §6.
+   */
+  grids?: {
+    [k: string]: Grid;
   };
 }
 /**
@@ -492,7 +607,7 @@ export interface Model {
    */
   examples?: Example[];
   /**
-   * Model-level boundary conditions, keyed by user-supplied id (v0.2.0 breaking change per docs/rfcs/discretization.md §9 and §10.1).
+   * Model-level boundary conditions, keyed by user-supplied id (see docs/rfcs/discretization.md §9). v0.2.0 breaking change: domains.<d>.boundary_conditions was removed in favor of this field; files from v0.1.0 carrying the old field must be migrated via spec.migrate_0_1_to_0_2 (RFC §16.1).
    */
   boundary_conditions?: {
     [k: string]: BoundaryCondition;
@@ -807,6 +922,60 @@ export interface PlotValue {
 export interface PlotSeries {
   name: string;
   variable: string;
+}
+/**
+ * Model-level boundary condition entry (v0.2.0). Constrains one model variable on one boundary side. See docs/rfcs/discretization.md §9.2 for full semantics. This object lives under models.<M>.boundary_conditions keyed by user-supplied id; it replaces the v0.1.0 domains.<d>.boundary_conditions list.
+ */
+export interface BoundaryCondition {
+  /**
+   * Name of the model variable the BC constrains. Must resolve to a variable declared in the enclosing model's variables map (or a dot-qualified subsystem variable).
+   */
+  variable: string;
+  /**
+   * Boundary side the BC applies to. Closed-vocabulary axis sides ('xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'tmin', 'tmax'), grid-family-specific seams ('panel_seam' for cubed-sphere), or generic unstructured boundary markers ('mesh_boundary'). Authors MAY introduce additional named sides (e.g., 'north', 'surface') provided the grid they reference declares them.
+   */
+  side: string;
+  /**
+   * BC kind. constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n-based; robin = αu + β∂u/∂n = γ; periodic = pair-side wraparound (declare once per periodic pair on either min or max side); flux_contrib = a component-contributed flux summand that the rewrite engine aggregates with other flux_contrib entries for the same (variable, side) pair before applying the enclosing neumann/robin template.
+   */
+  kind: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib";
+  /**
+   * BC value: numeric literal, variable/parameter reference string, or expression AST. Required for kind='constant' and kind='dirichlet'; semantics for other kinds per RFC §9.2.
+   */
+  value?: number | string | ExpressionNode1;
+  /**
+   * Robin BC coefficient α for the u term in αu + β∂u/∂n = γ.
+   */
+  robin_alpha?: number | string | ExpressionNode1;
+  /**
+   * Robin BC coefficient β for the ∂u/∂n term in αu + β∂u/∂n = γ.
+   */
+  robin_beta?: number | string | ExpressionNode1;
+  /**
+   * Robin BC RHS value γ in αu + β∂u/∂n = γ.
+   */
+  robin_gamma?: number | string | ExpressionNode1;
+  /**
+   * Reduced face-coordinate index names used when `value` contains an `index` op into a loader-provided time-varying field (§9.2 / §8.A.3). E.g., for side='zmin' on a 3D grid, face_coords: ['i', 'j']. Omit when `value` does not index into a time-varying loader field.
+   */
+  face_coords?: string[];
+  /**
+   * Optional component-contribution marker identifying the model component (deposition, emissions, surface-flux scheme) providing this flux. The rewrite engine sums all flux_contrib entries for the same (variable, side) pair into a single aggregated flux, then applies the enclosing kind's BC template. See RFC §9.3.
+   */
+  contributed_by?: {
+    /**
+     * Name of the contributing component.
+     */
+    component: string;
+    /**
+     * Sign of the contribution in the aggregated flux sum. Default '+'.
+     */
+    flux_sign?: "+" | "-";
+  };
+  /**
+   * Human-readable description of the BC.
+   */
+  description?: string;
 }
 /**
  * A reaction network — declarative representation of chemical or biological reactions.
@@ -1316,6 +1485,11 @@ export interface Domain {
   spatial_ref?: string;
   initial_conditions?: InitialConditions;
   /**
+   * @deprecated
+   * DEPRECATED (v0.2.0, RFC §10.1): domain-level boundary_conditions is superseded by model-level boundary_conditions (models.<M>.boundary_conditions). Retained in the schema only as a transitional compatibility shim; loaders MUST emit E_DEPRECATED_DOMAIN_BC when this field is present. A follow-up release will remove this field entirely.
+   */
+  boundary_conditions?: DeprecatedDomainBoundaryCondition[];
+  /**
    * Floating point precision.
    */
   element_type?: "Float32" | "Float64";
@@ -1339,50 +1513,20 @@ export interface CoordinateTransform {
   dimensions?: string[];
 }
 /**
- * Model-level boundary condition entry (v0.2.0). Constrains one model variable on one boundary
- * side. See docs/rfcs/discretization.md §9.2. Replaces the v0.1.0 domain-level BoundaryCondition.
+ * @deprecated
+ * DEPRECATED v0.1.0 domain-level boundary condition entry. Retained for the v0.2.0 transitional window only (RFC §10.1). Loaders emit E_DEPRECATED_DOMAIN_BC when encountering it; use Model.boundary_conditions (keyed map of BoundaryCondition entries) instead.
  */
-export interface BoundaryCondition {
+export interface DeprecatedDomainBoundaryCondition {
+  type: "constant" | "zero_gradient" | "periodic" | "dirichlet" | "neumann" | "robin";
   /**
-   * Name of the model variable the BC constrains.
+   * @minItems 1
    */
-  variable: string;
-  /**
-   * Boundary side (e.g., 'xmin', 'xmax', 'panel_seam', 'mesh_boundary').
-   */
-  side: string;
-  /**
-   * BC kind.
-   */
-  kind: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib";
-  /**
-   * BC value: numeric, variable-reference string, or expression AST. Required for 'constant' and 'dirichlet'.
-   */
-  value?: number | string | ExpressionNode;
-  /**
-   * Robin BC coefficient α.
-   */
-  robin_alpha?: number | string | ExpressionNode;
-  /**
-   * Robin BC coefficient β.
-   */
-  robin_beta?: number | string | ExpressionNode;
-  /**
-   * Robin BC RHS γ.
-   */
-  robin_gamma?: number | string | ExpressionNode;
-  /**
-   * Reduced face-coordinate index names (for loader-indexed time-varying fields).
-   */
-  face_coords?: string[];
-  /**
-   * Component-contribution marker (RFC §9.3).
-   */
-  contributed_by?: {
-    component: string;
-    flux_sign?: "+" | "-";
-  };
-  description?: string;
+  dimensions: [string, ...string[]];
+  value?: number;
+  function?: string;
+  robin_alpha?: number;
+  robin_beta?: number;
+  robin_gamma?: number;
 }
 /**
  * Geometric connection between two domains of potentially different dimensionality.
@@ -1433,4 +1577,52 @@ export interface InterfaceConstraint {
    */
   value: ("min" | "max" | "boundary") | number;
   description?: string;
+}
+/**
+ * A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.
+ */
+export interface GridMetricArray {
+  /**
+   * Tensor rank of the array: 0 = scalar (uniform spacing), 1 = 1D along a single dim, 2+ = multidimensional.
+   */
+  rank: number;
+  /**
+   * For rank=1: the dimension the array is indexed by (one of the grid's dimensions).
+   */
+  dim?: string;
+  /**
+   * For rank≥2: ordered list of dimensions the array is indexed by.
+   */
+  dims?: string[];
+  /**
+   * Optional declared shape (parameter names or integer literals per dimension). Used by connectivity/panel tables; redundant with dim/dims for metric arrays.
+   */
+  shape?: unknown[];
+  generator: GridMetricGenerator;
+}
+/**
+ * Per-dimension extent for cartesian or cubed_sphere grids. `n` is either an integer literal or a parameter reference naming the dimension count; `spacing` is 'uniform' or 'nonuniform' for cartesian (determines whether metric arrays are scalar or rank-1).
+ */
+export interface GridExtent {
+  n: number | string;
+  spacing?: "uniform" | "nonuniform";
+}
+/**
+ * Unstructured-grid connectivity table (e.g., cellsOnEdge, edgesOnCell). Integer-indexed lookup produced by a mesh loader. See §6.3.
+ */
+export interface GridConnectivity {
+  /**
+   * Ordered list of dimension sizes (parameter names or integer literals). E.g., ['nEdges', 2] for cellsOnEdge.
+   */
+  shape: unknown[];
+  rank: number;
+  /**
+   * Name of a data_loaders entry that supplies this table.
+   */
+  loader?: string;
+  /**
+   * Named field within the referenced loader's output.
+   */
+  field?: string;
+  generator?: GridMetricGenerator2;
 }

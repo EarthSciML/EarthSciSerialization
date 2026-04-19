@@ -952,6 +952,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let graph = component_graph(&esm_file);
@@ -1020,6 +1021,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let graph = component_graph(&esm_file);
@@ -1077,6 +1079,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         assert!(component_exists(&esm_file, "test_model"));
@@ -1143,6 +1146,7 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         assert_eq!(
@@ -1300,6 +1304,7 @@ mod tests {
             coupling: Some(coupling_entries),
             domains: None,
             interfaces: None,
+            grids: None,
         };
 
         let graph = component_graph(&esm_file);

@@ -2098,6 +2098,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 coupling: None,
                 domains: esm_file.domains.clone(),
                 interfaces: esm_file.interfaces.clone(),
+                grids: esm_file.grids.clone(),
             };
 
             // Extract the specific component

@@ -659,6 +659,71 @@ class Metadata:
 
 
 @dataclass
+class GridMetricGenerator:
+    """Generator for a grid metric array or connectivity table (RFC §6.5).
+
+    ``kind`` discriminates how values are produced:
+    - ``"expression"``: field ``expr`` holds an Expr tree / literal.
+    - ``"loader"``: fields ``loader`` (data_loader name) and ``field`` (variable).
+    - ``"builtin"``: field ``name`` names a builtin generator (e.g.
+      ``gnomonic_c6_neighbors``, ``gnomonic_c6_d4_action``).
+    """
+    kind: str
+    expr: Optional[Any] = None  # Expr for kind == "expression"
+    loader: Optional[str] = None  # data_loader name for kind == "loader"
+    field: Optional[str] = None  # field variable for kind == "loader"
+    name: Optional[str] = None  # builtin name for kind == "builtin"
+
+
+@dataclass
+class GridMetricArray:
+    """A grid metric array (e.g. dx, areaCell), RFC §6.5."""
+    rank: int
+    generator: GridMetricGenerator
+    dim: Optional[str] = None
+    dims: Optional[List[str]] = None
+    shape: Optional[List[Union[int, str]]] = None
+
+
+@dataclass
+class GridConnectivity:
+    """Grid connectivity table / panel_connectivity entry (RFC §6.3–§6.4)."""
+    shape: List[Union[int, str]]
+    rank: int
+    loader: Optional[str] = None
+    field: Optional[str] = None
+    generator: Optional[GridMetricGenerator] = None
+
+
+@dataclass
+class GridExtent:
+    """Cartesian grid extent per dimension (RFC §6.2)."""
+    n: Union[int, str]
+    spacing: Optional[str] = None
+
+
+@dataclass
+class Grid:
+    """Top-level grid declaration (RFC §6).
+
+    ``family`` discriminates structure: ``cartesian`` uses ``extents``;
+    ``unstructured`` uses ``connectivity``; ``cubed_sphere`` uses
+    ``extents`` + ``panel_connectivity``.
+    """
+    family: str
+    dimensions: List[str]
+    name: str = ""
+    description: Optional[str] = None
+    locations: Optional[List[str]] = None
+    metric_arrays: Dict[str, GridMetricArray] = field(default_factory=dict)
+    parameters: Dict[str, Parameter] = field(default_factory=dict)
+    domain: Optional[str] = None
+    extents: Dict[str, GridExtent] = field(default_factory=dict)
+    connectivity: Dict[str, GridConnectivity] = field(default_factory=dict)
+    panel_connectivity: Dict[str, GridConnectivity] = field(default_factory=dict)
+
+
+@dataclass
 class EsmFile:
     """Root container for an ESM format file."""
     version: str
@@ -671,6 +736,7 @@ class EsmFile:
     registered_functions: Dict[str, RegisteredFunction] = field(default_factory=dict)
     coupling: List[CouplingEntry] = field(default_factory=list)
     domains: Dict[str, Domain] = field(default_factory=dict)
+    grids: Dict[str, Grid] = field(default_factory=dict)
 
     @property
     def esm(self) -> str:

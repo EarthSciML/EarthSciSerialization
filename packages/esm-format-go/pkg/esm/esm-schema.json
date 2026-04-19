@@ -56,6 +56,11 @@
       "type": "object",
       "description": "Geometric connections between domains of different dimensionality.",
       "additionalProperties": { "$ref": "#/$defs/Interface" }
+    },
+    "grids": {
+      "type": "object",
+      "description": "Named discretization grids (v0.2.0). Each entry declares a cartesian/unstructured/cubed_sphere topology with dimensions, staggering locations, metric arrays, and (for unstructured/cubed-sphere) connectivity tables. See docs/rfcs/discretization.md §6.",
+      "additionalProperties": { "$ref": "#/$defs/Grid" }
     }
   },
 
@@ -1835,6 +1840,184 @@
         },
         "description": { "type": "string" }
       }
+    },
+
+    "GridMetricGenerator": {
+      "type": "object",
+      "description": "Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently 'gnomonic_c6_neighbors' and 'gnomonic_c6_d4_action'; adding a new builtin is a minor version bump per §6.4.1).",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["expression", "loader", "builtin"]
+        },
+        "expr": {
+          "description": "For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
+        },
+        "loader": {
+          "type": "string",
+          "description": "For kind='loader': name of a data_loaders entry that produces the array."
+        },
+        "field": {
+          "type": "string",
+          "description": "For kind='loader': named field within the referenced loader's output."
+        },
+        "name": {
+          "type": "string",
+          "description": "For kind='builtin': canonical name from the closed set defined in §6.4 (currently 'gnomonic_c6_neighbors', 'gnomonic_c6_d4_action'). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN."
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "expression" } }, "required": ["kind"] },
+          "then": { "required": ["expr"] } },
+        { "if": { "properties": { "kind": { "const": "loader" } }, "required": ["kind"] },
+          "then": { "required": ["loader", "field"] } },
+        { "if": { "properties": { "kind": { "const": "builtin" } }, "required": ["kind"] },
+          "then": { "required": ["name"] } }
+      ]
+    },
+
+    "GridMetricArray": {
+      "type": "object",
+      "description": "A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.",
+      "required": ["rank", "generator"],
+      "additionalProperties": false,
+      "properties": {
+        "rank": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tensor rank of the array: 0 = scalar (uniform spacing), 1 = 1D along a single dim, 2+ = multidimensional."
+        },
+        "dim": {
+          "type": "string",
+          "description": "For rank=1: the dimension the array is indexed by (one of the grid's dimensions)."
+        },
+        "dims": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "For rank≥2: ordered list of dimensions the array is indexed by."
+        },
+        "shape": {
+          "type": "array",
+          "description": "Optional declared shape (parameter names or integer literals per dimension). Used by connectivity/panel tables; redundant with dim/dims for metric arrays."
+        },
+        "generator": { "$ref": "#/$defs/GridMetricGenerator" }
+      }
+    },
+
+    "GridConnectivity": {
+      "type": "object",
+      "description": "Unstructured-grid connectivity table (e.g., cellsOnEdge, edgesOnCell). Integer-indexed lookup produced by a mesh loader. See §6.3.",
+      "required": ["shape", "rank"],
+      "additionalProperties": false,
+      "properties": {
+        "shape": {
+          "type": "array",
+          "description": "Ordered list of dimension sizes (parameter names or integer literals). E.g., ['nEdges', 2] for cellsOnEdge."
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "loader": {
+          "type": "string",
+          "description": "Name of a data_loaders entry that supplies this table."
+        },
+        "field": {
+          "type": "string",
+          "description": "Named field within the referenced loader's output."
+        },
+        "generator": {
+          "$ref": "#/$defs/GridMetricGenerator",
+          "description": "Alternative to loader/field: for generator-backed connectivity (e.g., cubed-sphere panel_connectivity uses kind='builtin')."
+        }
+      }
+    },
+
+    "GridExtent": {
+      "type": "object",
+      "description": "Per-dimension extent for cartesian or cubed_sphere grids. `n` is either an integer literal or a parameter reference naming the dimension count; `spacing` is 'uniform' or 'nonuniform' for cartesian (determines whether metric arrays are scalar or rank-1).",
+      "required": ["n"],
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "string" }
+          ]
+        },
+        "spacing": {
+          "type": "string",
+          "enum": ["uniform", "nonuniform"]
+        }
+      }
+    },
+
+    "Grid": {
+      "type": "object",
+      "description": "A named discretization grid. The `family` selects one of three topologies (cartesian / unstructured / cubed_sphere) per docs/rfcs/discretization.md §6.1-§6.4. Each grid also carries optional staggering locations, metric array declarations, and its own parameter block reusing the ordinary ESM Parameter schema.",
+      "required": ["family", "dimensions"],
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": ["cartesian", "unstructured", "cubed_sphere"]
+        },
+        "description": { "type": "string" },
+        "dimensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Ordered list of logical dimension names."
+        },
+        "locations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Declared stagger locations used by variables on this grid (see §11)."
+        },
+        "metric_arrays": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/GridMetricArray" }
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Grid-level parameters. Reuses the ordinary ESM Parameter schema. Parameters with value='from_loader' are resolved at load time from a referenced data_loaders entry (§6.6).",
+          "additionalProperties": { "$ref": "#/$defs/Parameter" }
+        },
+        "domain": {
+          "type": "string",
+          "description": "Optional name of the domains entry this grid refines. If a domain declares grid_spacing for the same dimension, the grid's extents.<dim>.spacing wins (§6.1)."
+        },
+        "extents": {
+          "type": "object",
+          "description": "Per-dimension extents. Required for 'cartesian' and 'cubed_sphere'; not used by 'unstructured'.",
+          "additionalProperties": { "$ref": "#/$defs/GridExtent" }
+        },
+        "connectivity": {
+          "type": "object",
+          "description": "Unstructured-family connectivity tables. Keys are table names (e.g., cellsOnEdge). Required for 'unstructured'; forbidden otherwise.",
+          "additionalProperties": { "$ref": "#/$defs/GridConnectivity" }
+        },
+        "panel_connectivity": {
+          "type": "object",
+          "description": "Cubed-sphere panel_connectivity tables (e.g., neighbors, axis_flip). Required for 'cubed_sphere'; forbidden otherwise. Typically built from the gnomonic_c6_* builtins.",
+          "additionalProperties": { "$ref": "#/$defs/GridConnectivity" }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "family": { "const": "cartesian" } }, "required": ["family"] },
+          "then": { "required": ["extents"] } },
+        { "if": { "properties": { "family": { "const": "unstructured" } }, "required": ["family"] },
+          "then": { "required": ["connectivity"] } },
+        { "if": { "properties": { "family": { "const": "cubed_sphere" } }, "required": ["family"] },
+          "then": { "required": ["extents", "panel_connectivity"] } }
+      ]
     },
 
     "Interface": {

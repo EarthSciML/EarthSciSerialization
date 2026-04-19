@@ -24,7 +24,7 @@ The two exceptions to full specification are **data loaders** and **registered o
 
 ```json
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": { ... },
   "models": { ... },
   "reaction_systems": { ... },
@@ -33,7 +33,8 @@ The two exceptions to full specification are **data loaders** and **registered o
   "registered_functions": { ... },
   "coupling": [ ... ],
   "domains": { ... },
-  "interfaces": { ... }
+  "interfaces": { ... },
+  "grids": { ... }
 }
 ```
 
@@ -49,6 +50,7 @@ The two exceptions to full specification are **data loaders** and **registered o
 | `coupling` | | Composition and coupling rules |
 | `domains` | | Named spatial/temporal domain specifications (see Section 11) |
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
+| `grids` | | Named discretization grids (cartesian / unstructured / cubed_sphere) — see docs/rfcs/discretization.md §6 |
 
 At least one of `models` or `reaction_systems` must be present.
 

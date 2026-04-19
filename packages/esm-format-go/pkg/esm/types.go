@@ -585,6 +585,63 @@ type BCContributedBy struct {
 }
 
 // ========================================
+// 7a. Grids (v0.2.0, RFC §6)
+// ========================================
+
+// Grid is a named discretization grid declared at the top-level `grids` map.
+// See docs/rfcs/discretization.md §6.
+type Grid struct {
+	Family             string                         `json:"family"` // "cartesian" | "unstructured" | "cubed_sphere"
+	Description        *string                        `json:"description,omitempty"`
+	Dimensions         []string                       `json:"dimensions"`
+	Locations          []string                       `json:"locations,omitempty"`
+	MetricArrays       map[string]GridMetricArray     `json:"metric_arrays,omitempty"`
+	Parameters         map[string]Parameter           `json:"parameters,omitempty"`
+	Domain             *string                        `json:"domain,omitempty"`
+	Extents            map[string]GridExtent          `json:"extents,omitempty"`
+	Connectivity       map[string]GridConnectivity    `json:"connectivity,omitempty"`
+	PanelConnectivity  map[string]GridConnectivity    `json:"panel_connectivity,omitempty"`
+}
+
+// GridExtent is a per-dimension extent (cartesian / cubed_sphere). `N` is an
+// integer literal or a parameter-reference string; `Spacing` is optional and
+// only meaningful for cartesian ('uniform' or 'nonuniform').
+type GridExtent struct {
+	N       interface{} `json:"n"`
+	Spacing *string     `json:"spacing,omitempty"`
+}
+
+// GridMetricArray is a named metric array on a grid (e.g., dx, areaCell). §6.5.
+type GridMetricArray struct {
+	Rank      int                 `json:"rank"`
+	Dim       *string             `json:"dim,omitempty"`
+	Dims      []string            `json:"dims,omitempty"`
+	Shape     []interface{}       `json:"shape,omitempty"`
+	Generator GridMetricGenerator `json:"generator"`
+}
+
+// GridMetricGenerator is the generator for a metric array — one of expression,
+// loader, or builtin per §6.5.
+type GridMetricGenerator struct {
+	Kind   string      `json:"kind"` // "expression" | "loader" | "builtin"
+	Expr   interface{} `json:"expr,omitempty"`
+	Loader *string     `json:"loader,omitempty"`
+	Field  *string     `json:"field,omitempty"`
+	Name   *string     `json:"name,omitempty"`
+}
+
+// GridConnectivity is an unstructured/cubed-sphere connectivity table (§6.3 /
+// §6.4). Entries are either loader-backed (Loader+Field) or generator-backed
+// (Generator).
+type GridConnectivity struct {
+	Shape     []interface{}        `json:"shape"`
+	Rank      int                  `json:"rank"`
+	Loader    *string              `json:"loader,omitempty"`
+	Field     *string              `json:"field,omitempty"`
+	Generator *GridMetricGenerator `json:"generator,omitempty"`
+}
+
+// ========================================
 // 7b. Interfaces
 // ========================================
 
@@ -654,6 +711,8 @@ type EsmFile struct {
 	Coupling            []interface{}                 `json:"coupling,omitempty"` // Properly deserialized coupling entries
 	Domains             map[string]Domain             `json:"domains,omitempty"`
 	Interfaces          map[string]Interface          `json:"interfaces,omitempty"`
+	// Grids holds top-level discretization grid declarations (v0.2.0, RFC §6).
+	Grids               map[string]Grid               `json:"grids,omitempty"`
 }
 
 // ========================================
@@ -957,6 +1016,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 		Coupling            json.RawMessage               `json:"coupling,omitempty"`
 		Domains             map[string]Domain             `json:"domains,omitempty"`
 		Interfaces          map[string]Interface          `json:"interfaces,omitempty"`
+		Grids               map[string]Grid               `json:"grids,omitempty"`
 	}
 
 	var temp TempEsmFile
@@ -974,6 +1034,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.RegisteredFunctions = temp.RegisteredFunctions
 	esm.Domains = temp.Domains
 	esm.Interfaces = temp.Interfaces
+	esm.Grids = temp.Grids
 
 	// Handle coupling array with proper type deserialization
 	if len(temp.Coupling) > 0 && string(temp.Coupling) != "null" {

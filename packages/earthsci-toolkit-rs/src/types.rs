@@ -46,6 +46,11 @@ pub struct EsmFile {
     /// Geometric interfaces between domains
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interfaces: Option<HashMap<String, serde_json::Value>>,
+
+    /// Named discretization grids (v0.2.0). Each entry declares a
+    /// cartesian/unstructured/cubed_sphere topology per docs/rfcs/discretization.md §6.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grids: Option<HashMap<String, Grid>>,
 }
 
 /// Academic citation or data source reference
@@ -1123,4 +1128,137 @@ pub struct Domain {
     /// Array backend identifier
     #[serde(skip_serializing_if = "Option::is_none")]
     pub array_type: Option<String>,
+}
+
+/// Generator for a grid metric array (§6.5). Exactly one of the three kinds
+/// applies:
+/// * `expression`: analytic expression, with `expr` set.
+/// * `loader`: pulled from a `data_loaders` entry; `loader` + `field` set.
+/// * `builtin`: closed set (currently `gnomonic_c6_neighbors`,
+///   `gnomonic_c6_d4_action`) selected by `name`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GridMetricGenerator {
+    /// One of `"expression"`, `"loader"`, `"builtin"`.
+    pub kind: String,
+
+    /// For `kind = "expression"`: the expression tree / literal / variable ref.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expr: Option<Expr>,
+
+    /// For `kind = "loader"`: name of a `data_loaders` entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loader: Option<String>,
+
+    /// For `kind = "loader"`: named field within the loader's output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+
+    /// For `kind = "builtin"`: canonical builtin name (closed set per §6.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GridMetricArray {
+    /// Tensor rank of the array: 0 = scalar, 1 = along a single dim, 2+ = multi.
+    pub rank: u32,
+
+    /// For `rank = 1`: the dimension the array is indexed by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dim: Option<String>,
+
+    /// For `rank >= 2`: ordered list of dimensions the array is indexed by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dims: Option<Vec<String>>,
+
+    /// Optional declared shape (parameter names or integer literals per dim).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<Vec<serde_json::Value>>,
+
+    /// The generator that produces this array.
+    pub generator: GridMetricGenerator,
+}
+
+/// Unstructured / cubed-sphere connectivity table (§6.3, §6.4). Either
+/// `loader` + `field` are set (data-loader-backed) or `generator` is set
+/// (builtin / expression).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GridConnectivity {
+    /// Ordered list of dimension sizes (parameter names or integer literals).
+    pub shape: Vec<serde_json::Value>,
+
+    /// Tensor rank (>= 1).
+    pub rank: u32,
+
+    /// Name of a `data_loaders` entry that supplies this table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loader: Option<String>,
+
+    /// Named field within the referenced loader's output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+
+    /// Alternative to loader/field: generator-backed connectivity (e.g.,
+    /// cubed-sphere `panel_connectivity` via `kind = "builtin"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generator: Option<GridMetricGenerator>,
+}
+
+/// Per-dimension extent for cartesian or cubed_sphere grids. `n` is either
+/// an integer literal or a parameter-name string; `spacing` is `"uniform"`
+/// or `"nonuniform"` for cartesian.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GridExtent {
+    /// Integer literal or parameter-name string naming the dimension count.
+    pub n: serde_json::Value,
+
+    /// Cartesian spacing: `"uniform"` or `"nonuniform"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spacing: Option<String>,
+}
+
+/// A named discretization grid (§6.1-§6.5). The `family` field selects one of
+/// three topologies: `"cartesian"`, `"unstructured"`, or `"cubed_sphere"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Grid {
+    /// One of `"cartesian"`, `"unstructured"`, `"cubed_sphere"`.
+    pub family: String,
+
+    /// Human-readable description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Ordered list of logical dimension names.
+    pub dimensions: Vec<String>,
+
+    /// Declared stagger locations used by variables on this grid (see §11).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locations: Option<Vec<String>>,
+
+    /// Metric array declarations, keyed by array name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metric_arrays: Option<HashMap<String, GridMetricArray>>,
+
+    /// Grid-level parameters. Reuses the ordinary ESM Parameter schema.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<HashMap<String, Parameter>>,
+
+    /// Optional name of the `domains` entry this grid refines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
+
+    /// Per-dimension extents (required for `"cartesian"` and `"cubed_sphere"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extents: Option<HashMap<String, GridExtent>>,
+
+    /// Unstructured-family connectivity tables (e.g. `cellsOnEdge`).
+    /// Required for `family = "unstructured"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connectivity: Option<HashMap<String, GridConnectivity>>,
+
+    /// Cubed-sphere panel connectivity (e.g. `neighbors`, `axis_flip`).
+    /// Required for `family = "cubed_sphere"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel_connectivity: Option<HashMap<String, GridConnectivity>>,
 }

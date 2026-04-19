@@ -100,10 +100,11 @@ pub use types::{
     AffectEquation, AutoRecords, ContinuousEvent, CouplingEntry, DataLoader, DataLoaderKind,
     DataLoaderMetadata, DataLoaderRegridding, DataLoaderSource, DataLoaderSpatial,
     DataLoaderTemporal, DataLoaderVariable, DiscreteEvent, DiscreteEventTrigger, Domain, Equation,
-    EsmFile, Expr, ExpressionNode, ExtrapolationMode, FunctionalAffect, GridType, Metadata, Model,
-    ModelTest, ModelTestAssertion, ModelVariable, Operator, Reaction, ReactionSystem,
-    RecordsPerFile, Species, StaggeringMode, StoichiometricEntry, TimeSpan, Tolerance,
-    UnitConversion, VariableType,
+    EsmFile, Expr, ExpressionNode, ExtrapolationMode, FunctionalAffect, Grid, GridConnectivity,
+    GridExtent, GridMetricArray, GridMetricGenerator, GridType, Metadata, Model, ModelTest,
+    ModelTestAssertion, ModelVariable, Operator, Reaction, ReactionSystem, RecordsPerFile,
+    Species, StaggeringMode, StoichiometricEntry, TimeSpan, Tolerance, UnitConversion,
+    VariableType,
 };
 pub use validate::{
     SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,
