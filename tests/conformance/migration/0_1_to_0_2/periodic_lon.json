@@ -1,0 +1,107 @@
+{
+  "id": "periodic_lon",
+  "description": "Periodic on custom axis 'lon': only the min side is emitted (RFC \u00a79.2.1), named 'lon_min' per the non-closed-axis underscore convention.",
+  "input": {
+    "esm": "0.1.0",
+    "metadata": {
+      "name": "PerLon",
+      "description": "periodic lon",
+      "authors": [
+        "ESM"
+      ],
+      "created": "2026-01-01T00:00:00Z"
+    },
+    "models": {
+      "M": {
+        "variables": {
+          "c": {
+            "type": "state",
+            "default": 1e-09
+          }
+        },
+        "equations": []
+      }
+    },
+    "domains": {
+      "default": {
+        "independent_variable": "t",
+        "temporal": {
+          "start": "2024-01-01T00:00:00Z",
+          "end": "2024-01-01T01:00:00Z"
+        },
+        "spatial": {
+          "lon": {
+            "min": -180.0,
+            "max": 180.0,
+            "units": "degrees"
+          }
+        },
+        "initial_conditions": {
+          "type": "constant",
+          "value": 0.0
+        },
+        "boundary_conditions": [
+          {
+            "type": "periodic",
+            "dimensions": [
+              "lon"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "expected": {
+    "esm": "0.2.0",
+    "metadata": {
+      "name": "PerLon",
+      "description": "periodic lon\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
+      "authors": [
+        "ESM"
+      ],
+      "created": "2026-01-01T00:00:00Z",
+      "tags": [
+        "migrated_from_v01"
+      ]
+    },
+    "models": {
+      "M": {
+        "variables": {
+          "c": {
+            "type": "state",
+            "default": 1e-09
+          }
+        },
+        "equations": [],
+        "boundary_conditions": {
+          "c_periodic_lon_min": {
+            "variable": "c",
+            "side": "lon_min",
+            "kind": "periodic"
+          }
+        }
+      }
+    },
+    "domains": {
+      "default": {
+        "independent_variable": "t",
+        "temporal": {
+          "start": "2024-01-01T00:00:00Z",
+          "end": "2024-01-01T01:00:00Z"
+        },
+        "spatial": {
+          "lon": {
+            "min": -180.0,
+            "max": 180.0,
+            "units": "degrees"
+          }
+        },
+        "initial_conditions": {
+          "type": "constant",
+          "value": 0.0
+        }
+      }
+    }
+  },
+  "tags": []
+}

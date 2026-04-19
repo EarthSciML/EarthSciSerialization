@@ -1,0 +1,12 @@
+{
+  "category": "migration",
+  "subcategory": "0_1_to_0_2",
+  "version": "1.0",
+  "description": "Cross-binding migration fixtures for v0.1.x -> v0.2.0 (RFC §10.1, §16.1). Each fixture's `input` is a pre-0.2 file carrying `domains.<d>.boundary_conditions`; `expected` is the byte-exact output of the `esm migrate`/`esm-migrate` tool per binding. The migration tool relocates each domain-level BC to model-level, bumps `esm` to 0.2.0, and records provenance.",
+  "fixtures": [
+    {"id": "zero_gradient_1d",  "path": "zero_gradient_1d.json",  "tags": ["zero_gradient", "single_axis"]},
+    {"id": "periodic_lon",      "path": "periodic_lon.json",      "tags": ["periodic", "custom_axis"]},
+    {"id": "robin_with_fields", "path": "robin_with_fields.json", "tags": ["robin", "value_fields"]}
+  ],
+  "rule": "For each domains.<d>.boundary_conditions[k] (type, dimensions, value?/robin_*?), emit model-level BC entries keyed as '<var>_<kind>_<side>' for every state variable in each matching model; 'periodic' emits only the min side (RFC §9.2.1); remove the domain-level list; bump esm to 0.2.0; append 'migrated_from_v01' to metadata.tags."
+}

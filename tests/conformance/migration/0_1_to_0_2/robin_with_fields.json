@@ -1,0 +1,158 @@
+{
+  "id": "robin_with_fields",
+  "description": "Robin BC with robin_alpha/beta/gamma numeric fields copied verbatim to each emitted model-level entry; Dirichlet with numeric value copied likewise.",
+  "input": {
+    "esm": "0.1.0",
+    "metadata": {
+      "name": "Robin",
+      "description": "robin fields",
+      "authors": [
+        "ESM"
+      ],
+      "created": "2026-01-01T00:00:00Z"
+    },
+    "models": {
+      "M": {
+        "variables": {
+          "T": {
+            "type": "state",
+            "default": 288.0
+          },
+          "k_diff": {
+            "type": "parameter",
+            "default": 1.0
+          }
+        },
+        "equations": []
+      }
+    },
+    "domains": {
+      "default": {
+        "independent_variable": "t",
+        "temporal": {
+          "start": "2024-01-01T00:00:00Z",
+          "end": "2024-01-01T01:00:00Z"
+        },
+        "spatial": {
+          "x": {
+            "min": 0.0,
+            "max": 1.0,
+            "units": "m"
+          },
+          "y": {
+            "min": 0.0,
+            "max": 1.0,
+            "units": "m"
+          }
+        },
+        "initial_conditions": {
+          "type": "constant",
+          "value": 0.0
+        },
+        "boundary_conditions": [
+          {
+            "type": "robin",
+            "dimensions": [
+              "x"
+            ],
+            "robin_alpha": 2.0,
+            "robin_beta": 1.0,
+            "robin_gamma": 3.5
+          },
+          {
+            "type": "dirichlet",
+            "dimensions": [
+              "y"
+            ],
+            "value": 288.15
+          }
+        ]
+      }
+    }
+  },
+  "expected": {
+    "esm": "0.2.0",
+    "metadata": {
+      "name": "Robin",
+      "description": "robin fields\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
+      "authors": [
+        "ESM"
+      ],
+      "created": "2026-01-01T00:00:00Z",
+      "tags": [
+        "migrated_from_v01"
+      ]
+    },
+    "models": {
+      "M": {
+        "variables": {
+          "T": {
+            "type": "state",
+            "default": 288.0
+          },
+          "k_diff": {
+            "type": "parameter",
+            "default": 1.0
+          }
+        },
+        "equations": [],
+        "boundary_conditions": {
+          "T_robin_xmin": {
+            "variable": "T",
+            "side": "xmin",
+            "kind": "robin",
+            "robin_alpha": 2.0,
+            "robin_beta": 1.0,
+            "robin_gamma": 3.5
+          },
+          "T_robin_xmax": {
+            "variable": "T",
+            "side": "xmax",
+            "kind": "robin",
+            "robin_alpha": 2.0,
+            "robin_beta": 1.0,
+            "robin_gamma": 3.5
+          },
+          "T_dirichlet_ymin": {
+            "variable": "T",
+            "side": "ymin",
+            "kind": "dirichlet",
+            "value": 288.15
+          },
+          "T_dirichlet_ymax": {
+            "variable": "T",
+            "side": "ymax",
+            "kind": "dirichlet",
+            "value": 288.15
+          }
+        }
+      }
+    },
+    "domains": {
+      "default": {
+        "independent_variable": "t",
+        "temporal": {
+          "start": "2024-01-01T00:00:00Z",
+          "end": "2024-01-01T01:00:00Z"
+        },
+        "spatial": {
+          "x": {
+            "min": 0.0,
+            "max": 1.0,
+            "units": "m"
+          },
+          "y": {
+            "min": 0.0,
+            "max": 1.0,
+            "units": "m"
+          }
+        },
+        "initial_conditions": {
+          "type": "constant",
+          "value": 0.0
+        }
+      }
+    }
+  },
+  "tags": []
+}

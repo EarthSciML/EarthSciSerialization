@@ -43,6 +43,9 @@ Repository = "https://github.com/ctessum/EarthSciSerialization.git"
 Documentation = "https://github.com/ctessum/EarthSciSerialization#readme"
 Issues = "https://github.com/ctessum/EarthSciSerialization/issues"
 
+[project.scripts]
+esm-migrate = "earthsci_toolkit.cli.migrate:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=6.0",
