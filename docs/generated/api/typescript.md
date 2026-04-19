@@ -184,7 +184,7 @@ Check if migration is possible from the source version to target version.
 
 ### canonicalJson
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:71`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:113`
 
 **Signature:**
 ```typescript
@@ -195,7 +195,7 @@ export function canonicalJson(expr: Expr): string {
 
 ### canonicalize
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:54`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:90`
 
 **Signature:**
 ```typescript
@@ -898,7 +898,7 @@ export function floatLit(value: number): NumericLiteral {
 
 ### formatCanonicalFloat
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:254`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:375`
 
 **Signature:**
 ```typescript
@@ -906,12 +906,13 @@ export function formatCanonicalFloat(f: number): string {
 ```
 
 **Description:**
-Format a finite `number` per RFC §5.4.6.
+Format a finite `number` per RFC §5.4.6. Only handles float-typed
+values: integer-typed `NumericLiteral` nodes are emitted as bare JSON
+integers by {@link canonicalJson} directly.
 
-Note: the trailing `.0` for integer-valued magnitudes applies because TS
-has no int/float distinction (every numeric literal is a float). Once
-gt-ca2u introduces typed integer nodes, integer values should serialize
-without the suffix.
+Unlike the convenience helper re-exported from `./numeric-literal`, this
+version strips the leading `+` on exponent notation (RFC §5.4.6:
+"no leading + on the exponent") so `1e25` emits as `1e25`, not `1e+25`.
 /
 
 ---
