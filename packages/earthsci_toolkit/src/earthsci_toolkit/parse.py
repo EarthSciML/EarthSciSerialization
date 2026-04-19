@@ -1913,6 +1913,78 @@ def _check_conversion_factor_consistency(data: Dict[str, Any], errors: List[str]
             )
 
 
+# Registry of well-known physical constants mapped by parameter name.
+# Each entry maps: name -> (canonical_units, description).
+# Pattern-matched by exact variable name; dimensional compatibility is checked
+# (not numerical equivalence — kcal/(mol*K) vs J/(mol*K) both pass this check).
+# Intentionally conservative — names chosen to minimize collision with common
+# non-constant uses (e.g., no 'c' for speed of light, which conflicts with
+# 'concentration'; no 'e' for elementary charge, which conflicts with Euler).
+_KNOWN_PHYSICAL_CONSTANTS = {
+    "R": ("J/(mol*K)", "ideal gas constant"),
+    "k_B": ("J/K", "Boltzmann constant"),
+    "N_A": ("1/mol", "Avogadro constant"),
+}
+
+
+def _expr_references_name(expr: Any, name: str) -> bool:
+    """Return True if the expression tree references a variable by exact name."""
+    if isinstance(expr, str):
+        return expr == name
+    if isinstance(expr, dict):
+        for arg in expr.get("args", []) or []:
+            if _expr_references_name(arg, name):
+                return True
+        inner = expr.get("expr")
+        if inner is not None and _expr_references_name(inner, name):
+            return True
+    return False
+
+
+def _check_physical_constant_units(data: Dict[str, Any], errors: List[str]) -> None:
+    """
+    Flag well-known physical constants declared with dimensionally incompatible units.
+
+    Uses a conservative registry (R, k_B, N_A) of pattern-matched names. A
+    parameter whose name exactly matches a known constant and whose declared
+    units are dimensionally different from the canonical form (e.g., R declared
+    as 'kcal/mol' — missing temperature — instead of 'J/(mol*K)') is flagged
+    as ``unit_inconsistency``. When an observed variable in the same model
+    references the constant, the error is reported at the usage site (where
+    the dimensional analysis error propagates); otherwise at the declaration.
+
+    Same-dimension numerical mismatches (e.g., R in 'kcal/(mol*K)' vs 'J/(mol*K)')
+    are not flagged — those require a numerical scale registry, which is
+    out of scope for this check.
+    """
+    for mname, m in data.get("models", {}).items():
+        variables = m.get("variables", {}) or {}
+        for vname, vdef in variables.items():
+            if vdef.get("type") != "parameter":
+                continue
+            if vname not in _KNOWN_PHYSICAL_CONSTANTS:
+                continue
+            declared = vdef.get("units")
+            if not declared:
+                continue
+            canonical, description = _KNOWN_PHYSICAL_CONSTANTS[vname]
+            if _units_compatible(declared, canonical):
+                continue
+            usage_vname = None
+            for other_vname, other_vdef in variables.items():
+                if other_vdef.get("type") != "observed":
+                    continue
+                if _expr_references_name(other_vdef.get("expression"), vname):
+                    usage_vname = other_vname
+                    break
+            target = f"models/{mname}/variables/{usage_vname or vname}"
+            errors.append(
+                f"{target}: Physical constant used with incorrect dimensional analysis "
+                f"(constant '{vname}' ({description}) declared with units '{declared}', "
+                f"expected dimensions compatible with '{canonical}')"
+            )
+
+
 def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors: List[str]) -> None:
     """
     Check unit compatibility in equations.
@@ -2272,6 +2344,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     _check_unit_consistency(data, tables, errors)
     _check_default_units_consistency(data, errors)
     _check_conversion_factor_consistency(data, errors)
+    _check_physical_constant_units(data, errors)
     _check_event_references(data, tables, errors)
     _check_equation_balance(data, errors)
     _check_operator_state_coverage(data, errors)

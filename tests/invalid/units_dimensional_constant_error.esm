@@ -1,0 +1,53 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "ConstantUnitsModel",
+    "description": "Invalid: ideal gas constant 'R' declared with units 'kcal/mol' (missing temperature dimension; canonical is J/(mol*K)). Dimensional analysis at the usage site 'gas_law_calculation' surfaces the physical-constant mismatch.",
+    "authors": ["Chris Tessum with Claude"],
+    "created": "2026-04-19T00:00:00Z"
+  },
+
+  "models": {
+    "ConstantUnitsModel": {
+      "variables": {
+        "P": {
+          "type": "parameter",
+          "units": "Pa",
+          "default": 101325.0,
+          "description": "Pressure"
+        },
+        "V": {
+          "type": "parameter",
+          "units": "m**3",
+          "default": 0.0224,
+          "description": "Volume"
+        },
+        "n": {
+          "type": "parameter",
+          "units": "mol",
+          "default": 1.0,
+          "description": "Amount of substance"
+        },
+        "T": {
+          "type": "parameter",
+          "units": "K",
+          "default": 273.15,
+          "description": "Temperature"
+        },
+        "R": {
+          "type": "parameter",
+          "units": "kcal/mol",
+          "default": 1.987e-3,
+          "description": "Ideal gas constant declared with units missing the temperature dimension (canonical: J/(mol*K))."
+        },
+        "gas_law_calculation": {
+          "type": "observed",
+          "units": "Pa*m**3",
+          "expression": {"op": "*", "args": ["n", "R", "T"]},
+          "description": "Right-hand side of P*V = n*R*T; inherits the dimensionally-incorrect R."
+        }
+      },
+      "equations": []
+    }
+  }
+}

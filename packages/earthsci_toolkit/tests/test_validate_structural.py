@@ -323,6 +323,23 @@ class TestValidationWithFixtures:
         if failed_files:
             pytest.fail(f"These invalid files unexpectedly passed validation: {failed_files}")
 
+    def test_units_dimensional_constant_error_fixture(self, fixtures_dir):
+        """gt-j91l: physical constant (R) declared with dimensionally-incorrect units
+        is flagged at the first usage site (`gas_law_calculation`)."""
+        fixture = fixtures_dir / "invalid" / "units_dimensional_constant_error.esm"
+        assert fixture.exists(), f"fixture missing: {fixture}"
+        with open(fixture) as f:
+            content = f.read()
+
+        with pytest.raises(SchemaValidationError) as exc_info:
+            load(content)
+
+        msg = str(exc_info.value)
+        assert "models/ConstantUnitsModel/variables/gas_law_calculation" in msg
+        assert "Physical constant used with incorrect dimensional analysis" in msg
+        assert "'R'" in msg
+        assert "ideal gas constant" in msg
+
     def test_all_valid_fixtures_pass_validation(self, fixtures_dir):
         """Test that all files in valid/ directory pass validation."""
         valid_dir = fixtures_dir / "valid"

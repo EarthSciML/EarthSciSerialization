@@ -2131,5 +2131,24 @@
     ],
     "is_valid": false,
     "notes": "Observed variable declared in Pa is assigned '50000 * p_atm' where p_atm is in atm; dimensions match but the numeric scale factor should be 101325 Pa/atm. Python's validator (parse._check_conversion_factor_consistency) detects linear-scale conversion errors by comparing the numeric literal in a '*' expression against pint's computed conversion factor. Affine conversions (e.g., degC→K) are excluded. Julia/Rust/TS/Go currently accept the file without this error — follow-up beads required for full cross-language support."
+  },
+
+  "units_dimensional_constant_error.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ConstantUnitsModel/variables/gas_law_calculation",
+        "code": "unit_inconsistency",
+        "message": "Physical constant used with incorrect dimensional analysis",
+        "details": {
+          "constant_name": "R",
+          "constant_description": "ideal gas constant",
+          "declared_units": "kcal/mol",
+          "canonical_units": "J/(mol*K)"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "The ideal gas constant 'R' is declared with units 'kcal/mol' — missing the temperature dimension — so the computed dimensions of 'n*R*T' in 'gas_law_calculation' do not match the canonical energy dimension expected from P*V = n*R*T. Python's validator pattern-matches a small registry of well-known constants (R, k_B, N_A) and flags dimensional (not numerical) mismatches at the first usage site. Julia/Rust/TS/Go currently do not implement this check — follow-up beads required for full cross-language support."
   }
 }
