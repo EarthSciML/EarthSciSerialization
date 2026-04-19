@@ -621,6 +621,17 @@ DomainUnitMismatchError(...)
 
 ---
 
+### ESM
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+ESM(...)
+```
+
+---
+
 ### Editing
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -800,6 +811,17 @@ FunctionalAffect(...)
 
 ---
 
+### GapReport
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+GapReport(...)
+```
+
+---
+
 ### Graph
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -898,6 +920,17 @@ JSON(...)
 **Signature:**
 ```julia
 Literal(...)
+```
+
+---
+
+### MTK
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+MTK(...)
 ```
 
 ---
@@ -1216,6 +1249,17 @@ ParseError(...)
 **Signature:**
 ```julia
 PeriodicTrigger(...)
+```
+
+---
+
+### Phase
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Phase(...)
 ```
 
 ---
@@ -3475,6 +3519,17 @@ distinction(...)
 
 ---
 
+### dod2
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+dod2(...)
+```
+
+---
+
 ### end_timer!
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/error_handling.jl:311`
@@ -3562,6 +3617,17 @@ result = evaluate(sum_expr, bindings)  # 5.0
 
 **Available in other languages:**
 - [Typescript](typescript.md#evaluate)
+
+---
+
+### export
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+export(...)
+```
 
 ---
 
@@ -4203,6 +4269,17 @@ Get the domain of a system by name. Returns:
 
 ---
 
+### gt
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+gt(...)
+```
+
+---
+
 ### has_element_pattern
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/display.jl:72`
@@ -4598,6 +4675,39 @@ from file_b take precedence.
 
 **Available in other languages:**
 - [Typescript](typescript.md#merge)
+
+---
+
+### migration
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+migration(...)
+```
+
+---
+
+### mtk2esm
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+mtk2esm(...)
+```
+
+---
+
+### mtk2esm_gaps
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+mtk2esm_gaps(...)
+```
 
 ---
 
@@ -6485,6 +6595,17 @@ function to_superscript(text::String)
 to_superscript(text::String) -> String
 
 Convert text to Unicode superscript representation.
+
+---
+
+### tooling
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+tooling(...)
+```
 
 ---
 
