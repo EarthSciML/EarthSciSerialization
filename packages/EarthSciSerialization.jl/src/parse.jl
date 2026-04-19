@@ -58,11 +58,13 @@ function parse_expression(data::Any)::Expr
     elseif isa(data, Dict) && haskey(data, "op")
         return _parse_op_dict(data, "op", "args", "wrt", "dim",
                               "output_idx", "expr", "reduce", "ranges",
-                              "regions", "values", "shape", "perm", "axis", "fn")
+                              "regions", "values", "shape", "perm", "axis", "fn",
+                              "handler_id")
     elseif hasfield(typeof(data), :op) || (hasmethod(haskey, (typeof(data), String)) && haskey(data, "op"))
         return _parse_op_dict(data, :op, :args, :wrt, :dim,
                               :output_idx, :expr, :reduce, :ranges,
-                              :regions, :values, :shape, :perm, :axis, :fn)
+                              :regions, :values, :shape, :perm, :axis, :fn,
+                              :handler_id)
     else
         throw(ParseError("Invalid expression format: expected number, string, or object with 'op' field. Got: $(typeof(data))"))
     end
@@ -72,7 +74,8 @@ end
 # arguments are passed as strings for Dict and symbols for JSON3.Object.
 function _parse_op_dict(data, kop, kargs, kwrt, kdim,
                         koutput_idx, kexpr, kreduce, kranges,
-                        kregions, kvalues, kshape, kperm, kaxis, kfn)
+                        kregions, kvalues, kshape, kperm, kaxis, kfn,
+                        khandler_id)
     op = string(data[kop])
     args_data = get(data, kargs, [])
     args = Vector{EarthSciSerialization.Expr}([parse_expression(arg) for arg in args_data])
@@ -96,13 +99,15 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     axis_int = axis_val === nothing ? nothing : Int(axis_val)
     fn_val = get(data, kfn, nothing)
     fn_str = fn_val === nothing ? nothing : string(fn_val)
+    handler_id_val = get(data, khandler_id, nothing)
+    handler_id_str = handler_id_val === nothing ? nothing : string(handler_id_val)
 
     return OpExpr(op, args;
         wrt=(wrt === nothing ? nothing : string(wrt)),
         dim=(dim === nothing ? nothing : string(dim)),
         output_idx=output_idx, expr_body=expr_body, reduce=reduce_str,
         ranges=ranges, regions=regions, values=values_vec, shape=shape_vec,
-        perm=perm_vec, axis=axis_int, fn=fn_str)
+        perm=perm_vec, axis=axis_int, fn=fn_str, handler_id=handler_id_str)
 end
 
 function _coerce_output_idx(data)
@@ -273,6 +278,12 @@ function coerce_esm_file(data::Any)::EsmFile
         nothing
     end
 
+    registered_functions = if haskey(data, :registered_functions) && data.registered_functions !== nothing
+        Dict{String,RegisteredFunction}(string(k) => coerce_registered_function(v) for (k, v) in pairs(data.registered_functions))
+    else
+        nothing
+    end
+
     coupling = if haskey(data, :coupling) && data.coupling !== nothing
         CouplingEntry[coerce_coupling_entry(c) for c in data.coupling]
     else
@@ -296,6 +307,7 @@ function coerce_esm_file(data::Any)::EsmFile
                   reaction_systems=reaction_systems,
                   data_loaders=data_loaders,
                   operators=operators,
+                  registered_functions=registered_functions,
                   coupling=coupling,
                   domains=domains,
                   interfaces=interfaces)
@@ -842,6 +854,56 @@ function coerce_operator(data::Any)::Operator
                    config=config,
                    modifies=modifies,
                    description=description)
+end
+
+"""
+    coerce_registered_function(data::Any) -> RegisteredFunction
+
+Coerce JSON data into RegisteredFunction type (esm-spec §9.2).
+"""
+function coerce_registered_function(data::Any)::RegisteredFunction
+    id = string(data.id)
+
+    sig_data = data.signature
+    arg_count = Int(sig_data.arg_count)
+    arg_types = if haskey(sig_data, :arg_types) && sig_data.arg_types !== nothing
+        [string(t) for t in sig_data.arg_types]
+    else
+        nothing
+    end
+    return_type = if haskey(sig_data, :return_type) && sig_data.return_type !== nothing
+        string(sig_data.return_type)
+    else
+        nothing
+    end
+    signature = RegisteredFunctionSignature(arg_count;
+                                            arg_types=arg_types,
+                                            return_type=return_type)
+
+    units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
+    arg_units = if haskey(data, :arg_units) && data.arg_units !== nothing
+        Vector{Union{String,Nothing}}([u === nothing ? nothing : string(u) for u in data.arg_units])
+    else
+        nothing
+    end
+    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
+    references = if haskey(data, :references) && data.references !== nothing
+        Reference[coerce_reference(r) for r in data.references]
+    else
+        Reference[]
+    end
+    config = if haskey(data, :config) && data.config !== nothing
+        Dict{String,Any}(string(k) => _to_native_json(v) for (k, v) in pairs(data.config))
+    else
+        nothing
+    end
+
+    return RegisteredFunction(id, signature;
+                              units=units,
+                              arg_units=arg_units,
+                              description=description,
+                              references=references,
+                              config=config)
 end
 
 """

@@ -50,7 +50,7 @@ export
     # Data and operator types
     DataLoader, DataLoaderSource, DataLoaderTemporal, DataLoaderSpatial,
     DataLoaderVariable, DataLoaderRegridding,
-    Operator, CouplingEntry,
+    Operator, RegisteredFunction, RegisteredFunctionSignature, CouplingEntry,
     # Concrete coupling types
     CouplingOperatorCompose, CouplingCouple, CouplingVariableMap,
     CouplingOperatorApply, CouplingCallback, CouplingEvent,

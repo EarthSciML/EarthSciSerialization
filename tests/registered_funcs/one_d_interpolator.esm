@@ -1,0 +1,50 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "registered_funcs_one_d_interpolator",
+    "description": "Exercises a 1D interpolation-table handler (`flux_interp_O3`) invoked on a scalar driver variable. Mirrors the GasChem.jl Fast-JX `flux_interp_*` pattern from the MTK audit (gt-p3ep). The handler body is not serialized — the fixture only declares the calling contract, including per-argument and output units. All five bindings MUST parse and round-trip.",
+    "authors": ["EarthSciSerialization/polecats/enclave"],
+    "tags": ["registered_functions", "call", "conformance", "interpolation", "gt-p3ep"],
+    "references": [
+      { "doi": "10.1029/1999GL011190" }
+    ]
+  },
+  "registered_functions": {
+    "flux_interp_O3": {
+      "id": "flux_interp_O3",
+      "signature": {
+        "arg_count": 1,
+        "arg_types": ["scalar"],
+        "return_type": "scalar"
+      },
+      "units": "s^-1",
+      "arg_units": ["rad"],
+      "description": "1D Fast-JX photolysis flux interpolator for O3 as a function of solar zenith angle.",
+      "references": [
+        { "doi": "10.1029/1999GL011190" }
+      ]
+    }
+  },
+  "models": {
+    "FastJX_O3": {
+      "variables": {
+        "sza": { "type": "parameter", "units": "rad", "default": 0.5 },
+        "O3":  { "type": "state",     "units": "mol/m^3" }
+      },
+      "equations": [
+        {
+          "_comment": "D(O3) = -j_O3(sza) * O3 — the photolysis-rate coefficient comes from the registered 1D interpolator.",
+          "lhs": { "op": "D", "args": ["O3"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              -1,
+              { "op": "call", "handler_id": "flux_interp_O3", "args": ["sza"] },
+              "O3"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

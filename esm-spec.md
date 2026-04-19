@@ -30,6 +30,7 @@ The two exceptions to full specification are **data loaders** and **registered o
   "reaction_systems": { ... },
   "data_loaders": { ... },
   "operators": { ... },
+  "registered_functions": { ... },
   "coupling": [ ... ],
   "domains": { ... },
   "interfaces": { ... }
@@ -44,6 +45,7 @@ The two exceptions to full specification are **data loaders** and **registered o
 | `reaction_systems` | | Reaction network components (fully specified) |
 | `data_loaders` | | External data source registrations (by reference) |
 | `operators` | | Registered runtime operators (by reference) |
+| `registered_functions` | | Registry of pure named functions invoked inside expressions via the `call` op (see Section 9.2) |
 | `coupling` | | Composition and coupling rules |
 | `domains` | | Named spatial/temporal domain specifications (see Section 11) |
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
@@ -134,6 +136,12 @@ All take their standard mathematical arguments in `args`.
 | Op | Args | Meaning |
 |---|---|---|
 | `Pre` | `[var]` | Value of variable immediately before an event fires (see Section 5) |
+
+#### Registered Function Invocation
+
+| Op | Required extra fields | Meaning |
+|---|---|---|
+| `call` | `handler_id` | Invoke a named pure function from the top-level `registered_functions` registry with the evaluated `args`. See Section 4.4 for semantics and Section 9.2 for the registry schema. |
 
 #### Array / Tensor
 
@@ -341,7 +349,49 @@ The following are intentionally *not* represented in the schema:
 - Broadcast fusion — handled by the runtime, not the serialization.
 - The `term` optimization hint on `SymbolicUtils.ArrayOp` (a pre-computed array-valued form used to short-circuit codegen). It is an optimization cache, not part of the mathematical semantics, and is recomputed at load time.
 
-### 4.4 Scoped References
+### 4.4 Registered Function Invocation (`call`)
+
+The `call` op invokes a named pure function that has been pre-registered in the top-level `registered_functions` map (see Section 9.2). This is the expression-embedded analogue of an [`@register_symbolic`](https://docs.sciml.ai/ModelingToolkit/stable/basics/Validation/#Custom-Function-Registration) stub in ModelingToolkit.jl and lets models serialize calls to interpolation tables, physics parameterizations, or any other externally-implemented scalar or array function without inlining the implementation.
+
+Fields:
+
+- `op`: `"call"`.
+- `handler_id`: string. Must match an entry key in the top-level `registered_functions` map.
+- `args`: array of sub-expressions. Evaluated and passed positionally to the registered handler.
+
+**Semantics.** At evaluation time, `handler_id` resolves via the `registered_functions` map to a concrete implementation supplied by the runtime (e.g. a Julia function bound through `@register_symbolic`, a Rust closure in a handler registry, a Python callable). Each argument in `args` is evaluated in the current context and passed positionally. The return value takes the place of the `call` node in the enclosing expression. Handlers are expected to be **pure** (no side effects on simulator state); stateful runtime operators should instead use the `operators` section.
+
+**Validation.** A schema-valid `call` node must reference a `handler_id` that appears as a key in `registered_functions`. Bindings SHOULD emit a `missing_registered_function` diagnostic when this invariant is violated. When `arg_units` are declared, bindings SHOULD additionally check that the unit of each argument sub-expression is compatible with the declared hint (same permissive rules as other dimensional checks).
+
+**Example — 1D photolysis-rate interpolator:**
+
+```json
+{
+  "op": "call",
+  "handler_id": "flux_interp_O3",
+  "args": ["sza"]
+}
+```
+
+References the `flux_interp_O3` entry declared under `registered_functions`, invoked on the solar-zenith-angle variable `sza`.
+
+**Example — scaled table lookup as a product term:**
+
+```json
+{
+  "op": "*",
+  "args": [
+    "c_species",
+    {
+      "op": "call",
+      "handler_id": "wesely_r_c",
+      "args": ["T", "LAI", "season"]
+    }
+  ]
+}
+```
+
+### 4.5 Scoped References
 
 Variables are referenced across systems using **hierarchical dot notation**. Systems can contain subsystems to arbitrary depth, and the dot-separated path walks the hierarchy from the top-level system down to the variable:
 
@@ -363,7 +413,7 @@ The **last** segment is always the variable (or species/parameter) name. All pre
 
 **Bare references** (no dot) refer to a variable within the current system context. In coupling entries, all references must be fully qualified from the top-level system name.
 
-### 4.5 Subsystem Inclusion by Reference
+### 4.6 Subsystem Inclusion by Reference
 
 Subsystems can be defined inline (as described in Sections 6 and 7) or included by reference from an external ESM file. A reference is an object with a single `ref` field containing a local file path or URL:
 
@@ -808,7 +858,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `equations` | ✓ | Array of `{lhs, rhs}` equation objects |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
-| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.5). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.4). |
+| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.6). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.5). |
 | `tolerance` | | Model-level default numerical tolerance used by tests (see Section 6.6). Object with optional `abs` and/or `rel` fields. |
 | `tests` | | Inline validation tests that exercise this model in isolation (see Section 6.6). |
 | `examples` | | Inline illustrative examples showing how to run this model (see Section 6.7). |
@@ -1332,7 +1382,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `constraint_equations` | | Additional algebraic or ODE constraints (in expression AST form) |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
-| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.5). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.4). |
+| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.6). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.5). |
 | `tolerance` | | System-level default numerical tolerance for tests. Same semantics as Section 6.6.4. |
 | `tests` | | Inline validation tests for this reaction system. Semantics, field shape, and tolerance resolution are identical to Section 6.6. Assertion `variable` names refer to species or observed quantities of this reaction system. |
 | `examples` | | Inline illustrative examples. Semantics, field shape, and plot/sweep rules are identical to Section 6.7. |
@@ -1648,7 +1698,9 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
 
 ---
 
-## 9. Operators
+## 9. Operators and Registered Functions
+
+### 9.1 Operators
 
 Operators correspond to `EarthSciMLBase.Operator` — objects that modify the simulator state directly via `SciMLOperators`. They cannot be expressed purely as ODEs because they involve operations like numerical advection schemes, diffusion stencils, or deposition algorithms that operate on the full discretized state array.
 
@@ -1686,7 +1738,7 @@ Like data loaders, operators are **registered by type** rather than fully specif
 }
 ```
 
-### 9.1 Operator Fields
+#### Operator Fields
 
 | Field | Required | Description |
 |---|---|---|
@@ -1696,6 +1748,69 @@ Like data loaders, operators are **registered by type** rather than fully specif
 | `needed_vars` | ✓ | Variables required by the operator (input to `get_needed_vars`) |
 | `modifies` | | Variables the operator modifies (informational, for dependency analysis) |
 | `description` | | Human-readable description |
+
+### 9.2 Registered Functions
+
+Registered functions are **pure**, named callables that are invoked *inside* expression trees via the `call` op (see Section 4.4). Unlike operators — which mutate simulator state at discrete points in the integration loop — registered functions are embedded directly in equation right-hand-sides and evaluated whenever the enclosing expression is evaluated. They are the serialization-level analogue of ModelingToolkit.jl's `@register_symbolic`.
+
+Use a registered function when:
+
+- The callable is side-effect-free and its output depends only on its arguments (e.g. a 1D/2D interpolation, a tabulated rate coefficient, an empirical surface-resistance formula).
+- It needs to appear directly inside symbolic expressions or reaction rate laws.
+
+Use an operator (Section 9.1) instead when the callable mutates simulator state (dry deposition applied to a grid, wet scavenging, an advection scheme).
+
+```json
+{
+  "registered_functions": {
+    "flux_interp_O3": {
+      "id": "flux_interp_O3",
+      "signature": { "arg_count": 1, "arg_types": ["scalar"], "return_type": "scalar" },
+      "units": "s^-1",
+      "arg_units": ["rad"],
+      "description": "Fast-JX photolysis flux interpolator for O3 as a function of solar zenith angle.",
+      "references": [
+        { "doi": "10.1029/1999GL011190" }
+      ]
+    },
+
+    "wesely_r_c": {
+      "id": "wesely_r_c",
+      "signature": { "arg_count": 3, "arg_types": ["scalar", "scalar", "scalar"], "return_type": "scalar" },
+      "units": "s/m",
+      "arg_units": ["K", "m^2/m^2", null],
+      "description": "Wesely (1989) canopy resistance as a function of temperature, LAI, and season."
+    },
+
+    "A_table": {
+      "id": "A_table",
+      "signature": { "arg_count": 2, "arg_types": ["scalar", "scalar"], "return_type": "scalar" },
+      "description": "2D deposition coefficient table lookup (land-use × season)."
+    }
+  }
+}
+```
+
+#### Registered Function Fields
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | ✓ | Registered identifier. Must equal the map key and the `handler_id` used by `call` ops that reference this function. |
+| `signature` | ✓ | Calling convention. Contains `arg_count` (required), optional `arg_types` (array of `"scalar"`/`"array"`/`"index"`, length must equal `arg_count`), and optional `return_type` (`"scalar"` or `"array"`). |
+| `units` | | Output units string. |
+| `arg_units` | | Per-argument units hints (length must equal `signature.arg_count`; each entry is a units string or `null`). |
+| `description` | | Human-readable description. |
+| `references` | | Academic citations. |
+| `config` | | Implementation-specific configuration (table data, grid descriptors, etc.) passed to the handler at bind time. |
+
+#### Runtime Binding
+
+Bindings establish a mapping from `id` to a concrete implementation at load time:
+
+- **Julia** (reference): each `id` is bound to a `@register_symbolic` stub whose body is supplied by the enclosing application.
+- **Rust / Python / Go / TypeScript**: each `id` is looked up in a runtime-supplied handler registry; evaluation of a `call` node invokes the registered handler with evaluated arguments.
+
+Handlers are out-of-band: the ESM file declares the calling contract, while the actual function bodies live in host code and are attached by the runtime. This preserves the ESM-as-contract invariant while enabling integration with parameterizations that resist direct serialization.
 
 ---
 
@@ -1943,7 +2058,7 @@ Advection.u_wind          # parameter u_wind from the Advection model
 Atmosphere.Chemistry.NO2  # species NO2 from a nested subsystem
 ```
 
-The last dot-separated segment is always the variable name; all preceding segments form the system path. This convention is consistent with the scoped reference notation used in coupling entries (Section 4.4) — the difference is that in the flattened system, **all** variable references are fully qualified, not just cross-system references.
+The last dot-separated segment is always the variable name; all preceding segments form the system path. This convention is consistent with the scoped reference notation used in coupling entries (Section 4.5) — the difference is that in the flattened system, **all** variable references are fully qualified, not just cross-system references.
 
 **Flattening is a core operation.** All libraries (not just simulation-tier) must be able to flatten a coupled system. The flattened representation is the input to:
 

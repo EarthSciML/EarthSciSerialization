@@ -82,6 +82,11 @@ const schema = {
       "description": "Registered runtime operators (by reference).",
       "additionalProperties": { "$ref": "#/$defs/Operator" }
     },
+    "registered_functions": {
+      "type": "object",
+      "description": "Registry of named pure functions invoked inside expressions via the 'call' op (esm-spec §9.2).",
+      "additionalProperties": { "$ref": "#/$defs/RegisteredFunction" }
+    },
     "coupling": {
       "type": "array",
       "description": "Composition and coupling rules.",
@@ -187,7 +192,8 @@ const schema = {
             "and", "or", "not",
             "Pre",
             "sign",
-            "index"
+            "index",
+            "call"
           ]
         },
         "args": {
@@ -202,9 +208,19 @@ const schema = {
         "dim": {
           "type": "string",
           "description": "Spatial dimension for grad operator (e.g., \"x\", \"y\", \"z\")."
+        },
+        "handler_id": {
+          "type": "string",
+          "description": "For call: id of a registered function (esm-spec §4.4)."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "const": "call" } }, "required": ["op"] },
+          "then": { "required": ["handler_id"] }
+        }
+      ]
     },
 
     "Equation": {
@@ -856,6 +872,43 @@ const schema = {
           "description": "Variables the operator modifies."
         },
         "description": { "type": "string" }
+      }
+    },
+
+    "RegisteredFunction": {
+      "type": "object",
+      "description": "A named pure function invoked inside expressions via the 'call' op (esm-spec §9.2).",
+      "required": ["id", "signature"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "signature": {
+          "type": "object",
+          "required": ["arg_count"],
+          "additionalProperties": false,
+          "properties": {
+            "arg_count": { "type": "integer", "minimum": 0 },
+            "arg_types": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["scalar", "array", "index"] }
+            },
+            "return_type": { "type": "string", "enum": ["scalar", "array"] }
+          }
+        },
+        "units": { "type": "string" },
+        "arg_units": {
+          "type": "array",
+          "items": { "oneOf": [ { "type": "string" }, { "type": "null" } ] }
+        },
+        "description": { "type": "string" },
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Reference" }
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": true
+        }
       }
     },
 

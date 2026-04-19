@@ -154,6 +154,10 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         perm = expr_data.get("perm")
         axis = expr_data.get("axis")
         fn = expr_data.get("fn")
+        handler_id = expr_data.get("handler_id")
+
+        if op == "call" and handler_id is None:
+            raise ValueError("Operator 'call' requires 'handler_id' field to be specified")
 
         return ExprNode(
             op=op,
@@ -170,6 +174,7 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
             perm=perm,
             axis=axis,
             fn=fn,
+            handler_id=handler_id,
         )
     else:
         raise ValueError(f"Invalid expression data: {expr_data}")
@@ -622,6 +627,32 @@ def _parse_operator(operator_data: Dict[str, Any]) -> Operator:
     )
 
 
+def _parse_registered_function(rf_data: Dict[str, Any]) -> 'RegisteredFunction':
+    """Parse a registered_functions entry from JSON data (esm-spec §9.2)."""
+    from .esm_types import RegisteredFunction, RegisteredFunctionSignature
+
+    sig_data = rf_data.get("signature", {})
+    signature = RegisteredFunctionSignature(
+        arg_count=sig_data.get("arg_count", 0),
+        arg_types=sig_data.get("arg_types"),
+        return_type=sig_data.get("return_type"),
+    )
+
+    references = []
+    for ref_data in rf_data.get("references", []) or []:
+        references.append(_parse_reference(ref_data))
+
+    return RegisteredFunction(
+        id=rf_data.get("id", ""),
+        signature=signature,
+        units=rf_data.get("units"),
+        arg_units=rf_data.get("arg_units"),
+        description=rf_data.get("description"),
+        references=references,
+        config=rf_data.get("config", {}) or {},
+    )
+
+
 def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
     """Parse a coupling entry from JSON data."""
     # Get coupling type from schema
@@ -952,6 +983,12 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             operator.name = op_name
             operators.append(operator)
 
+    # Parse registered_functions (esm-spec §9.2)
+    registered_functions = {}
+    if "registered_functions" in data:
+        for rf_name, rf_data in data["registered_functions"].items():
+            registered_functions[rf_name] = _parse_registered_function(rf_data)
+
     # Parse coupling entries
     coupling = []
     if "coupling" in data:
@@ -989,6 +1026,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         events=events,
         data_loaders=data_loaders,
         operators=operators,
+        registered_functions=registered_functions,
         coupling=coupling,
         domains=domains,
     )
@@ -2216,6 +2254,66 @@ def _check_event_references(data: Dict[str, Any], tables: Dict[str, Any], errors
                         )
 
 
+def _check_registered_function_calls(data: Dict[str, Any], errors: List[str]) -> None:
+    """Emit missing_registered_function diagnostics for 'call' ops whose
+    handler_id does not appear in the top-level registered_functions map
+    (esm-spec §4.4 / §9.2). Also checks arg_count against signature when declared.
+    """
+    registry = data.get("registered_functions") or {}
+
+    def walk(obj, path):
+        if isinstance(obj, dict):
+            if obj.get("op") == "call":
+                handler_id = obj.get("handler_id")
+                if handler_id is None:
+                    errors.append(f"{path}: 'call' op is missing required 'handler_id' field")
+                elif handler_id not in registry:
+                    errors.append(
+                        f"{path}: missing_registered_function — 'call' references handler_id "
+                        f"'{handler_id}' but no such entry exists in registered_functions"
+                    )
+                else:
+                    entry = registry[handler_id] or {}
+                    sig = entry.get("signature") or {}
+                    declared = sig.get("arg_count")
+                    args = obj.get("args") or []
+                    if declared is not None and len(args) != declared:
+                        errors.append(
+                            f"{path}: 'call' to '{handler_id}' has {len(args)} args but "
+                            f"signature declares arg_count={declared}"
+                        )
+            for k, v in obj.items():
+                walk(v, f"{path}/{k}")
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                walk(v, f"{path}[{i}]")
+
+    # Also sanity-check that each registered_functions entry's id matches its key
+    # and its arg_units length agrees with signature.arg_count when both are present.
+    for key, entry in registry.items():
+        if not isinstance(entry, dict):
+            continue
+        entry_id = entry.get("id")
+        if entry_id is not None and entry_id != key:
+            errors.append(
+                f"registered_functions/{key}: entry id '{entry_id}' does not match map key '{key}'"
+            )
+        sig = entry.get("signature") or {}
+        arg_count = sig.get("arg_count")
+        arg_units = entry.get("arg_units")
+        if arg_units is not None and arg_count is not None and len(arg_units) != arg_count:
+            errors.append(
+                f"registered_functions/{key}: arg_units length {len(arg_units)} != signature.arg_count {arg_count}"
+            )
+        arg_types = sig.get("arg_types")
+        if arg_types is not None and arg_count is not None and len(arg_types) != arg_count:
+            errors.append(
+                f"registered_functions/{key}: signature.arg_types length {len(arg_types)} != arg_count {arg_count}"
+            )
+
+    walk(data, "")
+
+
 def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     """
     Perform post-schema structural validation.
@@ -2261,6 +2359,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     # ``earthsci_toolkit.validation._validate_reaction_rate_dimensions`` with a
     # structured ``unit_inconsistency`` payload matching the cross-language
     # contract in ``tests/invalid/expected_errors.json``.
+    _check_registered_function_calls(data, errors)
 
     if errors:
         raise SchemaValidationError(

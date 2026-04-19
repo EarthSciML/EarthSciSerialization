@@ -2247,6 +2247,8 @@ mod tests {
             models: None,
             reaction_systems: Some(reaction_systems),
             operators: None,
+
+            registered_functions: None,
             data_loaders: None,
             coupling: None,
             domains: None,

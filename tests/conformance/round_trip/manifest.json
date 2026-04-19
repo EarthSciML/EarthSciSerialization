@@ -57,6 +57,9 @@
     { "id": "fixtures/arrayed_vars/vertex_located",  "path": "fixtures/arrayed_vars/vertex_located.esm",  "tags": ["arrayed_vars", "discretization", "vertex"] },
 
     { "id": "fixtures/sde/ornstein_uhlenbeck",       "path": "fixtures/sde/ornstein_uhlenbeck.esm",       "tags": ["sde", "brownian"] },
-    { "id": "fixtures/sde/correlated_noise",         "path": "fixtures/sde/correlated_noise.esm",         "tags": ["sde", "brownian", "correlated"] }
+    { "id": "fixtures/sde/correlated_noise",         "path": "fixtures/sde/correlated_noise.esm",         "tags": ["sde", "brownian", "correlated"] },
+    { "id": "registered_funcs/pure_math",            "path": "registered_funcs/pure_math.esm",            "tags": ["registered_functions", "call", "gt-p3ep"] },
+    { "id": "registered_funcs/one_d_interpolator",   "path": "registered_funcs/one_d_interpolator.esm",   "tags": ["registered_functions", "call", "interpolation", "gt-p3ep"] },
+    { "id": "registered_funcs/two_d_table_lookup",   "path": "registered_funcs/two_d_table_lookup.esm",   "tags": ["registered_functions", "call", "table_lookup", "gt-p3ep"] }
   ]
 }

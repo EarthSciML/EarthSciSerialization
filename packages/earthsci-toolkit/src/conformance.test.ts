@@ -111,6 +111,24 @@ describe('Conformance Test Suite', () => {
     });
   });
 
+  // gt-p3ep: 'call' op + registered_functions round-trip contract.
+  // Fixtures live in tests/registered_funcs/ and exercise the calling
+  // contract (handler_id, signature, arg_units) — handler bodies are
+  // supplied at runtime by the host.
+  describe('Registered-function call round-trip (gt-p3ep)', () => {
+    const registeredFuncsFiles = findEsmFiles(join(testsDir, 'registered_funcs'));
+
+    it.each(registeredFuncsFiles)('should round-trip %s', (filePath) => {
+      const originalContent = readFileSync(filePath, 'utf-8');
+      const original = load(originalContent);
+      const serialized = save(original);
+      const reloaded = load(serialized);
+      const secondSerialized = save(reloaded);
+      const secondReloaded = load(secondSerialized);
+      expect(secondReloaded).toEqual(original);
+    });
+  });
+
   // RFC discretization §5.1 (gt-5s48): `index` is legal in any expression
   // context, not only inside `arrayop.expr`. This test covers the scalar
   // case — integer-literal and composite-arithmetic index arguments on

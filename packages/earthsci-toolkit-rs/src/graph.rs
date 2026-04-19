@@ -947,6 +947,8 @@ mod tests {
             reaction_systems: None,
             data_loaders: None,
             operators: None,
+
+            registered_functions: None,
             coupling: None,
             domains: None,
             interfaces: None,
@@ -1011,6 +1013,8 @@ mod tests {
             reaction_systems: None,
             data_loaders: None,
             operators: None,
+
+            registered_functions: None,
             coupling: None,
             domains: None,
             interfaces: None,
@@ -1065,6 +1069,8 @@ mod tests {
             reaction_systems: None,
             data_loaders: None,
             operators: None,
+
+            registered_functions: None,
             coupling: None,
             domains: None,
             interfaces: None,
@@ -1128,6 +1134,8 @@ mod tests {
             reaction_systems: Some(reaction_systems),
             data_loaders: None,
             operators: None,
+
+            registered_functions: None,
             coupling: None,
             domains: None,
             interfaces: None,
@@ -1281,6 +1289,8 @@ mod tests {
             reaction_systems: None,
             data_loaders: None,
             operators: None,
+
+            registered_functions: None,
             coupling: Some(coupling_entries),
             domains: None,
             interfaces: None,

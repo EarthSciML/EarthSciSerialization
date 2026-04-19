@@ -102,7 +102,8 @@ export type ExpressionNode = ExpressionNode1 & {
     | "broadcast"
     | "reshape"
     | "transpose"
-    | "concat";
+    | "concat"
+    | "call";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
    *
@@ -165,6 +166,10 @@ export type ExpressionNode = ExpressionNode1 & {
    * For broadcast: the name of the scalar operator to apply element-wise to the operands in args. Must be an ExpressionNode op name drawn from the scalar subset (arithmetic, elementary functions, comparisons, etc.).
    */
   fn?: string;
+  /**
+   * For call: the identifier of a registered function (a key in the top-level `registered_functions` map). The handler receives the evaluated `args` positionally.
+   */
+  handler_id?: string;
 };
 export type ExpressionNode1 = {
   [k: string]: unknown;
@@ -391,6 +396,12 @@ export interface ESMFormat2 {
    */
   operators?: {
     [k: string]: Operator;
+  };
+  /**
+   * Registry of named pure functions that may be invoked inside expressions via the 'call' op. Each entry names a handler the runtime binds to a concrete implementation (e.g. an interpolation table lookup, a @register_symbolic stub in Julia).
+   */
+  registered_functions?: {
+    [k: string]: RegisteredFunction;
   };
   /**
    * Composition and coupling rules.
@@ -1072,6 +1083,48 @@ export interface Operator {
    */
   modifies?: string[];
   description?: string;
+}
+/**
+ * A named pure function that may be invoked inside an expression via the 'call' op. Analogous to Operator, but intended for side-effect-free callables embedded directly in expression trees (e.g. interpolation handlers, Julia @register_symbolic stubs, table lookups).
+ */
+export interface RegisteredFunction {
+  /**
+   * Registered identifier. Must match the key in the `registered_functions` map and the `handler_id` used by 'call' op nodes that reference this function.
+   */
+  id: string;
+  /**
+   * Calling convention.
+   */
+  signature: {
+    /**
+     * Number of positional arguments the handler expects.
+     */
+    arg_count: number;
+    /**
+     * Optional per-argument type hints. Each entry is one of 'scalar', 'array', 'index'. When present the array length must equal arg_count.
+     */
+    arg_types?: ("scalar" | "array" | "index")[];
+    /**
+     * Optional return-type hint.
+     */
+    return_type?: "scalar" | "array";
+  };
+  /**
+   * Optional output units string (same grammar as variable units).
+   */
+  units?: string;
+  /**
+   * Optional per-argument units hints. Each entry is either a units string or null (no hint). When present the array length must equal signature.arg_count.
+   */
+  arg_units?: (string | null)[];
+  description?: string;
+  references?: Reference[];
+  /**
+   * Implementation-specific configuration passed to the handler at bind time (e.g. table data, grid descriptors).
+   */
+  config?: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Match LHS time derivatives and add RHS terms together.

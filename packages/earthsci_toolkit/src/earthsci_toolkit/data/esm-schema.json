@@ -37,6 +37,11 @@
       "description": "Registered runtime operators (by reference).",
       "additionalProperties": { "$ref": "#/$defs/Operator" }
     },
+    "registered_functions": {
+      "type": "object",
+      "description": "Registry of named pure functions that may be invoked inside expressions via the 'call' op. Each entry names a handler the runtime binds to a concrete implementation (e.g. an interpolation table lookup, a @register_symbolic stub in Julia).",
+      "additionalProperties": { "$ref": "#/$defs/RegisteredFunction" }
+    },
     "coupling": {
       "type": "array",
       "description": "Composition and coupling rules.",
@@ -133,7 +138,8 @@
             "and", "or", "not",
             "Pre",
             "sign",
-            "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat"
+            "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
+            "call"
           ]
         },
         "args": {
@@ -223,6 +229,10 @@
         "fn": {
           "type": "string",
           "description": "For broadcast: the name of the scalar operator to apply element-wise to the operands in args. Must be an ExpressionNode op name drawn from the scalar subset (arithmetic, elementary functions, comparisons, etc.)."
+        },
+        "handler_id": {
+          "type": "string",
+          "description": "For call: the identifier of a registered function (a key in the top-level `registered_functions` map). The handler receives the evaluated `args` positionally."
         }
       },
       "additionalProperties": false,
@@ -246,6 +256,10 @@
         {
           "if": { "properties": { "op": { "const": "concat" } }, "required": ["op"] },
           "then": { "required": ["axis"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "call" } }, "required": ["op"] },
+          "then": { "required": ["handler_id"] }
         }
       ]
     },
@@ -1197,6 +1211,69 @@
               "items": { "type": "string" }
             }
           }
+        }
+      }
+    },
+
+    "RegisteredFunction": {
+      "type": "object",
+      "description": "A named pure function that may be invoked inside an expression via the 'call' op. Analogous to Operator, but intended for side-effect-free callables embedded directly in expression trees (e.g. interpolation handlers, Julia @register_symbolic stubs, table lookups).",
+      "required": ["id", "signature"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Registered identifier. Must match the key in the `registered_functions` map and the `handler_id` used by 'call' op nodes that reference this function."
+        },
+        "signature": {
+          "type": "object",
+          "description": "Calling convention.",
+          "required": ["arg_count"],
+          "additionalProperties": false,
+          "properties": {
+            "arg_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of positional arguments the handler expects."
+            },
+            "arg_types": {
+              "type": "array",
+              "description": "Optional per-argument type hints. Each entry is one of 'scalar', 'array', 'index'. When present the array length must equal arg_count.",
+              "items": {
+                "type": "string",
+                "enum": ["scalar", "array", "index"]
+              }
+            },
+            "return_type": {
+              "type": "string",
+              "description": "Optional return-type hint.",
+              "enum": ["scalar", "array"]
+            }
+          }
+        },
+        "units": {
+          "type": "string",
+          "description": "Optional output units string (same grammar as variable units)."
+        },
+        "arg_units": {
+          "type": "array",
+          "description": "Optional per-argument units hints. Each entry is either a units string or null (no hint). When present the array length must equal signature.arg_count.",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "description": { "type": "string" },
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Reference" }
+        },
+        "config": {
+          "type": "object",
+          "description": "Implementation-specific configuration passed to the handler at bind time (e.g. table data, grid descriptors).",
+          "additionalProperties": true
         }
       }
     },

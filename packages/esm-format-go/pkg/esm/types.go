@@ -14,10 +14,11 @@ import (
 
 // ExprNode represents an operator node in the expression tree
 type ExprNode struct {
-	Op   string        `json:"op"`
-	Args []interface{} `json:"args"`
-	Wrt  *string       `json:"wrt,omitempty"`  // for derivatives
-	Dim  *string       `json:"dim,omitempty"`  // for grad
+	Op        string        `json:"op"`
+	Args      []interface{} `json:"args"`
+	Wrt       *string       `json:"wrt,omitempty"`        // for derivatives
+	Dim       *string       `json:"dim,omitempty"`        // for grad
+	HandlerID *string       `json:"handler_id,omitempty"` // for `call` (esm-spec §4.4)
 }
 
 // Expression represents the union type: number | string | ExprNode
@@ -243,6 +244,27 @@ type Operator struct {
 	Description *string                `json:"description,omitempty"`
 }
 
+// RegisteredFunctionSignature describes the calling convention for a
+// RegisteredFunction (esm-spec §9.2).
+type RegisteredFunctionSignature struct {
+	ArgCount   int      `json:"arg_count"`
+	ArgTypes   []string `json:"arg_types,omitempty"`
+	ReturnType *string  `json:"return_type,omitempty"`
+}
+
+// RegisteredFunction is a named pure callable invoked inside expressions via
+// the `call` op (esm-spec §4.4 / §9.2). The serialized entry only declares
+// the calling contract; the concrete implementation is bound at runtime.
+type RegisteredFunction struct {
+	ID          string                      `json:"id"`
+	Signature   RegisteredFunctionSignature `json:"signature"`
+	Units       *string                     `json:"units,omitempty"`
+	ArgUnits    []*string                   `json:"arg_units,omitempty"`
+	Description *string                     `json:"description,omitempty"`
+	References  []Reference                 `json:"references,omitempty"`
+	Config      map[string]interface{}      `json:"config,omitempty"`
+}
+
 // ========================================
 // 6. Coupling
 // ========================================
@@ -456,15 +478,16 @@ type Metadata struct {
 
 // EsmFile represents the top-level ESM file structure
 type EsmFile struct {
-	Esm             string                    `json:"esm" validate:"required"`
-	Metadata        Metadata                  `json:"metadata" validate:"required"`
-	Models          map[string]Model          `json:"models,omitempty"`
-	ReactionSystems map[string]ReactionSystem `json:"reaction_systems,omitempty"`
-	DataLoaders     map[string]DataLoader     `json:"data_loaders,omitempty"`
-	Operators       map[string]Operator       `json:"operators,omitempty"`
-	Coupling        []interface{}             `json:"coupling,omitempty"` // Properly deserialized coupling entries
-	Domains         map[string]Domain         `json:"domains,omitempty"`
-	Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
+	Esm                 string                        `json:"esm" validate:"required"`
+	Metadata            Metadata                      `json:"metadata" validate:"required"`
+	Models              map[string]Model              `json:"models,omitempty"`
+	ReactionSystems     map[string]ReactionSystem     `json:"reaction_systems,omitempty"`
+	DataLoaders         map[string]DataLoader         `json:"data_loaders,omitempty"`
+	Operators           map[string]Operator           `json:"operators,omitempty"`
+	RegisteredFunctions map[string]RegisteredFunction `json:"registered_functions,omitempty"`
+	Coupling            []interface{}                 `json:"coupling,omitempty"` // Properly deserialized coupling entries
+	Domains             map[string]Domain             `json:"domains,omitempty"`
+	Interfaces          map[string]Interface          `json:"interfaces,omitempty"`
 }
 
 // ========================================
@@ -758,15 +781,16 @@ func (v *DataLoaderVariable) UnmarshalJSON(data []byte) error {
 func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	// Define a temporary struct that matches EsmFile but uses json.RawMessage for coupling
 	type TempEsmFile struct {
-		Esm             string                    `json:"esm"`
-		Metadata        Metadata                  `json:"metadata"`
-		Models          map[string]Model          `json:"models,omitempty"`
-		ReactionSystems map[string]ReactionSystem `json:"reaction_systems,omitempty"`
-		DataLoaders     map[string]DataLoader     `json:"data_loaders,omitempty"`
-		Operators       map[string]Operator       `json:"operators,omitempty"`
-		Coupling        json.RawMessage           `json:"coupling,omitempty"`
-		Domains         map[string]Domain         `json:"domains,omitempty"`
-		Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
+		Esm                 string                        `json:"esm"`
+		Metadata            Metadata                      `json:"metadata"`
+		Models              map[string]Model              `json:"models,omitempty"`
+		ReactionSystems     map[string]ReactionSystem     `json:"reaction_systems,omitempty"`
+		DataLoaders         map[string]DataLoader         `json:"data_loaders,omitempty"`
+		Operators           map[string]Operator           `json:"operators,omitempty"`
+		RegisteredFunctions map[string]RegisteredFunction `json:"registered_functions,omitempty"`
+		Coupling            json.RawMessage               `json:"coupling,omitempty"`
+		Domains             map[string]Domain             `json:"domains,omitempty"`
+		Interfaces          map[string]Interface          `json:"interfaces,omitempty"`
 	}
 
 	var temp TempEsmFile
@@ -781,6 +805,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.ReactionSystems = temp.ReactionSystems
 	esm.DataLoaders = temp.DataLoaders
 	esm.Operators = temp.Operators
+	esm.RegisteredFunctions = temp.RegisteredFunctions
 	esm.Domains = temp.Domains
 	esm.Interfaces = temp.Interfaces
 

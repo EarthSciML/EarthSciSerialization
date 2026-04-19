@@ -75,6 +75,8 @@ Operator expression node containing:
 - `perm`: for `transpose`, optional 0-based axis permutation.
 - `axis`: for `concat`, 0-based axis to concatenate along.
 - `fn`: for `broadcast`, the scalar operator to apply element-wise.
+- `handler_id`: for `call`, id of an entry in the top-level `registered_functions`
+  map. The handler receives the evaluated `args` positionally (see esm-spec §4.4).
 """
 struct OpExpr <: Expr
     op::String
@@ -91,14 +93,15 @@ struct OpExpr <: Expr
     perm::Union{Vector{Int},Nothing}
     axis::Union{Int,Nothing}
     fn::Union{String,Nothing}
+    handler_id::Union{String,Nothing}
 
     OpExpr(op::String, args::Vector{Expr};
            wrt=nothing, dim=nothing,
            output_idx=nothing, expr_body=nothing, reduce=nothing, ranges=nothing,
            regions=nothing, values=nothing, shape=nothing, perm=nothing,
-           axis=nothing, fn=nothing) =
+           axis=nothing, fn=nothing, handler_id=nothing) =
         new(op, args, wrt, dim, output_idx, expr_body, reduce, ranges,
-            regions, values, shape, perm, axis, fn)
+            regions, values, shape, perm, axis, fn, handler_id)
 end
 
 # Accept any AbstractVector of Expr-subtypes (e.g. Vector{VarExpr},
@@ -769,6 +772,48 @@ end
 # ========================================
 
 """
+    RegisteredFunctionSignature
+
+Calling convention for a [`RegisteredFunction`](@ref). See esm-spec §9.2.
+"""
+struct RegisteredFunctionSignature
+    arg_count::Int
+    arg_types::Union{Vector{String},Nothing}
+    return_type::Union{String,Nothing}
+
+    RegisteredFunctionSignature(arg_count::Int;
+                                arg_types=nothing,
+                                return_type=nothing) =
+        new(arg_count, arg_types, return_type)
+end
+
+"""
+    RegisteredFunction
+
+A named pure function that may be invoked inside expressions via the `call`
+op (see esm-spec §4.4 / §9.2). The serialized entry declares the calling
+contract only; the concrete implementation is supplied by the runtime through
+a handler registry (in Julia, via `@register_symbolic`).
+"""
+struct RegisteredFunction
+    id::String
+    signature::RegisteredFunctionSignature
+    units::Union{String,Nothing}
+    arg_units::Union{Vector{Union{String,Nothing}},Nothing}
+    description::Union{String,Nothing}
+    references::Vector{Reference}
+    config::Union{Dict{String,Any},Nothing}
+
+    RegisteredFunction(id::String, signature::RegisteredFunctionSignature;
+                       units=nothing,
+                       arg_units=nothing,
+                       description=nothing,
+                       references=Reference[],
+                       config=nothing) =
+        new(id, signature, units, arg_units, description, references, config)
+end
+
+"""
     Domain
 
 Spatial and temporal domain specification.
@@ -893,6 +938,7 @@ struct EsmFile
     reaction_systems::Union{Dict{String,ReactionSystem},Nothing}
     data_loaders::Union{Dict{String,DataLoader},Nothing}
     operators::Union{Dict{String,Operator},Nothing}
+    registered_functions::Union{Dict{String,RegisteredFunction},Nothing}
     coupling::Vector{CouplingEntry}
     domains::Union{Dict{String,Domain},Nothing}
     interfaces::Union{Dict{String,Interface},Nothing}
@@ -903,10 +949,12 @@ struct EsmFile
             reaction_systems=nothing,
             data_loaders=nothing,
             operators=nothing,
+            registered_functions=nothing,
             coupling=CouplingEntry[],
             domains=nothing,
             interfaces=nothing) =
-        new(esm, metadata, models, reaction_systems, data_loaders, operators, coupling, domains, interfaces)
+        new(esm, metadata, models, reaction_systems, data_loaders, operators,
+            registered_functions, coupling, domains, interfaces)
 end
 
 # ========================================

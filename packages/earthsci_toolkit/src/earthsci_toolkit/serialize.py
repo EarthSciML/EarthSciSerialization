@@ -57,6 +57,8 @@ def _serialize_expression(expr: Expr) -> Union[int, float, str, Dict[str, Any]]:
             result["axis"] = expr.axis
         if expr.fn is not None:
             result["fn"] = expr.fn
+        if expr.handler_id is not None:
+            result["handler_id"] = expr.handler_id
         return result
     else:
         raise ValueError(f"Invalid expression type: {type(expr)}")
@@ -512,6 +514,31 @@ def _serialize_operator(operator: Operator) -> Dict[str, Any]:
     return result
 
 
+def _serialize_registered_function(rf) -> Dict[str, Any]:
+    """Serialize a RegisteredFunction entry (esm-spec §9.2)."""
+    sig: Dict[str, Any] = {"arg_count": rf.signature.arg_count}
+    if rf.signature.arg_types is not None:
+        sig["arg_types"] = list(rf.signature.arg_types)
+    if rf.signature.return_type is not None:
+        sig["return_type"] = rf.signature.return_type
+
+    result: Dict[str, Any] = {
+        "id": rf.id,
+        "signature": sig,
+    }
+    if rf.units is not None:
+        result["units"] = rf.units
+    if rf.arg_units is not None:
+        result["arg_units"] = list(rf.arg_units)
+    if rf.description is not None:
+        result["description"] = rf.description
+    if rf.references:
+        result["references"] = [_serialize_reference(r) for r in rf.references]
+    if rf.config:
+        result["config"] = dict(rf.config)
+    return result
+
+
 def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
     """Serialize a coupling entry to JSON-compatible format."""
     result = {}
@@ -641,6 +668,13 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
         result["operators"] = {
             getattr(operator, 'name', operator.operator_id): _serialize_operator(operator)
             for operator in esm_file.operators
+        }
+
+    # Serialize registered_functions (esm-spec §9.2)
+    if esm_file.registered_functions:
+        result["registered_functions"] = {
+            name: _serialize_registered_function(rf)
+            for name, rf in esm_file.registered_functions.items()
         }
 
     # Serialize coupling

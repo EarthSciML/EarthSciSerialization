@@ -64,6 +64,9 @@ function serialize_expression(expr::Expr)
         if expr.fn !== nothing
             result["fn"] = expr.fn
         end
+        if expr.handler_id !== nothing
+            result["handler_id"] = expr.handler_id
+        end
         return result
     else
         throw(ArgumentError("Unknown expression type: $(typeof(expr))"))
@@ -604,6 +607,42 @@ function serialize_operator(op::Operator)::Dict{String,Any}
 end
 
 """
+    serialize_registered_function(rf::RegisteredFunction) -> Dict{String,Any}
+
+Serialize RegisteredFunction to JSON-compatible format (esm-spec §9.2).
+"""
+function serialize_registered_function(rf::RegisteredFunction)::Dict{String,Any}
+    sig = Dict{String,Any}("arg_count" => rf.signature.arg_count)
+    if rf.signature.arg_types !== nothing
+        sig["arg_types"] = rf.signature.arg_types
+    end
+    if rf.signature.return_type !== nothing
+        sig["return_type"] = rf.signature.return_type
+    end
+
+    result = Dict{String,Any}(
+        "id" => rf.id,
+        "signature" => sig,
+    )
+    if rf.units !== nothing
+        result["units"] = rf.units
+    end
+    if rf.arg_units !== nothing
+        result["arg_units"] = Any[u === nothing ? nothing : u for u in rf.arg_units]
+    end
+    if rf.description !== nothing
+        result["description"] = rf.description
+    end
+    if !isempty(rf.references)
+        result["references"] = [serialize_reference(r) for r in rf.references]
+    end
+    if rf.config !== nothing
+        result["config"] = rf.config
+    end
+    return result
+end
+
+"""
     serialize_coupling_entry(entry::CouplingEntry) -> Dict{String,Any}
 
 Serialize CouplingEntry to JSON-compatible format based on concrete type.
@@ -886,6 +925,9 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     end
     if file.operators !== nothing
         result["operators"] = Dict(k => serialize_operator(v) for (k, v) in file.operators)
+    end
+    if file.registered_functions !== nothing
+        result["registered_functions"] = Dict(k => serialize_registered_function(v) for (k, v) in file.registered_functions)
     end
     if !isempty(file.coupling)
         result["coupling"] = [serialize_coupling_entry(c) for c in file.coupling]

@@ -1,0 +1,35 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "registered_funcs_pure_math",
+    "description": "Exercises the `call` op + `registered_functions` registry with a trivial pure math handler (squared) invoked from a scalar ODE RHS. Handler body is supplied by the runtime test harness; the fixture only declares the calling contract. All five bindings MUST parse and round-trip this fixture (gt-p3ep).",
+    "authors": ["EarthSciSerialization/polecats/enclave"],
+    "tags": ["registered_functions", "call", "conformance", "gt-p3ep"]
+  },
+  "registered_functions": {
+    "sq": {
+      "id": "sq",
+      "signature": {
+        "arg_count": 1,
+        "arg_types": ["scalar"],
+        "return_type": "scalar"
+      },
+      "description": "Pure math handler: returns the square of its scalar argument."
+    }
+  },
+  "models": {
+    "PureMathCall": {
+      "variables": {
+        "x": { "type": "parameter", "default": 2.5 },
+        "y": { "type": "state" }
+      },
+      "equations": [
+        {
+          "_comment": "D(y) = sq(x) — expression embeds a registered-function call.",
+          "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
+          "rhs": { "op": "call", "handler_id": "sq", "args": ["x"] }
+        }
+      ]
+    }
+  }
+}

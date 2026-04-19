@@ -36,6 +36,8 @@ class ExprNode:
     axis: Optional[int] = None
     # broadcast:
     fn: Optional[str] = None
+    # call (registered function invocation, see esm-spec §4.4 / §9.2):
+    handler_id: Optional[str] = None
 
 
 # Recursive type definition for expressions
@@ -272,6 +274,26 @@ class Operator:
     description: Optional[str] = None
 
 
+@dataclass
+class RegisteredFunctionSignature:
+    """Calling convention for a RegisteredFunction (see esm-spec §9.2)."""
+    arg_count: int
+    arg_types: Optional[List[str]] = None
+    return_type: Optional[str] = None
+
+
+@dataclass
+class RegisteredFunction:
+    """A named pure function invoked inside expressions via the 'call' op."""
+    id: str
+    signature: RegisteredFunctionSignature
+    units: Optional[str] = None
+    arg_units: Optional[List[Optional[str]]] = None
+    description: Optional[str] = None
+    references: List['Reference'] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
 class CouplingType(Enum):
     """Types of coupling between model components matching ESM schema."""
     OPERATOR_COMPOSE = "operator_compose"
@@ -503,6 +525,7 @@ class EsmFile:
     events: List[Union[ContinuousEvent, DiscreteEvent]] = field(default_factory=list)
     data_loaders: Dict[str, DataLoader] = field(default_factory=dict)
     operators: List[Operator] = field(default_factory=list)
+    registered_functions: Dict[str, RegisteredFunction] = field(default_factory=dict)
     coupling: List[CouplingEntry] = field(default_factory=list)
     domains: Dict[str, Domain] = field(default_factory=dict)
 

@@ -116,6 +116,8 @@ fn test_structural_validation() {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+
+        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,
@@ -258,6 +260,8 @@ fn test_component_graph() {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+
+        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,

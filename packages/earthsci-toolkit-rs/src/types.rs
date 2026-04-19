@@ -30,6 +30,11 @@ pub struct EsmFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operators: Option<HashMap<String, Operator>>,
 
+    /// Registry of named pure functions invoked inside expressions via the
+    /// `call` op (esm-spec §9.2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registered_functions: Option<HashMap<String, RegisteredFunction>>,
+
     /// Composition and coupling rules
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coupling: Option<Vec<CouplingEntry>>,
@@ -185,6 +190,10 @@ pub struct ExpressionNode {
     /// Elementwise operator name for `broadcast` (serialized as `fn`).
     #[serde(default, rename = "fn", skip_serializing_if = "Option::is_none")]
     pub broadcast_fn: Option<String>,
+
+    /// For `call`: id of a registered function (esm-spec §4.4 / §9.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handler_id: Option<String>,
 }
 
 /// Numerical comparison tolerance used by inline model tests.
@@ -907,6 +916,54 @@ pub struct Operator {
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+}
+
+/// Calling convention for a [`RegisteredFunction`] (esm-spec §9.2).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisteredFunctionSignature {
+    /// Number of positional arguments the handler expects.
+    pub arg_count: i64,
+
+    /// Optional per-argument type hints.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arg_types: Option<Vec<String>>,
+
+    /// Optional return-type hint (`"scalar"` or `"array"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub return_type: Option<String>,
+}
+
+/// A named pure function invoked inside an expression via the `call` op
+/// (esm-spec §9.2). The serialized entry declares the calling contract only;
+/// the concrete implementation is supplied by the runtime through a handler
+/// registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisteredFunction {
+    /// Registered identifier; must match the map key and `call.handler_id`.
+    pub id: String,
+
+    /// Calling convention.
+    pub signature: RegisteredFunctionSignature,
+
+    /// Optional output units string.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
+
+    /// Optional per-argument units hints; length must equal `signature.arg_count`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arg_units: Option<Vec<Option<String>>>,
+
+    /// Human-readable description.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Academic citations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub references: Option<Vec<Reference>>,
+
+    /// Implementation-specific configuration passed to the handler at bind time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
 }
 
 /// Coupling entry with discriminated union based on type field
