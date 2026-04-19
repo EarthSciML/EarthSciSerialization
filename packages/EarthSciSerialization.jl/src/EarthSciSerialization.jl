@@ -75,6 +75,7 @@ export
     # Structural validation
     StructuralError, ValidationResult, validate_structural, validate,
     validate_reaction_rate_units, validate_model_gradient_units,
+    validate_model_conversion_factors,
     # Expression operations
     substitute, free_variables, contains, evaluate, simplify, UnboundVariableError,
     # Qualified reference resolution

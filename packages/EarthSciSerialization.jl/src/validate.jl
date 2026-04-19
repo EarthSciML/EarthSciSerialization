@@ -135,7 +135,11 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
         for (model_name, model) in file.models
             append!(errors, validate_event_consistency(model, "models.$model_name"))
             append!(errors, validate_model_gradient_units(file, model, "/models/$model_name"))
+<<<<<<< Updated upstream
             append!(errors, validate_physical_constant_units(model, "/models/$model_name"))
+=======
+            append!(errors, validate_model_conversion_factors(model, "/models/$model_name"))
+>>>>>>> Stashed changes
         end
     end
 
@@ -816,6 +820,87 @@ function _check_gradient_ops(expr::Expr, coord_units::Dict{String,Union{String,N
         end
     end
     return errors
+end
+
+"""
+    validate_model_conversion_factors(model::Model, path::String) -> Vector{StructuralError}
+
+Flag observed variables whose expression is `<numeric> * <var>` (or `<var> * <numeric>`)
+when the declared output units and the source variable's units are dimensionally
+compatible but the numeric literal disagrees with the correct linear scale factor
+(e.g., assigning `50000 * p_atm` to a Pa variable when the correct factor is
+101325 Pa/atm).
+
+Emits `unit_inconsistency` matching Python's `_check_conversion_factor_consistency`.
+Only linear (non-affine) scale conversions are checked — affine conversions like
+degC→K require an offset and are skipped. Compound expressions, matching units,
+and unparseable units are silently ignored to stay conservative.
+"""
+function validate_model_conversion_factors(model::Model, path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    for (vname, var) in model.variables
+        var.type == ObservedVariable || continue
+        lhs_units = var.units
+        (lhs_units === nothing || isempty(lhs_units)) && continue
+        expr = var.expression
+        expr === nothing && continue
+        expr isa OpExpr || continue
+        expr.op == "*" || continue
+        length(expr.args) == 2 || continue
+
+        numeric = nothing
+        var_ref = nothing
+        for a in expr.args
+            if a isa NumExpr && a.value isa Number && !(a.value isa Bool)
+                numeric = Float64(a.value)
+            elseif a isa VarExpr
+                var_ref = a.name
+            end
+        end
+        (numeric === nothing || var_ref === nothing) && continue
+        haskey(model.variables, var_ref) || continue
+        src_units = model.variables[var_ref].units
+        (src_units === nothing || isempty(src_units)) && continue
+        src_units == lhs_units && continue
+
+        u_src = parse_units(src_units)
+        u_lhs = parse_units(lhs_units)
+        (u_src === nothing || u_lhs === nothing) && continue
+        dimension(u_src) == dimension(u_lhs) || continue
+
+        factor = _linear_conversion_factor(u_src, u_lhs)
+        (factor === nothing || factor == 0) && continue
+        abs(numeric - factor) <= 1e-9 * max(abs(factor), 1.0) && continue
+
+        push!(errors, StructuralError(
+            "$path/variables/$vname",
+            "Unit conversion factor is incorrect for specified unit transformation " *
+            "(declared_factor=$numeric, expected_factor=$factor, " *
+            "source_units='$src_units', declared_units='$lhs_units')",
+            "unit_inconsistency",
+        ))
+    end
+
+    for (subsys_name, subsys) in model.subsystems
+        append!(errors, validate_model_conversion_factors(subsys, "$path/subsystems/$subsys_name"))
+    end
+
+    return errors
+end
+
+# Compute the linear (non-affine) conversion factor from `u_from` to `u_to` using
+# Unitful.jl. Returns `nothing` if the conversion is affine (offset non-zero at
+# the origin, e.g. degC→K) or if either direction fails.
+function _linear_conversion_factor(u_from, u_to)::Union{Float64,Nothing}
+    try
+        q0 = Unitful.ustrip(Unitful.uconvert(u_to, 0.0 * u_from))
+        abs(q0) > 1e-12 && return nothing  # affine
+        q1 = Unitful.ustrip(Unitful.uconvert(u_to, 1.0 * u_from))
+        return Float64(q1)
+    catch
+        return nothing
+    end
 end
 
 """

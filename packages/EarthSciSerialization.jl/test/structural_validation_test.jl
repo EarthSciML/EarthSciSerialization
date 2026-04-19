@@ -449,4 +449,106 @@ using EarthSciSerialization
         end
     end
 
+    @testset "Conversion factor consistency (gt-l76y)" begin
+        make_var(args...; kw...) = EarthSciSerialization.ModelVariable(args...; kw...)
+
+        @testset "Wrong numeric factor on atm→Pa is rejected" begin
+            vars = Dict{String,EarthSciSerialization.ModelVariable}(
+                "p_atm" => make_var(EarthSciSerialization.ParameterVariable;
+                                    units="atm", default=1.0),
+                "converted_pressure" => make_var(EarthSciSerialization.ObservedVariable;
+                                                 units="Pa",
+                                                 expression=EarthSciSerialization.OpExpr("*",
+                                                     EarthSciSerialization.Expr[
+                                                         EarthSciSerialization.NumExpr(50000.0),
+                                                         EarthSciSerialization.VarExpr("p_atm"),
+                                                     ])),
+            )
+            model = EarthSciSerialization.Model(vars, EarthSciSerialization.Equation[])
+            errors = EarthSciSerialization.validate_model_conversion_factors(model, "/models/Bad")
+            @test length(errors) == 1
+            @test errors[1].error_type == "unit_inconsistency"
+            @test errors[1].path == "/models/Bad/variables/converted_pressure"
+            @test occursin("declared_factor=50000", errors[1].message)
+            @test occursin("expected_factor=101325", errors[1].message)
+        end
+
+        @testset "Correct numeric factor on atm→Pa passes" begin
+            vars = Dict{String,EarthSciSerialization.ModelVariable}(
+                "p_atm" => make_var(EarthSciSerialization.ParameterVariable;
+                                    units="atm", default=1.0),
+                "converted_pressure" => make_var(EarthSciSerialization.ObservedVariable;
+                                                 units="Pa",
+                                                 expression=EarthSciSerialization.OpExpr("*",
+                                                     EarthSciSerialization.Expr[
+                                                         EarthSciSerialization.NumExpr(101325.0),
+                                                         EarthSciSerialization.VarExpr("p_atm"),
+                                                     ])),
+            )
+            model = EarthSciSerialization.Model(vars, EarthSciSerialization.Equation[])
+            errors = EarthSciSerialization.validate_model_conversion_factors(model, "/models/Good")
+            @test isempty(errors)
+        end
+
+        @testset "Affine conversion (degC→K) is skipped" begin
+            # Any numeric factor for an affine conversion must be skipped because
+            # linear-factor analysis is ill-defined; emitting here would produce
+            # false positives.
+            vars = Dict{String,EarthSciSerialization.ModelVariable}(
+                "t_c" => make_var(EarthSciSerialization.ParameterVariable;
+                                  units="degC", default=25.0),
+                "t_k" => make_var(EarthSciSerialization.ObservedVariable;
+                                  units="K",
+                                  expression=EarthSciSerialization.OpExpr("*",
+                                      EarthSciSerialization.Expr[
+                                          EarthSciSerialization.NumExpr(1.0),
+                                          EarthSciSerialization.VarExpr("t_c"),
+                                      ])),
+            )
+            model = EarthSciSerialization.Model(vars, EarthSciSerialization.Equation[])
+            errors = EarthSciSerialization.validate_model_conversion_factors(model, "/models/Affine")
+            @test isempty(errors)
+        end
+
+        @testset "Dimensional mismatch is not flagged here" begin
+            # Dimensional mismatch is another checker's responsibility; this
+            # validator should silently skip when dimensions differ.
+            vars = Dict{String,EarthSciSerialization.ModelVariable}(
+                "len" => make_var(EarthSciSerialization.ParameterVariable;
+                                  units="m", default=1.0),
+                "bad" => make_var(EarthSciSerialization.ObservedVariable;
+                                  units="s",
+                                  expression=EarthSciSerialization.OpExpr("*",
+                                      EarthSciSerialization.Expr[
+                                          EarthSciSerialization.NumExpr(2.0),
+                                          EarthSciSerialization.VarExpr("len"),
+                                      ])),
+            )
+            model = EarthSciSerialization.Model(vars, EarthSciSerialization.Equation[])
+            errors = EarthSciSerialization.validate_model_conversion_factors(model, "/models/DimMismatch")
+            @test isempty(errors)
+        end
+
+        @testset "Invalid fixture units_conversion_factor_error.esm is rejected" begin
+            fixture_path = joinpath(@__DIR__, "..", "..", "..", "tests", "invalid",
+                                    "units_conversion_factor_error.esm")
+            if isfile(fixture_path)
+                esm_data = EarthSciSerialization.load(fixture_path)
+                result = EarthSciSerialization.validate(esm_data)
+                @test !result.is_valid
+                conv_errs = filter(
+                    e -> e.error_type == "unit_inconsistency" &&
+                         e.path == "/models/BadUnitsModel/variables/converted_pressure",
+                    result.structural_errors)
+                @test length(conv_errs) == 1
+                @test occursin("Unit conversion factor is incorrect", conv_errs[1].message)
+                @test occursin("declared_factor=50000", conv_errs[1].message)
+                @test occursin("expected_factor=101325", conv_errs[1].message)
+            else
+                @warn "Fixture not found: $fixture_path"
+                @test_broken false
+            end
+        end
+    end
+
 end
