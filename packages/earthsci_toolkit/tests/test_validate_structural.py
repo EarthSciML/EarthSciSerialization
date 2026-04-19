@@ -311,14 +311,19 @@ class TestValidationWithFixtures:
 
         failed_files = []
         for invalid_file in invalid_files:
+            with open(invalid_file) as f:
+                content = f.read()
+            # A fixture is "invalid" if either load() rejects it OR validate()
+            # reports is_valid=False. Some dimensional checks (e.g. reaction
+            # rate/stoichiometry consistency) live in validate() only, matching
+            # the Julia/Go/Rust contract.
             try:
-                with open(invalid_file) as f:
-                    content = f.read()
                 load(content)
-                failed_files.append(invalid_file.name)
             except Exception:
-                # Expected to fail
-                pass
+                continue
+            result = validate(content)
+            if result.is_valid:
+                failed_files.append(invalid_file.name)
 
         if failed_files:
             pytest.fail(f"These invalid files unexpectedly passed validation: {failed_files}")
@@ -339,6 +344,38 @@ class TestValidationWithFixtures:
         assert "Physical constant used with incorrect dimensional analysis" in msg
         assert "'R'" in msg
         assert "ideal gas constant" in msg
+
+    def test_reaction_rate_units_mismatch_fixture(self, fixtures_dir):
+        """gt-siq3: a 2nd-order reaction whose rate parameter is declared with
+        1st-order units (1/s) must be flagged with a structured
+        ``unit_inconsistency`` error matching the cross-language contract in
+        ``tests/invalid/expected_errors.json``."""
+        fixture = fixtures_dir / "invalid" / "units_reaction_rate_mismatch.esm"
+        assert fixture.exists(), f"fixture missing: {fixture}"
+        with open(fixture) as f:
+            content = f.read()
+
+        result = validate(content)
+        assert not result.is_valid
+        matches = [
+            e for e in result.structural_errors
+            if e.code == "unit_inconsistency"
+            and e.path == "/reaction_systems/BadReactions/reactions/0"
+        ]
+        assert len(matches) == 1, (
+            f"expected one unit_inconsistency error, got "
+            f"{[(e.code, e.path) for e in result.structural_errors]}"
+        )
+        err = matches[0]
+        assert err.message == (
+            "Reaction rate expression has incompatible units for reaction stoichiometry"
+        )
+        assert err.details == {
+            "reaction_id": "R1",
+            "rate_units": "1/s",
+            "expected_rate_units": "L/(mol*s)",
+            "reaction_order": 2,
+        }
 
     def test_all_valid_fixtures_pass_validation(self, fixtures_dir):
         """Test that all files in valid/ directory pass validation."""

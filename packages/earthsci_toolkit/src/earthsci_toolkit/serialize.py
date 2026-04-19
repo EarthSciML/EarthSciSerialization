@@ -217,7 +217,7 @@ def _serialize_parameter(parameter: Parameter) -> Dict[str, Any]:
 def _serialize_reaction(reaction: Reaction) -> Dict[str, Any]:
     """Serialize a reaction to JSON-compatible format."""
     result = {
-        "id": reaction.name
+        "id": reaction.id if reaction.id is not None else reaction.name
     }
 
     if reaction.name:

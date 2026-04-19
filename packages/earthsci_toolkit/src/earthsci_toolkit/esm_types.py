@@ -114,6 +114,7 @@ class Parameter:
 class Reaction:
     """A chemical reaction."""
     name: str
+    id: Optional[str] = None
     reactants: Dict[str, float] = field(default_factory=dict)  # species -> coefficient
     products: Dict[str, float] = field(default_factory=dict)   # species -> coefficient
     rate_constant: Optional[Union[float, Expr]] = None

@@ -158,6 +158,9 @@ def validate(esm_file) -> ValidationResult:
         # 3. Reaction Consistency validation
         _validate_reaction_consistency(esm_file, structural_errors)
 
+        # 3b. Reaction rate/stoichiometry dimensional check (mass-action contract)
+        _validate_reaction_rate_dimensions(esm_file, structural_errors)
+
         # 4. Event Consistency validation
         _validate_event_consistency(esm_file, structural_errors)
 
@@ -771,6 +774,183 @@ def _validate_rate_expression(rate_expr, param_names: Set[str], species_names: S
                     "parse_error": str(e)
                 }
             ))
+
+
+def _validate_reaction_rate_dimensions(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
+    """
+    Mass-action dimensional check for reaction rates (spec §7.4).
+
+    For each reaction with a declared-unit rate and declared-unit substrates,
+    compare the rate expression's dimensions to conc_unit^(1-total_order)/time,
+    where conc_unit is the first substrate's species units. Emit
+    ``unit_inconsistency`` when they disagree. Dimensionless-concentration
+    systems (mole-fraction families) are skipped for Julia parity.
+
+    Mirrors Julia's ``validate_reaction_system_dimensions`` and the Go/Rust
+    ``validate_reaction_rate_units`` ports; the error payload matches the
+    contract in ``tests/invalid/expected_errors.json``.
+    """
+    try:
+        import pint
+    except ImportError:
+        return
+    from .parse import _normalize_unit, _BUILTIN_SYMBOLS
+
+    ureg = pint.UnitRegistry()
+    time_dim = ureg("second").dimensionality
+    dimensionless_dim = ureg("").dimensionality
+
+    def parse_dim(unit_str):
+        if not unit_str:
+            return None
+        try:
+            return ureg(_normalize_unit(unit_str)).dimensionality
+        except Exception:
+            return None
+
+    for rs_name, rs in esm_file.reaction_systems.items():
+        species_units = {sp.name: sp.units for sp in rs.species}
+        param_units = {p.name: p.units for p in rs.parameters}
+
+        for r_idx, reaction in enumerate(rs.reactions):
+            reaction_path = f"/reaction_systems/{rs_name}/reactions/{r_idx}"
+            rate = reaction.rate_constant
+            # Only bare-string rate refs are dimensionally checkable here;
+            # compound rate expressions carry implicit unit constants that
+            # defeat literal dimensional analysis.
+            if not isinstance(rate, str):
+                continue
+            if "." in rate or rate in _BUILTIN_SYMBOLS:
+                continue
+            if rate in param_units:
+                rate_units_str = param_units[rate]
+            elif rate in species_units:
+                rate_units_str = species_units[rate]
+            else:
+                continue  # undefined refs flagged elsewhere
+            rate_dim = parse_dim(rate_units_str)
+            if rate_dim is None:
+                continue
+
+            # reactants dict preserves insertion order from _parse_reaction
+            if not reaction.reactants:
+                continue
+            substrate_names = list(reaction.reactants.keys())
+            first_sp = substrate_names[0]
+            first_sp_units = species_units.get(first_sp)
+            first_sp_dim = parse_dim(first_sp_units)
+            if first_sp_dim is None:
+                continue
+            if first_sp_dim == dimensionless_dim:
+                # Julia parity: skip mole-fraction families.
+                continue
+
+            substrate_dim = ureg("").dimensionality
+            total_order = 0
+            resolvable = True
+            for sp_name, stoich in reaction.reactants.items():
+                try:
+                    stoich_i = int(stoich)
+                except (TypeError, ValueError):
+                    resolvable = False
+                    break
+                if stoich_i != stoich:
+                    resolvable = False
+                    break
+                sp_dim = parse_dim(species_units.get(sp_name))
+                if sp_dim is None:
+                    resolvable = False
+                    break
+                substrate_dim = substrate_dim * (sp_dim ** stoich_i)
+                total_order += stoich_i
+            if not resolvable:
+                continue
+
+            # Equivalent to rate_dim == first_sp_dim^(1-order) / time but
+            # avoids pint's [substance]^0 * [length]^0 ≠ dimensionless quirk
+            # by checking rate * prod(substrate^stoich) == first_species/time.
+            expected_dim = first_sp_dim / time_dim
+            full_dim = rate_dim * substrate_dim
+            if full_dim != expected_dim:
+                rxn_label = reaction.id if reaction.id is not None else reaction.name
+                structural_errors.append(ValidationError(
+                    path=reaction_path,
+                    message="Reaction rate expression has incompatible units for reaction stoichiometry",
+                    code="unit_inconsistency",
+                    details={
+                        "reaction_id": rxn_label,
+                        "rate_units": rate_units_str or "",
+                        "expected_rate_units": _format_expected_rate_units(first_sp_units or "", total_order),
+                        "reaction_order": total_order,
+                    }
+                ))
+
+
+def _format_expected_rate_units(species_units: str, total_order: int) -> str:
+    """Compose the canonical rate-unit string from the reference species unit
+    and total reaction order, matching the contract in
+    ``tests/invalid/expected_errors.json``. Ports the Go/Rust implementations.
+
+    Examples:
+        ("mol/L", 2) -> "L/(mol*s)"
+        ("mol/L", 1) -> "1/s"
+        ("mol/L", 0) -> "mol/(L*s)"
+        ("mol/m^3", 2) -> "m^3/(mol*s)"
+    """
+    exp = 1 - total_order
+    if exp == 0:
+        return "1/s"
+    num, den = _split_unit_num_den(species_units)
+    exp_abs = exp
+    if exp < 0:
+        num, den = den, num
+        exp_abs = -exp
+    num_str = _power_factor(num, exp_abs)
+    den_factors = []
+    df = _power_factor(den, exp_abs)
+    if df:
+        den_factors.append(df)
+    den_factors.append("s")
+    if not num_str:
+        num_str = "1"
+    if len(den_factors) == 1:
+        return f"{num_str}/{den_factors[0]}"
+    return f"{num_str}/({'*'.join(den_factors)})"
+
+
+def _split_unit_num_den(s: str):
+    """Split a unit string on its first top-level '/'. ``"mol/L"`` → ``("mol",
+    "L")``; ``"mol/(L*s)"`` → ``("mol", "L*s")``. If no top-level '/' appears,
+    the whole string is the numerator."""
+    s = s.strip()
+    if not s:
+        return "", ""
+    depth = 0
+    for i, c in enumerate(s):
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        elif c == "/" and depth == 0:
+            num = s[:i].strip()
+            den = s[i + 1:].strip()
+            if den.startswith("(") and den.endswith(")"):
+                den = den[1:-1]
+            return num, den
+    return s, ""
+
+
+def _power_factor(s: str, n: int) -> str:
+    """Raise a unit factor to an integer power, rendering as a string.
+    Parenthesises compound factors when the power is not 1."""
+    s = s.strip()
+    if not s:
+        return ""
+    if n == 1:
+        return s
+    if "*" in s or "/" in s:
+        return f"({s})^{n}"
+    return f"{s}^{n}"
 
 
 def _validate_event_consistency(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:

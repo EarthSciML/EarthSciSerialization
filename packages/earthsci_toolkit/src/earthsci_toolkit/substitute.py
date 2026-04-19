@@ -179,6 +179,7 @@ def substitute_in_reaction_system(system, bindings: Dict[str, Expr]):
 
         new_reaction = Reaction(
             name=reaction.name,
+            id=reaction.id,
             reactants=reaction.reactants.copy(),
             products=reaction.products.copy(),
             rate_constant=new_rate_constant,
