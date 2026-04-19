@@ -56,6 +56,11 @@
       "type": "object",
       "description": "Geometric connections between domains of different dimensionality.",
       "additionalProperties": { "$ref": "#/$defs/Interface" }
+    },
+    "discretizations": {
+      "type": "object",
+      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. See discretization RFC §7.",
+      "additionalProperties": { "$ref": "#/$defs/Discretization" }
     }
   },
 
@@ -1881,6 +1886,174 @@
             "description": { "type": "string" }
           }
         }
+      }
+    },
+
+    "PatternNode": {
+      "description": "A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PatternNode" }
+        }
+      ]
+    },
+
+    "NeighborSelector": {
+      "type": "object",
+      "description": "Discretization stencil neighbor selector (RFC §4, §7.2). The selector.kind tag discriminates between cartesian, panel, indirect, and reduction selectors. Additional per-kind fields are permitted so that pattern variables such as $x can appear in e.g. axis/offset positions.",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["cartesian", "panel", "indirect", "reduction"],
+          "description": "Selector family; must agree with the enclosing Discretization's grid_family (cartesian↔cartesian, cubed_sphere↔panel, unstructured↔indirect|reduction)."
+        },
+        "axis": {
+          "description": "cartesian: axis name (string or pattern variable e.g. \"$x\"). Ignored for other kinds."
+        },
+        "offset": {
+          "description": "cartesian: integer offset along the axis. May be a pattern variable or an expression node for symbolic strides."
+        },
+        "side": {
+          "description": "panel: cubed-sphere face side identifier (\"east\", \"west\", \"north\", \"south\", \"ne\", \"nw\", \"se\", \"sw\") or a pattern variable.",
+          "type": ["string", "number"]
+        },
+        "di": { "description": "panel: local panel-i displacement (integer or pattern variable)." },
+        "dj": { "description": "panel: local panel-j displacement (integer or pattern variable)." },
+        "index_expr": {
+          "description": "indirect: single index expression producing the neighbor's index in the indexed variable (AST).",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "table": {
+          "type": "string",
+          "description": "reduction/indirect: name of the connectivity array (e.g. \"edgesOnCell\") providing the neighbor list; referenced inside coeff via index(table, $target, k)."
+        },
+        "count_expr": {
+          "description": "reduction: AST expression producing the per-target neighbor count (e.g. index(nEdgesOnCell, $target)).",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "k_bound": {
+          "type": "string",
+          "description": "reduction: name of the local iteration index (in scope inside coeff alongside $target); conventionally \"k\"."
+        },
+        "combine": {
+          "type": "string",
+          "enum": ["+", "*", "min", "max"],
+          "description": "reduction: how element contributions combine across the neighbor loop (default \"+\" when omitted)."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if":   { "properties": { "kind": { "const": "cartesian" } }, "required": ["kind"] },
+          "then": { "required": ["axis", "offset"] }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "reduction" } }, "required": ["kind"] },
+          "then": { "required": ["table", "count_expr", "k_bound"] }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "indirect" } }, "required": ["kind"] },
+          "then": { "required": ["index_expr"] }
+        }
+      ]
+    },
+
+    "StencilEntry": {
+      "type": "object",
+      "description": "One neighbor contribution to a discretization stencil: a selector picking out the neighbor(s) and a coefficient expression.",
+      "required": ["selector", "coeff"],
+      "additionalProperties": false,
+      "properties": {
+        "selector": { "$ref": "#/$defs/NeighborSelector" },
+        "coeff": {
+          "description": "Coefficient expression. May reference grid metric arrays (bare strings or index nodes), grid parameters, pattern variables bound by the triggering rule, k_bound if a reduction selector is used, and $target components.",
+          "$ref": "#/$defs/PatternNode"
+        }
+      }
+    },
+
+    "GhostVarDecl": {
+      "type": "object",
+      "description": "Optional ghost-cell variable declaration used by a discretization scheme (e.g. a periodic-BC halo). See RFC §9 for boundary-condition interaction.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "Ghost variable name." },
+        "source": {
+          "type": "string",
+          "description": "How the ghost is populated: a symbolic hint like \"periodic\", \"copy\", \"reflect\" or a free-form note."
+        },
+        "description": { "type": "string" }
+      }
+    },
+
+    "Discretization": {
+      "type": "object",
+      "description": "A named stencil template. Each entry maps a PDE operator class (via an applies_to pattern) to a combination (combine) over neighbors with symbolic coefficients. See RFC §7.1.",
+      "required": ["applies_to", "grid_family", "stencil"],
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "description": "Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1).",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "grid_family": {
+          "type": "string",
+          "enum": ["cartesian", "cubed_sphere", "unstructured"],
+          "description": "Grid family this scheme targets; the stencil's selector.kind must match this family."
+        },
+        "combine": {
+          "type": "string",
+          "enum": ["+", "*", "min", "max"],
+          "default": "+",
+          "description": "How stencil entries are combined."
+        },
+        "stencil": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/StencilEntry" },
+          "description": "Array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1)."
+        },
+        "accuracy": {
+          "type": "string",
+          "description": "Informational: truncation order (e.g. \"O(dx^2)\")."
+        },
+        "requires_locations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "If set, the operand variable must carry one of these staggered-grid locations."
+        },
+        "emits_location": {
+          "type": "string",
+          "description": "Staggered-grid location the scheme emits (e.g. \"cell_center\", \"edge_normal\"). Used to pin $target on unstructured grids (RFC §7.1.1)."
+        },
+        "target_binding": {
+          "type": "string",
+          "default": "$target",
+          "description": "Reserved name for the target index binding."
+        },
+        "ghost_vars": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/GhostVarDecl" },
+          "description": "Optional ghost-cell variable declarations used by the scheme."
+        },
+        "free_variables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional list of free pattern-variable names (e.g. [\"$u\", \"$x\"]) that the scheme expects the triggering rule to bind; informational / for validator use."
+        },
+        "description": { "type": "string" },
+        "reference": { "$ref": "#/$defs/Reference" }
       }
     }
   }
