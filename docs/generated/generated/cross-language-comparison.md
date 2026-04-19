@@ -187,6 +187,20 @@ Model(...)
 
 ---
 
+### RFC
+
+**Julia:**
+```julia
+RFC(...)
+```
+
+**Julia:**
+```julia
+RFC(...)
+```
+
+---
+
 ### Reaction
 
 **Julia:**
@@ -251,6 +265,16 @@ def __init__(self, esm_file: EsmFile):
 ```
 
 > Initialize the ESM explorer.
+
+**Python:**
+```python
+def __init__(self, message: str = "E_CANONICAL_NONFINITE"):
+```
+
+**Python:**
+```python
+def __init__(self, message: str = "E_CANONICAL_DIVBY_ZERO"):
+```
 
 **Python:**
 ```python
@@ -523,6 +547,47 @@ def build(draw):
 **Python:**
 ```python
 def build(draw):
+```
+
+---
+
+### canonical_json
+
+**Julia:**
+```julia
+canonical_json(...)
+```
+
+**Julia:**
+```julia
+function canonical_json(expr::Expr)::String
+```
+
+> canonical_json(expr::Expr) -> String
+
+Emit the canonical on-wire JSON form of an expression per RFC §5.
+
+---
+
+### canonicalize
+
+**Julia:**
+```julia
+canonicalize(...)
+```
+
+**Julia:**
+```julia
+function canonicalize end
+```
+
+> canonicalize(expr::Expr) -> Expr
+
+Canonicalize an expression tree per discretization RFC §5.
+
+**Typescript:**
+```typescript
+export function canonicalize(expr: Expr): Expr {
 ```
 
 ---
@@ -837,6 +902,24 @@ export function flatten(file: EsmFile): FlattenedSystem {
 ```
 
 > Flatten a multi-system ESM file into a single unified system.
+
+---
+
+### format_canonical_float
+
+**Julia:**
+```julia
+format_canonical_float(...)
+```
+
+**Julia:**
+```julia
+function format_canonical_float(f::Float64)::String
+```
+
+> format_canonical_float(f::Float64) -> String
+
+Format a finite `Float64` per RFC §5.
 
 ---
 
@@ -2081,6 +2164,26 @@ export interface BoundaryCondition {
 ```
 
 > Boundary condition for one or more dimensions.
+
+---
+
+### CanonicalizeError
+
+**Julia:**
+```julia
+struct CanonicalizeError <: Exception
+```
+
+> CanonicalizeError(code::String, message::String)
+
+Error raised by [`canonicalize`](@ref).
+
+**Python:**
+```python
+class CanonicalizeError:
+```
+
+> Base class for canonicalization errors (RFC §5.
 
 ---
 

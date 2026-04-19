@@ -182,6 +182,32 @@ Check if migration is possible from the source version to target version.
 
 ---
 
+### canonicalJson
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:71`
+
+**Signature:**
+```typescript
+export function canonicalJson(expr: Expr): string {
+```
+
+---
+
+### canonicalize
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:54`
+
+**Signature:**
+```typescript
+export function canonicalize(expr: Expr): Expr {
+```
+
+**Available in other languages:**
+- [Julia](julia.md#canonicalize)
+- [Julia](julia.md#canonicalize)
+
+---
+
 ### checkDimensions
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:81`
@@ -856,6 +882,26 @@ The algorithm:
 - [Julia](julia.md#flatten)
 - [Julia](julia.md#flatten)
 - [Julia](julia.md#flatten)
+
+---
+
+### formatCanonicalFloat
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/canonicalize.ts:254`
+
+**Signature:**
+```typescript
+export function formatCanonicalFloat(f: number): string {
+```
+
+**Description:**
+Format a finite `number` per RFC §5.4.6.
+
+Note: the trailing `.0` for integer-valued magnitudes applies because TS
+has no int/float distinction (every numeric literal is a float). Once
+gt-ca2u introduces typed integer nodes, integer values should serialize
+without the suffix.
+/
 
 ---
 

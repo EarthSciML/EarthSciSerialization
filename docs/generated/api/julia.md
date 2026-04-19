@@ -15,6 +15,17 @@ ASCII(...)
 
 ---
 
+### AST
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+AST(...)
+```
+
+---
+
 ### AffectEquation
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -151,6 +162,31 @@ ReactionSystem display: reactions in chemical notation.
 ```julia
 BrownianVariable(...)
 ```
+
+---
+
+### Canonical
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Canonical(...)
+```
+
+---
+
+### CanonicalizeError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+CanonicalizeError(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#canonicalizeerror)
 
 ---
 
@@ -1203,6 +1239,17 @@ RFC(...)
 
 ---
 
+### RFC
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RFC(...)
+```
+
+---
+
 ### Reaction
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -2198,6 +2245,71 @@ Analyze coupling-related issues and provide debugging info.
 ```julia
 and(...)
 ```
+
+---
+
+### canonical_json
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+canonical_json(...)
+```
+
+---
+
+### canonical_json
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/canonicalize.jl:254`
+
+**Signature:**
+```julia
+function canonical_json(expr::Expr)::String
+```
+
+**Description:**
+canonical_json(expr::Expr) -> String
+
+Emit the canonical on-wire JSON form of an expression per RFC §5.4.6: keys
+sorted, no extraneous whitespace, shortest round-trip floats with trailing-`.0`
+disambiguation for integer-valued magnitudes, exponent-form (`1e25`, `5e-324`)
+outside `[1e-6, 1e21)`, signed zero preserved.
+
+---
+
+### canonicalize
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+canonicalize(...)
+```
+
+**Available in other languages:**
+- [Typescript](typescript.md#canonicalize)
+
+---
+
+### canonicalize
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/canonicalize.jl:31`
+
+**Signature:**
+```julia
+function canonicalize end
+```
+
+**Description:**
+canonicalize(expr::Expr) -> Expr
+
+Canonicalize an expression tree per discretization RFC §5.4. Returns a new
+tree; the input is not mutated. Throws [`CanonicalizeError`](@ref) for
+NaN/Inf or `0/0`.
+
+**Available in other languages:**
+- [Typescript](typescript.md#canonicalize)
 
 ---
 
@@ -3426,6 +3538,17 @@ for(...)
 
 ---
 
+### form
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+form(...)
+```
+
+---
+
 ### format
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -3434,6 +3557,33 @@ for(...)
 ```julia
 format(...)
 ```
+
+---
+
+### format_canonical_float
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+format_canonical_float(...)
+```
+
+---
+
+### format_canonical_float
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/canonicalize.jl:301`
+
+**Signature:**
+```julia
+function format_canonical_float(f::Float64)::String
+```
+
+**Description:**
+format_canonical_float(f::Float64) -> String
+
+Format a finite `Float64` per RFC §5.4.6.
 
 ---
 
@@ -6619,6 +6769,27 @@ A scalar `(variable, time, expected)` check used inside a `Test`.
 
 **Available in other languages:**
 - [Typescript](typescript.md#assertion)
+
+---
+
+### CanonicalizeError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/canonicalize.jl:16`
+
+**Definition:**
+```julia
+struct CanonicalizeError <: Exception
+```
+
+**Description:**
+CanonicalizeError(code::String, message::String)
+
+Error raised by [`canonicalize`](@ref). The `code` field carries one of the
+RFC §5.4.6 / §5.4.7 stable error codes (`E_CANONICAL_NONFINITE`,
+`E_CANONICAL_DIVBY_ZERO`).
+
+**Available in other languages:**
+- [Python](python.md#canonicalizeerror)
 
 ---
 

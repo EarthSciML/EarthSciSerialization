@@ -27,6 +27,7 @@ include("parse_test.jl")
     include("editing_test.jl")
     include("data_loader_fixtures_test.jl")
     include("arrayed_vars_test.jl")
+    include("canonicalize_test.jl")
 
     # Comprehensive test suite for full verification
     @testset "Comprehensive Test Suite" begin
