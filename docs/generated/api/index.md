@@ -3,11 +3,11 @@
 Complete API documentation for all ESM Format language implementations.
 
 ## [Julia](julia.md)
-- 426 functions
-- 72 types
+- 435 functions
+- 73 types
 
 ## [Python](python.md)
-- 685 functions
+- 686 functions
 - 230 types
 
 ## [Rust](rust.md)

@@ -631,7 +631,7 @@ contains(...)
 
 **Julia:**
 ```julia
-function contains(expr::NumExpr, var::String)::Bool
+function contains(expr::IntExpr, var::String)::Bool
 ```
 
 > contains(expr::Expr, var::String)::Bool
