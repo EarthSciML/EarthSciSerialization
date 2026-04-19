@@ -78,6 +78,17 @@ export type { FlattenedEquation, FlattenMetadata, FlattenedSystem } from './flat
 // Subsystem reference loading
 export { resolveSubsystemRefs, CircularReferenceError, RefLoadError } from './ref-loading.js'
 
+// Canonical AST form (RFC §5.4). TS lacks native int/float distinction;
+// see canonicalize.ts for the gt-ca2u limitation note.
+export {
+  canonicalize,
+  canonicalJson,
+  formatCanonicalFloat,
+  CanonicalizeError,
+  E_CANONICAL_NONFINITE,
+  E_CANONICAL_DIVBY_ZERO,
+} from './canonicalize.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
