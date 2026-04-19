@@ -101,6 +101,11 @@ const schema = {
       "type": "object",
       "description": "Named coupling interfaces between domains.",
       "additionalProperties": { "$ref": "#/$defs/Interface" }
+    },
+    "grids": {
+      "type": "object",
+      "description": "Named grid specifications (discretization RFC §6).",
+      "additionalProperties": { "$ref": "#/$defs/Grid" }
     }
   },
 
@@ -1361,6 +1366,50 @@ const schema = {
           "description": "Regridding configuration.",
           "additionalProperties": true
         }
+      }
+    },
+
+    "Grid": {
+      "type": "object",
+      "description": "Grid specification (discretization RFC §6). Family + ordered dimensions plus optional locations, metric arrays, parameters, and family-specific geometry (extents/connectivity/panel_connectivity).",
+      "required": ["family", "dimensions"],
+      "additionalProperties": true,
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": ["cartesian", "cubed_sphere", "unstructured"]
+        },
+        "dimensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "locations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "metric_arrays": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "domain": { "type": "string" },
+        "extents": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "connectivity": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "panel_connectivity": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "description": { "type": "string" }
       }
     },
 

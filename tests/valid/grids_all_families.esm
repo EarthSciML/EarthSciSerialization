@@ -1,0 +1,158 @@
+{
+  "esm": "0.2.0",
+  "metadata": {
+    "name": "GridsAllFamilies",
+    "description": "Cross-binding grids-schema fixture (gt-5kq3 / discretization RFC §6). Exercises all three families (cartesian, unstructured with cells+edges+vertices, cubed_sphere), loader-backed connectivity and metric arrays (§6.3-§6.5), and grid-level parameters including the 'from_loader' sentinel (§6.6).",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["grids", "discretization", "rfc-step2"]
+  },
+  "data_loaders": {
+    "mpas_mesh": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/mpas/mesh.nc"
+      },
+      "variables": {
+        "cellsOnEdge": {"file_variable": "cellsOnEdge", "units": "1"},
+        "edgesOnCell": {"file_variable": "edgesOnCell", "units": "1"},
+        "verticesOnEdge": {"file_variable": "verticesOnEdge", "units": "1"},
+        "nEdgesOnCell": {"file_variable": "nEdgesOnCell", "units": "1"},
+        "dcEdge": {"file_variable": "dcEdge", "units": "m"},
+        "dvEdge": {"file_variable": "dvEdge", "units": "m"},
+        "areaCell": {"file_variable": "areaCell", "units": "m^2"}
+      }
+    },
+    "zlev_csv": {
+      "kind": "static",
+      "source": {
+        "url_template": "file:///data/zlev.csv"
+      },
+      "variables": {
+        "dz": {"file_variable": "dz", "units": "m"}
+      }
+    }
+  },
+  "models": {
+    "GridsHost": {
+      "variables": {
+        "x": {"type": "state", "default": 0.0}
+      },
+      "equations": [
+        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0.0}
+      ]
+    }
+  },
+  "grids": {
+    "atmos_rect": {
+      "family": "cartesian",
+      "dimensions": ["x", "y", "z"],
+      "extents": {
+        "x": {"n": "Nx", "spacing": "uniform"},
+        "y": {"n": "Ny", "spacing": "uniform"},
+        "z": {"n": "Nz", "spacing": "nonuniform"}
+      },
+      "locations": ["cell_center", "x_face", "y_face", "z_face"],
+      "metric_arrays": {
+        "dx": {
+          "rank": 0,
+          "generator": {
+            "kind": "expression",
+            "expr": {"op": "/", "args": [{"op": "-", "args": ["x_max", "x_min"]}, "Nx"]}
+          }
+        },
+        "dz": {
+          "rank": 1,
+          "dim": "z",
+          "generator": {"kind": "loader", "loader": "zlev_csv", "field": "dz"}
+        }
+      },
+      "parameters": {
+        "Nx": {"value": 64},
+        "Ny": {"value": 64},
+        "Nz": {"value": 32},
+        "x_min": {"value": 0.0, "units": "m"},
+        "x_max": {"value": 1.0, "units": "m"}
+      }
+    },
+    "mpas_cvmesh": {
+      "family": "unstructured",
+      "dimensions": ["cell", "edge", "vertex"],
+      "locations": ["cell_center", "edge_normal", "vertex"],
+      "connectivity": {
+        "cellsOnEdge": {
+          "rank": 2,
+          "shape": ["nEdges", 2],
+          "loader": "mpas_mesh",
+          "field": "cellsOnEdge"
+        },
+        "edgesOnCell": {
+          "rank": 2,
+          "shape": ["nCells", "maxEdges"],
+          "loader": "mpas_mesh",
+          "field": "edgesOnCell"
+        },
+        "verticesOnEdge": {
+          "rank": 2,
+          "shape": ["nEdges", 2],
+          "loader": "mpas_mesh",
+          "field": "verticesOnEdge"
+        },
+        "nEdgesOnCell": {
+          "rank": 1,
+          "shape": ["nCells"],
+          "loader": "mpas_mesh",
+          "field": "nEdgesOnCell"
+        }
+      },
+      "metric_arrays": {
+        "dcEdge": {
+          "rank": 1,
+          "dim": "edge",
+          "generator": {"kind": "loader", "loader": "mpas_mesh", "field": "dcEdge"}
+        },
+        "dvEdge": {
+          "rank": 1,
+          "dim": "edge",
+          "generator": {"kind": "loader", "loader": "mpas_mesh", "field": "dvEdge"}
+        },
+        "areaCell": {
+          "rank": 1,
+          "dim": "cell",
+          "generator": {"kind": "loader", "loader": "mpas_mesh", "field": "areaCell"}
+        }
+      },
+      "parameters": {
+        "nCells": {"value": "from_loader"},
+        "nEdges": {"value": "from_loader"},
+        "maxEdges": {"value": "from_loader"}
+      }
+    },
+    "cubed_c48": {
+      "family": "cubed_sphere",
+      "dimensions": ["panel", "i", "j"],
+      "extents": {
+        "panel": {"n": 6},
+        "i": {"n": "Nc"},
+        "j": {"n": "Nc"}
+      },
+      "locations": ["cell_center", "i_edge", "j_edge", "vertex"],
+      "panel_connectivity": {
+        "neighbors": {
+          "rank": 2,
+          "shape": [6, 4],
+          "generator": {"kind": "builtin", "name": "gnomonic_c6_neighbors"}
+        },
+        "axis_flip": {
+          "rank": 2,
+          "shape": [6, 4],
+          "generator": {"kind": "builtin", "name": "gnomonic_c6_d4_action"}
+        }
+      },
+      "parameters": {
+        "Nc": {"value": 48},
+        "cube_edge_length": {"value": 1.0, "units": "m"}
+      }
+    }
+  }
+}

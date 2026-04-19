@@ -56,6 +56,11 @@
       "type": "object",
       "description": "Geometric connections between domains of different dimensionality.",
       "additionalProperties": { "$ref": "#/$defs/Interface" }
+    },
+    "grids": {
+      "type": "object",
+      "description": "Named grid specifications: family + dimensions, optional metric arrays, locations, parameters, and loader-backed geometry. See docs/rfcs/discretization.md §6.",
+      "additionalProperties": { "$ref": "#/$defs/Grid" }
     }
   },
 
@@ -1833,6 +1838,149 @@
             { "type": "number" }
           ]
         },
+        "description": { "type": "string" }
+      }
+    },
+
+    "Grid": {
+      "type": "object",
+      "description": "Grid specification (discretization RFC §6). A grid is a family tag plus ordered dimensions, with optional locations, metric_arrays, parameters, and loader-backed geometry. Family-specific fields (extents/connectivity/panel_connectivity) are validated against the family's sub-schema.",
+      "required": ["family", "dimensions"],
+      "additionalProperties": true,
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": ["cartesian", "cubed_sphere", "unstructured"],
+          "description": "Grid topology family (RFC §6.1)."
+        },
+        "dimensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Ordered list of logical dimension names."
+        },
+        "locations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Declared stagger locations (RFC §11); e.g. cell_center, x_face, edge_normal, vertex."
+        },
+        "metric_arrays": {
+          "type": "object",
+          "description": "Declarations of metric arrays (RFC §6.5).",
+          "additionalProperties": { "$ref": "#/$defs/GridMetricArray" }
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Grid-level parameters (ordinary ESM parameter entries, RFC §6.6).",
+          "additionalProperties": { "$ref": "#/$defs/GridParameter" }
+        },
+        "domain": {
+          "type": "string",
+          "description": "Optional name of the domains entry this grid refines."
+        },
+        "extents": {
+          "type": "object",
+          "description": "Per-dimension extent descriptors (cartesian/cubed_sphere families).",
+          "additionalProperties": { "$ref": "#/$defs/GridExtent" }
+        },
+        "connectivity": {
+          "type": "object",
+          "description": "Unstructured-family connectivity tables (RFC §6.3).",
+          "additionalProperties": { "$ref": "#/$defs/GridConnectivityTable" }
+        },
+        "panel_connectivity": {
+          "type": "object",
+          "description": "Cubed-sphere panel connectivity tables (RFC §6.4).",
+          "additionalProperties": { "$ref": "#/$defs/GridConnectivityTable" }
+        },
+        "description": { "type": "string" }
+      }
+    },
+
+    "GridExtent": {
+      "type": "object",
+      "description": "Per-dimension extent descriptor (cartesian/cubed_sphere).",
+      "required": ["n"],
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "description": "Count along this dimension. String references a grid parameter; number is a literal count.",
+          "type": ["string", "integer"]
+        },
+        "spacing": {
+          "type": "string",
+          "enum": ["uniform", "nonuniform"],
+          "description": "Spacing kind. 'uniform' allows scalar metric references; 'nonuniform' requires a rank-1 metric array over this dimension (RFC §6.2.1)."
+        }
+      }
+    },
+
+    "GridMetricArray": {
+      "type": "object",
+      "description": "Declaration of a grid metric array (RFC §6.5). Contents come from exactly one generator kind.",
+      "required": ["rank", "generator"],
+      "additionalProperties": false,
+      "properties": {
+        "rank": { "type": "integer", "minimum": 0 },
+        "dim": { "type": "string", "description": "For rank-1 arrays: the dimension the array is indexed by." },
+        "dims": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "For rank>=2 arrays: ordered dimension names."
+        },
+        "generator": { "$ref": "#/$defs/GridMetricGenerator" },
+        "description": { "type": "string" }
+      }
+    },
+
+    "GridMetricGenerator": {
+      "type": "object",
+      "description": "Metric-array generator: expression, loader, or builtin.",
+      "required": ["kind"],
+      "additionalProperties": true,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["expression", "loader", "builtin"]
+        },
+        "expr": { "description": "Expression tree (kind=expression)." },
+        "loader": { "type": "string", "description": "Name of an entry in data_loaders (kind=loader)." },
+        "field": { "type": "string", "description": "Named field produced by that loader (kind=loader)." },
+        "name": { "type": "string", "description": "Built-in generator name, drawn from a closed list (kind=builtin)." }
+      }
+    },
+
+    "GridConnectivityTable": {
+      "type": "object",
+      "description": "Connectivity table (unstructured family) or panel-connectivity table (cubed_sphere). Loader-backed or generated.",
+      "required": ["rank"],
+      "additionalProperties": true,
+      "properties": {
+        "rank": { "type": "integer", "minimum": 1 },
+        "shape": {
+          "type": "array",
+          "description": "Ordered shape: each entry is either a dimension name (string) or a literal count (integer).",
+          "items": {
+            "type": ["string", "integer"]
+          }
+        },
+        "loader": { "type": "string", "description": "Data-loader name (loader-backed table)." },
+        "field": { "type": "string", "description": "Named field in the loader (loader-backed table)." },
+        "generator": { "$ref": "#/$defs/GridMetricGenerator", "description": "Generator (panel-connectivity builtin or analytic expression)." },
+        "description": { "type": "string" }
+      }
+    },
+
+    "GridParameter": {
+      "type": "object",
+      "description": "Grid-level parameter (RFC §6.6). Reuses ordinary ESM parameter semantics.",
+      "additionalProperties": true,
+      "properties": {
+        "value": {
+          "description": "Literal value or the sentinel 'from_loader' to resolve from a referenced data loader.",
+          "type": ["number", "string", "boolean"]
+        },
+        "units": { "type": "string" },
         "description": { "type": "string" }
       }
     },
