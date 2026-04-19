@@ -1,7 +1,7 @@
 # RFC — Language-agnostic Discretization in ESM
 
-**Status:** Draft v2.1 (v2.1 addenda per dual review gt-j6do + gt-adhm)
-**Bead:** gt-dq0f (v1), gt-yx9y (v2 revision), gt-woe1 (v2.1 addenda)
+**Status:** Draft v2.2 (v2.2 addendum — §5.4.6 on-wire int/float disambiguation per gt-h9kt)
+**Bead:** gt-dq0f (v1), gt-yx9y (v2 revision), gt-woe1 (v2.1 addenda), gt-h9kt (v2.2 addendum)
 **Affects spec version:** 0.1.0 → 0.2.0 (**breaking**; see §10 and §16 for migration)
 **Scope:** Spatial discretization only. Time integration remains a runtime concern.
 
@@ -380,6 +380,8 @@ equal iff their canonical forms are JSON-equal.
 An integer literal and a float literal are distinct AST nodes. Canonical form
 **never auto-promotes**: `{op:"+", args:[1, 2.0]}` does not canonicalize to
 `3.0`. Promotion happens only in `evaluate`, not in `simplify`/canonicalize.
+The distinction is preserved through the on-wire form by §5.4.6's trailing-`.0`
+override for integer-valued floats and its disambiguating parse rule.
 
 #### 5.4.2 Commutative-op ordering
 
@@ -435,7 +437,7 @@ JSON numbers. A name that happens to be all digits (`"0"` as a variable)
 requires the authoring tool to quote it unambiguously; the canonicalizer
 does not disambiguate.
 
-#### 5.4.6 Normative JSON number formatting (resolves gt-j6do New C1 / gt-adhm C1)
+#### 5.4.6 Normative JSON number formatting (resolves gt-j6do New C1 / gt-adhm C1 / gt-h9kt)
 
 Without a pinned textual form for numeric literals, the byte-comparison
 strategy of §5.4.2 and §13's bit-identity claim are infeasible: Julia
@@ -443,53 +445,70 @@ strategy of §5.4.2 and §13's bit-identity claim are infeasible: Julia
 TypeScript `JSON.stringify` all produce divergent representations of
 the same `Float64`. This subsection pins the canonical number format
 normatively. All bindings MUST emit numeric literals in canonical form
-when producing a canonical AST; all bindings MUST accept any valid
-JSON number when parsing (lenient parse, strict emit).
+when producing a canonical AST; bindings MUST parse according to the
+disambiguating rule below (**strict parse, strict emit** — see
+"Round-trip invariant").
 
-**Baseline: RFC 8785 JCS number format, with additions.** Adopt RFC 8785
-(JSON Canonicalization Scheme) §3.2.2.3 number-serialization as the
-normative float-formatting rule:
+**Baseline: RFC 8785 JCS number format, with one normative override.**
+Adopt RFC 8785 (JSON Canonicalization Scheme) §3.2.2.3
+number-serialization as the normative float-formatting rule:
 <https://datatracker.ietf.org/doc/html/rfc8785#section-3.2.2.3>.
 JCS references ECMAScript 2019 §7.1.12.1 `ToString(Number)`, which is
 the shortest-round-trip decimal string that round-trips bit-identically
 to the source IEEE-754 double.
 
+This RFC **overrides** JCS §3.2.2.3 in exactly one place: an
+integer-valued float whose JCS form would be bare-integer-looking
+(no `.`, no `e`/`E`) receives a trailing `.0` so that on-wire integers
+and floats are never spelled the same way. All other JCS output is
+adopted verbatim. Rationale: under pure JCS, a float node holding `1.0`
+and an integer node holding `1` both serialize to the string `1`. On
+parse-back, §5.4.1's mandated integer/float node distinction is
+unrecoverable — the canonical round-trip invariant is broken. The `.0`
+suffix is the minimum-diff override: it keeps JCS's shortest-round-trip
+rule for every other float value and adds a single unambiguous token
+for the integer-valued case.
+
 Additional rules specific to this RFC:
 
-- **Integer literals** are emitted without a decimal point:
+- **Integer literals** are emitted as a JSON integer (no `.`, no `e`):
   `42`, `-1`, `0`. The canonical form never produces `42.0` for an
   integer-typed node.
-- **Float literals that are integer-valued** (e.g. `1.0`, `-3.0`) are
-  emitted as **`1`**, **`-3`** **iff the literal's type tag is integer**
-  (impossible under §5.4.1 — integer and float are distinct nodes). A
-  literal whose node type is *float* and whose value is integer-valued
-  is emitted with the JCS form of that float: JCS §3.2.2.3 emits `1`
-  for the float value `1.0` (ECMAScript `ToString`), so the on-wire
-  form is `1` — **but the node remains a float node** in the AST. Two
-  float nodes both containing `1.0` serialize to the string `1`, and
-  canonical-form equality compares the *node kind* first, the *value*
-  second. A float node with value `1.0` is NOT AST-equal to an integer
-  node with value `1` (§5.4.1).
+- **Float literals that are integer-valued** (e.g. `1.0`, `-3.0`,
+  `0.0`) are emitted with a trailing `.0` when the JCS form would
+  otherwise be bare-integer-looking: float `1.0` → **`1.0`**,
+  float `-3.0` → **`-3.0`**, float `0.0` → **`0.0`**. This applies
+  for every integer-valued magnitude in the plain-decimal range
+  `[−(1e21 − 1), 1e21 − 1]`. Integer-valued magnitudes that fall in
+  the exponent range (`|x| ≥ 1e21`) are emitted with exponent notation
+  by JCS (`1e21`, `1e25`, `-5e300`); the `e` already distinguishes
+  them from a JSON integer, so no `.0` suffix is added. The AST node
+  kind remains `float` in both cases.
 - **Shortest round-trip for non-integer floats.** The shortest decimal
   string that parses back to the exact IEEE-754 double. For example,
   `0.1 + 0.2` (which rounds to `0.30000000000000004`) canonicalizes to
   the 17-digit form `0.30000000000000004`, not `0.3`. This matches
   Rust `ryu`, Go `strconv.FormatFloat(f, 'g', -1, 64)`, and Python
-  `repr(float)` on 3.1+.
+  `repr(float)` on 3.1+. The shortest form already contains `.`, so
+  no override is needed.
 - **Exponent form.** For magnitudes `|x| < 1e-6` or `|x| ≥ 1e21`, use
   exponent notation with lowercase `e` and no leading `+` on the
   exponent: `1e-7`, `3.14e25`, `-5e-300`. For magnitudes inside
   `[1e-6, 1e21)`, use plain decimal notation. These breakpoints match
-  ECMAScript `ToString(Number)` (and thus JCS).
-- **Zero.** Positive zero is `0` (integer node) or `0` on the wire
-  (float node — see integer-valued float rule above). Negative zero
-  `-0.0` in a float node is spelled `-0` on the wire. Integer nodes
-  cannot hold negative zero.
+  ECMAScript `ToString(Number)` (and thus JCS). The `e` in exponent
+  form unambiguously marks the token as a float (JSON integers cannot
+  contain `e`), so no `.0` suffix is added — `1e25` is a valid
+  canonical float emission.
+- **Zero.** Positive zero is `0` (integer node) or **`0.0`** (float
+  node). Negative zero `-0.0` in a float node is spelled **`-0.0`**
+  on the wire. Integer nodes cannot hold negative zero; a leading `-`
+  before an integer literal `0` is non-conforming.
 - **Subnormals.** IEEE-754 subnormals (`|x| < 2^-1022` for double) are
   serialized by the same shortest-round-trip rule; all shortest-round-trip
   algorithms (Grisu3, Ryu, Dragon4) produce identical output for
   subnormals. Example: the smallest positive subnormal `5e-324`
-  canonicalizes to `5e-324`. Subnormals are **valid** in canonical form.
+  canonicalizes to `5e-324` (exponent form, unambiguously float).
+  Subnormals are **valid** in canonical form.
 - **NaN and Infinity are NOT representable in canonical form.** Any
   canonicalization pass that encounters a NaN or ±Inf literal MUST
   abort with error code `E_CANONICAL_NONFINITE` and the path to the
@@ -501,29 +520,76 @@ Additional rules specific to this RFC:
   represent them explicitly (e.g. as a parameter with a binding-side
   resolution); canonical ASTs are finite.
 
-**Worked example:** Consider two ASTs that differ only in float
-representation:
+**Round-trip invariant (normative parse rule).** Because the on-wire
+emitter is disambiguating, the parser MUST be disambiguating too. For
+any canonical-form JSON number token `T`:
 
-Input A: `{"op":"+", "args":[1.0, 2.5]}` (Julia `JSON3.write` default)
-Input B: `{"op":"+", "args":[1, 2.5]}` (Go `encoding/json` default)
+- If `T` contains a `.` **or** an `e`/`E`, it parses to a **float node**.
+- Otherwise (`T` matches the JSON-integer grammar `-?(0|[1-9][0-9]*)`),
+  it parses to an **integer node**.
 
-If both `args[0]` are **float nodes** with value `1.0`, they canonicalize
-to the same on-wire form: `{"op":"+","args":[1,2.5]}`. If `args[0]` in A
-is a float node and in B is an integer node, they are **not** AST-equal
-(§5.4.1), and the canonicalized output preserves the distinction.
+This is a strict parse, not lenient: a canonicalizer that accepts `1`
+as a float is non-conforming (it would break the round-trip). Bindings
+that ingest non-canonical JSON (e.g. author input with mixed
+conventions) MUST canonicalize before admitting the document as a
+valid ESM AST; the canonicalization pass is the trust boundary. The
+result: `canonicalize(parse(emit(A))) == A` as a byte-for-byte JSON
+equality on the on-wire form, for every canonical AST `A`. This is
+the invariant §5.4's opening paragraph requires.
 
-Two ASTs representing `3.14159e-10` (subnormal regime is not reached
-here, but floating-point): both canonicalize to
-`{"op":"/","args":[1,<float 3.14159e-10>]}` → on wire, the number is
-`3.14159e-10`. A binding that emits `3.14159E-10` (capital E) or
-`+3.14159e-10` (leading `+`) is non-conforming.
+**Worked example — the disambiguation in action:**
+
+Input A (float node `1.0` + float node `2.5`):
+`{"op":"+","args":[{"kind":"float","value":1.0},{"kind":"float","value":2.5}]}`
+
+Input B (integer node `1` + float node `2.5`):
+`{"op":"+","args":[{"kind":"int","value":1},{"kind":"float","value":2.5}]}`
+
+Canonical on-wire forms (using the compact primitive-literal encoding
+where a bare JSON number denotes the literal node and the node kind is
+recovered from the token's shape per the round-trip parse rule):
+
+- A → `{"op":"+","args":[1.0,2.5]}`
+- B → `{"op":"+","args":[1,2.5]}`
+
+Pure JCS (pre-override) would have emitted both as
+`{"op":"+","args":[1,2.5]}`, destroying the §5.4.1 distinction. With
+the override, A and B produce distinct on-wire forms, and re-parsing
+each yields back the original integer-vs-float node kind.
+
+**Inline round-trip fixture.** The following table is normative — every
+binding MUST reproduce these emissions for the given AST leaf and, on
+parse-back, MUST recover the indicated node kind. (A binding fixture
+under `tests/fixtures/canonical_numbers/` materializes this table as a
+conformance test when §13.1 Step 1 lands.)
+
+| AST node kind | Value                     | Canonical on-wire | Parse-back kind |
+|---------------|---------------------------|-------------------|-----------------|
+| integer       | 1                         | `1`               | integer         |
+| integer       | -42                       | `-42`             | integer         |
+| integer       | 0                         | `0`               | integer         |
+| float         | 1.0                       | `1.0`             | float           |
+| float         | -3.0                      | `-3.0`            | float           |
+| float         | 0.0                       | `0.0`             | float           |
+| float         | -0.0                      | `-0.0`            | float           |
+| float         | 2.5                       | `2.5`             | float           |
+| float         | 0.30000000000000004       | `0.30000000000000004` | float       |
+| float         | 1e25                      | `1e25`            | float           |
+| float         | 5e-324 (subnormal)        | `5e-324`          | float           |
+
+A binding that emits `3.14159E-10` (capital E), `+3.14159e-10` (leading
+`+`), `1` for a float-valued `1.0`, or `1.0` for an integer `1` is
+non-conforming.
 
 **Spec preservation of integer/float distinction.** §5.4.1 says integer
 and float literals are distinct AST nodes. This subsection confirms
-that distinction survives canonicalization: the ON-WIRE decimal for
-float `1.0` is the string `1`, but the *node* carries a `type: "float"`
-tag (implied by the AST-kind slot; see the spec's primitive-literal
-encoding). Canonical-form equality compares node kind first.
+the distinction survives canonicalization **and** round-trips through
+the on-wire form: the integer node with value `1` emits as `1` and
+re-parses as an integer node; the float node with value `1.0` emits
+as `1.0` and re-parses as a float node. Canonical-form equality
+compares node kind first, value second; neither side of an
+integer/float pair can be substituted for the other without changing
+the canonical serialization.
 
 #### 5.4.7 Canonicalization for `-`, `/`, unary `neg` (resolves gt-adhm M6)
 
@@ -1959,9 +2025,11 @@ findings it resolves and the section(s) that carry the normative text.
   integer-valued floats, shortest round-trip non-integer floats,
   subnormals, negative zero, and NaN/Inf (forbidden in canonical form;
   `E_CANONICAL_NONFINITE`). Preserves §5.4.1's integer/float node
-  distinction: a float node with integer value still serializes as
-  `1` on the wire but remains type-tagged as float in the AST.
-  Resolves gt-j6do **New C1** and gt-adhm **C1**.
+  distinction. **Superseded in part by v2.2 §17.2:** the
+  integer-valued-float on-wire rule changed from "emit as `1`" to
+  "emit as `1.0`" to close the round-trip gap. See §5.4.6 and §17.2
+  for the current normative text. Resolves gt-j6do **New C1** and
+  gt-adhm **C1**; gap closed by gt-h9kt.
 
 - **F3 — §7.1.1 `$target` chooser + dim→component mapping.** Adds
   the emits-location-first rule for unstructured grids; adds the
@@ -2076,4 +2144,72 @@ findings it resolves and the section(s) that carry the normative text.
 
 ---
 
-*End of v2.1.*
+### 17.2 v2.2 addendum — §5.4.6 on-wire int/float disambiguation (gt-h9kt)
+
+Scope: single-subsection normative clarification. No schema change, no
+new fields, no AST shape change.
+
+**The gap.** v2.1's §5.4.6 adopted RFC 8785 JCS verbatim. Under JCS
+(via ECMAScript `ToString(Number)`), an integer node with value `1`
+and a float node with value `1.0` both serialize to the string `1`.
+§5.4.1 mandates that integer and float are distinct AST nodes, but the
+v2.1 on-wire form silently collapses them — on parse-back, the original
+node kind is unrecoverable. This breaks the canonical-form round-trip
+invariant the opening paragraph of §5.4 requires.
+
+**The fix.** v2.2 adds one normative override to JCS: an integer-valued
+float whose shortest-round-trip form is bare-integer-looking receives
+a trailing `.0`. Float `1.0` → on-wire `1.0`; integer `1` → on-wire
+`1`. Exponent-form emissions (e.g. `1e25`, `5e-324`) already contain
+`e` and are unambiguously float under the JSON integer grammar, so no
+suffix is added there.
+
+**Complementary parse rule.** §5.4.6 now also pins the parse-side rule:
+a JSON number token containing `.` or `e`/`E` is a float node;
+otherwise it is an integer node. Together, the emit override and the
+parse rule close the round-trip loop (`canonicalize(parse(emit(A)))
+== A` byte-for-byte, for every canonical AST `A`).
+
+**Alternatives considered.**
+
+- **Explicit type tag** (`{"type":"int","value":1}` vs
+  `{"type":"float","value":1}`). Unambiguous, but every numeric leaf
+  grows from a bare JSON number to a 3-key object. Verbose, and
+  inflates on-wire size for the 99% case where the type tag is
+  implicit in the token shape. Rejected.
+- **Abandon the int/float distinction** (collapse to a single numeric
+  node type, everything is float). Simpler wire form, but breaks
+  §5.4.1 and forces bindings that model integer arithmetic (Julia
+  `Int64`, Go `int64`) to round-trip through `Float64`, with loss for
+  magnitudes `> 2^53`. Rejected.
+- **Trailing `.0` override (chosen).** Minimum diff. Keeps the compact
+  on-wire form (bare JSON number). Preserves the §5.4.1 node
+  distinction without a schema change. Narrowly scoped override of a
+  single JCS rule; every other JCS output is adopted verbatim.
+
+**Affected conformance surface.**
+
+- §13.1 Step 1 acceptance (F9 in §17.1) already requires
+  integer-valued-float corner cases. Under v2.2 the expected on-wire
+  for `float(1.0)` is `1.0`, not `1` — binding fixtures drafted
+  against v2.1 must be updated before Step 1 lands. A normative inline
+  fixture table is embedded in §5.4.6; a materialized fixture directory
+  `tests/fixtures/canonical_numbers/` is a deliverable for Step 1.
+- §5.4.2 byte-comparator: no behavior change. The comparator sorts by
+  byte-string of the canonical JSON serialization, which now includes
+  the `.0` for integer-valued floats. Float `1.0` and integer `1`
+  now sort to different byte strings (`"1.0"` vs `"1"`), reinforcing
+  §5.4.1's "integer before float at equal magnitude" rule — the
+  comparator rule already handled this at the AST-kind level; the
+  wire form now mirrors it.
+- §5.4.8 worked example: integer-only; unaffected.
+
+**Error codes.** No new error codes. A binding that emits `1` for a
+float node or `1.0` for an integer node is non-conforming under
+§13.1 Step 1 and fails the canonical-round-trip test.
+
+*End of v2.2 addendum.*
+
+---
+
+*End of v2.2.*
