@@ -45,12 +45,20 @@ fn simulation_skip(name: &str) -> Option<&'static str> {
         "bouncing_ball.esm" => Some("gt-2ta2"),
         // Discrete events similarly rejected.
         "periodic_dosing.esm" => Some("gt-2ta2"),
-        // gt-su6u: ExponentialDecay integrates past analytical at t=3000 with
-        // Rust Bdf @ abstol=1e-12/reltol=1e-10 (diff 2.85e-13, rel bound
-        // 4.98e-14). Compile gap gt-xyhc/gt-vx74 is fixed; this is runtime
-        // solver drift. Other sample points and LogisticGrowth pass.
-        "python_scipy_integration.esm" => Some("gt-su6u"),
         _ => None,
+    }
+}
+
+/// Per-fixture solver override. Default is `Bdf` (stiff-capable, matches the
+/// Rust binding's default). Fixtures whose analytical references come from a
+/// non-stiff explicit reference solver (e.g. Julia's Tsit5 for the SciPy
+/// integration cases) use `Erk` so the numerical trajectory stays within the
+/// fixture's relative tolerance at long horizons — gt-su6u tracked Bdf drift
+/// on ExponentialDecay at t=3000 that Erk (Tsit5) resolves.
+fn per_fixture_solver(name: &str) -> SolverChoice {
+    match name {
+        "python_scipy_integration.esm" => SolverChoice::Erk,
+        _ => SolverChoice::Bdf,
     }
 }
 
@@ -140,6 +148,7 @@ fn execute_component(
     component: &str,
     tests: &[earthsci_toolkit::ModelTest],
     model_tol: Option<&Tolerance>,
+    solver: SolverChoice,
 ) {
     let compiled = Compiled::from_file(subset)
         .unwrap_or_else(|e| panic!("{label}: compile failed: {e}"));
@@ -182,7 +191,7 @@ fn execute_component(
         sample_times.dedup_by(|a, b| (*a - *b).abs() < 0.0);
 
         let opts = SimulateOptions {
-            solver: SolverChoice::Bdf,
+            solver,
             abstol: 1e-15,
             reltol: 1e-10,
             max_steps: 1_000_000,
@@ -295,6 +304,7 @@ fn tests_blocks_execution_runner() {
 
         // Models.
         if let Some(models) = file.models.clone() {
+            let solver = per_fixture_solver(name);
             for (mname, model) in &models {
                 if model.tests.as_ref().is_none_or(|t| t.is_empty()) {
                     continue;
@@ -308,6 +318,7 @@ fn tests_blocks_execution_runner() {
                     mname,
                     tests,
                     model.tolerance.as_ref(),
+                    solver,
                 );
                 any_executed = true;
             }
