@@ -2,23 +2,23 @@
  * Canonical AST form per discretization RFC §5.4.
  *
  * Implements `canonicalize(expr)` and `canonicalJson(expr)` for the TypeScript
- * binding.
- *
- * **Known limitation (gt-ca2u).** JavaScript numbers are IEEE-754 doubles
- * with no native integer/float distinction. Until gt-ca2u (TS rep refactor)
- * lands, every numeric literal is treated as a float and serialized per
- * §5.4.6 with a trailing `.0` for integer-valued magnitudes. The other
- * bindings (Julia/Rust/Python/Go) will emit `1` for an integer node and
- * `1.0` for a float node, so cross-binding byte-equality holds only for
- * fixtures that contain no integer literals — or that happen to use the
- * same wire token after canonicalization. Once gt-ca2u introduces a
- * tagged-literal representation in TS, this file should be updated to
- * preserve and emit the int/float distinction.
+ * binding. Integer-vs-float AST-node distinction is carried by the
+ * `NumericLiteral` tagged leaf (see `./numeric-literal.ts`); plain JS
+ * `number` values are treated as untagged float-like literals for backward
+ * compatibility with callers that have not migrated to `intLit` / `floatLit`.
  *
  * See `docs/rfcs/discretization.md` §5.4.1–§5.4.7 for the normative rules.
  */
 
-import type { Expression, ExpressionNode } from './generated.js'
+import type { Expression } from './generated.js'
+import {
+  type NumericLiteral,
+  intLit,
+  floatLit,
+  isFloatLit,
+  isIntLit,
+  isNumericLiteral,
+} from './numeric-literal.js'
 
 export class CanonicalizeError extends Error {
   /** Stable RFC §5.4.6 / §5.4.7 error code. */
@@ -35,14 +35,20 @@ export const E_CANONICAL_NONFINITE = 'E_CANONICAL_NONFINITE'
 /** `E_CANONICAL_DIVBY_ZERO` — `/(0, 0)` (§5.4.7). */
 export const E_CANONICAL_DIVBY_ZERO = 'E_CANONICAL_DIVBY_ZERO'
 
-type Expr = Expression
-type Node = Expression & { op: string; args: Expression[] }
+type Expr = Expression | NumericLiteral
+type Node = { op: string; args: Expr[] } & Record<string, unknown>
 
 function isNode(e: Expr): e is Node {
-  return typeof e === 'object' && e !== null && 'op' in e && 'args' in e
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    !isNumericLiteral(e) &&
+    'op' in e &&
+    'args' in e
+  )
 }
 
-function isNumber(e: Expr): e is number {
+function isPlainNumber(e: Expr): e is number {
   return typeof e === 'number'
 }
 
@@ -50,9 +56,45 @@ function isString(e: Expr): e is string {
   return typeof e === 'string'
 }
 
+/** True for plain JS numbers and tagged `NumericLiteral` leaves. */
+function isNumericLeaf(e: Expr): boolean {
+  return isPlainNumber(e) || isNumericLiteral(e)
+}
+
+/** Underlying numeric value for a plain number or `NumericLiteral`. */
+function leafValue(e: Expr): number {
+  if (isPlainNumber(e)) return e
+  if (isNumericLiteral(e)) return e.value
+  throw new TypeError('not a numeric leaf')
+}
+
+/**
+ * A value counts as "float-like" for RFC §5.4.4 type-preserving rules when
+ * it is either a plain JS number (TS has no native int tag) or an explicit
+ * `floatLit`. Tagged `intLit` leaves and all non-numeric nodes are not
+ * float-like.
+ */
+function isFloatLike(e: Expr): boolean {
+  return isPlainNumber(e) || isFloatLit(e)
+}
+
+function isZeroValue(e: Expr): boolean {
+  return isNumericLeaf(e) && leafValue(e) === 0
+}
+
+function isOneValue(e: Expr): boolean {
+  return isNumericLeaf(e) && leafValue(e) === 1
+}
+
 /** Canonicalize an expression tree per RFC §5.4. Input is not mutated. */
 export function canonicalize(expr: Expr): Expr {
-  if (isNumber(expr)) {
+  if (isNumericLiteral(expr)) {
+    if (!Number.isFinite(expr.value)) {
+      throw new CanonicalizeError(E_CANONICAL_NONFINITE)
+    }
+    return expr
+  }
+  if (isPlainNumber(expr)) {
     if (!Number.isFinite(expr)) {
       throw new CanonicalizeError(E_CANONICAL_NONFINITE)
     }
@@ -74,7 +116,7 @@ export function canonicalJson(expr: Expr): string {
 
 function canonOp(node: Node): Expr {
   const newArgs: Expr[] = node.args.map((a) => canonicalize(a))
-  const work: Node = { ...node, args: newArgs } as Node
+  const work: Node = { ...node, args: newArgs }
   switch (work.op) {
     case '+':
       return canonAdd(work)
@@ -93,60 +135,128 @@ function canonOp(node: Node): Expr {
 
 function canonAdd(node: Node): Expr {
   const flat = flattenSameOp(node.args, '+')
-  // Without int/float distinction, treat zero-elim as straightforward drop.
-  const others = flat.filter((a) => !isZeroAny(a))
-  if (others.length === 0) return 0
-  if (others.length === 1) return others[0]
+  const others: Expr[] = []
+  let floatZeroSample: Expr | null = null
+  let hadFloatZero = false
+  let hadIntZero = false
+  for (const a of flat) {
+    if (isZeroValue(a)) {
+      // Tagged float-zero is conditional (RFC §5.4.4 type-preserving).
+      if (isFloatLit(a)) {
+        if (floatZeroSample === null) floatZeroSample = a
+        hadFloatZero = true
+        continue
+      }
+      // Tagged int-zero and plain-number zeros drop unconditionally.
+      if (isIntLit(a)) hadIntZero = true
+      continue
+    }
+    others.push(a)
+  }
+  if (hadFloatZero && !others.every(isFloatLike)) {
+    others.push(floatZeroSample as Expr)
+    hadFloatZero = false // consumed — don't re-emit below
+  }
+  if (others.length === 0) {
+    if (hadFloatZero) return floatZeroSample as Expr
+    if (hadIntZero) return intLit(0)
+    return 0
+  }
+  if (others.length === 1) return others[0]!
   sortArgs(others)
   return { ...node, op: '+', args: others }
 }
 
 function canonMul(node: Node): Expr {
   const flat = flattenSameOp(node.args, '*')
+  // Zero annihilation (§5.4.4) — preserve the numeric type of the zero.
   for (const a of flat) {
-    if (isZeroAny(a)) {
-      // Preserve signed zero (only meaningful for -0).
-      if (typeof a === 'number' && Object.is(a, -0)) return -0
-      return 0
-    }
+    if (!isZeroValue(a)) continue
+    if (isIntLit(a)) return intLit(0)
+    if (isFloatLit(a)) return a // preserves signed zero
+    // Plain number zero — preserve signed zero for -0.
+    if (isPlainNumber(a) && Object.is(a, -0)) return -0
+    return 0
   }
-  const others = flat.filter((a) => !isOneAny(a))
-  if (others.length === 0) return 1
-  if (others.length === 1) return others[0]
+  const others: Expr[] = []
+  let floatOneSample: Expr | null = null
+  let hadFloatOne = false
+  let hadIntOne = false
+  for (const a of flat) {
+    if (isOneValue(a)) {
+      if (isFloatLit(a)) {
+        if (floatOneSample === null) floatOneSample = a
+        hadFloatOne = true
+        continue
+      }
+      if (isIntLit(a)) hadIntOne = true
+      continue
+    }
+    others.push(a)
+  }
+  if (hadFloatOne && !others.every(isFloatLike)) {
+    others.push(floatOneSample as Expr)
+    hadFloatOne = false
+  }
+  if (others.length === 0) {
+    if (hadFloatOne) return floatOneSample as Expr
+    if (hadIntOne) return intLit(1)
+    return 1
+  }
+  if (others.length === 1) return others[0]!
   sortArgs(others)
   return { ...node, op: '*', args: others }
 }
 
 function canonSub(node: Node): Expr {
-  if (node.args.length === 1) return canonNegValue(node.args[0])
+  if (node.args.length === 1) return canonNegValue(node.args[0]!)
   if (node.args.length === 2) {
-    const [a, b] = node.args
-    if (isZeroAny(a)) return canonNegValue(b)
-    if (isZeroAny(b)) return a
+    const a = node.args[0]!
+    const b = node.args[1]!
+    if (isZeroValue(a)) return canonNegValue(b)
+    if (isZeroValue(b)) {
+      // Type-preserving: -(intLit(x), floatLit(0)) → floatLit(x) to keep float promotion.
+      if (isFloatLit(b) && isIntLit(a)) return floatLit(a.value)
+      return a
+    }
   }
   return node
 }
 
 function canonDiv(node: Node): Expr {
   if (node.args.length !== 2) return node
-  const [a, b] = node.args
-  if (isZeroAny(a) && isZeroAny(b)) {
+  const a = node.args[0]!
+  const b = node.args[1]!
+  if (isZeroValue(a) && isZeroValue(b)) {
     throw new CanonicalizeError(E_CANONICAL_DIVBY_ZERO)
   }
-  if (isOneAny(b)) return a
-  if (isZeroAny(a)) return 0
+  if (isOneValue(b)) {
+    if (isFloatLit(b) && isIntLit(a)) return floatLit(a.value)
+    return a
+  }
+  if (isZeroValue(a)) {
+    // /(0, x) — preserve zero type.
+    if (isFloatLit(a)) return a
+    if (isIntLit(a)) return intLit(0)
+    return 0
+  }
   return node
 }
 
 function canonNeg(node: Node): Expr {
   if (node.args.length !== 1) return node
-  return canonNegValue(node.args[0])
+  return canonNegValue(node.args[0]!)
 }
 
 function canonNegValue(arg: Expr): Expr {
-  if (isNumber(arg)) return -arg
-  if (isNode(arg) && arg.op === 'neg' && arg.args.length === 1) return arg.args[0]
-  return { op: 'neg', args: [arg] } as Node
+  if (isIntLit(arg)) {
+    // intLit cannot hold -0, so -0 value is impossible here.
+    return arg.value === 0 ? arg : intLit(-arg.value)
+  }
+  if (isFloatLit(arg)) return floatLit(-arg.value)
+  if (isPlainNumber(arg)) return -arg
+  if (isNode(arg) && arg.op === 'neg' && arg.args.length === 1) return arg.args[0]!
+  return { op: 'neg', args: [arg] }
 }
 
 function flattenSameOp(args: Expr[], op: string): Expr[] {
@@ -161,23 +271,14 @@ function flattenSameOp(args: Expr[], op: string): Expr[] {
   return out
 }
 
-function isZeroAny(e: Expr): boolean {
-  return isNumber(e) && e === 0
-}
-
-function isOneAny(e: Expr): boolean {
-  return isNumber(e) && e === 1
-}
-
 function argTier(e: Expr): number {
-  if (isNumber(e)) return 0
+  if (isNumericLeaf(e)) return 0
   if (isString(e)) return 1
   if (isNode(e)) return 2
   return 3
 }
 
 function sortArgs(args: Expr[]): void {
-  // Memoize canonical JSON for non-leaf nodes (§5.4.9).
   const cache = new Map<number, string>()
   const indices = args.map((_, i) => i)
   const getJson = (i: number, e: Expr): string => {
@@ -188,9 +289,9 @@ function sortArgs(args: Expr[]): void {
     }
     return s
   }
-  indices.sort((ia, ib) => compareExprs(args[ia], args[ib], ia, ib, getJson))
-  const snap = indices.map((i) => args[i])
-  for (let i = 0; i < args.length; i++) args[i] = snap[i]
+  indices.sort((ia, ib) => compareExprs(args[ia]!, args[ib]!, ia, ib, getJson))
+  const snap = indices.map((i) => args[i]!)
+  for (let i = 0; i < args.length; i++) args[i] = snap[i]!
 }
 
 function compareExprs(
@@ -204,7 +305,14 @@ function compareExprs(
   const tb = argTier(b)
   if (ta !== tb) return ta - tb
   if (ta === 0) {
-    return (a as number) - (b as number)
+    const va = leafValue(a)
+    const vb = leafValue(b)
+    if (va !== vb) return va - vb
+    // Equal magnitude: int before float (RFC §5.4.2 stable tiebreak).
+    const af = isFloatLit(a) || isPlainNumber(a)
+    const bf = isFloatLit(b) || isPlainNumber(b)
+    if (af === bf) return 0
+    return af ? 1 : -1
   }
   if (ta === 1) {
     return (a as string) < (b as string) ? -1 : (a as string) > (b as string) ? 1 : 0
@@ -215,7 +323,19 @@ function compareExprs(
 }
 
 function emitJson(e: Expr): string {
-  if (isNumber(e)) {
+  if (isIntLit(e)) {
+    // Value is guaranteed integer-valued and finite by intLit().
+    const s = String(e.value)
+    if (s.includes('.') || s.includes('e') || s.includes('E')) {
+      throw new TypeError(`int NumericLiteral produced non-integer token ${s}`)
+    }
+    return s
+  }
+  if (isFloatLit(e)) {
+    if (!Number.isFinite(e.value)) throw new CanonicalizeError(E_CANONICAL_NONFINITE)
+    return formatCanonicalFloat(e.value)
+  }
+  if (isPlainNumber(e)) {
     if (!Number.isFinite(e)) throw new CanonicalizeError(E_CANONICAL_NONFINITE)
     return formatCanonicalFloat(e)
   }
@@ -244,12 +364,13 @@ function emitNodeJson(n: Node): string {
 }
 
 /**
- * Format a finite `number` per RFC §5.4.6.
+ * Format a finite `number` per RFC §5.4.6. Only handles float-typed
+ * values: integer-typed `NumericLiteral` nodes are emitted as bare JSON
+ * integers by {@link canonicalJson} directly.
  *
- * Note: the trailing `.0` for integer-valued magnitudes applies because TS
- * has no int/float distinction (every numeric literal is a float). Once
- * gt-ca2u introduces typed integer nodes, integer values should serialize
- * without the suffix.
+ * Unlike the convenience helper re-exported from `./numeric-literal`, this
+ * version strips the leading `+` on exponent notation (RFC §5.4.6:
+ * "no leading + on the exponent") so `1e25` emits as `1e25`, not `1e+25`.
  */
 export function formatCanonicalFloat(f: number): string {
   if (!Number.isFinite(f)) {
@@ -261,15 +382,10 @@ export function formatCanonicalFloat(f: number): string {
   const abs = Math.abs(f)
   const useExp = abs < 1e-6 || abs >= 1e21
   if (useExp) {
-    // Number.prototype.toString already gives shortest round-trip and uses
-    // exponent form outside [1e-6, 1e21). Strip leading + on the exponent.
-    let s = f.toString()
-    return normalizeExponent(s)
+    return normalizeExponent(f.toString())
   }
   let s = f.toString()
   if (s.includes('e') || s.includes('E')) {
-    // Defensive: Number.toString shouldn't produce exp form here, but if it
-    // does, expand manually.
     s = expandToPlain(f)
   }
   if (!s.includes('.')) s += '.0'
@@ -279,8 +395,8 @@ export function formatCanonicalFloat(f: number): string {
 function normalizeExponent(s: string): string {
   const m = /^(-?[0-9]*\.?[0-9]*)[eE]([+-]?[0-9]+)$/.exec(s)
   if (!m) return s
-  const mant = m[1]
-  let exp = m[2]
+  const mant = m[1]!
+  let exp = m[2]!
   if (exp.startsWith('+')) exp = exp.slice(1)
   let sign = ''
   if (exp.startsWith('-')) {
@@ -292,10 +408,6 @@ function normalizeExponent(s: string): string {
 }
 
 function expandToPlain(f: number): string {
-  // Use toFixed with sufficient precision then trim.
-  // For numbers in [1e-6, 1e21), toString already gives plain decimal —
-  // this branch is defensive only.
   const s = f.toFixed(20)
-  // Trim trailing zeros but keep at least one digit after dot.
   return s.replace(/(\.[0-9]*?)0+$/, '$1').replace(/\.$/, '')
 }
