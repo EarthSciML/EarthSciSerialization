@@ -2336,7 +2336,7 @@ export interface AffectEquation {
 struct Assertion
 ```
 
-> Assertion(variable::String, time::Float64, expected::Float64, tolerance::Union{Tolerance,Nothing})
+> Assertion(variable::String, time::Float64, expected::Float64, tolerance, coords, reduce, reference)
 
 A scalar `(variable, time, expected)` check used inside a `Test`.
 
@@ -2346,13 +2346,6 @@ class Assertion:
 ```
 
 > A scalar (variable, time, expected) check used inside a Test.
-
-**Typescript:**
-```typescript
-export interface Assertion {
-```
-
-> A single scalar check at a (variable, time) point.
 
 ---
 
@@ -3549,24 +3542,6 @@ export interface ParameterSweep {
 ```
 
 > Optional parameter sweep.
-
----
-
-### Plot
-
-**Python:**
-```python
-class Plot:
-```
-
-> A plot specification associated with an example.
-
-**Typescript:**
-```typescript
-export interface Plot {
-```
-
-> A plot specification associated with an example.
 
 ---
 
