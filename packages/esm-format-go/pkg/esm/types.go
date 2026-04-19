@@ -540,6 +540,64 @@ type EsmFile struct {
 	Coupling            []interface{}                 `json:"coupling,omitempty"` // Properly deserialized coupling entries
 	Domains             map[string]Domain             `json:"domains,omitempty"`
 	Interfaces          map[string]Interface          `json:"interfaces,omitempty"`
+	Discretizations     map[string]Discretization     `json:"discretizations,omitempty"`
+}
+
+// Discretization is a named stencil template (discretization RFC §7.1).
+//
+// The AST-pattern fields (AppliesTo, Stencil[*].Coeff, NeighborSelector
+// expression slots) carry pattern variables like "$u" / "$target" that are
+// bound by the rule engine at expansion time — they are not ordinary
+// Expressions and thus are preserved as raw json.RawMessage for lossless
+// round-tripping.
+type Discretization struct {
+	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
+	// this scheme discretizes. Preserved as raw JSON because the pattern may
+	// contain pattern variables ($u, $x, ...) that are not valid
+	// Expression ops.
+	AppliesTo          json.RawMessage   `json:"applies_to"`
+	GridFamily         string            `json:"grid_family"`
+	Combine            string            `json:"combine,omitempty"`
+	Stencil            []StencilEntry    `json:"stencil"`
+	Accuracy           string            `json:"accuracy,omitempty"`
+	RequiresLocations  []string          `json:"requires_locations,omitempty"`
+	EmitsLocation      string            `json:"emits_location,omitempty"`
+	TargetBinding      string            `json:"target_binding,omitempty"`
+	GhostVars          []GhostVarDecl    `json:"ghost_vars,omitempty"`
+	FreeVariables      []string          `json:"free_variables,omitempty"`
+	Description        string            `json:"description,omitempty"`
+	Reference          *Reference        `json:"reference,omitempty"`
+}
+
+// StencilEntry is one neighbor contribution: a selector plus a symbolic
+// coefficient. Coeff is raw JSON so that pattern variables survive round-trip.
+type StencilEntry struct {
+	Selector NeighborSelector `json:"selector"`
+	Coeff    json.RawMessage  `json:"coeff"`
+}
+
+// NeighborSelector selects a neighbor (or neighbor set) in a stencil entry.
+// Kind discriminates the selector family; per-kind fields are carried as raw
+// JSON because they may contain pattern variables.
+type NeighborSelector struct {
+	Kind       string          `json:"kind"`
+	Axis       json.RawMessage `json:"axis,omitempty"`
+	Offset     json.RawMessage `json:"offset,omitempty"`
+	Side       json.RawMessage `json:"side,omitempty"`
+	Di         json.RawMessage `json:"di,omitempty"`
+	Dj         json.RawMessage `json:"dj,omitempty"`
+	IndexExpr  json.RawMessage `json:"index_expr,omitempty"`
+	Table      string          `json:"table,omitempty"`
+	CountExpr  json.RawMessage `json:"count_expr,omitempty"`
+	KBound     string          `json:"k_bound,omitempty"`
+	Combine    string          `json:"combine,omitempty"`
+}
+
+// GhostVarDecl declares a ghost-cell variable used by a discretization scheme.
+type GhostVarDecl struct {
+	Name        string  `json:"name"`
+	Source      string  `json:"source,omitempty"`
+	Description string  `json:"description,omitempty"`
 }
 
 // ========================================
@@ -843,6 +901,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 		Coupling            json.RawMessage               `json:"coupling,omitempty"`
 		Domains             map[string]Domain             `json:"domains,omitempty"`
 		Interfaces          map[string]Interface          `json:"interfaces,omitempty"`
+		Discretizations     map[string]Discretization     `json:"discretizations,omitempty"`
 	}
 
 	var temp TempEsmFile
@@ -860,6 +919,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.RegisteredFunctions = temp.RegisteredFunctions
 	esm.Domains = temp.Domains
 	esm.Interfaces = temp.Interfaces
+	esm.Discretizations = temp.Discretizations
 
 	// Handle coupling array with proper type deserialization
 	if len(temp.Coupling) > 0 && string(temp.Coupling) != "null" {

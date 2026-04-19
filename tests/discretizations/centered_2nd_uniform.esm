@@ -1,0 +1,42 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "Centered2ndUniform",
+    "description": "Discretization scheme: 2nd-order centered finite difference for grad on a uniform cartesian grid. RFC §7 example.",
+    "authors": ["gt-yhkn"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["discretization", "cartesian", "gradient"]
+  },
+  "models": {
+    "Empty": {
+      "variables": {
+        "phi": { "type": "state", "units": "1", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["phi"], "wrt": "t" },
+          "rhs": 0.0
+        }
+      ]
+    }
+  },
+  "discretizations": {
+    "centered_2nd_uniform": {
+      "applies_to": { "op": "grad", "args": ["$u"], "dim": "$x" },
+      "grid_family": "cartesian",
+      "combine": "+",
+      "accuracy": "O(dx^2)",
+      "stencil": [
+        {
+          "selector": { "kind": "cartesian", "axis": "$x", "offset": -1 },
+          "coeff": { "op": "/", "args": [-1, { "op": "*", "args": [2, "dx"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "$x", "offset": 1 },
+          "coeff": { "op": "/", "args": [1, { "op": "*", "args": [2, "dx"] }] }
+        }
+      ],
+      "description": "Classic centered O(dx^2) finite difference for the gradient on a uniform grid."
+    }
+  }
+}
