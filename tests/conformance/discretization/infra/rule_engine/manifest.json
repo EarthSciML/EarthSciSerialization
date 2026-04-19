@@ -1,0 +1,16 @@
+{
+  "category": "rule_engine",
+  "version": "1.0",
+  "description": "Cross-binding rule-engine fixtures per discretization RFC §5.2. Each fixture's `expect.canonical_json` is the byte-exact canonical form each binding's `canonical_json(rewrite(input, rules))` must produce. Error fixtures assert the engine aborts with the given stable error code.",
+  "fixtures": [
+    {"id": "match_once",         "path": "match_once.json",         "tags": ["match_once"]},
+    {"id": "fixed_point",        "path": "fixed_point.json",        "tags": ["fixed_point"]},
+    {"id": "not_converged",      "path": "not_converged.json",      "tags": ["not_converged", "max_passes"]},
+    {"id": "nonlinear_match",    "path": "nonlinear_match.json",    "tags": ["nonlinear"]},
+    {"id": "sibling_field",      "path": "sibling_field.json",      "tags": ["sibling_field"]},
+    {"id": "guard_var_has_grid", "path": "guard_var_has_grid.json", "tags": ["guard", "var_has_grid"]}
+  ],
+  "bindings_required": ["julia", "rust"],
+  "bindings_optional": ["python", "go", "typescript"],
+  "note": "Julia and Rust are the only bindings required to produce rule-engine output for Step 1 (RFC §13.1). Other bindings may round-trip the fixture's rule/input JSON without executing, or stub the rewrite step."
+}
