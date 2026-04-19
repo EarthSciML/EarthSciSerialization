@@ -1384,6 +1384,18 @@ function _record_index!(shapes::Dict{String,Vector{UnitRange{Int}}},
         push!(axis_ranges, r)
     end
 
+    # Normalise axis starts to 1 — MTK's `@variables name[r]` carries the
+    # declared index range straight through to runtime indexing, but internal
+    # initialization-problem code allocates linear buffers sized by the
+    # *range length* and then writes at the *logical index*. Declaring a
+    # variable like `flux[3:17]` therefore mismatches (length 15, index 17)
+    # during `generate_initializesystem_timevarying`. Keeping 1-based ranges
+    # aligns Symbolics' logical indices with MTK's buffer positions; cells
+    # that the user never references (`flux[1]`, `flux[2]` here) simply stay
+    # as additional unknowns without equations, which is acceptable for
+    # state variables with matching scalar BCs on the untouched indices.
+    axis_ranges = UnitRange{Int}[1:max(1, last(r)) for r in axis_ranges]
+
     if haskey(shapes, vname)
         existing = shapes[vname]
         if length(existing) != length(axis_ranges)
@@ -1392,7 +1404,7 @@ function _record_index!(shapes::Dict{String,Vector{UnitRange{Int}}},
                 "saw $(length(existing))-D and $(length(axis_ranges))-D references"))
         end
         for (i, r) in enumerate(axis_ranges)
-            existing[i] = min(first(existing[i]), first(r)):max(last(existing[i]), last(r))
+            existing[i] = 1:max(last(existing[i]), last(r))
         end
     else
         shapes[vname] = axis_ranges

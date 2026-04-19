@@ -194,17 +194,29 @@ function _build_arrayop(expr::OpExpr, var_dict::Dict{String,Any},
     end
     output_tuple = Core.Expr(:tuple, output_tuple_args...)
 
-    # Build the body AST.
-    body_ast = _esm_to_julia_ast(body, var_name_to_sym)
-
-    # Collect explicit range declarations as `idx in lo:hi` macro options.
+    # `@arrayop` always iterates its declared indices from 1:length — shape
+    # inference in SymbolicUtils normalises `i in lo:hi` to an output axis of
+    # `1:length(lo:hi)` and substitutes `i` with values from that 1-based range
+    # during scalarization. For a stencil like `u[i-1]` over `i in 2:9`, naive
+    # translation would substitute `i=1 → u[0]` and raise a `BoundsError`.
+    # Shift each declared index so the macro sees `i in 1:(hi-lo+1)` while the
+    # body is rewritten with `i → i + (lo-1)` to preserve the user's intent.
+    idx_shifts = Dict{String,Int}()
     range_opts = Any[]
     if expr.ranges !== nothing
         for (name, r) in expr.ranges
             lo, hi = _range_bounds_int(r)
-            push!(range_opts, Core.Expr(:call, :in, Symbol(name), Core.Expr(:call, :(:), lo, hi)))
+            shift = lo - 1
+            if shift != 0
+                idx_shifts[name] = shift
+            end
+            push!(range_opts, Core.Expr(:call, :in, Symbol(name),
+                                        Core.Expr(:call, :(:), 1, hi - lo + 1)))
         end
     end
+
+    # Build the body AST (after range collection so we know index shifts).
+    body_ast = _esm_to_julia_ast(body, var_name_to_sym, idx_shifts)
 
     # Build `reduce=<sym>` macro option.
     reduce_opt = Core.Expr(:(=), :reduce, Symbol(expr.reduce === nothing ? "+" : expr.reduce))
@@ -272,7 +284,8 @@ end
 # an arrayop body (e.g. `makearray` inside an arrayop) are not common but
 # we still handle `index` nodes since those are the primary way variables
 # are indexed inside an `@arrayop` body.
-function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
+function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol},
+                           idx_shifts::Dict{String,Int}=Dict{String,Int}())
     if expr isa NumExpr
         # Prefer integer literals when the value is whole — this matters for
         # expressions like `u[i-1]` where the macro's offset-range inference
@@ -280,15 +293,20 @@ function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
         v = expr.value
         return v == floor(v) ? Int(v) : v
     elseif expr isa VarExpr
-        return get(var_name_to_sym, expr.name, Symbol(expr.name))
+        if haskey(var_name_to_sym, expr.name)
+            return var_name_to_sym[expr.name]
+        end
+        sym = Symbol(expr.name)
+        shift = get(idx_shifts, expr.name, 0)
+        return shift == 0 ? sym : Core.Expr(:call, :+, sym, shift)
     elseif expr isa OpExpr
         op = expr.op
         if op == "index"
-            arr = _esm_to_julia_ast(expr.args[1], var_name_to_sym)
-            idxs = [_esm_to_julia_ast(a, var_name_to_sym) for a in expr.args[2:end]]
+            arr = _esm_to_julia_ast(expr.args[1], var_name_to_sym, idx_shifts)
+            idxs = [_esm_to_julia_ast(a, var_name_to_sym, idx_shifts) for a in expr.args[2:end]]
             return Core.Expr(:ref, arr, idxs...)
         elseif op in ("+", "-", "*", "/", "^")
-            args_ast = [_esm_to_julia_ast(a, var_name_to_sym) for a in expr.args]
+            args_ast = [_esm_to_julia_ast(a, var_name_to_sym, idx_shifts) for a in expr.args]
             if length(args_ast) == 1 && op == "-"
                 return Core.Expr(:call, :-, args_ast[1])
             end
@@ -296,12 +314,12 @@ function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
         elseif op in ("exp", "log", "log10", "sin", "cos", "tan",
                       "sinh", "cosh", "tanh", "asin", "acos", "atan",
                       "sqrt", "abs")
-            args_ast = [_esm_to_julia_ast(a, var_name_to_sym) for a in expr.args]
+            args_ast = [_esm_to_julia_ast(a, var_name_to_sym, idx_shifts) for a in expr.args]
             return Core.Expr(:call, Symbol(op), args_ast...)
         elseif op == "D"
             # D(u[i]) inside an @arrayop body: emit a bare `D` symbol; the
             # let-block wrapping the macro call binds `D = Differential(t_sym)`.
-            inner = _esm_to_julia_ast(expr.args[1], var_name_to_sym)
+            inner = _esm_to_julia_ast(expr.args[1], var_name_to_sym, idx_shifts)
             return Core.Expr(:call, :D, inner)
         else
             error("Unsupported operator inside arrayop body: $op")
@@ -333,12 +351,24 @@ function _build_makearray(expr::OpExpr, var_dict::Dict{String,Any},
         end
     end
 
-    am = Symbolics.ArrayMaker{Real}(Tuple(sz))
-    for (region, val) in zip(expr.regions, expr.values)
-        vw = Tuple(pair[1]:pair[2] for pair in region)
-        v = _esm_to_symbolic(val, var_dict, t_sym, dim_dict)
-        push!(am.sequence, vw => v)
+    # SymbolicUtils.ArrayMaker{T}(regions, values; shape=...) is the current
+    # constructor API — the older `ArrayMaker{Real}(tuple)` + `push!(am.sequence, ...)`
+    # pattern no longer exists, and `Symbolics.ArrayMaker` is not exported.
+    # `shape` is typed `SmallVec{UnitRange{Int}}` so we leave it off and let
+    # SymbolicUtils infer it from the region list (union of per-axis extents).
+    regions_vec = [[pair[1]:pair[2] for pair in region] for region in expr.regions]
+    values_vec = Any[_esm_to_symbolic(val, var_dict, t_sym, dim_dict)
+                     for val in expr.values]
+    # Wrap scalar numeric values as array literals so they satisfy the
+    # `symtype <: AbstractArray` requirement of `ArrayMaker`. Each region is a
+    # rectangular block, so broadcasting a scalar over the block dimensions
+    # produces the right shape.
+    for i in eachindex(values_vec, regions_vec)
+        region = regions_vec[i]
+        block_size = ntuple(d -> length(region[d]), ndims)
+        values_vec[i] = fill(values_vec[i], block_size...)
     end
+    am = SymUtils.ArrayMaker{SymUtils.SymReal}(regions_vec, values_vec)
     return Symbolics.scalarize(am)
 end
 
