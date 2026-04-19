@@ -184,6 +184,8 @@ func buildUnitRegistry() map[string]Unit {
 	r["J"] = r["N"].Multiply(r["m"])
 	r["W"] = r["J"].Divide(r["s"])
 
+	r["atm"] = Unit{Dim: r["Pa"].Dim, Scale: 101325}
+
 	// Concentration-ish.
 	r["M"] = r["mol"].Divide(liter) // molarity
 
@@ -672,6 +674,139 @@ func validateModelUnits(modelName string, model *Model, basePath string, result 
 			result.UnitWarnings = append(result.UnitWarnings, *w)
 		}
 	}
+	checkConversionFactorConsistency(modelName, model, result)
+}
+
+// checkConversionFactorConsistency flags observed variables whose expression
+// has the shape `<numeric> * <var>` (or `<var> * <numeric>`) when the declared
+// output units and the source variable's units are dimensionally compatible
+// but the numeric literal disagrees with the correct linear scale factor.
+//
+// Example: `converted_pressure` in Pa assigned `50000 * p_atm` where p_atm is
+// in atm. Dimensions match (both are pressure) but the numeric factor should
+// be 101325 Pa/atm.
+//
+// Mirrors Python's parse._check_conversion_factor_consistency (gt-nvdv).
+// Affine conversions (e.g., degC→K) are skipped; compound expressions,
+// matching units, and unparseable units are silently ignored.
+func checkConversionFactorConsistency(modelName string, model *Model, result *StructuralValidationResult) {
+	varUnits := make(map[string]string, len(model.Variables))
+	for name, v := range model.Variables {
+		if v.Units != nil {
+			varUnits[name] = *v.Units
+		}
+	}
+	for vname, vdef := range model.Variables {
+		if vdef.Type != "observed" || vdef.Expression == nil {
+			continue
+		}
+		lhsUnits := ""
+		if vdef.Units != nil {
+			lhsUnits = *vdef.Units
+		}
+		if lhsUnits == "" {
+			continue
+		}
+		node, ok := exprAsNode(vdef.Expression)
+		if !ok || node.Op != "*" || len(node.Args) != 2 {
+			continue
+		}
+		var numeric float64
+		var varRef string
+		var haveNumeric, haveVar bool
+		for _, a := range node.Args {
+			switch v := a.(type) {
+			case bool:
+				// ignored
+			case float64:
+				numeric = v
+				haveNumeric = true
+			case int:
+				numeric = float64(v)
+				haveNumeric = true
+			case int64:
+				numeric = float64(v)
+				haveNumeric = true
+			case string:
+				varRef = v
+				haveVar = true
+			}
+		}
+		if !haveNumeric || !haveVar {
+			continue
+		}
+		srcUnits, ok := varUnits[varRef]
+		if !ok || srcUnits == "" {
+			continue
+		}
+		if srcUnits == lhsUnits {
+			continue
+		}
+		srcU, err := ParseUnit(srcUnits)
+		if err != nil {
+			continue
+		}
+		lhsU, err := ParseUnit(lhsUnits)
+		if err != nil {
+			continue
+		}
+		if !srcU.Dim.Equal(lhsU.Dim) {
+			continue // dimensional mismatch — other checks handle it
+		}
+		if isAffineTempUnit(srcUnits) || isAffineTempUnit(lhsUnits) {
+			continue
+		}
+		if lhsU.Scale == 0 {
+			continue
+		}
+		factor := srcU.Scale / lhsU.Scale
+		if factor == 0 {
+			continue
+		}
+		tol := 1e-9 * math.Max(math.Abs(factor), 1.0)
+		if math.Abs(numeric-factor) <= tol {
+			continue
+		}
+		result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+			Path:    fmt.Sprintf("/models/%s/variables/%s", modelName, vname),
+			Code:    ErrorUnitInconsistency,
+			Message: "Unit conversion factor is incorrect for specified unit transformation",
+			Details: map[string]interface{}{
+				"variable":        vname,
+				"declared_units":  lhsUnits,
+				"source_units":    srcUnits,
+				"declared_factor": numeric,
+				"expected_factor": factor,
+			},
+		})
+	}
+}
+
+// exprAsNode normalizes Expression to an ExprNode value.
+func exprAsNode(e Expression) (ExprNode, bool) {
+	switch v := e.(type) {
+	case ExprNode:
+		return v, true
+	case *ExprNode:
+		if v == nil {
+			return ExprNode{}, false
+		}
+		return *v, true
+	}
+	return ExprNode{}, false
+}
+
+// isAffineTempUnit reports whether a unit string denotes a temperature scale
+// with an offset (Celsius/Fahrenheit). Go's unit registry represents these as
+// plain Kelvin, so we use a conservative string match to skip them from
+// scale-factor comparisons.
+func isAffineTempUnit(s string) bool {
+	s = strings.TrimSpace(s)
+	switch s {
+	case "degC", "degF", "C", "F":
+		return true
+	}
+	return false
 }
 
 // validateReactionRateUnits enforces the mass-action dimensional constraint

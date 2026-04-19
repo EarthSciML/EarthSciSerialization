@@ -106,3 +106,60 @@ func TestReactionRateUnitsMismatchFixtureRejected(t *testing.T) {
 	expectDetail("expected_rate_units", "L/(mol*s)")
 	expectDetail("reaction_order", 2)
 }
+
+// TestConversionFactorErrorFixtureRejected verifies that
+// tests/invalid/units_conversion_factor_error.esm (observed variable in Pa
+// assigned `50000 * p_atm` where p_atm is in atm — expected factor 101325) is
+// rejected as a structural error with code "unit_inconsistency". Mirrors
+// Python's parse._check_conversion_factor_consistency (gt-nvdv / gt-abh1).
+func TestConversionFactorErrorFixtureRejected(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "tests", "invalid", "units_conversion_factor_error.esm")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	file, err := LoadString(string(content))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	result := ValidateFile(file, string(content))
+	if result.IsValid {
+		t.Fatalf("expected fixture to fail validation, got is_valid=true")
+	}
+	var found *StructuralError
+	for i, e := range result.StructuralErrors {
+		if e.Code == ErrorUnitInconsistency {
+			found = &result.StructuralErrors[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected unit_inconsistency error, got: %+v", result.StructuralErrors)
+	}
+	if found.Path != "/models/BadUnitsModel/variables/converted_pressure" {
+		t.Errorf("unexpected path: %q", found.Path)
+	}
+	if found.Message != "Unit conversion factor is incorrect for specified unit transformation" {
+		t.Errorf("unexpected message: %q", found.Message)
+	}
+	expectDetail := func(key string, want interface{}) {
+		t.Helper()
+		got, ok := found.Details[key]
+		if !ok {
+			t.Errorf("details[%q] missing", key)
+			return
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("details[%q] = %v, want %v", key, got, want)
+		}
+	}
+	expectDetail("variable", "converted_pressure")
+	expectDetail("declared_units", "Pa")
+	expectDetail("source_units", "atm")
+	expectDetail("declared_factor", 50000.0)
+	expectDetail("expected_factor", 101325.0)
+}
