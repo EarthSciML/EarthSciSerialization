@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "InterfaceDefinitions",
-    "description": "Test fixture for interface definitions with dimension_mapping, constraints, and regridding methods",
+    "description": "Test fixture for interface definitions with dimension_mapping, constraints, and regridding methods\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "EarthSciML"
     ],
@@ -11,7 +11,8 @@
       "interfaces",
       "dimension-mapping",
       "regridding",
-      "constraints"
+      "constraints",
+      "migrated_from_v01"
     ]
   },
   "models": {
@@ -52,7 +53,59 @@
           },
           "rhs": 0.0
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "O3_periodic_lon_min": {
+          "variable": "O3",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "T_periodic_lon_min": {
+          "variable": "T",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "O3_zero_gradient_lat_min": {
+          "variable": "O3",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lat_min": {
+          "variable": "T",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_lat_max": {
+          "variable": "O3",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lat_max": {
+          "variable": "T",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_pressure_min": {
+          "variable": "O3",
+          "side": "pressure_min",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_pressure_min": {
+          "variable": "T",
+          "side": "pressure_min",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_pressure_max": {
+          "variable": "O3",
+          "side": "pressure_max",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_pressure_max": {
+          "variable": "T",
+          "side": "pressure_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "LowerAtmosphere": {
       "domain": "lower_atmos",
@@ -97,7 +150,59 @@
           },
           "rhs": 0.0
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "T_periodic_lon_min": {
+          "variable": "T",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "q_periodic_lon_min": {
+          "variable": "q",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "T_zero_gradient_lat_min": {
+          "variable": "T",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "q_zero_gradient_lat_min": {
+          "variable": "q",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lat_max": {
+          "variable": "T",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "q_zero_gradient_lat_max": {
+          "variable": "q",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lev_min": {
+          "variable": "T",
+          "side": "lev_min",
+          "kind": "zero_gradient"
+        },
+        "q_zero_gradient_lev_min": {
+          "variable": "q",
+          "side": "lev_min",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lev_max": {
+          "variable": "T",
+          "side": "lev_max",
+          "kind": "zero_gradient"
+        },
+        "q_zero_gradient_lev_max": {
+          "variable": "q",
+          "side": "lev_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "LandSurface": {
       "domain": "land",
@@ -148,7 +253,39 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "T_soil_periodic_lon_min": {
+          "variable": "T_soil",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "soil_moisture_periodic_lon_min": {
+          "variable": "soil_moisture",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "T_soil_zero_gradient_lat_min": {
+          "variable": "T_soil",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "soil_moisture_zero_gradient_lat_min": {
+          "variable": "soil_moisture",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "T_soil_zero_gradient_lat_max": {
+          "variable": "T_soil",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "soil_moisture_zero_gradient_lat_max": {
+          "variable": "soil_moisture",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "IceSheet": {
       "domain": "ice",
@@ -182,7 +319,29 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "thickness_zero_gradient_xmin": {
+          "variable": "thickness",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "thickness_zero_gradient_xmax": {
+          "variable": "thickness",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "thickness_zero_gradient_ymin": {
+          "variable": "thickness",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "thickness_zero_gradient_ymax": {
+          "variable": "thickness",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        }
+      }
     }
   },
   "domains": {
@@ -216,21 +375,6 @@
         "type": "constant",
         "value": 0.0
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "lon"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lat",
-            "pressure"
-          ]
-        }
-      ],
       "element_type": "Float64"
     },
     "lower_atmos": {
@@ -263,21 +407,6 @@
         "type": "constant",
         "value": 288.0
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "lon"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lat",
-            "lev"
-          ]
-        }
-      ],
       "element_type": "Float64"
     },
     "land": {
@@ -304,20 +433,6 @@
         "type": "constant",
         "value": 290.0
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "lon"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lat"
-          ]
-        }
-      ],
       "element_type": "Float64"
     },
     "ice": {
@@ -343,15 +458,6 @@
         "type": "constant",
         "value": 1000.0
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "x",
-            "y"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   },

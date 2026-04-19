@@ -1,12 +1,15 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "OperatorApplyExamples",
-    "description": "Test fixtures for operator_apply coupling with runtime operators",
+    "description": "Test fixtures for operator_apply coupling with runtime operators\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Claude Sonnet 4"
     ],
-    "created": "2026-02-16T00:00:00Z"
+    "created": "2026-02-16T00:00:00Z",
+    "tags": [
+      "migrated_from_v01"
+    ]
   },
   "operators": {
     "SpatialAverage": {
@@ -162,7 +165,33 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "concentration_neumann_xmin": {
+          "variable": "concentration",
+          "side": "xmin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "concentration_neumann_xmax": {
+          "variable": "concentration",
+          "side": "xmax",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "concentration_dirichlet_xmin": {
+          "variable": "concentration",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "concentration_dirichlet_xmax": {
+          "variable": "concentration",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        }
+      }
     },
     "FlowField": {
       "reference": {
@@ -188,7 +217,7 @@
           "type": "parameter"
         },
         "buoyancy_strength": {
-          "units": "m^4/(mol\u00b7s)",
+          "units": "m^4/(mol·s)",
           "default": 1e-06,
           "description": "Buoyancy coupling strength",
           "type": "parameter"
@@ -228,7 +257,33 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "velocity_neumann_xmin": {
+          "variable": "velocity",
+          "side": "xmin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "velocity_neumann_xmax": {
+          "variable": "velocity",
+          "side": "xmax",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "velocity_dirichlet_xmin": {
+          "variable": "velocity",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "velocity_dirichlet_xmax": {
+          "variable": "velocity",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        }
+      }
     }
   },
   "coupling": [
@@ -270,22 +325,6 @@
         "type": "per_variable",
         "values": {}
       },
-      "boundary_conditions": [
-        {
-          "type": "neumann",
-          "value": 0.0,
-          "dimensions": [
-            "x"
-          ]
-        },
-        {
-          "type": "dirichlet",
-          "value": 0.0,
-          "dimensions": [
-            "x"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }

@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "CoupledAtmosphericSystem",
-    "description": "Complete end-to-end test for fully coupled atmospheric chemistry with transport, deposition, emissions, and meteorology",
+    "description": "Complete end-to-end test for fully coupled atmospheric chemistry with transport, deposition, emissions, and meteorology\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "ESM Test Suite"
     ],
@@ -13,7 +13,8 @@
       "end-to-end",
       "atmospheric-chemistry",
       "transport",
-      "coupling"
+      "coupling",
+      "migrated_from_v01"
     ],
     "references": [
       {
@@ -82,7 +83,7 @@
           "type": "parameter",
           "units": "cm^3/molec/s",
           "default": 1.8e-12,
-          "description": "Rate constant NO + O3 \u2192 NO2"
+          "description": "Rate constant NO + O3 → NO2"
         },
         "jNO2": {
           "type": "parameter",
@@ -100,7 +101,7 @@
           "type": "parameter",
           "units": "cm^3/molec/s",
           "default": 8.1e-12,
-          "description": "Rate constant HO2 + NO \u2192 OH + NO2"
+          "description": "Rate constant HO2 + NO → OH + NO2"
         },
         "total_NOx": {
           "type": "observed",
@@ -373,7 +374,159 @@
           ],
           "description": "Increase photolysis when ozone exceeds 70 ppb (pollution episode)"
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "O3_constant_xmin": {
+          "variable": "O3",
+          "side": "xmin",
+          "kind": "constant"
+        },
+        "NO_constant_xmin": {
+          "variable": "NO",
+          "side": "xmin",
+          "kind": "constant"
+        },
+        "NO2_constant_xmin": {
+          "variable": "NO2",
+          "side": "xmin",
+          "kind": "constant"
+        },
+        "HCHO_constant_xmin": {
+          "variable": "HCHO",
+          "side": "xmin",
+          "kind": "constant"
+        },
+        "HO2_constant_xmin": {
+          "variable": "HO2",
+          "side": "xmin",
+          "kind": "constant"
+        },
+        "O3_constant_xmax": {
+          "variable": "O3",
+          "side": "xmax",
+          "kind": "constant"
+        },
+        "NO_constant_xmax": {
+          "variable": "NO",
+          "side": "xmax",
+          "kind": "constant"
+        },
+        "NO2_constant_xmax": {
+          "variable": "NO2",
+          "side": "xmax",
+          "kind": "constant"
+        },
+        "HCHO_constant_xmax": {
+          "variable": "HCHO",
+          "side": "xmax",
+          "kind": "constant"
+        },
+        "HO2_constant_xmax": {
+          "variable": "HO2",
+          "side": "xmax",
+          "kind": "constant"
+        },
+        "O3_zero_gradient_xmin": {
+          "variable": "O3",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_xmin": {
+          "variable": "NO",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "NO2_zero_gradient_xmin": {
+          "variable": "NO2",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "HCHO_zero_gradient_xmin": {
+          "variable": "HCHO",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "HO2_zero_gradient_xmin": {
+          "variable": "HO2",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_xmax": {
+          "variable": "O3",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_xmax": {
+          "variable": "NO",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "NO2_zero_gradient_xmax": {
+          "variable": "NO2",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "HCHO_zero_gradient_xmax": {
+          "variable": "HCHO",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "HO2_zero_gradient_xmax": {
+          "variable": "HO2",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "O3_robin_xmin": {
+          "variable": "O3",
+          "side": "xmin",
+          "kind": "robin"
+        },
+        "NO_robin_xmin": {
+          "variable": "NO",
+          "side": "xmin",
+          "kind": "robin"
+        },
+        "NO2_robin_xmin": {
+          "variable": "NO2",
+          "side": "xmin",
+          "kind": "robin"
+        },
+        "HCHO_robin_xmin": {
+          "variable": "HCHO",
+          "side": "xmin",
+          "kind": "robin"
+        },
+        "HO2_robin_xmin": {
+          "variable": "HO2",
+          "side": "xmin",
+          "kind": "robin"
+        },
+        "O3_robin_xmax": {
+          "variable": "O3",
+          "side": "xmax",
+          "kind": "robin"
+        },
+        "NO_robin_xmax": {
+          "variable": "NO",
+          "side": "xmax",
+          "kind": "robin"
+        },
+        "NO2_robin_xmax": {
+          "variable": "NO2",
+          "side": "xmax",
+          "kind": "robin"
+        },
+        "HCHO_robin_xmax": {
+          "variable": "HCHO",
+          "side": "xmax",
+          "kind": "robin"
+        },
+        "HO2_robin_xmax": {
+          "variable": "HO2",
+          "side": "xmax",
+          "kind": "robin"
+        }
+      }
     },
     "AtmosphericTransport": {
       "reference": {
@@ -1246,26 +1399,6 @@
           "AtmosphericChemistry.HO2": 1e-12
         }
       },
-      "boundary_conditions": [
-        {
-          "type": "constant",
-          "dimensions": [
-            "x"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "x"
-          ]
-        },
-        {
-          "type": "robin",
-          "dimensions": [
-            "x"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }

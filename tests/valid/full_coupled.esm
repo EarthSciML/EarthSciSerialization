@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "FullCoupledSystem",
-    "description": "Comprehensive ESM test exercising all sections: models, reaction_systems, data_loaders, operators, coupling (all 6 types), domain with spatial+temporal+ICs+BCs, and solver",
+    "description": "Comprehensive ESM test exercising all sections: models, reaction_systems, data_loaders, operators, coupling (all 6 types), domain with spatial+temporal+ICs+BCs, and solver\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Claude Test Generator"
     ],
@@ -10,7 +10,8 @@
     "tags": [
       "comprehensive",
       "test",
-      "all-sections"
+      "all-sections",
+      "migrated_from_v01"
     ],
     "license": "MIT"
   },
@@ -524,27 +525,6 @@
           "NO2": 1e-09
         }
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "lon"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lat"
-          ]
-        },
-        {
-          "type": "constant",
-          "dimensions": [
-            "lev"
-          ],
-          "value": 1e-09
-        }
-      ],
       "element_type": "Float64"
     }
   }

@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "SpatialDiffusionTest",
-    "description": "1D diffusion equation with spatial operators",
+    "description": "1D diffusion equation with spatial operators\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Test Suite"
     ],
@@ -11,13 +11,14 @@
       "test",
       "spatial",
       "pde",
-      "diffusion"
+      "diffusion",
+      "migrated_from_v01"
     ]
   },
   "models": {
     "DiffusionSystem": {
       "reference": {
-        "notes": "Heat equation: \u2202u/\u2202t = D * \u2202\u00b2u/\u2202x\u00b2 with Dirichlet boundary conditions"
+        "notes": "Heat equation: ∂u/∂t = D * ∂²u/∂x² with Dirichlet boundary conditions"
       },
       "variables": {
         "u": {
@@ -56,7 +57,33 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "u_dirichlet_xmin": {
+          "variable": "u",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "u_dirichlet_xmax": {
+          "variable": "u",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "u_dirichlet_xmin_2": {
+          "variable": "u",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "u_dirichlet_xmax_2": {
+          "variable": "u",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        }
+      }
     }
   },
   "domains": {
@@ -68,22 +95,6 @@
         }
       },
       "temporal": {},
-      "boundary_conditions": [
-        {
-          "type": "dirichlet",
-          "dimensions": [
-            "x"
-          ],
-          "value": 0.0
-        },
-        {
-          "type": "dirichlet",
-          "dimensions": [
-            "x"
-          ],
-          "value": 0.0
-        }
-      ],
       "initial_conditions": {
         "type": "per_variable",
         "values": {}

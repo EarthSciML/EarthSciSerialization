@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "EventsCrossSystemInteraction",
-    "description": "Test fixture for cross-system events - Events spanning multiple coupled systems with inter-system dependencies",
+    "description": "Test fixture for cross-system events - Events spanning multiple coupled systems with inter-system dependencies\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Claude Sonnet 4"
     ],
@@ -12,7 +12,8 @@
       "cross_system",
       "coupling",
       "multi_system",
-      "interactions"
+      "interactions",
+      "migrated_from_v01"
     ]
   },
   "reaction_systems": {
@@ -219,7 +220,7 @@
         },
         "temperature": {
           "type": "state",
-          "units": "\u00b0C",
+          "units": "°C",
           "default": 25.0,
           "description": "Air temperature"
         },
@@ -248,13 +249,13 @@
           "type": "parameter"
         },
         "temp_amplitude": {
-          "units": "\u00b0C",
+          "units": "°C",
           "default": 10.0,
           "description": "Diurnal temperature amplitude",
           "type": "parameter"
         },
         "base_temp": {
-          "units": "\u00b0C",
+          "units": "°C",
           "default": 20.0,
           "description": "Base temperature",
           "type": "parameter"
@@ -417,7 +418,39 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "solar_intensity_periodic_xmin": {
+          "variable": "solar_intensity",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "temperature_periodic_xmin": {
+          "variable": "temperature",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "wind_speed_periodic_xmin": {
+          "variable": "wind_speed",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "solar_intensity_periodic_ymin": {
+          "variable": "solar_intensity",
+          "side": "ymin",
+          "kind": "periodic"
+        },
+        "temperature_periodic_ymin": {
+          "variable": "temperature",
+          "side": "ymin",
+          "kind": "periodic"
+        },
+        "wind_speed_periodic_ymin": {
+          "variable": "wind_speed",
+          "side": "ymin",
+          "kind": "periodic"
+        }
+      }
     }
   },
   "coupling": [
@@ -460,15 +493,6 @@
         "type": "per_variable",
         "values": {}
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "x",
-            "y"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }

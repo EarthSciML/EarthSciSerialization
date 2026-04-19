@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "EventsAllTypes",
-    "description": "Test fixture exercising continuous events (with affect_neg, root_find options), discrete events (condition, periodic, preset_times triggers), discrete_parameters, functional affects, and cross-system events",
+    "description": "Test fixture exercising continuous events (with affect_neg, root_find options), discrete events (condition, periodic, preset_times triggers), discrete_parameters, functional affects, and cross-system events\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Claude Test Generator"
     ],
@@ -11,7 +11,8 @@
       "events",
       "continuous",
       "discrete",
-      "comprehensive"
+      "comprehensive",
+      "migrated_from_v01"
     ]
   },
   "reaction_systems": {
@@ -436,7 +437,19 @@
             "trigger_level"
           ]
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "x_periodic_xmin": {
+          "variable": "x",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "y_periodic_xmin": {
+          "variable": "y",
+          "side": "xmin",
+          "kind": "periodic"
+        }
+      }
     }
   },
   "coupling": [
@@ -472,14 +485,6 @@
         "type": "constant",
         "value": 1.0
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "x"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }

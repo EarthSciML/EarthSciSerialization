@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "CompleteCouplingTests",
-    "description": "Test all 6 coupling types: operator_compose, couple, variable_map, operator_apply, callback, event",
+    "description": "Test all 6 coupling types: operator_compose, couple, variable_map, operator_apply, callback, event\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "ESM Test Suite"
     ],
@@ -10,7 +10,8 @@
     "tags": [
       "coupling",
       "comprehensive",
-      "all-types"
+      "all-types",
+      "migrated_from_v01"
     ]
   },
   "models": {
@@ -54,7 +55,7 @@
           "type": "parameter",
           "units": "cm^3/molec/s",
           "default": 1.8e-12,
-          "description": "Rate constant for NO + O3 \u2192 NO2"
+          "description": "Rate constant for NO + O3 → NO2"
         },
         "jNO2": {
           "type": "parameter",
@@ -166,7 +167,69 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "O3_zero_gradient_xmin": {
+          "variable": "O3",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_xmin": {
+          "variable": "NO",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "NO2_zero_gradient_xmin": {
+          "variable": "NO2",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_xmax": {
+          "variable": "O3",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_xmax": {
+          "variable": "NO",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "NO2_zero_gradient_xmax": {
+          "variable": "NO2",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_ymin": {
+          "variable": "O3",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_ymin": {
+          "variable": "NO",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "NO2_zero_gradient_ymin": {
+          "variable": "NO2",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_ymax": {
+          "variable": "O3",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_ymax": {
+          "variable": "NO",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        },
+        "NO2_zero_gradient_ymax": {
+          "variable": "NO2",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "AdvectionTransport": {
       "reference": {
@@ -749,15 +812,6 @@
         "type": "constant",
         "value": 0.0
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "x",
-            "y"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }

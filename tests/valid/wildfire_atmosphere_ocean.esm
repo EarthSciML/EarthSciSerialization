@@ -1,12 +1,15 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "WildfireAtmosphereOcean",
-    "description": "Coupled wildfire-atmosphere-ocean system with 0D parameterizations",
+    "description": "Coupled wildfire-atmosphere-ocean system with 0D parameterizations\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "EarthSciML"
     ],
-    "created": "2026-04-08T00:00:00Z"
+    "created": "2026-04-08T00:00:00Z",
+    "tags": [
+      "migrated_from_v01"
+    ]
   },
   "models": {
     "AtmosphericDynamics": {
@@ -92,7 +95,99 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "T_zero_gradient_lon_min": {
+          "variable": "T",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "wind_u_zero_gradient_lon_min": {
+          "variable": "wind_u",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "wind_v_zero_gradient_lon_min": {
+          "variable": "wind_v",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lon_max": {
+          "variable": "T",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "wind_u_zero_gradient_lon_max": {
+          "variable": "wind_u",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "wind_v_zero_gradient_lon_max": {
+          "variable": "wind_v",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lat_min": {
+          "variable": "T",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "wind_u_zero_gradient_lat_min": {
+          "variable": "wind_u",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "wind_v_zero_gradient_lat_min": {
+          "variable": "wind_v",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lat_max": {
+          "variable": "T",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "wind_u_zero_gradient_lat_max": {
+          "variable": "wind_u",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "wind_v_zero_gradient_lat_max": {
+          "variable": "wind_v",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lev_min": {
+          "variable": "T",
+          "side": "lev_min",
+          "kind": "zero_gradient"
+        },
+        "wind_u_zero_gradient_lev_min": {
+          "variable": "wind_u",
+          "side": "lev_min",
+          "kind": "zero_gradient"
+        },
+        "wind_v_zero_gradient_lev_min": {
+          "variable": "wind_v",
+          "side": "lev_min",
+          "kind": "zero_gradient"
+        },
+        "T_zero_gradient_lev_max": {
+          "variable": "T",
+          "side": "lev_max",
+          "kind": "zero_gradient"
+        },
+        "wind_u_zero_gradient_lev_max": {
+          "variable": "wind_u",
+          "side": "lev_max",
+          "kind": "zero_gradient"
+        },
+        "wind_v_zero_gradient_lev_max": {
+          "variable": "wind_v",
+          "side": "lev_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "WildfirePropagation": {
       "domain": "wildfire_surface",
@@ -231,7 +326,49 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "phi_zero_gradient_lon_min": {
+          "variable": "phi",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "fuel_zero_gradient_lon_min": {
+          "variable": "fuel",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "phi_zero_gradient_lon_max": {
+          "variable": "phi",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "fuel_zero_gradient_lon_max": {
+          "variable": "fuel",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "phi_zero_gradient_lat_min": {
+          "variable": "phi",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "fuel_zero_gradient_lat_min": {
+          "variable": "fuel",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "phi_zero_gradient_lat_max": {
+          "variable": "phi",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "fuel_zero_gradient_lat_max": {
+          "variable": "fuel",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "FireSpreadCalculator": {
       "domain": null,
@@ -384,7 +521,59 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "SST_periodic_lon_min": {
+          "variable": "SST",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "u_ocean_periodic_lon_min": {
+          "variable": "u_ocean",
+          "side": "lon_min",
+          "kind": "periodic"
+        },
+        "SST_zero_gradient_lat_min": {
+          "variable": "SST",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "u_ocean_zero_gradient_lat_min": {
+          "variable": "u_ocean",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_lat_max": {
+          "variable": "SST",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "u_ocean_zero_gradient_lat_max": {
+          "variable": "u_ocean",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_depth_min": {
+          "variable": "SST",
+          "side": "depth_min",
+          "kind": "zero_gradient"
+        },
+        "u_ocean_zero_gradient_depth_min": {
+          "variable": "u_ocean",
+          "side": "depth_min",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_depth_max": {
+          "variable": "SST",
+          "side": "depth_max",
+          "kind": "zero_gradient"
+        },
+        "u_ocean_zero_gradient_depth_max": {
+          "variable": "u_ocean",
+          "side": "depth_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "AirSeaFluxCalculator": {
       "domain": null,
@@ -493,21 +682,6 @@
         "type": "constant",
         "value": 0.0
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lon",
-            "lat"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lev"
-          ]
-        }
-      ],
       "element_type": "Float64"
     },
     "wildfire_surface": {
@@ -543,15 +717,6 @@
         "type": "constant",
         "value": 1.0
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lon",
-            "lat"
-          ]
-        }
-      ],
       "element_type": "Float64"
     },
     "ocean": {
@@ -593,21 +758,6 @@
         "type": "constant",
         "value": 290.0
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "lon"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lat",
-            "depth"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   },

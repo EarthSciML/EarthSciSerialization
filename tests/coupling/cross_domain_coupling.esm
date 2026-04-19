@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "CrossDomainCoupling",
-    "description": "Test fixture for coupling entries with interface and lifting fields across domains of different dimensionality",
+    "description": "Test fixture for coupling entries with interface and lifting fields across domains of different dimensionality\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "EarthSciML"
     ],
@@ -11,7 +11,8 @@
       "cross-domain",
       "coupling",
       "interface",
-      "lifting"
+      "lifting",
+      "migrated_from_v01"
     ]
   },
   "models": {
@@ -64,7 +65,69 @@
           },
           "rhs": 0.0
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "SST_zero_gradient_lon_min": {
+          "variable": "SST",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "salinity_zero_gradient_lon_min": {
+          "variable": "salinity",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_lon_max": {
+          "variable": "SST",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "salinity_zero_gradient_lon_max": {
+          "variable": "salinity",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_lat_min": {
+          "variable": "SST",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "salinity_zero_gradient_lat_min": {
+          "variable": "salinity",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_lat_max": {
+          "variable": "SST",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "salinity_zero_gradient_lat_max": {
+          "variable": "salinity",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_depth_min": {
+          "variable": "SST",
+          "side": "depth_min",
+          "kind": "zero_gradient"
+        },
+        "salinity_zero_gradient_depth_min": {
+          "variable": "salinity",
+          "side": "depth_min",
+          "kind": "zero_gradient"
+        },
+        "SST_zero_gradient_depth_max": {
+          "variable": "SST",
+          "side": "depth_max",
+          "kind": "zero_gradient"
+        },
+        "salinity_zero_gradient_depth_max": {
+          "variable": "salinity",
+          "side": "depth_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "Atmosphere2D": {
       "domain": "atmos_surface",
@@ -109,7 +172,49 @@
           },
           "rhs": 0.0
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "T_air_zero_gradient_lon_min": {
+          "variable": "T_air",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "wind_speed_zero_gradient_lon_min": {
+          "variable": "wind_speed",
+          "side": "lon_min",
+          "kind": "zero_gradient"
+        },
+        "T_air_zero_gradient_lon_max": {
+          "variable": "T_air",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "wind_speed_zero_gradient_lon_max": {
+          "variable": "wind_speed",
+          "side": "lon_max",
+          "kind": "zero_gradient"
+        },
+        "T_air_zero_gradient_lat_min": {
+          "variable": "T_air",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "wind_speed_zero_gradient_lat_min": {
+          "variable": "wind_speed",
+          "side": "lat_min",
+          "kind": "zero_gradient"
+        },
+        "T_air_zero_gradient_lat_max": {
+          "variable": "T_air",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        },
+        "wind_speed_zero_gradient_lat_max": {
+          "variable": "wind_speed",
+          "side": "lat_max",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "BulkFluxCalculator": {
       "domain": null,
@@ -216,21 +321,6 @@
         "type": "constant",
         "value": 290.0
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lon",
-            "lat"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "depth"
-          ]
-        }
-      ],
       "element_type": "Float64"
     },
     "atmos_surface": {
@@ -257,15 +347,6 @@
         "type": "constant",
         "value": 288.0
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lon",
-            "lat"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   },

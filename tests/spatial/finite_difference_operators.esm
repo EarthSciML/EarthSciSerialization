@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "SpatialOperatorDiscretization",
-    "description": "Test finite difference implementation of spatial operators on structured grids",
+    "description": "Test finite difference implementation of spatial operators on structured grids\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "ESM Test Suite"
     ],
@@ -10,7 +10,8 @@
     "tags": [
       "spatial-operators",
       "finite-difference",
-      "atmospheric-transport"
+      "atmospheric-transport",
+      "migrated_from_v01"
     ]
   },
   "models": {
@@ -174,11 +175,33 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "tracer_zero_gradient_xmin": {
+          "variable": "tracer",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "tracer_zero_gradient_xmax": {
+          "variable": "tracer",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "tracer_zero_gradient_ymin": {
+          "variable": "tracer",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "tracer_zero_gradient_ymax": {
+          "variable": "tracer",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "DivergenceTest": {
       "reference": {
-        "notes": "Test divergence operator implementation: \u2207 \u00b7 (u*tracer) for mass flux conservation"
+        "notes": "Test divergence operator implementation: ∇ · (u*tracer) for mass flux conservation"
       },
       "variables": {
         "tracer": {
@@ -254,11 +277,33 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "tracer_zero_gradient_xmin": {
+          "variable": "tracer",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "tracer_zero_gradient_xmax": {
+          "variable": "tracer",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "tracer_zero_gradient_ymin": {
+          "variable": "tracer",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "tracer_zero_gradient_ymax": {
+          "variable": "tracer",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "LaplacianAccuracy": {
       "reference": {
-        "notes": "Test Laplacian operator accuracy for known analytical solution: \u2207\u00b2(sin(\u03c0x)sin(\u03c0y)) = -2\u03c0\u00b2sin(\u03c0x)sin(\u03c0y)"
+        "notes": "Test Laplacian operator accuracy for known analytical solution: ∇²(sin(πx)sin(πy)) = -2π²sin(πx)sin(πy)"
       },
       "variables": {
         "analytical_field": {
@@ -293,7 +338,7 @@
               }
             ]
           },
-          "description": "sin(\u03c0x)sin(\u03c0y)"
+          "description": "sin(πx)sin(πy)"
         },
         "analytical_laplacian": {
           "type": "observed",
@@ -333,7 +378,7 @@
               }
             ]
           },
-          "description": "-2\u03c0\u00b2sin(\u03c0x)sin(\u03c0y)"
+          "description": "-2π²sin(πx)sin(πy)"
         },
         "numerical_laplacian": {
           "type": "observed",
@@ -344,7 +389,7 @@
               "analytical_field"
             ]
           },
-          "description": "Finite difference \u2207\u00b2(sin(\u03c0x)sin(\u03c0y))"
+          "description": "Finite difference ∇²(sin(πx)sin(πy))"
         },
         "discretization_error": {
           "type": "observed",
@@ -404,15 +449,6 @@
           "tracer": 1e-09
         }
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "x",
-            "y"
-          ]
-        }
-      ],
       "element_type": "Float64",
       "array_type": "Array"
     }

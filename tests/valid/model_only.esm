@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "ModelOnly",
-    "description": "Valid ESM file containing only models section, no reaction_systems",
+    "description": "Valid ESM file containing only models section, no reaction_systems\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Claude Test Generator"
     ],
@@ -10,7 +10,8 @@
     "tags": [
       "model-only",
       "validation",
-      "ode-system"
+      "ode-system",
+      "migrated_from_v01"
     ]
   },
   "models": {
@@ -421,7 +422,105 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "u_dirichlet_xmin": {
+          "variable": "u",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "v_dirichlet_xmin": {
+          "variable": "v",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "p_dirichlet_xmin": {
+          "variable": "p",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "T_dirichlet_xmin": {
+          "variable": "T",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "u_dirichlet_xmax": {
+          "variable": "u",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "v_dirichlet_xmax": {
+          "variable": "v",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "p_dirichlet_xmax": {
+          "variable": "p",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "T_dirichlet_xmax": {
+          "variable": "T",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "u_neumann_ymin": {
+          "variable": "u",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "v_neumann_ymin": {
+          "variable": "v",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "p_neumann_ymin": {
+          "variable": "p",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "T_neumann_ymin": {
+          "variable": "T",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "u_neumann_ymax": {
+          "variable": "u",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "v_neumann_ymax": {
+          "variable": "v",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "p_neumann_ymax": {
+          "variable": "p",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "T_neumann_ymax": {
+          "variable": "T",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        }
+      }
     },
     "WaveEquation": {
       "reference": {
@@ -516,7 +615,57 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "phi_dirichlet_xmin": {
+          "variable": "phi",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "phi_t_dirichlet_xmin": {
+          "variable": "phi_t",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "phi_dirichlet_xmax": {
+          "variable": "phi",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "phi_t_dirichlet_xmax": {
+          "variable": "phi_t",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "phi_neumann_ymin": {
+          "variable": "phi",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "phi_t_neumann_ymin": {
+          "variable": "phi_t",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "phi_neumann_ymax": {
+          "variable": "phi",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "phi_t_neumann_ymax": {
+          "variable": "phi_t",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        }
+      }
     },
     "PopulationDynamics": {
       "reference": {
@@ -667,7 +816,57 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "prey_dirichlet_xmin": {
+          "variable": "prey",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "predator_dirichlet_xmin": {
+          "variable": "predator",
+          "side": "xmin",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "prey_dirichlet_xmax": {
+          "variable": "prey",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "predator_dirichlet_xmax": {
+          "variable": "predator",
+          "side": "xmax",
+          "kind": "dirichlet",
+          "value": 0.0
+        },
+        "prey_neumann_ymin": {
+          "variable": "prey",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "predator_neumann_ymin": {
+          "variable": "predator",
+          "side": "ymin",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "prey_neumann_ymax": {
+          "variable": "prey",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        },
+        "predator_neumann_ymax": {
+          "variable": "predator",
+          "side": "ymax",
+          "kind": "neumann",
+          "value": 0.0
+        }
+      }
     }
   },
   "data_loaders": {
@@ -829,22 +1028,6 @@
           "predator": 10.0
         }
       },
-      "boundary_conditions": [
-        {
-          "type": "dirichlet",
-          "dimensions": [
-            "x"
-          ],
-          "value": 0.0
-        },
-        {
-          "type": "neumann",
-          "dimensions": [
-            "y"
-          ],
-          "value": 0.0
-        }
-      ],
       "element_type": "Float32"
     }
   }

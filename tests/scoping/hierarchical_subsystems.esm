@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "HierarchicalSubsystemTests",
-    "description": "Test hierarchical subsystem and scoped reference resolution with 3-level nesting",
+    "description": "Test hierarchical subsystem and scoped reference resolution with 3-level nesting\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "ESM Test Suite"
     ],
@@ -11,7 +11,8 @@
       "scoping",
       "subsystems",
       "hierarchical",
-      "reference-resolution"
+      "reference-resolution",
+      "migrated_from_v01"
     ]
   },
   "models": {
@@ -436,14 +437,6 @@
         "type": "constant",
         "value": 0.0
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "z"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }

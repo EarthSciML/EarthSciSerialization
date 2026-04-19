@@ -1,12 +1,15 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "MinimalChemAdvection",
-    "description": "O3-NO-NO2 chemistry with advection and external meteorology",
+    "description": "O3-NO-NO2 chemistry with advection and external meteorology\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Chris Tessum"
     ],
-    "created": "2026-02-11T00:00:00Z"
+    "created": "2026-02-11T00:00:00Z",
+    "tags": [
+      "migrated_from_v01"
+    ]
   },
   "reaction_systems": {
     "SimpleOzone": {
@@ -275,14 +278,6 @@
         "type": "constant",
         "value": 1e-09
       },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "lon"
-          ]
-        }
-      ],
       "element_type": "Float32"
     }
   }

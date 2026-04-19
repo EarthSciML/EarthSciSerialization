@@ -1,12 +1,15 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "AdvancedCouplingTests",
-    "description": "Test all coupling types: couple, operator_apply, callback",
+    "description": "Test all coupling types: couple, operator_apply, callback\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "Test Suite"
     ],
-    "created": "2026-02-14T00:00:00Z"
+    "created": "2026-02-14T00:00:00Z",
+    "tags": [
+      "migrated_from_v01"
+    ]
   },
   "models": {
     "Chemistry": {
@@ -78,7 +81,49 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "O3_zero_gradient_xmin": {
+          "variable": "O3",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_xmin": {
+          "variable": "NO",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_xmax": {
+          "variable": "O3",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_xmax": {
+          "variable": "NO",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_ymin": {
+          "variable": "O3",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_ymin": {
+          "variable": "NO",
+          "side": "ymin",
+          "kind": "zero_gradient"
+        },
+        "O3_zero_gradient_ymax": {
+          "variable": "O3",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        },
+        "NO_zero_gradient_ymax": {
+          "variable": "NO",
+          "side": "ymax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "Surface": {
       "coupletype": "SurfaceCoupler",
@@ -372,16 +417,7 @@
       "initial_conditions": {
         "type": "constant",
         "value": 1e-09
-      },
-      "boundary_conditions": [
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "x",
-            "y"
-          ]
-        }
-      ]
+      }
     }
   }
 }

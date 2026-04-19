@@ -1,8 +1,8 @@
 {
-  "esm": "0.1.0",
+  "esm": "0.2.0",
   "metadata": {
     "name": "LandAtmosphereHydrology",
-    "description": "End-to-end test for coupled land-atmosphere water and energy cycles with vegetation dynamics",
+    "description": "End-to-end test for coupled land-atmosphere water and energy cycles with vegetation dynamics\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
     "authors": [
       "ESM Test Suite"
     ],
@@ -13,7 +13,8 @@
       "land-atmosphere",
       "hydrology",
       "vegetation",
-      "energy-balance"
+      "energy-balance",
+      "migrated_from_v01"
     ],
     "references": [
       {
@@ -156,7 +157,54 @@
           },
           "rhs": 0.0
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "air_temperature_periodic_xmin": {
+          "variable": "air_temperature",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "specific_humidity_periodic_xmin": {
+          "variable": "specific_humidity",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "wind_speed_periodic_xmin": {
+          "variable": "wind_speed",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "air_temperature_zero_gradient_xmin": {
+          "variable": "air_temperature",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "specific_humidity_zero_gradient_xmin": {
+          "variable": "specific_humidity",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "wind_speed_zero_gradient_xmin": {
+          "variable": "wind_speed",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "air_temperature_zero_gradient_xmax": {
+          "variable": "air_temperature",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "specific_humidity_zero_gradient_xmax": {
+          "variable": "specific_humidity",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "wind_speed_zero_gradient_xmax": {
+          "variable": "wind_speed",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "SoilHydrologyThermal": {
       "coupletype": "SoilCoupler",
@@ -636,7 +684,99 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "soil_moisture_layer1_periodic_xmin": {
+          "variable": "soil_moisture_layer1",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "soil_moisture_layer2_periodic_xmin": {
+          "variable": "soil_moisture_layer2",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "soil_moisture_layer3_periodic_xmin": {
+          "variable": "soil_moisture_layer3",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "soil_temperature_layer1_periodic_xmin": {
+          "variable": "soil_temperature_layer1",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "soil_temperature_layer2_periodic_xmin": {
+          "variable": "soil_temperature_layer2",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "soil_temperature_layer3_periodic_xmin": {
+          "variable": "soil_temperature_layer3",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "soil_moisture_layer1_zero_gradient_xmin": {
+          "variable": "soil_moisture_layer1",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "soil_moisture_layer2_zero_gradient_xmin": {
+          "variable": "soil_moisture_layer2",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "soil_moisture_layer3_zero_gradient_xmin": {
+          "variable": "soil_moisture_layer3",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "soil_temperature_layer1_zero_gradient_xmin": {
+          "variable": "soil_temperature_layer1",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "soil_temperature_layer2_zero_gradient_xmin": {
+          "variable": "soil_temperature_layer2",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "soil_temperature_layer3_zero_gradient_xmin": {
+          "variable": "soil_temperature_layer3",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "soil_moisture_layer1_zero_gradient_xmax": {
+          "variable": "soil_moisture_layer1",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "soil_moisture_layer2_zero_gradient_xmax": {
+          "variable": "soil_moisture_layer2",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "soil_moisture_layer3_zero_gradient_xmax": {
+          "variable": "soil_moisture_layer3",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "soil_temperature_layer1_zero_gradient_xmax": {
+          "variable": "soil_temperature_layer1",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "soil_temperature_layer2_zero_gradient_xmax": {
+          "variable": "soil_temperature_layer2",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "soil_temperature_layer3_zero_gradient_xmax": {
+          "variable": "soil_temperature_layer3",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "VegetationDynamics": {
       "reference": {
@@ -896,7 +1036,54 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "leaf_area_index_periodic_xmin": {
+          "variable": "leaf_area_index",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "above_ground_biomass_periodic_xmin": {
+          "variable": "above_ground_biomass",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "below_ground_biomass_periodic_xmin": {
+          "variable": "below_ground_biomass",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "leaf_area_index_zero_gradient_xmin": {
+          "variable": "leaf_area_index",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "above_ground_biomass_zero_gradient_xmin": {
+          "variable": "above_ground_biomass",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "below_ground_biomass_zero_gradient_xmin": {
+          "variable": "below_ground_biomass",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "leaf_area_index_zero_gradient_xmax": {
+          "variable": "leaf_area_index",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "above_ground_biomass_zero_gradient_xmax": {
+          "variable": "above_ground_biomass",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        },
+        "below_ground_biomass_zero_gradient_xmax": {
+          "variable": "below_ground_biomass",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        }
+      }
     },
     "SurfaceEnergyBalance": {
       "reference": {
@@ -1191,7 +1378,24 @@
             ]
           }
         }
-      ]
+      ],
+      "boundary_conditions": {
+        "surface_temperature_periodic_xmin": {
+          "variable": "surface_temperature",
+          "side": "xmin",
+          "kind": "periodic"
+        },
+        "surface_temperature_zero_gradient_xmin": {
+          "variable": "surface_temperature",
+          "side": "xmin",
+          "kind": "zero_gradient"
+        },
+        "surface_temperature_zero_gradient_xmax": {
+          "variable": "surface_temperature",
+          "side": "xmax",
+          "kind": "zero_gradient"
+        }
+      }
     }
   },
   "data_loaders": {
@@ -1729,7 +1933,7 @@
       "discrete_parameters": [
         "VegetationDynamics.leaf_turnover_rate"
       ],
-      "description": "Accelerate leaf senescence in autumn when temperature drops below 5\u00b0C"
+      "description": "Accelerate leaf senescence in autumn when temperature drops below 5°C"
     }
   ],
   "domains": {
@@ -1772,20 +1976,6 @@
           "SurfaceEnergyBalance.surface_temperature": 290.15
         }
       },
-      "boundary_conditions": [
-        {
-          "type": "periodic",
-          "dimensions": [
-            "x"
-          ]
-        },
-        {
-          "type": "zero_gradient",
-          "dimensions": [
-            "x"
-          ]
-        }
-      ],
       "element_type": "Float64"
     }
   }
