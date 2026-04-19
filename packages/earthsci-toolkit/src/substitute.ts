@@ -6,6 +6,7 @@
  */
 
 import type { Expr, ExprNode, Model, ReactionSystem, EsmFile } from './types.js'
+import { isNumericLiteral } from './numeric-literal.js'
 
 /**
  * Context for resolving scoped references during substitution
@@ -29,8 +30,9 @@ export function substitute(
   bindings: Record<string, Expr>,
   context?: SubstitutionContext
 ): Expr {
-  // Base cases: numbers remain unchanged
-  if (typeof expr === 'number') {
+  // Base cases: numeric literals (plain numbers or tagged int/float
+  // canonical-form leaves) remain unchanged.
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
     return expr
   }
 

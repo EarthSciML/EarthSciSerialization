@@ -21,7 +21,7 @@ export * from './types.js'
 
 // Export parsing and serialization functions
 export { load, validateSchema, ParseError, SchemaValidationError } from './parse.js'
-export type { SchemaError } from './parse.js'
+export type { SchemaError, LoadOptions } from './parse.js'
 export { save } from './serialize.js'
 export { validate } from './validate.js'
 export type { ValidationError, ValidationResult } from './validate.js'

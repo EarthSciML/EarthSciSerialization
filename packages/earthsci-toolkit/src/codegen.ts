@@ -9,6 +9,7 @@
 
 import type { EsmFile, Model, ReactionSystem, Expression, ExpressionNode, Equation, ModelVariable, Species, Reaction, ContinuousEvent, DiscreteEvent, CouplingEntry, Domain, DataLoader } from './types.js'
 import { toAscii } from './pretty-print.js'
+import { isNumericLiteral, numericValue } from './numeric-literal.js'
 
 /**
  * Generate a self-contained Julia script from an ESM file
@@ -494,10 +495,13 @@ function formatVariableDeclaration(variable: ModelVariable, name: string): strin
     const parts: string[] = []
 
     if (variable.default !== undefined) {
-      // Ensure decimal point for floating point numbers
+      // Ensure decimal point for floating point numbers.
       const defaultVal = variable.default
-      if (typeof defaultVal === 'number' && Number.isInteger(defaultVal)) {
-        parts.push(`${defaultVal}.0`)
+      const n = numericValue(defaultVal)
+      if (n !== undefined && Number.isInteger(n)) {
+        parts.push(`${n}.0`)
+      } else if (n !== undefined) {
+        parts.push(`${n}`)
       } else {
         parts.push(`${defaultVal}`)
       }
@@ -524,8 +528,11 @@ function formatSpeciesDeclaration(species: Species, name: string): string {
   const initialValue = species.default !== undefined ? species.default : (species as any).initial_value
   if (initialValue !== undefined) {
     // Ensure decimal point for floating point numbers
-    if (typeof initialValue === 'number' && Number.isInteger(initialValue)) {
-      decl += `(${initialValue}.0)`
+    const n = numericValue(initialValue)
+    if (n !== undefined && Number.isInteger(n)) {
+      decl += `(${n}.0)`
+    } else if (n !== undefined) {
+      decl += `(${n})`
     } else {
       decl += `(${initialValue})`
     }
@@ -569,8 +576,9 @@ function formatReaction(reaction: Reaction): string {
  * Format an expression for Julia code generation
  */
 function formatExpression(expr: Expression): string {
-  if (typeof expr === 'number') {
-    return expr.toString()
+  const n = numericValue(expr)
+  if (n !== undefined) {
+    return n.toString()
   }
 
   if (typeof expr === 'string') {
@@ -967,8 +975,9 @@ function generatePythonDataLoaderCode(name: string, dataLoader: DataLoader): str
  * Format an expression for Python code generation
  */
 function formatPythonExpression(expr: Expression): string {
-  if (typeof expr === 'number') {
-    return expr.toString()
+  const n = numericValue(expr)
+  if (n !== undefined) {
+    return n.toString()
   }
 
   if (typeof expr === 'string') {

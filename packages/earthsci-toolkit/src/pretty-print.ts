@@ -10,6 +10,7 @@
  */
 
 import type { Expr, Equation, Model, EsmFile, ReactionSystem, ExprNode } from './types.js'
+import { isNumericLiteral, numericValue } from './numeric-literal.js'
 
 // Element lookup table for chemical subscript detection (118 elements)
 const ELEMENTS = new Set([
@@ -455,7 +456,7 @@ function getOperatorPrecedence(op: string): number {
  * Check if parentheses are needed around a subexpression
  */
 function needsParentheses(parent: ExprNode, child: Expr, isRightOperand = false): boolean {
-  if (typeof child === 'number' || typeof child === 'string') {
+  if (typeof child === 'number' || typeof child === 'string' || isNumericLiteral(child)) {
     return false
   }
 
@@ -494,8 +495,8 @@ function needsParentheses(parent: ExprNode, child: Expr, isRightOperand = false)
  * Format an expression as Unicode mathematical notation
  */
 export function toUnicode(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
-  if (typeof expr === 'number') {
-    return formatNumber(expr, 'unicode')
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
+    return formatNumber(numericValue(expr)!, 'unicode')
   }
 
   if (typeof expr === 'string') {
@@ -534,8 +535,8 @@ export function toUnicode(expr: Expr | Equation | Model | ReactionSystem | EsmFi
  * Format an expression as LaTeX mathematical notation
  */
 export function toLatex(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
-  if (typeof expr === 'number') {
-    return formatNumber(expr, 'latex')
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
+    return formatNumber(numericValue(expr)!, 'latex')
   }
 
   if (typeof expr === 'string') {
@@ -575,8 +576,8 @@ export function toLatex(expr: Expr | Equation | Model | ReactionSystem | EsmFile
  * Format an expression as plain ASCII text
  */
 export function toAscii(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
-  if (typeof expr === 'number') {
-    return formatNumber(expr, 'ascii')
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
+    return formatNumber(numericValue(expr)!, 'ascii')
   }
 
   if (typeof expr === 'string') {
@@ -615,8 +616,8 @@ export function toAscii(expr: Expr | Equation | Model | ReactionSystem | EsmFile
  * Format an expression as MathML markup for web/academic publishing
  */
 export function toMathML(expr: Expr | Equation | Model | ReactionSystem | EsmFile): string {
-  if (typeof expr === 'number') {
-    return `<mn>${formatNumber(expr, 'ascii')}</mn>`
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
+    return `<mn>${formatNumber(numericValue(expr)!, 'ascii')}</mn>`
   }
 
   if (typeof expr === 'string') {
@@ -971,8 +972,11 @@ function formatExpressionNode(node: ExprNode, format: 'unicode' | 'latex' | 'asc
           return `${formatArg(left)}^{${toLatex(right)}}`
         }
         // For unicode, try to use superscript digits
-        if (format === 'unicode' && typeof right === 'number' && Number.isInteger(right)) {
-          return `${formatArg(left)}${toSuperscript(right.toString())}`
+        {
+          const rn = numericValue(right)
+          if (format === 'unicode' && rn !== undefined && Number.isInteger(rn)) {
+            return `${formatArg(left)}${toSuperscript(rn.toString())}`
+          }
         }
         return `${formatArg(left)}^${formatArg(right, true)}`
 

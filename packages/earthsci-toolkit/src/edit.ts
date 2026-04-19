@@ -20,6 +20,7 @@ import type {
 } from './types.js'
 import { substitute, substituteInModel, substituteInReactionSystem } from './substitute.js'
 import { deriveODEs } from './reactions.js'
+import { isNumericLiteral, numericValue } from './numeric-literal.js'
 
 /**
  * Error thrown when attempting to remove a variable that is still referenced
@@ -643,7 +644,7 @@ function referencesVariable(expr: Expr, variableName: string): boolean {
     return expr === variableName || expr.includes(variableName + '.') || expr.includes('.' + variableName)
   }
 
-  if (typeof expr === 'number') {
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
     return false
   }
 
@@ -663,12 +664,16 @@ function referencesVariable(expr: Expr, variableName: string): boolean {
  * @returns True if expressions are equal
  */
 function expressionsEqual(a: Expr, b: Expr): boolean {
-  if (typeof a !== typeof b) {
-    return false
+  if (typeof a === 'string' || typeof b === 'string') {
+    return typeof a === 'string' && typeof b === 'string' && a === b
   }
 
-  if (typeof a === 'string' || typeof a === 'number') {
-    return a === b
+  // Numeric literals: compare by underlying value, treating plain numbers
+  // and tagged NumericLiteral leaves as equal when they share a value.
+  const na = numericValue(a)
+  const nb = numericValue(b)
+  if (na !== undefined || nb !== undefined) {
+    return na !== undefined && nb !== undefined && Object.is(na, nb)
   }
 
   // ExpressionNode case

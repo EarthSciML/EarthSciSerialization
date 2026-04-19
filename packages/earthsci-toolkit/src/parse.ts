@@ -9,6 +9,7 @@ import Ajv, { ErrorObject, ValidateFunction } from 'ajv'
 import addFormats from 'ajv-formats'
 import type { EsmFile, Expression, CouplingEntry } from './types.js'
 import { validateUnits } from './units.js'
+import { isNumericLiteral, losslessJsonParse } from './numeric-literal.js'
 
 /**
  * Schema validation error with JSON Pointer path
@@ -1643,11 +1644,67 @@ function parseJson(input: string): unknown {
 }
 
 /**
+ * Parse JSON string preserving integer-vs-float distinction via
+ * `losslessJsonParse`. Numeric literals in the result are tagged
+ * `NumericLiteral` leaves per RFC §5.4.1.
+ */
+function parseJsonLossless(input: string): unknown {
+  try {
+    return losslessJsonParse(input)
+  } catch (error) {
+    throw new ParseError(
+      `Invalid JSON: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error instanceof Error ? error : undefined,
+    )
+  }
+}
+
+/**
+ * Recursively replace `NumericLiteral` leaves with their plain-number
+ * value. Used to produce a plain view of a lossless-parsed document
+ * for Ajv schema validation (the schema declares `type: number`, which
+ * does not match tagged objects).
+ *
+ * Returns a new tree; input is not mutated. Non-literal objects and
+ * arrays are shallow-copied only when a descendant is rewritten.
+ */
+function stripNumericLiterals(value: unknown): unknown {
+  if (isNumericLiteral(value)) return value.value
+  if (Array.isArray(value)) {
+    let changed = false
+    const out: unknown[] = new Array(value.length)
+    for (let i = 0; i < value.length; i++) {
+      const v = stripNumericLiterals(value[i])
+      if (v !== value[i]) changed = true
+      out[i] = v
+    }
+    return changed ? out : value
+  }
+  if (value && typeof value === 'object') {
+    const src = value as Record<string, unknown>
+    let changed = false
+    const out: Record<string, unknown> = {}
+    for (const key of Object.keys(src)) {
+      const v = stripNumericLiterals(src[key])
+      if (v !== src[key]) changed = true
+      out[key] = v
+    }
+    return changed ? out : value
+  }
+  return value
+}
+
+/**
  * Coerce types for better TypeScript compatibility
  * Handles Expression union types and discriminated unions
  */
 function coerceTypes(data: any): any {
   if (data === null || data === undefined) {
+    return data
+  }
+
+  // Canonical-mode tagged leaves are opaque — never descend into them.
+  if (isNumericLiteral(data)) {
     return data
   }
 
@@ -1675,11 +1732,18 @@ function coerceTypes(data: any): any {
 }
 
 /**
- * Coerce Expression union type (number | string | ExpressionNode)
+ * Coerce Expression union type (number | string | ExpressionNode).
+ * `NumericLiteral` tagged leaves (canonical-mode only) pass through
+ * unchanged.
  */
 function coerceExpression(value: any): Expression {
   if (typeof value === 'number' || typeof value === 'string') {
     return value
+  }
+
+  // NumericLiteral — canonical-mode tagged leaf; pass through.
+  if (isNumericLiteral(value)) {
+    return value as unknown as Expression
   }
 
   // If it's an object with 'op' and 'args', treat as ExpressionNode
@@ -1907,27 +1971,61 @@ function cleanReactionSystems(reactionSystems: any): any {
 }
 
 /**
+ * Options controlling how `load()` parses and represents an ESM file.
+ */
+export interface LoadOptions {
+  /**
+   * When `true`, numeric literals at Expression-bearing positions are
+   * decoded to tagged `NumericLiteral` leaves (see
+   * {@link losslessJsonParse}) so downstream consumers can preserve the
+   * integer-vs-float distinction required by the canonical form
+   * (discretization RFC §5.4.1 / §5.4.6). When `false` or absent
+   * (default), numeric literals decode to plain JS numbers for
+   * backwards compatibility.
+   *
+   * Canonical mode only takes effect for string inputs; pre-parsed
+   * objects are returned as-is (callers that want tagged leaves should
+   * run `losslessJsonParse` themselves before passing the object in).
+   */
+  canonical?: boolean
+}
+
+/**
  * Load an ESM file from a JSON string or pre-parsed object
  *
  * @param input - JSON string or pre-parsed JavaScript object
+ * @param options - Optional load-time settings (see {@link LoadOptions})
  * @returns Typed EsmFile object
  * @throws {ParseError} When JSON parsing fails or version is incompatible
  * @throws {SchemaValidationError} When schema validation fails
  */
-export function load(input: string | object): EsmFile {
-  // Step 1: JSON parsing
+export function load(input: string | object, options?: LoadOptions): EsmFile {
+  const canonical = options?.canonical === true
+
+  // Step 1: JSON parsing. In canonical mode, decode tagged numeric
+  // literals and keep a separate plain view for Ajv schema validation
+  // (the schema declares `type: number`, which does not match tagged
+  // `NumericLiteral` objects).
   let data: unknown
+  let validationView: unknown
   if (typeof input === 'string') {
-    data = parseJson(input)
+    if (canonical) {
+      data = parseJsonLossless(input)
+      validationView = stripNumericLiterals(data)
+    } else {
+      data = parseJson(input)
+      validationView = data
+    }
   } else {
     data = input
+    validationView = canonical ? stripNumericLiterals(input) : input
   }
 
   // Step 2: Version compatibility check (before schema validation)
-  checkVersionCompatibility(data)
+  checkVersionCompatibility(validationView)
 
   // Step 3: Schema validation with version compatibility
-  const schemaErrors = validateSchemaWithVersionCompatibility(data)
+  const schemaErrors = validateSchemaWithVersionCompatibility(validationView)
   if (schemaErrors.length > 0) {
     throw new SchemaValidationError(
       `Schema validation failed with ${schemaErrors.length} error(s)`,

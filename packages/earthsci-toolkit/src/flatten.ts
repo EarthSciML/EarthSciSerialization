@@ -16,6 +16,7 @@ import type {
   CouplingEntry,
   Equation,
 } from './types.js'
+import { isNumericLiteral, numericValue } from './numeric-literal.js'
 
 /**
  * A single equation in the flattened system, with dot-namespaced variable names.
@@ -348,8 +349,9 @@ function namespaceExpression(
   prefix: string,
   localNames: Set<string>
 ): string {
-  if (typeof expr === 'number') {
-    return String(expr)
+  const n = numericValue(expr)
+  if (n !== undefined) {
+    return String(n)
   }
 
   if (typeof expr === 'string') {
@@ -426,8 +428,9 @@ function expressionNodeToString(
  * where variables are already scoped).
  */
 function expressionToString(expr: Expression): string {
-  if (typeof expr === 'number') {
-    return String(expr)
+  const n = numericValue(expr)
+  if (n !== undefined) {
+    return String(n)
   }
   if (typeof expr === 'string') {
     return expr

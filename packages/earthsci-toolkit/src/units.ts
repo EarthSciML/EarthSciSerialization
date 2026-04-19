@@ -16,6 +16,7 @@ import {
   parseUnitForConversion,
   UnitConversionError,
 } from './unit-conversion.js'
+import { isNumericLiteral } from './numeric-literal.js'
 
 export type { CanonicalDims, ParsedUnit } from './unit-conversion.js'
 
@@ -85,7 +86,7 @@ export function checkDimensions(
 ): UnitResult {
   const warnings: string[] = []
 
-  if (typeof expr === 'number') {
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
     return { dimensions: dimensionless(), warnings }
   }
 

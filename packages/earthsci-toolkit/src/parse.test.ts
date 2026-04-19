@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { load, save, ParseError, SchemaValidationError, validateSchema } from './index.js'
+import { isNumericLiteral, isIntLit, isFloatLit } from './numeric-literal.js'
 
 describe('Parse and Serialize', () => {
   const validMinimalEsm = {
@@ -229,6 +230,62 @@ describe('Parse and Serialize', () => {
 
         const messages = warnSpy.mock.calls.map(args => String(args[0]))
         expect(messages.some(m => m.includes('[models.mech]'))).toBe(true)
+      })
+    })
+
+    describe('canonical-mode loading (gt-4cx3)', () => {
+      const canonicalEsmJson = JSON.stringify({
+        esm: '0.1.0',
+        metadata: { name: 'canonical' },
+        models: {
+          m: {
+            variables: {
+              x: { type: 'state' },
+              y: { type: 'parameter', default: 2 },
+            },
+            equations: [
+              { lhs: 'x', rhs: { op: '*', args: [2, 1.5] } },
+            ],
+          },
+        },
+      })
+
+      it('returns plain JS numbers by default (backwards compatible)', () => {
+        const plain = load(canonicalEsmJson) as any
+        const rhs = plain.models.m.equations[0].rhs
+        expect(rhs.args[0]).toBe(2)
+        expect(rhs.args[1]).toBe(1.5)
+        expect(isNumericLiteral(rhs.args[0])).toBe(false)
+        expect(isNumericLiteral(rhs.args[1])).toBe(false)
+      })
+
+      it('preserves int/float distinction under { canonical: true }', () => {
+        const canon = load(canonicalEsmJson, { canonical: true }) as any
+        const rhs = canon.models.m.equations[0].rhs
+        expect(isNumericLiteral(rhs.args[0])).toBe(true)
+        expect(isNumericLiteral(rhs.args[1])).toBe(true)
+        expect(isIntLit(rhs.args[0])).toBe(true)
+        expect(isFloatLit(rhs.args[1])).toBe(true)
+        // underlying values still correct
+        expect((rhs.args[0] as any).value).toBe(2)
+        expect((rhs.args[1] as any).value).toBe(1.5)
+      })
+
+      it('canonical mode still validates against the schema', () => {
+        const invalid = '{"esm":"0.1.0","metadata":{"name":"x"}}' // missing models/reaction_systems
+        expect(() => load(invalid, { canonical: true })).toThrow(SchemaValidationError)
+      })
+
+      it('canonical mode rejects malformed JSON', () => {
+        expect(() => load('{ not json', { canonical: true })).toThrow(ParseError)
+      })
+
+      it('canonical mode with object input strips NumericLiterals for validation', () => {
+        // Pre-parsed plain object — canonical mode is a no-op here (no tagged
+        // leaves to preserve), but load() should not error on the plain view.
+        const obj = JSON.parse(canonicalEsmJson)
+        const result = load(obj, { canonical: true }) as any
+        expect(result.models.m.equations[0].rhs.args[0]).toBe(2)
       })
     })
 
