@@ -34,6 +34,7 @@ include("units.jl")
 include("edit.jl")
 include("codegen.jl")
 include("canonicalize.jl")
+include("rule_engine.jl")
 
 export
     # Expression types
@@ -104,6 +105,10 @@ export
     # ASCII display format
     to_ascii, format_expression_ascii,
     # Canonical AST form (RFC §5.4)
-    canonicalize, canonical_json, format_canonical_float, CanonicalizeError
+    canonicalize, canonical_json, format_canonical_float, CanonicalizeError,
+    # Rule engine (RFC §5.2)
+    Rule, Guard, RuleContext, RuleEngineError,
+    match_pattern, apply_bindings, rewrite, check_guards, check_guard,
+    parse_rule, parse_rules, check_unrewritten_pde_ops
 
 end # module EarthSciSerialization
