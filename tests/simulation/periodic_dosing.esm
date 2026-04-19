@@ -112,6 +112,49 @@
           "assertions": [
             { "variable": "drug_amount", "time": 0.0, "expected": 0.0, "tolerance": { "abs": 1.0e-12 } }
           ]
+        },
+        {
+          "id": "first_dose_fires_at_period_not_zero",
+          "description": "Distinguishes MTK's SymbolicDiscreteCallback(period::Real, affects) firing convention. MTK wraps a scalar-period SymbolicDiscreteCallback in a DiffEqCallbacks.PeriodicCallback, which defaults to initial_affect=false — so the first dose fires at t=tspan[0]+interval=8, NOT at t=0. Sampling at t=7.9 verifies drug_amount is still on its (zero-value) IC decay trajectory; sampling at t=8.1 verifies the first dose has fired (drug = 100*exp(-0.1*0.1) = 99.00498).",
+          "initial_conditions": {
+            "drug_amount": 0.0
+          },
+          "parameter_overrides": {
+            "elimination_rate": 0.1,
+            "dose_amount": 100.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 10.0
+          },
+          "assertions": [
+            { "variable": "drug_amount", "time": 7.9, "expected": 0.0,              "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "drug_amount", "time": 8.1, "expected": 99.0049833749168, "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } }
+          ]
+        },
+        {
+          "id": "multi_dose_accumulation",
+          "description": "Analytical reference over four dose cycles at tau=8, ke=0.1, dose=100 with doses firing at t=8, 16, 24, 32. Peak_n right after dose n is dose*(1-exp(-n*ke*tau))/(1-exp(-ke*tau)); between doses drug decays as peak_n*exp(-ke*(t-n*tau)). Sampled at t=(n*tau - 0.1) for troughs (pre-dose decay) and t=(n*tau + 0.1) for post-dose trajectory. Asymptotic steady-state peak=181.596622, trough=81.596622 (ruling out the deleted reference_solutions/periodic_dosing_solution.json which claimed peak=185.067, trough=83.417 — those numbers are inconsistent with the closed-form).",
+          "initial_conditions": {
+            "drug_amount": 0.0
+          },
+          "parameter_overrides": {
+            "elimination_rate": 0.1,
+            "dose_amount": 100.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 40.0
+          },
+          "assertions": [
+            { "variable": "drug_amount", "time": 15.9, "expected": 45.38447952823558,   "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } },
+            { "variable": "drug_amount", "time": 16.1, "expected": 143.4907899972109,   "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } },
+            { "variable": "drug_amount", "time": 23.9, "expected": 65.77704070165694,   "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } },
+            { "variable": "drug_amount", "time": 24.1, "expected": 163.47955140472536,  "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } },
+            { "variable": "drug_amount", "time": 31.9, "expected": 74.94000908940743,   "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } },
+            { "variable": "drug_amount", "time": 32.1, "expected": 172.4610808619501,   "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } },
+            { "variable": "drug_amount", "time": 39.9, "expected": 79.0571961833142,    "tolerance": { "rel": 1.0e-5, "abs": 1.0e-8 } }
+          ]
         }
       ]
     }

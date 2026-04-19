@@ -454,10 +454,12 @@ end
 """
     _make_param(name::Symbol) -> Num
 
-Construct a plain parameter symbol `name` using `Symbolics.@parameters`.
+Construct a plain parameter symbol `name` using `ModelingToolkit.@parameters`.
 """
+# @parameters (not @variables) stamps isparameter=true, which AffectSystem
+# relies on to classify symbols inside a SymbolicDiscreteCallback affect.
 function _make_param(name::Symbol)
-    vars = Core.eval(Symbolics, :(@variables $(name)))
+    vars = Core.eval(ModelingToolkit, :(@parameters $(name)))
     return vars[1]
 end
 
@@ -690,8 +692,13 @@ function _build_discrete_events(flat::FlattenedSystem, var_dict, t_sym, dim_dict
         elseif ev.trigger isa PeriodicTrigger
             push!(cbs, ModelingToolkit.SymbolicDiscreteCallback(ev.trigger.period, affects))
         elseif ev.trigger isa PresetTimesTrigger
+            # MTK routes a Vector{<:Real} condition to PresetTimeCallback
+            # (fires at exactly those times); a scalar Real goes to
+            # PeriodicCallback (fires at tspan[1]+period, 2*period, ...).
+            # Pass the full times vector so multi-time triggers are honored.
             if !isempty(ev.trigger.times)
-                push!(cbs, ModelingToolkit.SymbolicDiscreteCallback(ev.trigger.times[1], affects))
+                push!(cbs, ModelingToolkit.SymbolicDiscreteCallback(
+                    collect(ev.trigger.times), affects))
             end
         end
     end
