@@ -45,11 +45,6 @@ fn simulation_skip(name: &str) -> Option<&'static str> {
         "bouncing_ball.esm" => Some("gt-2ta2"),
         // Discrete events similarly rejected.
         "periodic_dosing.esm" => Some("gt-2ta2"),
-        // gt-xyhc: ExponentialDecay's analytical_solution observed expression
-        // references the independent variable `t`, which the Rust compiler
-        // rejects with "Unknown variable ExponentialDecay.t". Python/Julia
-        // handle this. LogisticGrowth in the same fixture compiles fine.
-        "python_scipy_integration.esm" => Some("gt-xyhc"),
         _ => None,
     }
 }
@@ -183,7 +178,7 @@ fn execute_component(
 
         let opts = SimulateOptions {
             solver: SolverChoice::Bdf,
-            abstol: 1e-12,
+            abstol: 1e-15,
             reltol: 1e-10,
             max_steps: 1_000_000,
             output_times: Some(sample_times.clone()),

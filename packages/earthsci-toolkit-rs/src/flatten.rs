@@ -561,7 +561,7 @@ fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
         Expr::Number(n) => Expr::Number(*n),
         Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(name) => {
-            if name.contains('.') {
+            if name.contains('.') || name == "t" {
                 Expr::Variable(name.clone())
             } else {
                 Expr::Variable(format!("{}.{}", system_name, name))
