@@ -555,7 +555,9 @@ fn build_reaction_block(
 /// Dot-prefix every un-namespaced variable reference in `expr` with
 /// `system_name`. Variables already containing a `.` are left alone so that
 /// cross-system references (e.g. an equation explicitly referencing
-/// `GEOSFP.T` in a `SimpleOzone` equation) survive unchanged.
+/// `GEOSFP.T` in a `SimpleOzone` equation) survive unchanged. The independent
+/// variable `t` is never namespaced — it's a global symbol resolved to
+/// [`ResolvedExpr::Time`] during compile, not a component-scoped name.
 fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
@@ -1074,5 +1076,33 @@ mod tests {
         );
         assert_eq!(flat.equations[0].rhs, Expr::Variable("sys.k".to_string()));
         assert_eq!(flat.metadata.source_systems, vec!["sys".to_string()]);
+    }
+
+    // gt-vx74: `t` is the global independent variable and must stay bare
+    // after flatten (never `sys.t`). Observed expressions in tests/simulation
+    // fixtures — notably python_scipy_integration.esm's ExponentialDecay
+    // analytical_solution — reference `t` directly, and the downstream
+    // resolver only recognizes bare `t` as [`ResolvedExpr::Time`].
+    #[test]
+    fn test_namespace_expr_preserves_bare_t() {
+        let expr = Expr::Operator(ExpressionNode {
+            op: "*".to_string(),
+            args: vec![
+                Expr::Variable("decay_rate".to_string()),
+                Expr::Variable("t".to_string()),
+            ],
+            ..Default::default()
+        });
+        let out = namespace_expr(&expr, "ExponentialDecay");
+        match out {
+            Expr::Operator(node) => {
+                assert_eq!(
+                    node.args[0],
+                    Expr::Variable("ExponentialDecay.decay_rate".to_string())
+                );
+                assert_eq!(node.args[1], Expr::Variable("t".to_string()));
+            }
+            _ => panic!("expected operator node"),
+        }
     }
 }
