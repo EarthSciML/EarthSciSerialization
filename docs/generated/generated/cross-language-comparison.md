@@ -3076,13 +3076,6 @@ class ModelVariable:
 
 > A variable in a mathematical model.
 
-**Typescript:**
-```typescript
-export interface ModelVariable {
-```
-
-> A variable in an ODE model.
-
 ---
 
 ### Operator
