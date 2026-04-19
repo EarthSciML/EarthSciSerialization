@@ -536,7 +536,35 @@ function coerce_assertion(data::Any)::Assertion
     expected = Float64(data.expected)
     tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
         coerce_tolerance(data.tolerance) : nothing
-    return Assertion(variable, time_val, expected; tolerance=tolerance)
+    coords = nothing
+    if haskey(data, :coords) && data.coords !== nothing
+        coords = Dict{String,Float64}()
+        for (k, v) in pairs(data.coords)
+            coords[string(k)] = Float64(v)
+        end
+    end
+    reduce_val = haskey(data, :reduce) && data.reduce !== nothing ?
+        string(data.reduce) : nothing
+    reference = nothing
+    if haskey(data, :reference) && data.reference !== nothing
+        ref = data.reference
+        # The from_file shape is a JSON object whose `type` is the literal
+        # string "from_file"; everything else is treated as an Expression AST.
+        if ref isa AbstractDict || (hasproperty(ref, :type) &&
+                                    string(getproperty(ref, :type)) == "from_file")
+            reference = Dict{String,Any}()
+            for (k, v) in pairs(ref)
+                reference[string(k)] = v
+            end
+        else
+            reference = parse_expression(ref)
+        end
+    end
+    return Assertion(variable, time_val, expected;
+                     tolerance=tolerance,
+                     coords=coords,
+                     reduce=reduce_val,
+                     reference=reference)
 end
 
 """

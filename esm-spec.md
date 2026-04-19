@@ -1030,6 +1030,9 @@ Each assertion is a per-(variable, time) check against a scalar expected value:
 | `time` | ✓ | Simulation time at which to evaluate the assertion; must lie in `[time_span.start, time_span.end]`. |
 | `expected` | ✓ | Expected scalar value. |
 | `tolerance` | | Per-assertion tolerance override. |
+| `coords` | | PDE only: spatial-point sample. Map from domain dimension name to the numeric coordinate at which to evaluate the field. Mutually exclusive with `reduce`. |
+| `reduce` | | PDE only: collapse the spatial field to a scalar before comparison. One of `integral`, `mean`, `max`, `min`, `L2_error`, `Linf_error`. Mutually exclusive with `coords`. |
+| `reference` | error-norms only | Required when `reduce` is `L2_error` or `Linf_error`: an inline `Expression` (evaluated over the component's domain coordinates) or `{type: "from_file", path, format?}`. |
 
 Assertions are stored **inline** only — there is no file-reference option. Tests should be small (a handful of assertion points), not full reference trajectories.
 
@@ -1051,6 +1054,44 @@ Tolerance is resolved most-specific first:
 4. Otherwise, an **implementation default** — conforming runtimes should use `rel = 1e-6` and no `abs` bound.
 
 Each level is a `{abs?, rel?}` object; absent fields fall through to the next level independently. Specifying only `abs` at a lower level does not mask `rel` from an upper level — they are merged per-field.
+
+#### 6.6.5 PDE-Aware Assertions
+
+Pointwise scalar assertions (the default — neither `coords` nor `reduce`) only make sense on 0-D components: there is one trajectory per variable, indexed by time alone. On a component with a spatial domain (`component.domain.spatial` non-empty), every assertion MUST select a scalar via either `coords` or `reduce`. Validators MUST reject:
+
+- a 0-D component carrying an assertion with `coords` or `reduce` set; and
+- a PDE component carrying a pointwise assertion (no `coords`, no `reduce`).
+
+`coords` keys MUST match dimension names declared in `component.domain.spatial`. The runtime samples the field at the named point (interpolation vs nearest-grid is a runtime concern). `coords` may pin a strict subset of dimensions only when the remaining dimensions resolve to a single sample (e.g., a 1-D component with a single dimension); otherwise the assertion is ill-defined and validators MUST reject.
+
+`reduce` collapses the field over the entire spatial domain at the given `time`. The pure reductions (`integral`, `mean`, `max`, `min`) compare directly against `expected`. The error-norm reductions compare against a `reference` solution:
+
+- `L2_error`: `expected ≈ ||u_actual − u_reference||_2 / ||u_reference||_2` (relative L2), evaluated as a domain integral.
+- `Linf_error`: `expected ≈ max_x |u_actual(x) − u_reference(x)|` (uniform norm).
+
+`reference` may be:
+
+- an inline `Expression` whose free variables are the domain dimension names (e.g., `sin(π x)`), evaluated by the runtime over every grid point at the assertion `time`; or
+- `{type: "from_file", path, format?}` pointing at a precomputed snapshot in the same shape as the field.
+
+Worked example — 1-D heat equation `u_t = α u_xx` on `x ∈ [0, 1]` with `u(x,0) = sin(π x)` and zero-Dirichlet BCs has analytic solution `u(x,t) = exp(−α π² t) · sin(π x)`. The corresponding L2-error assertion is:
+
+```json
+{
+  "variable": "u",
+  "time": 0.1,
+  "expected": 0.0,
+  "tolerance": { "abs": 1e-3 },
+  "reduce": "L2_error",
+  "reference": {
+    "op": "*",
+    "args": [
+      { "op": "exp", "args": [{ "op": "*", "args": [-0.01, 9.8696, 0.1] }] },
+      { "op": "sin", "args": [{ "op": "*", "args": [3.14159, "x"] }] }
+    ]
+  }
+}
+```
 
 ### 6.7 Examples
 
@@ -1104,7 +1145,7 @@ Like tests, examples are per-component and travel with the model in the `.esm` d
 |---|---|---|
 | `id` | ✓ | Identifier unique within this component's `examples` array. |
 | `description` | | Human-readable description. |
-| `initial_state` | | Initial conditions. Reuses the same `InitialConditions` schema as the `domains` section: `{type: "constant", value}`, `{type: "per_variable", values: {...}}`, or `{type: "from_file", path, format?}`. |
+| `initial_state` | | Initial conditions. Reuses the same `InitialConditions` schema as the `domains` section: `{type: "constant", value}`, `{type: "per_variable", values: {...}}`, `{type: "from_file", path, format?}`, or — for PDE components — `{type: "expression", values: {var: Expression}}` (see §11.4). |
 | `parameters` | | Parameter overrides, keyed by local parameter name. |
 | `time_span` | ✓ | `{start, end}` in the component's time units. |
 | `parameter_sweep` | | Optional parameter sweep; see Section 6.7.3. When present, the example represents a family of runs rather than a single trajectory. |
@@ -1137,20 +1178,24 @@ Exactly one of `values` or `range` must be given per dimension.
 
 Plots describe how the run (or sweep) result is turned into a visualization. Only **structural** information is recorded: axes, series selection, and value reduction. Styling — colors, fonts, legend placement, themes — is the viewer's concern.
 
-Three plot types are defined:
+Five plot types are defined:
 
 - `line` — one or more trajectories plotted as lines against a shared x axis.
 - `scatter` — one or more trajectories as scatter points.
 - `heatmap` — a 2-D grid over two swept parameters with a per-run color channel.
+- `field_slice` — a 1-D cut through an N-D PDE field at fixed `at_time`. `x` names a spatial dimension; `y` names the variable plotted as a function of that dimension. Non-plotted spatial dimensions MUST be pinned in `pinned_coords`.
+- `field_snapshot` — a 2-D field at fixed `at_time` with the variable as a color channel. `x` and `y` name two spatial dimensions; `value.variable` names the field. Non-plotted spatial dimensions MUST be pinned in `pinned_coords`.
 
 | Field | Required | Description |
 |---|---|---|
 | `id` | ✓ | Identifier unique within this example's `plots` array. |
-| `type` | ✓ | `line`, `scatter`, or `heatmap`. |
+| `type` | ✓ | `line`, `scatter`, `heatmap`, `field_slice`, or `field_snapshot`. |
 | `description` | | Human-readable description. |
-| `x`, `y` | ✓ | Axis specifications (`{variable, label?}`). `variable` may be any state variable, observed variable, parameter name, or swept parameter. |
-| `value` | heatmap | Heatmap color channel: a `PlotValue` (see below). |
-| `series` | | For `line`/`scatter`: an array of `{name, variable}` pairs selecting multiple trajectories to overlay. |
+| `x`, `y` | ✓ | Axis specifications (`{variable, label?}`). For trajectory/sweep plots `variable` may be any state variable, observed variable, parameter name, or swept parameter; for `field_slice` and `field_snapshot`, `x` (and `y` for snapshots) MUST name a domain spatial dimension. |
+| `value` | heatmap, field_snapshot | Color channel for `heatmap` (a `PlotValue`) and for `field_snapshot` (only `value.variable` is used; `at_time` and `reduce` are ignored — the field is sampled at the plot-level `at_time`). |
+| `series` | | For `line`/`scatter`: an array of `{name, variable}` pairs selecting multiple trajectories to overlay. Ignored for heatmap/field plots. |
+| `at_time` | field_slice, field_snapshot | Required for field plots: simulation time at which to extract the spatial field. Must lie within the example's `time_span`. |
+| `pinned_coords` | field plots, when domain has higher dimensionality than the plot | Map from each non-plotted spatial dimension name to a numeric coordinate. Required when the component domain has more spatial dimensions than the plot uses (1 axis for `field_slice`, 2 for `field_snapshot`). |
 
 **Plot axes are flexible.** Any state variable, observed variable, parameter, or swept-parameter name is allowed for `x`, `y`, and (for heatmaps) the `value.variable`. The independent variable of the simulation is typically spelled `"t"`.
 
@@ -1181,6 +1226,33 @@ A heatmap of the maximum O3 concentration over a 20 × 10 sweep of `j_NO2` and `
 ```
 
 For each Cartesian combination of `(j_NO2, k_NO_O3)`, the runtime simulates once, takes the maximum O3 over the trajectory, and places that scalar at the corresponding grid cell.
+
+#### 6.7.6 Worked Example: Field Plots for a 1-D Heat Equation
+
+A 1-D field slice and (for a 2-D companion model) a 2-D field snapshot at `t = 0.1`:
+
+```json
+[
+  {
+    "id": "u_at_t_0_1",
+    "type": "field_slice",
+    "description": "u(x, t=0.1) along the spatial axis.",
+    "x": { "variable": "x", "label": "x" },
+    "y": { "variable": "u", "label": "u(x, 0.1)" },
+    "at_time": 0.1
+  },
+  {
+    "id": "u_xy_at_t_0_1",
+    "type": "field_snapshot",
+    "x": { "variable": "x" },
+    "y": { "variable": "y" },
+    "value": { "variable": "u" },
+    "at_time": 0.1
+  }
+]
+```
+
+If the underlying domain has more spatial dimensions than the plot uses, the extras MUST be pinned, e.g. `"pinned_coords": { "z": 0.0 }`.
 
 ---
 
@@ -2205,6 +2277,20 @@ Each named domain supports the following fields:
 | `constant` | `value` | Uniform initial value for all state variables |
 | `per_variable` | `values: {var: value}` | Per-variable initial values |
 | `from_file` | `path`, `format` | Load from external file |
+| `expression` | `values: {var: Expression}` | Per-variable closed-form initial fields. Each value is an `Expression` whose free symbols MUST be names of the component domain's spatial dimensions; the runtime evaluates the expression at every grid point to produce the initial field. PDE components only — meaningless on 0-D components, where validators MUST reject. |
+
+The `expression` shape replaces the prior need to spill PDE initial conditions into a sidecar file: a closed-form initial field (e.g., `u(x, 0) = sin(π x)`) round-trips through the document just like any other inline math.
+
+**Example** — heat equation initial profile on a 1-D domain with dimension `x ∈ [0, 1]`:
+
+```json
+{
+  "type": "expression",
+  "values": {
+    "u": { "op": "sin", "args": [{ "op": "*", "args": [3.141592653589793, "x"] }] }
+  }
+}
+```
 
 ### 11.5 Boundary Condition Types
 

@@ -247,6 +247,51 @@ export type DiscreteEvent1 =
       [k: string]: unknown;
     };
 /**
+ * A single scalar check against a model variable at a specific (variable, time) point. PDE-aware variants pin a spatial point via `coords`, or reduce the field to a scalar via `reduce` (domain-integral, mean, max, min, or an error-norm against a `reference` solution). `coords` and `reduce` are mutually exclusive; if neither is given the assertion is pointwise and only valid on a 0-D component. Error-norm reductions (L2_error, Linf_error) require `reference`.
+ */
+export type Assertion = Assertion1 & {
+  /**
+   * Name of the variable or species to check. Use the local name (e.g., "O3") or a scoped reference relative to this component (e.g., "subsystem.X").
+   */
+  variable: string;
+  /**
+   * Simulation time at which to evaluate the assertion. Must lie within [time_span.start, time_span.end].
+   */
+  time: number;
+  /**
+   * Expected scalar value of the variable at the given time.
+   */
+  expected: number;
+  tolerance?: Tolerance2;
+  /**
+   * Spatial-point evaluation: map from the enclosing component's domain dimension name (e.g., "x", "lon") to the numeric coordinate at which to sample the field. All keys MUST be names of dimensions declared in the component's domain.spatial. Mutually exclusive with `reduce`.
+   */
+  coords?: {
+    [k: string]: number;
+  };
+  /**
+   * Domain reduction: collapse the spatial field to a single scalar before comparison. `integral`/`mean`/`max`/`min` are pure reductions; `L2_error`/`Linf_error` require a `reference` solution and compute ||u_actual - u_reference||_norm. Mutually exclusive with `coords`.
+   */
+  reduce?: "integral" | "mean" | "max" | "min" | "L2_error" | "Linf_error";
+  /**
+   * Reference (analytic or precomputed) solution required by error-norm reductions. Either an inline Expression evaluated over the component's domain coordinates, or a from_file shape pointing at a precomputed snapshot.
+   */
+  reference?:
+    | Expression
+    | {
+        type: "from_file";
+        path: string;
+        format?: string;
+      };
+};
+export type Assertion1 = {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+};
+/**
  * One axis of a parameter sweep: exactly one of values or range must be given.
  */
 export type SweepDimension = {
@@ -269,6 +314,41 @@ export type SweepDimension1 =
   | {
       [k: string]: unknown;
     };
+/**
+ * A plot specification associated with an example. Only structural information is recorded — axes, series selection, and value reductions. Styling (colors, fonts, legends, themes) is the viewer's concern. PDE-aware plot types `field_slice` and `field_snapshot` visualize spatial fields at a fixed time; `x` (and `y` for snapshots) name domain dimensions, the variable value becomes the y / color channel, and any non-plotted spatial dimension MUST be pinned in `pinned_coords`.
+ */
+export type Plot = Plot1 & {
+  /**
+   * Identifier unique within this example's plots array.
+   */
+  id: string;
+  type: "line" | "scatter" | "heatmap" | "field_slice" | "field_snapshot";
+  description?: string;
+  x: PlotAxis;
+  y: PlotAxis;
+  value?: PlotValue;
+  /**
+   * Multiple named series for line or scatter plots. Ignored for heatmap and field plots.
+   */
+  series?: PlotSeries[];
+  /**
+   * Required for field_slice and field_snapshot: simulation time at which to extract the spatial field. Must lie within the example's time_span.
+   */
+  at_time?: number;
+  /**
+   * Required for field_slice and field_snapshot when the component domain has more spatial dimensions than the plot's spatial axes (1 for field_slice, 2 for field_snapshot). Maps each non-plotted spatial dimension name to the numeric coordinate at which to slice. Keys MUST be names of dimensions in component.domain.spatial that are not used by `x` (or `y` for field_snapshot).
+   */
+  pinned_coords?: {
+    [k: string]: number;
+  };
+};
+export type Plot1 = {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+};
 /**
  * A single coupling rule connecting models, reaction systems, data loaders, or operators.
  */
@@ -357,7 +437,7 @@ export type CouplingEvent2 =
       [k: string]: unknown;
     };
 /**
- * Initial conditions for state variables.
+ * Initial conditions for state variables. Four shapes: `constant` (uniform scalar), `per_variable` (uniform per variable), `from_file` (load a precomputed field), and `expression` (per-variable Expressions over the component's domain coordinates — a serializable closed-form initial field for PDE components).
  */
 export type InitialConditions =
   | {
@@ -374,6 +454,15 @@ export type InitialConditions =
       type: "from_file";
       path: string;
       format?: string;
+    }
+  | {
+      type: "expression";
+      /**
+       * Map from variable name to an Expression that yields the variable's initial field. Free symbols in the Expression MUST be names of the component domain's spatial dimensions (e.g., "x", "y"). The runtime evaluates the Expression at every grid point to produce u(x, 0). Only meaningful on PDE (≥1-D spatial) components.
+       */
+      values: {
+        [k: string]: Expression;
+      };
     };
 /**
  * A named discretization grid. The `family` selects one of three topologies (cartesian / unstructured / cubed_sphere) per docs/rfcs/discretization.md §6.1-§6.4. Each grid also carries optional staggering locations, metric array declarations, and its own parameter block reusing the ordinary ESM Parameter schema.
@@ -746,7 +835,7 @@ export interface Test {
    *
    * @minItems 1
    */
-  assertions: [Assertion, ...Assertion[]];
+  assertions: [Assertion, ...Assertion1[]];
 }
 /**
  * Simulation time interval expressed in the component's time units.
@@ -767,24 +856,6 @@ export interface Tolerance1 {
    * Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel.
    */
   rel?: number;
-}
-/**
- * A single scalar check at a (variable, time) point.
- */
-export interface Assertion {
-  /**
-   * Name of the variable or species to check. Use the local name (e.g., "O3") or a scoped reference relative to this component (e.g., "subsystem.X").
-   */
-  variable: string;
-  /**
-   * Simulation time at which to evaluate the assertion. Must lie within [time_span.start, time_span.end].
-   */
-  time: number;
-  /**
-   * Expected scalar value of the variable at the given time.
-   */
-  expected: number;
-  tolerance?: Tolerance2;
 }
 /**
  * Per-assertion tolerance override. If present, this takes precedence over the test-level and model-level defaults.
@@ -829,6 +900,15 @@ export interface Example {
         type: "from_file";
         path: string;
         format?: string;
+      }
+    | {
+        type: "expression";
+        /**
+         * Map from variable name to an Expression that yields the variable's initial field. Free symbols in the Expression MUST be names of the component domain's spatial dimensions (e.g., "x", "y"). The runtime evaluates the Expression at every grid point to produce u(x, 0). Only meaningful on PDE (≥1-D spatial) components.
+         */
+        values: {
+          [k: string]: Expression;
+        };
       };
   /**
    * Parameter overrides, keyed by parameter name (local to this component).
@@ -869,24 +949,6 @@ export interface SweepRange {
   scale?: "linear" | "log";
 }
 /**
- * A plot specification associated with an example. Only structural information is recorded — axes, series selection, and value reductions. Styling (colors, fonts, legends, themes) is the viewer's concern.
- */
-export interface Plot {
-  /**
-   * Identifier unique within this example's plots array.
-   */
-  id: string;
-  type: "line" | "scatter" | "heatmap";
-  description?: string;
-  x: PlotAxis;
-  y: PlotAxis;
-  value?: PlotValue;
-  /**
-   * Multiple named series for line or scatter plots. Ignored for heatmap.
-   */
-  series?: PlotSeries[];
-}
-/**
  * Axis specification: any state variable, observed variable, parameter name, or swept parameter may be used.
  */
 export interface PlotAxis {
@@ -900,7 +962,7 @@ export interface PlotAxis {
   label?: string;
 }
 /**
- * Required for heatmap; defines the color channel. Ignored for line/scatter.
+ * Required for heatmap; defines the color channel. Ignored for line/scatter. For field_snapshot, the variable plotted as the color channel (use `value.variable`); `at_time` and `reduce` are ignored — the field is sampled at `at_time` declared on the plot.
  */
 export interface PlotValue {
   /**
