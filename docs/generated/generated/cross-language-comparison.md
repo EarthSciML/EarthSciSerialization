@@ -3213,6 +3213,54 @@ export interface Reference {
 
 ---
 
+### RegisteredFunction
+
+**Julia:**
+```julia
+struct RegisteredFunction
+```
+
+> RegisteredFunction
+
+A named pure function that may be invoked inside expressions via the `call`
+op (see esm-spec §4.
+
+**Python:**
+```python
+class RegisteredFunction:
+```
+
+> A named pure function invoked inside expressions via the 'call' op.
+
+**Typescript:**
+```typescript
+export interface RegisteredFunction {
+```
+
+> A named pure function that may be invoked inside an expression via the 'call' op.
+
+---
+
+### RegisteredFunctionSignature
+
+**Julia:**
+```julia
+struct RegisteredFunctionSignature
+```
+
+> RegisteredFunctionSignature
+
+Calling convention for a [`RegisteredFunction`](@ref).
+
+**Python:**
+```python
+class RegisteredFunctionSignature:
+```
+
+> Calling convention for a RegisteredFunction (see esm-spec §9.
+
+---
+
 ### SchemaError
 
 **Julia:**
