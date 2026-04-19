@@ -1,0 +1,215 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "PDETestsAndExamples",
+    "description": "PDE-aware tests and examples: spatial-point assertions, domain-reduce assertions, L2-error assertions against an analytic reference, expression-shaped initial conditions, and field plot types (field_slice / field_snapshot). Exercises the §6.6.5, §6.7.4 and §11.4 extensions added under gt-vzwk.",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["pde", "spatial-assertions", "expression-ic", "field-plots"]
+  },
+  "models": {
+    "HeatEquation1D": {
+      "reference": {
+        "notes": "1-D heat equation u_t = alpha * u_xx on x in [0,1], zero-Dirichlet BCs, IC u(x,0) = sin(pi x). Analytic solution: u(x,t) = exp(-alpha pi^2 t) * sin(pi x)."
+      },
+      "domain": "heat_1d",
+      "variables": {
+        "u": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "Diffused field"
+        },
+        "alpha": {
+          "type": "parameter",
+          "units": "1",
+          "default": 0.01,
+          "description": "Diffusivity"
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "alpha",
+              { "op": "laplacian", "args": ["u"] }
+            ]
+          }
+        }
+      ],
+      "tests": [
+        {
+          "id": "point_sample_at_center",
+          "description": "(a) Spatial-point assertion: sample u at x=0.5, t=0.1. Analytic value exp(-alpha pi^2 t) * sin(pi/2) = exp(-0.00986960) ~ 0.99018.",
+          "time_span": { "start": 0.0, "end": 0.1 },
+          "tolerance": { "abs": 1.0e-3 },
+          "assertions": [
+            {
+              "variable": "u",
+              "time": 0.1,
+              "expected": 0.990178,
+              "coords": { "x": 0.5 }
+            }
+          ]
+        },
+        {
+          "id": "domain_integral_conservation",
+          "description": "(b) Domain-reduce assertion: integral of u over x in [0,1] at t=0.1. Analytic integral = exp(-alpha pi^2 t) * (2/pi) ~ 0.63037.",
+          "time_span": { "start": 0.0, "end": 0.1 },
+          "tolerance": { "abs": 1.0e-3 },
+          "assertions": [
+            {
+              "variable": "u",
+              "time": 0.1,
+              "expected": 0.630371,
+              "reduce": "integral"
+            }
+          ]
+        },
+        {
+          "id": "analytic_l2_error",
+          "description": "(c) L2-error assertion against analytic reference exp(-alpha pi^2 t) sin(pi x).",
+          "time_span": { "start": 0.0, "end": 0.1 },
+          "tolerance": { "abs": 1.0e-3 },
+          "assertions": [
+            {
+              "variable": "u",
+              "time": 0.1,
+              "expected": 0.0,
+              "reduce": "L2_error",
+              "reference": {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "exp",
+                    "args": [
+                      { "op": "*", "args": [-0.01, 9.8696044, 0.1] }
+                    ]
+                  },
+                  {
+                    "op": "sin",
+                    "args": [
+                      { "op": "*", "args": [3.141592653589793, "x"] }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "id": "heat_decay_from_sine",
+          "description": "(d) Expression-shaped initial condition u(x,0) = sin(pi x); (e) field_slice and field_snapshot plot types.",
+          "initial_state": {
+            "type": "expression",
+            "values": {
+              "u": {
+                "op": "sin",
+                "args": [
+                  { "op": "*", "args": [3.141592653589793, "x"] }
+                ]
+              }
+            }
+          },
+          "parameters": { "alpha": 0.01 },
+          "time_span": { "start": 0.0, "end": 0.1 },
+          "plots": [
+            {
+              "id": "u_slice_at_t_0_1",
+              "type": "field_slice",
+              "description": "u(x, t=0.1) along the spatial axis.",
+              "x": { "variable": "x", "label": "x" },
+              "y": { "variable": "u", "label": "u(x, 0.1)" },
+              "at_time": 0.1
+            }
+          ]
+        }
+      ]
+    },
+    "HeatEquation2D": {
+      "reference": {
+        "notes": "2-D heat equation u_t = alpha * laplacian(u) on (x,y) in [0,1]^2 — used for the field_snapshot plot type."
+      },
+      "domain": "heat_2d",
+      "variables": {
+        "u": { "type": "state", "units": "1", "default": 0.0 },
+        "alpha": { "type": "parameter", "units": "1", "default": 0.01 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": {
+            "op": "*",
+            "args": [
+              "alpha",
+              { "op": "laplacian", "args": ["u"] }
+            ]
+          }
+        }
+      ],
+      "examples": [
+        {
+          "id": "heat_decay_2d",
+          "description": "Field snapshot at t=0.1 with both spatial axes plotted.",
+          "initial_state": {
+            "type": "expression",
+            "values": {
+              "u": {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "sin",
+                    "args": [{ "op": "*", "args": [3.141592653589793, "x"] }]
+                  },
+                  {
+                    "op": "sin",
+                    "args": [{ "op": "*", "args": [3.141592653589793, "y"] }]
+                  }
+                ]
+              }
+            }
+          },
+          "time_span": { "start": 0.0, "end": 0.1 },
+          "plots": [
+            {
+              "id": "u_xy_at_t_0_1",
+              "type": "field_snapshot",
+              "description": "2-D field u(x,y,t=0.1) as a heatmap-style snapshot.",
+              "x": { "variable": "x" },
+              "y": { "variable": "y" },
+              "value": { "variable": "u" },
+              "at_time": 0.1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "domains": {
+    "heat_1d": {
+      "independent_variable": "t",
+      "spatial": {
+        "x": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.02 }
+      },
+      "boundary_conditions": [
+        { "type": "dirichlet", "dimensions": ["x"], "value": 0.0 }
+      ],
+      "element_type": "Float64"
+    },
+    "heat_2d": {
+      "independent_variable": "t",
+      "spatial": {
+        "x": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.05 },
+        "y": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.05 }
+      },
+      "boundary_conditions": [
+        { "type": "dirichlet", "dimensions": ["x", "y"], "value": 0.0 }
+      ],
+      "element_type": "Float64"
+    }
+  }
+}

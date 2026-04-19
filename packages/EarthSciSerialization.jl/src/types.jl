@@ -335,19 +335,49 @@ struct Tolerance
 end
 
 """
-    Assertion(variable::String, time::Float64, expected::Float64, tolerance::Union{Tolerance,Nothing})
+    Assertion(variable::String, time::Float64, expected::Float64, tolerance, coords, reduce, reference)
 
 A scalar `(variable, time, expected)` check used inside a `Test`.
+
+PDE-aware variants (gt-vzwk):
+- `coords`: pin a spatial point as `dim => coordinate` (mutually exclusive with `reduce`).
+- `reduce`: collapse the spatial field to a scalar — one of `integral`, `mean`,
+  `max`, `min`, `L2_error`, `Linf_error`. Mutually exclusive with `coords`.
+- `reference`: required for error-norm reductions; either an `Expr` AST evaluated
+  over the domain coordinates, or a `Dict` representing the `{type: from_file,
+  path, format?}` shape.
 """
 struct Assertion
     variable::String
     time::Float64
     expected::Float64
     tolerance::Union{Tolerance,Nothing}
+    coords::Union{Dict{String,Float64},Nothing}
+    reduce::Union{String,Nothing}
+    reference::Any
 
-    Assertion(variable::AbstractString, time::Real, expected::Real;
-              tolerance=nothing) =
-        new(String(variable), Float64(time), Float64(expected), tolerance)
+    function Assertion(variable::AbstractString, time::Real, expected::Real;
+                       tolerance=nothing,
+                       coords=nothing,
+                       reduce=nothing,
+                       reference=nothing)
+        if coords !== nothing && reduce !== nothing
+            error("Assertion: `coords` and `reduce` are mutually exclusive")
+        end
+        if reduce !== nothing && (reduce == "L2_error" || reduce == "Linf_error") &&
+                reference === nothing
+            error("Assertion: `reduce=$(reduce)` requires `reference`")
+        end
+        if reference !== nothing && reduce !== nothing &&
+                !(reduce in ("L2_error", "Linf_error"))
+            error("Assertion: `reference` is only meaningful for error-norm reductions")
+        end
+        coords_typed = coords === nothing ? nothing :
+            Dict{String,Float64}(string(k) => Float64(v) for (k, v) in coords)
+        reduce_typed = reduce === nothing ? nothing : String(reduce)
+        return new(String(variable), Float64(time), Float64(expected),
+                   tolerance, coords_typed, reduce_typed, reference)
+    end
 end
 
 """

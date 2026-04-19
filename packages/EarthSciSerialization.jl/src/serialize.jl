@@ -336,6 +336,26 @@ function serialize_assertion(a::Assertion)::Dict{String,Any}
     if a.tolerance !== nothing
         result["tolerance"] = serialize_tolerance(a.tolerance)
     end
+    if a.coords !== nothing
+        result["coords"] = Dict{String,Any}(k => v for (k, v) in a.coords)
+    end
+    if a.reduce !== nothing
+        result["reduce"] = a.reduce
+    end
+    if a.reference !== nothing
+        if a.reference isa Expr
+            result["reference"] = serialize_expression(a.reference)
+        elseif a.reference isa AbstractDict
+            # from_file shape: round-trip its keys verbatim
+            ref_out = Dict{String,Any}()
+            for (k, v) in a.reference
+                ref_out[string(k)] = v
+            end
+            result["reference"] = ref_out
+        else
+            result["reference"] = a.reference
+        end
+    end
     return result
 end
 

@@ -60,6 +60,8 @@
     { "id": "fixtures/sde/correlated_noise",         "path": "fixtures/sde/correlated_noise.esm",         "tags": ["sde", "brownian", "correlated"] },
     { "id": "registered_funcs/pure_math",            "path": "registered_funcs/pure_math.esm",            "tags": ["registered_functions", "call", "gt-p3ep"] },
     { "id": "registered_funcs/one_d_interpolator",   "path": "registered_funcs/one_d_interpolator.esm",   "tags": ["registered_functions", "call", "interpolation", "gt-p3ep"] },
-    { "id": "registered_funcs/two_d_table_lookup",   "path": "registered_funcs/two_d_table_lookup.esm",   "tags": ["registered_functions", "call", "table_lookup", "gt-p3ep"] }
+    { "id": "registered_funcs/two_d_table_lookup",   "path": "registered_funcs/two_d_table_lookup.esm",   "tags": ["registered_functions", "call", "table_lookup", "gt-p3ep"] },
+
+    { "id": "spatial/pde_tests_examples",            "path": "spatial/pde_tests_examples.esm",            "tags": ["pde", "spatial-assertions", "expression-ic", "field-plots", "gt-vzwk"] }
   ]
 }
