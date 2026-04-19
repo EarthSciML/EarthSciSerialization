@@ -642,12 +642,13 @@ fn validate_reaction_system(
     // Note: Event validation would go here when ReactionSystem types support events
 }
 
-/// Enforce that each reaction's rate expression, multiplied by the product of
-/// substrate species raised to their stoichiometry, has dimensions of
-/// species/time. Mirrors the Julia/Python/TS checks so the same invalid
-/// fixtures are rejected across all bindings. Skipped when the reference
-/// concentration (first substrate) is dimensionless — mole-fraction and ppm
-/// species commonly bake a number-density factor into the rate constant.
+/// Enforce the mass-action dimensional constraint from spec §7.4: rate
+/// dimensions must equal concentration^(1-total_order)/time, where the
+/// reference concentration unit is the first substrate's units. Mirrors the
+/// Julia/Python/TS/Go checks so the same invalid fixtures are rejected across
+/// all bindings. Skipped when the reference concentration (first substrate) is
+/// dimensionless — mole-fraction and ppm species commonly bake a
+/// number-density factor into the rate constant.
 fn validate_reaction_rate_units(
     rs_name: &str,
     rs: &crate::ReactionSystem,
@@ -709,28 +710,21 @@ fn validate_reaction_rate_units(
             continue;
         }
 
-        // Compute product(substrate^stoich).
-        let mut substrate_unit = Unit::dimensionless();
         let mut total_order: u32 = 0;
         let mut resolvable = true;
         for entry in substrates {
-            let sp_unit = match env.get(&entry.species) {
-                Some(u) => u.clone(),
-                None => {
-                    resolvable = false;
-                    break;
-                }
-            };
-            substrate_unit = substrate_unit.multiply(&sp_unit.power(entry.coefficient as i32));
+            if !env.contains_key(&entry.species) {
+                resolvable = false;
+                break;
+            }
             total_order += entry.coefficient;
         }
         if !resolvable {
             continue;
         }
 
-        let expected = conc_unit.divide(&time);
-        let full = rate_unit.multiply(&substrate_unit);
-        if !full.is_compatible(&expected) {
+        let expected_rate_unit = conc_unit.power(1 - total_order as i32).divide(&time);
+        if !rate_unit.is_compatible(&expected_rate_unit) {
             let rate_units_str = reaction_rate_units_str(&reaction.rate, rs);
             let first_sp_units = rs
                 .species
@@ -740,19 +734,102 @@ fn validate_reaction_rate_units(
             errors.push(StructuralError {
                 path: rxn_path,
                 code: StructuralErrorCode::UnitInconsistency,
-                message: format!(
-                    "Reaction rate expression has incompatible units for reaction stoichiometry \
-                     (reaction {}, order {}, substrate species units '{}')",
-                    reaction_label, total_order, first_sp_units
-                ),
+                message:
+                    "Reaction rate expression has incompatible units for reaction stoichiometry"
+                        .to_string(),
                 details: serde_json::json!({
                     "reaction_id": reaction_label,
                     "rate_units": rate_units_str,
+                    "expected_rate_units": format_expected_rate_units(&first_sp_units, total_order),
                     "reaction_order": total_order,
-                    "substrate_species_units": first_sp_units,
                 }),
             });
         }
+    }
+}
+
+/// Compose the canonical rate-unit string from the reference species unit
+/// string and total reaction order, matching the contract in
+/// `tests/invalid/expected_errors.json`. Examples:
+///
+/// - `("mol/L", 2)` → `"L/(mol*s)"`
+/// - `("mol/L", 1)` → `"1/s"`
+/// - `("mol/L", 0)` → `"mol/(L*s)"`
+/// - `("mol/m^3", 2)` → `"m^3/(mol*s)"`
+fn format_expected_rate_units(species_units: &str, total_order: u32) -> String {
+    let exp: i32 = 1 - total_order as i32;
+    if exp == 0 {
+        return "1/s".to_string();
+    }
+    let (mut num, mut den) = split_unit_num_den(species_units);
+    let mut exp_abs = exp;
+    if exp < 0 {
+        std::mem::swap(&mut num, &mut den);
+        exp_abs = -exp;
+    }
+    let num_str = power_factor(&num, exp_abs);
+    let mut den_factors: Vec<String> = Vec::new();
+    let df = power_factor(&den, exp_abs);
+    if !df.is_empty() {
+        den_factors.push(df);
+    }
+    den_factors.push("s".to_string());
+    let num_out = if num_str.is_empty() {
+        "1".to_string()
+    } else {
+        num_str
+    };
+    if den_factors.len() == 1 {
+        format!("{}/{}", num_out, den_factors[0])
+    } else {
+        format!("{}/({})", num_out, den_factors.join("*"))
+    }
+}
+
+/// Split a unit string like `"mol/L"` into `("mol", "L")`, or `"mol/(L*s)"`
+/// into `("mol", "L*s")`. The split is on the first top-level `/`. Returns
+/// `("", "")` for an empty input. If no `/` appears, the whole string is the
+/// numerator.
+fn split_unit_num_den(s: &str) -> (String, String) {
+    let s = s.trim();
+    if s.is_empty() {
+        return (String::new(), String::new());
+    }
+    let mut depth = 0i32;
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            '/' if depth == 0 => {
+                let num = s[..i].trim().to_string();
+                let den_raw = s[i + 1..].trim();
+                let den = den_raw
+                    .strip_prefix('(')
+                    .and_then(|t| t.strip_suffix(')'))
+                    .unwrap_or(den_raw)
+                    .to_string();
+                return (num, den);
+            }
+            _ => {}
+        }
+    }
+    (s.to_string(), String::new())
+}
+
+/// Raise a unit factor to an integer power, rendering the result as a string.
+/// Parenthesises compound factors for clarity when the power is not 1.
+fn power_factor(s: &str, n: i32) -> String {
+    let s = s.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    if n == 1 {
+        return s.to_string();
+    }
+    if s.contains('*') || s.contains('/') {
+        format!("({})^{}", s, n)
+    } else {
+        format!("{}^{}", s, n)
     }
 }
 

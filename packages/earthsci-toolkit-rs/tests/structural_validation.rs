@@ -694,12 +694,23 @@ fn test_reaction_rate_units_mismatch_fixture_rejected() {
     let fixture = include_str!("../../../tests/invalid/units_reaction_rate_mismatch.esm");
     let esm_file = load(fixture).expect("fixture should parse and schema-validate");
     let result = validate(&esm_file);
-    assert!(
-        result
-            .errors()
-            .iter()
-            .any(|err| matches!(err.code, StructuralErrorCode::UnitInconsistency)),
-        "expected UnitInconsistency error for units_reaction_rate_mismatch.esm, got: {:?}",
-        result.errors()
+    let err = result
+        .errors()
+        .into_iter()
+        .find(|e| matches!(e.code, StructuralErrorCode::UnitInconsistency))
+        .unwrap_or_else(|| {
+            panic!(
+                "expected UnitInconsistency error for units_reaction_rate_mismatch.esm, got: {:?}",
+                result.errors()
+            )
+        });
+    // Match the contract in tests/invalid/expected_errors.json.
+    assert_eq!(
+        err.message,
+        "Reaction rate expression has incompatible units for reaction stoichiometry"
     );
+    assert_eq!(err.details["reaction_id"], "R1");
+    assert_eq!(err.details["rate_units"], "1/s");
+    assert_eq!(err.details["expected_rate_units"], "L/(mol*s)");
+    assert_eq!(err.details["reaction_order"], 2);
 }
