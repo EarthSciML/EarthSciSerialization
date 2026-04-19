@@ -647,9 +647,21 @@ def simulate(
         state_symbols = [symbol_map[name] for name in state_names]
         rhs_funcs = [sp.lambdify(state_symbols, expr, "numpy") for expr in rhs_exprs]
 
+        # Clip only chemical species to non-negative before RHS evaluation;
+        # generic state variables (position, velocity, etc.) may legitimately
+        # be negative and must not be mutated.
+        species_mask = np.array(
+            [flat.state_variables[name].type == "species" for name in state_names],
+            dtype=bool,
+        )
+
         def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
-            y_clipped = np.maximum(y, 0.0)
-            dydt = np.array([func(*y_clipped) for func in rhs_funcs])
+            if species_mask.any():
+                y_eval = y.copy()
+                y_eval[species_mask] = np.maximum(y_eval[species_mask], 0.0)
+            else:
+                y_eval = y
+            dydt = np.array([func(*y_eval) for func in rhs_funcs])
             if not np.all(np.isfinite(dydt)):
                 raise SimulationError("Non-finite derivatives encountered")
             return dydt
