@@ -299,3 +299,47 @@ class TestDeriveODEs:
         # Should successfully create model
         assert model.name == "source_sink_odes"
         assert len(model.equations) == 2  # Both A and B have rate equations
+
+    def test_rate_expression_already_contains_substrate(self):
+        """Rate like ``k*A*B`` must NOT be re-multiplied by A and B.
+
+        Mirrors Julia's ``mass_action_rate`` detect-and-skip: when the
+        user-supplied rate already references any substrate, it is treated
+        as the full rate law, not a bare coefficient.
+        """
+        species = [Species(name="A"), Species(name="B")]
+        params = [Parameter(name="k", value=0.1)]
+        # rate = k * A * B (full mass-action rate, not just the constant)
+        full_rate = ExprNode(op="*", args=["k", "A", "B"])
+        reaction = Reaction(
+            name="r",
+            reactants={"A": 1.0, "B": 1.0},
+            products={},
+            rate_constant=full_rate,
+        )
+        system = ReactionSystem(
+            name="mass_action",
+            species=species,
+            parameters=params,
+            reactions=[reaction],
+        )
+
+        model = derive_odes(system)
+
+        # dA/dt should be -(k*A*B), not -(k*A*B*A*B). Inspect the AST.
+        da_eq = next(
+            eq for eq in model.equations
+            if isinstance(eq.lhs, ExprNode) and eq.lhs.op == "D" and eq.lhs.args[0] == "A"
+        )
+        # rhs = -1 * (k*A*B). Walk down to the rate factor.
+        contribution = da_eq.rhs
+        assert isinstance(contribution, ExprNode) and contribution.op == "*"
+        # Flatten multiplication args and count how many times A/B appear.
+        def _count_var(expr, name):
+            if isinstance(expr, str):
+                return 1 if expr == name else 0
+            if isinstance(expr, ExprNode):
+                return sum(_count_var(a, name) for a in expr.args)
+            return 0
+        assert _count_var(da_eq.rhs, "A") == 1
+        assert _count_var(da_eq.rhs, "B") == 1
