@@ -576,4 +576,39 @@ mod tests {
             CanonicalizeError::DivByZero
         );
     }
+
+    /// Conformance fixture consumer — the same fixture set is run by every
+    /// binding's tests; passing here means this binding produces canonical
+    /// output that matches the cross-binding contract.
+    #[test]
+    fn cross_binding_conformance_fixtures() {
+        use std::path::PathBuf;
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        // packages/earthsci-toolkit-rs -> repo root is 2 levels up.
+        let repo_root: PathBuf = PathBuf::from(manifest_dir)
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let dir = repo_root.join("tests").join("conformance").join("canonical");
+        let manifest_bytes = std::fs::read(dir.join("manifest.json")).expect("read manifest");
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&manifest_bytes).expect("parse manifest");
+        let fixtures = manifest["fixtures"].as_array().expect("fixtures array");
+        assert!(!fixtures.is_empty(), "manifest has no fixtures");
+        for f in fixtures {
+            let id = f["id"].as_str().unwrap();
+            let path = dir.join(f["path"].as_str().unwrap());
+            let raw = std::fs::read(&path).expect("read fixture");
+            let fixture: serde_json::Value =
+                serde_json::from_slice(&raw).expect("parse fixture");
+            let input_json = fixture["input"].clone();
+            let expr: Expr =
+                serde_json::from_value(input_json).expect("decode input as Expr");
+            let got = canonical_json(&expr).expect("canonicalize");
+            let want = fixture["expected"].as_str().unwrap();
+            assert_eq!(got, want, "fixture {id}: got {got}, want {want}");
+        }
+    }
 }

@@ -1,0 +1,14 @@
+{
+  "id": "n_ary_flatten",
+  "description": "N-ary flattening of nested + and *. RFC §5.4.3.",
+  "input": {
+    "op": "+",
+    "args": [
+      {"op": "+", "args": ["a", {"op": "+", "args": ["b", "c"]}]},
+      {"op": "*", "args": [{"op": "*", "args": ["x", "y"]}, "z"]},
+      "d"
+    ]
+  },
+  "expected": "{\"args\":[\"a\",\"b\",\"c\",\"d\",{\"args\":[\"x\",\"y\",\"z\"],\"op\":\"*\"}],\"op\":\"+\"}",
+  "tags": ["flatten", "ordering", "nonleaf"]
+}

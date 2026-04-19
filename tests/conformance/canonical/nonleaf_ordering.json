@@ -1,0 +1,14 @@
+{
+  "id": "nonleaf_ordering",
+  "description": "Non-leaf operator nodes are ordered by canonical-JSON byte compare (RFC §5.4.2 tier 3). Three sibling op nodes here permute into stable JSON-lexicographic order.",
+  "input": {
+    "op": "+",
+    "args": [
+      {"op": "*", "args": ["z", "z"]},
+      {"op": "*", "args": ["a", "a"]},
+      {"op": "*", "args": ["m", "m"]}
+    ]
+  },
+  "expected": "{\"args\":[{\"args\":[\"a\",\"a\"],\"op\":\"*\"},{\"args\":[\"m\",\"m\"],\"op\":\"*\"},{\"args\":[\"z\",\"z\"],\"op\":\"*\"}],\"op\":\"+\"}",
+  "tags": ["ordering", "nonleaf"]
+}

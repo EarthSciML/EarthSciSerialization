@@ -1,0 +1,7 @@
+{
+  "id": "float_subnormal",
+  "description": "Shortest-round-trip float emission including subnormal 5e-324. RFC §5.4.6 subnormal bullet. The -0.0 is treated as a numeric zero by §5.4.4 and drops because all surviving args are float (type-preserving condition holds).",
+  "input": {"op": "+", "args": [5e-324, -0.0, 2.5, 1.0]},
+  "expected": "{\"args\":[5e-324,1.0,2.5],\"op\":\"+\"}",
+  "tags": ["float", "subnormal", "ordering", "zero_elim"]
+}

@@ -94,4 +94,41 @@ const ESM_Expr = EarthSciSerialization.Expr
     @testset "div 0/0" begin
         @test_throws CanonicalizeError canonicalize(op("/", Any[0, 0]))
     end
+
+    @testset "cross-binding conformance fixtures" begin
+        # tests/conformance/canonical/*.json — same fixtures every binding runs.
+        using JSON3
+        repo_root = abspath(joinpath(@__DIR__, "..", "..", ".."))
+        dir = joinpath(repo_root, "tests", "conformance", "canonical")
+        manifest = JSON3.read(read(joinpath(dir, "manifest.json"), String))
+        fixtures = manifest.fixtures
+        @test !isempty(fixtures)
+
+        function wire_to_expr(node)
+            if node isa AbstractDict || (node isa JSON3.Object)
+                if haskey(node, :op) && haskey(node, :args)
+                    args = ESM_Expr[wire_to_expr(a) for a in node[:args]]
+                    return OpExpr(String(node[:op]), args)
+                end
+            end
+            if node isa Integer
+                return IntExpr(Int64(node))
+            elseif node isa AbstractFloat
+                return NumExpr(Float64(node))
+            elseif node isa AbstractString
+                return VarExpr(String(node))
+            end
+            error("unknown wire form: $(typeof(node))")
+        end
+
+        for f in fixtures
+            id = String(f[:id])
+            path = joinpath(dir, String(f[:path]))
+            fixture = JSON3.read(read(path, String))
+            expr = wire_to_expr(fixture[:input])
+            got = canonical_json(expr)
+            want = String(fixture[:expected])
+            @test got == want
+        end
+    end
 end

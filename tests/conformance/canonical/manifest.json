@@ -1,0 +1,14 @@
+{
+  "category": "canonical",
+  "version": "1.0",
+  "description": "Cross-binding canonical-form fixtures per discretization RFC §5.4. Each fixture's `expected` field is the byte-exact canonical JSON each binding's canonical_json() must produce.",
+  "fixtures": [
+    {"id": "integer_literals",  "path": "integer_literals.json",  "tags": ["integer", "ordering"], "ts_skip": "int_required"},
+    {"id": "float_subnormal",   "path": "float_subnormal.json",   "tags": ["float", "subnormal", "signed_zero", "ordering"]},
+    {"id": "n_ary_flatten",     "path": "n_ary_flatten.json",     "tags": ["flatten", "ordering", "nonleaf"]},
+    {"id": "zero_elim",         "path": "zero_elim.json",         "tags": ["zero_elim", "integer", "ordering", "nonleaf"], "ts_skip": "int_required"},
+    {"id": "nonleaf_ordering",  "path": "nonleaf_ordering.json",  "tags": ["ordering", "nonleaf"]}
+  ],
+  "ts_skip_reason": "TypeScript canonicalize cannot emit JSON-integer tokens until gt-ca2u (rep refactor) lands; integer-bearing fixtures emit `1.0` instead of `1`. Skip these for TS only.",
+  "follow_up": "gt-z8k0 follow-up bead: TS canonicalize once gt-ca2u lands."
+}

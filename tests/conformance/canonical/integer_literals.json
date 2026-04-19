@@ -1,0 +1,7 @@
+{
+  "id": "integer_literals",
+  "description": "Integer literals serialize as bare JSON integers (no '.', no 'e'). RFC §5.4.6 first bullet. The 0 is dropped by §5.4.4 zero-elim; the remaining literals sort ascending by value.",
+  "input": {"op": "+", "args": [1, -42, 0, "x"]},
+  "expected": "{\"args\":[-42,1,\"x\"],\"op\":\"+\"}",
+  "tags": ["integer", "ordering", "zero_elim"]
+}

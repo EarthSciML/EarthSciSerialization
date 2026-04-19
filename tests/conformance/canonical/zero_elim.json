@@ -1,0 +1,16 @@
+{
+  "id": "zero_elim",
+  "description": "Zero elimination from + (RFC §5.4.4). Integer 0 drops cleanly even when surviving args are mixed bare-variable / non-leaf.",
+  "input": {
+    "op": "+",
+    "args": [
+      0,
+      "x",
+      0,
+      {"op": "*", "args": ["a", "b"]},
+      0
+    ]
+  },
+  "expected": "{\"args\":[\"x\",{\"args\":[\"a\",\"b\"],\"op\":\"*\"}],\"op\":\"+\"}",
+  "tags": ["zero_elim", "integer", "ordering", "nonleaf"]
+}
