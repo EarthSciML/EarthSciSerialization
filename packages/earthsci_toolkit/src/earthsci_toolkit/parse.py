@@ -1663,6 +1663,77 @@ def _is_dimensionless_unit(unit: Optional[str]) -> bool:
         return False
 
 
+def _model_coordinate_units(
+    data: Dict[str, Any], model: Dict[str, Any]
+) -> Optional[Dict[str, Optional[str]]]:
+    """
+    Resolve the enclosing model's domain coordinate units.
+
+    Returns a {dim_name: units_str_or_None} map — units is None when the
+    coordinate is declared without a `units` field. Returns None when the
+    model has no domain reference or the domain/spatial block is missing,
+    so callers can distinguish "no info" from "coord declared, units absent".
+    """
+    domain_name = model.get("domain")
+    if not domain_name:
+        return None
+    domain = (data.get("domains") or {}).get(domain_name)
+    if not isinstance(domain, dict):
+        return None
+    spatial = domain.get("spatial")
+    if not isinstance(spatial, dict):
+        return None
+    coords: Dict[str, Optional[str]] = {}
+    for dim_name, dim_def in spatial.items():
+        if isinstance(dim_def, dict):
+            coords[dim_name] = dim_def.get("units")
+        else:
+            coords[dim_name] = None
+    return coords
+
+
+def _walk_expression_for_spatial_operator_checks(
+    expr: Any,
+    coord_units: Optional[Dict[str, Optional[str]]],
+    path: str,
+    errors: List[str],
+) -> None:
+    """
+    Walk an expression tree and flag grad/div/laplacian whose spatial
+    coordinate has no declared units (or is not present in the model's
+    domain at all), which leaves the operator's result dimensionally
+    unresolvable. Matches the TypeScript validator's behaviour.
+    """
+    if not isinstance(expr, dict):
+        return
+    op = expr.get("op")
+    args = expr.get("args", []) or []
+    if op in ("grad", "div", "laplacian"):
+        dim_name = expr.get("dim")
+        if dim_name is not None:
+            if coord_units is None or dim_name not in coord_units:
+                errors.append(
+                    f"{path}: operator '{op}' references coordinate '{dim_name}' "
+                    f"not declared in model's domain (unit_inconsistency)"
+                )
+            else:
+                coord_u = coord_units[dim_name]
+                if coord_u is None or _is_dimensionless_unit(coord_u):
+                    errors.append(
+                        f"{path}: {op.capitalize()} operator applied to variable "
+                        f"with incompatible spatial units: coordinate '{dim_name}' "
+                        f"has no declared units (unit_inconsistency)"
+                    )
+    for i, arg in enumerate(args):
+        _walk_expression_for_spatial_operator_checks(
+            arg, coord_units, f"{path}/args[{i}]", errors
+        )
+    if "expr" in expr:
+        _walk_expression_for_spatial_operator_checks(
+            expr["expr"], coord_units, f"{path}/expr", errors
+        )
+
+
 def _walk_expression_for_exponent_checks(
     expr: Any,
     var_units: Dict[str, str],
@@ -1762,10 +1833,15 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
        clearly incompatible with x/time (e.g., velocity-rate set to mass).
     2. Observed variable expressions whose top-level + or - has incompatible operands.
     3. '^' operators whose right operand has non-dimensionless units.
+    4. grad/div/laplacian operators whose referenced coordinate is not
+       declared in the model's domain, or is declared without units — the
+       result's dimension cannot be resolved, matching the TypeScript
+       validator's behaviour.
     """
     var_units = _collect_var_units(tables)
 
     for mname, m in data.get("models", {}).items():
+        coord_units = _model_coordinate_units(data, m)
         # Observed variables: check direct addition/subtraction operand compatibility
         for vname, vdef in m.get("variables", {}).items():
             if vdef.get("type") == "observed" and "expression" in vdef:
@@ -1788,13 +1864,20 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
                 _walk_expression_for_exponent_checks(
                     expr, var_units, f"models/{mname}/variables/{vname}/expression", errors
                 )
+                _walk_expression_for_spatial_operator_checks(
+                    expr, coord_units, f"models/{mname}/variables/{vname}/expression", errors
+                )
 
-        # Check '^' exponents in equation rhs/lhs expressions as well
+        # Check '^' exponents and grad/div/laplacian coordinate resolution
+        # in equation rhs/lhs expressions as well
         for ei, eq in enumerate(m.get("equations", [])):
             for side in ("lhs", "rhs"):
                 if side in eq:
                     _walk_expression_for_exponent_checks(
                         eq[side], var_units, f"models/{mname}/equations[{ei}]/{side}", errors
+                    )
+                    _walk_expression_for_spatial_operator_checks(
+                        eq[side], coord_units, f"models/{mname}/equations[{ei}]/{side}", errors
                     )
 
         # Equations: only check D(x)/dt = bare_var case
