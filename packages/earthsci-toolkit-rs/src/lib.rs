@@ -46,6 +46,7 @@ pub mod graph;
 pub mod migration;
 pub mod parse;
 pub mod reactions;
+pub mod rule_engine;
 pub mod ref_loading;
 pub mod serialize;
 pub mod substitute;
@@ -66,6 +67,11 @@ pub mod simulate_array;
 
 // Re-export main types
 pub use canonicalize::{CanonicalizeError, canonical_json, canonicalize, format_canonical_float};
+pub use rule_engine::{
+    DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
+    apply_bindings, check_guard, check_guards, check_unrewritten_pde_ops, match_pattern,
+    parse_expr, parse_rules, rewrite,
+};
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};
 pub use flatten::{
