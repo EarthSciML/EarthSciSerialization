@@ -33,6 +33,7 @@ include("graph.jl")
 include("units.jl")
 include("edit.jl")
 include("codegen.jl")
+include("canonicalize.jl")
 
 export
     # Expression types
@@ -101,6 +102,8 @@ export
     # Code generation
     to_julia_code, to_python_code,
     # ASCII display format
-    to_ascii, format_expression_ascii
+    to_ascii, format_expression_ascii,
+    # Canonical AST form (RFC §5.4)
+    canonicalize, canonical_json, format_canonical_float, CanonicalizeError
 
 end # module EarthSciSerialization
