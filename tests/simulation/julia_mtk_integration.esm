@@ -125,6 +125,38 @@
             ]
           }
         }
+      ],
+      "tolerance": {
+        "rel": 1.0e-6,
+        "abs": 1.0e-10
+      },
+      "tests": [
+        {
+          "id": "harmonic_analytical",
+          "description": "Harmonic oscillator x'' + omega^2*x = 0 with x(0)=1, v(0)=0, omega=1. Closed-form solution is x(t)=cos(omega*t), v(t)=-omega*sin(omega*t); energy = 0.5 constant. Sample at t = 0, pi/2, pi, 3*pi/2, 2*pi.",
+          "initial_conditions": {
+            "x": 1.0,
+            "v": 0.0
+          },
+          "parameter_overrides": {
+            "omega": 1.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 6.283185307179586
+          },
+          "assertions": [
+            { "variable": "x", "time": 0.0,                "expected": 1.0 },
+            { "variable": "x", "time": 1.5707963267948966, "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x", "time": 3.141592653589793,  "expected": -1.0 },
+            { "variable": "x", "time": 4.71238898038469,   "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "x", "time": 6.283185307179586,  "expected": 1.0 },
+            { "variable": "v", "time": 0.0,                "expected": 0.0,  "tolerance": { "abs": 1.0e-10 } },
+            { "variable": "v", "time": 1.5707963267948966, "expected": -1.0 },
+            { "variable": "v", "time": 3.141592653589793,  "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
+            { "variable": "v", "time": 4.71238898038469,   "expected": 1.0 }
+          ]
+        }
       ]
     },
     "StiffChemistry": {

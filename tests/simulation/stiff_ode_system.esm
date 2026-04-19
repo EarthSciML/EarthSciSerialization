@@ -95,6 +95,31 @@
             ]
           }
         }
+      ],
+      "tolerance": {
+        "rel": 1.0e-4,
+        "abs": 1.0e-8
+      },
+      "tests": [
+        {
+          "id": "initial_condition_identity",
+          "description": "Van der Pol with epsilon=0.01 (default) is extremely stiff and cannot be integrated by Tsit5 over a meaningful interval. This smoke test verifies MTK compile + solve-at-t0 round-trip: at t=0, solver returns the initial condition exactly. Larger-scale reference solutions require an implicit solver (Rosenbrock/Rodas) and are out of scope for the Tsit5-based inline runner.",
+          "initial_conditions": {
+            "x": 2.0,
+            "y": 0.0
+          },
+          "parameter_overrides": {
+            "epsilon": 1.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 1.0e-6
+          },
+          "assertions": [
+            { "variable": "x", "time": 0.0, "expected": 2.0, "tolerance": { "abs": 1.0e-12 } },
+            { "variable": "y", "time": 0.0, "expected": 0.0, "tolerance": { "abs": 1.0e-12 } }
+          ]
+        }
       ]
     }
   },

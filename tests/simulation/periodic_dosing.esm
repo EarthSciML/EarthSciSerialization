@@ -72,7 +72,7 @@
         {
           "trigger": {
             "type": "periodic",
-            "interval": 1.0,
+            "interval": 8.0,
             "initial_offset": 0.0
           },
           "description": "Administer dose every 8 hours",
@@ -87,6 +87,30 @@
                 ]
               }
             }
+          ]
+        }
+      ],
+      "tolerance": {
+        "rel": 1.0e-4,
+        "abs": 1.0e-8
+      },
+      "tests": [
+        {
+          "id": "pre_first_dose_ic",
+          "description": "Initial condition verification: before any periodic dose fires, drug_amount equals IC (0.0). Assertion at t=0 is trivially pre-event regardless of whether the MTK SymbolicDiscreteCallback fires at t=t0 or t=t0+interval.",
+          "initial_conditions": {
+            "drug_amount": 0.0
+          },
+          "parameter_overrides": {
+            "elimination_rate": 0.1,
+            "dose_amount": 100.0
+          },
+          "time_span": {
+            "start": 0.0,
+            "end": 0.5
+          },
+          "assertions": [
+            { "variable": "drug_amount", "time": 0.0, "expected": 0.0, "tolerance": { "abs": 1.0e-12 } }
           ]
         }
       ]

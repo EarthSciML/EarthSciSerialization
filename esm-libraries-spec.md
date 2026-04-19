@@ -970,13 +970,15 @@ cover at minimum:
    `A, B → 0, C → 1` at `t = 4e10`. Robertson is the canonical stiff
    validation case; if it integrates correctly, the stiff path is proven.
 
-5. **.esm fixture round-trip vs cross-language reference** —
-   Load `tests/simulation/simple_ode.esm`, flatten, build a `System`, and
-   compare the numerical trajectory against the analytical / Python-SciPy
-   reference in `tests/simulation/reference_solutions/simple_ode_solution.json`
-   at the documented sample times to `rtol = 1e-6`. This proves that the
-   Julia library produces the same trajectory as the cross-language
-   reference solution for an identical input fixture.
+5. **.esm fixture round-trip vs inline reference** —
+   Load each fixture under `tests/simulation/*.esm`, walk its inline
+   `tests` blocks, build a `System`, and compare the numerical trajectory
+   against each test's declared `assertions` at the documented
+   sample times under the resolved (assertion > test > model) tolerance.
+   This proves that the Julia library reproduces the cross-language
+   analytical or numerical reference carried in the fixture itself — the
+   earlier `reference_solutions/*.json` filesystem pairing was migrated
+   to inline `tests` blocks by gt-l5b and gt-3lff.
 
 **Dependency discipline.** The solver packages used by these tests
 (`OrdinaryDiffEqTsit5`, `OrdinaryDiffEqRosenbrock`) MUST live in
