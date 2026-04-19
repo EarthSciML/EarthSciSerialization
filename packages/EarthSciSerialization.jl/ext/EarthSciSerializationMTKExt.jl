@@ -575,8 +575,15 @@ function _make_array_dep_var(name::Symbol, iv_syms::Vector{Any},
     holder_names = [Symbol("__esm_iv_", i) for i in 1:length(iv_syms)]
     bindings = [Core.Expr(:(=), holder_names[i], iv_syms[i]) for i in 1:length(iv_syms)]
     call_expr = Core.Expr(:call, name, holder_names...)
-    # Build the `[range_1, range_2, ...]` index spec as a Julia :ref expression.
-    ranges_ast = [Core.Expr(:call, :(:), first(r), last(r)) for r in shape]
+    # Always pad the low side of the shape to 1. MTK's init path treats
+    # Symbolics.Arr indices as raw 1-based Vector positions, so declaring
+    # `@variables flux(t)[3:17]` produces a 15-slot backing Vector but
+    # `flux[17]` then resolves to internal position 17 and raises
+    # BoundsError during `generate_initializesystem_timevarying`. Using
+    # `1:last(r)` makes the backing Vector large enough that every used
+    # index is a valid position; the low slots that fall outside the
+    # inferred range are simply left out of `states` in `_build_var_dict`.
+    ranges_ast = [Core.Expr(:call, :(:), 1, last(r)) for r in shape]
     ref_expr = Core.Expr(:ref, call_expr, ranges_ast...)
     # `(name(iv...)[range...])` — the parenthesized form the macro expects.
     paren_expr = Core.Expr(:block, ref_expr)
