@@ -202,4 +202,127 @@ describe('Structural validation', () => {
     expect(result).toHaveProperty('unit_warnings');
     expect(Array.isArray(result.unit_warnings)).toBe(true);
   });
+
+  it('rejects reaction rate with stoichiometry mismatch (unit_inconsistency)', () => {
+    // 2nd-order A + B -> C with a 1st-order rate constant (1/s) —
+    // the reference fixture for the cross-binding dimensional check.
+    const data = {
+      esm: "0.1.0",
+      metadata: { name: "BadReactions" },
+      reaction_systems: {
+        BadReactions: {
+          species: {
+            A: { units: "mol/L", default: 1.0 },
+            B: { units: "mol/L", default: 1.0 },
+            C: { units: "mol/L", default: 0.0 }
+          },
+          parameters: {
+            k: { units: "1/s", default: 0.1 }
+          },
+          reactions: [
+            {
+              id: "R1",
+              substrates: [
+                { species: "A", stoichiometry: 1 },
+                { species: "B", stoichiometry: 1 }
+              ],
+              products: [{ species: "C", stoichiometry: 1 }],
+              rate: "k"
+            }
+          ]
+        }
+      }
+    };
+
+    const result = validate(data);
+
+    expect(result.is_valid).toBe(false);
+    const err = result.structural_errors.find(e => e.code === 'unit_inconsistency');
+    expect(err).toBeDefined();
+    expect(err!.path).toBe('/reaction_systems/BadReactions/reactions/0');
+    expect(err!.message).toBe(
+      'Reaction rate expression has incompatible units for reaction stoichiometry',
+    );
+    expect(err!.details).toEqual({
+      reaction_id: 'R1',
+      rate_units: '1/s',
+      expected_rate_units: 'L/(mol*s)',
+      reaction_order: 2,
+    });
+  });
+
+  it('accepts reaction rate with matching stoichiometry (2nd-order)', () => {
+    // ESM rate fields hold the rate CONSTANT (dims = conc^(1-order)/time);
+    // the integrator multiplies by substrate concentrations at evaluation
+    // time. So a 2nd-order constant must carry L/mol/s ≡ L/(mol*s) dims.
+    const data = {
+      esm: "0.1.0",
+      metadata: { name: "GoodReactions" },
+      reaction_systems: {
+        GoodReactions: {
+          species: {
+            A: { units: "mol/L", default: 1.0 },
+            B: { units: "mol/L", default: 1.0 },
+            C: { units: "mol/L", default: 0.0 }
+          },
+          parameters: {
+            // L/mol/s equals L/(mol*s) dimensionally; the current parseUnit
+            // does not accept parenthesized denominators so we use the
+            // linear form.
+            k: { units: "L/mol/s", default: 0.1 }
+          },
+          reactions: [
+            {
+              id: "R1",
+              substrates: [
+                { species: "A", stoichiometry: 1 },
+                { species: "B", stoichiometry: 1 }
+              ],
+              products: [{ species: "C", stoichiometry: 1 }],
+              rate: "k"
+            }
+          ]
+        }
+      }
+    };
+
+    const result = validate(data);
+    expect(result.structural_errors.some(e => e.code === 'unit_inconsistency')).toBe(false);
+  });
+
+  it('skips stoichiometry check when first substrate is dimensionless (mol/mol)', () => {
+    // Atmospheric-chemistry convention: a 1/s rate constant with
+    // mole-fraction species is well-formed because the rate expression
+    // typically carries a number-density factor.
+    const data = {
+      esm: "0.1.0",
+      metadata: { name: "DimlessReactions" },
+      reaction_systems: {
+        DimlessReactions: {
+          species: {
+            A: { units: "mol/mol", default: 1.0 },
+            B: { units: "mol/mol", default: 1.0 },
+            C: { units: "mol/mol", default: 0.0 }
+          },
+          parameters: {
+            k: { units: "1/s", default: 0.1 }
+          },
+          reactions: [
+            {
+              id: "R1",
+              substrates: [
+                { species: "A", stoichiometry: 1 },
+                { species: "B", stoichiometry: 1 }
+              ],
+              products: [{ species: "C", stoichiometry: 1 }],
+              rate: "k"
+            }
+          ]
+        }
+      }
+    };
+
+    const result = validate(data);
+    expect(result.structural_errors.some(e => e.code === 'unit_inconsistency')).toBe(false);
+  });
 });

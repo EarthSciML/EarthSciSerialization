@@ -345,65 +345,9 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
     }
   }
 
-  if (file.reaction_systems) {
-    for (const [systemName, system] of Object.entries(file.reaction_systems)) {
-      if (!('reactions' in system) || !system.reactions) continue
-      const speciesMap = ('species' in system && system.species) ? system.species : {}
-
-      for (let i = 0; i < system.reactions.length; i++) {
-        const reaction = system.reactions[i]
-        if (!reaction || !reaction.substrates || reaction.substrates.length === 0) continue
-
-        // Derive the reference concentration unit from the first substrate
-        // species. Skip the stoichiometric check when that unit is empty or
-        // dimensionless (mol/mol, ppm, …) — the rate-constant convention is
-        // ambiguous there and authors commonly encode a number-density factor
-        // directly in the rate expression.
-        const firstSubstrate = reaction.substrates[0]
-        const firstSpecies = speciesMap[firstSubstrate.species]
-        if (!firstSpecies || !firstSpecies.units) continue
-
-        const concUnit = parseUnit(firstSpecies.units)
-        if (isDimensionless(concUnit)) continue
-
-        const totalOrder = reaction.substrates.reduce(
-          (sum, s) => sum + (s && typeof s.stoichiometry === 'number' ? s.stoichiometry : 0),
-          0,
-        )
-        const expectedConcPower = 1 - totalOrder
-
-        try {
-          const rateResult = checkDimensions(reaction.rate, unitBindings)
-          if (rateResult.warnings.some((w) => w.includes('Unknown variable'))) continue
-
-          const expectedDims: CanonicalDims = {}
-          for (const [k, v] of Object.entries(concUnit.dims)) {
-            if (v == null) continue
-            expectedDims[k as keyof CanonicalDims] = v * expectedConcPower
-          }
-          const timeDims: CanonicalDims = { s: 1 }
-          for (const [k, v] of Object.entries(timeDims)) {
-            if (v == null) continue
-            const key = k as keyof CanonicalDims
-            expectedDims[key] = (expectedDims[key] ?? 0) - v
-          }
-          pruneZeros(expectedDims)
-
-          if (!dimsEqual(rateResult.dimensions.dims, expectedDims)) {
-            warnings.push({
-              message: `Reaction ${i} (${reaction.id}) rate expression has incompatible units for reaction stoichiometry: observed ${formatDims(rateResult.dimensions.dims)}, expected ${formatDims(expectedDims)} (total order ${totalOrder})`,
-              location: `reaction_systems.${systemName}.reactions.${i}`,
-            })
-          }
-        } catch (error) {
-          warnings.push({
-            message: `Error checking reaction ${i} rate dimensions: ${error instanceof Error ? error.message : String(error)}`,
-            location: `reaction_systems.${systemName}.reactions.${i}`,
-          })
-        }
-      }
-    }
-  }
+  // Reaction-rate / stoichiometry dimensional check lives in validate.ts
+  // (`validateReactionRateUnits`) so it can emit a structured
+  // `unit_inconsistency` error with typed details instead of a prose warning.
 
   const coordinateBindingsFor = (domainName: string | null | undefined): Map<string, ParsedUnit> | undefined => {
     if (!domainName || !file.domains) return undefined
@@ -542,14 +486,14 @@ function pruneZeros(dims: CanonicalDims): void {
   }
 }
 
-function isDimensionless(unit: ParsedUnit): boolean {
+export function isDimensionless(unit: ParsedUnit): boolean {
   for (const v of Object.values(unit.dims)) {
     if (v != null && v !== 0) return false
   }
   return true
 }
 
-function dimsEqual(a: CanonicalDims, b: CanonicalDims): boolean {
+export function dimsEqual(a: CanonicalDims, b: CanonicalDims): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)])
   for (const key of keys) {
     const av = (a as Record<string, number | undefined>)[key] ?? 0

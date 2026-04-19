@@ -6,7 +6,16 @@
  */
 
 import { validateSchema, load, type SchemaError } from './parse.js';
-import { validateUnits, type UnitWarning } from './units.js';
+import {
+    validateUnits,
+    checkDimensions,
+    parseUnit,
+    isDimensionless,
+    dimsEqual,
+    type UnitWarning,
+    type CanonicalDims,
+    type ParsedUnit,
+} from './units.js';
 import type {
     EsmFile,
     Model,
@@ -479,6 +488,194 @@ function validateReactionConsistency(reactionSystem: ReactionSystem, systemPath:
 }
 
 /**
+ * Build a unit-binding map for a single reaction system covering its species
+ * and parameters. Mirrors the binding environment used by validateUnits but
+ * scoped to one system so dimensional checks see the author-declared units
+ * for each symbol.
+ */
+function buildReactionSystemUnitBindings(
+    reactionSystem: ReactionSystem,
+): Map<string, ParsedUnit> {
+    const bindings = new Map<string, ParsedUnit>();
+    if ('species' in reactionSystem && reactionSystem.species) {
+        for (const [name, species] of Object.entries(reactionSystem.species)) {
+            if (species && species.units) {
+                bindings.set(name, parseUnit(species.units));
+            }
+        }
+    }
+    if ('parameters' in reactionSystem && reactionSystem.parameters) {
+        for (const [name, param] of Object.entries(reactionSystem.parameters)) {
+            if (param && param.units) {
+                bindings.set(name, parseUnit(param.units));
+            }
+        }
+    }
+    return bindings;
+}
+
+/**
+ * Split a unit string like "mol/L" into ("mol", "L") or "mol/(L*s)" into
+ * ("mol", "L*s"). The split is on the first top-level '/'. If no '/' appears,
+ * the whole string is the numerator. Matches Go's splitUnitNumDen so the
+ * expected_rate_units payloads line up byte-for-byte across bindings.
+ */
+function splitUnitNumDen(s: string): [string, string] {
+    const trimmed = s.trim();
+    if (trimmed === '') return ['', ''];
+    let depth = 0;
+    for (let i = 0; i < trimmed.length; i++) {
+        const c = trimmed[i];
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        else if (c === '/' && depth === 0) {
+            const num = trimmed.slice(0, i).trim();
+            let den = trimmed.slice(i + 1).trim();
+            if (den.startsWith('(') && den.endsWith(')')) {
+                den = den.slice(1, -1);
+            }
+            return [num, den];
+        }
+    }
+    return [trimmed, ''];
+}
+
+/**
+ * Render a unit factor raised to an integer power. Parenthesizes compound
+ * factors when the exponent is not 1. Mirrors Go's powerFactor.
+ */
+function powerFactor(s: string, n: number): string {
+    const t = s.trim();
+    if (t === '') return '';
+    if (n === 1) return t;
+    if (/[*/]/.test(t)) return `(${t})^${n}`;
+    return `${t}^${n}`;
+}
+
+/**
+ * Compose the canonical expected rate-unit string from the reference species
+ * unit string and total reaction order: rate_units = species_units^(1-order) / s.
+ * Matches the contract in tests/invalid/expected_errors.json and the Go
+ * formatExpectedRateUnits helper so cross-binding details stay identical.
+ *
+ *   ("mol/L", 2) → "L/(mol*s)"
+ *   ("mol/L", 1) → "1/s"
+ *   ("mol/L", 0) → "mol/(L*s)"
+ *   ("mol/m^3", 2) → "m^3/(mol*s)"
+ */
+function formatExpectedRateUnits(speciesUnits: string, totalOrder: number): string {
+    let exp = 1 - totalOrder;
+    if (exp === 0) return '1/s';
+    let [num, den] = splitUnitNumDen(speciesUnits);
+    if (exp < 0) {
+        [num, den] = [den, num];
+        exp = -exp;
+    }
+    let numStr = powerFactor(num, exp);
+    const denFactors: string[] = [];
+    const df = powerFactor(den, exp);
+    if (df !== '') denFactors.push(df);
+    denFactors.push('s');
+    if (numStr === '') numStr = '1';
+    if (denFactors.length === 1) return `${numStr}/${denFactors[0]}`;
+    return `${numStr}/(${denFactors.join('*')})`;
+}
+
+/**
+ * If the rate expression is a bare variable reference (species or parameter
+ * name), return its declared unit string. Otherwise returns the empty string.
+ * Matches Go's rateVarName + unit lookup so rate_units details align across
+ * bindings for the bare-variable case that the cross-binding fixture uses.
+ */
+function rateUnitStringFromExpression(
+    rate: Expression,
+    reactionSystem: ReactionSystem,
+): string {
+    if (typeof rate !== 'string') return '';
+    const param = (reactionSystem.parameters || {})[rate];
+    if (param && param.units) return param.units;
+    const species = (reactionSystem.species || {})[rate];
+    if (species && species.units) return species.units;
+    return '';
+}
+
+/**
+ * Enforce the mass-action dimensional constraint for reaction rates from
+ * spec §7.4: rate dimensions must equal concentration^(1-total_order)/time,
+ * where the reference concentration unit is the first substrate's declared
+ * units. Mirrors validate_reaction_system_dimensions in Julia and
+ * validateReactionRateUnits in Go.
+ *
+ * Skipped when the first substrate is dimensionless (mol/mol, ppm, …)
+ * because atmospheric-chemistry rate expressions commonly bake a
+ * number-density factor into the rate constant, making the
+ * stoichiometric-order convention ambiguous there.
+ */
+function validateReactionRateUnits(
+    reactionSystem: ReactionSystem,
+    systemPath: string,
+): StructuralError[] {
+    const errors: StructuralError[] = [];
+    if (!reactionSystem.reactions) return errors;
+
+    const bindings = buildReactionSystemUnitBindings(reactionSystem);
+    const speciesMap = reactionSystem.species || {};
+
+    for (let i = 0; i < reactionSystem.reactions.length; i++) {
+        const reaction = reactionSystem.reactions[i];
+        if (!reaction || !reaction.substrates || reaction.substrates.length === 0) continue;
+
+        const firstSubstrate = reaction.substrates[0];
+        const firstSpecies = speciesMap[firstSubstrate.species];
+        if (!firstSpecies || !firstSpecies.units) continue;
+
+        const concUnit = parseUnit(firstSpecies.units);
+        if (isDimensionless(concUnit)) continue;
+
+        let resolvable = true;
+        let totalOrder = 0;
+        for (const sub of reaction.substrates) {
+            if (!sub || !bindings.has(sub.species)) {
+                resolvable = false;
+                break;
+            }
+            if (typeof sub.stoichiometry === 'number') {
+                totalOrder += sub.stoichiometry;
+            }
+        }
+        if (!resolvable) continue;
+
+        const rateResult = checkDimensions(reaction.rate, bindings);
+        if (rateResult.warnings.some(w => w.includes('Unknown variable'))) continue;
+
+        const expectedPower = 1 - totalOrder;
+        const expectedDims: CanonicalDims = {};
+        for (const [k, v] of Object.entries(concUnit.dims)) {
+            if (v == null) continue;
+            expectedDims[k as keyof CanonicalDims] = v * expectedPower;
+        }
+        const sKey = 's' as keyof CanonicalDims;
+        expectedDims[sKey] = (expectedDims[sKey] ?? 0) - 1;
+
+        if (dimsEqual(rateResult.dimensions.dims, expectedDims)) continue;
+
+        errors.push({
+            path: `${systemPath}/reactions/${i}`,
+            code: 'unit_inconsistency',
+            message: 'Reaction rate expression has incompatible units for reaction stoichiometry',
+            details: {
+                reaction_id: reaction.id,
+                rate_units: rateUnitStringFromExpression(reaction.rate, reactionSystem),
+                expected_rate_units: formatExpectedRateUnits(firstSpecies.units, totalOrder),
+                reaction_order: totalOrder,
+            },
+        });
+    }
+
+    return errors;
+}
+
+/**
  * Check coupling entries reference integrity
  */
 function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
@@ -807,12 +1004,14 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
             const systemPath = `/reaction_systems/${systemName}`;
 
             errors.push(...validateReactionConsistency(reactionSystem, systemPath));
+            errors.push(...validateReactionRateUnits(reactionSystem, systemPath));
 
             // Recursively validate subsystems
             if (reactionSystem.subsystems) {
                 for (const [subsystemName, subsystem] of Object.entries(reactionSystem.subsystems)) {
                     const subsystemPath = `${systemPath}/subsystems/${subsystemName}`;
                     errors.push(...validateReactionConsistency(subsystem, subsystemPath));
+                    errors.push(...validateReactionRateUnits(subsystem, subsystemPath));
                 }
             }
         }
