@@ -186,7 +186,8 @@ const schema = {
             ">", "<", ">=", "<=", "==", "!=",
             "and", "or", "not",
             "Pre",
-            "sign"
+            "sign",
+            "index"
           ]
         },
         "args": {

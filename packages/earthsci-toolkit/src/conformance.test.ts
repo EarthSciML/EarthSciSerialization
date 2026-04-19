@@ -111,6 +111,68 @@ describe('Conformance Test Suite', () => {
     });
   });
 
+  // RFC discretization §5.1 (gt-5s48): `index` is legal in any expression
+  // context, not only inside `arrayop.expr`. This test covers the scalar
+  // case — integer-literal and composite-arithmetic index arguments on
+  // the RHS of model equations — matching the Go adapter's approach. The
+  // shared cross-binding fixture at tests/indexing/idx_outside_arrayop.esm
+  // also uses `arrayop` in its integration harness; `arrayop` round-trip
+  // in the TypeScript binding is a separate gap and is tracked independently.
+  describe('RFC §5.1 — `index` outside arrayop', () => {
+    it('should round-trip scalar `index` RHS (integer and composite args)', () => {
+      const original = {
+        esm: '0.1.0',
+        metadata: {
+          name: 'index_scalar_rhs',
+          authors: ['EarthSciSerialization/polecats/chrome'],
+        },
+        models: {
+          M: {
+            variables: {
+              u:           { type: 'state' },
+              s_literal:   { type: 'state' },
+              s_composite: { type: 'state' },
+            },
+            equations: [
+              {
+                // D(s_literal) = index(u, 2)
+                lhs: { op: 'D', args: ['s_literal'], wrt: 't' },
+                rhs: { op: 'index', args: ['u', 2] },
+              },
+              {
+                // D(s_composite) = index(u, 1 + 2)
+                lhs: { op: 'D', args: ['s_composite'], wrt: 't' },
+                rhs: { op: 'index', args: ['u', { op: '+', args: [1, 2] }] },
+              },
+            ],
+          },
+        },
+      };
+
+      const firstText = JSON.stringify(original);
+      const parsed = load(firstText);
+      const serialized = save(parsed);
+      const reparsed = load(serialized);
+
+      // Idempotence: a second save→load cycle must be a fixed point.
+      const serializedAgain = save(reparsed);
+      expect(JSON.parse(serializedAgain)).toEqual(JSON.parse(serialized));
+
+      // Semantic anchor: both `index` nodes survive with their arg shapes.
+      const model = (reparsed.models as Record<string, any>)['M'];
+      expect(model.equations).toHaveLength(2);
+
+      const rhs0 = model.equations[0].rhs;
+      expect(rhs0.op).toBe('index');
+      expect(rhs0.args).toEqual(['u', 2]);
+
+      const rhs1 = model.equations[1].rhs;
+      expect(rhs1.op).toBe('index');
+      expect(rhs1.args[0]).toBe('u');
+      expect(rhs1.args[1]).toEqual({ op: '+', args: [1, 2] });
+    });
+  });
+
   describe('Schema validation tests', () => {
     const invalidFiles = findEsmFiles(join(testsDir, 'invalid'));
 

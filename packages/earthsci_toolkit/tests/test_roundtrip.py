@@ -1,6 +1,8 @@
 """Tests for round-trip functionality: load(save(load(json))) == load(json)."""
 
 import json
+from pathlib import Path
+
 import pytest
 
 from earthsci_toolkit import load, save
@@ -267,3 +269,37 @@ def test_roundtrip_preserves_metadata():
     assert ref["citation"] == "Smith et al. (2024)"
     assert ref["doi"] == "10.1000/test.doi"
     assert ref["url"] == "https://example.com/paper"
+
+
+def test_roundtrip_index_outside_arrayop():
+    """Round-trip for `index` op used in scalar RHS contexts (outside
+    `arrayop.expr`), per RFC discretization §5.1. Exercises integer-literal
+    and composite-arithmetic index arguments, plus a coexisting `index`
+    inside an `arrayop.expr` body, to ensure both contexts survive
+    load → save → load idempotently.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    fixture_path = repo_root / "tests" / "indexing" / "idx_outside_arrayop.esm"
+    json_str = fixture_path.read_text()
+
+    esm1 = load(json_str)
+    json_str2 = save(esm1)
+    esm2 = load(json_str2)
+    json_str3 = save(esm2)
+
+    # Idempotence: second save must equal third save under parsed JSON comparison.
+    assert json.loads(json_str2) == json.loads(json_str3)
+
+    # Semantic anchor: verify the `index` nodes survive on the right equations.
+    data = json.loads(json_str3)
+    eqs = data["models"]["IdxOutsideArrayop"]["equations"]
+    assert len(eqs) == 3
+    # Scalar ODE with integer-literal index: D(s_literal) = index(u, 2)
+    assert eqs[1]["rhs"]["op"] == "index"
+    assert eqs[1]["rhs"]["args"][0] == "u"
+    assert eqs[1]["rhs"]["args"][1] == 2
+    # Scalar ODE with composite index expression: index(u, 1+2)
+    assert eqs[2]["rhs"]["op"] == "index"
+    composite_idx = eqs[2]["rhs"]["args"][1]
+    assert isinstance(composite_idx, dict)
+    assert composite_idx["op"] == "+"

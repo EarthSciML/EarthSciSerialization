@@ -201,6 +201,33 @@ fn test_mathematical_correctness_round_trip() {
     }
 }
 
+/// Round-trip for the `index`-outside-arrayop fixture (RFC discretization §5.1).
+/// Confirms that `{op:"index", args:[V, i]}` nodes sitting on a scalar equation
+/// RHS (rather than inside `arrayop.expr`) survive a load → save → load cycle
+/// under the typed parser, with both integer-literal and composite-arithmetic
+/// index arguments preserved.
+#[test]
+fn test_index_outside_arrayop_round_trip() {
+    let fixture = include_str!("../../../tests/indexing/idx_outside_arrayop.esm");
+
+    let parsed: EsmFile = load(fixture).expect("Failed to parse idx_outside_arrayop");
+    let serialized = save(&parsed).expect("Failed to serialize idx_outside_arrayop");
+    let reparsed: EsmFile = load(&serialized).expect("Failed to reparse idx_outside_arrayop");
+
+    assert_eq!(parsed.esm, reparsed.esm);
+    assert_eq!(parsed.metadata.name, reparsed.metadata.name);
+
+    // Idempotency: a second save→load cycle must be a fixed point on the
+    // JSON value (modulo map key ordering).
+    let serialized_again = save(&reparsed).expect("second serialize");
+    let reparsed_again: EsmFile = load(&serialized_again).expect("second reparse");
+    assert_eq!(
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+        serde_json::to_value(&reparsed_again).expect("reparsed_again as value"),
+        "save/load must be a fixed point on idx_outside_arrayop"
+    );
+}
+
 /// Test round-trip for scoping fixtures
 #[test]
 fn test_scoping_round_trip() {

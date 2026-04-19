@@ -46,6 +46,8 @@
     { "id": "fixtures/arrayop/02_mixed_ode_algebraic",      "path": "fixtures/arrayop/02_mixed_ode_algebraic.esm",      "tags": ["arrayop"] },
     { "id": "fixtures/arrayop/03_1d_stencil_mass_conservation", "path": "fixtures/arrayop/03_1d_stencil_mass_conservation.esm", "tags": ["arrayop"] },
     { "id": "fixtures/arrayop/04_weno_wide_stencil",        "path": "fixtures/arrayop/04_weno_wide_stencil.esm",        "tags": ["arrayop"] },
-    { "id": "fixtures/arrayop/06_rearranged_algebraic",     "path": "fixtures/arrayop/06_rearranged_algebraic.esm",     "tags": ["arrayop"] }
+    { "id": "fixtures/arrayop/06_rearranged_algebraic",     "path": "fixtures/arrayop/06_rearranged_algebraic.esm",     "tags": ["arrayop"] },
+
+    { "id": "indexing/idx_outside_arrayop",                 "path": "indexing/idx_outside_arrayop.esm",                 "tags": ["indexing", "rfc-discretization-5.1"] }
   ]
 }
