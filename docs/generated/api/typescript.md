@@ -564,6 +564,17 @@ Compute the symbolic derivative of an expression with respect to a variable
 
 ---
 
+### dimsEqual
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:496`
+
+**Signature:**
+```typescript
+export function dimsEqual(a: CanonicalDims, b: CanonicalDims): boolean {
+```
+
+---
+
 ### estimateParallelPotential
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/complexity.ts:282`
@@ -1037,6 +1048,17 @@ Check if an expression is differentiable with respect to a variable
 @param variable Variable to check differentiability with respect to
 @returns True if differentiable, false otherwise
 /
+
+---
+
+### isDimensionless
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/units.ts:489`
+
+**Signature:**
+```typescript
+export function isDimensionless(unit: ParsedUnit): boolean {
+```
 
 ---
 
@@ -1687,7 +1709,7 @@ A non-throwing companion to `convertUnits`.
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:856`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:1055`
 
 **Signature:**
 ```typescript
@@ -3230,7 +3252,7 @@ A species with its stoichiometric coefficient in a reaction.
 
 ### StructuralError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:51`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:60`
 
 **Definition:**
 ```typescript
@@ -3492,7 +3514,7 @@ Configuration for validation behavior
 
 ### ValidationError
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:31`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:40`
 
 **Definition:**
 ```typescript
@@ -3541,7 +3563,7 @@ Extended validation error with UI-specific metadata
 
 ### ValidationResult
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:41`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:50`
 
 **Definition:**
 ```typescript
