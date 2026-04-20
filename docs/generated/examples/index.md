@@ -168,6 +168,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [Catalyst Extension Integration](julia-catalyst-extension-integration.md)
 - [Catalyst.ReactionSystem(::ESM ReactionSystem) builds a real ReactionSystem](julia-catalyst-reactionsystem---esm-reactionsystem--builds-a-real-reactionsystem.md)
 - [Round-trip: ESM ReactionSystem → Catalyst → ESM](julia-round-trip--esm-reactionsystem---catalyst---esm.md)
+- [Reservoir species (constant=true) maps to isconstantspecies (gt-ertm)](julia-reservoir-species--constant-true--maps-to-isconstantspecies--gt-ertm-.md)
 - [rule engine per RFC §5.2](julia-rule-engine-per-rfc--5-2.md)
 - [simple match + replace](julia-simple-match---replace.md)
 - [non-linear pattern (§5.2.2)](julia-non-linear-pattern---5-2-2-.md)
