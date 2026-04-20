@@ -114,6 +114,14 @@ export {
 } from './rule-engine.js'
 export type { Rule, Guard, RuleContext, GridMeta, VariableMeta } from './rule-engine.js'
 
+// Discretization pipeline (RFC §11, gt-gbs2) + DAE binding contract (RFC §12, gt-q7sh).
+export {
+  discretize,
+  E_UNREWRITTEN_PDE_OP as E_DISCRETIZE_UNREWRITTEN_PDE_OP,
+  E_NO_DAE_SUPPORT,
+} from './discretize.js'
+export type { DiscretizeOptions } from './discretize.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
