@@ -35,6 +35,7 @@ include("edit.jl")
 include("codegen.jl")
 include("canonicalize.jl")
 include("rule_engine.jl")
+include("discretize.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
 
@@ -112,6 +113,8 @@ export
     Rule, Guard, RuleContext, RuleEngineError,
     match_pattern, apply_bindings, rewrite, check_guards, check_guard,
     parse_rule, parse_rules, check_unrewritten_pde_ops,
+    # Discretization pipeline (RFC §11, gt-gbs2)
+    discretize,
     # MTK → ESM export (gt-dod2; Phase 1 migration tooling)
     mtk2esm, mtk2esm_gaps, GapReport,
     # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
