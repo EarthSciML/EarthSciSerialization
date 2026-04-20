@@ -89,6 +89,31 @@ export {
   E_CANONICAL_DIVBY_ZERO,
 } from './canonicalize.js'
 
+// Rule engine (RFC §5.2). Pattern-match rewriting, guards, and fixed-point
+// loop. Produces byte-identical canonical output with Julia and Rust on
+// the Step 1 conformance fixtures.
+export {
+  rewrite,
+  matchPattern,
+  applyBindings,
+  checkGuards,
+  checkGuard,
+  parseRules,
+  parseExpr,
+  checkUnrewrittenPdeOps,
+  emptyContext,
+  RuleEngineError,
+  DEFAULT_MAX_PASSES,
+  E_RULES_NOT_CONVERGED,
+  E_UNREWRITTEN_PDE_OP,
+  E_PATTERN_VAR_UNBOUND,
+  E_PATTERN_VAR_TYPE,
+  E_UNKNOWN_GUARD,
+  E_RULE_PARSE,
+  E_RULE_REPLACEMENT_MISSING,
+} from './rule-engine.js'
+export type { Rule, Guard, RuleContext, GridMeta, VariableMeta } from './rule-engine.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'

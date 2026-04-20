@@ -1,0 +1,613 @@
+/**
+ * Rule engine per discretization RFC §5.2.
+ *
+ * Pattern-match rewriting over the ESM expression AST with typed pattern
+ * variables, guards, non-linear matching (via canonical equality), and a
+ * top-down fixed-point loop with per-pass sealing of rewritten subtrees.
+ *
+ * This module mirrors the Julia and Rust reference implementations
+ * (`packages/EarthSciSerialization.jl/src/rule_engine.jl`,
+ * `packages/earthsci-toolkit-rs/src/rule_engine.rs`) so that all three
+ * bindings emit byte-identical canonical output on the Step 1
+ * conformance fixtures.
+ *
+ * The MVP supports only the inline `replacement` form; `use:<scheme>`
+ * (RFC §7.2.1) is deferred to Step 1b.
+ *
+ * See `docs/rfcs/discretization.md` §5.2 for the normative rules.
+ */
+
+import { canonicalJson } from './canonicalize.js'
+import type { Expr } from './expression.js'
+import { isNumericLiteral, type NumericLiteral } from './numeric-literal.js'
+
+// ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
+
+/**
+ * Error raised by the rule engine. `code` carries one of the RFC stable
+ * error codes (`E_RULES_NOT_CONVERGED`, `E_UNREWRITTEN_PDE_OP`,
+ * `E_PATTERN_VAR_UNBOUND`, `E_PATTERN_VAR_TYPE`, `E_UNKNOWN_GUARD`,
+ * `E_RULE_PARSE`, `E_RULE_REPLACEMENT_MISSING`, `E_SCHEME_MISMATCH`).
+ */
+export class RuleEngineError extends Error {
+  readonly code: string
+  constructor(code: string, message?: string) {
+    super(message ?? code)
+    this.code = code
+    this.name = 'RuleEngineError'
+  }
+}
+
+export const E_RULES_NOT_CONVERGED = 'E_RULES_NOT_CONVERGED'
+export const E_UNREWRITTEN_PDE_OP = 'E_UNREWRITTEN_PDE_OP'
+export const E_PATTERN_VAR_UNBOUND = 'E_PATTERN_VAR_UNBOUND'
+export const E_PATTERN_VAR_TYPE = 'E_PATTERN_VAR_TYPE'
+export const E_UNKNOWN_GUARD = 'E_UNKNOWN_GUARD'
+export const E_RULE_PARSE = 'E_RULE_PARSE'
+export const E_RULE_REPLACEMENT_MISSING = 'E_RULE_REPLACEMENT_MISSING'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type ExprNode = { op: string; args: Expr[]; wrt?: string; dim?: string } & Record<
+  string,
+  unknown
+>
+
+export interface Guard {
+  name: string
+  params: Record<string, unknown>
+}
+
+export interface Rule {
+  name: string
+  pattern: Expr
+  where: Guard[]
+  replacement: Expr
+  region?: string
+}
+
+export interface GridMeta {
+  spatial_dims?: string[]
+  periodic_dims?: string[]
+  nonuniform_dims?: string[]
+}
+
+export interface VariableMeta {
+  grid?: string
+  location?: string
+  shape?: string[]
+}
+
+export interface RuleContext {
+  grids: Record<string, GridMeta>
+  variables: Record<string, VariableMeta>
+}
+
+export function emptyContext(): RuleContext {
+  return { grids: {}, variables: {} }
+}
+
+export const DEFAULT_MAX_PASSES = 32
+
+// ---------------------------------------------------------------------------
+// Expression classification
+// ---------------------------------------------------------------------------
+
+function isOpNode(e: Expr): e is ExprNode {
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    !isNumericLiteral(e) &&
+    typeof (e as { op?: unknown }).op === 'string' &&
+    Array.isArray((e as { args?: unknown }).args)
+  )
+}
+
+function isPvarString(s: unknown): s is string {
+  return typeof s === 'string' && s.length >= 2 && s.startsWith('$')
+}
+
+function numericEqual(a: Expr, b: Expr): boolean {
+  const an = isNumericLiteral(a) ? a : null
+  const bn = isNumericLiteral(b) ? b : null
+  if (an && bn) return an.kind === bn.kind && Object.is(an.value, bn.value)
+  if (typeof a === 'number' && typeof b === 'number') return Object.is(a, b)
+  if (an && typeof b === 'number') return an.kind === 'float' && Object.is(an.value, b)
+  if (bn && typeof a === 'number') return bn.kind === 'float' && Object.is(bn.value, a)
+  return false
+}
+
+// ---------------------------------------------------------------------------
+// Pattern matching (§5.2.1 – §5.2.4)
+// ---------------------------------------------------------------------------
+
+type Bindings = Map<string, Expr>
+
+/**
+ * Attempt to match `pattern` against `expr`. On success, returns a
+ * substitution map from each pattern-variable name (including the
+ * leading `$`) to the bound expression. Sibling-field (name-class)
+ * pvars bind to bare-name strings.
+ */
+export function matchPattern(pattern: Expr, expr: Expr): Bindings | null {
+  return matchInner(pattern, expr, new Map())
+}
+
+function matchInner(pat: Expr, expr: Expr, b: Bindings): Bindings | null {
+  if (typeof pat === 'string' && isPvarString(pat)) {
+    return unify(pat, expr, b)
+  }
+  if (typeof pat === 'string' && typeof expr === 'string') {
+    return pat === expr ? b : null
+  }
+  if (typeof pat === 'number' || isNumericLiteral(pat)) {
+    return numericEqual(pat, expr) ? b : null
+  }
+  if (typeof expr === 'number' || isNumericLiteral(expr)) {
+    return null
+  }
+  if (isOpNode(pat) && isOpNode(expr)) {
+    return matchOp(pat, expr, b)
+  }
+  return null
+}
+
+function matchOp(pat: ExprNode, expr: ExprNode, b: Bindings): Bindings | null {
+  if (pat.op !== expr.op) return null
+  if (pat.args.length !== expr.args.length) return null
+  let cur: Bindings | null = matchSiblingName(pat.wrt, expr.wrt, b)
+  if (cur === null) return null
+  cur = matchSiblingName(pat.dim, expr.dim, cur)
+  if (cur === null) return null
+  for (let i = 0; i < pat.args.length; i++) {
+    cur = matchInner(pat.args[i]!, expr.args[i]!, cur)
+    if (cur === null) return null
+  }
+  return cur
+}
+
+function matchSiblingName(
+  pat: string | undefined,
+  val: string | undefined,
+  b: Bindings,
+): Bindings | null {
+  if (pat === undefined && val === undefined) return b
+  if (pat === undefined || val === undefined) return null
+  if (isPvarString(pat)) return unify(pat, val, b)
+  return pat === val ? b : null
+}
+
+function unify(pvar: string, candidate: Expr, b: Bindings): Bindings | null {
+  const prev = b.get(pvar)
+  if (prev === undefined) {
+    const nb = new Map(b)
+    nb.set(pvar, candidate)
+    return nb
+  }
+  // Non-linear (§5.2.2): existing binding must match canonically.
+  let prevJson: string
+  let candJson: string
+  try {
+    prevJson = canonicalJson(prev as Expr)
+    candJson = canonicalJson(candidate)
+  } catch {
+    return null
+  }
+  return prevJson === candJson ? b : null
+}
+
+// ---------------------------------------------------------------------------
+// Apply bindings (build replacement AST)
+// ---------------------------------------------------------------------------
+
+/**
+ * Substitute pattern variables in `template` with their bound values.
+ * Throws `RuleEngineError(E_PATTERN_VAR_UNBOUND)` if the template
+ * references a pattern variable not in `bindings`.
+ */
+export function applyBindings(template: Expr, b: Bindings): Expr {
+  if (typeof template === 'string' && isPvarString(template)) {
+    const v = b.get(template)
+    if (v === undefined) {
+      throw new RuleEngineError(
+        E_PATTERN_VAR_UNBOUND,
+        `pattern variable ${template} is not bound`,
+      )
+    }
+    return v
+  }
+  if (isOpNode(template)) {
+    const newArgs = template.args.map((a) => applyBindings(a, b))
+    const newWrt = applyNameField(template.wrt, b)
+    const newDim = applyNameField(template.dim, b)
+    const out: ExprNode = { ...(template as ExprNode), args: newArgs }
+    if (newWrt === undefined) delete (out as Record<string, unknown>).wrt
+    else out.wrt = newWrt
+    if (newDim === undefined) delete (out as Record<string, unknown>).dim
+    else out.dim = newDim
+    return out
+  }
+  return template
+}
+
+function applyNameField(field: string | undefined, b: Bindings): string | undefined {
+  if (field === undefined) return undefined
+  if (!isPvarString(field)) return field
+  const v = b.get(field)
+  if (v === undefined) {
+    throw new RuleEngineError(
+      E_PATTERN_VAR_UNBOUND,
+      `pattern variable ${field} is not bound`,
+    )
+  }
+  if (typeof v !== 'string') {
+    throw new RuleEngineError(
+      E_PATTERN_VAR_TYPE,
+      `pattern variable ${field} used in name-class field must bind a bare name`,
+    )
+  }
+  return v
+}
+
+// ---------------------------------------------------------------------------
+// Guards (§5.2.4 closed set)
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluate `guards` left-to-right, threading bindings. A guard whose
+ * pvar-valued `grid` field is unbound at entry binds it to the
+ * variable's actual grid (§9.2.1). Returns extended bindings on
+ * success, `null` on miss. Throws on unknown guard names.
+ */
+export function checkGuards(
+  guards: Guard[],
+  bindings: Bindings,
+  ctx: RuleContext,
+): Bindings | null {
+  let b: Bindings = bindings
+  for (const g of guards) {
+    const next = checkGuard(g, b, ctx)
+    if (next === null) return null
+    b = next
+  }
+  return b
+}
+
+export function checkGuard(g: Guard, b: Bindings, ctx: RuleContext): Bindings | null {
+  switch (g.name) {
+    case 'var_has_grid':
+      return guardVarHasGrid(g, b, ctx)
+    case 'dim_is_spatial_dim_of':
+      return guardDim(g, b, ctx, 'spatial_dims')
+    case 'dim_is_periodic':
+      return guardDim(g, b, ctx, 'periodic_dims')
+    case 'dim_is_nonuniform':
+      return guardDim(g, b, ctx, 'nonuniform_dims')
+    case 'var_location_is':
+      return guardVarLocationIs(g, b, ctx)
+    case 'var_shape_rank':
+      return guardVarShapeRank(g, b, ctx)
+    default:
+      throw new RuleEngineError(
+        E_UNKNOWN_GUARD,
+        `unknown guard: ${g.name} (§5.2.4 closed set)`,
+      )
+  }
+}
+
+function paramStr(g: Guard, field: string): string | undefined {
+  const v = g.params[field]
+  return typeof v === 'string' ? v : undefined
+}
+
+function resolveName(b: Bindings, key: string): string | undefined {
+  const v = b.get(key)
+  return typeof v === 'string' ? v : undefined
+}
+
+/**
+ * Resolve a guard field that may be a literal string or a pvar
+ * reference. Returns `{value, unboundPvar}`.
+ */
+function resolveOrMark(
+  g: Guard,
+  b: Bindings,
+  field: string,
+): { value?: string; unboundPvar?: string } {
+  const raw = paramStr(g, field)
+  if (raw === undefined) return {}
+  if (isPvarString(raw)) {
+    const v = b.get(raw)
+    if (v === undefined) return { unboundPvar: raw }
+    if (typeof v === 'string') return { value: v }
+    return {}
+  }
+  return { value: raw }
+}
+
+function bindPvarName(b: Bindings, pvar: string, name: string): Bindings {
+  const nb = new Map(b)
+  nb.set(pvar, name)
+  return nb
+}
+
+function guardVarHasGrid(g: Guard, b: Bindings, ctx: RuleContext): Bindings | null {
+  const pvar = paramStr(g, 'pvar')
+  if (pvar === undefined) return null
+  const varName = resolveName(b, pvar)
+  if (varName === undefined) return null
+  const meta = ctx.variables[varName]
+  if (!meta || meta.grid === undefined) return null
+  const actual = meta.grid
+  const { value, unboundPvar } = resolveOrMark(g, b, 'grid')
+  if (unboundPvar !== undefined) return bindPvarName(b, unboundPvar, actual)
+  if (value !== undefined && value === actual) return b
+  return null
+}
+
+function dimFromPvarOrLiteral(g: Guard, b: Bindings): string | undefined {
+  const pvar = paramStr(g, 'pvar')
+  if (pvar === undefined) return undefined
+  if (isPvarString(pvar)) return resolveName(b, pvar)
+  return pvar
+}
+
+function guardDim(
+  g: Guard,
+  b: Bindings,
+  ctx: RuleContext,
+  field: 'spatial_dims' | 'periodic_dims' | 'nonuniform_dims',
+): Bindings | null {
+  const dimName = dimFromPvarOrLiteral(g, b)
+  if (dimName === undefined) return null
+  const { value: grid } = resolveOrMark(g, b, 'grid')
+  if (grid === undefined) return null
+  const meta = ctx.grids[grid]
+  if (!meta) return null
+  const list = meta[field]
+  if (!list || !list.includes(dimName)) return null
+  return b
+}
+
+function guardVarLocationIs(g: Guard, b: Bindings, ctx: RuleContext): Bindings | null {
+  const pvar = paramStr(g, 'pvar')
+  if (pvar === undefined) return null
+  const varName = resolveName(b, pvar)
+  if (varName === undefined) return null
+  const target = paramStr(g, 'location')
+  if (target === undefined) return null
+  const meta = ctx.variables[varName]
+  if (!meta) return null
+  return meta.location === target ? b : null
+}
+
+function guardVarShapeRank(g: Guard, b: Bindings, ctx: RuleContext): Bindings | null {
+  const pvar = paramStr(g, 'pvar')
+  if (pvar === undefined) return null
+  const varName = resolveName(b, pvar)
+  if (varName === undefined) return null
+  const rank = g.params.rank
+  if (typeof rank !== 'number' || !Number.isInteger(rank)) return null
+  const meta = ctx.variables[varName]
+  if (!meta || !meta.shape) return null
+  return meta.shape.length === rank ? b : null
+}
+
+// ---------------------------------------------------------------------------
+// Rewriter (§5.2.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the rule engine on `expr` per RFC §5.2.5. Top-down walker, per-
+ * pass sealing of rewritten subtrees, fixed-point loop bounded by
+ * `maxPasses`. Throws `RuleEngineError(E_RULES_NOT_CONVERGED)` on
+ * non-convergence.
+ */
+export function rewrite(
+  expr: Expr,
+  rules: Rule[],
+  ctx: RuleContext = emptyContext(),
+  maxPasses: number = DEFAULT_MAX_PASSES,
+): Expr {
+  let current = expr
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const res = rewritePass(current, rules, ctx)
+    if (!res.changed) return current
+    current = res.expr
+  }
+  throw new RuleEngineError(
+    E_RULES_NOT_CONVERGED,
+    `rule engine did not converge within ${maxPasses} passes`,
+  )
+}
+
+interface PassResult {
+  expr: Expr
+  changed: boolean
+}
+
+function rewritePass(expr: Expr, rules: Rule[], ctx: RuleContext): PassResult {
+  const fired = tryFireAt(expr, rules, ctx)
+  if (fired !== null) return { expr: fired, changed: true } // sealed
+  if (isOpNode(expr)) {
+    const newArgs: Expr[] = []
+    let changed = false
+    for (const a of expr.args) {
+      const r = rewritePass(a, rules, ctx)
+      newArgs.push(r.expr)
+      if (r.changed) changed = true
+    }
+    if (changed) {
+      return { expr: { ...(expr as ExprNode), args: newArgs }, changed: true }
+    }
+  }
+  return { expr, changed: false }
+}
+
+function tryFireAt(expr: Expr, rules: Rule[], ctx: RuleContext): Expr | null {
+  for (const rule of rules) {
+    const m = matchPattern(rule.pattern, expr)
+    if (m === null) continue
+    const m2 = checkGuards(rule.where, m, ctx)
+    if (m2 === null) continue
+    return applyBindings(rule.replacement, m2)
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// JSON parsing (rules and expressions)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a `rules` section (already-parsed JSON value — produced by
+ * `losslessJsonParse` or `JSON.parse`) into an ordered list. Accepts
+ * either the JSON-object-keyed-by-name form or the array form
+ * (RFC §5.2.5).
+ */
+export function parseRules(value: unknown): Rule[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => parseRuleArrayEntry(v))
+  }
+  if (typeof value === 'object' && value !== null && !isNumericLiteral(value)) {
+    const out: Rule[] = []
+    for (const [name, v] of Object.entries(value as Record<string, unknown>)) {
+      out.push(parseRuleNamed(name, v))
+    }
+    return out
+  }
+  throw new RuleEngineError(E_RULE_PARSE, '`rules` must be an object or array')
+}
+
+function parseRuleArrayEntry(v: unknown): Rule {
+  if (typeof v !== 'object' || v === null || isNumericLiteral(v)) {
+    throw new RuleEngineError(E_RULE_PARSE, 'array-form rule must be an object')
+  }
+  const obj = v as Record<string, unknown>
+  const name = obj.name
+  if (typeof name !== 'string') {
+    throw new RuleEngineError(E_RULE_PARSE, 'array-form rule missing `name`')
+  }
+  return parseRuleNamed(name, v)
+}
+
+function parseRuleNamed(name: string, v: unknown): Rule {
+  if (typeof v !== 'object' || v === null || isNumericLiteral(v)) {
+    throw new RuleEngineError(E_RULE_PARSE, `rule \`${name}\` must be an object`)
+  }
+  const obj = v as Record<string, unknown>
+  if (!('pattern' in obj)) {
+    throw new RuleEngineError(E_RULE_PARSE, `rule \`${name}\` missing \`pattern\``)
+  }
+  if (!('replacement' in obj)) {
+    throw new RuleEngineError(
+      E_RULE_REPLACEMENT_MISSING,
+      `rule \`${name}\`: MVP supports only the \`replacement\` form; \`use:\` rules are deferred`,
+    )
+  }
+  const pattern = parseExpr(obj.pattern)
+  const replacement = parseExpr(obj.replacement)
+  let where: Guard[] = []
+  if ('where' in obj && obj.where !== undefined) {
+    if (!Array.isArray(obj.where)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`where\` must be an array`,
+      )
+    }
+    where = obj.where.map(parseGuard)
+  }
+  const region = typeof obj.region === 'string' ? obj.region : undefined
+  return { name, pattern, where, replacement, region }
+}
+
+function parseGuard(v: unknown): Guard {
+  if (typeof v !== 'object' || v === null || isNumericLiteral(v)) {
+    throw new RuleEngineError(E_RULE_PARSE, 'guard must be an object')
+  }
+  const obj = v as Record<string, unknown>
+  const gname = obj.guard
+  if (typeof gname !== 'string') {
+    throw new RuleEngineError(E_RULE_PARSE, 'guard object missing `guard` field')
+  }
+  const params: Record<string, unknown> = {}
+  for (const [k, val] of Object.entries(obj)) {
+    if (k === 'guard') continue
+    params[k] = unwrapNumeric(val)
+  }
+  return { name: gname, params }
+}
+
+/**
+ * Unwrap NumericLiteral leaves produced by `losslessJsonParse` to their
+ * plain number for use in guard params (rank, etc.).
+ */
+function unwrapNumeric(v: unknown): unknown {
+  if (isNumericLiteral(v)) return (v as NumericLiteral).value
+  return v
+}
+
+/**
+ * Parse a JSON value (already parsed — produced by `losslessJsonParse`
+ * or `JSON.parse`) into an [`Expr`], preserving int-vs-float per
+ * RFC §5.4 when the caller used `losslessJsonParse`.
+ */
+export function parseExpr(v: unknown): Expr {
+  if (typeof v === 'number') return v
+  if (isNumericLiteral(v)) return v
+  if (typeof v === 'string') return v
+  if (typeof v === 'object' && v !== null) {
+    const obj = v as Record<string, unknown>
+    const op = obj.op
+    if (typeof op !== 'string') {
+      throw new RuleEngineError(E_RULE_PARSE, 'operator node missing `op`')
+    }
+    const rawArgs = obj.args
+    const args: Expr[] = Array.isArray(rawArgs) ? rawArgs.map(parseExpr) : []
+    const node: ExprNode = { op, args }
+    if (typeof obj.wrt === 'string') node.wrt = obj.wrt
+    if (typeof obj.dim === 'string') node.dim = obj.dim
+    // Preserve other pass-through fields (kind, side, handler_id, etc.)
+    // so pattern matching and replacement can observe them.
+    for (const [k, val] of Object.entries(obj)) {
+      if (k === 'op' || k === 'args' || k === 'wrt' || k === 'dim') continue
+      node[k] = val
+    }
+    return node
+  }
+  throw new RuleEngineError(E_RULE_PARSE, `cannot parse expression of type ${typeof v}`)
+}
+
+// ---------------------------------------------------------------------------
+// Unrewritten PDE op check (§11 Step 7)
+// ---------------------------------------------------------------------------
+
+const PDE_OPS = new Set(['grad', 'div', 'laplacian', 'D', 'bc'])
+
+/**
+ * Scan `expr` for leftover PDE ops after rewriting. Throws
+ * `RuleEngineError(E_UNREWRITTEN_PDE_OP)` if any are found.
+ */
+export function checkUnrewrittenPdeOps(expr: Expr): void {
+  const op = findPdeOp(expr)
+  if (op !== null) {
+    throw new RuleEngineError(
+      E_UNREWRITTEN_PDE_OP,
+      `equation still contains PDE op '${op}' after rewrite; annotate the equation with 'passthrough: true' to opt out`,
+    )
+  }
+}
+
+function findPdeOp(e: Expr): string | null {
+  if (!isOpNode(e)) return null
+  if (PDE_OPS.has(e.op)) return e.op
+  for (const a of e.args) {
+    const x = findPdeOp(a)
+    if (x !== null) return x
+  }
+  return null
+}
