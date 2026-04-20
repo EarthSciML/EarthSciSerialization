@@ -4,6 +4,7 @@ Collection of examples showing how to use the ESM Format libraries.
 
 ## Julia Examples
 
+- [Conformance: discretize (gt-l3dg, manifest-driven)](julia-conformance--discretize--gt-l3dg--manifest-driven-.md)
 - [Real MTK Extension Integration Tests](julia-real-mtk-extension-integration-tests.md)
 - [ModelingToolkit.System(::Model) builds a real System](julia-modelingtoolkit-system---model--builds-a-real-system.md)
 - [ModelingToolkit.System(::Model) errors on PDE model with pointer to PDESystem](julia-modelingtoolkit-system---model--errors-on-pde-model-with-pointer-to-pdesystem.md)
