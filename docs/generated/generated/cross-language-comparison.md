@@ -244,10 +244,10 @@ Reaction(...)
 
 **Julia:**
 ```julia
-function Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false)
+function Reaction(reactants::AbstractDict{String,<:Real}, products::AbstractDict{String,<:Real}, rate::Expr; reversible=false)
 ```
 
-> Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false) -> Reaction
+> Reaction(reactants::AbstractDict{String,<:Real}, products::AbstractDict{String,<:Real}, rate::Expr; reversible=false) -> Reaction
 
 Legacy constructor for backward compatibility.
 
