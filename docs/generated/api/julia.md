@@ -1838,6 +1838,36 @@ connector entries.
 
 ---
 
+### _apply_dae_contract!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/discretize.jl:365`
+
+**Signature:**
+```julia
+function _apply_dae_contract!(esm::Dict{String,Any}, dae_support::Bool)
+```
+
+**Description:**
+_apply_dae_contract!(esm, dae_support)
+
+Classify every equation as differential vs algebraic, record the
+per-model algebraic count, and either stamp `metadata.system_class`
+on the output or throw `E_NO_DAE_SUPPORT`.
+
+An equation is **differential** iff its LHS is an `OpExpr` with `op == "D"`
+and `wrt` equal to the enclosing model's independent variable (the
+domain's `independent_variable`, defaulting to `"t"`). Every other
+equation — authored algebraic constraints, observed equations whose
+LHS is a plain variable, equations emitted by a `produces: algebraic`
+rule (once that lands) — is algebraic for the purpose of this contract.
+
+This is deliberately inclusive: any binding that claims ODE-only
+support and hands off a system to an ODE integrator would drop an
+observed-equation LHS just as surely as a true DAE constraint. RFC §12
+pins the contract as "hand to a DAE assembler, or abort".
+
+---
+
 ### _apply_operator_compose!
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:844`
@@ -3702,7 +3732,7 @@ discretize(...)
 
 ### discretize
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/discretize.jl:45`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/discretize.jl:74`
 
 **Signature:**
 ```julia
@@ -3710,9 +3740,11 @@ function discretize(esm::AbstractDict;
 ```
 
 **Description:**
-discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true) -> Dict{String,Any}
+discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true,
+               dae_support::Bool=true) -> Dict{String,Any}
 
-Run the RFC §11 discretization pipeline on an ESM document.
+Run the RFC §11 discretization pipeline on an ESM document and apply
+the RFC §12 DAE binding contract.
 
 `esm` is the parsed ESM payload as a `Dict{String,Any}` (the form produced
 by [`load`](@ref) followed by `_to_native_json`, or by direct JSON
@@ -3731,6 +3763,22 @@ Behavior:
   [`RuleEngineError`](@ref) with code `E_UNREWRITTEN_PDE_OP`. With
   `strict_unrewritten=false` the offending equation/BC is instead marked
   `passthrough: true` and retained verbatim.
+- After the pipeline, every equation is classified as either
+  `differential` (LHS is `D(x, wrt=<independent_variable>)`) or
+  `algebraic` (anything else — includes `produces: algebraic` output
+  once rule `produces` lands, and authored non-differential equations).
+  The total and per-model algebraic counts are written to the top-level
+  `metadata.dae_info` (`{algebraic_equation_count, per_model}`), and
+  `metadata.system_class` is set to `"dae"` if any model has at least
+  one algebraic equation, else `"ode"`. (Model schemas use
+  `additionalProperties: false`, so the counts live only on the
+  top-level metadata, not inside each model.)
+- If any model contains algebraic equations **and** `dae_support=false`
+  (or the environment variable `ESM_DAE_SUPPORT=0`), `discretize` throws
+  [`RuleEngineError`](@ref) with code `E_NO_DAE_SUPPORT`. The message
+  names the first model and algebraic equation path found. Per RFC §12
+  the Julia binding's default strategy is direct DAE hand-off to
+  ModelingToolkit, so `dae_support=true` is the normal setting.
 - `metadata.discretized_from` is set on the output to the input's
   `metadata.name`.
 

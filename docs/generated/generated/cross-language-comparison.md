@@ -938,9 +938,11 @@ discretize(...)
 function discretize(esm::AbstractDict;
 ```
 
-> discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true) -> Dict{String,Any}
+> discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true,
+               dae_support::Bool=true) -> Dict{String,Any}
 
-Run the RFC §11 discretization pipeline on an ESM document.
+Run the RFC §11 discretization pipeline on an ESM document and apply
+the RFC §12 DAE binding contract.
 
 ---
 
