@@ -149,6 +149,23 @@ Analyze the complexity of an expression
 
 ---
 
+### applyBindings
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:212`
+
+**Signature:**
+```typescript
+export function applyBindings(template: Expr, b: Bindings): Expr {
+```
+
+**Description:**
+Substitute pattern variables in `template` with their bound values.
+Throws `RuleEngineError(E_PATTERN_VAR_UNBOUND)` if the template
+references a pattern variable not in `bindings`.
+/
+
+---
+
 ### buildDependencyGraph
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/dependency-graph.ts:19`
@@ -226,6 +243,51 @@ Follows ESM spec Section 3.3.1:
 - Division: dimensions subtract (scales divide)
 - `D(x, wrt=t)`: dimension of x divided by dimension of t
 - Transcendental functions require dimensionless arguments
+/
+
+---
+
+### checkGuard
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:280`
+
+**Signature:**
+```typescript
+export function checkGuard(g: Guard, b: Bindings, ctx: RuleContext): Bindings | null {
+```
+
+---
+
+### checkGuards
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:266`
+
+**Signature:**
+```typescript
+export function checkGuards(
+```
+
+**Description:**
+Evaluate `guards` left-to-right, threading bindings. A guard whose
+pvar-valued `grid` field is unbound at entry binds it to the
+variable's actual grid (§9.2.1). Returns extended bindings on
+success, `null` on miss. Throws on unknown guard names.
+/
+
+---
+
+### checkUnrewrittenPdeOps
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:595`
+
+**Signature:**
+```typescript
+export function checkUnrewrittenPdeOps(expr: Expr): void {
+```
+
+**Description:**
+Scan `expr` for leftover PDE ops after rewriting. Throws
+`RuleEngineError(E_UNREWRITTEN_PDE_OP)` if any are found.
 /
 
 ---
@@ -597,6 +659,17 @@ Compute the symbolic derivative of an expression with respect to a variable
 **Signature:**
 ```typescript
 export function dimsEqual(a: CanonicalDims, b: CanonicalDims): boolean {
+```
+
+---
+
+### emptyContext
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:90`
+
+**Signature:**
+```typescript
+export function emptyContext(): RuleContext {
 ```
 
 ---
@@ -1284,6 +1357,24 @@ Map a variable from one system to another with optional transformation
 
 ---
 
+### matchPattern
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:136`
+
+**Signature:**
+```typescript
+export function matchPattern(pattern: Expr, expr: Expr): Bindings | null {
+```
+
+**Description:**
+Attempt to match `pattern` against `expr`. On success, returns a
+substitution map from each pattern-variable name (including the
+leading `$`) to the bound expression. Sibling-field (name-class)
+pvars bind to bare-name strings.
+/
+
+---
+
 ### merge
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/edit.ts:554`
@@ -1337,6 +1428,41 @@ export function numericValue(x: unknown): number | undefined {
 Return the underlying numeric value of a plain `number` or a
 `NumericLiteral`. Returns `undefined` for anything else. Use this
 at the boundary between kind-aware and kind-agnostic code.
+/
+
+---
+
+### parseExpr
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:559`
+
+**Signature:**
+```typescript
+export function parseExpr(v: unknown): Expr {
+```
+
+**Description:**
+Parse a JSON value (already parsed — produced by `losslessJsonParse`
+or `JSON.parse`) into an [`Expr`], preserving int-vs-float per
+RFC §5.4 when the caller used `losslessJsonParse`.
+/
+
+---
+
+### parseRules
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:472`
+
+**Signature:**
+```typescript
+export function parseRules(value: unknown): Rule[] {
+```
+
+**Description:**
+Parse a `rules` section (already-parsed JSON value — produced by
+`losslessJsonParse` or `JSON.parse`) into an ordered list. Accepts
+either the JSON-object-keyed-by-name form or the array form
+(RFC §5.2.5).
 /
 
 ---
@@ -1598,6 +1724,28 @@ Rename a variable throughout a model
 @returns New model with variable renamed
 @throws EntityNotFoundError if variable doesn't exist
 /
+
+---
+
+### rewrite
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:410`
+
+**Signature:**
+```typescript
+export function rewrite(
+```
+
+**Description:**
+Run the rule engine on `expr` per RFC §5.2.5. Top-down walker, per-
+pass sealing of rewritten subtrees, fixed-point loop bounded by
+`maxPasses`. Throws `RuleEngineError(E_RULES_NOT_CONVERGED)` on
+non-convergence.
+/
+
+**Available in other languages:**
+- [Julia](julia.md#rewrite)
+- [Julia](julia.md#rewrite)
 
 ---
 
@@ -3082,6 +3230,17 @@ Per-dimension extent for cartesian or cubed_sphere grids. `n` is either an integ
 
 ---
 
+### GridMeta
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:73`
+
+**Definition:**
+```typescript
+export interface GridMeta {
+```
+
+---
+
 ### GridMetricArray
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1847`
@@ -3097,6 +3256,20 @@ A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.
 
 **Available in other languages:**
 - [Python](python.md#gridmetricarray)
+
+---
+
+### Guard
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:60`
+
+**Definition:**
+```typescript
+export interface Guard {
+```
+
+**Available in other languages:**
+- [Julia](julia.md#guard)
 
 ---
 
@@ -3461,6 +3634,34 @@ A named pure function that may be invoked inside an expression via the 'call' op
 **Available in other languages:**
 - [Julia](julia.md#registeredfunction)
 - [Python](python.md#registeredfunction)
+
+---
+
+### Rule
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:65`
+
+**Definition:**
+```typescript
+export interface Rule {
+```
+
+**Available in other languages:**
+- [Julia](julia.md#rule)
+
+---
+
+### RuleContext
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:85`
+
+**Definition:**
+```typescript
+export interface RuleContext {
+```
+
+**Available in other languages:**
+- [Julia](julia.md#rulecontext)
 
 ---
 
@@ -3900,6 +4101,17 @@ export interface ValidationSignals {
 **Description:**
 Validation signals interface providing reactive validation state
 /
+
+---
+
+### VariableMeta
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:79`
+
+**Definition:**
+```typescript
+export interface VariableMeta {
+```
 
 ---
 

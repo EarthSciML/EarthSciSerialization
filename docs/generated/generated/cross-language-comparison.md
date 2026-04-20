@@ -1813,6 +1813,13 @@ function rewrite(expr::Expr, rules::Vector{Rule}, ctx::RuleContext=RuleContext()
 
 Run the rule engine on `expr` per RFC §5.
 
+**Typescript:**
+```typescript
+export function rewrite(
+```
+
+> Run the rule engine on `expr` per RFC §5.
+
 ---
 
 ### save
@@ -3445,6 +3452,24 @@ export interface GridMetricArray {
 
 ---
 
+### Guard
+
+**Julia:**
+```julia
+struct Guard
+```
+
+> Guard(name::String, params::Dict{String,Any})
+
+A single constraint on pattern-variable bindings.
+
+**Typescript:**
+```typescript
+export interface Guard {
+```
+
+---
+
 ### Interface
 
 **Julia:**
@@ -3792,6 +3817,42 @@ class RegisteredFunctionSignature:
 ```
 
 > Calling convention for a RegisteredFunction (see esm-spec §9.
+
+---
+
+### Rule
+
+**Julia:**
+```julia
+struct Rule
+```
+
+> Rule(name, pattern, where, replacement, region)
+
+A rewrite rule.
+
+**Typescript:**
+```typescript
+export interface Rule {
+```
+
+---
+
+### RuleContext
+
+**Julia:**
+```julia
+struct RuleContext
+```
+
+> RuleContext(grids, variables)
+
+Context supplied to [`rewrite`](@ref) and guard evaluation.
+
+**Typescript:**
+```typescript
+export interface RuleContext {
+```
 
 ---
 

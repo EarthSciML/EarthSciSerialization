@@ -15,8 +15,8 @@ Complete API documentation for all ESM Format language implementations.
 - 0 types
 
 ## [Typescript](typescript.md)
-- 108 functions
-- 121 types
+- 117 functions
+- 126 types
 
 ## Cross-Language Resources
 

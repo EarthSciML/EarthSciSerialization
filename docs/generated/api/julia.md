@@ -875,6 +875,9 @@ Grid(...)
 Guard(...)
 ```
 
+**Available in other languages:**
+- [Typescript](typescript.md#guard)
+
 ---
 
 ### IntExpr
@@ -1481,6 +1484,9 @@ RegisteredFunctionSignature(...)
 Rule(...)
 ```
 
+**Available in other languages:**
+- [Typescript](typescript.md#rule)
+
 ---
 
 ### Rule
@@ -1492,6 +1498,9 @@ Rule(...)
 Rule(...)
 ```
 
+**Available in other languages:**
+- [Typescript](typescript.md#rule)
+
 ---
 
 ### RuleContext
@@ -1502,6 +1511,9 @@ Rule(...)
 ```julia
 RuleContext(...)
 ```
+
+**Available in other languages:**
+- [Typescript](typescript.md#rulecontext)
 
 ---
 
@@ -5546,6 +5558,9 @@ Circular references are detected and raise a `SubsystemRefError`.
 rewrite(...)
 ```
 
+**Available in other languages:**
+- [Typescript](typescript.md#rewrite)
+
 ---
 
 ### rewrite
@@ -5567,6 +5582,9 @@ rewrite), then we continue with siblings. A pass that produces no
 rewrites terminates the loop. If `max_passes` is reached without
 convergence, throws [`RuleEngineError`](@ref) with code
 `E_RULES_NOT_CONVERGED`.
+
+**Available in other languages:**
+- [Typescript](typescript.md#rewrite)
 
 ---
 
@@ -8318,6 +8336,9 @@ A single constraint on pattern-variable bindings. `name` is one of the
 §5.2.4 closed-set guard names; `params` carries the fields from the JSON
 guard object (`pvar`, `grid`, `location`, `rank`, …).
 
+**Available in other languages:**
+- [Typescript](typescript.md#guard)
+
 ---
 
 ### IntExpr
@@ -8826,6 +8847,9 @@ A rewrite rule. `pattern` is an AST with `\$`-prefixed pattern variables;
 AST over the pattern variables. The MVP supports only the inline
 `replacement` form; `use:<scheme>` is reserved for Step 1b.
 
+**Available in other languages:**
+- [Typescript](typescript.md#rule)
+
 ---
 
 ### RuleContext
@@ -8851,6 +8875,9 @@ grid metadata and variable table needed by the closed-set guards in
 - `variables::Dict{String, Dict{String,Any}}`: per-variable metadata.
   Each entry may carry `"grid"` (String), `"location"` (String),
   `"shape"` (Vector or Vector{String}).
+
+**Available in other languages:**
+- [Typescript](typescript.md#rulecontext)
 
 ---
 
