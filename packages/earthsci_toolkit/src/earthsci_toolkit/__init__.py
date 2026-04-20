@@ -231,6 +231,10 @@ from .data_loaders import (
     resolve_files,
 )
 
+# Discretization pipeline (RFC §11)
+from .discretize import discretize
+from .rule_engine import RuleEngineError
+
 # Operator registry functionality (Core tier requirement)
 from .operator_registry import (
     register_operator,
@@ -431,6 +435,10 @@ __all__ = [
     "RegisteredOperator",
     "OperatorRegistryError",
     "OperatorValidationError",
+
+    # Discretization pipeline (RFC §11)
+    "discretize",
+    "RuleEngineError",
 
     # Runtime data loaders
     "UrlTemplateError",
