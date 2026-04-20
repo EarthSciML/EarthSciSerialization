@@ -53,6 +53,66 @@ func TestUnitsFixturesCrossBinding(t *testing.T) {
 	}
 }
 
+// TestGradientOperatorMismatchFixtureRejected verifies that
+// tests/invalid/units_gradient_operator_mismatch.esm (grad applied over
+// coordinate 'x' declared without units) is rejected as a structural
+// unit_inconsistency error at the equation. Mirrors Python/TS behaviour
+// (gt-p2h0).
+func TestGradientOperatorMismatchFixtureRejected(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "tests", "invalid", "units_gradient_operator_mismatch.esm")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	file, err := LoadString(string(content))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	result := ValidateFile(file, string(content))
+	if result.IsValid {
+		t.Fatalf("expected fixture to fail validation, got is_valid=true")
+	}
+	var found *StructuralError
+	for i, e := range result.StructuralErrors {
+		if e.Code == ErrorUnitInconsistency &&
+			e.Message == "Gradient operator applied to variable with incompatible spatial units" {
+			found = &result.StructuralErrors[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected unit_inconsistency error for gradient operator, got: %+v", result.StructuralErrors)
+	}
+	if found.Path != "/models/SpatialModel/equations/0" {
+		t.Errorf("unexpected path: %q", found.Path)
+	}
+	expectDetail := func(key string, want interface{}) {
+		t.Helper()
+		got, ok := found.Details[key]
+		if !ok {
+			t.Errorf("details[%q] missing", key)
+			return
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("details[%q] = %v, want %v", key, got, want)
+		}
+	}
+	expectDetail("operator", "grad")
+	expectDetail("variable", "c")
+	expectDetail("variable_units", "mol/m^3")
+	expectDetail("dim", "x")
+	expectDetail("equation_index", 0)
+	if v, ok := found.Details["coordinate_units"]; !ok {
+		t.Errorf("details[coordinate_units] missing")
+	} else if v != nil {
+		t.Errorf("details[coordinate_units] = %v, want nil", v)
+	}
+}
+
 // TestReactionRateUnitsMismatchFixtureRejected verifies that the shared
 // tests/invalid/units_reaction_rate_mismatch.esm fixture (2nd-order reaction
 // A + B -> C whose rate parameter is declared with 1/s units) is rejected

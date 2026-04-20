@@ -183,7 +183,7 @@ func ValidateStructuralWithCodes(file *EsmFile) *StructuralValidationResult {
 	// Validate models
 	for modelName, model := range file.Models {
 		validateModelWithCodes(modelName, &model, result, file)
-		validateModelUnits(modelName, &model, fmt.Sprintf("$.models.%s", modelName), result)
+		validateModelUnits(modelName, &model, fmt.Sprintf("$.models.%s", modelName), file, result)
 	}
 
 	// Validate reaction systems

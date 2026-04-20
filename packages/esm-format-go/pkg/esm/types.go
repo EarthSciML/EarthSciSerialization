@@ -73,6 +73,10 @@ type ModelVariable struct {
 type Model struct {
 	CoupleType         *string                       `json:"coupletype,omitempty"`
 	Reference          *Reference                    `json:"reference,omitempty"`
+	// Domain references a top-level domain (EsmFile.Domains) that declares the
+	// spatial coordinates this model discretizes over. Used by the unit checker
+	// to resolve grad/div/laplacian coordinate units.
+	Domain             *string                       `json:"domain,omitempty"`
 	Variables          map[string]ModelVariable      `json:"variables"`
 	Equations          []Equation                    `json:"equations"`
 	DiscreteEvents     []DiscreteEvent               `json:"discrete_events,omitempty"`

@@ -378,7 +378,7 @@ func TestValidateModelUnitsIntegration(t *testing.T) {
 		},
 	}
 	result := &StructuralValidationResult{}
-	validateModelUnits("M", &model, "$.models.M", result)
+	validateModelUnits("M", &model, "$.models.M", nil, result)
 	if len(result.UnitWarnings) != 1 {
 		t.Fatalf("expected 1 unit warning, got %d: %+v", len(result.UnitWarnings), result.UnitWarnings)
 	}

@@ -385,6 +385,15 @@ func isIdentCont(c byte) bool {
 // A non-nil error signals a dimensional inconsistency discovered during
 // propagation. The caller decides whether to turn that into a UnitWarning.
 func PropagateDimension(expr Expression, env map[string]Unit) (*Unit, error) {
+	return propagateDimensionWithCoords(expr, env, nil)
+}
+
+// propagateDimensionWithCoords extends PropagateDimension with a coordinate
+// unit environment so grad/div/laplacian can resolve node.Dim against the
+// enclosing model's domain. A nil coordEnv means "no coordinate info
+// available" — grad/div/laplacian falls back to returning an unknown result
+// rather than hard-coding a metre denominator.
+func propagateDimensionWithCoords(expr Expression, env map[string]Unit, coordEnv map[string]*Unit) (*Unit, error) {
 	switch e := expr.(type) {
 	case nil:
 		return nil, nil
@@ -398,24 +407,24 @@ func PropagateDimension(expr Expression, env map[string]Unit) (*Unit, error) {
 		}
 		return nil, nil
 	case ExprNode:
-		return propagateExprNode(e, env)
+		return propagateExprNode(e, env, coordEnv)
 	case *ExprNode:
-		return propagateExprNode(*e, env)
+		return propagateExprNode(*e, env, coordEnv)
 	default:
 		return nil, nil
 	}
 }
 
-func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
+func propagateExprNode(node ExprNode, env map[string]Unit, coordEnv map[string]*Unit) (*Unit, error) {
 	switch node.Op {
 	case "+", "-":
 		// Unary minus: propagate its single operand.
 		if node.Op == "-" && len(node.Args) == 1 {
-			return PropagateDimension(node.Args[0], env)
+			return propagateDimensionWithCoords(node.Args[0], env, coordEnv)
 		}
 		var first *Unit
 		for i, arg := range node.Args {
-			u, err := PropagateDimension(arg, env)
+			u, err := propagateDimensionWithCoords(arg, env, coordEnv)
 			if err != nil {
 				return nil, err
 			}
@@ -437,7 +446,7 @@ func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
 		result := Unit{Scale: 1}
 		anyKnown := false
 		for _, arg := range node.Args {
-			u, err := PropagateDimension(arg, env)
+			u, err := propagateDimensionWithCoords(arg, env, coordEnv)
 			if err != nil {
 				return nil, err
 			}
@@ -456,11 +465,11 @@ func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
 		if len(node.Args) != 2 {
 			return nil, fmt.Errorf("'/' requires exactly 2 arguments, got %d", len(node.Args))
 		}
-		num, err := PropagateDimension(node.Args[0], env)
+		num, err := propagateDimensionWithCoords(node.Args[0], env, coordEnv)
 		if err != nil {
 			return nil, err
 		}
-		den, err := PropagateDimension(node.Args[1], env)
+		den, err := propagateDimensionWithCoords(node.Args[1], env, coordEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -474,11 +483,11 @@ func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
 		if len(node.Args) != 2 {
 			return nil, fmt.Errorf("'%s' requires exactly 2 arguments, got %d", node.Op, len(node.Args))
 		}
-		base, err := PropagateDimension(node.Args[0], env)
+		base, err := propagateDimensionWithCoords(node.Args[0], env, coordEnv)
 		if err != nil {
 			return nil, err
 		}
-		expDim, err := PropagateDimension(node.Args[1], env)
+		expDim, err := propagateDimensionWithCoords(node.Args[1], env, coordEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -505,7 +514,7 @@ func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
 			if len(node.Args) != 1 {
 				return nil, fmt.Errorf("sqrt requires 1 argument, got %d", len(node.Args))
 			}
-			base, err := PropagateDimension(node.Args[0], env)
+			base, err := propagateDimensionWithCoords(node.Args[0], env, coordEnv)
 			if err != nil {
 				return nil, err
 			}
@@ -525,7 +534,7 @@ func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
 		if len(node.Args) != 1 {
 			return nil, fmt.Errorf("'%s' requires 1 argument, got %d", node.Op, len(node.Args))
 		}
-		arg, err := PropagateDimension(node.Args[0], env)
+		arg, err := propagateDimensionWithCoords(node.Args[0], env, coordEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -538,13 +547,13 @@ func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
 		if len(node.Args) != 1 {
 			return nil, fmt.Errorf("'%s' requires 1 argument, got %d", node.Op, len(node.Args))
 		}
-		return PropagateDimension(node.Args[0], env)
+		return propagateDimensionWithCoords(node.Args[0], env, coordEnv)
 
 	case "D":
 		if len(node.Args) != 1 {
 			return nil, fmt.Errorf("'D' requires 1 argument, got %d", len(node.Args))
 		}
-		varDim, err := PropagateDimension(node.Args[0], env)
+		varDim, err := propagateDimensionWithCoords(node.Args[0], env, coordEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -563,11 +572,41 @@ func propagateExprNode(node ExprNode, env map[string]Unit) (*Unit, error) {
 		r := varDim.Divide(wrtUnit)
 		return &r, nil
 
+	case "grad", "div", "laplacian":
+		// Spatial derivative: operand dimensions divided by the spatial
+		// coordinate's declared units. The coordinate is identified by
+		// node.Dim and resolved against the enclosing model's domain
+		// (coordEnv). When coordEnv is nil (no domain context) or the
+		// coordinate is missing / declared without units, we return the
+		// unpropagated operand dim — the structural check in
+		// checkSpatialOperatorCoordinateUnits emits the unit_inconsistency
+		// error separately, so we avoid hard-coding a metre denominator
+		// here.
+		if len(node.Args) < 1 {
+			return nil, nil
+		}
+		operand, err := propagateDimensionWithCoords(node.Args[0], env, coordEnv)
+		if err != nil {
+			return nil, err
+		}
+		if operand == nil {
+			return nil, nil
+		}
+		if node.Dim == nil || coordEnv == nil {
+			return nil, nil
+		}
+		coord, present := coordEnv[*node.Dim]
+		if !present || coord == nil || coord.Dim.IsDimensionless() {
+			return nil, nil
+		}
+		r := operand.Divide(*coord)
+		return &r, nil
+
 	case "min", "max":
 		// Return dimension of first operand; require others to match.
 		var first *Unit
 		for i, arg := range node.Args {
-			u, err := PropagateDimension(arg, env)
+			u, err := propagateDimensionWithCoords(arg, env, coordEnv)
 			if err != nil {
 				return nil, err
 			}
@@ -657,7 +696,7 @@ func dimString(u *Unit) string {
 
 // ValidateModelUnits runs dimensional analysis over every equation in a model
 // and appends any warnings it finds to the result.
-func validateModelUnits(modelName string, model *Model, basePath string, result *StructuralValidationResult) {
+func validateModelUnits(modelName string, model *Model, basePath string, file *EsmFile, result *StructuralValidationResult) {
 	raw := make(map[string]string, len(model.Variables))
 	for name, v := range model.Variables {
 		if v.Units != nil {
@@ -671,14 +710,227 @@ func validateModelUnits(modelName string, model *Model, basePath string, result 
 			Message: fmt.Sprintf("could not parse unit: %v", err),
 		})
 	}
+	coordEnv := modelCoordinateUnitEnv(file, model)
 	for i, eq := range model.Equations {
 		eqPath := fmt.Sprintf("%s.equations[%d]", basePath, i)
-		if w := ValidateEquationDimensions(&eq, env, eqPath); w != nil {
+		if w := validateEquationDimensionsCoords(&eq, env, coordEnv, eqPath); w != nil {
 			result.UnitWarnings = append(result.UnitWarnings, *w)
 		}
 	}
 	checkConversionFactorConsistency(modelName, model, result)
 	checkPhysicalConstantUnits(modelName, model, result)
+	checkSpatialOperatorCoordinateUnits(modelName, model, file, result)
+}
+
+// modelCoordinateUnitEnv resolves the model's domain.spatial block into a map
+// of coordinate name → *Unit. A nil map means the model has no domain
+// reference or the domain/spatial block is missing. An entry whose value is
+// nil means the coordinate is declared without a `units` field.
+func modelCoordinateUnitEnv(file *EsmFile, model *Model) map[string]*Unit {
+	if file == nil || model == nil || model.Domain == nil || *model.Domain == "" {
+		return nil
+	}
+	domain, ok := file.Domains[*model.Domain]
+	if !ok || len(domain.Spatial) == 0 {
+		return nil
+	}
+	out := make(map[string]*Unit, len(domain.Spatial))
+	for dimName, sd := range domain.Spatial {
+		if strings.TrimSpace(sd.Units) == "" {
+			out[dimName] = nil
+			continue
+		}
+		u, err := ParseUnit(sd.Units)
+		if err != nil {
+			out[dimName] = nil
+			continue
+		}
+		uc := u
+		out[dimName] = &uc
+	}
+	return out
+}
+
+// validateEquationDimensionsCoords mirrors ValidateEquationDimensions but uses
+// the coord-aware propagator so grad/div/laplacian resolves node.Dim against
+// the enclosing model's domain.
+func validateEquationDimensionsCoords(eq *Equation, env map[string]Unit, coordEnv map[string]*Unit, path string) *UnitWarning {
+	lhs, lhsErr := propagateDimensionWithCoords(eq.LHS, env, coordEnv)
+	rhs, rhsErr := propagateDimensionWithCoords(eq.RHS, env, coordEnv)
+
+	if lhsErr != nil {
+		return &UnitWarning{
+			Path:     path + ".lhs",
+			Message:  "dimensional analysis failed on LHS: " + lhsErr.Error(),
+			LhsUnits: "error",
+			RhsUnits: dimString(rhs),
+		}
+	}
+	if rhsErr != nil {
+		return &UnitWarning{
+			Path:     path + ".rhs",
+			Message:  "dimensional analysis failed on RHS: " + rhsErr.Error(),
+			LhsUnits: dimString(lhs),
+			RhsUnits: "error",
+		}
+	}
+	if lhs == nil || rhs == nil {
+		return nil
+	}
+	if !lhs.Dim.Equal(rhs.Dim) {
+		return &UnitWarning{
+			Path:     path,
+			Message:  fmt.Sprintf("LHS dimension %s does not match RHS dimension %s", lhs.Dim, rhs.Dim),
+			LhsUnits: lhs.Dim.String(),
+			RhsUnits: rhs.Dim.String(),
+		}
+	}
+	return nil
+}
+
+// checkSpatialOperatorCoordinateUnits walks every equation and observed
+// variable expression in a model looking for grad/div/laplacian operators
+// whose referenced coordinate (node.Dim) is either absent from the model's
+// domain or declared without units. Either condition leaves the operator's
+// result dimensionally unresolvable, so we emit a unit_inconsistency
+// structural error. Mirrors the TypeScript validator (units.ts 'grad' case)
+// and Python's _walk_expression_for_spatial_operator_checks.
+func checkSpatialOperatorCoordinateUnits(modelName string, model *Model, file *EsmFile, result *StructuralValidationResult) {
+	coordUnitStrs := modelCoordinateUnitStrings(file, model)
+	varUnits := map[string]string{}
+	for name, v := range model.Variables {
+		if v.Units != nil {
+			varUnits[name] = *v.Units
+		}
+	}
+	for i, eq := range model.Equations {
+		path := fmt.Sprintf("/models/%s/equations/%d", modelName, i)
+		walkSpatialOps(eq.LHS, modelName, path, i, coordUnitStrs, varUnits, result)
+		walkSpatialOps(eq.RHS, modelName, path, i, coordUnitStrs, varUnits, result)
+	}
+	for vname, v := range model.Variables {
+		if v.Type != "observed" || v.Expression == nil {
+			continue
+		}
+		path := fmt.Sprintf("/models/%s/variables/%s", modelName, vname)
+		walkSpatialOps(v.Expression, modelName, path, -1, coordUnitStrs, varUnits, result)
+	}
+}
+
+// modelCoordinateUnitStrings returns a {dim_name: unit_string} map for the
+// model's domain. Returns nil when no domain is wired up. An entry whose
+// value is the empty string means the coordinate is declared without units.
+// The second return slot is true if the model had a resolvable domain.spatial
+// block so callers can distinguish "no domain" from "coord not listed".
+func modelCoordinateUnitStrings(file *EsmFile, model *Model) map[string]string {
+	if file == nil || model == nil || model.Domain == nil || *model.Domain == "" {
+		return nil
+	}
+	domain, ok := file.Domains[*model.Domain]
+	if !ok {
+		return nil
+	}
+	if len(domain.Spatial) == 0 {
+		// Non-nil but empty — lets the walker distinguish "domain has no
+		// spatial block" from "no domain at all". We return nil here so
+		// the walker skips silently; there is nothing to check.
+		return nil
+	}
+	out := make(map[string]string, len(domain.Spatial))
+	for dimName, sd := range domain.Spatial {
+		out[dimName] = strings.TrimSpace(sd.Units)
+	}
+	return out
+}
+
+// walkSpatialOps recurses over an expression tree looking for grad/div/
+// laplacian nodes. Emits a structural unit_inconsistency error when the
+// coordinate (node.Dim) is not declared in coordUnits or is declared without
+// units. equationIndex < 0 means the expression is an observed variable
+// expression rather than an equation side.
+func walkSpatialOps(
+	expr Expression,
+	modelName, path string,
+	equationIndex int,
+	coordUnits map[string]string,
+	varUnits map[string]string,
+	result *StructuralValidationResult,
+) {
+	node, ok := exprAsNode(expr)
+	if !ok {
+		return
+	}
+	if node.Op == "grad" || node.Op == "div" || node.Op == "laplacian" {
+		if node.Dim != nil && coordUnits != nil {
+			dimName := *node.Dim
+			coordU, present := coordUnits[dimName]
+			if !present || coordU == "" || isDimensionlessUnitString(coordU) {
+				details := map[string]interface{}{
+					"operator": node.Op,
+					"dim":      dimName,
+				}
+				if equationIndex >= 0 {
+					details["equation_index"] = equationIndex
+				}
+				if len(node.Args) >= 1 {
+					if varName, ok := node.Args[0].(string); ok {
+						details["variable"] = varName
+						if u, hasUnits := varUnits[varName]; hasUnits {
+							details["variable_units"] = u
+						}
+					}
+				}
+				if !present {
+					details["coordinate_units"] = nil
+					details["reason"] = "coordinate not declared in model's domain"
+				} else if coordU == "" {
+					details["coordinate_units"] = nil
+				} else {
+					details["coordinate_units"] = coordU
+				}
+				message := opLabel(node.Op) + " operator applied to variable with incompatible spatial units"
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    path,
+					Code:    ErrorUnitInconsistency,
+					Message: message,
+					Details: details,
+				})
+			}
+		}
+	}
+	for _, arg := range node.Args {
+		walkSpatialOps(arg, modelName, path, equationIndex, coordUnits, varUnits, result)
+	}
+}
+
+// opLabel renders the spatial-operator name for error messages.
+func opLabel(op string) string {
+	switch op {
+	case "grad":
+		return "Gradient"
+	case "div":
+		return "Divergence"
+	case "laplacian":
+		return "Laplacian"
+	}
+	return op
+}
+
+// isDimensionlessUnitString reports whether a unit string denotes a
+// dimensionless quantity. A missing / empty string is treated as
+// dimensionless (the coordinate was declared without units).
+func isDimensionlessUnitString(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "1" || s == "dimensionless" {
+		return true
+	}
+	u, err := ParseUnit(s)
+	if err != nil {
+		// Unparseable — treat conservatively as non-dimensionless so we
+		// don't double-flag unit-registry gaps as coordinate errors.
+		return false
+	}
+	return u.Dim.IsDimensionless()
 }
 
 // knownPhysicalConstant pairs a canonical unit string with a human description.
