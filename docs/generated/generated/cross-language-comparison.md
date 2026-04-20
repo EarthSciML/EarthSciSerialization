@@ -304,6 +304,11 @@ def __init__(self, validate_after_edit: bool = True):
 
 **Python:**
 ```python
+def __init__(self, code: str, message: str):
+```
+
+**Python:**
+```python
 def __init__(self, esm_file: EsmFile):
 ```
 
