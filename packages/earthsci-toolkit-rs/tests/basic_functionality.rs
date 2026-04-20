@@ -180,6 +180,7 @@ fn test_stoichiometric_matrix() {
             units: Some("mol/L".to_string()),
             default: Some(1.0),
             description: None,
+            constant: None,
         },
     );
     species.insert(
@@ -188,6 +189,7 @@ fn test_stoichiometric_matrix() {
             units: Some("mol/L".to_string()),
             default: Some(0.0),
             description: None,
+            constant: None,
         },
     );
 

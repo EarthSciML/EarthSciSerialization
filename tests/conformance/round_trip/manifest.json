@@ -69,6 +69,8 @@
     { "id": "spatial/pde_tests_examples",            "path": "spatial/pde_tests_examples.esm",            "tags": ["pde", "spatial-assertions", "expression-ic", "field-plots", "gt-vzwk"] },
 
     { "id": "valid/nonlinear_isorropia_shape",       "path": "valid/nonlinear_isorropia_shape.esm",       "tags": ["nonlinear", "initialization", "guesses", "gt-ebuq"] },
-    { "id": "valid/nonlinear_mogi_shape",            "path": "valid/nonlinear_mogi_shape.esm",            "tags": ["nonlinear", "geodynamics", "gt-ebuq"] }
+    { "id": "valid/nonlinear_mogi_shape",            "path": "valid/nonlinear_mogi_shape.esm",            "tags": ["nonlinear", "geodynamics", "gt-ebuq"] },
+
+    { "id": "valid/reservoir_species_constant",      "path": "valid/reservoir_species_constant.esm",      "tags": ["reactions", "constant-species", "reservoir", "gt-ertm"] }
   ]
 }

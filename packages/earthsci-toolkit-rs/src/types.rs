@@ -613,6 +613,11 @@ pub struct Species {
     /// Brief description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// Reservoir species: participates in reactions but held fixed (no ODE).
+    /// Maps to Catalyst's `isconstantspecies=true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub constant: Option<bool>,
 }
 
 /// Parameter in a reaction system

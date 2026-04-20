@@ -120,6 +120,7 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
                 units: None,
                 default: None,
                 description: None,
+                constant: None,
             },
         );
     }

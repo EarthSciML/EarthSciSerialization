@@ -209,6 +209,7 @@ fn test_undefined_species_in_reaction() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m

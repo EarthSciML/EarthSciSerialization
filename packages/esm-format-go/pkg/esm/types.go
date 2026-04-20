@@ -111,9 +111,12 @@ type Model struct {
 
 // Species represents a chemical species
 type Species struct {
-	Units       *string `json:"units,omitempty"`
+	Units       *string     `json:"units,omitempty"`
 	Default     interface{} `json:"default,omitempty"`
-	Description *string `json:"description,omitempty"`
+	Description *string     `json:"description,omitempty"`
+	// Constant marks reservoir species (held fixed, no ODE).
+	// Maps to Catalyst's isconstantspecies=true.
+	Constant *bool `json:"constant,omitempty"`
 }
 
 // Parameter represents a model parameter

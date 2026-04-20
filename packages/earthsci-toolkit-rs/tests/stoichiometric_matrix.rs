@@ -17,6 +17,7 @@ fn test_simple_stoichiometric_matrix() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -25,6 +26,7 @@ fn test_simple_stoichiometric_matrix() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m
@@ -81,6 +83,7 @@ fn test_multiple_reaction_stoichiometric_matrix() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -89,6 +92,7 @@ fn test_multiple_reaction_stoichiometric_matrix() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -97,6 +101,7 @@ fn test_multiple_reaction_stoichiometric_matrix() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m
@@ -175,6 +180,7 @@ fn test_stoichiometric_coefficients() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -183,6 +189,7 @@ fn test_stoichiometric_coefficients() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -191,6 +198,7 @@ fn test_stoichiometric_coefficients() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m
@@ -250,6 +258,7 @@ fn test_reversible_reactions() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -258,6 +267,7 @@ fn test_reversible_reactions() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m
@@ -334,6 +344,7 @@ fn test_complex_reaction_network() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -342,6 +353,7 @@ fn test_complex_reaction_network() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -350,6 +362,7 @@ fn test_complex_reaction_network() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -358,6 +371,7 @@ fn test_complex_reaction_network() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -366,6 +380,7 @@ fn test_complex_reaction_network() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m
@@ -506,6 +521,7 @@ fn test_no_reactions() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m
@@ -543,6 +559,7 @@ fn test_default_coefficients() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -551,6 +568,7 @@ fn test_default_coefficients() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m

@@ -643,7 +643,12 @@ const schema = {
       "properties": {
         "units": { "type": "string" },
         "default": { "type": "number" },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "constant": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, the species participates in reactions but its concentration is held fixed (no ODE)."
+        }
       }
     },
 

@@ -231,13 +231,22 @@ function generate_reaction_system_code(name::String, reaction_system::ReactionSy
 
     push!(lines, "# Reaction System: $name")
 
-    # Generate @species declaration
-    if !isnothing(reaction_system.species) && !isempty(reaction_system.species)
-        species_decls = join(map(format_species_declaration, reaction_system.species), " ")
+    # Split species by the Species.constant flag: ordinary state species get
+    # @species, reservoir species (constant=true) are emitted as @parameters
+    # with the Catalyst isconstantspecies=true metadata. Catalyst's @species
+    # macro rejects isconstantspecies metadata ("can only be used with
+    # parameters"), so the metadata must travel with a @parameters declaration.
+    state_species = !isnothing(reaction_system.species) ?
+        filter(s -> s.constant !== true, reaction_system.species) : EarthSciSerialization.Species[]
+    const_species = !isnothing(reaction_system.species) ?
+        filter(s -> s.constant === true, reaction_system.species) : EarthSciSerialization.Species[]
+
+    if !isempty(state_species)
+        species_decls = join(map(format_species_declaration, state_species), " ")
         push!(lines, "@species $species_decls")
     end
 
-    # Generate @parameters for reaction parameters
+    # Generate @parameters for reaction parameters plus reservoir species.
     reaction_params = Set{String}()
     if !isnothing(reaction_system.reactions) && !isempty(reaction_system.reactions)
         for reaction in reaction_system.reactions
@@ -250,6 +259,10 @@ function generate_reaction_system_code(name::String, reaction_system::ReactionSy
 
     if !isempty(reaction_params)
         push!(lines, "@parameters $(join(reaction_params, " "))")
+    end
+    if !isempty(const_species)
+        reservoir_decls = join([string(s.name, " [isconstantspecies=true]") for s in const_species], " ")
+        push!(lines, "@parameters $reservoir_decls")
     end
 
     # Generate reactions
@@ -351,10 +364,11 @@ function format_variable_declaration(var_name::String, variable::ModelVariable)
 end
 
 function format_species_declaration(species::Species)
-    decl = string(species.name)
-    # Species in the ESM format don't have initial_value fields
-    # Initial values are set during system configuration
-    return decl
+    # Initial values are set during system configuration, not here.
+    # Reservoir species (constant=true) are emitted as @parameters with
+    # isconstantspecies=true metadata elsewhere, so they should not reach
+    # this formatter.
+    return string(species.name)
 end
 
 function format_equation(equation::Equation)

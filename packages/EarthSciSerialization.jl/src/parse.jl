@@ -835,8 +835,9 @@ function coerce_species(name::String, data::Any)::Species
     default = haskey(data, :default) && data.default !== nothing ? Float64(data.default) : nothing
     description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
     default_units = haskey(data, :default_units) && data.default_units !== nothing ? string(data.default_units) : nothing
+    constant = haskey(data, :constant) && data.constant !== nothing ? Bool(data.constant) : nothing
 
-    return Species(name, units=units, default=default, description=description, default_units=default_units)
+    return Species(name, units=units, default=default, description=description, default_units=default_units, constant=constant)
 end
 
 """

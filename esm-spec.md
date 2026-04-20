@@ -1453,7 +1453,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `domain` | | Name of a domain from the `domains` section that this reaction system is defined on. Omit or set to `null` for 0D (non-spatial) systems. |
 | `coupletype` | | Coupling type name. Informational label identifying this system's role in coupling. |
 | `reference` | | Academic citation |
-| `species` | ✓ | Named reactive species with units, defaults, descriptions |
+| `species` | ✓ | Named reactive species with units, defaults, descriptions. Each species may set `constant: true` to declare a **reservoir species** whose concentration is held fixed (no ODE integration) while it still participates in reactions as a substrate or product (see §7.4). |
 | `parameters` | ✓ | Named parameters (rate constants, temperature, photolysis rates, etc.) |
 | `reactions` | ✓ | Array of reaction definitions |
 | `constraint_equations` | | Additional algebraic or ODE constraints (in expression AST form) |
@@ -1492,6 +1492,8 @@ dX/dt += (net_stoich_X) · v
 where `net_stoich_X = (stoich as product) − (stoich as substrate)`.
 
 **Unit convention:** The `rate` field in each reaction must be the **effective rate** for the species units used — i.e., mass action applied to the rate and species values must produce the correct ODE tendency in the declared species units. When species are in mixing ratios (e.g., `mol/mol`) but rate constants are in concentration units (e.g., `cm³/molec/s`), the rate expression must include the appropriate number density factor(s) `M` to convert. For a reaction of total substrate order `n`, the rate should include `M^(n−1)`.
+
+**Reservoir species (`constant: true`).** A species declared with `constant: true` is a *reservoir*: it appears in rate laws as a concentration but no `dX/dt` equation is generated for it. Bindings that target Catalyst emit it as a parameter with `isconstantspecies=true` metadata; other bindings skip the ODE for that species while still evaluating mass-action contributions from it. Typical use: O₂, CH₄, H₂O in tropospheric chemistry where the species participates in many reactions but its concentration is effectively unchanged on the simulation timescale.
 
 ---
 

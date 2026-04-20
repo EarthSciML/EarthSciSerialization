@@ -86,6 +86,19 @@ function _make_cparam(name::Symbol)
     return vars[1]
 end
 
+# Reservoir species: declared as a parameter with Catalyst's
+# isconstantspecies=true metadata. The @species macro rejects this
+# metadata ("can only be used with parameters"), so we must go through
+# @parameters. The resulting symbol still participates in reactions as a
+# reactant/product but its value is held fixed by the solver.
+function _make_constant_species(name::Symbol)
+    # Equivalent to `@parameters X [isconstantspecies=true]` at runtime.
+    meta = Core.Expr(:vect, Core.Expr(:(=), :isconstantspecies, true))
+    decl = Core.Expr(:macrocall, Symbol("@parameters"), LineNumberNode(0), name, meta)
+    vars = Core.eval(Catalyst, decl)
+    return vars[1]
+end
+
 function _make_civ(name::Symbol)
     # Independent variables in Catalyst/MTK need @independent_variables metadata.
     vars = Core.eval(Catalyst, :(@variables $(name)))
@@ -99,14 +112,20 @@ function Catalyst.ReactionSystem(rsys::EarthSciSerialization.ReactionSystem;
 
     species_dict = Dict{String,Any}()
     species_syms = Any[]
+    param_dict = Dict{String,Any}()
+    param_syms = Any[]
     for sp in rsys.species
-        sym = _make_species(Symbol(sp.name), t)
-        push!(species_syms, sym)
+        if sp.constant === true
+            # Reservoir species: parameter with isconstantspecies=true metadata.
+            sym = _make_constant_species(Symbol(sp.name))
+            push!(param_syms, sym)
+        else
+            sym = _make_species(Symbol(sp.name), t)
+            push!(species_syms, sym)
+        end
         species_dict[sp.name] = sym
     end
 
-    param_dict = Dict{String,Any}()
-    param_syms = Any[]
     for p in rsys.parameters
         sym = _make_cparam(Symbol(p.name))
         push!(param_syms, sym)
@@ -182,7 +201,14 @@ function EarthSciSerialization.ReactionSystem(rs::Catalyst.ReactionSystem)
         catch
             1.0
         end
-        push!(parameters, Parameter(pname, default))
+        # Reservoir species travel through Catalyst as parameters with
+        # isconstantspecies=true metadata; recover them as ESM species with
+        # constant=true rather than as ordinary parameters.
+        if Catalyst.isconstant(p)
+            push!(species, Species(pname; default=Float64(default), constant=true))
+        else
+            push!(parameters, Parameter(pname, Float64(default)))
+        end
     end
 
     reactions = Reaction[]

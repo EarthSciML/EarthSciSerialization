@@ -122,6 +122,7 @@ class Species:
     default_units: Optional[str] = None
     description: Optional[str] = None
     formula: Optional[str] = None  # Chemical formula
+    constant: Optional[bool] = None  # Reservoir species (held-fixed, no ODE)
 
 
 @dataclass

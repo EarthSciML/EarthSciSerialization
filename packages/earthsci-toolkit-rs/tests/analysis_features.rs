@@ -95,6 +95,7 @@ fn test_analysis_features_integration() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -103,6 +104,7 @@ fn test_analysis_features_integration() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m

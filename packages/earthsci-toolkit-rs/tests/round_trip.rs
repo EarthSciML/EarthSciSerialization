@@ -455,3 +455,35 @@ fn test_nonlinear_mogi_shape_round_trip() {
     assert!(model.initialization_equations.is_none());
     assert!(model.guesses.is_none());
 }
+
+/// Reservoir species: Species.constant=true must round-trip through parse → save → reparse
+/// and be preserved byte-identical for the flagged species while absent for ordinary ones.
+#[test]
+fn test_reservoir_species_constant_round_trip() {
+    let fixture = include_str!("../../../tests/valid/reservoir_species_constant.esm");
+    let parsed: EsmFile = load(fixture).expect("load reservoir fixture");
+    let serialized = save(&parsed).expect("save reservoir fixture");
+    let reparsed: EsmFile = load(&serialized).expect("reload reservoir fixture");
+    assert_eq!(
+        serde_json::to_value(&parsed).expect("parsed as value"),
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+    );
+    let rs = parsed
+        .reaction_systems
+        .as_ref()
+        .and_then(|m| m.get("SuperFastSubset"))
+        .expect("SuperFastSubset missing");
+    for name in &["O2", "CH4", "H2O"] {
+        assert_eq!(
+            rs.species.get(*name).and_then(|s| s.constant),
+            Some(true),
+            "species {name} should be constant=true",
+        );
+    }
+    for name in &["O3", "OH", "HO2"] {
+        assert!(
+            rs.species.get(*name).and_then(|s| s.constant).is_none(),
+            "species {name} should have no constant flag",
+        );
+    }
+}

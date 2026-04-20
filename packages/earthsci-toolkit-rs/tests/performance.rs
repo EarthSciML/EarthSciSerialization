@@ -517,6 +517,7 @@ fn test_parallel_stoichiometric_matrix_computation() {
             units: Some("mol".to_string()),
             default: Some(1.0),
             description: None,
+            constant: None,
         },
     );
     species.insert(
@@ -525,6 +526,7 @@ fn test_parallel_stoichiometric_matrix_computation() {
             units: Some("mol".to_string()),
             default: Some(1.0),
             description: None,
+            constant: None,
         },
     );
     species.insert(
@@ -533,6 +535,7 @@ fn test_parallel_stoichiometric_matrix_computation() {
             units: Some("mol".to_string()),
             default: Some(0.0),
             description: None,
+            constant: None,
         },
     );
 

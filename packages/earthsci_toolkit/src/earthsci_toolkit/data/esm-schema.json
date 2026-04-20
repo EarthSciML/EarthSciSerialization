@@ -646,7 +646,12 @@
           "type": "string",
           "description": "Units of the default value, if different from the declared units field. See ModelVariable.default_units for semantics."
         },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "constant": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, the species participates in reactions as a reactant/product but its concentration is held fixed (no ODE integration) — a reservoir species. Maps to Catalyst's @species [isconstantspecies=true]. Absent or false means an ordinary state species with an ODE."
+        }
       }
     },
 

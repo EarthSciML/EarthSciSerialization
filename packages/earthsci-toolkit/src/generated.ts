@@ -1215,6 +1215,10 @@ export interface Species {
    */
   default_units?: string;
   description?: string;
+  /**
+   * When true, the species participates in reactions as a reactant/product but its concentration is held fixed (no ODE integration) — a reservoir species. Maps to Catalyst's @species [isconstantspecies=true]. Absent or false means an ordinary state species with an ODE.
+   */
+  constant?: boolean;
 }
 /**
  * A parameter in a reaction system.

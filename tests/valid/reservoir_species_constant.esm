@@ -1,0 +1,121 @@
+{
+  "esm": "0.2.0",
+  "metadata": {
+    "name": "ReservoirSpeciesConstant",
+    "description": "SuperFast-style reaction system with reservoir (constant) species O2, CH4, H2O. Exercises the Species.constant=true flag (maps to Catalyst isconstantspecies=true).",
+    "authors": [
+      "EarthSciML"
+    ],
+    "created": "2026-04-20T00:00:00Z",
+    "tags": [
+      "reactions",
+      "reservoir",
+      "constant-species",
+      "gt-ertm"
+    ]
+  },
+  "reaction_systems": {
+    "SuperFastSubset": {
+      "species": {
+        "O2": {
+          "units": "ppb",
+          "default": 2.1e8,
+          "description": "Molecular oxygen (reservoir)",
+          "constant": true
+        },
+        "CH4": {
+          "units": "ppb",
+          "default": 1700.0,
+          "description": "Methane (reservoir)",
+          "constant": true
+        },
+        "H2O": {
+          "units": "ppb",
+          "default": 1.8e7,
+          "description": "Water vapor (reservoir)",
+          "constant": true
+        },
+        "O3": {
+          "units": "ppb",
+          "default": 40.0,
+          "description": "Ozone"
+        },
+        "OH": {
+          "units": "ppb",
+          "default": 1e-4,
+          "description": "Hydroxyl radical"
+        },
+        "HO2": {
+          "units": "ppb",
+          "default": 1e-3,
+          "description": "Hydroperoxyl radical"
+        }
+      },
+      "parameters": {
+        "kO1D_H2O": {
+          "units": "1/s",
+          "default": 1e-10,
+          "description": "Effective rate for O(1D)+H2O -> 2 OH"
+        },
+        "kCH4_OH": {
+          "units": "1/s",
+          "default": 6.3e-15,
+          "description": "CH4 + OH oxidation rate"
+        },
+        "kHO2_O3": {
+          "units": "1/s",
+          "default": 2e-15,
+          "description": "HO2 + O3 rate"
+        }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "O1D_with_H2O_forms_OH",
+          "substrates": [
+            { "species": "O3", "stoichiometry": 1 },
+            { "species": "H2O", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "OH", "stoichiometry": 2 }
+          ],
+          "rate": "kO1D_H2O"
+        },
+        {
+          "id": "R2",
+          "name": "CH4_OH_oxidation",
+          "substrates": [
+            { "species": "CH4", "stoichiometry": 1 },
+            { "species": "OH", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "HO2", "stoichiometry": 1 }
+          ],
+          "rate": "kCH4_OH"
+        },
+        {
+          "id": "R3",
+          "name": "HO2_O3_sink",
+          "substrates": [
+            { "species": "HO2", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "OH", "stoichiometry": 1 },
+            { "species": "O2", "stoichiometry": 1 }
+          ],
+          "rate": "kHO2_O3"
+        }
+      ]
+    }
+  },
+  "domains": {
+    "default": {
+      "temporal": {
+        "start": "2024-06-21T12:00:00Z",
+        "end": "2024-06-21T12:06:00Z"
+      },
+      "element_type": "Float64"
+    }
+  }
+}

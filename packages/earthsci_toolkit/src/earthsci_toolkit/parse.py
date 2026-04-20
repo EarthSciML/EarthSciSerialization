@@ -588,7 +588,8 @@ def _parse_species(species_data: Dict[str, Any]) -> Species:
         units=species_data.get("units"),
         default=species_data.get("default"),
         default_units=species_data.get("default_units"),
-        description=species_data.get("description")
+        description=species_data.get("description"),
+        constant=species_data.get("constant"),
     )
 
 

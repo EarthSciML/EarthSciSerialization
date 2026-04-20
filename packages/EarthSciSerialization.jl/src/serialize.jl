@@ -423,6 +423,9 @@ function serialize_species(species::Species)::Dict{String,Any}
     if species.description !== nothing
         result["description"] = species.description
     end
+    if species.constant !== nothing
+        result["constant"] = species.constant
+    end
     return result
 end
 

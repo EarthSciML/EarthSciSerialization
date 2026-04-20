@@ -66,6 +66,7 @@ fn test_component_graph_generation() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m
@@ -318,6 +319,7 @@ fn test_reaction_system_expression_graph() {
                 units: Some("mol/L".to_string()),
                 default: Some(1.0),
                 description: None,
+                constant: None,
             },
         );
         m.insert(
@@ -326,6 +328,7 @@ fn test_reaction_system_expression_graph() {
                 units: Some("mol/L".to_string()),
                 default: Some(0.0),
                 description: None,
+                constant: None,
             },
         );
         m

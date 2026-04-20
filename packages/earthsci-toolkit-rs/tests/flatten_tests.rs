@@ -95,6 +95,7 @@ fn reaction_system(
                     units: None,
                     default: d,
                     description: None,
+                    constant: None,
                 },
             )
         })

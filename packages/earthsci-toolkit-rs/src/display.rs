@@ -2213,6 +2213,7 @@ mod tests {
                 default: Some(1e-9),
                 units: Some("molec/cm3".to_string()),
                 description: None,
+                constant: None,
             },
         );
         species.insert(
@@ -2221,6 +2222,7 @@ mod tests {
                 default: Some(0.0),
                 units: Some("molec/cm3".to_string()),
                 description: None,
+                constant: None,
             },
         );
 

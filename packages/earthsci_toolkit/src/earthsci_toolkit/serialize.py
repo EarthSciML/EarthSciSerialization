@@ -372,6 +372,8 @@ def _serialize_species(species: Species) -> Dict[str, Any]:
         result["default_units"] = species.default_units
     if species.description is not None:
         result["description"] = species.description
+    if species.constant is not None:
+        result["constant"] = species.constant
     return result
 
 

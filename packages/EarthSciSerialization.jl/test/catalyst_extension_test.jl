@@ -6,6 +6,9 @@ import ModelingToolkit
 import Symbolics
 import Catalyst
 
+# Helper: strip "(t)" suffix that Catalyst appends to species names.
+_strip_time_suffix(s::AbstractString) = endswith(s, "(t)") ? s[1:end-3] : s
+
 @testset "Catalyst Extension Integration" begin
 
     @testset "Loading Catalyst activates both extensions" begin
@@ -65,5 +68,50 @@ import Catalyst
         @test length(recovered.species) == 2
         @test length(recovered.parameters) == 1
         @test length(recovered.reactions) == 1
+    end
+
+    @testset "Reservoir species (constant=true) maps to isconstantspecies (gt-ertm)" begin
+        # Reservoir species must flow through Catalyst as parameters with the
+        # isconstantspecies=true metadata (modern Catalyst rejects this
+        # metadata on @species). The reverse direction recovers them as ESM
+        # species with constant=true rather than as ordinary parameters.
+        species = [
+            EarthSciSerialization.Species("O2"; constant=true),
+            EarthSciSerialization.Species("CH4"; constant=true),
+            EarthSciSerialization.Species("OH"),
+        ]
+        params = [EarthSciSerialization.Parameter("k", 1e-14)]
+        rxns = EarthSciSerialization.Reaction[
+            EarthSciSerialization.Reaction(Dict("CH4" => 1, "OH" => 1),
+                                           Dict("O2" => 1),
+                                           VarExpr("k")),
+        ]
+        esm_rsys = EarthSciSerialization.ReactionSystem(species, rxns;
+                                                        parameters=params)
+        cat_rsys = Catalyst.ReactionSystem(esm_rsys; name=:Reservoir)
+
+        # Check that O2 and CH4 are constant species (metadata-tagged
+        # parameters in Catalyst), while OH remains a state species.
+        constant_names = Set(String[])
+        for p in Catalyst.parameters(cat_rsys)
+            if Catalyst.isconstant(p)
+                push!(constant_names, string(Catalyst.getname(p)))
+            end
+        end
+        @test "O2" in constant_names
+        @test "CH4" in constant_names
+        species_names = Set(_strip_time_suffix(string(Catalyst.getname(s)))
+                            for s in Catalyst.species(cat_rsys))
+        @test "OH" in species_names
+        @test !("O2" in species_names)
+        @test !("CH4" in species_names)
+
+        # Reverse: recover constant flag from Catalyst metadata.
+        recovered = EarthSciSerialization.ReactionSystem(cat_rsys)
+        by_name = Dict(s.name => s for s in recovered.species)
+        @test haskey(by_name, "O2")  && by_name["O2"].constant  === true
+        @test haskey(by_name, "CH4") && by_name["CH4"].constant === true
+        @test haskey(by_name, "OH")  && by_name["OH"].constant  !== true
+        @test length(recovered.parameters) == 1
     end
 end

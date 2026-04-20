@@ -510,10 +510,11 @@ struct Species
     default::Union{Float64,Nothing}
     description::Union{String,Nothing}
     default_units::Union{String,Nothing}
+    constant::Union{Bool,Nothing}
 
     # Constructor with optional parameters
-    Species(name::String; units=nothing, default=nothing, description=nothing, default_units=nothing) =
-        new(name, units, default, description, default_units)
+    Species(name::String; units=nothing, default=nothing, description=nothing, default_units=nothing, constant=nothing) =
+        new(name, units, default, description, default_units, constant)
 end
 
 """
