@@ -946,6 +946,17 @@ MTK(...)
 
 ---
 
+### MTK
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+MTK(...)
+```
+
+---
+
 ### Metadata
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1330,6 +1341,17 @@ RFC(...)
 
 ---
 
+### RHS
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RHS(...)
+```
+
+---
+
 ### Reaction
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1641,6 +1663,28 @@ SubsystemRefError(...)
 **Signature:**
 ```julia
 System(...)
+```
+
+---
+
+### Tree
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Tree(...)
+```
+
+---
+
+### TreeWalkError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+TreeWalkError(...)
 ```
 
 ---
@@ -2417,6 +2461,92 @@ apply_bindings(template::Expr, bindings::Dict{String,Expr}) -> Expr
 Substitute pattern variables in `template` with their bound values.
 Throws [`RuleEngineError`](@ref) if `template` references a pattern
 variable that is not in `bindings`.
+
+---
+
+### build_evaluator
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+build_evaluator(...)
+```
+
+---
+
+### build_evaluator
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/tree_walk.jl:78`
+
+**Signature:**
+```julia
+function build_evaluator(model::Model;
+```
+
+**Description:**
+build_evaluator(model::Model; initial_conditions=Dict(),
+                    parameter_overrides=Dict(), tspan=nothing,
+                    registered_functions=Dict())
+
+Build a tree-walk ODE RHS evaluator for `model`.
+
+All state variables must be scalar (shape === nothing) — the walker
+assumes equations have already been scalarized by the discretize
+pipeline. Array-typed ops (`arrayop`, `makearray`, `broadcast`,
+`reshape`, `transpose`, `concat`) therefore raise
+`E_TREEWALK_UNSUPPORTED_OP` if they appear in an RHS.
+
+The returned `f!` closure reads `u`, the captured parameter vector
+`p` (a NamedTuple keyed by parameter name), and `t`, and writes
+time-derivatives into `du`. Observed variables are substituted into
+RHS expressions at build time.
+
+Keyword arguments:
+
+* `initial_conditions::Dict{String,<:Real}` — override the default
+  values in `model.variables` for specific state variables.
+* `parameter_overrides::Dict{String,<:Real}` — override the default
+  values for specific parameters.
+* `tspan::Union{Nothing,Tuple{Real,Real}}` — explicit time span. If
+  `nothing`, the first inline `tests` block's `time_span` is used; if
+  the model has no tests, the null default `(0.0, 1.0)` is returned.
+* `registered_functions::Dict{String,<:Function}` — handlers for
+  `call` ops, keyed by `handler_id`.
+
+---
+
+### build_evaluator
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/tree_walk.jl:194`
+
+**Signature:**
+```julia
+function build_evaluator(file::EsmFile;
+```
+
+**Description:**
+build_evaluator(file::EsmFile; model_name=nothing, kwargs...)
+
+Delegate to the typed entry point after selecting the model.
+
+---
+
+### build_evaluator
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/tree_walk.jl:208`
+
+**Signature:**
+```julia
+function build_evaluator(esm::AbstractDict;
+```
+
+**Description:**
+build_evaluator(esm::AbstractDict; model_name=nothing, kwargs...)
+
+Parse a raw ESM dict, then delegate. This is the signature from the
+bead description; the typed entry point is faster for callers that
+already have a parsed `Model`.
 
 ---
 
@@ -3530,6 +3660,17 @@ dod2(...)
 
 ---
 
+### e8yw
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+e8yw(...)
+```
+
+---
+
 ### end_timer!
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/error_handling.jl:311`
@@ -3617,6 +3758,17 @@ result = evaluate(sum_expr, bindings)  # 5.0
 
 **Available in other languages:**
 - [Typescript](typescript.md#evaluate)
+
+---
+
+### evaluator
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+evaluator(...)
+```
 
 ---
 
@@ -4070,6 +4222,17 @@ Format error message for end users.
 
 ---
 
+### free
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+free(...)
+```
+
+---
+
 ### free_variables
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4266,6 +4429,17 @@ Get the domain of a system by name. Returns:
 - String: the domain name
 - nothing: system is 0D (no domain)
 - missing: system not found
+
+---
+
+### gt
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+gt(...)
+```
 
 ---
 
@@ -4934,6 +5108,17 @@ Schema-defined variants:
 **Signature:**
 ```julia
 parse_units(...)
+```
+
+---
+
+### path
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+path(...)
 ```
 
 ---
@@ -7256,6 +7441,20 @@ Check if a variable exists in the given system.
 
 ---
 
+### walk
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+walk(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#walk)
+
+---
+
 ## Types
 
 ### AffectEquation
@@ -8857,6 +9056,25 @@ set; an assertion passes when any set bound is satisfied.
 **Available in other languages:**
 - [Python](python.md#tolerance)
 - [Typescript](typescript.md#tolerance)
+
+---
+
+### TreeWalkError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/tree_walk.jl:36`
+
+**Definition:**
+```julia
+struct TreeWalkError <: Exception
+```
+
+**Description:**
+TreeWalkError
+
+Raised when the walker encounters an operator or construct it cannot
+evaluate. `code` is always one of the `E_TREEWALK_*` codes from the
+bead's acceptance criterion; `detail` carries op name or variable name
+for diagnostics.
 
 ---
 

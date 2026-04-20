@@ -111,6 +111,11 @@ MTK(...)
 MTK(...)
 ```
 
+**Julia:**
+```julia
+MTK(...)
+```
+
 ---
 
 ### MockCatalystSystem
@@ -599,6 +604,40 @@ def build(draw):
 ```python
 def build(draw):
 ```
+
+---
+
+### build_evaluator
+
+**Julia:**
+```julia
+build_evaluator(...)
+```
+
+**Julia:**
+```julia
+function build_evaluator(model::Model;
+```
+
+> build_evaluator(model::Model; initial_conditions=Dict(),
+                    parameter_overrides=Dict(), tspan=nothing,
+                    registered_functions=Dict())
+
+Build a tree-walk ODE RHS evaluator for `model`.
+
+**Julia:**
+```julia
+function build_evaluator(file::EsmFile;
+```
+
+> build_evaluator(file::EsmFile; model_name=nothing, kwargs.
+
+**Julia:**
+```julia
+function build_evaluator(esm::AbstractDict;
+```
+
+> build_evaluator(esm::AbstractDict; model_name=nothing, kwargs.
 
 ---
 
@@ -1128,6 +1167,20 @@ def get_stats(self):
 **Python:**
 ```python
 def get_stats(self):
+```
+
+---
+
+### gt
+
+**Julia:**
+```julia
+gt(...)
+```
+
+**Julia:**
+```julia
+gt(...)
 ```
 
 ---
@@ -2296,6 +2349,20 @@ validation(...)
 **Julia:**
 ```julia
 validation(...)
+```
+
+---
+
+### walk
+
+**Julia:**
+```julia
+walk(...)
+```
+
+**Python:**
+```python
+def walk(obj, path):
 ```
 
 ---
