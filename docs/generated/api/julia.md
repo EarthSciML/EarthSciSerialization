@@ -1782,7 +1782,7 @@ VariableNode(...)
 
 ### _apply_couple!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:974`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:994`
 
 **Signature:**
 ```julia
@@ -1799,7 +1799,7 @@ connector entries.
 
 ### _apply_operator_compose!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:824`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:844`
 
 **Signature:**
 ```julia
@@ -1816,7 +1816,7 @@ representation, "matching" means "has the same namespaced dependent variable".
 
 ### _apply_variable_map!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1015`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1035`
 
 **Signature:**
 ```julia
@@ -1849,7 +1849,7 @@ URLs are returned as-is; local paths are resolved to absolute paths.
 
 ### _check_coupling_domain_coverage!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:712`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:732`
 
 **Signature:**
 ```julia
@@ -1869,7 +1869,7 @@ interfaces section; its absence raises `UnmappedDomainError`."
 
 ### _check_interfaces!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:635`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:655`
 
 **Signature:**
 ```julia
@@ -1890,7 +1890,7 @@ a regridding method outside the supported set raise `UnsupportedMappingError`.
 
 ### _check_variable_map_units!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:745`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:765`
 
 **Signature:**
 ```julia
@@ -1924,7 +1924,7 @@ recursing through subsystems. All names are rewritten to `prefix.local_name`.
 
 ### _collect_reaction_system!
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:504`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:524`
 
 **Signature:**
 ```julia
@@ -1941,7 +1941,7 @@ variables are then namespaced by `prefix`.
 
 ### _collect_system_domains
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:670`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:690`
 
 **Signature:**
 ```julia
@@ -1973,7 +1973,7 @@ system equation rendering.
 
 ### _find_conflicting_derivatives
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:566`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:586`
 
 **Signature:**
 ```julia
@@ -1995,7 +1995,7 @@ and by `validate_structural` to catch the same class of error at load time.
 
 ### _interface_covers
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:693`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:713`
 
 **Signature:**
 ```julia
@@ -2064,7 +2064,7 @@ Uses the Downloads stdlib to fetch the content.
 
 ### _lookup_variable_units
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:765`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:785`
 
 **Signature:**
 ```julia
@@ -3596,7 +3596,7 @@ derive_odes(...)
 
 ### describe_coupling_entry
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1221`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1241`
 
 **Signature:**
 ```julia
@@ -3933,7 +3933,7 @@ flatten(...)
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1099`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1119`
 
 **Signature:**
 ```julia
@@ -3957,7 +3957,7 @@ a system is over-determined.
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1194`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1214`
 
 **Signature:**
 ```julia
@@ -3978,7 +3978,7 @@ name) and run the full flattener. This is the call path used by
 
 ### flatten
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1205`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1225`
 
 **Signature:**
 ```julia
@@ -4501,7 +4501,7 @@ infer_array_shapes(...)
 
 ### infer_array_shapes
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1298`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/flatten.jl:1318`
 
 **Signature:**
 ```julia
