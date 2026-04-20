@@ -1,0 +1,22 @@
+{
+  "category": "dae_missing",
+  "version": "1.0",
+  "description": "Cross-binding DAE binding-contract fixtures per discretization RFC §12 (gt-q7sh). Each fixture is an ESM document that, after discretize() is applied, contains algebraic equation(s) alongside differential equation(s). Bindings MUST either (a) accept the DAE and return a discretized document whose `metadata.system_class` is `\"dae\"`, or (b) abort with error code `E_NO_DAE_SUPPORT` when DAE support is disabled (env var `ESM_DAE_SUPPORT=0` or a binding-specific flag). Silent success with `system_class` absent or equal to `\"ode\"` is a test failure — that indicates the binding dropped the algebraic constraint.",
+  "fixtures": [
+    {
+      "id": "mixed_dae_observed",
+      "path": "mixed_dae_observed.json",
+      "tags": ["authored_algebraic", "observed_equation"],
+      "description": "One differential equation (dx/dt = -k*x) plus one algebraic observed equation (y = x^2). dae_support=true: output metadata.system_class == \"dae\", dae_info.algebraic_equation_count == 1. dae_support=false: abort with E_NO_DAE_SUPPORT."
+    },
+    {
+      "id": "pure_ode_baseline",
+      "path": "pure_ode_baseline.json",
+      "tags": ["baseline", "ode_only"],
+      "description": "Baseline: the same scalar ODE with no algebraic constraint. Output metadata.system_class == \"ode\"; E_NO_DAE_SUPPORT is NOT emitted under dae_support=false."
+    }
+  ],
+  "bindings_required": ["julia"],
+  "bindings_optional": ["rust", "python", "go", "typescript"],
+  "note": "RFC §12 requires Julia and Rust to implement both the DAE-success path (metadata.system_class == \"dae\") and the disabled-DAE path (E_NO_DAE_SUPPORT). Python, Go, and TypeScript MAY stub the success path (return E_NO_DAE_SUPPORT always) in v0.2.0 but MUST emit the exact error code on the failure path. Only Julia is gated as required here because discretize() lands binding-by-binding (RFC §13.1); other bindings pick up this fixture as they implement their own discretize()."
+}

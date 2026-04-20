@@ -1,4 +1,5 @@
-# Discretization pipeline per discretization RFC §11 (gt-gbs2).
+# Discretization pipeline per discretization RFC §11 (gt-gbs2) and
+# DAE support / binding contract per RFC §12 (gt-q7sh).
 #
 # The public entry point is `discretize(esm::AbstractDict)`, which walks a
 # parsed ESM document and emits a discretized ESM:
@@ -11,16 +12,28 @@
 #   4. Re-canonicalize the rewritten ASTs.
 #   5. Check for unrewritten PDE ops (§11 Step 7) — error or
 #      passthrough-annotate depending on `strict_unrewritten`.
-#   6. Record `metadata.discretized_from` provenance.
+#   6. RFC §12: classify each equation as `differential` vs `algebraic`
+#      (LHS `D(x, wrt=<indep>)` versus anything else), count algebraic
+#      equations across all models, stamp `metadata.system_class` on the
+#      output (`"ode"` or `"dae"`), and either hand the DAE off to the
+#      host assembler or abort with `E_NO_DAE_SUPPORT` per the
+#      `dae_support` knob.
+#   7. Record `metadata.discretized_from` provenance.
 #
 # Scheme-expansion of `use:<scheme>` rules (§7.2.1) is deferred to Step 1b
-# and is out of scope here. Cross-grid `regrid` wrapping and DAE (§12)
-# handling are likewise out of scope.
+# and is out of scope here. Cross-grid `regrid` wrapping is likewise out
+# of scope. The Julia binding's DAE **strategy** is direct hand-off to
+# ModelingToolkit.jl, which natively accepts mixed differential/algebraic
+# equation sets; we do not attempt index reduction here. See
+# `docs/rfcs/discretization.md` §12 and `docs/rfcs/dae-binding-strategies.md`
+# for the normative per-binding strategies.
 
 """
-    discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true) -> Dict{String,Any}
+    discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true,
+               dae_support::Bool=true) -> Dict{String,Any}
 
-Run the RFC §11 discretization pipeline on an ESM document.
+Run the RFC §11 discretization pipeline on an ESM document and apply
+the RFC §12 DAE binding contract.
 
 `esm` is the parsed ESM payload as a `Dict{String,Any}` (the form produced
 by [`load`](@ref) followed by `_to_native_json`, or by direct JSON
@@ -39,12 +52,29 @@ Behavior:
   [`RuleEngineError`](@ref) with code `E_UNREWRITTEN_PDE_OP`. With
   `strict_unrewritten=false` the offending equation/BC is instead marked
   `passthrough: true` and retained verbatim.
+- After the pipeline, every equation is classified as either
+  `differential` (LHS is `D(x, wrt=<independent_variable>)`) or
+  `algebraic` (anything else — includes `produces: algebraic` output
+  once rule `produces` lands, and authored non-differential equations).
+  The total and per-model algebraic counts are written to the top-level
+  `metadata.dae_info` (`{algebraic_equation_count, per_model}`), and
+  `metadata.system_class` is set to `"dae"` if any model has at least
+  one algebraic equation, else `"ode"`. (Model schemas use
+  `additionalProperties: false`, so the counts live only on the
+  top-level metadata, not inside each model.)
+- If any model contains algebraic equations **and** `dae_support=false`
+  (or the environment variable `ESM_DAE_SUPPORT=0`), `discretize` throws
+  [`RuleEngineError`](@ref) with code `E_NO_DAE_SUPPORT`. The message
+  names the first model and algebraic equation path found. Per RFC §12
+  the Julia binding's default strategy is direct DAE hand-off to
+  ModelingToolkit, so `dae_support=true` is the normal setting.
 - `metadata.discretized_from` is set on the output to the input's
   `metadata.name`.
 """
 function discretize(esm::AbstractDict;
                     max_passes::Int = 32,
-                    strict_unrewritten::Bool = true)::Dict{String,Any}
+                    strict_unrewritten::Bool = true,
+                    dae_support::Bool = _default_dae_support())::Dict{String,Any}
     out = _deep_native(esm)
     out isa Dict{String,Any} || throw(ArgumentError(
         "discretize: input must be a JSON object / Dict; got $(typeof(esm))"))
@@ -64,8 +94,21 @@ function discretize(esm::AbstractDict;
         end
     end
 
+    # RFC §12 — DAE classification + binding contract.
+    _apply_dae_contract!(out, dae_support)
+
     _record_discretized_from!(out)
     return out
+end
+
+# Default `dae_support` honors the `ESM_DAE_SUPPORT` env var (RFC §12 says
+# bindings MAY expose either an env var or a binding-specific flag; Julia
+# exposes both). Any falsy value ("0", "false", "off", "no") disables.
+function _default_dae_support()::Bool
+    raw = get(ENV, "ESM_DAE_SUPPORT", nothing)
+    raw === nothing && return true
+    v = lowercase(strip(String(raw)))
+    return !(v in ("0", "false", "off", "no"))
 end
 
 # ============================================================================
@@ -294,6 +337,143 @@ end
 function _canonicalize_value(value_raw)
     expr = parse_expression(value_raw)
     return serialize_expression(canonicalize(expr))
+end
+
+# ============================================================================
+# DAE classification and binding contract (RFC §12)
+# ============================================================================
+
+"""
+    _apply_dae_contract!(esm, dae_support)
+
+Classify every equation as differential vs algebraic, record the
+per-model algebraic count, and either stamp `metadata.system_class`
+on the output or throw `E_NO_DAE_SUPPORT`.
+
+An equation is **differential** iff its LHS is an `OpExpr` with `op == "D"`
+and `wrt` equal to the enclosing model's independent variable (the
+domain's `independent_variable`, defaulting to `"t"`). Every other
+equation — authored algebraic constraints, observed equations whose
+LHS is a plain variable, equations emitted by a `produces: algebraic`
+rule (once that lands) — is algebraic for the purpose of this contract.
+
+This is deliberately inclusive: any binding that claims ODE-only
+support and hands off a system to an ODE integrator would drop an
+observed-equation LHS just as surely as a true DAE constraint. RFC §12
+pins the contract as "hand to a DAE assembler, or abort".
+"""
+function _apply_dae_contract!(esm::Dict{String,Any}, dae_support::Bool)
+    total_algebraic = 0
+    per_model = Dict{String,Int}()
+    first_algebraic_path::Union{Nothing,String} = nothing
+
+    models = get(esm, "models", nothing)
+    if models isa AbstractDict
+        indep_by_domain = _indep_var_by_domain(esm)
+        for (mname, mraw) in models
+            mraw isa AbstractDict || continue
+            indep = _model_independent_variable(mraw, indep_by_domain)
+            count = 0
+            eqns = get(mraw, "equations", nothing)
+            if eqns isa AbstractVector
+                for (i, eqn) in enumerate(eqns)
+                    eqn isa AbstractDict || continue
+                    _is_algebraic_equation(eqn, indep) || continue
+                    count += 1
+                    if first_algebraic_path === nothing
+                        first_algebraic_path = "models.$(mname).equations[$i]"
+                    end
+                end
+            end
+            total_algebraic += count
+            per_model[String(mname)] = count
+        end
+    end
+
+    # Write classification to top-level metadata so downstream (MTK export,
+    # conformance harness) can read it without re-walking. We do not mutate
+    # per-model dicts because `Model` has `additionalProperties: false`.
+    out_meta = _ensure_dict!(esm, "metadata")
+    out_meta["system_class"] = total_algebraic > 0 ? "dae" : "ode"
+    out_meta["dae_info"] = Dict{String,Any}(
+        "algebraic_equation_count" => total_algebraic,
+        "per_model" => Dict{String,Any}(k => v for (k, v) in per_model),
+    )
+
+    if total_algebraic > 0 && !dae_support
+        where_ = first_algebraic_path === nothing ? "(unknown)" : first_algebraic_path
+        throw(RuleEngineError("E_NO_DAE_SUPPORT",
+            "discretize() output contains $(total_algebraic) algebraic " *
+            "equation(s) (first at $(where_)); DAE support is disabled " *
+            "(dae_support=false / ESM_DAE_SUPPORT=0). Enable DAE support " *
+            "or remove the algebraic constraint(s). See RFC §12."))
+    end
+    return esm
+end
+
+# Resolve domain -> independent_variable (default "t").
+function _indep_var_by_domain(esm::Dict{String,Any})::Dict{String,String}
+    out = Dict{String,String}()
+    domains = get(esm, "domains", nothing)
+    domains isa AbstractDict || return out
+    for (dname, draw) in domains
+        draw isa AbstractDict || continue
+        iv = get(draw, "independent_variable", nothing)
+        out[String(dname)] = iv isa AbstractString ? String(iv) : "t"
+    end
+    return out
+end
+
+function _model_independent_variable(model::AbstractDict,
+                                      indep_by_domain::Dict{String,String})::String
+    dname = get(model, "domain", nothing)
+    dname isa AbstractString || return "t"
+    return get(indep_by_domain, String(dname), "t")
+end
+
+function _is_algebraic_equation(eqn::AbstractDict, indep::String)::Bool
+    # An explicit marker wins if present (future `produces: algebraic`
+    # output can stamp this directly).
+    if haskey(eqn, "produces")
+        p = eqn["produces"]
+        if p == "algebraic" || (p isa AbstractDict && get(p, "kind", nothing) == "algebraic")
+            return true
+        end
+    end
+    if _as_bool(get(eqn, "algebraic", false))
+        return true
+    end
+    lhs_raw = get(eqn, "lhs", nothing)
+    lhs_raw === nothing && return true  # malformed — treat as algebraic
+    # Parse defensively; if we can't parse the LHS, treat as algebraic so
+    # the contract fails closed rather than silently dropping a constraint.
+    lhs = try
+        parse_expression(lhs_raw)
+    catch
+        return true
+    end
+    if lhs isa OpExpr && lhs.op == "D"
+        wrt = lhs.wrt
+        if wrt === nothing || wrt == indep
+            return false
+        end
+    end
+    return true
+end
+
+function _ensure_dict!(container::AbstractDict, key::AbstractString)::Dict{String,Any}
+    raw = get(container, key, nothing)
+    if raw isa Dict{String,Any}
+        return raw
+    elseif raw isa AbstractDict
+        d = Dict{String,Any}(String(k) => v for (k, v) in raw)
+        container[key] = d
+        return d
+    else
+        d = Dict{String,Any}()
+        container[key] = d
+        return d
+    end
 end
 
 # ============================================================================

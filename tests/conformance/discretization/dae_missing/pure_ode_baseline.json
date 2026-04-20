@@ -1,0 +1,39 @@
+{
+  "id": "pure_ode_baseline",
+  "description": "Baseline: a pure scalar ODE (no algebraic constraint). discretize() output must have metadata.system_class = \"ode\" under both dae_support=true and dae_support=false; E_NO_DAE_SUPPORT is NOT emitted. This fixture guards against a binding that always reports DAE or always errors with E_NO_DAE_SUPPORT.",
+  "input": {
+    "esm": "0.2.0",
+    "metadata": { "name": "pure_ode_baseline" },
+    "models": {
+      "M": {
+        "variables": {
+          "x": { "type": "state",     "default": 1.0, "units": "1" },
+          "k": { "type": "parameter", "default": 0.5, "units": "1/s" }
+        },
+        "equations": [
+          {
+            "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+            "rhs": { "op": "*", "args": [ { "op": "-", "args": ["k"] }, "x" ] }
+          }
+        ]
+      }
+    }
+  },
+  "expect": [
+    {
+      "mode": "dae_support_enabled",
+      "kind": "output",
+      "system_class": "ode",
+      "algebraic_equation_count": 0,
+      "per_model": { "M": 0 }
+    },
+    {
+      "mode": "dae_support_disabled",
+      "kind": "output",
+      "system_class": "ode",
+      "algebraic_equation_count": 0,
+      "per_model": { "M": 0 }
+    }
+  ],
+  "tags": ["baseline", "ode_only"]
+}

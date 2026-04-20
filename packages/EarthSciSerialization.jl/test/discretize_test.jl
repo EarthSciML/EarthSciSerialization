@@ -218,6 +218,163 @@ using JSON3
         @test bc_val == 1
     end
 
+    # =====================================================================
+    # RFC §12 — DAE binding contract (gt-q7sh)
+    # =====================================================================
+
+    # Helper: a mixed DAE — one differential equation plus one authored
+    # algebraic constraint. Julia's §12 strategy is direct hand-off to
+    # MTK (no index reduction), so this should succeed with
+    # dae_support=true and fail with E_NO_DAE_SUPPORT when dae_support=false.
+    function _mixed_dae_esm()
+        return Dict{String,Any}(
+            "esm" => "0.2.0",
+            "metadata" => Dict{String,Any}("name" => "mixed_dae"),
+            "models" => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "variables" => Dict{String,Any}(
+                        "x" => Dict{String,Any}("type" => "state",    "default" => 1.0, "units" => "1"),
+                        "y" => Dict{String,Any}("type" => "observed", "units" => "1"),
+                        "k" => Dict{String,Any}("type" => "parameter","default" => 0.5, "units" => "1/s"),
+                    ),
+                    "equations" => Any[
+                        # Differential: dx/dt = -k * x
+                        Dict{String,Any}(
+                            "lhs" => Dict{String,Any}("op" => "D", "args" => Any["x"], "wrt" => "t"),
+                            "rhs" => Dict{String,Any}("op" => "*", "args" => Any[
+                                Dict{String,Any}("op" => "-", "args" => Any["k"]),
+                                "x",
+                            ]),
+                        ),
+                        # Algebraic: y = x^2
+                        Dict{String,Any}(
+                            "lhs" => "y",
+                            "rhs" => Dict{String,Any}("op" => "^", "args" => Any["x", 2]),
+                        ),
+                    ],
+                ),
+            ),
+        )
+    end
+
+    @testset "DAE §12 — pure ODE stamps system_class=ode" begin
+        out = discretize(_scalar_ode_esm())
+        @test out["metadata"]["system_class"] == "ode"
+        info = out["metadata"]["dae_info"]
+        @test info["algebraic_equation_count"] == 0
+        @test info["per_model"]["M"] == 0
+    end
+
+    @testset "DAE §12 — mixed DAE stamps system_class=dae" begin
+        out = discretize(_mixed_dae_esm())
+        @test out["metadata"]["system_class"] == "dae"
+        info = out["metadata"]["dae_info"]
+        @test info["algebraic_equation_count"] == 1
+        @test info["per_model"]["M"] == 1
+    end
+
+    @testset "DAE §12 — dae_support=false aborts with E_NO_DAE_SUPPORT" begin
+        err = try
+            discretize(_mixed_dae_esm(); dae_support=false)
+            nothing
+        catch e
+            e
+        end
+        @test err isa RuleEngineError
+        @test err.code == "E_NO_DAE_SUPPORT"
+        @test occursin("models.M.equations[2]", err.message)
+        @test occursin("RFC §12", err.message)
+    end
+
+    @testset "DAE §12 — pure ODE passes even with dae_support=false" begin
+        out = discretize(_scalar_ode_esm(); dae_support=false)
+        @test out["metadata"]["system_class"] == "ode"
+    end
+
+    @testset "DAE §12 — explicit produces:algebraic marker is algebraic" begin
+        esm = _scalar_ode_esm()
+        # Stamp produces:algebraic on the differential equation. The
+        # classifier reads the marker first, so the equation must count
+        # as algebraic even though its LHS is a time derivative.
+        esm["models"]["M"]["equations"][1]["produces"] = "algebraic"
+        out = discretize(esm)
+        @test out["metadata"]["system_class"] == "dae"
+        @test out["metadata"]["dae_info"]["algebraic_equation_count"] == 1
+    end
+
+    @testset "DAE §12 — ESM_DAE_SUPPORT=0 env var disables by default" begin
+        saved = get(ENV, "ESM_DAE_SUPPORT", nothing)
+        ENV["ESM_DAE_SUPPORT"] = "0"
+        try
+            err = try
+                discretize(_mixed_dae_esm())
+                nothing
+            catch e
+                e
+            end
+            @test err isa RuleEngineError
+            @test err.code == "E_NO_DAE_SUPPORT"
+            # Pure ODE still succeeds.
+            out = discretize(_scalar_ode_esm())
+            @test out["metadata"]["system_class"] == "ode"
+        finally
+            if saved === nothing
+                delete!(ENV, "ESM_DAE_SUPPORT")
+            else
+                ENV["ESM_DAE_SUPPORT"] = saved
+            end
+        end
+    end
+
+    @testset "DAE §12 — explicit dae_support=true overrides ESM_DAE_SUPPORT=0" begin
+        saved = get(ENV, "ESM_DAE_SUPPORT", nothing)
+        ENV["ESM_DAE_SUPPORT"] = "0"
+        try
+            out = discretize(_mixed_dae_esm(); dae_support=true)
+            @test out["metadata"]["system_class"] == "dae"
+        finally
+            if saved === nothing
+                delete!(ENV, "ESM_DAE_SUPPORT")
+            else
+                ENV["ESM_DAE_SUPPORT"] = saved
+            end
+        end
+    end
+
+    @testset "DAE §12 — independent_variable respected from domain" begin
+        # Model binds to a domain with independent_variable="tau"; an
+        # equation with LHS D(x, wrt="t") is algebraic under this domain,
+        # and D(x, wrt="tau") is differential.
+        esm = Dict{String,Any}(
+            "esm" => "0.2.0",
+            "metadata" => Dict{String,Any}("name" => "tau_indep"),
+            "domains" => Dict{String,Any}(
+                "d" => Dict{String,Any}("independent_variable" => "tau"),
+            ),
+            "models" => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "domain" => "d",
+                    "variables" => Dict{String,Any}(
+                        "x" => Dict{String,Any}("type" => "state", "default" => 0.0, "units" => "1"),
+                    ),
+                    "equations" => Any[
+                        Dict{String,Any}(
+                            "lhs" => Dict{String,Any}("op" => "D", "args" => Any["x"], "wrt" => "tau"),
+                            "rhs" => 0.0,
+                        ),
+                    ],
+                ),
+            ),
+        )
+        out = discretize(esm)
+        @test out["metadata"]["system_class"] == "ode"
+
+        # Flip wrt to "t" — now algebraic under tau-indep domain.
+        esm["models"]["M"]["equations"][1]["lhs"]["wrt"] = "t"
+        out2 = discretize(esm)
+        @test out2["metadata"]["system_class"] == "dae"
+    end
+
     @testset "max_passes surfaces E_RULES_NOT_CONVERGED" begin
         # Rule `x -> x + 0` canonicalizes back to `x` → but a pattern that
         # refuses to fix-point: `$a -> $a + 1` on any variable `y` forever.

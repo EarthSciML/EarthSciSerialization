@@ -1549,17 +1549,27 @@ is **non-conforming**.
 
 Spec-level contract: if a binding advertises discretization support without
 DAE support, that is the binding's bug, not the model author's problem.
-Each binding's documentation must state its DAE assembler.
+Each binding's documentation must state its DAE assembler. The
+per-binding strategies table (direct hand-off vs deferred/stubbed),
+the default enable state, and each binding's disable knob are
+catalogued centrally in [`dae-binding-strategies.md`](./dae-binding-strategies.md)
+so that a model author can find out in one place what will happen
+with their mixed-DAE `.esm` under each binding.
 
 **Error code pinned.** The error code name is exactly
 `E_NO_DAE_SUPPORT` (upper-case, ASCII, with a single underscore between
 each word). Bindings MUST emit this exact string, not a paraphrase.
 
 **Conformance test (resolves gt-j6do New M5 / bead F10).** The
-conformance harness ships a fixture at
-`tests/conformance/discretization/dae-missing/algebraic_fixture.esm`
-containing a model whose rule set emits `produces: algebraic` on at
-least one equation. The harness:
+conformance harness ships fixtures under
+`tests/conformance/discretization/dae_missing/` (underscore, to match
+the `infra/rule_engine/` sibling). The minimum set includes
+`mixed_dae_observed.json` — a model with one differential equation
+plus one authored algebraic (observed-equation) constraint — and
+`pure_ode_baseline.json` — a pure-ODE baseline that guards against
+false-positive `E_NO_DAE_SUPPORT` emission. A later fixture will
+exercise rules with `produces: algebraic` once that mechanism lands
+(RFC §13.1 Step 1b+). The harness:
 
 1. Loads the fixture under each binding with DAE support enabled —
    expects the binding to produce a DAE-assembled system and return
