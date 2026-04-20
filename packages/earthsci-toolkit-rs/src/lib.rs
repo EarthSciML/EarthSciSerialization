@@ -37,6 +37,7 @@
 //! ```
 
 pub mod canonicalize;
+pub mod discretize;
 pub mod display;
 pub mod edit;
 pub mod error;
@@ -67,6 +68,7 @@ pub mod simulate_array;
 
 // Re-export main types
 pub use canonicalize::{CanonicalizeError, canonical_json, canonicalize, format_canonical_float};
+pub use discretize::{DiscretizeOptions, canonical_doc_json, discretize};
 pub use rule_engine::{
     DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
     apply_bindings, check_guard, check_guards, check_unrewritten_pde_ops, match_pattern,
