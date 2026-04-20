@@ -944,6 +944,14 @@ function discretize(esm::AbstractDict;
 Run the RFC §11 discretization pipeline on an ESM document and apply
 the RFC §12 DAE binding contract.
 
+**Typescript:**
+```typescript
+export function discretize(esm: JsonObject, options: DiscretizeOptions = {}): JsonObject {
+```
+
+> Run the RFC §11 discretization pipeline and the RFC §12 DAE binding
+contract on an ESM document.
+
 ---
 
 ### evaluate

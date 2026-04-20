@@ -3728,6 +3728,9 @@ are supported by the v0.2.x schema.
 discretize(...)
 ```
 
+**Available in other languages:**
+- [Typescript](typescript.md#discretize)
+
 ---
 
 ### discretize
@@ -3781,6 +3784,9 @@ Behavior:
   ModelingToolkit, so `dae_support=true` is the normal setting.
 - `metadata.discretized_from` is set on the output to the input's
   `metadata.name`.
+
+**Available in other languages:**
+- [Typescript](typescript.md#discretize)
 
 ---
 

@@ -663,6 +663,27 @@ export function dimsEqual(a: CanonicalDims, b: CanonicalDims): boolean {
 
 ---
 
+### discretize
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/discretize.ts:87`
+
+**Signature:**
+```typescript
+export function discretize(esm: JsonObject, options: DiscretizeOptions = {}): JsonObject {
+```
+
+**Description:**
+Run the RFC §11 discretization pipeline and the RFC §12 DAE binding
+contract on an ESM document. Returns a new object; the input is not
+mutated.
+/
+
+**Available in other languages:**
+- [Julia](julia.md#discretize)
+- [Julia](julia.md#discretize)
+
+---
+
 ### emptyContext
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:90`
@@ -2647,6 +2668,17 @@ export interface Discretization {
 **Description:**
 A named stencil template. Each entry maps a PDE operator class (via an applies_to pattern) to a combination (combine) over neighbors with symbolic coefficients. See RFC §7.1.
 /
+
+---
+
+### DiscretizeOptions
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/discretize.ts:46`
+
+**Definition:**
+```typescript
+export interface DiscretizeOptions {
+```
 
 ---
 
