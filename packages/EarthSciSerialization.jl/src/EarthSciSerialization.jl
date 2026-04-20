@@ -36,6 +36,7 @@ include("codegen.jl")
 include("canonicalize.jl")
 include("rule_engine.jl")
 include("mtk_export.jl")
+include("tree_walk.jl")
 
 export
     # Expression types
@@ -112,6 +113,8 @@ export
     match_pattern, apply_bindings, rewrite, check_guards, check_guard,
     parse_rule, parse_rules, check_unrewritten_pde_ops,
     # MTK → ESM export (gt-dod2; Phase 1 migration tooling)
-    mtk2esm, mtk2esm_gaps, GapReport
+    mtk2esm, mtk2esm_gaps, GapReport,
+    # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
+    build_evaluator, TreeWalkError
 
 end # module EarthSciSerialization
