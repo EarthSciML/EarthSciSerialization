@@ -876,6 +876,7 @@ Guard(...)
 ```
 
 **Available in other languages:**
+- [Python](python.md#guard)
 - [Typescript](typescript.md#guard)
 
 ---
@@ -1485,6 +1486,7 @@ Rule(...)
 ```
 
 **Available in other languages:**
+- [Python](python.md#rule)
 - [Typescript](typescript.md#rule)
 
 ---
@@ -1499,6 +1501,7 @@ Rule(...)
 ```
 
 **Available in other languages:**
+- [Python](python.md#rule)
 - [Typescript](typescript.md#rule)
 
 ---
@@ -1513,6 +1516,7 @@ RuleContext(...)
 ```
 
 **Available in other languages:**
+- [Python](python.md#rulecontext)
 - [Typescript](typescript.md#rulecontext)
 
 ---
@@ -1525,6 +1529,9 @@ RuleContext(...)
 ```julia
 RuleEngineError(...)
 ```
+
+**Available in other languages:**
+- [Python](python.md#ruleengineerror)
 
 ---
 
@@ -8337,6 +8344,7 @@ A single constraint on pattern-variable bindings. `name` is one of the
 guard object (`pvar`, `grid`, `location`, `rank`, …).
 
 **Available in other languages:**
+- [Python](python.md#guard)
 - [Typescript](typescript.md#guard)
 
 ---
@@ -8848,6 +8856,7 @@ AST over the pattern variables. The MVP supports only the inline
 `replacement` form; `use:<scheme>` is reserved for Step 1b.
 
 **Available in other languages:**
+- [Python](python.md#rule)
 - [Typescript](typescript.md#rule)
 
 ---
@@ -8877,6 +8886,7 @@ grid metadata and variable table needed by the closed-set guards in
   `"shape"` (Vector or Vector{String}).
 
 **Available in other languages:**
+- [Python](python.md#rulecontext)
 - [Typescript](typescript.md#rulecontext)
 
 ---
@@ -8901,6 +8911,9 @@ RFC §5.2 / §11 stable error codes:
   remained after rewriting on an equation not annotated `passthrough: true`.
 - `E_SCHEME_MISMATCH` — rule/scheme `applies_to` disagreement (reserved for
   the `use:` rule form; not emitted in the MVP).
+
+**Available in other languages:**
+- [Python](python.md#ruleengineerror)
 
 ---
 

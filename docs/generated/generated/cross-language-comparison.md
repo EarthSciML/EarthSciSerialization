@@ -306,6 +306,11 @@ def __init__(self, esm_file: EsmFile):
 
 **Python:**
 ```python
+def __init__(self, code: str, message: str):
+```
+
+**Python:**
+```python
 def __init__(self, message: str = "E_CANONICAL_NONFINITE"):
 ```
 
@@ -430,6 +435,38 @@ def __str__(self):
 ```python
 def __str__(self):
 ```
+
+---
+
+### _load_manifest
+
+**Python:**
+```python
+def _load_manifest():
+```
+
+**Python:**
+```python
+def _load_manifest():
+```
+
+---
+
+### _wire_to_expr
+
+**Python:**
+```python
+def _wire_to_expr(node):
+```
+
+> Convert a JSON-deserialized fixture into an ESM expression tree.
+
+**Python:**
+```python
+def _wire_to_expr(node):
+```
+
+> Convert a JSON-deserialized fixture into an ESM expression tree.
 
 ---
 
@@ -3463,6 +3500,13 @@ struct Guard
 
 A single constraint on pattern-variable bindings.
 
+**Python:**
+```python
+class Guard:
+```
+
+> A single constraint on pattern-variable bindings (RFC §5.
+
 **Typescript:**
 ```typescript
 export interface Guard {
@@ -3831,6 +3875,13 @@ struct Rule
 
 A rewrite rule.
 
+**Python:**
+```python
+class Rule:
+```
+
+> A rewrite rule (RFC §5.
+
 **Typescript:**
 ```typescript
 export interface Rule {
@@ -3849,10 +3900,37 @@ struct RuleContext
 
 Context supplied to [`rewrite`](@ref) and guard evaluation.
 
+**Python:**
+```python
+class RuleContext:
+```
+
+> Context supplied to guard evaluation (RFC §5.
+
 **Typescript:**
 ```typescript
 export interface RuleContext {
 ```
+
+---
+
+### RuleEngineError
+
+**Julia:**
+```julia
+struct RuleEngineError <: Exception
+```
+
+> RuleEngineError(code::String, message::String)
+
+Error raised by the rule engine.
+
+**Python:**
+```python
+class RuleEngineError:
+```
+
+> Error raised by the rule engine.
 
 ---
 

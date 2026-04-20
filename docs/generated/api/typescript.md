@@ -3270,6 +3270,7 @@ export interface Guard {
 
 **Available in other languages:**
 - [Julia](julia.md#guard)
+- [Python](python.md#guard)
 
 ---
 
@@ -3648,6 +3649,7 @@ export interface Rule {
 
 **Available in other languages:**
 - [Julia](julia.md#rule)
+- [Python](python.md#rule)
 
 ---
 
@@ -3662,6 +3664,7 @@ export interface RuleContext {
 
 **Available in other languages:**
 - [Julia](julia.md#rulecontext)
+- [Python](python.md#rulecontext)
 
 ---
 
