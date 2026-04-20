@@ -849,16 +849,17 @@ function coerce_reaction(data::Any)::Reaction
     id = string(data.id)
     name = haskey(data, :name) && data.name !== nothing ? string(data.name) : nothing
 
-    # Handle substrates (can be null for source reactions)
+    # Handle substrates (can be null for source reactions).
+    # Stoichiometry may be integer or fractional per v0.2.x schema — the
+    # StoichiometryEntry constructor enforces finite positivity.
     substrates = if haskey(data, :substrates) && data.substrates !== nothing
-        [StoichiometryEntry(string(entry.species), Int(entry.stoichiometry)) for entry in data.substrates]
+        [StoichiometryEntry(string(entry.species), entry.stoichiometry) for entry in data.substrates]
     else
         nothing
     end
 
-    # Handle products (can be null for sink reactions)
     products = if haskey(data, :products) && data.products !== nothing
-        [StoichiometryEntry(string(entry.species), Int(entry.stoichiometry)) for entry in data.products]
+        [StoichiometryEntry(string(entry.species), entry.stoichiometry) for entry in data.products]
     else
         nothing
     end

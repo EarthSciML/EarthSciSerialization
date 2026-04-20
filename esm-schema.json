@@ -672,14 +672,14 @@
 
     "StoichiometryEntry": {
       "type": "object",
-      "description": "A species with its stoichiometric coefficient in a reaction.",
+      "description": "A species with its stoichiometric coefficient in a reaction. Coefficients MUST be positive and finite (NaN / ±Infinity are rejected at parse time). Fractional values are supported to preserve fidelity with atmospheric-chemistry mechanisms whose products include non-integer yields (e.g. `0.87 CH2O`, `1.86 CH3O2`). Integer values remain valid — they are a subset of the permitted number range.",
       "required": ["species", "stoichiometry"],
       "additionalProperties": false,
       "properties": {
         "species": { "type": "string" },
         "stoichiometry": {
-          "type": "integer",
-          "minimum": 1
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       }
     },

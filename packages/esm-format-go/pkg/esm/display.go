@@ -545,7 +545,7 @@ func ModelSummary(esm *EsmFile) string {
 					if substrate.Stoichiometry == 1 {
 						substrateNames[i] = ToUnicode(substrate.Species)
 					} else {
-						substrateNames[i] = fmt.Sprintf("%d%s", substrate.Stoichiometry, ToUnicode(substrate.Species))
+						substrateNames[i] = fmt.Sprintf("%s%s", formatStoich(substrate.Stoichiometry), ToUnicode(substrate.Species))
 					}
 				}
 				result.WriteString(strings.Join(substrateNames, " + "))
@@ -558,7 +558,7 @@ func ModelSummary(esm *EsmFile) string {
 					if product.Stoichiometry == 1 {
 						productNames[i] = ToUnicode(product.Species)
 					} else {
-						productNames[i] = fmt.Sprintf("%d%s", product.Stoichiometry, ToUnicode(product.Species))
+						productNames[i] = fmt.Sprintf("%s%s", formatStoich(product.Stoichiometry), ToUnicode(product.Species))
 					}
 				}
 				result.WriteString(strings.Join(productNames, " + "))

@@ -665,19 +665,24 @@ pub struct Reaction {
     pub reference: Option<Reference>,
 }
 
-/// Species with stoichiometric coefficient
+/// Species with stoichiometric coefficient.
+///
+/// v0.2.x permits fractional coefficients (e.g. `0.87 CH2O` in atmospheric
+/// chemistry) in addition to the historical integer case. The coefficient
+/// MUST be positive and finite — NaN / ±∞ are rejected at parse time by
+/// [`validate_stoichiometries`](crate::parse::validate_stoichiometries).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoichiometricEntry {
     /// Species name
     pub species: String,
 
-    /// Stoichiometric coefficient (integer ≥ 1 per schema; serialized as `stoichiometry`)
+    /// Stoichiometric coefficient (positive finite number; serialized as `stoichiometry`)
     #[serde(rename = "stoichiometry", default = "default_stoichiometry")]
-    pub coefficient: u32,
+    pub coefficient: f64,
 }
 
-fn default_stoichiometry() -> u32 {
-    1
+fn default_stoichiometry() -> f64 {
+    1.0
 }
 
 /// Generic, runtime-agnostic description of an external data source.

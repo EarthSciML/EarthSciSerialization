@@ -7,6 +7,21 @@ Provides functionality to serialize EsmFile objects to JSON strings.
 using JSON3
 
 """
+    _emit_stoich(x::Real)
+
+Emit a stoichiometric coefficient as an integer when the value is exact, else as
+its Float64 form. Integer exactness keeps existing integer-only fixtures
+byte-identical across a parse/re-emit cycle, while fractional values (e.g.
+`0.87 CH2O`, `1.86 CH3O2`) survive untouched.
+"""
+function _emit_stoich(x::Real)
+    if isinteger(x) && isfinite(x) && abs(x) < 2.0^53
+        return Int(x)
+    end
+    return Float64(x)
+end
+
+"""
     serialize_expression(expr::Expr) -> Any
 
 Serialize an Expression to JSON-compatible format.
@@ -474,7 +489,7 @@ function serialize_reaction(reaction::Reaction)::Dict{String,Any}
     substrates_raw = getfield(reaction, :substrates)
     if substrates_raw !== nothing
         result["substrates"] = [
-            Dict("species" => entry.species, "stoichiometry" => entry.stoichiometry)
+            Dict("species" => entry.species, "stoichiometry" => _emit_stoich(entry.stoichiometry))
             for entry in substrates_raw
         ]
     else
@@ -484,7 +499,7 @@ function serialize_reaction(reaction::Reaction)::Dict{String,Any}
     products_raw = getfield(reaction, :products)
     if products_raw !== nothing
         result["products"] = [
-            Dict("species" => entry.species, "stoichiometry" => entry.stoichiometry)
+            Dict("species" => entry.species, "stoichiometry" => _emit_stoich(entry.stoichiometry))
             for entry in products_raw
         ]
     else

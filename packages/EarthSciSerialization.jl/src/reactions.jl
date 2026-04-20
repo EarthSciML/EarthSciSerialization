@@ -77,7 +77,7 @@ function derive_odes(rxn_sys::ReactionSystem)::Model
 end
 
 """
-    stoichiometric_matrix(rxn_sys::ReactionSystem) -> Matrix{Int}
+    stoichiometric_matrix(rxn_sys::ReactionSystem) -> Matrix{Float64}
 
 Compute the net stoichiometric matrix (species × reactions).
 
@@ -86,11 +86,15 @@ The stoichiometric matrix S has dimensions (n_species × n_reactions) where:
 - Net stoichiometry = products - reactants
 - Positive values indicate production, negative values indicate consumption
 
+Values are `Float64` because v0.2.x allows fractional stoichiometries
+(e.g. `ISOP+O3 → 0.87 CH2O`). Integer-only systems produce a matrix whose
+entries happen to be exact integers stored as `Float64`.
+
 # Arguments
 - `rxn_sys::ReactionSystem`: Input reaction system
 
 # Returns
-- `Matrix{Int}`: Stoichiometric matrix with dimensions (n_species, n_reactions)
+- `Matrix{Float64}`: Stoichiometric matrix with dimensions (n_species, n_reactions)
 
 # Examples
 ```julia
@@ -100,7 +104,7 @@ The stoichiometric matrix S has dimensions (n_species × n_reactions) where:
 #       2] # C produced (2 molecules)
 ```
 """
-function stoichiometric_matrix(rxn_sys::ReactionSystem)::Matrix{Int}
+function stoichiometric_matrix(rxn_sys::ReactionSystem)::Matrix{Float64}
     n_species = length(rxn_sys.species)
     n_reactions = length(rxn_sys.reactions)
 
@@ -108,7 +112,7 @@ function stoichiometric_matrix(rxn_sys::ReactionSystem)::Matrix{Int}
     species_idx = Dict(species.name => i for (i, species) in enumerate(rxn_sys.species))
 
     # Initialize stoichiometric matrix
-    S = zeros(Int, n_species, n_reactions)
+    S = zeros(Float64, n_species, n_reactions)
 
     for (j, reaction) in enumerate(rxn_sys.reactions)
         # Use getfield to bypass the backward-compat getproperty overrides that
@@ -201,9 +205,11 @@ function mass_action_rate(reaction::Reaction, species::Vector{Species})::EarthSc
         if entry.stoichiometry == 1
             push!(mass_action_terms, species_expr)
         else
+            exponent_expr = isinteger(entry.stoichiometry) ?
+                IntExpr(Int64(entry.stoichiometry)) :
+                NumExpr(entry.stoichiometry)
             push!(mass_action_terms, OpExpr("^",
-                EarthSciSerialization.Expr[species_expr,
-                                           IntExpr(Int64(entry.stoichiometry))]))
+                EarthSciSerialization.Expr[species_expr, exponent_expr]))
         end
     end
 

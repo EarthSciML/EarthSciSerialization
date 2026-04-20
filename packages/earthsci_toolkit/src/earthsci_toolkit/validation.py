@@ -8,6 +8,7 @@ conformance testing, returning structured validation results.
 from dataclasses import dataclass
 from typing import List, Dict, Any, Union, Tuple, Set
 import json
+import math
 import traceback
 
 import jsonschema
@@ -660,21 +661,26 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
                         details={"species": species_name, "reaction_system": rs.name, "available_species": list(species_names)}
                     ))
 
-                if stoich <= 0:
+                if not isinstance(stoich, (int, float)) or isinstance(stoich, bool):
+                    structural_errors.append(ValidationError(
+                        path=f"{reaction_path}/reactants/{species_name}",
+                        message=f"Reactant stoichiometry must be a number, got {type(stoich).__name__}",
+                        code="invalid_stoichiometry_type",
+                        details={"species": species_name, "stoichiometry": stoich, "stoichiometry_type": type(stoich).__name__}
+                    ))
+                elif isinstance(stoich, float) and (math.isnan(stoich) or math.isinf(stoich)):
+                    structural_errors.append(ValidationError(
+                        path=f"{reaction_path}/reactants/{species_name}",
+                        message=f"Reactant stoichiometry must be finite, got {stoich}",
+                        code="invalid_stoichiometry",
+                        details={"species": species_name, "stoichiometry": stoich}
+                    ))
+                elif stoich <= 0:
                     structural_errors.append(ValidationError(
                         path=f"{reaction_path}/reactants/{species_name}",
                         message=f"Reactant stoichiometry must be positive, got {stoich}",
                         code="negative_stoichiometry",
                         details={"species": species_name, "stoichiometry": stoich}
-                    ))
-
-                # Check if stoichiometry is an integer
-                if not isinstance(stoich, int) and not (isinstance(stoich, float) and stoich.is_integer()):
-                    structural_errors.append(ValidationError(
-                        path=f"{reaction_path}/reactants/{species_name}",
-                        message=f"Reactant stoichiometry must be a positive integer, got {stoich}",
-                        code="non_integer_stoichiometry",
-                        details={"species": species_name, "stoichiometry": stoich, "stoichiometry_type": type(stoich).__name__}
                     ))
 
             # Validate product species exist and have positive stoichiometry
@@ -687,21 +693,26 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
                         details={"species": species_name, "reaction_system": rs.name, "available_species": list(species_names)}
                     ))
 
-                if stoich <= 0:
+                if not isinstance(stoich, (int, float)) or isinstance(stoich, bool):
+                    structural_errors.append(ValidationError(
+                        path=f"{reaction_path}/products/{species_name}",
+                        message=f"Product stoichiometry must be a number, got {type(stoich).__name__}",
+                        code="invalid_stoichiometry_type",
+                        details={"species": species_name, "stoichiometry": stoich, "stoichiometry_type": type(stoich).__name__}
+                    ))
+                elif isinstance(stoich, float) and (math.isnan(stoich) or math.isinf(stoich)):
+                    structural_errors.append(ValidationError(
+                        path=f"{reaction_path}/products/{species_name}",
+                        message=f"Product stoichiometry must be finite, got {stoich}",
+                        code="invalid_stoichiometry",
+                        details={"species": species_name, "stoichiometry": stoich}
+                    ))
+                elif stoich <= 0:
                     structural_errors.append(ValidationError(
                         path=f"{reaction_path}/products/{species_name}",
                         message=f"Product stoichiometry must be positive, got {stoich}",
                         code="negative_stoichiometry",
                         details={"species": species_name, "stoichiometry": stoich}
-                    ))
-
-                # Check if stoichiometry is an integer
-                if not isinstance(stoich, int) and not (isinstance(stoich, float) and stoich.is_integer()):
-                    structural_errors.append(ValidationError(
-                        path=f"{reaction_path}/products/{species_name}",
-                        message=f"Product stoichiometry must be a positive integer, got {stoich}",
-                        code="non_integer_stoichiometry",
-                        details={"species": species_name, "stoichiometry": stoich, "stoichiometry_type": type(stoich).__name__}
                     ))
 
             # Validate rate constant references (full expression parsing)

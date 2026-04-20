@@ -545,16 +545,16 @@ fn test_parallel_stoichiometric_matrix_computation() {
         substrates: Some(vec![
             StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             },
             StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             },
         ]),
         products: Some(vec![StoichiometricEntry {
             species: "C".to_string(),
-            coefficient: 1,
+            coefficient: 1.0,
         }]),
         rate: Expr::Number(1.0),
         reference: None,

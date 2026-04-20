@@ -611,21 +611,20 @@ def _parse_reaction(reaction_data: Dict[str, Any]) -> Reaction:
     rxn_id = reaction_data.get("id")
     name = reaction_data.get("name", rxn_id)
 
-    # Parse reactants (substrates in schema)
+    # Parse reactants (substrates in schema). Preserve `int` vs `float` so a
+    # parse/re-emit cycle stays byte-identical for integer-only fixtures and
+    # round-trips fractional stoichiometries untouched.
     reactants = {}
     if reaction_data.get("substrates"):
         for substrate in reaction_data["substrates"]:
             species = substrate["species"]
-            stoichiometry = substrate["stoichiometry"]
-            reactants[species] = float(stoichiometry)
+            reactants[species] = substrate["stoichiometry"]
 
-    # Parse products
     products = {}
     if reaction_data.get("products"):
         for product in reaction_data["products"]:
             species = product["species"]
-            stoichiometry = product["stoichiometry"]
-            products[species] = float(stoichiometry)
+            products[species] = product["stoichiometry"]
 
     # Parse rate
     rate_constant = None

@@ -1210,14 +1210,21 @@ func validateReactionRateUnits(systemName string, system *ReactionSystem, basePa
 
 		totalOrder := 0
 		resolvable := true
+		fractionalSubstrate := false
 		for _, sub := range rx.Substrates {
 			if _, ok := env[sub.Species]; !ok {
 				resolvable = false
 				break
 			}
-			totalOrder += sub.Stoichiometry
+			if sub.Stoichiometry != math.Trunc(sub.Stoichiometry) || math.IsInf(sub.Stoichiometry, 0) || math.IsNaN(sub.Stoichiometry) {
+				// Unit exponents must be integer — skip the rate-units
+				// compatibility check for fractional substrate stoichiometry.
+				fractionalSubstrate = true
+				break
+			}
+			totalOrder += int(sub.Stoichiometry)
 		}
-		if !resolvable {
+		if !resolvable || fractionalSubstrate {
 			continue
 		}
 

@@ -223,6 +223,7 @@ fn validate_structural_json(json_value: &Value) -> Result<(), EsmError> {
         check_event_variable_references(obj, &mut errors);
         check_event_discrete_parameters(obj, &mut errors);
         check_grid_references(obj, &mut errors);
+        check_reaction_stoichiometries(obj, &mut errors);
     }
 
     if errors.is_empty() {
@@ -256,6 +257,60 @@ fn check_version_compatibility(obj: &serde_json::Map<String, Value>, errors: &mu
             "Unsupported major version {}. This library supports major version {} only.",
             major, LIBRARY_VERSION.0
         ));
+    }
+}
+
+/// Reject reaction stoichiometries that are not positive finite numbers.
+///
+/// JSON Schema already enforces `"type": "number", "exclusiveMinimum": 0`, but
+/// JSON cannot encode NaN / ±Infinity — if upstream tooling produces such a
+/// value, or a numeric encoding overflows to Infinity, we surface the error
+/// here rather than silently accepting it downstream.
+fn check_reaction_stoichiometries(
+    obj: &serde_json::Map<String, Value>,
+    errors: &mut Vec<String>,
+) {
+    let Some(reaction_systems) = obj.get("reaction_systems").and_then(|v| v.as_object()) else {
+        return;
+    };
+    for (rs_name, rs_val) in reaction_systems {
+        let Some(rs_obj) = rs_val.as_object() else { continue };
+        let Some(reactions) = rs_obj.get("reactions").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for (r_idx, r_val) in reactions.iter().enumerate() {
+            let Some(r_obj) = r_val.as_object() else { continue };
+            for side in ["substrates", "products"] {
+                let Some(entries) = r_obj.get(side).and_then(|v| v.as_array()) else {
+                    continue;
+                };
+                for (e_idx, e_val) in entries.iter().enumerate() {
+                    let Some(e_obj) = e_val.as_object() else { continue };
+                    let Some(stoich) = e_obj.get("stoichiometry") else { continue };
+                    let path = format!(
+                        "reaction_systems/{rs_name}/reactions[{r_idx}]/{side}[{e_idx}]/stoichiometry"
+                    );
+                    match stoich.as_f64() {
+                        Some(v) if v.is_finite() && v > 0.0 => {}
+                        Some(v) if !v.is_finite() => {
+                            errors.push(format!(
+                                "{path}: stoichiometry must be finite, got {v}"
+                            ));
+                        }
+                        Some(v) => {
+                            errors.push(format!(
+                                "{path}: stoichiometry must be positive, got {v}"
+                            ));
+                        }
+                        None => {
+                            errors.push(format!(
+                                "{path}: stoichiometry must be a number"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

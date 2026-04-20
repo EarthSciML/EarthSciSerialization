@@ -283,20 +283,32 @@ function validate_reaction_system_dimensions(rxn_sys::ReactionSystem)::Bool
             # For mass action kinetics, rate should have dimensions of concentration/time
             # multiplied by concentration^(total_reactant_order - 1)
 
-            # Calculate total reaction order from substrates (reactants)
-            total_order = 0
+            # Calculate total reaction order from substrates (reactants).
+            # v0.2.x allows fractional stoichiometries; skip the dimensional
+            # rate-expression check when a substrate is fractional because
+            # Unitful's dimension exponents must be integer / rational.
+            total_order = 0.0
+            fractional_substrate = false
             if reaction.substrates !== nothing
                 for substrate in reaction.substrates
+                    if !isinteger(substrate.stoichiometry)
+                        fractional_substrate = true
+                        break
+                    end
                     total_order += substrate.stoichiometry
                 end
             end
+            if fractional_substrate
+                continue
+            end
+            total_order_int = Int(total_order)
 
             # Expected dimensions for rate constant: concentration/time / concentration^total_order
             # = concentration^(1-total_order) / time
             # For zero-order: concentration/time
             # For first-order: 1/time
             # For second-order: 1/(concentration*time)
-            expected_conc_power = 1 - total_order
+            expected_conc_power = 1 - total_order_int
 
             @debug "Reaction $i rate dimensions: $(dimension(rate_dim))"
             @debug "Reaction $i total order: $total_order, expected concentration power: $expected_conc_power"

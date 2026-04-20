@@ -127,14 +127,14 @@ impl ParallelEvaluator {
                     // Process substrates (negative coefficients)
                     for substrate in reaction.substrates.iter().flatten() {
                         if let Some(&species_idx) = species_index.get(&substrate.species) {
-                            contributions.push((species_idx, -(substrate.coefficient as f64)));
+                            contributions.push((species_idx, -substrate.coefficient));
                         }
                     }
 
                     // Process products (positive coefficients)
                     for product in reaction.products.iter().flatten() {
                         if let Some(&species_idx) = species_index.get(&product.species) {
-                            contributions.push((species_idx, product.coefficient as f64));
+                            contributions.push((species_idx, product.coefficient));
                         }
                     }
 

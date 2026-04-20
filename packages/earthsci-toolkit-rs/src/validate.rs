@@ -950,16 +950,25 @@ fn validate_reaction_rate_units(
             continue;
         }
 
+        // Unit exponents must be integer, so skip the rate-units compatibility
+        // check when any substrate carries a fractional stoichiometry (v0.2.x
+        // allows them; fractional *products* — the common atmospheric-chemistry
+        // case — never enter this branch).
         let mut total_order: u32 = 0;
         let mut resolvable = true;
+        let mut fractional_substrate = false;
         for entry in substrates {
             if !env.contains_key(&entry.species) {
                 resolvable = false;
                 break;
             }
-            total_order += entry.coefficient;
+            if entry.coefficient.fract() != 0.0 || !entry.coefficient.is_finite() {
+                fractional_substrate = true;
+                break;
+            }
+            total_order += entry.coefficient as u32;
         }
-        if !resolvable {
+        if !resolvable || fractional_substrate {
             continue;
         }
 

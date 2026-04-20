@@ -125,7 +125,7 @@ fn reaction_system(
     }
 }
 
-fn stoich(name: &str, coeff: u32) -> StoichiometricEntry {
+fn stoich(name: &str, coeff: f64) -> StoichiometricEntry {
     StoichiometricEntry {
         species: name.to_string(),
         coefficient: coeff,
@@ -143,8 +143,8 @@ fn flatten_reactions_only_file_produces_mass_action_odes() {
         vec![Reaction {
             id: None,
             name: Some("r1".to_string()),
-            substrates: Some(vec![stoich("A", 1)]),
-            products: Some(vec![stoich("B", 1)]),
+            substrates: Some(vec![stoich("A", 1.0)]),
+            products: Some(vec![stoich("B", 1.0)]),
             rate: var("k1"),
             reference: None,
         }],
@@ -228,7 +228,7 @@ fn flatten_mixed_model_and_reaction_system() {
         vec![Reaction {
             id: None,
             name: None,
-            substrates: Some(vec![stoich("X", 1)]),
+            substrates: Some(vec![stoich("X", 1.0)]),
             products: Some(vec![]),
             rate: var("k"),
             reference: None,
@@ -276,8 +276,8 @@ fn flatten_autocatalytic_reaction_net_stoichiometry() {
         vec![Reaction {
             id: None,
             name: None,
-            substrates: Some(vec![stoich("A", 1), stoich("B", 1)]),
-            products: Some(vec![stoich("B", 2)]),
+            substrates: Some(vec![stoich("A", 1.0), stoich("B", 1.0)]),
+            products: Some(vec![stoich("B", 2.0)]),
             rate: var("k"),
             reference: None,
         }],
@@ -327,7 +327,7 @@ fn flatten_source_and_sink_reactions() {
                 id: None,
                 name: Some("src".to_string()),
                 substrates: Some(vec![]),
-                products: Some(vec![stoich("X", 1)]),
+                products: Some(vec![stoich("X", 1.0)]),
                 rate: var("k_src"),
                 reference: None,
             },
@@ -335,7 +335,7 @@ fn flatten_source_and_sink_reactions() {
             Reaction {
                 id: None,
                 name: Some("sink".to_string()),
-                substrates: Some(vec![stoich("X", 1)]),
+                substrates: Some(vec![stoich("X", 1.0)]),
                 products: Some(vec![]),
                 rate: var("k_sink"),
                 reference: None,
@@ -416,7 +416,7 @@ fn flatten_conflicting_derivative_raises_error() {
         vec![Reaction {
             id: None,
             name: None,
-            substrates: Some(vec![stoich("X", 1)]),
+            substrates: Some(vec![stoich("X", 1.0)]),
             products: Some(vec![]),
             rate: var("k"),
             reference: None,

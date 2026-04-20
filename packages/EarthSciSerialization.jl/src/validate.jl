@@ -660,10 +660,16 @@ function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{
         (substrates_field === nothing || isempty(substrates_field)) && continue
 
         # Require every referenced substrate to have declared units.
+        # Fractional stoichiometries on substrates produce non-integer unit
+        # exponents, which Unitful does not support for dimensional analysis —
+        # skip the dimensional check in that case (fractional substrates are
+        # unusual; fractional *products* are the common atmospheric-chemistry
+        # case and don't enter this path).
         resolvable = true
         substrate_dim = Unitful.NoUnits
         species_dim = nothing
-        total_order = 0
+        total_order = 0.0
+        fractional_substrate = false
         for substrate in substrates_field
             sp_units_str = get(species_units, substrate.species, nothing)
             if sp_units_str === nothing
@@ -676,9 +682,14 @@ function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{
                 break
             end
             species_dim === nothing && (species_dim = sp_dim)
-            substrate_dim = substrate_dim * (sp_dim^substrate.stoichiometry)
+            if !isinteger(substrate.stoichiometry)
+                fractional_substrate = true
+                break
+            end
+            substrate_dim = substrate_dim * (sp_dim^Int(substrate.stoichiometry))
             total_order += substrate.stoichiometry
         end
+        fractional_substrate && continue
         (!resolvable || species_dim === nothing) && continue
         time_unit === nothing && continue
 
@@ -690,10 +701,11 @@ function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{
         full_dim = rate_dim * substrate_dim
         if dimension(full_dim) != dimension(expected_dim)
             first_sp_units = get(species_units, substrates_field[1].species, "")
+            order_str = isinteger(total_order) ? string(Int(total_order)) : string(total_order)
             push!(errors, StructuralError(
                 "$path/reactions/$(i-1)",
                 "Reaction $(reaction.id) rate '$rate_name' units '$rate_units_str' " *
-                "incompatible with order-$total_order reaction for species units " *
+                "incompatible with order-$order_str reaction for species units " *
                 "'$first_sp_units' (expected rate*substrates to have dimensions of species/time)",
                 "unit_inconsistency",
             ))

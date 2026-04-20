@@ -816,7 +816,10 @@ function Base.show(io::IO, reaction_system::ReactionSystem)
                 if entry.stoichiometry == 1
                     format_chemical_subscripts(entry.species, :unicode)
                 else
-                    "$(entry.stoichiometry)$(format_chemical_subscripts(entry.species, :unicode))"
+                    coeff_str = isinteger(entry.stoichiometry) ?
+                        string(Int(entry.stoichiometry)) :
+                        string(entry.stoichiometry)
+                    "$(coeff_str)$(format_chemical_subscripts(entry.species, :unicode))"
                 end
                 for entry in reaction.substrates
             ], " + ")
@@ -830,7 +833,10 @@ function Base.show(io::IO, reaction_system::ReactionSystem)
                 if entry.stoichiometry == 1
                     format_chemical_subscripts(entry.species, :unicode)
                 else
-                    "$(entry.stoichiometry)$(format_chemical_subscripts(entry.species, :unicode))"
+                    coeff_str = isinteger(entry.stoichiometry) ?
+                        string(Int(entry.stoichiometry)) :
+                        string(entry.stoichiometry)
+                    "$(coeff_str)$(format_chemical_subscripts(entry.species, :unicode))"
                 end
                 for entry in reaction.products
             ], " + ")

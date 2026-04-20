@@ -115,11 +115,11 @@ fn test_analysis_features_integration() {
         name: None,
         substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: 1,
+            coefficient: 1.0,
         }]),
         products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: 1,
+            coefficient: 1.0,
         }]),
         rate: Expr::Operator(ExpressionNode {
             op: "*".to_string(),

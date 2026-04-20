@@ -465,3 +465,38 @@ def test_roundtrip_nonlinear_mogi_shape():
     assert model.system_kind == "nonlinear"
     assert model.initialization_equations == []
     assert model.guesses == {}
+
+
+def test_roundtrip_fractional_stoichiometry():
+    """Reactions with fractional product yields (e.g. ISOP+O3 → 0.87 CH2O)
+    round-trip losslessly on the v0.2.x schema (gt-1e96). Integer substrate
+    coefficients coexist with fractional products."""
+    repo_root = Path(__file__).resolve().parents[3]
+    fixture = repo_root / "tests" / "valid" / "fractional_stoichiometry.esm"
+    original_text = fixture.read_text()
+    first = load(original_text)
+    second = load(save(first))
+    first_json = json.loads(save(first))
+    second_json = json.loads(save(second))
+    assert first_json == second_json
+
+    rs = first.reaction_systems["SuperFastLike"]
+    assert len(rs.reactions) == 4
+
+    r1 = rs.reactions[0]
+    assert r1.products["CH2O"] == 0.87
+    assert r1.products["CH3O2"] == 1.86
+    assert r1.reactants["ISOP"] == 1
+
+    # Integer coefficients round-trip as integers in the emitted JSON so
+    # existing integer-only fixtures stay byte-identical across a parse /
+    # re-emit cycle.
+    r4_products = first_json["reaction_systems"]["SuperFastLike"]["reactions"][3]["products"]
+    assert r4_products[0]["stoichiometry"] == 1
+    assert isinstance(r4_products[0]["stoichiometry"], int)
+
+    # Fractional coefficients are emitted as floats.
+    r1_products = first_json["reaction_systems"]["SuperFastLike"]["reactions"][0]["products"]
+    ch2o = next(p for p in r1_products if p["species"] == "CH2O")
+    assert ch2o["stoichiometry"] == 0.87
+    assert isinstance(ch2o["stoichiometry"], float)

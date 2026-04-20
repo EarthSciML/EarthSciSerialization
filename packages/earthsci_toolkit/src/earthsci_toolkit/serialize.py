@@ -6,8 +6,25 @@ with optional file writing capability.
 """
 
 import json
+import math
 from pathlib import Path
 from typing import Union, Dict, Any, Optional
+
+
+def _emit_stoich(coeff: Union[int, float]) -> Union[int, float]:
+    """Emit a stoichiometric coefficient preserving integer-vs-float distinction.
+
+    Integer values (either `int` or integer-valued `float`) are emitted as `int`
+    so existing integer-only fixtures stay byte-identical through a parse /
+    re-emit cycle. Fractional coefficients like `0.87` are emitted as `float`.
+    """
+    if isinstance(coeff, bool):
+        return int(coeff)
+    if isinstance(coeff, int):
+        return coeff
+    if isinstance(coeff, float) and math.isfinite(coeff) and coeff.is_integer():
+        return int(coeff)
+    return float(coeff)
 
 from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
@@ -400,19 +417,21 @@ def _serialize_reaction(reaction: Reaction) -> Dict[str, Any]:
     if reaction.name:
         result["name"] = reaction.name
 
-    # Serialize substrates (reactants)
+    # Serialize substrates (reactants). Emit integer-valued coefficients as
+    # `int` and fractional coefficients as `float` so the schema's numeric
+    # stoichiometry field survives a round trip (integer fixtures stay
+    # byte-identical; fractional ones like `0.87 CH2O` are preserved exactly).
     if reaction.reactants:
         result["substrates"] = [
-            {"species": species, "stoichiometry": int(coeff)}
+            {"species": species, "stoichiometry": _emit_stoich(coeff)}
             for species, coeff in reaction.reactants.items()
         ]
     else:
         result["substrates"] = None
 
-    # Serialize products
     if reaction.products:
         result["products"] = [
-            {"species": species, "stoichiometry": int(coeff)}
+            {"species": species, "stoichiometry": _emit_stoich(coeff)}
             for species, coeff in reaction.products.items()
         ]
     else:

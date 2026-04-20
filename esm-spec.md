@@ -1475,6 +1475,12 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `rate` | ✓ | Rate expression: a string (parameter ref), number, or expression AST |
 | `reference` | | Per-reaction citation or notes |
 
+### 7.3a Stoichiometric Coefficients
+
+`stoichiometry` is a **positive finite number**. Integer coefficients (the only form accepted in v0.1.x) remain valid; fractional coefficients are accepted in v0.2.x so reaction mechanisms whose product yields are non-integer (e.g. `CH3O2 + CH3O2 → 2.0 CH2O + 0.8 HO2`, `ISOP + O3 → 0.87 CH2O + 1.86 CH3O2 + 0.06 HO2 + 0.05 CO`) can be expressed directly rather than encoded as multiple shadow reactions. NaN and ±Infinity are rejected at parse time.
+
+Integer fixtures and fractional fixtures share one on-disk representation: the JSON number. Implementations SHOULD emit integer-valued coefficients without a decimal point so existing integer-only files round-trip byte-identically.
+
 ### 7.4 ODE Generation from Reactions
 
 A conforming implementation generates ODEs from the reaction list using standard mass action kinetics. For a reaction with rate `k`, substrates `{S_i}` with stoichiometries `{n_i}`, and products `{P_j}` with stoichiometries `{m_j}`:

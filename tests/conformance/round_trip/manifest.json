@@ -71,6 +71,7 @@
     { "id": "valid/nonlinear_isorropia_shape",       "path": "valid/nonlinear_isorropia_shape.esm",       "tags": ["nonlinear", "initialization", "guesses", "gt-ebuq"] },
     { "id": "valid/nonlinear_mogi_shape",            "path": "valid/nonlinear_mogi_shape.esm",            "tags": ["nonlinear", "geodynamics", "gt-ebuq"] },
 
-    { "id": "valid/reservoir_species_constant",      "path": "valid/reservoir_species_constant.esm",      "tags": ["reactions", "constant-species", "reservoir", "gt-ertm"] }
+    { "id": "valid/reservoir_species_constant",      "path": "valid/reservoir_species_constant.esm",      "tags": ["reactions", "constant-species", "reservoir", "gt-ertm"] },
+    { "id": "valid/fractional_stoichiometry",        "path": "valid/fractional_stoichiometry.esm",        "tags": ["reactions", "fractional-stoichiometry", "gt-1e96"] }
   ]
 }

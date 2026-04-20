@@ -126,10 +126,15 @@ type Parameter struct {
 	Description *string `json:"description,omitempty"`
 }
 
-// SubstrateProduct represents a substrate or product in a reaction
+// SubstrateProduct represents a substrate or product in a reaction.
+//
+// Stoichiometry MUST be a positive finite number. v0.2.x permits fractional
+// coefficients (e.g. 0.87 CH2O) in addition to the historical integer case;
+// integer-valued coefficients round-trip as integers via encoding/json because
+// float64(1) marshals to "1" in Go's standard encoder.
 type SubstrateProduct struct {
-	Species       string `json:"species"`
-	Stoichiometry int    `json:"stoichiometry"`
+	Species       string  `json:"species"`
+	Stoichiometry float64 `json:"stoichiometry"`
 }
 
 // Reaction represents a chemical reaction

@@ -1891,12 +1891,12 @@ impl fmt::Display for ReactionSystem {
                 .iter()
                 .flatten()
                 .map(|s| {
-                    if s.coefficient == 1 {
+                    if s.coefficient == 1.0 {
                         format_chemical_subscripts(&s.species)
                     } else {
                         format!(
                             "{}·{}",
-                            format_number_unicode(s.coefficient as f64),
+                            format_number_unicode(s.coefficient),
                             format_chemical_subscripts(&s.species)
                         )
                     }
@@ -1910,12 +1910,12 @@ impl fmt::Display for ReactionSystem {
                 .iter()
                 .flatten()
                 .map(|p| {
-                    if p.coefficient == 1 {
+                    if p.coefficient == 1.0 {
                         format_chemical_subscripts(&p.species)
                     } else {
                         format!(
                             "{}·{}",
-                            format_number_unicode(p.coefficient as f64),
+                            format_number_unicode(p.coefficient),
                             format_chemical_subscripts(&p.species)
                         )
                     }
@@ -2196,11 +2196,11 @@ mod tests {
             name: Some("R1".to_string()),
             substrates: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: Expr::Variable("k1".to_string()),
             reference: None,

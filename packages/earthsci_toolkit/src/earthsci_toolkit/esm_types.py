@@ -141,8 +141,12 @@ class Reaction:
     """A chemical reaction."""
     name: str
     id: Optional[str] = None
-    reactants: Dict[str, float] = field(default_factory=dict)  # species -> coefficient
-    products: Dict[str, float] = field(default_factory=dict)   # species -> coefficient
+    # species -> coefficient. Values may be `int` or `float`: v0.2.x permits
+    # fractional stoichiometries (e.g. `0.87 CH2O`). Parser preserves the
+    # original JSON numeric type; serializer emits `int` for integer-valued
+    # coefficients to keep integer fixtures byte-identical across round-trips.
+    reactants: Dict[str, Union[int, float]] = field(default_factory=dict)
+    products: Dict[str, Union[int, float]] = field(default_factory=dict)
     rate_constant: Optional[Union[float, Expr]] = None
     conditions: Dict[str, Any] = field(default_factory=dict)
 

@@ -913,10 +913,21 @@ A species with its stoichiometric coefficient in a reaction.
 """
 struct StoichiometryEntry
     species::String
-    stoichiometry::Int
+    stoichiometry::Float64
 
-    # Constructor
-    StoichiometryEntry(species::String, stoichiometry::Int) = new(species, stoichiometry)
+    function StoichiometryEntry(species::String, stoichiometry::Real)
+        if !isfinite(stoichiometry)
+            throw(ArgumentError(
+                "StoichiometryEntry: stoichiometry must be finite (got $(stoichiometry)) for species '$(species)'"
+            ))
+        end
+        if stoichiometry <= 0
+            throw(ArgumentError(
+                "StoichiometryEntry: stoichiometry must be positive (got $(stoichiometry)) for species '$(species)'"
+            ))
+        end
+        return new(species, Float64(stoichiometry))
+    end
 end
 
 """
@@ -1263,29 +1274,31 @@ end
 # ========================================
 
 """
-    dict_to_stoichiometry_entries(dict::Dict{String,Int}) -> Vector{StoichiometryEntry}
+    dict_to_stoichiometry_entries(dict::AbstractDict{String,<:Real}) -> Vector{StoichiometryEntry}
 
-Convert old-style Dict{String,Int} format to new StoichiometryEntry vector format.
+Convert old-style species→coefficient dict format to new StoichiometryEntry vector format.
+Accepts any numeric coefficient type (`Int`, `Float64`, …) — fractional stoichiometries
+are supported by the v0.2.x schema.
 """
-function dict_to_stoichiometry_entries(dict::Dict{String,Int})::Vector{StoichiometryEntry}
+function dict_to_stoichiometry_entries(dict::AbstractDict{String,<:Real})::Vector{StoichiometryEntry}
     return [StoichiometryEntry(species, stoichiometry) for (species, stoichiometry) in dict]
 end
 
 """
-    stoichiometry_entries_to_dict(entries::Vector{StoichiometryEntry}) -> Dict{String,Int}
+    stoichiometry_entries_to_dict(entries::Vector{StoichiometryEntry}) -> Dict{String,Float64}
 
-Convert new StoichiometryEntry vector format to old-style Dict{String,Int} format.
+Convert new StoichiometryEntry vector format to species→coefficient dict.
 """
-function stoichiometry_entries_to_dict(entries::Vector{StoichiometryEntry})::Dict{String,Int}
+function stoichiometry_entries_to_dict(entries::Vector{StoichiometryEntry})::Dict{String,Float64}
     return Dict(entry.species => entry.stoichiometry for entry in entries)
 end
 
 """
-    Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false) -> Reaction
+    Reaction(reactants::AbstractDict{String,<:Real}, products::AbstractDict{String,<:Real}, rate::Expr; reversible=false) -> Reaction
 
 Legacy constructor for backward compatibility. Creates a reaction with auto-generated ID.
 """
-function Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate::Expr; reversible=false)
+function Reaction(reactants::AbstractDict{String,<:Real}, products::AbstractDict{String,<:Real}, rate::Expr; reversible=false)
     # Generate a simple ID based on the reactants and products
     id = "reaction_$(hash(string(reactants, products, rate)))"
 
@@ -1296,30 +1309,30 @@ function Reaction(reactants::Dict{String,Int}, products::Dict{String,Int}, rate:
 end
 
 """
-    get_reactants_dict(reaction::Reaction) -> Dict{String,Int}
+    get_reactants_dict(reaction::Reaction) -> Dict{String,Float64}
 
 Get reactants as dictionary for backward compatibility.
 """
-function get_reactants_dict(reaction::Reaction)::Dict{String,Int}
+function get_reactants_dict(reaction::Reaction)::Dict{String,Float64}
     # Use getfield to avoid infinite recursion
     substrates_field = getfield(reaction, :substrates)
     if substrates_field === nothing
-        return Dict{String,Int}()
+        return Dict{String,Float64}()
     else
         return stoichiometry_entries_to_dict(substrates_field)
     end
 end
 
 """
-    get_products_dict(reaction::Reaction) -> Dict{String,Int}
+    get_products_dict(reaction::Reaction) -> Dict{String,Float64}
 
 Get products as dictionary for backward compatibility.
 """
-function get_products_dict(reaction::Reaction)::Dict{String,Int}
+function get_products_dict(reaction::Reaction)::Dict{String,Float64}
     # Use getfield to avoid infinite recursion
     products_field = getfield(reaction, :products)
     if products_field === nothing
-        return Dict{String,Int}()
+        return Dict{String,Float64}()
     else
         return stoichiometry_entries_to_dict(products_field)
     end

@@ -37,11 +37,11 @@ fn test_simple_stoichiometric_matrix() {
         name: None,
         substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: 1,
+            coefficient: 1.0,
         }]),
         products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: 1,
+            coefficient: 1.0,
         }]),
         rate: Expr::Variable("k".to_string()),
         reference: None,
@@ -113,11 +113,11 @@ fn test_multiple_reaction_stoichiometric_matrix() {
             name: Some("R1".to_string()),
             substrates: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: Expr::Variable("k1".to_string()),
             reference: None,
@@ -127,11 +127,11 @@ fn test_multiple_reaction_stoichiometric_matrix() {
             name: Some("R2".to_string()),
             substrates: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
                 species: "C".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: Expr::Variable("k2".to_string()),
             reference: None,
@@ -210,16 +210,16 @@ fn test_stoichiometric_coefficients() {
         substrates: Some(vec![
             StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: 2,
+                coefficient: 2.0,
             },
             StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             },
         ]),
         products: Some(vec![StoichiometricEntry {
             species: "C".to_string(),
-            coefficient: 3,
+            coefficient: 3.0,
         }]),
         rate: Expr::Variable("k".to_string()),
         reference: None,
@@ -279,11 +279,11 @@ fn test_reversible_reactions() {
             name: Some("Forward".to_string()),
             substrates: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: Expr::Variable("kf".to_string()),
             reference: None,
@@ -293,11 +293,11 @@ fn test_reversible_reactions() {
             name: Some("Reverse".to_string()),
             substrates: Some(vec![StoichiometricEntry {
                 species: "B".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: Expr::Variable("kr".to_string()),
             reference: None,
@@ -394,16 +394,16 @@ fn test_complex_reaction_network() {
             substrates: Some(vec![
                 StoichiometricEntry {
                     species: "A".to_string(),
-                    coefficient: 1,
+                    coefficient: 1.0,
                 },
                 StoichiometricEntry {
                     species: "B".to_string(),
-                    coefficient: 1,
+                    coefficient: 1.0,
                 },
             ]),
             products: Some(vec![StoichiometricEntry {
                 species: "C".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: Expr::Variable("k1".to_string()),
             reference: None,
@@ -414,16 +414,16 @@ fn test_complex_reaction_network() {
             name: Some("R2".to_string()),
             substrates: Some(vec![StoichiometricEntry {
                 species: "C".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![
                 StoichiometricEntry {
                     species: "D".to_string(),
-                    coefficient: 1,
+                    coefficient: 1.0,
                 },
                 StoichiometricEntry {
                     species: "E".to_string(),
-                    coefficient: 1,
+                    coefficient: 1.0,
                 },
             ]),
             rate: Expr::Variable("k2".to_string()),
@@ -435,11 +435,11 @@ fn test_complex_reaction_network() {
             name: Some("R3".to_string()),
             substrates: Some(vec![StoichiometricEntry {
                 species: "D".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
                 species: "A".to_string(),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: Expr::Variable("k3".to_string()),
             reference: None,
@@ -579,11 +579,11 @@ fn test_default_coefficients() {
         name: None,
         substrates: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: 1, // Default
+            coefficient: 1.0, // Default
         }]),
         products: Some(vec![StoichiometricEntry {
             species: "B".to_string(),
-            coefficient: 1, // Default
+            coefficient: 1.0, // Default
         }]),
         rate: Expr::Variable("k".to_string()),
         reference: None,

@@ -86,7 +86,7 @@ const ReactionItem: Component<{
         const formula = species?.formula || reactant.species;
         const stoichiometry = reactant.stoichiometry !== undefined ? reactant.stoichiometry : 1;
 
-        return `${stoichiometry > 1 ? stoichiometry : ''}${renderChemicalFormula(formula)}`;
+        return `${stoichiometry !== 1 ? stoichiometry : ''}${renderChemicalFormula(formula)}`;
       })
       .join(' + ');
   };
@@ -101,7 +101,7 @@ const ReactionItem: Component<{
         const formula = species?.formula || product.species;
         const stoichiometry = product.stoichiometry !== undefined ? product.stoichiometry : 1;
 
-        return `${stoichiometry > 1 ? stoichiometry : ''}${renderChemicalFormula(formula)}`;
+        return `${stoichiometry !== 1 ? stoichiometry : ''}${renderChemicalFormula(formula)}`;
       })
       .join(' + ');
   };

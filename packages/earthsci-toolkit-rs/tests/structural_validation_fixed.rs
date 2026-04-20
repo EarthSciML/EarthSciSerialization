@@ -220,11 +220,11 @@ fn test_undefined_species_in_reaction() {
         name: None,
         substrates: Some(vec![StoichiometricEntry {
             species: "B".to_string(), // 'B' is not defined
-            coefficient: 1,
+            coefficient: 1.0,
         }]),
         products: Some(vec![StoichiometricEntry {
             species: "A".to_string(),
-            coefficient: 1,
+            coefficient: 1.0,
         }]),
         rate: Expr::Variable("k".to_string()),
         reference: None,

@@ -2225,14 +2225,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Substrates (negative coefficients)
                         for substrate in reaction.substrates.iter().flatten() {
                             if let Some(&idx) = species_index.get(&substrate.species) {
-                                coeffs[idx] -= substrate.coefficient as f64;
+                                coeffs[idx] -= substrate.coefficient;
                             }
                         }
 
                         // Products (positive coefficients)
                         for product in reaction.products.iter().flatten() {
                             if let Some(&idx) = species_index.get(&product.species) {
-                                coeffs[idx] += product.coefficient as f64;
+                                coeffs[idx] += product.coefficient;
                             }
                         }
 

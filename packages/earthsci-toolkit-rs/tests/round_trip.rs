@@ -487,3 +487,44 @@ fn test_reservoir_species_constant_round_trip() {
         );
     }
 }
+
+/// Reaction systems with fractional stoichiometries (ISOP+O3 → 0.87 CH2O, …)
+/// must load and re-serialize without truncating the coefficients. Per
+/// gt-1e96, parser/serializer preserve integer vs float numeric type, so the
+/// round-tripped JSON is value-equal to the source fixture.
+#[test]
+fn test_fractional_stoichiometry_round_trip() {
+    let fixture = include_str!("../../../tests/valid/fractional_stoichiometry.esm");
+    let parsed: EsmFile = load(fixture).expect("load fractional_stoichiometry fixture");
+    let serialized = save(&parsed).expect("save fractional_stoichiometry fixture");
+    let reparsed: EsmFile = load(&serialized).expect("reload fractional_stoichiometry fixture");
+
+    assert_eq!(
+        serde_json::to_value(&parsed).expect("parsed as value"),
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+    );
+
+    let rs = parsed
+        .reaction_systems
+        .as_ref()
+        .and_then(|rs| rs.get("SuperFastLike"))
+        .expect("SuperFastLike reaction system missing");
+
+    let r1 = &rs.reactions[0];
+    let products = r1.products.as_ref().expect("R1 products missing");
+    let ch2o = products
+        .iter()
+        .find(|p| p.species == "CH2O")
+        .expect("CH2O missing from R1 products");
+    assert!((ch2o.coefficient - 0.87).abs() < 1e-12);
+
+    let ch3o2 = products
+        .iter()
+        .find(|p| p.species == "CH3O2")
+        .expect("CH3O2 missing from R1 products");
+    assert!((ch3o2.coefficient - 1.86).abs() < 1e-12);
+
+    let r4 = &rs.reactions[3];
+    let substrates = r4.substrates.as_ref().expect("R4 substrates missing");
+    assert_eq!(substrates[0].coefficient, 2.0);
+}

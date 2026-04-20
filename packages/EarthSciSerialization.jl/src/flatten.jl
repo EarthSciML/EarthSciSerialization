@@ -254,7 +254,7 @@ function lower_reactions_to_equations(reactions::Vector{Reaction},
 
     n_species = length(species_names)
     n_rxns = length(reactions)
-    S = zeros(Int, n_species, n_rxns)
+    S = zeros(Float64, n_species, n_rxns)
 
     for (j, rxn) in enumerate(reactions)
         substrates = getfield(rxn, :substrates)

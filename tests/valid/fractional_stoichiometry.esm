@@ -1,0 +1,84 @@
+{
+  "esm": "0.2.0",
+  "metadata": {
+    "name": "FractionalStoichiometry",
+    "description": "Atmospheric-chemistry-style reactions with non-integer product yields (e.g., 0.87 CH2O from ISOP+O3). Exercises the v0.2.x schema relaxation of StoichiometryEntry.stoichiometry from integer to positive number (gt-1e96). Integer-valued substrate coefficients coexist with fractional-valued product coefficients.",
+    "authors": ["EarthSciSerialization contributors"],
+    "created": "2026-04-20T00:00:00Z",
+    "tags": ["reactions", "fractional-stoichiometry", "atmospheric-chemistry", "gt-1e96"]
+  },
+  "reaction_systems": {
+    "SuperFastLike": {
+      "species": {
+        "ISOP":  { "units": "mol/mol", "default": 1e-10, "description": "Isoprene" },
+        "O3":    { "units": "mol/mol", "default": 4e-8,  "description": "Ozone" },
+        "OH":    { "units": "mol/mol", "default": 1e-13, "description": "Hydroxyl radical" },
+        "CH2O":  { "units": "mol/mol", "default": 1e-10, "description": "Formaldehyde" },
+        "CH3O2": { "units": "mol/mol", "default": 1e-12, "description": "Methyl peroxy radical" },
+        "HO2":   { "units": "mol/mol", "default": 1e-12, "description": "Hydroperoxyl radical" },
+        "CO":    { "units": "mol/mol", "default": 1e-7,  "description": "Carbon monoxide" },
+        "H2O2":  { "units": "mol/mol", "default": 1e-11, "description": "Hydrogen peroxide" }
+      },
+      "parameters": {
+        "k_isop_o3":  { "units": "1/s", "default": 1.03e-17 },
+        "k_isop_oh":  { "units": "1/s", "default": 1.00e-10 },
+        "k_ho2_ho2":  { "units": "1/s", "default": 2.80e-13 },
+        "k_ch3o2_x2": { "units": "1/s", "default": 3.50e-13 }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "ISOP+O3 → fractional products",
+          "substrates": [
+            { "species": "ISOP", "stoichiometry": 1 },
+            { "species": "O3",   "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "CH2O",  "stoichiometry": 0.87 },
+            { "species": "CH3O2", "stoichiometry": 1.86 },
+            { "species": "HO2",   "stoichiometry": 0.06 },
+            { "species": "CO",    "stoichiometry": 0.05 }
+          ],
+          "rate": "k_isop_o3"
+        },
+        {
+          "id": "R2",
+          "name": "ISOP+OH → fractional products",
+          "substrates": [
+            { "species": "ISOP", "stoichiometry": 1 },
+            { "species": "OH",   "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "CH2O",  "stoichiometry": 0.629 },
+            { "species": "HO2",   "stoichiometry": 0.991 },
+            { "species": "CH3O2", "stoichiometry": 0.235 }
+          ],
+          "rate": "k_isop_oh"
+        },
+        {
+          "id": "R3",
+          "name": "2 CH3O2 → fractional products",
+          "substrates": [
+            { "species": "CH3O2", "stoichiometry": 2 }
+          ],
+          "products": [
+            { "species": "CH2O", "stoichiometry": 2.0 },
+            { "species": "HO2",  "stoichiometry": 0.8 }
+          ],
+          "rate": "k_ch3o2_x2"
+        },
+        {
+          "id": "R4",
+          "name": "2 HO2 → H2O2 (integer stoichiometry — backward-compat sanity check)",
+          "substrates": [
+            { "species": "HO2", "stoichiometry": 2 }
+          ],
+          "products": [
+            { "species": "H2O2", "stoichiometry": 1 }
+          ],
+          "rate": "k_ho2_ho2"
+        }
+      ]
+    }
+  }
+}

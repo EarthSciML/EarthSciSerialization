@@ -2,9 +2,25 @@ package esm
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 )
+
+// formatStoich renders a stoichiometric coefficient using the shortest form
+// that round-trips exactly through JSON: integer-valued coefficients emit
+// without a decimal (e.g. "2"), fractional coefficients use the canonical
+// minimal float representation (e.g. "0.87").
+func formatStoich(v float64) string {
+	if math.IsInf(v, 0) || math.IsNaN(v) {
+		return strconv.FormatFloat(v, 'g', -1, 64)
+	}
+	if v == math.Trunc(v) && math.Abs(v) < 1e15 {
+		return strconv.FormatInt(int64(v), 10)
+	}
+	return strconv.FormatFloat(v, 'g', -1, 64)
+}
 
 // FlattenedSystem represents a coupled system flattened into a single system
 type FlattenedSystem struct {
@@ -192,7 +208,7 @@ func deriveODEs(rs ReactionSystem, systemName string, varNames map[string]bool) 
 		for _, sub := range reaction.Substrates {
 			term := rateStr
 			if sub.Stoichiometry != 1 {
-				term = fmt.Sprintf("%d*%s", sub.Stoichiometry, rateStr)
+				term = fmt.Sprintf("%s*%s", formatStoich(sub.Stoichiometry), rateStr)
 			}
 			speciesTerms[sub.Species] = append(speciesTerms[sub.Species], "-"+term)
 		}
@@ -201,7 +217,7 @@ func deriveODEs(rs ReactionSystem, systemName string, varNames map[string]bool) 
 		for _, prod := range reaction.Products {
 			term := rateStr
 			if prod.Stoichiometry != 1 {
-				term = fmt.Sprintf("%d*%s", prod.Stoichiometry, rateStr)
+				term = fmt.Sprintf("%s*%s", formatStoich(prod.Stoichiometry), rateStr)
 			}
 			speciesTerms[prod.Species] = append(speciesTerms[prod.Species], "+"+term)
 		}

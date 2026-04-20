@@ -89,28 +89,30 @@ pub fn lower_reactions_to_equations(
         let mut rate_terms = Vec::new();
 
         for reaction in reactions {
-            let mut net_stoichiometry: i64 = 0;
+            // v0.2.x allows fractional stoichiometries; accumulate in f64 so
+            // products like `0.87 CH2O` survive the ODE lowering unchanged.
+            let mut net_stoichiometry: f64 = 0.0;
 
             for substrate in reaction.substrates.iter().flatten() {
                 if &substrate.species == sp_name {
-                    net_stoichiometry -= substrate.coefficient as i64;
+                    net_stoichiometry -= substrate.coefficient;
                 }
             }
             for product in reaction.products.iter().flatten() {
                 if &product.species == sp_name {
-                    net_stoichiometry += product.coefficient as i64;
+                    net_stoichiometry += product.coefficient;
                 }
             }
 
-            if net_stoichiometry != 0 {
+            if net_stoichiometry != 0.0 {
                 let enhanced_rate = enhance_rate_with_mass_action(
                     &reaction.rate,
                     reaction.substrates.as_deref().unwrap_or(&[]),
                 )?;
 
-                if net_stoichiometry == 1 {
+                if net_stoichiometry == 1.0 {
                     rate_terms.push(enhanced_rate);
-                } else if net_stoichiometry == -1 {
+                } else if net_stoichiometry == -1.0 {
                     rate_terms.push(Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
                         args: vec![Expr::Number(-1.0), enhanced_rate],
@@ -121,7 +123,7 @@ pub fn lower_reactions_to_equations(
                 } else {
                     rate_terms.push(Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
-                        args: vec![Expr::Number(net_stoichiometry as f64), enhanced_rate],
+                        args: vec![Expr::Number(net_stoichiometry), enhanced_rate],
                         wrt: None,
                         dim: None,
                         ..Default::default()
@@ -245,23 +247,34 @@ fn enhance_rate_with_mass_action(
     }
 
     // Otherwise, enhance with mass action kinetics.
-    // Stoichiometric coefficients are integers ≥ 1 per schema.
+    // Stoichiometric coefficients are positive finite numbers — integer coefficients
+    // unroll into repeated multiplication (`[A]·[A]·…`), fractional coefficients
+    // (e.g. 1.5) lower to a `^` power expression.
     let mut concentration_factors = Vec::new();
 
     for substrate in substrates {
         let coeff = substrate.coefficient;
         let species_var = Expr::Variable(substrate.species.clone());
 
-        if coeff == 1 {
+        if coeff == 1.0 {
             concentration_factors.push(species_var);
-        } else {
+        } else if coeff.fract() == 0.0 && coeff > 0.0 && coeff < 1e6 {
+            let n = coeff as u64;
             let mut power_terms = Vec::new();
-            for _ in 0..coeff {
+            for _ in 0..n {
                 power_terms.push(species_var.clone());
             }
             concentration_factors.push(Expr::Operator(ExpressionNode {
                 op: "*".to_string(),
                 args: power_terms,
+                wrt: None,
+                dim: None,
+                ..Default::default()
+            }));
+        } else {
+            concentration_factors.push(Expr::Operator(ExpressionNode {
+                op: "^".to_string(),
+                args: vec![species_var, Expr::Number(coeff)],
                 wrt: None,
                 dim: None,
                 ..Default::default()
@@ -941,8 +954,8 @@ mod tests {
     }
 
     fn create_test_reaction(
-        substrates: Vec<(&str, u32)>,
-        products: Vec<(&str, u32)>,
+        substrates: Vec<(&str, f64)>,
+        products: Vec<(&str, f64)>,
         rate: Expr,
     ) -> Reaction {
         Reaction {
@@ -984,8 +997,8 @@ mod tests {
             reactions: vec![
                 // A -> B with rate k1 * A
                 create_test_reaction(
-                    vec![("A", 1)],
-                    vec![("B", 1)],
+                    vec![("A", 1.0)],
+                    vec![("B", 1.0)],
                     Expr::Operator(ExpressionNode {
                         op: "*".to_string(),
                         args: vec![
@@ -1046,20 +1059,20 @@ mod tests {
             reactions: vec![
                 // Reaction 1: A -> B
                 create_test_reaction(
-                    vec![("A", 1)],
-                    vec![("B", 1)],
+                    vec![("A", 1.0)],
+                    vec![("B", 1.0)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // Reaction 2: B -> C
                 create_test_reaction(
-                    vec![("B", 1)],
-                    vec![("C", 1)],
+                    vec![("B", 1.0)],
+                    vec![("C", 1.0)],
                     Expr::Variable("k2".to_string()),
                 ),
                 // Reaction 3: 2A -> C
                 create_test_reaction(
-                    vec![("A", 2)],
-                    vec![("C", 1)],
+                    vec![("A", 2.0)],
+                    vec![("C", 1.0)],
                     Expr::Variable("k3".to_string()),
                 ),
             ],
@@ -1138,8 +1151,8 @@ mod tests {
                 .collect::<std::collections::HashMap<_, _>>(),
             parameters: HashMap::new(),
             reactions: vec![create_test_reaction(
-                vec![("B", 1)], // B is not defined in species
-                vec![("A", 1)],
+                vec![("B", 1.0)], // B is not defined in species
+                vec![("A", 1.0)],
                 Expr::Variable("k1".to_string()),
             )],
             constraint_equations: None,
@@ -1175,8 +1188,8 @@ mod tests {
             reactions: vec![
                 // A + B -> C with rate coefficient k1 (should become k1*A*B)
                 create_test_reaction(
-                    vec![("A", 1), ("B", 1)],
-                    vec![("C", 1)],
+                    vec![("A", 1.0), ("B", 1.0)],
+                    vec![("C", 1.0)],
                     Expr::Variable("k1".to_string()),
                 ),
             ],
@@ -1226,7 +1239,7 @@ mod tests {
             parameters: HashMap::new(),
             reactions: vec![
                 // Source reaction: -> A with rate k0 (no substrates)
-                create_test_reaction(vec![], vec![("A", 1)], Expr::Variable("k0".to_string())),
+                create_test_reaction(vec![], vec![("A", 1.0)], Expr::Variable("k0".to_string())),
             ],
             constraint_equations: None,
             discrete_events: None,
@@ -1258,7 +1271,7 @@ mod tests {
             parameters: HashMap::new(),
             reactions: vec![
                 // Sink reaction: A -> with rate k_deg (no products)
-                create_test_reaction(vec![("A", 1)], vec![], Expr::Variable("k_deg".to_string())),
+                create_test_reaction(vec![("A", 1.0)], vec![], Expr::Variable("k_deg".to_string())),
             ],
             constraint_equations: None,
             discrete_events: None,
@@ -1302,8 +1315,8 @@ mod tests {
             reactions: vec![
                 // 2A -> B with rate k1 (second order in A)
                 create_test_reaction(
-                    vec![("A", 2)],
-                    vec![("B", 1)],
+                    vec![("A", 2.0)],
+                    vec![("B", 1.0)],
                     Expr::Variable("k1".to_string()),
                 ),
             ],
@@ -1389,20 +1402,20 @@ mod tests {
             reactions: vec![
                 // A + B -> C + D (rate k1)
                 create_test_reaction(
-                    vec![("A", 1), ("B", 1)],
-                    vec![("C", 1), ("D", 1)],
+                    vec![("A", 1.0), ("B", 1.0)],
+                    vec![("C", 1.0), ("D", 1.0)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // C -> A (rate k2)
                 create_test_reaction(
-                    vec![("C", 1)],
-                    vec![("A", 1)],
+                    vec![("C", 1.0)],
+                    vec![("A", 1.0)],
                     Expr::Variable("k2".to_string()),
                 ),
                 // D -> B (rate k3)
                 create_test_reaction(
-                    vec![("D", 1)],
-                    vec![("B", 1)],
+                    vec![("D", 1.0)],
+                    vec![("B", 1.0)],
                     Expr::Variable("k3".to_string()),
                 ),
             ],
@@ -1474,14 +1487,14 @@ mod tests {
             reactions: vec![
                 // A -> B
                 create_test_reaction(
-                    vec![("A", 1)],
-                    vec![("B", 1)],
+                    vec![("A", 1.0)],
+                    vec![("B", 1.0)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // B -> C
                 create_test_reaction(
-                    vec![("B", 1)],
-                    vec![("C", 1)],
+                    vec![("B", 1.0)],
+                    vec![("C", 1.0)],
                     Expr::Variable("k2".to_string()),
                 ),
             ],
@@ -1532,13 +1545,13 @@ mod tests {
             reactions: vec![
                 // A <-> B (reversible)
                 create_test_reaction(
-                    vec![("A", 1)],
-                    vec![("B", 1)],
+                    vec![("A", 1.0)],
+                    vec![("B", 1.0)],
                     Expr::Variable("kf".to_string()),
                 ),
                 create_test_reaction(
-                    vec![("B", 1)],
-                    vec![("A", 1)],
+                    vec![("B", 1.0)],
+                    vec![("A", 1.0)],
                     Expr::Variable("kr".to_string()),
                 ),
             ],
@@ -1586,8 +1599,8 @@ mod tests {
             reactions: vec![
                 // Unbalanced: 2A -> B (mass not conserved)
                 create_test_reaction(
-                    vec![("A", 2)],
-                    vec![("B", 1)],
+                    vec![("A", 2.0)],
+                    vec![("B", 1.0)],
                     Expr::Variable("k".to_string()),
                 ),
             ],
@@ -1635,14 +1648,14 @@ mod tests {
             reactions: vec![
                 // 2A -> B + C (total mass conserved)
                 create_test_reaction(
-                    vec![("A", 2)],
-                    vec![("B", 1), ("C", 1)],
+                    vec![("A", 2.0)],
+                    vec![("B", 1.0), ("C", 1.0)],
                     Expr::Variable("k1".to_string()),
                 ),
                 // B -> A (mass conserved)
                 create_test_reaction(
-                    vec![("B", 1)],
-                    vec![("A", 1)],
+                    vec![("B", 1.0)],
+                    vec![("A", 1.0)],
                     Expr::Variable("k2".to_string()),
                 ),
             ],
@@ -1724,11 +1737,11 @@ mod tests {
                 // Source: -> A
                 create_test_reaction(
                     vec![],
-                    vec![("A", 1)],
+                    vec![("A", 1.0)],
                     Expr::Variable("k_source".to_string()),
                 ),
                 // Sink: A ->
-                create_test_reaction(vec![("A", 1)], vec![], Expr::Variable("k_sink".to_string())),
+                create_test_reaction(vec![("A", 1.0)], vec![], Expr::Variable("k_sink".to_string())),
             ],
             constraint_equations: None,
             discrete_events: None,
@@ -1766,8 +1779,8 @@ mod tests {
             reactions: vec![
                 // A <-> B
                 create_test_reaction(
-                    vec![("A", 1)],
-                    vec![("B", 1)],
+                    vec![("A", 1.0)],
+                    vec![("B", 1.0)],
                     Expr::Variable("k".to_string()),
                 ),
             ],
