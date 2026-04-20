@@ -2,7 +2,7 @@
 
 use crate::EsmFile;
 use crate::parse::{load, validate_schema};
-use crate::units::{build_unit_env, parse_unit, validate_equation_dimensions};
+use crate::units::{Unit, build_unit_env, parse_unit, validate_equation_dimensions_with_coords};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -173,12 +173,14 @@ pub fn validate(esm_file: &EsmFile) -> ValidationResult {
     if let Some(ref models) = esm_file.models {
         for (model_name, model) in models {
             validate_model(
+                esm_file,
                 model_name,
                 model,
                 &system_refs,
                 &mut structural_errors,
                 &mut unit_warnings,
             );
+            validate_model_gradient_units(esm_file, model_name, model, &mut structural_errors);
         }
 
         // Check for circular dependencies between models
@@ -382,6 +384,7 @@ enum SystemType {
 }
 
 fn validate_model(
+    esm_file: &EsmFile,
     model_name: &str,
     model: &crate::Model,
     system_refs: &HashMap<String, SystemInfo>,
@@ -439,6 +442,16 @@ fn validate_model(
     // dimensional propagation walks the Expr AST using this map.
     let unit_env = build_unit_env(&model.variables);
 
+    // Build the coordinate-units map for the model's referenced domain, if
+    // any. Used by `grad`/`div`/`laplacian` propagation to divide by the
+    // declared coordinate units rather than a hardcoded metre denominator
+    // (gt-ui96). Coordinates declared without units are stored as
+    // dimensionless so the downstream propagator falls back to metres;
+    // `validate_model_gradient_units` separately emits the
+    // `unit_inconsistency` structural error for that case.
+    let coord_env = build_coordinate_unit_env(esm_file, model);
+    let coord_env_ref = coord_env.as_ref();
+
     // Check that all equation references are defined and validate dimensional consistency
     for (eq_idx, equation) in model.equations.iter().enumerate() {
         let eq_path = format!("{}/equations/{}", model_path, eq_idx);
@@ -461,7 +474,9 @@ fn validate_model(
 
         // Validate dimensional consistency of equation via expression-level
         // propagation over the Expr AST.
-        if let Err(unit_error) = validate_equation_dimensions(equation, &unit_env) {
+        if let Err(unit_error) =
+            validate_equation_dimensions_with_coords(equation, &unit_env, coord_env_ref)
+        {
             warnings.push(format!(
                 "Equation {}: {} (in {})",
                 eq_idx, unit_error, eq_path
@@ -589,6 +604,137 @@ fn check_physical_constant_units(
                 "canonical_units": canonical,
             }),
         });
+    }
+}
+
+/// Build a map of spatial-coordinate name → parsed [`Unit`] for use by
+/// `Unit::propagate_with_coords` in grad/div/laplacian propagation. A
+/// coordinate declared without `units` (or whose `units` string fails to
+/// parse) is stored as dimensionless — the propagator then falls back to
+/// the legacy metre denominator so downstream comparisons remain
+/// conservative. Returns `None` when there is no resolvable spatial table.
+fn build_coordinate_unit_env(
+    esm_file: &EsmFile,
+    model: &crate::Model,
+) -> Option<HashMap<String, Unit>> {
+    let coords = collect_coordinate_units(esm_file, model)?;
+    let mut env = HashMap::new();
+    for (dim_name, units) in coords {
+        let unit = units
+            .as_deref()
+            .and_then(|s| parse_unit(s).ok())
+            .unwrap_or_else(Unit::dimensionless);
+        env.insert(dim_name, unit);
+    }
+    Some(env)
+}
+
+/// Build a map of spatial-coordinate names → declared units string for the
+/// model's referenced domain. A coordinate declared without a `units` field is
+/// mapped to `None`. Returns `None` when the model has no domain reference,
+/// the domain isn't registered, or the domain carries no `spatial` table.
+///
+/// The raw `spatial` field is kept as a `serde_json::Value` by the loader (see
+/// `types::Domain::spatial`); this helper normalises it into a lookup table.
+fn collect_coordinate_units(
+    esm_file: &EsmFile,
+    model: &crate::Model,
+) -> Option<HashMap<String, Option<String>>> {
+    let domain_name = model.domain.as_deref()?;
+    let domains = esm_file.domains.as_ref()?;
+    let domain = domains.get(domain_name)?;
+    let spatial_val = domain.spatial.as_ref()?;
+    let spatial_map = spatial_val.as_object()?;
+    let mut coords = HashMap::new();
+    for (dim_name, dim_val) in spatial_map {
+        let units = dim_val
+            .as_object()
+            .and_then(|obj| obj.get("units"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        coords.insert(dim_name.clone(), units);
+    }
+    Some(coords)
+}
+
+/// Walk equation expressions looking for `grad`/`div`/`laplacian` nodes whose
+/// `dim` names a coordinate that the enclosing model's domain declares without
+/// units. When found, emit a structured `unit_inconsistency` error mirroring
+/// the TypeScript binding (see `packages/earthsci-toolkit/src/units.ts`) and
+/// the Julia binding (`validate.jl::_check_gradient_ops`, gt-sosg).
+///
+/// Coordinates present in `domain.spatial` but absent from this lookup, and
+/// models without a resolvable domain, are left to the legacy metre-denominator
+/// fallback in `units.rs` — matching other bindings' silent behaviour in those
+/// cases.
+fn validate_model_gradient_units(
+    esm_file: &EsmFile,
+    model_name: &str,
+    model: &crate::Model,
+    errors: &mut Vec<StructuralError>,
+) {
+    let Some(coords) = collect_coordinate_units(esm_file, model) else {
+        return;
+    };
+    for (eq_idx, equation) in model.equations.iter().enumerate() {
+        let eq_path = format!("/models/{}/equations/{}", model_name, eq_idx);
+        check_gradient_ops(&equation.lhs, &coords, model, &eq_path, eq_idx, errors);
+        check_gradient_ops(&equation.rhs, &coords, model, &eq_path, eq_idx, errors);
+    }
+}
+
+fn check_gradient_ops(
+    expr: &crate::Expr,
+    coords: &HashMap<String, Option<String>>,
+    model: &crate::Model,
+    eq_path: &str,
+    eq_index: usize,
+    errors: &mut Vec<StructuralError>,
+) {
+    let crate::Expr::Operator(node) = expr else {
+        return;
+    };
+    if matches!(node.op.as_str(), "grad" | "div" | "laplacian")
+        && let Some(dim_name) = node.dim.as_deref()
+        && let Some(entry) = coords.get(dim_name)
+        && entry.is_none()
+    {
+        // Coordinate declared in the domain but without units — we cannot
+        // infer the result's dimension, so flag it rather than silently
+        // assuming metres.
+        let (variable, variable_units) = match node.args.first() {
+            Some(crate::Expr::Variable(v)) => (
+                Some(v.clone()),
+                model.variables.get(v).and_then(|mv| mv.units.clone()),
+            ),
+            _ => (None, None),
+        };
+        let mut details = serde_json::json!({
+            "operator": node.op,
+            "dim": dim_name,
+            "coordinate_units": serde_json::Value::Null,
+            "equation_index": eq_index,
+        });
+        if let Some(v) = variable {
+            details["variable"] = serde_json::Value::String(v);
+        }
+        if let Some(u) = variable_units {
+            details["variable_units"] = serde_json::Value::String(u);
+        }
+        errors.push(StructuralError {
+            path: eq_path.to_string(),
+            code: StructuralErrorCode::UnitInconsistency,
+            message: "Gradient operator applied to variable with incompatible spatial units"
+                .to_string(),
+            details,
+        });
+    }
+    for arg in &node.args {
+        check_gradient_ops(arg, coords, model, eq_path, eq_index, errors);
+    }
+    if let Some(inner) = node.expr.as_ref() {
+        check_gradient_ops(inner, coords, model, eq_path, eq_index, errors);
     }
 }
 

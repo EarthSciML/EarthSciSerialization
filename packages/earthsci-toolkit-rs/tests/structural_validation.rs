@@ -747,3 +747,38 @@ fn test_physical_constant_dimensional_error_fixture_rejected() {
     assert_eq!(err.details["declared_units"], "kcal/mol");
     assert_eq!(err.details["canonical_units"], "J/(mol*K)");
 }
+
+/// units_gradient_operator_mismatch.esm applies `grad` over a spatial
+/// coordinate `x` that is declared in the domain without units. A validator
+/// that models grad/div/laplacian cannot infer the result's dimension and must
+/// emit a structured `unit_inconsistency` error at the equation site, rather
+/// than silently assuming metres. Mirrors the TypeScript binding's behaviour
+/// and the Julia binding's `_check_gradient_ops` (gt-sosg, gt-ui96).
+#[test]
+fn test_gradient_operator_spatial_units_mismatch_rejected() {
+    let fixture = include_str!("../../../tests/invalid/units_gradient_operator_mismatch.esm");
+    let esm_file = load(fixture).expect("fixture should parse and schema-validate");
+    let result = validate(&esm_file);
+    let err = result
+        .errors()
+        .into_iter()
+        .find(|e| {
+            matches!(e.code, StructuralErrorCode::UnitInconsistency)
+                && e.message
+                    == "Gradient operator applied to variable with incompatible spatial units"
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected UnitInconsistency (gradient) for units_gradient_operator_mismatch.esm, got: {:?}",
+                result.errors()
+            )
+        });
+    assert_eq!(err.path, "/models/SpatialModel/equations/0");
+    assert_eq!(err.details["operator"], "grad");
+    assert_eq!(err.details["variable"], "c");
+    assert_eq!(err.details["variable_units"], "mol/m^3");
+    assert_eq!(err.details["dim"], "x");
+    assert!(err.details["coordinate_units"].is_null());
+    assert_eq!(err.details["equation_index"], 0);
+    assert!(!result.is_valid);
+}

@@ -157,6 +157,18 @@ impl Unit {
     /// * `expr` - Expression to analyse.
     /// * `env`  - Map from variable name to its [`Unit`].
     pub fn propagate(expr: &Expr, env: &HashMap<String, Unit>) -> Result<Unit, UnitError> {
+        Self::propagate_with_coords(expr, env, None)
+    }
+
+    /// Like [`Unit::propagate`] but additionally consults a map of spatial
+    /// coordinate name → declared [`Unit`] when resolving `grad`/`div`/
+    /// `laplacian` operators' denominator. When `coords` is `None` or does not
+    /// contain the node's `dim`, falls back to the legacy metre denominator.
+    pub fn propagate_with_coords(
+        expr: &Expr,
+        env: &HashMap<String, Unit>,
+        coords: Option<&HashMap<String, Unit>>,
+    ) -> Result<Unit, UnitError> {
         match expr {
             Expr::Number(_) | Expr::Integer(_) => Ok(Unit::dimensionless()),
             Expr::Variable(name) => {
@@ -169,12 +181,16 @@ impl Unit {
                     Err(UnitError::UnknownUnit(format!("Variable: {}", name)))
                 }
             }
-            Expr::Operator(op) => propagate_operator(op, env),
+            Expr::Operator(op) => propagate_operator(op, env, coords),
         }
     }
 }
 
-fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Result<Unit, UnitError> {
+fn propagate_operator(
+    op: &ExpressionNode,
+    env: &HashMap<String, Unit>,
+    coords: Option<&HashMap<String, Unit>>,
+) -> Result<Unit, UnitError> {
     match op.op.as_str() {
         "+" | "-" => {
             if op.args.is_empty() {
@@ -182,11 +198,11 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             }
             // Unary minus: propagate the single argument.
             if op.op == "-" && op.args.len() == 1 {
-                return Unit::propagate(&op.args[0], env);
+                return Unit::propagate_with_coords(&op.args[0], env, coords);
             }
-            let first = Unit::propagate(&op.args[0], env)?;
+            let first = Unit::propagate_with_coords(&op.args[0], env, coords)?;
             for arg in op.args.iter().skip(1) {
-                let other = Unit::propagate(arg, env)?;
+                let other = Unit::propagate_with_coords(arg, env, coords)?;
                 if !first.is_compatible(&other) {
                     return Err(UnitError::DimensionMismatch(format!(
                         "Incompatible dimensions in '{}' operation",
@@ -200,7 +216,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
         "*" => {
             let mut result = Unit::dimensionless();
             for arg in &op.args {
-                let u = Unit::propagate(arg, env)?;
+                let u = Unit::propagate_with_coords(arg, env, coords)?;
                 result = result.multiply(&u);
             }
             Ok(result)
@@ -212,8 +228,8 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     "Division requires exactly 2 arguments".to_string(),
                 ));
             }
-            let num = Unit::propagate(&op.args[0], env)?;
-            let den = Unit::propagate(&op.args[1], env)?;
+            let num = Unit::propagate_with_coords(&op.args[0], env, coords)?;
+            let den = Unit::propagate_with_coords(&op.args[1], env, coords)?;
             Ok(num.divide(&den))
         }
 
@@ -223,8 +239,8 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     "Power operator requires exactly 2 arguments".to_string(),
                 ));
             }
-            let base_unit = Unit::propagate(&op.args[0], env)?;
-            let exp_unit = Unit::propagate(&op.args[1], env)?;
+            let base_unit = Unit::propagate_with_coords(&op.args[0], env, coords)?;
+            let exp_unit = Unit::propagate_with_coords(&op.args[1], env, coords)?;
             if !exp_unit.is_dimensionless() {
                 return Err(UnitError::DimensionMismatch(format!(
                     "Exponent in '{}' must be dimensionless",
@@ -256,7 +272,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     "Derivative 'D' requires exactly 1 argument".to_string(),
                 ));
             }
-            let arg_unit = Unit::propagate(&op.args[0], env)?;
+            let arg_unit = Unit::propagate_with_coords(&op.args[0], env, coords)?;
             let wrt = op.wrt.as_deref().unwrap_or("t");
             let wrt_unit = env
                 .get(wrt)
@@ -281,9 +297,9 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     op.op
                 )));
             }
-            let arg_unit = Unit::propagate(&op.args[0], env)?;
-            let length = Unit::base(Dimension::Length, 1, 1.0);
-            Ok(arg_unit.divide(&length))
+            let arg_unit = Unit::propagate_with_coords(&op.args[0], env, coords)?;
+            let denom = coord_denominator(op, coords, 1);
+            Ok(arg_unit.divide(&denom))
         }
 
         "laplacian" => {
@@ -292,9 +308,9 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     "'laplacian' requires at least one argument".to_string(),
                 ));
             }
-            let arg_unit = Unit::propagate(&op.args[0], env)?;
-            let length2 = Unit::base(Dimension::Length, 2, 1.0);
-            Ok(arg_unit.divide(&length2))
+            let arg_unit = Unit::propagate_with_coords(&op.args[0], env, coords)?;
+            let denom = coord_denominator(op, coords, 2);
+            Ok(arg_unit.divide(&denom))
         }
 
         // Transcendental and trigonometric functions: argument must be
@@ -307,7 +323,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     op.op
                 )));
             }
-            let arg = Unit::propagate(&op.args[0], env)?;
+            let arg = Unit::propagate_with_coords(&op.args[0], env, coords)?;
             if !arg.is_dimensionless() {
                 return Err(UnitError::DimensionMismatch(format!(
                     "Argument to '{}' must be dimensionless",
@@ -324,7 +340,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     "'sqrt' requires exactly 1 argument".to_string(),
                 ));
             }
-            let arg = Unit::propagate(&op.args[0], env)?;
+            let arg = Unit::propagate_with_coords(&op.args[0], env, coords)?;
             if arg.is_dimensionless() {
                 return Ok(Unit::dimensionless());
             }
@@ -352,7 +368,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     op.op
                 )));
             }
-            Unit::propagate(&op.args[0], env)
+            Unit::propagate_with_coords(&op.args[0], env, coords)
         }
 
         // min / max require matching dimensions.
@@ -360,9 +376,9 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             if op.args.is_empty() {
                 return Ok(Unit::dimensionless());
             }
-            let first = Unit::propagate(&op.args[0], env)?;
+            let first = Unit::propagate_with_coords(&op.args[0], env, coords)?;
             for arg in op.args.iter().skip(1) {
-                let other = Unit::propagate(arg, env)?;
+                let other = Unit::propagate_with_coords(arg, env, coords)?;
                 if !first.is_compatible(&other) {
                     return Err(UnitError::DimensionMismatch(format!(
                         "Incompatible dimensions in '{}'",
@@ -379,8 +395,8 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     "'atan2' requires exactly 2 arguments".to_string(),
                 ));
             }
-            let a = Unit::propagate(&op.args[0], env)?;
-            let b = Unit::propagate(&op.args[1], env)?;
+            let a = Unit::propagate_with_coords(&op.args[0], env, coords)?;
+            let b = Unit::propagate_with_coords(&op.args[1], env, coords)?;
             if !a.is_compatible(&b) {
                 return Err(UnitError::DimensionMismatch(
                     "atan2 arguments must share dimensions (ratio is the angle)".to_string(),
@@ -399,8 +415,8 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             // already produce a dimensionless Boolean, and we don't want to
             // reject bare scalars used as truthiness flags. Branches must
             // match.
-            let t_unit = Unit::propagate(&op.args[1], env)?;
-            let f_unit = Unit::propagate(&op.args[2], env)?;
+            let t_unit = Unit::propagate_with_coords(&op.args[1], env, coords)?;
+            let f_unit = Unit::propagate_with_coords(&op.args[2], env, coords)?;
             if !t_unit.is_compatible(&f_unit) {
                 return Err(UnitError::DimensionMismatch(
                     "'ifelse' branches must share dimensions".to_string(),
@@ -419,8 +435,8 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     op.op
                 )));
             }
-            let a = Unit::propagate(&op.args[0], env)?;
-            let b = Unit::propagate(&op.args[1], env)?;
+            let a = Unit::propagate_with_coords(&op.args[0], env, coords)?;
+            let b = Unit::propagate_with_coords(&op.args[1], env, coords)?;
             if !a.is_compatible(&b) {
                 return Err(UnitError::DimensionMismatch(format!(
                     "Comparison '{}' requires matching dimensions",
@@ -439,7 +455,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                     "'Pre' requires exactly 1 argument".to_string(),
                 ));
             }
-            Unit::propagate(&op.args[0], env)
+            Unit::propagate_with_coords(&op.args[0], env, coords)
         }
 
         // Array operators: propagate the element dimension. Shape and
@@ -450,11 +466,11 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             // loop-index values; its dimension is the array's element
             // dimension.
             if let Some(body) = &op.expr {
-                return Unit::propagate(body, env);
+                return Unit::propagate_with_coords(body, env, coords);
             }
             // Fallback: infer from the first positional arg.
             if let Some(first) = op.args.first() {
-                return Unit::propagate(first, env);
+                return Unit::propagate_with_coords(first, env, coords);
             }
             Ok(Unit::dimensionless())
         }
@@ -464,9 +480,9 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             if let Some(values) = &op.values
                 && let Some(first) = values.first()
             {
-                let first_dim = Unit::propagate(first, env)?;
+                let first_dim = Unit::propagate_with_coords(first, env, coords)?;
                 for v in values.iter().skip(1) {
-                    let v_dim = Unit::propagate(v, env)?;
+                    let v_dim = Unit::propagate_with_coords(v, env, coords)?;
                     if !first_dim.is_compatible(&v_dim) {
                         return Err(UnitError::DimensionMismatch(
                             "'makearray' regions must share dimensions".to_string(),
@@ -481,7 +497,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             // Shape-only reorderings: element dimension is inherited from
             // the first positional arg (the source array).
             if let Some(first) = op.args.first() {
-                return Unit::propagate(first, env);
+                return Unit::propagate_with_coords(first, env, coords);
             }
             Ok(Unit::dimensionless())
         }
@@ -498,7 +514,7 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
                 args: op.args.clone(),
                 ..ExpressionNode::default()
             };
-            propagate_operator(&synthetic, env)
+            propagate_operator(&synthetic, env, coords)
         }
 
         // Unknown operator — fail loudly rather than silently returning
@@ -508,6 +524,35 @@ fn propagate_operator(op: &ExpressionNode, env: &HashMap<String, Unit>) -> Resul
             other
         ))),
     }
+}
+
+/// Resolve the denominator unit for a `grad`/`div`/`laplacian` node raised
+/// to `power`. Looks up `op.dim` in the supplied coordinate map; falls back
+/// to `Length^power` (the legacy metre denominator) when the coordinate map
+/// is absent, the dim is unspecified, or the dim is not present in the map.
+/// A coordinate entry that is dimensionless (declared without units) also
+/// falls back to metres — the structural error for that case is emitted by
+/// `validate_model_gradient_units` in validate.rs; here we only care about
+/// propagation.
+fn coord_denominator(
+    op: &ExpressionNode,
+    coords: Option<&HashMap<String, Unit>>,
+    power: i32,
+) -> Unit {
+    let fallback = Unit::base(Dimension::Length, power, 1.0);
+    let Some(coords) = coords else {
+        return fallback;
+    };
+    let Some(dim) = op.dim.as_deref() else {
+        return fallback;
+    };
+    let Some(coord) = coords.get(dim) else {
+        return fallback;
+    };
+    if coord.is_dimensionless() {
+        return fallback;
+    }
+    coord.power(power)
 }
 
 /// Build a `HashMap<String, Unit>` environment from model variable metadata.
@@ -535,8 +580,19 @@ pub fn validate_equation_dimensions(
     eq: &Equation,
     env: &HashMap<String, Unit>,
 ) -> Result<(), UnitError> {
-    let lhs = Unit::propagate(&eq.lhs, env)?;
-    let rhs = Unit::propagate(&eq.rhs, env)?;
+    validate_equation_dimensions_with_coords(eq, env, None)
+}
+
+/// Like [`validate_equation_dimensions`] but additionally consults a spatial
+/// coordinate units map when propagating `grad`/`div`/`laplacian` operators,
+/// rather than assuming a hardcoded metre denominator.
+pub fn validate_equation_dimensions_with_coords(
+    eq: &Equation,
+    env: &HashMap<String, Unit>,
+    coords: Option<&HashMap<String, Unit>>,
+) -> Result<(), UnitError> {
+    let lhs = Unit::propagate_with_coords(&eq.lhs, env, coords)?;
+    let rhs = Unit::propagate_with_coords(&eq.rhs, env, coords)?;
     if lhs.is_compatible(&rhs) {
         Ok(())
     } else {

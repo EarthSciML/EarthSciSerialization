@@ -132,7 +132,7 @@ pub use simulate::{
 };
 pub use units::{
     Dimension, Unit, UnitError, build_unit_env, check_dimensional_consistency, convert_units,
-    parse_unit, validate_equation_dimensions,
+    parse_unit, validate_equation_dimensions, validate_equation_dimensions_with_coords,
 };
 
 #[cfg(feature = "parallel")]
