@@ -77,6 +77,9 @@ from .flatten import (
 # Validation (Core tier requirement)
 from .validation import validate, ValidationResult, ValidationError
 
+# Discretization pipeline / RFC §12 DAE binding contract
+from .discretize import discretize, DiscretizationError
+
 # Expression engine (Core tier requirement)
 from .expression import (
     free_variables,
@@ -309,6 +312,10 @@ __all__ = [
     "UnsupportedVersionError",
     "CircularReferenceError",
     "SubsystemRefError",
+
+    # Discretization / DAE binding contract (RFC §12)
+    "discretize",
+    "DiscretizationError",
 
     # Coupled system flattening (spec §4.7.5 + §4.7.6)
     "flatten",

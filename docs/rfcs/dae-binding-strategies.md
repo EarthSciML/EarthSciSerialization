@@ -16,7 +16,7 @@ assembler; this file is that documentation, centralized.
 |---|---|---|---|---|
 | **Julia** (`EarthSciSerialization.jl`) | **Direct DAE hand-off.** `discretize(esm; dae_support=true)` is the default; when the output is a DAE, `metadata.system_class` is stamped `"dae"` and the caller's MTK export path (`mtk2esm`'s inverse, `MockMTKSystem`, or a user-supplied `System` constructor) receives a mixed equation set that ModelingToolkit.jl handles natively. No index reduction is attempted; MTK performs any required structural simplification. | ModelingToolkit.jl (`System` / `ODESystem` with algebraic equations; `DAEProblem` on solve) | Delegated to MTK (`structural_simplify`) at solve time. | `discretize(esm; dae_support=false)` or env `ESM_DAE_SUPPORT=0`. |
 | **Rust** (`earthsci-toolkit-rs`) | **Direct DAE hand-off (planned).** Until `discretize()` lands in Rust, the binding emits `E_NO_DAE_SUPPORT` on any discretize input containing algebraic equations. The target assembler is [`diffsol`](https://github.com/martinjrobins/diffsol), which has native DAE support. | diffsol (`Bdf` / `Sdirk` DAE paths) | Not planned for v0.2; deferred to later minor releases. | Binding-specific flag `DiscretizeOptions::dae_support = false` (TBD) or env `ESM_DAE_SUPPORT=0`. |
-| **Python** (`earthsci_toolkit`) | **Stubbed.** v0.2.0 always emits `E_NO_DAE_SUPPORT` on mixed-DAE input; `discretize()` success path is ODE-only. A future release will delegate to SUNDIALS/IDA via scikits.odes or to diffrax's DAE mode. | Deferred. | Env `ESM_DAE_SUPPORT=0`; the DAE-enabled path is not yet implemented, so the knob is effectively one-way in v0.2.0. |
+| **Python** (`earthsci_toolkit`) | **Trivial-factor + error otherwise.** `discretize()` classifies each equation as differential vs algebraic (same rule as Julia), then attempts to eliminate every algebraic equation whose LHS is a bare variable name and whose RHS does not reference that variable (transitively, via a topological substitution pass). Factored equations are substituted into downstream equations and removed; the output is a pure-ODE system (`metadata.system_class = "ode"`, `algebraic_equation_count = 0`). If any algebraic equation remains — because its LHS is an operator node (e.g. the unit-circle constraint `x²+y² = 1`), because the LHS variable appears in its own RHS, or because a cycle exists among observed equations — `discretize()` raises `DiscretizationError` with code `E_NONTRIVIAL_DAE`. The error message names each residual equation and points to the Julia binding for full DAE support. A future release may delegate the full-DAE path to SUNDIALS/IDA via scikits.odes or diffrax. | Deferred (trivial-factor only). | Python-specific kwarg `discretize(esm, dae_support=False)` or env `ESM_DAE_SUPPORT=0` — either bypasses factoring and emits `E_NO_DAE_SUPPORT` on any algebraic equation, matching Julia's error-path semantics. |
 | **Go** (`esm-format-go`) | **Trivial-factor.** `ApplyDAEContract(*EsmFile)` symbolically substitutes every algebraic equation of the form `y ~ f(...)` (where `y` is a plain variable and `f` does not reference `y`) into downstream equations, removing the factored equation from the model. Factoring runs to a fixed point so transitive chains `z ~ g(y); y ~ h(x)` fold into pure-ODE form. If any algebraic equations remain after factoring (cyclic observed equations or genuine constraints like `x^2 + y^2 = 1`), the binding aborts with `E_NONTRIVIAL_DAE`; the error names each residual equation and points the author at the Julia binding. Go has no in-ecosystem DAE assembler, so non-trivial DAEs require a different binding. | None (trivial cases reduce to ODE; non-trivial cases abort). | None — the DAE contract is informational-only in Go: pure-ODE output after factoring classifies as `"ode"`, otherwise the binding errors. |
 | **TypeScript** (`earthsci-toolkit`) | **Stubbed.** v0.2.0 always emits `E_NO_DAE_SUPPORT` on mixed-DAE input. No native DAE assembler in the JS/TS ecosystem; expected to remain a pure-ODE binding unless a WASM DAE solver is vendored. | Deferred (TBD). | Env `ESM_DAE_SUPPORT=0`. |
 
@@ -69,3 +69,20 @@ MUST contain:
 
 See `tests/conformance/discretization/dae_missing/README.md` for the
 exact conformance harness expectations.
+
+### Trivial-factor bindings: `E_NONTRIVIAL_DAE`
+
+Bindings that use the trivial-factor strategy (Python, Go) emit a
+second error code, `E_NONTRIVIAL_DAE`, when an algebraic equation
+cannot be factored away (see the corresponding rows in the strategy
+table above). The message MUST contain:
+
+- The exact code string `E_NONTRIVIAL_DAE`.
+- A `models.<name>.equations[<i>]` path for each residual equation.
+- A pointer to the Julia binding as the current full-DAE-capable
+  implementation.
+- A citation of RFC §12.
+
+This code is specific to trivial-factor bindings — bindings that
+either (a) fully support DAEs or (b) stub as ODE-only do not need to
+emit it.
