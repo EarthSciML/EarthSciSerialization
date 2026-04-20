@@ -578,6 +578,17 @@ DiscreteEventTrigger(...)
 
 ---
 
+### Discretization
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+Discretization(...)
+```
+
+---
+
 ### Domain
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1308,6 +1319,17 @@ Qualified(...)
 **Signature:**
 ```julia
 QualifiedReferenceError(...)
+```
+
+---
+
+### RFC
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RFC(...)
 ```
 
 ---
@@ -3646,6 +3668,53 @@ Convert old-style Dict{String,Int} format to new StoichiometryEntry vector forma
 
 ---
 
+### discretize
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+discretize(...)
+```
+
+---
+
+### discretize
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/discretize.jl:45`
+
+**Signature:**
+```julia
+function discretize(esm::AbstractDict;
+```
+
+**Description:**
+discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true) -> Dict{String,Any}
+
+Run the RFC §11 discretization pipeline on an ESM document.
+
+`esm` is the parsed ESM payload as a `Dict{String,Any}` (the form produced
+by [`load`](@ref) followed by `_to_native_json`, or by direct JSON
+decoding). The function returns a new `Dict{String,Any}`; the input is not
+mutated.
+
+Behavior:
+
+- Every equation in every model, and every boundary condition `value`
+  expression, is first canonicalized per §5.4, then rewritten by the rule
+  engine built from `esm["rules"]` (optional top-level, per RFC §5.2) plus
+  any per-model `rules`, then canonicalized again.
+- `max_passes` is the per-expression rule-engine budget (§5.2.5).
+- With `strict_unrewritten=true` (the default) a rewritten expression that
+  still carries a PDE op (`grad`, `div`, `laplacian`, `D`, `bc`) raises
+  [`RuleEngineError`](@ref) with code `E_UNREWRITTEN_PDE_OP`. With
+  `strict_unrewritten=false` the offending equation/BC is instead marked
+  `passthrough: true` and retained verbatim.
+- `metadata.discretized_from` is set on the output to the input's
+  `metadata.name`.
+
+---
+
 ### display
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4313,6 +4382,17 @@ functions(...)
 
 ---
 
+### gbs2
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+gbs2(...)
+```
+
+---
+
 ### generation
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4448,6 +4528,17 @@ Get the domain of a system by name. Returns:
 - String: the domain name
 - nothing: system is 0D (no domain)
 - missing: system not found
+
+---
+
+### gt
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+gt(...)
+```
 
 ---
 
@@ -5138,6 +5229,17 @@ parse_units(...)
 **Signature:**
 ```julia
 path(...)
+```
+
+---
+
+### pipeline
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+pipeline(...)
 ```
 
 ---

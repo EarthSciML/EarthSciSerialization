@@ -223,6 +223,11 @@ RFC(...)
 RFC(...)
 ```
 
+**Julia:**
+```julia
+RFC(...)
+```
+
 ---
 
 ### Reaction
@@ -921,6 +926,24 @@ export function differentiate(expr: Expr, variable: string): DerivativeResult {
 
 ---
 
+### discretize
+
+**Julia:**
+```julia
+discretize(...)
+```
+
+**Julia:**
+```julia
+function discretize(esm::AbstractDict;
+```
+
+> discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true) -> Dict{String,Any}
+
+Run the RFC §11 discretization pipeline on an ESM document.
+
+---
+
 ### evaluate
 
 **Julia:**
@@ -1209,6 +1232,11 @@ def get_stats(self):
 ---
 
 ### gt
+
+**Julia:**
+```julia
+gt(...)
+```
 
 **Julia:**
 ```julia
