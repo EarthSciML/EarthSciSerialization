@@ -454,10 +454,30 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
         end
     end
 
+    explicit_lhs_names = Set{String}()
     for eq in model.equations
         lhs = namespace_expr(eq.lhs, prefix, local_names)
         rhs = namespace_expr(eq.rhs, prefix, local_names)
         push!(equations, Equation(lhs, rhs; _comment=eq._comment))
+        if lhs isa VarExpr
+            push!(explicit_lhs_names, lhs.name)
+        end
+    end
+
+    # Observed variables carry their defining expression in `expression`
+    # (per esm-spec §6.2: "must include an `expression` field"). Emit
+    # `obs ~ expression` as a flattened equation so the enclosing System
+    # is well-determined (one equation per observed var). Skip when an
+    # explicit `equations` entry already provides the definition — some
+    # fixtures use a sentinel `expression: 0.0` plus an explicit equation.
+    for (name, var) in model.variables
+        var.type == ObservedVariable || continue
+        var.expression === nothing && continue
+        namespaced = "$(prefix).$(name)"
+        namespaced in explicit_lhs_names && continue
+        lhs = VarExpr(namespaced)
+        rhs = namespace_expr(var.expression, prefix, local_names)
+        push!(equations, Equation(lhs, rhs))
     end
 
     for ev in model.continuous_events
