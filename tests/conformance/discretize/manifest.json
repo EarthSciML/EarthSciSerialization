@@ -1,0 +1,29 @@
+{
+  "category": "discretize",
+  "version": "1.0",
+  "description": "Step-1 end-to-end conformance fixtures for discretize() per RFC §11 (gt-l3dg). Inputs under inputs/, byte-identical canonical-JSON goldens under golden/. Paths are relative to this manifest's directory. Bindings MUST parse the input, call their discretize() with default options, emit canonical JSON (sorted keys, RFC §5.4.6 number format, minified), and match the golden byte-for-byte.",
+  "options": {
+    "max_passes": 32,
+    "strict_unrewritten": true
+  },
+  "fixtures": [
+    {
+      "id": "scalar_ode",
+      "input":  "inputs/scalar_ode.esm",
+      "golden": "golden/scalar_ode.json",
+      "tags": ["step1", "ode", "no-rules"]
+    },
+    {
+      "id": "heat_1d_centered_grad",
+      "input":  "inputs/heat_1d_centered_grad.esm",
+      "golden": "golden/heat_1d_centered_grad.json",
+      "tags": ["step1", "pde", "rules", "grid"]
+    },
+    {
+      "id": "bc_value_canonicalization",
+      "input":  "inputs/bc_value_canonicalization.esm",
+      "golden": "golden/bc_value_canonicalization.json",
+      "tags": ["step1", "boundary_conditions", "canonicalize"]
+    }
+  ]
+}
