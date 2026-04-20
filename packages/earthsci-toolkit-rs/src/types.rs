@@ -107,6 +107,46 @@ pub struct Metadata {
     /// Academic citations and references
     #[serde(skip_serializing_if = "Option::is_none")]
     pub references: Option<Vec<Reference>>,
+
+    /// System classification stamped by `discretize()` per RFC §12:
+    /// `"ode"` if no algebraic equations remain after discretization,
+    /// `"dae"` if any algebraic equations remain. Absent on undiscretized
+    /// inputs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_class: Option<String>,
+
+    /// DAE classification details stamped by `discretize()` per RFC §12.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dae_info: Option<DaeInfo>,
+
+    /// Provenance stamp: the `metadata.name` of the input ESM that
+    /// `discretize()` was called on. Absent on undiscretized inputs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discretized_from: Option<String>,
+}
+
+/// Summary of DAE classification stamped onto `metadata.dae_info` by
+/// `discretize()` per RFC §12.
+///
+/// `algebraic_equation_count` is the post-`discretize()` total across all
+/// models; `per_model` breaks it down by model name. `factored_equation_count`
+/// is rust-binding-specific — it reports the number of trivially
+/// substitutable algebraic equations the preprocessor eliminated before
+/// classification (see `docs/rfcs/dae-binding-strategies.md`). `0` on
+/// bindings that do not perform trivial factoring.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct DaeInfo {
+    /// Total algebraic equations remaining after `discretize()` completes.
+    pub algebraic_equation_count: usize,
+
+    /// Per-model count, keyed by model name.
+    pub per_model: HashMap<String, usize>,
+
+    /// rust-binding-specific: number of trivially substitutable algebraic
+    /// equations factored into the ODE system by the preprocessor. `None`
+    /// on bindings that do not factor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub factored_equation_count: Option<usize>,
 }
 
 /// Mathematical expression: a number literal, variable reference, or operator node.

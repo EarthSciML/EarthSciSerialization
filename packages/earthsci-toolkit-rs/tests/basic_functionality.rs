@@ -115,6 +115,9 @@ fn test_structural_validation() {
             license: None,
             tags: None,
             references: None,
+            system_class: None,
+            dae_info: None,
+            discretized_from: None,
         },
         models: Some(models),
         reaction_systems: None,
@@ -240,6 +243,9 @@ fn test_component_graph() {
         license: None,
         tags: None,
         references: None,
+        system_class: None,
+        dae_info: None,
+        discretized_from: None,
     };
 
     let model = Model {
@@ -341,8 +347,8 @@ fn test_editing() {
         expression: None,
         shape: None,
         location: None,
-            noise_kind: None,
-            correlation_group: None,
+        noise_kind: None,
+        correlation_group: None,
     };
 
     let updated_model = add_variable(&model, "k", new_var).expect("Failed to add variable");

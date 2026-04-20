@@ -799,8 +799,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
 
@@ -837,6 +837,9 @@ mod tests {
                 license: None,
                 tags: None,
                 references: None,
+                system_class: None,
+                dae_info: None,
+                discretized_from: None,
             },
             models: Some(models),
             reaction_systems: None,
@@ -878,8 +881,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
 
@@ -916,6 +919,9 @@ mod tests {
                 license: None,
                 tags: None,
                 references: None,
+                system_class: None,
+                dae_info: None,
+                discretized_from: None,
             },
             models: Some(models),
             reaction_systems: None,
@@ -960,8 +966,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
 
@@ -998,6 +1004,9 @@ mod tests {
                 license: None,
                 tags: None,
                 references: None,
+                system_class: None,
+                dae_info: None,
+                discretized_from: None,
             },
             models: Some(models),
             reaction_systems: None,
@@ -1042,8 +1051,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
         model_variables.insert(
@@ -1056,8 +1065,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
 
@@ -1094,6 +1103,9 @@ mod tests {
                 license: None,
                 tags: None,
                 references: None,
+                system_class: None,
+                dae_info: None,
+                discretized_from: None,
             },
             models: Some(models),
             reaction_systems: None,
@@ -1262,8 +1274,8 @@ mod tests {
                         expression: None,
                         shape: None,
                         location: None,
-            noise_kind: None,
-            correlation_group: None,
+                        noise_kind: None,
+                        correlation_group: None,
                     },
                 );
                 vars

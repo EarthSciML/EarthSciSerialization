@@ -35,6 +35,9 @@ fn empty_metadata() -> Metadata {
         modified: None,
         tags: None,
         references: None,
+        system_class: None,
+        dae_info: None,
+        discretized_from: None,
     }
 }
 
@@ -775,8 +778,8 @@ fn test_error_missing_initial_condition() {
         expression: None,
         shape: None,
         location: None,
-            noise_kind: None,
-            correlation_group: None,
+        noise_kind: None,
+        correlation_group: None,
     };
     // Force a state with no default
     state_x.default = None;

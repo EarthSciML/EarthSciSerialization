@@ -37,6 +37,7 @@
 //! ```
 
 pub mod canonicalize;
+pub mod dae;
 pub mod display;
 pub mod edit;
 pub mod error;
@@ -46,8 +47,8 @@ pub mod graph;
 pub mod migration;
 pub mod parse;
 pub mod reactions;
-pub mod rule_engine;
 pub mod ref_loading;
+pub mod rule_engine;
 pub mod serialize;
 pub mod substitute;
 pub mod types;
@@ -67,11 +68,7 @@ pub mod simulate_array;
 
 // Re-export main types
 pub use canonicalize::{CanonicalizeError, canonical_json, canonicalize, format_canonical_float};
-pub use rule_engine::{
-    DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
-    apply_bindings, check_guard, check_guards, check_unrewritten_pde_ops, match_pattern,
-    parse_expr, parse_rules, rewrite,
-};
+pub use dae::{DaeError, DiscretizeOptions, apply_dae_contract, default_dae_support, discretize};
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};
 pub use flatten::{
@@ -90,6 +87,11 @@ pub use reactions::{
     stoichiometric_matrix,
 };
 pub use ref_loading::resolve_subsystem_refs;
+pub use rule_engine::{
+    DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
+    apply_bindings, check_guard, check_guards, check_unrewritten_pde_ops, match_pattern,
+    parse_expr, parse_rules, rewrite,
+};
 pub use serialize::{save, save_compact};
 pub use substitute::{
     ScopedContext, substitute, substitute_in_model, substitute_in_model_with_context,
@@ -97,14 +99,13 @@ pub use substitute::{
     substitute_with_context,
 };
 pub use types::{
-    AffectEquation, AutoRecords, ContinuousEvent, CouplingEntry, DataLoader, DataLoaderKind,
-    DataLoaderMetadata, DataLoaderRegridding, DataLoaderSource, DataLoaderSpatial,
+    AffectEquation, AutoRecords, ContinuousEvent, CouplingEntry, DaeInfo, DataLoader,
+    DataLoaderKind, DataLoaderMetadata, DataLoaderRegridding, DataLoaderSource, DataLoaderSpatial,
     DataLoaderTemporal, DataLoaderVariable, DiscreteEvent, DiscreteEventTrigger, Domain, Equation,
     EsmFile, Expr, ExpressionNode, ExtrapolationMode, FunctionalAffect, Grid, GridConnectivity,
     GridExtent, GridMetricArray, GridMetricGenerator, GridType, Metadata, Model, ModelTest,
-    ModelTestAssertion, ModelVariable, Operator, Reaction, ReactionSystem, RecordsPerFile,
-    Species, StaggeringMode, StoichiometricEntry, TimeSpan, Tolerance, UnitConversion,
-    VariableType,
+    ModelTestAssertion, ModelVariable, Operator, Reaction, ReactionSystem, RecordsPerFile, Species,
+    StaggeringMode, StoichiometricEntry, TimeSpan, Tolerance, UnitConversion, VariableType,
 };
 pub use validate::{
     SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,

@@ -1,0 +1,23 @@
+{
+  "esm": "0.2.0",
+  "metadata": { "name": "trivial_observed" },
+  "models": {
+    "M": {
+      "variables": {
+        "x": { "type": "state",    "default": 1.0, "units": "1" },
+        "y": { "type": "observed", "units": "1", "expression": { "op": "^", "args": ["x", 2] } },
+        "k": { "type": "parameter","default": 0.5, "units": "1/s" }
+      },
+      "equations": [
+        {
+          "lhs": "y",
+          "rhs": { "op": "^", "args": ["x", 2] }
+        },
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [ { "op": "-", "args": ["k"] }, "y" ] }
+        }
+      ]
+    }
+  }
+}

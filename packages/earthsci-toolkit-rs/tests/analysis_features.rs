@@ -14,6 +14,9 @@ fn test_analysis_features_integration() {
         license: None,
         tags: None,
         references: None,
+        system_class: None,
+        dae_info: None,
+        discretized_from: None,
     };
 
     let mut variables = HashMap::new();
@@ -248,8 +251,8 @@ fn test_editing_operations() {
         expression: None,
         shape: None,
         location: None,
-            noise_kind: None,
-            correlation_group: None,
+        noise_kind: None,
+        correlation_group: None,
     };
 
     let updated_model = add_variable(&model, "test_k", new_var).expect("Failed to add variable");

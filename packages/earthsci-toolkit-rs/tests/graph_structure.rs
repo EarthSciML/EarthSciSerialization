@@ -18,6 +18,9 @@ fn test_component_graph_generation() {
         license: None,
         tags: None,
         references: None,
+        system_class: None,
+        dae_info: None,
+        discretized_from: None,
     };
 
     let mut variables = HashMap::new();
@@ -141,6 +144,9 @@ fn test_component_graph_exports() {
         license: None,
         tags: None,
         references: None,
+        system_class: None,
+        dae_info: None,
+        discretized_from: None,
     };
 
     let model = Model {
@@ -401,6 +407,9 @@ fn test_component_existence() {
         license: None,
         tags: None,
         references: None,
+        system_class: None,
+        dae_info: None,
+        discretized_from: None,
     };
 
     let model = Model {

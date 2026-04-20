@@ -382,6 +382,9 @@ pub fn flatten_model(model: &Model) -> Result<FlattenedSystem, FlattenError> {
             modified: None,
             tags: None,
             references: None,
+            system_class: None,
+            dae_info: None,
+            discretized_from: None,
         },
         models: Some(models),
         reaction_systems: None,
@@ -505,8 +508,8 @@ fn build_reaction_block(
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
     }
@@ -526,8 +529,8 @@ fn build_reaction_block(
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
     }
@@ -975,6 +978,9 @@ mod tests {
             modified: None,
             tags: None,
             references: None,
+            system_class: None,
+            dae_info: None,
+            discretized_from: None,
         }
     }
 
@@ -1014,8 +1020,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
         vars.insert(
@@ -1028,8 +1034,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
 

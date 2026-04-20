@@ -24,6 +24,9 @@ fn empty_metadata() -> Metadata {
         modified: None,
         tags: None,
         references: None,
+        system_class: None,
+        dae_info: None,
+        discretized_from: None,
     }
 }
 

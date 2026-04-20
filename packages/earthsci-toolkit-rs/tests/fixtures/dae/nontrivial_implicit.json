@@ -1,0 +1,28 @@
+{
+  "esm": "0.2.0",
+  "metadata": { "name": "nontrivial_implicit" },
+  "models": {
+    "Circle": {
+      "variables": {
+        "x": { "type": "state", "default": 1.0, "units": "1" },
+        "y": { "type": "state", "default": 0.0, "units": "1" }
+      },
+      "equations": [
+        {
+          "lhs": {
+            "op": "+",
+            "args": [
+              { "op": "^", "args": ["x", 2] },
+              { "op": "^", "args": ["y", 2] }
+            ]
+          },
+          "rhs": 1
+        },
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": "y"
+        }
+      ]
+    }
+  }
+}

@@ -617,6 +617,9 @@ mod tests {
                 license: None,
                 tags: None,
                 references: None,
+                system_class: None,
+                dae_info: None,
+                discretized_from: None,
             },
             models: None,
             reaction_systems: None,
@@ -717,8 +720,8 @@ mod tests {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
 

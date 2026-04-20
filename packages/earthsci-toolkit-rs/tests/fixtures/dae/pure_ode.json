@@ -1,0 +1,18 @@
+{
+  "esm": "0.2.0",
+  "metadata": { "name": "pure_ode" },
+  "models": {
+    "M": {
+      "variables": {
+        "x": { "type": "state",     "default": 1.0, "units": "1" },
+        "k": { "type": "parameter", "default": 0.5, "units": "1/s" }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [ { "op": "-", "args": ["k"] }, "x" ] }
+        }
+      ]
+    }
+  }
+}
