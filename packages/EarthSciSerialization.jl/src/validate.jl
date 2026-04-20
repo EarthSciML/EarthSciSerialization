@@ -136,6 +136,7 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
             append!(errors, validate_event_consistency(model, "models.$model_name"))
             append!(errors, validate_model_gradient_units(file, model, "/models/$model_name"))
             append!(errors, validate_physical_constant_units(model, "/models/$model_name"))
+            append!(errors, validate_conversion_factor_consistency(model, "/models/$model_name"))
         end
     end
 
@@ -1248,6 +1249,89 @@ function validate_physical_constant_units(model::Model, path::String)::Vector{St
     # Recurse into subsystems
     for (subsys_name, subsys) in model.subsystems
         append!(errors, validate_physical_constant_units(subsys, "$path/subsystems/$subsys_name"))
+    end
+
+    return errors
+end
+
+# Compute the linear conversion factor from `from_units` to `to_units`, or
+# `nothing` when the conversion is affine (e.g., degC → K) or the units can't
+# be parsed/converted. A conversion is linear iff 0 `from_units` converts to
+# 0 `to_units` (within tolerance).
+function _linear_conversion_factor(from_units::String, to_units::String)::Union{Float64,Nothing}
+    from_unit = parse_units(from_units)
+    to_unit = parse_units(to_units)
+    (from_unit === nothing || to_unit === nothing) && return nothing
+    dimension(from_unit) == dimension(to_unit) || return nothing
+    try
+        q0 = Unitful.ustrip(Unitful.uconvert(to_unit, 0.0 * from_unit))
+        q1 = Unitful.ustrip(Unitful.uconvert(to_unit, 1.0 * from_unit))
+        abs(q0) > 1e-12 && return nothing  # affine
+        return Float64(q1)
+    catch
+        return nothing
+    end
+end
+
+"""
+    validate_conversion_factor_consistency(model::Model, path::String) -> Vector{StructuralError}
+
+Flag observed variables whose defining expression is `<numeric> * <var>`
+(or `<var> * <numeric>`) where the declared units and the source variable's
+units are dimensionally compatible but the numeric literal disagrees with the
+correct linear conversion factor. Only linear (non-affine) conversions are
+checked. Mirrors Python's `parse._check_conversion_factor_consistency`
+(gt-nvdv). Recurses into subsystems.
+"""
+function validate_conversion_factor_consistency(model::Model, path::String)::Vector{StructuralError}
+    errors = StructuralError[]
+
+    for (vname, var) in model.variables
+        var.type == ObservedVariable || continue
+        lhs_units = var.units
+        (lhs_units === nothing || isempty(lhs_units)) && continue
+        expr = var.expression
+        expr isa OpExpr || continue
+        expr.op == "*" || continue
+        length(expr.args) == 2 || continue
+
+        numeric = nothing
+        var_ref = nothing
+        for a in expr.args
+            if a isa NumExpr
+                numeric = Float64(a.value)
+            elseif a isa IntExpr
+                numeric = Float64(a.value)
+            elseif a isa VarExpr
+                var_ref = a.name
+            end
+        end
+        (numeric === nothing || var_ref === nothing) && continue
+
+        src_var = get(model.variables, var_ref, nothing)
+        src_var === nothing && continue
+        src_units = src_var.units
+        (src_units === nothing || isempty(src_units)) && continue
+
+        # Skip identical unit strings — no conversion to check.
+        src_units == lhs_units && continue
+
+        factor = _linear_conversion_factor(String(src_units), String(lhs_units))
+        (factor === nothing || factor == 0) && continue
+        abs(numeric - factor) <= 1e-9 * max(abs(factor), 1.0) && continue
+
+        push!(errors, StructuralError(
+            "$path/variables/$vname",
+            "Unit conversion factor is incorrect for specified unit transformation " *
+            "(variable '$vname', declared_units='$lhs_units', source_units='$src_units', " *
+            "declared_factor=$numeric, expected_factor=$factor)",
+            "unit_inconsistency",
+        ))
+    end
+
+    # Recurse into subsystems
+    for (subsys_name, subsys) in model.subsystems
+        append!(errors, validate_conversion_factor_consistency(subsys, "$path/subsystems/$subsys_name"))
     end
 
     return errors
