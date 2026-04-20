@@ -1586,11 +1586,16 @@ exercise rules with `produces: algebraic` once that mechanism lands
    algebraic equations are present as constraints, not as ODE terms.
 
 Binding coverage: Julia and Rust MUST implement both the success and
-the disabled-DAE paths. Python, Go, and TS MAY stub the DAE-success
-path (return `E_NO_DAE_SUPPORT` always) in v0.2.0; they MUST still
-emit the exact error code on the failure path. Bindings that gain DAE
-support in subsequent minor versions extend the success-path coverage
-without a spec change.
+the disabled-DAE paths. Python and TS MAY stub the DAE-success path
+(return `E_NO_DAE_SUPPORT` always) in v0.2.0; they MUST still emit
+the exact error code on the failure path. Go implements a
+**trivial-factor** strategy (see `dae-binding-strategies.md`): it
+symbolically substitutes and removes `y ~ f(...)` observed-style
+algebraic equations where `y` does not appear in `f`, classifies the
+result as `"ode"` when no algebraic equation remains, and aborts with
+`E_NONTRIVIAL_DAE` (not `E_NO_DAE_SUPPORT`) otherwise. Bindings that
+gain DAE support in subsequent minor versions extend the success-path
+coverage without a spec change.
 
 ## 13. Conformance
 
