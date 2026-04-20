@@ -245,6 +245,12 @@ enum Commands {
         #[arg(value_name = "FILE")]
         file: Option<PathBuf>,
     },
+    /// Generate cross-language conformance results artifact
+    ConformanceTest {
+        /// Output directory where results.json will be written
+        #[arg(value_name = "OUTPUT_DIR")]
+        output_dir: PathBuf,
+    },
 }
 
 #[cfg(feature = "cli")]
@@ -3311,9 +3317,296 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Interactive REPL not yet implemented");
             println!("Type 'exit' to quit (if it were implemented)");
         }
+
+        Commands::ConformanceTest { output_dir } => {
+            run_conformance_test(&output_dir)?;
+        }
     }
 
     Ok(())
+}
+
+#[cfg(feature = "cli")]
+fn run_conformance_test(output_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    // Project root is two levels up from the crate manifest dir
+    // (packages/earthsci-toolkit-rs -> project root).
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..");
+    let tests_dir = project_root.join("tests");
+
+    println!("Running Rust conformance tests...");
+    println!("Tests directory: {}", tests_dir.display());
+    println!("Output directory: {}", output_dir.display());
+
+    let mut errors: Vec<String> = Vec::new();
+
+    let validation_results = match run_conformance_validation(&tests_dir) {
+        Ok(v) => {
+            println!("✓ Validation tests completed");
+            v
+        }
+        Err(e) => {
+            errors.push(format!("Validation tests failed: {}", e));
+            println!("✗ Validation tests failed: {}", e);
+            serde_json::json!({})
+        }
+    };
+
+    let display_results = match run_conformance_display(&tests_dir) {
+        Ok(v) => {
+            println!("✓ Display tests completed");
+            v
+        }
+        Err(e) => {
+            errors.push(format!("Display tests failed: {}", e));
+            println!("✗ Display tests failed: {}", e);
+            serde_json::json!({})
+        }
+    };
+
+    let arrayop_results = match run_conformance_arrayop(&tests_dir) {
+        Ok(v) => {
+            println!("✓ Arrayop tests completed");
+            v
+        }
+        Err(e) => {
+            errors.push(format!("Arrayop tests failed: {}", e));
+            println!("✗ Arrayop tests failed: {}", e);
+            serde_json::json!({})
+        }
+    };
+
+    // Rust binding does not yet expose substitution or graph serialization paths
+    // comparable to the Python runner; emit empty maps so the schema matches.
+    let substitution_results = serde_json::json!({});
+    let graph_results = serde_json::json!({});
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_else(|_| "0".to_string());
+
+    let results = serde_json::json!({
+        "language": "rust",
+        "timestamp": timestamp,
+        "validation_results": validation_results,
+        "display_results": display_results,
+        "substitution_results": substitution_results,
+        "graph_results": graph_results,
+        "arrayop_results": arrayop_results,
+        "errors": errors,
+    });
+
+    fs::create_dir_all(output_dir)?;
+    let results_file = output_dir.join("results.json");
+    fs::write(&results_file, serde_json::to_string_pretty(&results)?)?;
+    println!("Rust conformance results written to: {}", results_file.display());
+
+    if errors.is_empty() {
+        println!("Rust conformance testing completed successfully!");
+        Ok(())
+    } else {
+        println!(
+            "Rust conformance testing completed with {} errors",
+            errors.len()
+        );
+        std::process::exit(1);
+    }
+}
+
+#[cfg(feature = "cli")]
+fn run_conformance_validation(
+    tests_dir: &std::path::Path,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    println!("Running validation tests...");
+    let mut out = serde_json::Map::new();
+
+    for (label, subdir) in [("valid", "valid"), ("invalid", "invalid")] {
+        let dir = tests_dir.join(subdir);
+        if !dir.is_dir() {
+            continue;
+        }
+        let mut per_dir = serde_json::Map::new();
+        let mut entries: Vec<PathBuf> = fs::read_dir(&dir)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("esm"))
+            .collect();
+        entries.sort();
+
+        for path in entries {
+            let name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            let entry = match fs::read_to_string(&path) {
+                Ok(content) => {
+                    let result = validate_complete(&content);
+                    serde_json::json!({
+                        "is_valid": result.is_valid,
+                        "schema_errors": result.schema_errors,
+                        "structural_errors": result.structural_errors,
+                        "parsed_successfully": true,
+                    })
+                }
+                Err(e) => serde_json::json!({
+                    "parsed_successfully": false,
+                    "error": e.to_string(),
+                    "error_type": "io",
+                    "is_expected_error": label == "invalid",
+                }),
+            };
+            per_dir.insert(name, entry);
+        }
+        out.insert(label.to_string(), serde_json::Value::Object(per_dir));
+    }
+
+    Ok(serde_json::Value::Object(out))
+}
+
+#[cfg(feature = "cli")]
+fn run_conformance_display(
+    tests_dir: &std::path::Path,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    println!("Running display tests...");
+    let mut out = serde_json::Map::new();
+
+    let dir = tests_dir.join("display");
+    if !dir.is_dir() {
+        return Ok(serde_json::Value::Object(out));
+    }
+    let mut entries: Vec<PathBuf> = fs::read_dir(&dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("json"))
+        .collect();
+    entries.sort();
+
+    for path in entries {
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let entry = match fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).map_err(|e| e.to_string()))
+        {
+            Ok(v) => {
+                let mut expressions = Vec::new();
+                collect_expression_inputs(&v, &mut expressions);
+                serde_json::json!({ "expressions": expressions })
+            }
+            Err(e) => serde_json::json!({ "error": e, "success": false }),
+        };
+        out.insert(name, entry);
+    }
+
+    Ok(serde_json::Value::Object(out))
+}
+
+#[cfg(feature = "cli")]
+fn collect_expression_inputs(v: &serde_json::Value, out: &mut Vec<serde_json::Value>) {
+    match v {
+        serde_json::Value::Object(map) => {
+            if let Some(input) = map.get("input") {
+                if input.is_object() {
+                    // Try to deserialize as Expr and render.
+                    match serde_json::from_value::<earthsci_toolkit::Expr>(input.clone()) {
+                        Ok(expr) => {
+                            out.push(serde_json::json!({
+                                "input": input,
+                                "output_unicode": earthsci_toolkit::to_unicode(&expr),
+                                "output_latex": earthsci_toolkit::to_latex(&expr),
+                                "output_ascii": earthsci_toolkit::to_ascii(&expr),
+                                "success": true,
+                            }));
+                        }
+                        Err(e) => {
+                            out.push(serde_json::json!({
+                                "input": input,
+                                "error": e.to_string(),
+                                "success": false,
+                            }));
+                        }
+                    }
+                }
+            }
+            for (_k, child) in map {
+                collect_expression_inputs(child, out);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for child in arr {
+                collect_expression_inputs(child, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(feature = "cli")]
+fn run_conformance_arrayop(
+    tests_dir: &std::path::Path,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    println!("Running arrayop tests...");
+    let mut out = serde_json::Map::new();
+
+    let dir = tests_dir.join("fixtures").join("arrayop");
+    if !dir.is_dir() {
+        return Ok(serde_json::Value::Object(out));
+    }
+    let mut entries: Vec<PathBuf> = fs::read_dir(&dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("esm"))
+        .collect();
+    entries.sort();
+
+    for path in entries {
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Validate + round-trip-parse. Actuals filled in when Rust gains a
+        // simulate path on the conformance runner (gt-4g0 follow-up).
+        let entry = match fs::read_to_string(&path) {
+            Ok(content) => {
+                let validation = validate_complete(&content);
+                let (round_trip_ok, round_trip_error) = match load(&content) {
+                    Ok(esm_file) => match save(&esm_file) {
+                        Ok(reserialized) => match load(&reserialized) {
+                            Ok(reparsed) => {
+                                let orig_json = serde_json::to_value(&esm_file).ok();
+                                let reparsed_json = serde_json::to_value(&reparsed).ok();
+                                (orig_json == reparsed_json, None)
+                            }
+                            Err(e) => (false, Some(format!("reparse: {}", e))),
+                        },
+                        Err(e) => (false, Some(format!("save: {}", e))),
+                    },
+                    Err(e) => (false, Some(format!("load: {}", e))),
+                };
+                serde_json::json!({
+                    "parsed_successfully": round_trip_error.is_none()
+                        || !matches!(round_trip_error.as_deref(), Some(s) if s.starts_with("load:")),
+                    "is_valid": validation.is_valid,
+                    "schema_errors": validation.schema_errors,
+                    "structural_errors": validation.structural_errors,
+                    "round_trip_ok": round_trip_ok,
+                    "round_trip_error": round_trip_error,
+                })
+            }
+            Err(e) => serde_json::json!({
+                "parsed_successfully": false,
+                "error": e.to_string(),
+            }),
+        };
+        out.insert(name, entry);
+    }
+
+    Ok(serde_json::Value::Object(out))
 }
 
 #[cfg(not(feature = "cli"))]
