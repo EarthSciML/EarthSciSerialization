@@ -423,14 +423,21 @@ struct Model
     domain::Union{String,Nothing}
     tolerance::Union{Tolerance,Nothing}
     tests::Vector{Test}
+    initialization_equations::Vector{Equation}
+    guesses::Dict{String,Union{Float64,Expr}}
+    system_kind::Union{String,Nothing}
 
     # Primary constructor with separate event arrays
     Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
           subsystems::Dict{String,Model};
-          domain=nothing, tolerance=nothing, tests=Test[]) =
+          domain=nothing, tolerance=nothing, tests=Test[],
+          initialization_equations=Equation[],
+          guesses=Dict{String,Union{Float64,Expr}}(),
+          system_kind=nothing) =
         new(variables, equations, discrete_events, continuous_events, subsystems,
-            domain, tolerance, tests)
+            domain, tolerance, tests,
+            initialization_equations, guesses, system_kind)
 
     # Convenience constructor with optional events and subsystems.
     # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
@@ -443,7 +450,10 @@ struct Model
                    subsystems=Dict{String,Model}(),
                    domain=nothing,
                    tolerance=nothing,
-                   tests=Test[])
+                   tests=Test[],
+                   initialization_equations=Equation[],
+                   guesses=Dict{String,Union{Float64,Expr}}(),
+                   system_kind=nothing)
         if events !== nothing
             discrete_events = DiscreteEvent[]
             continuous_events = ContinuousEvent[]
@@ -458,7 +468,8 @@ struct Model
             end
         end
         return new(variables, equations, discrete_events, continuous_events, subsystems,
-                   domain, tolerance, tests)
+                   domain, tolerance, tests,
+                   initialization_equations, guesses, system_kind)
     end
 end
 

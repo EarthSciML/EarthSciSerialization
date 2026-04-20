@@ -215,6 +215,9 @@ fn flatten_mixed_model_and_reaction_system() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
 
@@ -400,6 +403,9 @@ fn flatten_conflicting_derivative_raises_error() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
 
@@ -510,6 +516,9 @@ fn flatten_operator_compose_sums_matched_rhses() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
     models.insert(
@@ -537,6 +546,9 @@ fn flatten_operator_compose_sums_matched_rhses() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
 
@@ -652,6 +664,9 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
     models.insert(
@@ -670,6 +685,9 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
 
@@ -745,6 +763,9 @@ fn flatten_couple_includes_connector_equations() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
     // Connector with one equation: lhs Variable "bridge", rhs Variable "A.x"
@@ -819,6 +840,9 @@ fn flatten_model_wraps_and_namespaces_under_declared_name() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
     let flat = flatten_model(&model).unwrap();
     assert!(flat.state_variables.contains_key("Nested.q"));
@@ -872,6 +896,9 @@ fn flatten_rejects_spatial_operators() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
     let file = EsmFile {
@@ -934,6 +961,9 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         },
     );
     let file = EsmFile {

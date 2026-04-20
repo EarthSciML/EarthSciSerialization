@@ -106,6 +106,11 @@ class Model:
     tests: List['Test'] = field(default_factory=list)
     # Inline illustrative examples (esm-spec §6.7).
     examples: List['Example'] = field(default_factory=list)
+    # Initialization-only equations (hold at t=0) and solver guesses (gt-ebuq).
+    initialization_equations: List[Equation] = field(default_factory=list)
+    guesses: Dict[str, Union[float, 'Expr']] = field(default_factory=dict)
+    # MTK system-kind discriminator: "ode" (default), "nonlinear", "sde", "pde".
+    system_kind: Optional[str] = None
 
 
 @dataclass

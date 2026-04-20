@@ -214,6 +214,9 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     })
 }
 

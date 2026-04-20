@@ -537,6 +537,18 @@ const schema = {
           "description": "Array of {lhs, rhs} equation objects.",
           "items": { "$ref": "#/$defs/Equation" }
         },
+        "initialization_equations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Equation" }
+        },
+        "guesses": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
+        },
+        "system_kind": {
+          "type": "string",
+          "enum": ["ode", "nonlinear", "sde", "pde"]
+        },
         "discrete_events": {
           "type": "array",
           "items": { "$ref": "#/$defs/DiscreteEvent" }

@@ -860,6 +860,9 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `equations` | ✓ | Array of `{lhs, rhs}` equation objects |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
+| `initialization_equations` | | Equations that hold only at t=0, solved before time-stepping begins. Typical uses: aerosol equilibrium / plume-rise style models (`system_kind='nonlinear'`) that need extra constraints for initialization, and ODE models whose initial state is determined by solving an auxiliary system. |
+| `guesses` | | Initial-guess seeds for nonlinear solvers during initialization, keyed by variable name. Values are `Expression` graphs (numbers, strings, or nodes). |
+| `system_kind` | | Discriminates the MTK system type: `"ode"` (default; time-stepped), `"nonlinear"` (algebraic-only equilibrium — no time derivative), `"sde"` (stochastic — brownian variables present), `"pde"` (spatial domain + differential operators). Each binding's MTK integration uses this to select between `System`, `NonlinearSystem`, `SDESystem`, and `PDESystem` constructors. |
 | `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.6). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.5). |
 | `tolerance` | | Model-level default numerical tolerance used by tests (see Section 6.6). Object with optional `abs` and/or `rel` fields. |
 | `tests` | | Inline validation tests that exercise this model in isolation (see Section 6.6). |

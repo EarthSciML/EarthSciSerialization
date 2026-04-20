@@ -520,6 +520,21 @@ def _parse_model(model_data: Dict[str, Any]) -> Model:
     if "examples" in model_data:
         model.examples = [_parse_example(e) for e in model_data["examples"]]
 
+    if "initialization_equations" in model_data and model_data["initialization_equations"] is not None:
+        model.initialization_equations = [
+            _parse_equation(eq) for eq in model_data["initialization_equations"]
+        ]
+    if "guesses" in model_data and model_data["guesses"] is not None:
+        guesses: Dict[str, Any] = {}
+        for var_name, seed in model_data["guesses"].items():
+            if isinstance(seed, (int, float)) and not isinstance(seed, bool):
+                guesses[var_name] = float(seed)
+            else:
+                guesses[var_name] = _parse_expression(seed)
+        model.guesses = guesses
+    if "system_kind" in model_data and model_data["system_kind"] is not None:
+        model.system_kind = model_data["system_kind"]
+
     return model
 
 

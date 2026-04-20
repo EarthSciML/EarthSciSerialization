@@ -229,6 +229,9 @@ fn test_model_substitution() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     // Create substitutions

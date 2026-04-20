@@ -96,6 +96,9 @@ fn test_structural_validation() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     let mut models = HashMap::new();
@@ -251,6 +254,9 @@ fn test_component_graph() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     let mut models = HashMap::new();
@@ -319,6 +325,9 @@ fn test_editing() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     // Test adding variables

@@ -44,6 +44,9 @@ fn test_undefined_variable_in_model() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     let mut models = HashMap::new();
@@ -146,6 +149,9 @@ fn test_equation_count_mismatch() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     let mut models = HashMap::new();
@@ -345,6 +351,9 @@ fn test_valid_file_passes() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     let mut models = HashMap::new();

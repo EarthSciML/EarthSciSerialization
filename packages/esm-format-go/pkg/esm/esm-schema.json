@@ -567,6 +567,21 @@
           "description": "Array of {lhs, rhs} equation objects.",
           "items": { "$ref": "#/$defs/Equation" }
         },
+        "initialization_equations": {
+          "type": "array",
+          "description": "Equations that hold only at t=0 (not dynamically). Used by models whose initialization requires solving an auxiliary system before time-stepping begins (e.g. aerosol equilibrium, plume rise). Each entry is a {lhs, rhs} equation evaluated/solved at t=0.",
+          "items": { "$ref": "#/$defs/Equation" }
+        },
+        "guesses": {
+          "type": "object",
+          "description": "Initial-guess seeds for nonlinear solvers during initialization, keyed by variable name. Values are Expression graphs (numbers, strings, or ExpressionNode).",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
+        },
+        "system_kind": {
+          "type": "string",
+          "description": "Discriminates the MTK system type this model maps to. Defaults to 'ode' (time-stepping). 'nonlinear' for algebraic-only systems (no time derivative; e.g. aerosol equilibrium, Mogi). 'sde' when brownian variables are present. 'pde' for models with a spatial domain plus differential operators (often implied by the domain field; set explicitly to disambiguate).",
+          "enum": ["ode", "nonlinear", "sde", "pde"]
+        },
         "discrete_events": {
           "type": "array",
           "items": { "$ref": "#/$defs/DiscreteEvent" }

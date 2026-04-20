@@ -1,0 +1,71 @@
+{
+  "esm": "0.2.0",
+  "metadata": {
+    "name": "IsorropiaShape",
+    "description": "Minimal ISORROPIA-shaped aerosol equilibrium: a nonlinear (algebraic-only) model whose unknowns are determined by algebraic equations plus extra initialization constraints with solver guesses. Exercises Model.system_kind='nonlinear', initialization_equations, and guesses.",
+    "authors": ["gt-ebuq"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["nonlinear", "initialization", "guesses", "aerosol", "regression"]
+  },
+  "models": {
+    "IsorropiaEq": {
+      "system_kind": "nonlinear",
+      "variables": {
+        "H": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 1.0e-6,
+          "description": "Aqueous H+ concentration"
+        },
+        "SO4": {
+          "type": "state",
+          "units": "mol/m^3",
+          "default": 1.0e-6,
+          "description": "Aqueous SO4(2-) concentration"
+        },
+        "Ksp": {
+          "type": "parameter",
+          "units": "mol^2/m^6",
+          "default": 1.0e-12,
+          "description": "Solubility-product constant"
+        },
+        "T_SO4": {
+          "type": "parameter",
+          "units": "mol/m^3",
+          "default": 1.0e-5,
+          "description": "Total sulfate loading"
+        }
+      },
+      "equations": [
+        {
+          "lhs": "H",
+          "rhs": {
+            "op": "*",
+            "args": [2, "SO4"]
+          }
+        },
+        {
+          "lhs": {
+            "op": "*",
+            "args": ["H", "H", "SO4"]
+          },
+          "rhs": "Ksp"
+        }
+      ],
+      "initialization_equations": [
+        {
+          "lhs": "SO4",
+          "rhs": "T_SO4"
+        },
+        {
+          "lhs": "H",
+          "rhs": 1.0e-6
+        }
+      ],
+      "guesses": {
+        "H": 1.0e-6,
+        "SO4": 1.0e-5
+      }
+    }
+  }
+}

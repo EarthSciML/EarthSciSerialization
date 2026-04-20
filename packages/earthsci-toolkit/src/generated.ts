@@ -465,6 +465,98 @@ export type InitialConditions =
       };
     };
 /**
+ * A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.
+ */
+export type PatternNode =
+  | number
+  | string
+  | boolean
+  | null
+  | {
+      [k: string]: unknown;
+    }
+  | PatternNode[];
+/**
+ * Discretization stencil neighbor selector (RFC §4, §7.2). The selector.kind tag discriminates between cartesian, panel, indirect, and reduction selectors. Additional per-kind fields are permitted so that pattern variables such as $x can appear in e.g. axis/offset positions.
+ */
+export type NeighborSelector = NeighborSelector1 & {
+  /**
+   * Selector family; must agree with the enclosing Discretization's grid_family (cartesian↔cartesian, cubed_sphere↔panel, unstructured↔indirect|reduction).
+   */
+  kind: "cartesian" | "panel" | "indirect" | "reduction";
+  /**
+   * cartesian: axis name (string or pattern variable e.g. "$x"). Ignored for other kinds.
+   */
+  axis?: {
+    [k: string]: unknown;
+  };
+  /**
+   * cartesian: integer offset along the axis. May be a pattern variable or an expression node for symbolic strides.
+   */
+  offset?: {
+    [k: string]: unknown;
+  };
+  /**
+   * panel: cubed-sphere face side identifier ("east", "west", "north", "south", "ne", "nw", "se", "sw") or a pattern variable.
+   */
+  side?: string | number;
+  /**
+   * panel: local panel-i displacement (integer or pattern variable).
+   */
+  di?: {
+    [k: string]: unknown;
+  };
+  /**
+   * panel: local panel-j displacement (integer or pattern variable).
+   */
+  dj?: {
+    [k: string]: unknown;
+  };
+  /**
+   * A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.
+   */
+  index_expr?:
+    | number
+    | string
+    | boolean
+    | null
+    | {
+        [k: string]: unknown;
+      }
+    | PatternNode[];
+  /**
+   * reduction/indirect: name of the connectivity array (e.g. "edgesOnCell") providing the neighbor list; referenced inside coeff via index(table, $target, k).
+   */
+  table?: string;
+  /**
+   * A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.
+   */
+  count_expr?:
+    | number
+    | string
+    | boolean
+    | null
+    | {
+        [k: string]: unknown;
+      }
+    | PatternNode[];
+  /**
+   * reduction: name of the local iteration index (in scope inside coeff alongside $target); conventionally "k".
+   */
+  k_bound?: string;
+  /**
+   * reduction: how element contributions combine across the neighbor loop (default "+" when omitted).
+   */
+  combine?: "+" | "*" | "min" | "max";
+};
+export type NeighborSelector1 = {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+};
+/**
  * A named discretization grid. The `family` selects one of three topologies (cartesian / unstructured / cubed_sphere) per docs/rfcs/discretization.md §6.1-§6.4. Each grid also carries optional staggering locations, metric array declarations, and its own parameter block reusing the ordinary ESM Parameter schema.
  */
 export type Grid = Grid1 & {
@@ -618,6 +710,12 @@ export interface ESMFormat2 {
     [k: string]: Interface;
   };
   /**
+   * Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. See discretization RFC §7.
+   */
+  discretizations?: {
+    [k: string]: Discretization;
+  };
+  /**
    * Named discretization grids (v0.2.0). Each entry declares a cartesian/unstructured/cubed_sphere topology with dimensions, staggering locations, metric arrays, and (for unstructured/cubed-sphere) connectivity tables. See docs/rfcs/discretization.md §6.
    */
   grids?: {
@@ -678,6 +776,20 @@ export interface Model {
    * Array of {lhs, rhs} equation objects.
    */
   equations: Equation[];
+  /**
+   * Equations that hold only at t=0 (not dynamically). Used by models whose initialization requires solving an auxiliary system before time-stepping begins (e.g. aerosol equilibrium, plume rise). Each entry is a {lhs, rhs} equation evaluated/solved at t=0.
+   */
+  initialization_equations?: Equation[];
+  /**
+   * Initial-guess seeds for nonlinear solvers during initialization, keyed by variable name. Values are Expression graphs (numbers, strings, or ExpressionNode).
+   */
+  guesses?: {
+    [k: string]: Expression;
+  };
+  /**
+   * Discriminates the MTK system type this model maps to. Defaults to 'ode' (time-stepping). 'nonlinear' for algebraic-only systems (no time derivative; e.g. aerosol equilibrium, Mogi). 'sde' when brownian variables are present. 'pde' for models with a spatial domain plus differential operators (often implied by the domain field; set explicitly to disambiguate).
+   */
+  system_kind?: "ode" | "nonlinear" | "sde" | "pde";
   discrete_events?: DiscreteEvent[];
   continuous_events?: ContinuousEvent[];
   /**
@@ -1638,6 +1750,95 @@ export interface InterfaceConstraint {
    * Where the dimension is constrained: 'min', 'max', 'boundary', or a numeric coordinate.
    */
   value: ("min" | "max" | "boundary") | number;
+  description?: string;
+}
+/**
+ * A named stencil template. Each entry maps a PDE operator class (via an applies_to pattern) to a combination (combine) over neighbors with symbolic coefficients. See RFC §7.1.
+ */
+export interface Discretization {
+  /**
+   * Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1).
+   */
+  applies_to:
+    | number
+    | string
+    | boolean
+    | null
+    | {
+        [k: string]: unknown;
+      }
+    | PatternNode[];
+  /**
+   * Grid family this scheme targets; the stencil's selector.kind must match this family.
+   */
+  grid_family: "cartesian" | "cubed_sphere" | "unstructured";
+  /**
+   * How stencil entries are combined.
+   */
+  combine?: "+" | "*" | "min" | "max";
+  /**
+   * Array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1).
+   *
+   * @minItems 1
+   */
+  stencil: [StencilEntry, ...StencilEntry[]];
+  /**
+   * Informational: truncation order (e.g. "O(dx^2)").
+   */
+  accuracy?: string;
+  /**
+   * If set, the operand variable must carry one of these staggered-grid locations.
+   */
+  requires_locations?: string[];
+  /**
+   * Staggered-grid location the scheme emits (e.g. "cell_center", "edge_normal"). Used to pin $target on unstructured grids (RFC §7.1.1).
+   */
+  emits_location?: string;
+  /**
+   * Reserved name for the target index binding.
+   */
+  target_binding?: string;
+  /**
+   * Optional ghost-cell variable declarations used by the scheme.
+   */
+  ghost_vars?: GhostVarDecl[];
+  /**
+   * Optional list of free pattern-variable names (e.g. ["$u", "$x"]) that the scheme expects the triggering rule to bind; informational / for validator use.
+   */
+  free_variables?: string[];
+  description?: string;
+  reference?: Reference;
+}
+/**
+ * One neighbor contribution to a discretization stencil: a selector picking out the neighbor(s) and a coefficient expression.
+ */
+export interface StencilEntry {
+  selector: NeighborSelector;
+  /**
+   * A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.
+   */
+  coeff:
+    | number
+    | string
+    | boolean
+    | null
+    | {
+        [k: string]: unknown;
+      }
+    | PatternNode[];
+}
+/**
+ * Optional ghost-cell variable declaration used by a discretization scheme (e.g. a periodic-BC halo). See RFC §9 for boundary-condition interaction.
+ */
+export interface GhostVarDecl {
+  /**
+   * Ghost variable name.
+   */
+  name: string;
+  /**
+   * How the ghost is populated: a symbolic hint like "periodic", "copy", "reflect" or a free-form note.
+   */
+  source?: string;
   description?: string;
 }
 /**

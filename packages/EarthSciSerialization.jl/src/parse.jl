@@ -480,10 +480,38 @@ function coerce_model(data::Any)::Model
         continuous_events = [coerce_continuous_event(ev) for ev in data.continuous_events]
     end
 
+    # Initialization equations and solver guesses (gt-ebuq).
+    initialization_equations = haskey(data, :initialization_equations) &&
+        data.initialization_equations !== nothing ?
+        [coerce_equation(eq) for eq in data.initialization_equations] :
+        Equation[]
+    guesses = Dict{String,Union{Float64,EarthSciSerialization.Expr}}()
+    if haskey(data, :guesses) && data.guesses !== nothing
+        for (k, v) in pairs(data.guesses)
+            if v isa Number
+                guesses[string(k)] = Float64(v)
+            else
+                guesses[string(k)] = parse_expression(v)
+            end
+        end
+    end
+    system_kind = haskey(data, :system_kind) && data.system_kind !== nothing ?
+        string(data.system_kind) : nothing
+
     # Backwards compatibility: handle old 'events' field
     if haskey(data, :events)
         mixed_events = [coerce_event(ev) for ev in data.events]
-        return create_model_with_mixed_events(variables, equations, mixed_events)
+        base = create_model_with_mixed_events(variables, equations, mixed_events)
+        # Preserve init fields on the legacy path by re-packing.
+        return Model(base.variables, base.equations,
+                     base.discrete_events, base.continuous_events,
+                     base.subsystems;
+                     domain=base.domain,
+                     tolerance=base.tolerance,
+                     tests=base.tests,
+                     initialization_equations=initialization_equations,
+                     guesses=guesses,
+                     system_kind=system_kind)
     end
 
     domain = haskey(data, :domain) && data.domain !== nothing ? string(data.domain) : nothing
@@ -500,7 +528,10 @@ function coerce_model(data::Any)::Model
                  continuous_events=continuous_events,
                  domain=domain,
                  tolerance=tolerance,
-                 tests=tests)
+                 tests=tests,
+                 initialization_equations=initialization_equations,
+                 guesses=guesses,
+                 system_kind=system_kind)
 end
 
 """

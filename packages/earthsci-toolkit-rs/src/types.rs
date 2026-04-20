@@ -338,6 +338,20 @@ pub struct Model {
     /// may deserialize each entry into a typed BC struct as needed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boundary_conditions: Option<HashMap<String, serde_json::Value>>,
+
+    /// Equations that hold only at t=0 (initialization-only, not time-stepped).
+    /// Introduced for aerosol equilibrium / plume-rise style models (gt-ebuq).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initialization_equations: Option<Vec<Equation>>,
+
+    /// Initial-guess seeds for nonlinear solvers during initialization, keyed
+    /// by variable name. Values may be numeric literals or Expression graphs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guesses: Option<HashMap<String, serde_json::Value>>,
+
+    /// MTK system-kind discriminator: "ode" (default), "nonlinear", "sde", "pde".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_kind: Option<String>,
 }
 
 /// Variable within a model

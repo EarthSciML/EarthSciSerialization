@@ -1,0 +1,143 @@
+{
+  "esm": "0.2.0",
+  "metadata": {
+    "name": "MogiShape",
+    "description": "Mogi-McTigue-shaped algebraic surface-deformation model: purely nonlinear (no time derivatives). Exercises system_kind='nonlinear' on a Geodynamics-style equilibrium model with no initialization_equations or guesses.",
+    "authors": ["gt-ebuq"],
+    "created": "2026-04-19T00:00:00Z",
+    "tags": ["nonlinear", "geodynamics", "regression"]
+  },
+  "models": {
+    "MogiModel": {
+      "system_kind": "nonlinear",
+      "variables": {
+        "ur": {
+          "type": "state",
+          "units": "m",
+          "default": 0.0,
+          "description": "Radial surface displacement"
+        },
+        "uz": {
+          "type": "state",
+          "units": "m",
+          "default": 0.0,
+          "description": "Vertical surface displacement"
+        },
+        "dV": {
+          "type": "parameter",
+          "units": "m^3",
+          "default": 1.0e6,
+          "description": "Source volume change"
+        },
+        "d": {
+          "type": "parameter",
+          "units": "m",
+          "default": 3000.0,
+          "description": "Source depth"
+        },
+        "r": {
+          "type": "parameter",
+          "units": "m",
+          "default": 1000.0,
+          "description": "Radial distance from source epicenter"
+        },
+        "nu": {
+          "type": "parameter",
+          "units": "dimensionless",
+          "default": 0.25,
+          "description": "Poisson ratio"
+        }
+      },
+      "equations": [
+        {
+          "lhs": "ur",
+          "rhs": {
+            "op": "/",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "-",
+                    "args": [1, "nu"]
+                  },
+                  "dV",
+                  "r"
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  3.141592653589793,
+                  {
+                    "op": "^",
+                    "args": [
+                      {
+                        "op": "+",
+                        "args": [
+                          {
+                            "op": "^",
+                            "args": ["r", 2]
+                          },
+                          {
+                            "op": "^",
+                            "args": ["d", 2]
+                          }
+                        ]
+                      },
+                      1.5
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "lhs": "uz",
+          "rhs": {
+            "op": "/",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  {
+                    "op": "-",
+                    "args": [1, "nu"]
+                  },
+                  "dV",
+                  "d"
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  3.141592653589793,
+                  {
+                    "op": "^",
+                    "args": [
+                      {
+                        "op": "+",
+                        "args": [
+                          {
+                            "op": "^",
+                            "args": ["r", 2]
+                          },
+                          {
+                            "op": "^",
+                            "args": ["d", 2]
+                          }
+                        ]
+                      },
+                      1.5
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

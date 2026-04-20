@@ -401,3 +401,57 @@ fn test_correlated_noise_sde_round_trip() {
     assert!(flat.brownian_variables.contains_key("TwoBody.Bx"));
     assert!(flat.brownian_variables.contains_key("TwoBody.By"));
 }
+
+/// Round-trip: nonlinear models with initialization_equations, guesses, system_kind (gt-ebuq).
+#[test]
+fn test_nonlinear_isorropia_shape_round_trip() {
+    let fixture = include_str!("../../../tests/valid/nonlinear_isorropia_shape.esm");
+    let parsed: EsmFile = load(fixture).expect("load isorropia fixture");
+    let serialized = save(&parsed).expect("save isorropia fixture");
+    let reparsed: EsmFile = load(&serialized).expect("reload isorropia fixture");
+    assert_eq!(
+        serde_json::to_value(&parsed).expect("parsed as value"),
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+    );
+
+    let model = parsed
+        .models
+        .as_ref()
+        .and_then(|m| m.get("IsorropiaEq"))
+        .expect("IsorropiaEq model missing");
+    assert_eq!(model.system_kind.as_deref(), Some("nonlinear"));
+    assert_eq!(
+        model
+            .initialization_equations
+            .as_ref()
+            .map(|eqs| eqs.len())
+            .unwrap_or(0),
+        2,
+        "expected two initialization equations",
+    );
+    assert_eq!(
+        model.guesses.as_ref().map(|g| g.len()).unwrap_or(0),
+        2,
+        "expected two guess entries",
+    );
+}
+
+#[test]
+fn test_nonlinear_mogi_shape_round_trip() {
+    let fixture = include_str!("../../../tests/valid/nonlinear_mogi_shape.esm");
+    let parsed: EsmFile = load(fixture).expect("load mogi fixture");
+    let serialized = save(&parsed).expect("save mogi fixture");
+    let reparsed: EsmFile = load(&serialized).expect("reload mogi fixture");
+    assert_eq!(
+        serde_json::to_value(&parsed).expect("parsed as value"),
+        serde_json::to_value(&reparsed).expect("reparsed as value"),
+    );
+    let model = parsed
+        .models
+        .as_ref()
+        .and_then(|m| m.get("MogiModel"))
+        .expect("MogiModel missing");
+    assert_eq!(model.system_kind.as_deref(), Some("nonlinear"));
+    assert!(model.initialization_equations.is_none());
+    assert!(model.guesses.is_none());
+}

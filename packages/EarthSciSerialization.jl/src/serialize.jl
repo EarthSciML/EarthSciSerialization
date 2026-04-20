@@ -300,6 +300,24 @@ function serialize_model(model::Model)::Dict{String,Any}
         result["tests"] = [serialize_test(t) for t in model.tests]
     end
 
+    if !isempty(model.initialization_equations)
+        result["initialization_equations"] =
+            [serialize_equation(eq) for eq in model.initialization_equations]
+    end
+
+    if !isempty(model.guesses)
+        guesses_out = Dict{String,Any}()
+        for (k, v) in model.guesses
+            guesses_out[k] = v isa EarthSciSerialization.Expr ?
+                serialize_expression(v) : v
+        end
+        result["guesses"] = guesses_out
+    end
+
+    if model.system_kind !== nothing
+        result["system_kind"] = model.system_kind
+    end
+
     return result
 end
 

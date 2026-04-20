@@ -436,3 +436,32 @@ def test_roundtrip_typed_test_assertion():
     assert t["tolerance"] == {"abs": 1e-4}
     assert t["assertions"][0]["tolerance"] == {"abs": 1e-8}
     assert data["models"]["M"]["tolerance"] == {"rel": 1e-6}
+
+
+def test_roundtrip_nonlinear_isorropia_shape():
+    """Round-trip fixture for Model.initialization_equations + guesses + system_kind (gt-ebuq)."""
+    repo_root = Path(__file__).resolve().parents[3]
+    fixture = repo_root / "tests" / "valid" / "nonlinear_isorropia_shape.esm"
+    original_text = fixture.read_text()
+    first = load(original_text)
+    second = load(save(first))
+    assert json.loads(save(first)) == json.loads(save(second))
+
+    model = first.models["IsorropiaEq"]
+    assert model.system_kind == "nonlinear"
+    assert len(model.initialization_equations) == 2
+    assert set(model.guesses.keys()) == {"H", "SO4"}
+
+
+def test_roundtrip_nonlinear_mogi_shape():
+    """Round-trip fixture for algebraic Mogi-shape model (gt-ebuq)."""
+    repo_root = Path(__file__).resolve().parents[3]
+    fixture = repo_root / "tests" / "valid" / "nonlinear_mogi_shape.esm"
+    first = load(fixture.read_text())
+    second = load(save(first))
+    assert json.loads(save(first)) == json.loads(save(second))
+
+    model = first.models["MogiModel"]
+    assert model.system_kind == "nonlinear"
+    assert model.initialization_equations == []
+    assert model.guesses == {}

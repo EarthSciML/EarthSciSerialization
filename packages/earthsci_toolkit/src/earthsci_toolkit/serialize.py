@@ -342,6 +342,22 @@ def _serialize_model(model: Model) -> Dict[str, Any]:
     if model.examples:
         result["examples"] = [_serialize_example(e) for e in model.examples]
 
+    # Initialization-only equations and solver guesses (gt-ebuq).
+    if model.initialization_equations:
+        result["initialization_equations"] = [
+            _serialize_equation(eq) for eq in model.initialization_equations
+        ]
+    if model.guesses:
+        guesses_out: Dict[str, Any] = {}
+        for var_name, seed in model.guesses.items():
+            if isinstance(seed, (int, float)) and not isinstance(seed, bool):
+                guesses_out[var_name] = seed
+            else:
+                guesses_out[var_name] = _serialize_expression(seed)
+        result["guesses"] = guesses_out
+    if model.system_kind is not None:
+        result["system_kind"] = model.system_kind
+
     return result
 
 

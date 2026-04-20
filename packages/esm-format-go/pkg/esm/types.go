@@ -88,6 +88,17 @@ type Model struct {
 	Tests []Test `json:"tests,omitempty"`
 	// Examples are inline illustrative runs + plot specs (esm-spec §6.7).
 	Examples []Example `json:"examples,omitempty"`
+	// InitializationEquations hold only at t=0 (not dynamically time-stepped).
+	// Used by models that must solve an auxiliary system before the main
+	// time-stepping begins (e.g. aerosol equilibrium, plume rise). See gt-ebuq.
+	InitializationEquations []Equation `json:"initialization_equations,omitempty"`
+	// Guesses provides initial-guess seeds for nonlinear solvers during
+	// initialization, keyed by variable name. Values may be numeric literals
+	// or Expression graphs (serialized as interface{}).
+	Guesses map[string]interface{} `json:"guesses,omitempty"`
+	// SystemKind discriminates the MTK system type this model maps to.
+	// One of "ode" (default), "nonlinear", "sde", "pde".
+	SystemKind *string `json:"system_kind,omitempty"`
 }
 
 // ========================================

@@ -78,6 +78,9 @@ fn test_analysis_features_integration() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     let mut models = HashMap::new();
@@ -229,6 +232,9 @@ fn test_editing_operations() {
         tolerance: None,
         tests: None,
         boundary_conditions: None,
+        initialization_equations: None,
+        guesses: None,
+        system_kind: None,
     };
 
     // Test adding variables

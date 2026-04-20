@@ -66,6 +66,9 @@
     { "id": "discretizations/upwind_1st_advection",  "path": "discretizations/upwind_1st_advection.esm",  "tags": ["discretization", "cartesian", "advection"] },
     { "id": "discretizations/periodic_bc",           "path": "discretizations/periodic_bc.esm",           "tags": ["discretization", "boundary_condition"] },
     { "id": "discretizations/mpas_cell_div",         "path": "discretizations/mpas_cell_div.esm",         "tags": ["discretization", "unstructured", "mpas"] },
-    { "id": "spatial/pde_tests_examples",            "path": "spatial/pde_tests_examples.esm",            "tags": ["pde", "spatial-assertions", "expression-ic", "field-plots", "gt-vzwk"] }
+    { "id": "spatial/pde_tests_examples",            "path": "spatial/pde_tests_examples.esm",            "tags": ["pde", "spatial-assertions", "expression-ic", "field-plots", "gt-vzwk"] },
+
+    { "id": "valid/nonlinear_isorropia_shape",       "path": "valid/nonlinear_isorropia_shape.esm",       "tags": ["nonlinear", "initialization", "guesses", "gt-ebuq"] },
+    { "id": "valid/nonlinear_mogi_shape",            "path": "valid/nonlinear_mogi_shape.esm",            "tags": ["nonlinear", "geodynamics", "gt-ebuq"] }
   ]
 }

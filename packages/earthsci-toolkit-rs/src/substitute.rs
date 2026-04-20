@@ -220,6 +220,9 @@ pub fn substitute_in_model(
         tolerance: model.tolerance.clone(),
         tests: model.tests.clone(),
         boundary_conditions: model.boundary_conditions.clone(),
+        initialization_equations: model.initialization_equations.clone(),
+        guesses: model.guesses.clone(),
+        system_kind: model.system_kind.clone(),
     }
 }
 
@@ -518,6 +521,9 @@ pub fn substitute_in_model_with_context(
         tolerance: model.tolerance.clone(),
         tests: model.tests.clone(),
         boundary_conditions: model.boundary_conditions.clone(),
+        initialization_equations: model.initialization_equations.clone(),
+        guesses: model.guesses.clone(),
+        system_kind: model.system_kind.clone(),
     }
 }
 
@@ -814,6 +820,9 @@ mod tests {
                 tolerance: None,
                 tests: None,
                 boundary_conditions: None,
+                initialization_equations: None,
+                guesses: None,
+                system_kind: None,
             },
         );
 
@@ -890,6 +899,9 @@ mod tests {
                 tolerance: None,
                 tests: None,
                 boundary_conditions: None,
+                initialization_equations: None,
+                guesses: None,
+                system_kind: None,
             },
         );
 
@@ -969,6 +981,9 @@ mod tests {
                 tolerance: None,
                 tests: None,
                 boundary_conditions: None,
+                initialization_equations: None,
+                guesses: None,
+                system_kind: None,
             },
         );
 
@@ -1062,6 +1077,9 @@ mod tests {
                 tolerance: None,
                 tests: None,
                 boundary_conditions: None,
+                initialization_equations: None,
+                guesses: None,
+                system_kind: None,
             },
         );
 
@@ -1283,6 +1301,9 @@ mod tests {
             tolerance: None,
             tests: None,
             boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         };
 
         let result = substitute_in_model(&model, &substitutions);
