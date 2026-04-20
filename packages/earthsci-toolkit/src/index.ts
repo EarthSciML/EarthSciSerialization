@@ -78,6 +78,10 @@ export type { FlattenedEquation, FlattenMetadata, FlattenedSystem } from './flat
 // Subsystem reference loading
 export { resolveSubsystemRefs, CircularReferenceError, RefLoadError } from './ref-loading.js'
 
+// DAE binding contract (RFC §12): trivial-factor + error otherwise.
+export { discretize, DAEError, E_NONTRIVIAL_DAE } from './discretize.js'
+export type { DiscretizeResult, DAEInfo } from './discretize.js'
+
 // Canonical AST form (RFC §5.4). TS lacks native int/float distinction;
 // see canonicalize.ts for the gt-ca2u limitation note.
 export {

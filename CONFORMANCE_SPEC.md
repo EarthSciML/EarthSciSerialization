@@ -574,6 +574,7 @@ Validation tests must use these standardized error codes:
 | `E_UNREWRITTEN_PDE_OP` | Discretization | `discretize()` output still contains a PDE op (`grad`, `div`, `laplacian`, `D`, `bc`) after the rule engine runs (RFC §11 Step 7). |
 | `E_RULES_NOT_CONVERGED` | Discretization | Rule engine hit `max_passes` without reaching a fixed point (RFC §5.2.5). |
 | `E_NO_DAE_SUPPORT` | Discretization | `discretize()` output contains algebraic equations alongside differential ones, and DAE support is disabled in the binding (RFC §12). The error message must name at least one algebraic-equation path and the enabling knob. |
+| `E_NONTRIVIAL_DAE` | Discretization | Binding-specific code for bindings whose DAE strategy is *trivial-factor + error otherwise* (currently TypeScript, per `docs/rfcs/dae-binding-strategies.md`). Emitted by `discretize()` when an algebraic equation remains after trivial observed-style substitution (non-trivial constraint, cyclic observed chain, or observed variable that is also differentiated). The error message must name at least one residual algebraic-equation path and point the user at a binding with full-DAE support. |
 
 ### 7.2 Error Message Format
 

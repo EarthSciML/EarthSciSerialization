@@ -74,5 +74,9 @@ export {
   RefLoadError,
 } from './ref-loading.js'
 
+// DAE binding contract (RFC §12): trivial-factor + error otherwise.
+export { discretize, DAEError, E_NONTRIVIAL_DAE } from './discretize.js'
+export type { DiscretizeResult, DAEInfo } from './discretize.js'
+
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
