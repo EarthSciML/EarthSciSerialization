@@ -2230,6 +2230,82 @@ def _walk_expression_for_exponent_checks(
         _walk_expression_for_exponent_checks(expr["expr"], var_units, f"{path}/expr", errors)
 
 
+_SPATIAL_DERIVATIVE_OPS = ("grad", "div", "laplacian")
+
+
+def _collect_coordinate_units(data: Dict[str, Any], domain_name: Optional[str]) -> Optional[Dict[str, Optional[str]]]:
+    """
+    Return {coord_name: unit_str or None} for the given domain's spatial coords.
+
+    Returns None if the domain is unknown or has no spatial section. A coord
+    declared without units maps to None so callers can distinguish "coord not
+    in domain" (key absent) from "coord declared but unitless" (value None).
+    """
+    if not domain_name:
+        return None
+    domain = data.get("domains", {}).get(domain_name)
+    if not isinstance(domain, dict):
+        return None
+    spatial = domain.get("spatial")
+    if not isinstance(spatial, dict):
+        return None
+    coords: Dict[str, Optional[str]] = {}
+    for coord_name, coord_def in spatial.items():
+        if isinstance(coord_def, dict):
+            coords[coord_name] = coord_def.get("units")
+        else:
+            coords[coord_name] = None
+    return coords
+
+
+def _walk_expression_for_spatial_operator_checks(
+    expr: Any,
+    var_units: Dict[str, str],
+    coord_units: Optional[Dict[str, Optional[str]]],
+    path: str,
+    errors: List[str],
+) -> None:
+    """
+    Walk an expression tree and flag grad/div/laplacian operators applied over
+    a spatial coordinate whose units are undeclared or dimensionless.
+
+    Mirrors the TypeScript validator (packages/earthsci-toolkit/src/units.ts):
+    the operand's units are divided by the coordinate's declared units. When
+    the coordinate is present in the model's domain but has no units (or a
+    dimensionless placeholder like '1'), emit unit_inconsistency. When the
+    domain, spatial section, or coordinate is absent, we have no basis to
+    flag — silently skip.
+    """
+    if not isinstance(expr, dict):
+        return
+    op = expr.get("op")
+    args = expr.get("args", []) or []
+    if op in _SPATIAL_DERIVATIVE_OPS and coord_units is not None:
+        dim_name = expr.get("dim")
+        if isinstance(dim_name, str) and dim_name in coord_units:
+            coord_unit_str = coord_units[dim_name]
+            if coord_unit_str is None or _is_dimensionless_unit(coord_unit_str):
+                operand = args[0] if args else None
+                operand_units = var_units.get(operand) if isinstance(operand, str) else None
+                operand_desc = (
+                    f" applied to '{operand}' (units '{operand_units}')"
+                    if operand_units
+                    else (f" applied to '{operand}'" if isinstance(operand, str) else "")
+                )
+                errors.append(
+                    f"{path}: {op} operator{operand_desc} over coordinate '{dim_name}' with "
+                    f"{'dimensionless' if coord_unit_str else 'undeclared'} units (unit_inconsistency)"
+                )
+    for i, arg in enumerate(args):
+        _walk_expression_for_spatial_operator_checks(
+            arg, var_units, coord_units, f"{path}/args[{i}]", errors
+        )
+    if "expr" in expr:
+        _walk_expression_for_spatial_operator_checks(
+            expr["expr"], var_units, coord_units, f"{path}/expr", errors
+        )
+
+
 def _check_default_units_consistency(data: Dict[str, Any], errors: List[str]) -> None:
     """
     Flag variables whose `default_units` disagrees with the declared `units`.
@@ -2464,7 +2540,12 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
     var_units = _collect_var_units(tables)
 
     for mname, m in data.get("models", {}).items():
+<<<<<<< Updated upstream
         coord_units = _model_coordinate_units(data, m)
+=======
+        coord_units = _collect_coordinate_units(data, m.get("domain"))
+
+>>>>>>> Stashed changes
         # Observed variables: check direct addition/subtraction operand compatibility
         for vname, vdef in m.get("variables", {}).items():
             if vdef.get("type") == "observed" and "expression" in vdef:
@@ -2488,7 +2569,12 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
                     expr, var_units, f"models/{mname}/variables/{vname}/expression", errors
                 )
                 _walk_expression_for_spatial_operator_checks(
+<<<<<<< Updated upstream
                     expr, coord_units, f"models/{mname}/variables/{vname}/expression", errors
+=======
+                    expr, var_units, coord_units,
+                    f"models/{mname}/variables/{vname}/expression", errors,
+>>>>>>> Stashed changes
                 )
 
         # Check '^' exponents and grad/div/laplacian coordinate resolution
@@ -2500,7 +2586,12 @@ def _check_unit_consistency(data: Dict[str, Any], tables: Dict[str, Any], errors
                         eq[side], var_units, f"models/{mname}/equations[{ei}]/{side}", errors
                     )
                     _walk_expression_for_spatial_operator_checks(
+<<<<<<< Updated upstream
                         eq[side], coord_units, f"models/{mname}/equations[{ei}]/{side}", errors
+=======
+                        eq[side], var_units, coord_units,
+                        f"models/{mname}/equations[{ei}]/{side}", errors,
+>>>>>>> Stashed changes
                     )
 
         # Equations: only check D(x)/dt = bare_var case
