@@ -285,11 +285,6 @@ Section(...)
 
 **Python:**
 ```python
-def __init__(self, code: str, message: str):
-```
-
-**Python:**
-```python
 def __init__(self):
 ```
 
@@ -297,10 +292,15 @@ def __init__(self):
 
 **Python:**
 ```python
-def __init__(self, esm_file: EsmFile):
+def __init__(self, message: str, from_version: str = "", to_version: str = ""):
 ```
 
-> Initialize the scope validator.
+**Python:**
+```python
+def __init__(self, validate_after_edit: bool = True):
+```
+
+> Initialize the ESM editor.
 
 **Python:**
 ```python
@@ -312,9 +312,21 @@ def __init__(self, code: str, message: str):
 def __init__(self, esm_file: EsmFile):
 ```
 
+> Initialize the ESM explorer.
+
 **Python:**
 ```python
-def __init__(self, message: str, from_version: str = "", to_version: str = ""):
+def __init__(self, code: str, message: str):
+```
+
+**Python:**
+```python
+def __init__(self, message: str = "E_CANONICAL_NONFINITE"):
+```
+
+**Python:**
+```python
+def __init__(self, message: str = "E_CANONICAL_DIVBY_ZERO"):
 ```
 
 **Python:**
@@ -339,6 +351,13 @@ def __init__(self, source: str, target: str, label: str = "", dependency_type: s
 
 **Python:**
 ```python
+def __init__(self, esm_file: EsmFile):
+```
+
+> Initialize the scope validator.
+
+**Python:**
+```python
 def __init__(self):
 ```
 
@@ -351,27 +370,8 @@ def __init__(self, esm_file: EsmFile):
 
 **Python:**
 ```python
-def __init__(self, validate_after_edit: bool = True):
-```
-
-> Initialize the ESM editor.
-
-**Python:**
-```python
-def __init__(self, message: str = "E_CANONICAL_NONFINITE"):
-```
-
-**Python:**
-```python
-def __init__(self, message: str = "E_CANONICAL_DIVBY_ZERO"):
-```
-
-**Python:**
-```python
 def __init__(self, esm_file: EsmFile):
 ```
-
-> Initialize the ESM explorer.
 
 **Python:**
 ```python
@@ -1049,6 +1049,13 @@ export function extract(
 def fixtures_dir(self):
 ```
 
+> Get path to display fixtures.
+
+**Python:**
+```python
+def fixtures_dir(self):
+```
+
 > Get path to validation fixtures.
 
 **Python:**
@@ -1064,13 +1071,6 @@ def fixtures_dir(self):
 ```
 
 > Get path to test fixtures.
-
-**Python:**
-```python
-def fixtures_dir(self):
-```
-
-> Get path to display fixtures.
 
 **Python:**
 ```python
@@ -1404,14 +1404,14 @@ mass-action kinetics: `d[X]/dt = Σ (stoich_ij * rate_j)`.
 def main():
 ```
 
-> Run all demonstrations.
+> Run all coupling error handling demonstrations.
 
 **Python:**
 ```python
 def main():
 ```
 
-> Run all coupling error handling demonstrations.
+> Demonstrate mathematical operators functionality.
 
 **Python:**
 ```python
@@ -1432,14 +1432,14 @@ def main():
 def main():
 ```
 
-> Run all performance optimization demos.
+> Run all demonstrations.
 
 **Python:**
 ```python
 def main():
 ```
 
-> Demonstrate mathematical operators functionality.
+> Run all performance optimization demos.
 
 **Python:**
 ```python
@@ -2089,14 +2089,14 @@ system(...)
 def test_empty_system(self):
 ```
 
-> Test empty reaction system returns empty matrix.
+> Test handling of empty reaction system.
 
 **Python:**
 ```python
 def test_empty_system(self):
 ```
 
-> Test handling of empty reaction system.
+> Test empty reaction system returns empty matrix.
 
 ---
 
@@ -2125,14 +2125,14 @@ def test_required_fields_validation(self):
 def test_source_and_sink_reactions(self):
 ```
 
-> Test reactions with no reactants (source) or no products (sink).
+> Test source (null substrates) and sink (null products) reactions.
 
 **Python:**
 ```python
 def test_source_and_sink_reactions(self):
 ```
 
-> Test source (null substrates) and sink (null products) reactions.
+> Test reactions with no reactants (source) or no products (sink).
 
 ---
 
@@ -2707,14 +2707,14 @@ struct CouplingEdge
 class CouplingEdge:
 ```
 
-> Represents a labeled edge in the coupling graph.
+> An edge representing coupling between components.
 
 **Python:**
 ```python
 class CouplingEdge:
 ```
 
-> An edge representing coupling between components.
+> Represents a labeled edge in the coupling graph.
 
 **Typescript:**
 ```typescript
