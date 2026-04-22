@@ -80,6 +80,20 @@ from .validation import validate, ValidationResult, ValidationError
 # Discretization pipeline / RFC §12 DAE binding contract
 from .discretize import discretize, DiscretizationError
 
+# Grid accessor ABC + registry (ESD registers concrete family impls)
+from .grid_accessor import (
+    GridAccessor,
+    GridAccessorError,
+    UnknownGridFamilyError,
+    GridAccessorRegistrationError,
+    GridAccessorFactory,
+    register_grid_accessor,
+    unregister_grid_accessor,
+    has_grid_accessor,
+    registered_grid_families,
+    get_grid_accessor,
+)
+
 # Expression engine (Core tier requirement)
 from .expression import (
     free_variables,
@@ -316,6 +330,18 @@ __all__ = [
     # Discretization / DAE binding contract (RFC §12)
     "discretize",
     "DiscretizationError",
+
+    # Grid accessor ABC + registry (gt-6trd)
+    "GridAccessor",
+    "GridAccessorError",
+    "UnknownGridFamilyError",
+    "GridAccessorRegistrationError",
+    "GridAccessorFactory",
+    "register_grid_accessor",
+    "unregister_grid_accessor",
+    "has_grid_accessor",
+    "registered_grid_families",
+    "get_grid_accessor",
 
     # Coupled system flattening (spec §4.7.5 + §4.7.6)
     "flatten",
