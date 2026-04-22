@@ -3363,6 +3363,9 @@ Subsumes the GRIDS_API §3.4 `Grid` interface (family/dtype/toESM)
 and adds the three accessor methods called out in gt-j2b8.
 /
 
+**Available in other languages:**
+- [Python](python.md#gridaccessor)
+
 ---
 
 ### GridConnectivity

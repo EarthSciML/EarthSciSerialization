@@ -3478,6 +3478,24 @@ class Grid:
 
 ---
 
+### GridAccessor
+
+**Python:**
+```python
+class GridAccessor:
+```
+
+> Abstract read-only accessor over a parsed :class:`Grid`.
+
+**Typescript:**
+```typescript
+export interface GridAccessor {
+```
+
+> Accessor contract every ESD-provided concrete grid implements.
+
+---
+
 ### GridConnectivity
 
 **Python:**

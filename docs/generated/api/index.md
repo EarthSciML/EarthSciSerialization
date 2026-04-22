@@ -7,8 +7,8 @@ Complete API documentation for all ESM Format language implementations.
 - 82 types
 
 ## [Python](python.md)
-- 796 functions
-- 267 types
+- 810 functions
+- 272 types
 
 ## [Rust](rust.md)
 - 0 functions
