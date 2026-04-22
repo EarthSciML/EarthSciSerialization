@@ -44,6 +44,7 @@ pub mod error;
 pub mod expression;
 pub mod flatten;
 pub mod graph;
+pub mod grid_accessor;
 pub mod migration;
 pub mod parse;
 pub mod reactions;
@@ -79,6 +80,10 @@ pub use graph::{
     ComponentGraph, ComponentNode, ComponentType, CouplingEdge, DependencyEdge,
     DependencyRelationship, ExpressionGraph, ExpressionGraphInput, VariableKind, VariableNode,
     component_exists, component_graph, expression_graph, get_component_type,
+};
+pub use grid_accessor::{
+    CellId, GridAccessor, GridAccessorError, GridAccessorFactory, build_accessor, has_factory,
+    register_factory,
 };
 pub use parse::{ParseError, SchemaValidationError, load, load_path};
 pub use reactions::{
