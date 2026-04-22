@@ -2731,6 +2731,127 @@ def _check_registered_function_calls(data: Dict[str, Any], errors: List[str]) ->
     walk(data, "")
 
 
+def _resolve_component_spatial_dims(data: Dict[str, Any], component: Dict[str, Any]) -> Optional[List[str]]:
+    """Return the ordered list of spatial dim names for a component.
+
+    Returns:
+        None if the component is 0-D (domain is null/absent, or resolves to a
+        domain whose `spatial` map is missing or empty).
+        A list of dim names (possibly empty → still treated as 0-D by callers)
+        when a spatial map is present.
+    """
+    dref = component.get("domain")
+    if dref is None:
+        return None
+    domain = (data.get("domains") or {}).get(dref)
+    if not isinstance(domain, dict):
+        return None
+    spatial = domain.get("spatial")
+    if not isinstance(spatial, dict) or not spatial:
+        return None
+    return list(spatial.keys())
+
+
+def _check_pde_aware_assertions(data: Dict[str, Any], errors: List[str]) -> None:
+    """Per-binding structural rules for §6.6.5 (PDE-aware assertions) and
+    §6.7.4 (pinned_coords on field plots).
+
+    These rules require resolved-domain information that JSON Schema cannot
+    express:
+
+    - A 0-D component (component.domain is null/absent, or points at a Domain
+      whose spatial map is empty/missing) MUST NOT carry an Assertion that
+      sets coords or reduce.
+    - A PDE component (>=1 spatial dim) MUST NOT carry an Assertion that
+      omits BOTH coords and reduce.
+    - coords keys MUST be names declared in component.domain.spatial.
+    - pinned_coords on field_slice/field_snapshot plots MUST cover every
+      spatial dimension that is not used by the plot's x (and y) axes.
+    """
+    models = data.get("models") or {}
+    for mname, model in models.items():
+        if not isinstance(model, dict):
+            continue
+        spatial_dims = _resolve_component_spatial_dims(data, model)
+        is_0d = spatial_dims is None
+
+        for ti, test in enumerate(model.get("tests") or []):
+            if not isinstance(test, dict):
+                continue
+            test_id = test.get("id")
+            for ai, assertion in enumerate(test.get("assertions") or []):
+                if not isinstance(assertion, dict):
+                    continue
+                path = f"/models/{mname}/tests/{ti}/assertions/{ai}"
+                has_coords = "coords" in assertion
+                has_reduce = "reduce" in assertion
+                variable = assertion.get("variable")
+                if is_0d:
+                    if has_coords or has_reduce:
+                        offending = "coords" if has_coords else "reduce"
+                        errors.append(
+                            f"{path}: assertion_spatial_on_0d — Assertion on 0-D "
+                            f"component '{mname}' must not set coords or reduce "
+                            f"(test '{test_id}', variable '{variable}', offending field '{offending}')"
+                        )
+                else:
+                    if not has_coords and not has_reduce:
+                        errors.append(
+                            f"{path}: assertion_missing_spatial_on_pde — Assertion on PDE "
+                            f"component '{mname}' must set either coords or reduce "
+                            f"(test '{test_id}', variable '{variable}', "
+                            f"spatial dimensions {spatial_dims})"
+                        )
+                    if has_coords and isinstance(assertion.get("coords"), dict):
+                        for key in assertion["coords"].keys():
+                            if key not in spatial_dims:
+                                errors.append(
+                                    f"{path}: assertion_coords_unknown_dim — Assertion coords "
+                                    f"key '{key}' is not a spatial dimension of component "
+                                    f"'{mname}' (declared dimensions: {spatial_dims})"
+                                )
+
+        for ei, example in enumerate(model.get("examples") or []):
+            if not isinstance(example, dict):
+                continue
+            example_id = example.get("id")
+            for pi, plot in enumerate(example.get("plots") or []):
+                if not isinstance(plot, dict):
+                    continue
+                ptype = plot.get("type")
+                if ptype not in ("field_slice", "field_snapshot"):
+                    continue
+                ppath = f"/models/{mname}/examples/{ei}/plots/{pi}"
+                if spatial_dims is None:
+                    errors.append(
+                        f"{ppath}: plot_field_on_0d — field plot type '{ptype}' requires a "
+                        f"component with a spatial domain, but component '{mname}' is 0-D"
+                    )
+                    continue
+                used_axes = []
+                x_axis = plot.get("x")
+                if isinstance(x_axis, dict):
+                    v = x_axis.get("variable")
+                    if isinstance(v, str):
+                        used_axes.append(v)
+                if ptype == "field_snapshot":
+                    y_axis = plot.get("y")
+                    if isinstance(y_axis, dict):
+                        v = y_axis.get("variable")
+                        if isinstance(v, str):
+                            used_axes.append(v)
+                pinned = plot.get("pinned_coords") or {}
+                if not isinstance(pinned, dict):
+                    pinned = {}
+                missing = [d for d in spatial_dims if d not in used_axes and d not in pinned]
+                if missing:
+                    errors.append(
+                        f"{ppath}: plot_pinned_coords_missing — {ptype} plot on component "
+                        f"'{mname}' must pin non-axis spatial dimensions {missing} in "
+                        f"pinned_coords (plot_id '{plot.get('id')}', spatial dimensions {spatial_dims})"
+                    )
+
+
 def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     """
     Perform post-schema structural validation.
@@ -2777,6 +2898,7 @@ def _validate_structural(data: Dict[str, Any], file_path=None) -> None:
     # structured ``unit_inconsistency`` payload matching the cross-language
     # contract in ``tests/invalid/expected_errors.json``.
     _check_registered_function_calls(data, errors)
+    _check_pde_aware_assertions(data, errors)
 
     if errors:
         raise SchemaValidationError(

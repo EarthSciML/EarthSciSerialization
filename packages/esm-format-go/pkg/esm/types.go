@@ -185,11 +185,23 @@ type TimeSpan struct {
 }
 
 // Assertion is a single scalar (variable, time, expected) check inside a Test.
+//
+// PDE-aware variants (esm-spec §6.6.5) pin a spatial point via Coords, or
+// reduce the field to a scalar via Reduce (integral/mean/max/min or the
+// error-norms L2_error/Linf_error). Error-norm reductions require Reference.
+// Structural validators reject combinations forbidden by §6.6.5.
 type Assertion struct {
-	Variable  string     `json:"variable"`
-	Time      float64    `json:"time"`
-	Expected  float64    `json:"expected"`
-	Tolerance *Tolerance `json:"tolerance,omitempty"`
+	Variable  string             `json:"variable"`
+	Time      float64            `json:"time"`
+	Expected  float64            `json:"expected"`
+	Tolerance *Tolerance         `json:"tolerance,omitempty"`
+	Coords    map[string]float64 `json:"coords,omitempty"`
+	Reduce    *string            `json:"reduce,omitempty"`
+	// Reference is an analytic or precomputed reference solution for
+	// error-norm reductions (L2_error/Linf_error). Kept as raw JSON pending
+	// typed downstream consumers — may be an inline Expression or a
+	// {type: "from_file", path, format?} object.
+	Reference json.RawMessage `json:"reference,omitempty"`
 }
 
 // Test is an inline validation test for a Model or ReactionSystem.
@@ -224,14 +236,22 @@ type PlotSeries struct {
 }
 
 // Plot is a plot specification associated with an Example.
+//
+// PDE-aware plot types "field_slice" and "field_snapshot" (esm-spec §6.7.4)
+// visualize spatial fields at a fixed time; `X` (and `Y` for snapshots) name
+// domain dimensions, and any non-plotted spatial dimension MUST be pinned in
+// PinnedCoords. Structural validators reject field plots that omit required
+// pinned coordinates.
 type Plot struct {
-	ID          string       `json:"id"`
-	Type        string       `json:"type"` // "line" | "scatter" | "heatmap"
-	Description *string      `json:"description,omitempty"`
-	X           PlotAxis     `json:"x"`
-	Y           PlotAxis     `json:"y"`
-	Value       *PlotValue   `json:"value,omitempty"`
-	Series      []PlotSeries `json:"series,omitempty"`
+	ID           string             `json:"id"`
+	Type         string             `json:"type"` // "line" | "scatter" | "heatmap" | "field_slice" | "field_snapshot"
+	Description  *string            `json:"description,omitempty"`
+	X            PlotAxis           `json:"x"`
+	Y            PlotAxis           `json:"y"`
+	Value        *PlotValue         `json:"value,omitempty"`
+	Series       []PlotSeries       `json:"series,omitempty"`
+	AtTime       *float64           `json:"at_time,omitempty"`
+	PinnedCoords map[string]float64 `json:"pinned_coords,omitempty"`
 }
 
 // SweepRange is a generated range of parameter values.

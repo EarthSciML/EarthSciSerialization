@@ -423,6 +423,7 @@ struct Model
     domain::Union{String,Nothing}
     tolerance::Union{Tolerance,Nothing}
     tests::Vector{Test}
+    examples::Vector{Any}
     initialization_equations::Vector{Equation}
     guesses::Dict{String,Union{Float64,Expr}}
     system_kind::Union{String,Nothing}
@@ -431,12 +432,12 @@ struct Model
     Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
           subsystems::Dict{String,Model};
-          domain=nothing, tolerance=nothing, tests=Test[],
+          domain=nothing, tolerance=nothing, tests=Test[], examples=Any[],
           initialization_equations=Equation[],
           guesses=Dict{String,Union{Float64,Expr}}(),
           system_kind=nothing) =
         new(variables, equations, discrete_events, continuous_events, subsystems,
-            domain, tolerance, tests,
+            domain, tolerance, tests, examples,
             initialization_equations, guesses, system_kind)
 
     # Convenience constructor with optional events and subsystems.
@@ -451,6 +452,7 @@ struct Model
                    domain=nothing,
                    tolerance=nothing,
                    tests=Test[],
+                   examples=Any[],
                    initialization_equations=Equation[],
                    guesses=Dict{String,Union{Float64,Expr}}(),
                    system_kind=nothing)
@@ -468,7 +470,7 @@ struct Model
             end
         end
         return new(variables, equations, discrete_events, continuous_events, subsystems,
-                   domain, tolerance, tests,
+                   domain, tolerance, tests, examples,
                    initialization_equations, guesses, system_kind)
     end
 end

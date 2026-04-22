@@ -1028,6 +1028,164 @@ function promoteUnitWarningsToErrors(warnings: UnitWarning[]): StructuralError[]
     return errors;
 }
 
+/**
+ * Collect the ordered list of spatial dimension names for a component.
+ * Returns `null` when the component is 0-D (no `domain`, missing domain
+ * entry, or a domain whose `spatial` map is missing/empty).
+ */
+function collectSpatialDimNames(esmFile: EsmFile, model: Model): string[] | null {
+    const domainRef = model.domain;
+    if (!domainRef) return null;
+    const domains = esmFile.domains as Record<string, any> | undefined;
+    const domain = domains?.[domainRef];
+    if (!domain || typeof domain !== 'object') return null;
+    const spatial = (domain as any).spatial;
+    if (!spatial || typeof spatial !== 'object') return null;
+    const names = Object.keys(spatial);
+    if (names.length === 0) return null;
+    return names;
+}
+
+/**
+ * Per-binding structural rules for esm-spec §6.6.5 (PDE-aware assertions)
+ * and §6.7.4 (pinned_coords on field plots). These rules require
+ * resolved-domain information that JSON Schema cannot express.
+ *
+ * Mirrors the logic in:
+ * - `earthsci_toolkit/src/earthsci_toolkit/parse.py::_check_pde_aware_assertions`
+ * - `earthsci-toolkit-rs/src/validate.rs::validate_pde_aware_assertions`
+ * - `EarthSciSerialization.jl/src/validate.jl::validate_pde_aware_assertions`
+ */
+function validatePdeAwareAssertions(
+    modelName: string,
+    model: Model,
+    esmFile: EsmFile,
+): StructuralError[] {
+    const errors: StructuralError[] = [];
+    const spatialDims = collectSpatialDimNames(esmFile, model);
+    const is0d = spatialDims === null;
+
+    const tests = (model.tests ?? []) as any[];
+    for (let ti = 0; ti < tests.length; ti++) {
+        const test = tests[ti];
+        const assertions = test?.assertions ?? [];
+        for (let ai = 0; ai < assertions.length; ai++) {
+            const a = assertions[ai] ?? {};
+            const path = `/models/${modelName}/tests/${ti}/assertions/${ai}`;
+            const hasCoords = a.coords !== undefined && a.coords !== null;
+            const hasReduce = a.reduce !== undefined && a.reduce !== null;
+            const variable = a.variable;
+            if (is0d) {
+                if (hasCoords || hasReduce) {
+                    const offending = hasCoords ? 'coords' : 'reduce';
+                    errors.push({
+                        path,
+                        code: 'assertion_spatial_on_0d',
+                        message: `Assertion on 0-D component '${modelName}' must not set coords or reduce`,
+                        details: {
+                            component: modelName,
+                            test_id: test?.id,
+                            assertion_index: ai,
+                            variable,
+                            offending_field: offending,
+                        },
+                    });
+                }
+            } else {
+                const dims = spatialDims!;
+                if (!hasCoords && !hasReduce) {
+                    errors.push({
+                        path,
+                        code: 'assertion_missing_spatial_on_pde',
+                        message: `Assertion on PDE component '${modelName}' must set either coords or reduce`,
+                        details: {
+                            component: modelName,
+                            test_id: test?.id,
+                            assertion_index: ai,
+                            variable,
+                            spatial_dimensions: dims,
+                        },
+                    });
+                }
+                if (hasCoords && typeof a.coords === 'object') {
+                    for (const key of Object.keys(a.coords)) {
+                        if (!dims.includes(key)) {
+                            errors.push({
+                                path,
+                                code: 'assertion_coords_unknown_dim',
+                                message: `Assertion coords key '${key}' is not a spatial dimension of component '${modelName}'`,
+                                details: {
+                                    component: modelName,
+                                    test_id: test?.id,
+                                    assertion_index: ai,
+                                    variable,
+                                    unknown_key: key,
+                                    spatial_dimensions: dims,
+                                },
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    const examples = (model.examples ?? []) as any[];
+    for (let ei = 0; ei < examples.length; ei++) {
+        const example = examples[ei] ?? {};
+        const plots = example.plots ?? [];
+        for (let pi = 0; pi < plots.length; pi++) {
+            const plot = plots[pi] ?? {};
+            const ptype = plot.type;
+            if (ptype !== 'field_slice' && ptype !== 'field_snapshot') continue;
+            const ppath = `/models/${modelName}/examples/${ei}/plots/${pi}`;
+            if (is0d) {
+                errors.push({
+                    path: ppath,
+                    code: 'plot_field_on_0d',
+                    message: `Field plot type '${ptype}' requires a component with a spatial domain, but component '${modelName}' is 0-D`,
+                    details: {
+                        component: modelName,
+                        example_id: example.id,
+                        plot_id: plot.id,
+                        plot_type: ptype,
+                    },
+                });
+                continue;
+            }
+            const dims = spatialDims!;
+            const usedAxes: string[] = [];
+            if (plot.x && typeof plot.x.variable === 'string') {
+                usedAxes.push(plot.x.variable);
+            }
+            if (ptype === 'field_snapshot' && plot.y && typeof plot.y.variable === 'string') {
+                usedAxes.push(plot.y.variable);
+            }
+            const pinned = (plot.pinned_coords && typeof plot.pinned_coords === 'object')
+                ? plot.pinned_coords
+                : {};
+            const missing = dims.filter(d => !usedAxes.includes(d) && !(d in pinned));
+            if (missing.length > 0) {
+                errors.push({
+                    path: ppath,
+                    code: 'plot_pinned_coords_missing',
+                    message: `${ptype} plot on component '${modelName}' must pin non-axis spatial dimension '${missing[0]}' in pinned_coords`,
+                    details: {
+                        component: modelName,
+                        example_id: example.id,
+                        plot_id: plot.id,
+                        plot_type: ptype,
+                        missing_dimensions: missing,
+                        spatial_dimensions: dims,
+                    },
+                });
+            }
+        }
+    }
+
+    return errors;
+}
+
 function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
     const errors: StructuralError[] = [];
 
@@ -1067,6 +1225,7 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
             }
             errors.push(...validateEventConsistency(model, modelPath));
             errors.push(...validatePhysicalConstantUnits(model, modelPath));
+            errors.push(...validatePdeAwareAssertions(modelName, model, esmFile));
 
             // Recursively validate subsystems
             if (model.subsystems) {

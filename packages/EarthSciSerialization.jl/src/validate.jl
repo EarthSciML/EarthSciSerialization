@@ -137,6 +137,7 @@ function validate_structural(file::EsmFile)::Vector{StructuralError}
             append!(errors, validate_model_gradient_units(file, model, "/models/$model_name"))
             append!(errors, validate_physical_constant_units(model, "/models/$model_name"))
             append!(errors, validate_conversion_factor_consistency(model, "/models/$model_name"))
+            append!(errors, validate_pde_aware_assertions(file, model_name, model))
         end
     end
 
@@ -715,6 +716,134 @@ function validate_reaction_rate_units(rs::ReactionSystem, path::String)::Vector{
     # Recurse into subsystems
     for (subsys_name, subsys) in rs.subsystems
         append!(errors, validate_reaction_rate_units(subsys, "$path/subsystems/$subsys_name"))
+    end
+
+    return errors
+end
+
+"""
+    _collect_spatial_dim_names(file::EsmFile, model::Model) -> Union{Vector{String},Nothing}
+
+Return the ordered list of spatial dimension names for a component, or
+`nothing` when the component is 0-D (no `domain` reference, missing domain
+entry, or a domain whose `spatial` map is missing/empty).
+"""
+function _collect_spatial_dim_names(file::EsmFile, model::Model)
+    model.domain === nothing && return nothing
+    file.domains === nothing && return nothing
+    haskey(file.domains, model.domain) || return nothing
+    domain = file.domains[model.domain]
+    domain.spatial === nothing && return nothing
+    names = collect(keys(domain.spatial))
+    isempty(names) && return nothing
+    return String[string(n) for n in names]
+end
+
+"""
+    validate_pde_aware_assertions(file::EsmFile, model_name::String, model::Model) -> Vector{StructuralError}
+
+Per-binding structural rules for esm-spec §6.6.5 (PDE-aware assertions) and
+§6.7.4 (pinned_coords on field plots). These rules require resolved-domain
+information that JSON Schema cannot express:
+
+- A 0-D component MUST NOT carry an Assertion that sets `coords` or `reduce`.
+- A PDE component (≥1 spatial dim) MUST NOT carry an Assertion that omits
+  BOTH `coords` and `reduce`.
+- `coords` keys MUST name dimensions declared in `component.domain.spatial`.
+- `pinned_coords` on `field_slice`/`field_snapshot` plots MUST cover every
+  spatial dimension not used by the plot's `x` (and `y`) axes.
+
+Mirrors the implementations in `earthsci-toolkit-rs/src/validate.rs` and
+`earthsci_toolkit/src/earthsci_toolkit/parse.py::_check_pde_aware_assertions`.
+"""
+function validate_pde_aware_assertions(file::EsmFile, model_name::AbstractString,
+                                        model::Model)::Vector{StructuralError}
+    errors = StructuralError[]
+    spatial_dims = _collect_spatial_dim_names(file, model)
+    is_0d = spatial_dims === nothing
+
+    for (ti, test) in enumerate(model.tests)
+        for (ai, a) in enumerate(test.assertions)
+            path = "/models/$model_name/tests/$(ti-1)/assertions/$(ai-1)"
+            has_coords = a.coords !== nothing
+            has_reduce = a.reduce !== nothing
+            if is_0d
+                if has_coords || has_reduce
+                    offending = has_coords ? "coords" : "reduce"
+                    push!(errors, StructuralError(
+                        path,
+                        "Assertion on 0-D component '$model_name' must not set coords or reduce (test '$(test.id)', variable '$(a.variable)', offending field '$offending')",
+                        "assertion_spatial_on_0d",
+                    ))
+                end
+            else
+                dims = spatial_dims
+                if !has_coords && !has_reduce
+                    push!(errors, StructuralError(
+                        path,
+                        "Assertion on PDE component '$model_name' must set either coords or reduce (test '$(test.id)', variable '$(a.variable)', spatial dimensions $(dims))",
+                        "assertion_missing_spatial_on_pde",
+                    ))
+                end
+                if has_coords
+                    for key in keys(a.coords)
+                        if !(string(key) in dims)
+                            push!(errors, StructuralError(
+                                path,
+                                "Assertion coords key '$key' is not a spatial dimension of component '$model_name' (declared dimensions: $dims)",
+                                "assertion_coords_unknown_dim",
+                            ))
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    # Field-plot coverage. `model.examples` carries raw JSON3 objects (see
+    # `coerce_model` in parse.jl); we avoid a typed Plot struct because
+    # examples are non-normative illustrative runs, not simulation inputs.
+    for (ei, ex) in enumerate(model.examples)
+        example_id = (haskey(ex, :id) && ex.id !== nothing) ? string(ex.id) : ""
+        haskey(ex, :plots) && ex.plots !== nothing || continue
+        for (pi, plot) in enumerate(ex.plots)
+            ptype = (haskey(plot, :type) && plot.type !== nothing) ? string(plot.type) : ""
+            (ptype == "field_slice" || ptype == "field_snapshot") || continue
+            ppath = "/models/$model_name/examples/$(ei-1)/plots/$(pi-1)"
+            plot_id = (haskey(plot, :id) && plot.id !== nothing) ? string(plot.id) : ""
+            if spatial_dims === nothing
+                push!(errors, StructuralError(
+                    ppath,
+                    "Field plot type '$ptype' requires a component with a spatial domain, but component '$model_name' is 0-D (example '$example_id', plot '$plot_id')",
+                    "plot_field_on_0d",
+                ))
+                continue
+            end
+            dims = spatial_dims
+            used_axes = String[]
+            if haskey(plot, :x) && plot.x !== nothing &&
+                    haskey(plot.x, :variable) && plot.x.variable !== nothing
+                push!(used_axes, string(plot.x.variable))
+            end
+            if ptype == "field_snapshot" && haskey(plot, :y) && plot.y !== nothing &&
+                    haskey(plot.y, :variable) && plot.y.variable !== nothing
+                push!(used_axes, string(plot.y.variable))
+            end
+            pinned_keys = String[]
+            if haskey(plot, :pinned_coords) && plot.pinned_coords !== nothing
+                for k in keys(plot.pinned_coords)
+                    push!(pinned_keys, string(k))
+                end
+            end
+            missing_dims = [d for d in dims if !(d in used_axes) && !(d in pinned_keys)]
+            if !isempty(missing_dims)
+                push!(errors, StructuralError(
+                    ppath,
+                    "$ptype plot on component '$model_name' must pin non-axis spatial dimension '$(missing_dims[1])' in pinned_coords (example '$example_id', plot '$plot_id', missing $(missing_dims))",
+                    "plot_pinned_coords_missing",
+                ))
+            end
+        end
     end
 
     return errors

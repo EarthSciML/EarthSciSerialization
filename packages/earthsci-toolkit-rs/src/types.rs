@@ -271,6 +271,16 @@ pub struct TimeSpan {
 }
 
 /// A single scalar `(variable, time, expected)` check inside a [`ModelTest`].
+///
+/// PDE-aware variants (esm-spec §6.6.5) pin a spatial point via [`coords`], or
+/// reduce the field to a scalar via [`reduce`] (`integral`/`mean`/`max`/`min`
+/// or the error-norms `L2_error`/`Linf_error`). Error-norm reductions require
+/// a [`reference`] analytic/precomputed solution. Structural validators reject
+/// combinations forbidden by §6.6.5.
+///
+/// [`coords`]: Self::coords
+/// [`reduce`]: Self::reduce
+/// [`reference`]: Self::reference
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModelTestAssertion {
@@ -287,6 +297,23 @@ pub struct ModelTestAssertion {
     /// and model-level defaults when present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tolerance: Option<Tolerance>,
+
+    /// Spatial-point evaluation: `{dim_name: coord}` sampling the field at
+    /// the named point. Mutually exclusive with [`reduce`](Self::reduce).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coords: Option<HashMap<String, f64>>,
+
+    /// Domain reduction over the spatial field. Mutually exclusive with
+    /// [`coords`](Self::coords); error-norm reductions require
+    /// [`reference`](Self::reference).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduce: Option<String>,
+
+    /// Reference (analytic or precomputed) solution for error-norm reductions.
+    /// Either an inline Expression or a `{type: "from_file", path, format?}`
+    /// shape; kept as raw JSON pending typed downstream consumers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<serde_json::Value>,
 }
 
 /// Inline validation test for a [`Model`] (schema gt-cc1).
@@ -371,6 +398,12 @@ pub struct Model {
     /// Inline validation tests that exercise this model in isolation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tests: Option<Vec<ModelTest>>,
+
+    /// Inline illustrative examples (§6.7). Kept as raw JSON pending typed
+    /// downstream consumers; the structural validator walks these to enforce
+    /// field-plot constraints (e.g. pinned_coords on field_slice/field_snapshot).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub examples: Option<Vec<serde_json::Value>>,
 
     /// Model-level boundary conditions, keyed by user-supplied id. New in ESM
     /// v0.2.0 (breaking change per docs/rfcs/discretization.md §9 / §10.1).

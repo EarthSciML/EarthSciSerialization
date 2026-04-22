@@ -228,6 +228,7 @@ fn test_model_substitution() {
         description: None,
         tolerance: None,
         tests: None,
+        examples: None,
         boundary_conditions: None,
         initialization_equations: None,
         guesses: None,

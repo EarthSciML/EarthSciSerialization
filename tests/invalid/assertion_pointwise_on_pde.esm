@@ -1,0 +1,43 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "AssertionPointwiseOnPDE",
+    "description": "A PDE component (>=1 spatial dim) must not carry a pointwise Assertion (no coords, no reduce): the comparison has no defined point.",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-04-22T00:00:00Z"
+  },
+  "models": {
+    "Heat1D": {
+      "domain": "heat_1d",
+      "variables": {
+        "u": { "type": "state", "units": "1", "default": 0.0 },
+        "alpha": { "type": "parameter", "units": "1", "default": 0.01 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["alpha", { "op": "laplacian", "args": ["u"] }] }
+        }
+      ],
+      "tests": [
+        {
+          "id": "missing_spatial_on_pde",
+          "time_span": { "start": 0.0, "end": 0.1 },
+          "tolerance": { "abs": 1.0e-3 },
+          "assertions": [
+            { "variable": "u", "time": 0.1, "expected": 0.5 }
+          ]
+        }
+      ]
+    }
+  },
+  "domains": {
+    "heat_1d": {
+      "independent_variable": "t",
+      "spatial": {
+        "x": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.02 }
+      },
+      "element_type": "Float64"
+    }
+  }
+}

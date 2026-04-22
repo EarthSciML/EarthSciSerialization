@@ -1,0 +1,62 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "PlotPinnedCoordsMissing",
+    "description": "A field_slice plot on a 2-D domain MUST pin every non-axis spatial dimension in pinned_coords. Omitting pinned_coords for 'y' when the plot x-axis is 'x' is a structural error.",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-04-22T00:00:00Z"
+  },
+  "models": {
+    "Heat2D": {
+      "domain": "heat_2d",
+      "variables": {
+        "u": { "type": "state", "units": "1", "default": 0.0 },
+        "alpha": { "type": "parameter", "units": "1", "default": 0.01 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": { "op": "*", "args": ["alpha", { "op": "laplacian", "args": ["u"] }] }
+        }
+      ],
+      "examples": [
+        {
+          "id": "heat_decay_2d",
+          "initial_state": {
+            "type": "expression",
+            "values": {
+              "u": {
+                "op": "*",
+                "args": [
+                  { "op": "sin", "args": [{ "op": "*", "args": [3.141592653589793, "x"] }] },
+                  { "op": "sin", "args": [{ "op": "*", "args": [3.141592653589793, "y"] }] }
+                ]
+              }
+            }
+          },
+          "parameters": { "alpha": 0.01 },
+          "time_span": { "start": 0.0, "end": 0.1 },
+          "plots": [
+            {
+              "id": "u_slice_missing_pin",
+              "type": "field_slice",
+              "x": { "variable": "x" },
+              "y": { "variable": "u" },
+              "at_time": 0.1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "domains": {
+    "heat_2d": {
+      "independent_variable": "t",
+      "spatial": {
+        "x": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.05 },
+        "y": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.05 }
+      },
+      "element_type": "Float64"
+    }
+  }
+}

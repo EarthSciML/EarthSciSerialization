@@ -89,6 +89,17 @@ pub enum StructuralErrorCode {
     CircularDependency,
     /// Reaction rate expression has incompatible units for reaction stoichiometry
     UnitInconsistency,
+    /// Assertion on a 0-D component sets `coords` or `reduce` (esm-spec §6.6.5)
+    AssertionSpatialOn0d,
+    /// Assertion on a PDE component omits both `coords` and `reduce` (esm-spec §6.6.5)
+    AssertionMissingSpatialOnPde,
+    /// Assertion `coords` references a dimension not declared in the component's domain
+    AssertionCoordsUnknownDim,
+    /// Field plot (`field_slice`/`field_snapshot`) is missing `pinned_coords` for a
+    /// non-axis spatial dimension (esm-spec §6.7.4)
+    PlotPinnedCoordsMissing,
+    /// Field plot is attached to a 0-D component that has no spatial domain
+    PlotFieldOn0d,
 }
 
 impl std::fmt::Display for StructuralErrorCode {
@@ -109,6 +120,11 @@ impl std::fmt::Display for StructuralErrorCode {
             Self::OperatorVariableMissing => "operator_variable_missing",
             Self::CircularDependency => "circular_dependency",
             Self::UnitInconsistency => "unit_inconsistency",
+            Self::AssertionSpatialOn0d => "assertion_spatial_on_0d",
+            Self::AssertionMissingSpatialOnPde => "assertion_missing_spatial_on_pde",
+            Self::AssertionCoordsUnknownDim => "assertion_coords_unknown_dim",
+            Self::PlotPinnedCoordsMissing => "plot_pinned_coords_missing",
+            Self::PlotFieldOn0d => "plot_field_on_0d",
         };
         write!(f, "{}", s)
     }
@@ -181,6 +197,7 @@ pub fn validate(esm_file: &EsmFile) -> ValidationResult {
                 &mut unit_warnings,
             );
             validate_model_gradient_units(esm_file, model_name, model, &mut structural_errors);
+            validate_pde_aware_assertions(esm_file, model_name, model, &mut structural_errors);
         }
 
         // Check for circular dependencies between models
@@ -735,6 +752,200 @@ fn check_gradient_ops(
     }
     if let Some(inner) = node.expr.as_ref() {
         check_gradient_ops(inner, coords, model, eq_path, eq_index, errors);
+    }
+}
+
+/// Collect the ordered list of spatial dimension names for a component.
+/// Returns `None` when the component is 0-D (no `domain` reference, missing
+/// domain entry, or a domain whose `spatial` map is missing/empty).
+fn collect_spatial_dim_names(
+    esm_file: &EsmFile,
+    model: &crate::Model,
+) -> Option<Vec<String>> {
+    let domain_name = model.domain.as_deref()?;
+    let domains = esm_file.domains.as_ref()?;
+    let domain = domains.get(domain_name)?;
+    let spatial_val = domain.spatial.as_ref()?;
+    let spatial_map = spatial_val.as_object()?;
+    if spatial_map.is_empty() {
+        return None;
+    }
+    Some(spatial_map.keys().cloned().collect())
+}
+
+/// Per-binding structural rules for esm-spec §6.6.5 (PDE-aware assertions)
+/// and §6.7.4 (pinned_coords on field plots). These rules require
+/// resolved-domain information that JSON Schema cannot express.
+fn validate_pde_aware_assertions(
+    esm_file: &EsmFile,
+    model_name: &str,
+    model: &crate::Model,
+    errors: &mut Vec<StructuralError>,
+) {
+    let spatial_dims = collect_spatial_dim_names(esm_file, model);
+    let is_0d = spatial_dims.is_none();
+
+    if let Some(tests) = model.tests.as_ref() {
+        for (ti, test) in tests.iter().enumerate() {
+            for (ai, assertion) in test.assertions.iter().enumerate() {
+                let path = format!(
+                    "/models/{}/tests/{}/assertions/{}",
+                    model_name, ti, ai
+                );
+                let has_coords = assertion.coords.is_some();
+                let has_reduce = assertion.reduce.is_some();
+                if is_0d {
+                    if has_coords || has_reduce {
+                        let offending = if has_coords { "coords" } else { "reduce" };
+                        errors.push(StructuralError {
+                            path: path.clone(),
+                            code: StructuralErrorCode::AssertionSpatialOn0d,
+                            message: format!(
+                                "Assertion on 0-D component '{}' must not set coords or reduce",
+                                model_name
+                            ),
+                            details: serde_json::json!({
+                                "component": model_name,
+                                "test_id": test.id,
+                                "assertion_index": ai,
+                                "variable": assertion.variable,
+                                "offending_field": offending,
+                            }),
+                        });
+                    }
+                } else {
+                    let dims = spatial_dims.as_ref().unwrap();
+                    if !has_coords && !has_reduce {
+                        errors.push(StructuralError {
+                            path: path.clone(),
+                            code: StructuralErrorCode::AssertionMissingSpatialOnPde,
+                            message: format!(
+                                "Assertion on PDE component '{}' must set either coords or reduce",
+                                model_name
+                            ),
+                            details: serde_json::json!({
+                                "component": model_name,
+                                "test_id": test.id,
+                                "assertion_index": ai,
+                                "variable": assertion.variable,
+                                "spatial_dimensions": dims,
+                            }),
+                        });
+                    }
+                    if let Some(coords) = assertion.coords.as_ref() {
+                        for key in coords.keys() {
+                            if !dims.iter().any(|d| d == key) {
+                                errors.push(StructuralError {
+                                    path: path.clone(),
+                                    code: StructuralErrorCode::AssertionCoordsUnknownDim,
+                                    message: format!(
+                                        "Assertion coords key '{}' is not a spatial dimension of component '{}'",
+                                        key, model_name
+                                    ),
+                                    details: serde_json::json!({
+                                        "component": model_name,
+                                        "test_id": test.id,
+                                        "assertion_index": ai,
+                                        "variable": assertion.variable,
+                                        "unknown_key": key,
+                                        "spatial_dimensions": dims,
+                                    }),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(examples) = model.examples.as_ref() {
+        for (ei, example) in examples.iter().enumerate() {
+            let example_id = example
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let plots = match example.get("plots").and_then(|v| v.as_array()) {
+                Some(p) => p,
+                None => continue,
+            };
+            for (pi, plot) in plots.iter().enumerate() {
+                let ptype = plot.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                if ptype != "field_slice" && ptype != "field_snapshot" {
+                    continue;
+                }
+                let ppath = format!(
+                    "/models/{}/examples/{}/plots/{}",
+                    model_name, ei, pi
+                );
+                let plot_id = plot
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let Some(dims) = spatial_dims.as_ref() else {
+                    errors.push(StructuralError {
+                        path: ppath,
+                        code: StructuralErrorCode::PlotFieldOn0d,
+                        message: format!(
+                            "Field plot type '{}' requires a component with a spatial domain, but component '{}' is 0-D",
+                            ptype, model_name
+                        ),
+                        details: serde_json::json!({
+                            "component": model_name,
+                            "example_id": example_id,
+                            "plot_id": plot_id,
+                            "plot_type": ptype,
+                        }),
+                    });
+                    continue;
+                };
+                let mut used_axes: Vec<String> = Vec::new();
+                if let Some(v) = plot
+                    .get("x")
+                    .and_then(|a| a.get("variable"))
+                    .and_then(|v| v.as_str())
+                {
+                    used_axes.push(v.to_string());
+                }
+                if ptype == "field_snapshot"
+                    && let Some(v) = plot
+                        .get("y")
+                        .and_then(|a| a.get("variable"))
+                        .and_then(|v| v.as_str())
+                {
+                    used_axes.push(v.to_string());
+                }
+                let pinned_obj = plot.get("pinned_coords").and_then(|v| v.as_object());
+                let missing: Vec<String> = dims
+                    .iter()
+                    .filter(|d| {
+                        !used_axes.iter().any(|ax| ax == *d)
+                            && !pinned_obj.map(|o| o.contains_key(*d)).unwrap_or(false)
+                    })
+                    .cloned()
+                    .collect();
+                if !missing.is_empty() {
+                    errors.push(StructuralError {
+                        path: ppath,
+                        code: StructuralErrorCode::PlotPinnedCoordsMissing,
+                        message: format!(
+                            "{} plot on component '{}' must pin non-axis spatial dimension '{}' in pinned_coords",
+                            ptype, model_name, missing[0]
+                        ),
+                        details: serde_json::json!({
+                            "component": model_name,
+                            "example_id": example_id,
+                            "plot_id": plot_id,
+                            "plot_type": ptype,
+                            "missing_dimensions": missing,
+                            "spatial_dimensions": dims,
+                        }),
+                    });
+                }
+            }
+        }
     }
 }
 
@@ -1815,6 +2026,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
@@ -1925,6 +2137,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
@@ -2050,6 +2263,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
@@ -2185,6 +2399,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
@@ -2359,6 +2574,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
@@ -2471,6 +2687,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
@@ -2582,6 +2799,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
@@ -2682,6 +2900,7 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
+                examples: None,
                 boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,

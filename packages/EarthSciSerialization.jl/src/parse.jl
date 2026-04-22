@@ -522,6 +522,11 @@ function coerce_model(data::Any)::Model
     tests = haskey(data, :tests) && data.tests !== nothing ?
         EarthSciSerialization.Test[coerce_test(t) for t in data.tests] :
         EarthSciSerialization.Test[]
+    # Preserve raw JSON3 example objects so the structural validator can
+    # enforce §6.7.4 field-plot invariants (pinned_coords coverage).
+    examples = haskey(data, :examples) && data.examples !== nothing ?
+        Any[ex for ex in data.examples] :
+        Any[]
 
     return Model(variables, equations;
                  discrete_events=discrete_events,
@@ -529,6 +534,7 @@ function coerce_model(data::Any)::Model
                  domain=domain,
                  tolerance=tolerance,
                  tests=tests,
+                 examples=examples,
                  initialization_equations=initialization_equations,
                  guesses=guesses,
                  system_kind=system_kind)

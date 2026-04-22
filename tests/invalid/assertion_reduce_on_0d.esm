@@ -1,0 +1,33 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "AssertionReduceOn0D",
+    "description": "A 0-D component (no domain) must not carry an Assertion with reduce — domain reductions are meaningless on a scalar trajectory.",
+    "authors": ["ESM Test Suite"],
+    "created": "2026-04-22T00:00:00Z"
+  },
+  "models": {
+    "ScalarDecay": {
+      "variables": {
+        "u": { "type": "state", "units": "1", "default": 1.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 1.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [{ "op": "-", "args": ["k"] }, "u"] }
+        }
+      ],
+      "tests": [
+        {
+          "id": "bad_reduce_on_scalar",
+          "time_span": { "start": 0.0, "end": 1.0 },
+          "tolerance": { "abs": 1.0e-3 },
+          "assertions": [
+            { "variable": "u", "time": 1.0, "expected": 0.367879, "reduce": "integral" }
+          ]
+        }
+      ]
+    }
+  }
+}

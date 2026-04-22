@@ -50,6 +50,20 @@ const (
 	ErrorMissingObservedExpr   = "missing_observed_expr"
 	ErrorEventVarUndeclared    = "event_var_undeclared"
 	ErrorUnitInconsistency     = "unit_inconsistency"
+	// Per esm-spec §6.6.5: a 0-D component must not carry an assertion with
+	// coords or reduce set.
+	ErrorAssertionSpatialOn0D = "assertion_spatial_on_0d"
+	// Per esm-spec §6.6.5: a PDE component must not carry a pointwise assertion
+	// (both coords and reduce absent).
+	ErrorAssertionMissingSpatialOnPDE = "assertion_missing_spatial_on_pde"
+	// Per esm-spec §6.6.5: assertion coords keys must name dimensions declared
+	// in component.domain.spatial.
+	ErrorAssertionCoordsUnknownDim = "assertion_coords_unknown_dim"
+	// Per esm-spec §6.7.4: field_slice / field_snapshot plots must pin every
+	// non-axis spatial dimension in pinned_coords.
+	ErrorPlotPinnedCoordsMissing = "plot_pinned_coords_missing"
+	// Field plot type attached to a 0-D component that has no spatial domain.
+	ErrorPlotFieldOn0D = "plot_field_on_0d"
 )
 
 // ValidationMessage represents a single validation issue (for backward compatibility)
@@ -249,6 +263,178 @@ func validateModelWithCodes(modelName string, model *Model, result *StructuralVa
 	// Validate continuous events
 	for i, event := range model.ContinuousEvents {
 		validateContinuousEventWithCodes(&event, allVars, fmt.Sprintf("%s.continuous_events[%d]", basePath, i), result, file, modelName)
+	}
+
+	// PDE-aware assertion + field-plot invariants (esm-spec §6.6.5 / §6.7.4).
+	validatePDEAwareAssertions(modelName, model, result, file)
+}
+
+// collectSpatialDimNames returns the ordered list of spatial dimension names
+// for a component, or nil when the component is 0-D (no domain reference,
+// missing domain entry, or a domain whose spatial map is missing/empty).
+func collectSpatialDimNames(model *Model, file *EsmFile) []string {
+	if model.Domain == nil {
+		return nil
+	}
+	domain, ok := file.Domains[*model.Domain]
+	if !ok {
+		return nil
+	}
+	if len(domain.Spatial) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(domain.Spatial))
+	for name := range domain.Spatial {
+		names = append(names, name)
+	}
+	return names
+}
+
+// validatePDEAwareAssertions enforces esm-spec §6.6.5 (PDE-aware assertions)
+// and §6.7.4 (pinned_coords on field plots). These rules require
+// resolved-domain information that JSON Schema cannot express.
+//
+// Mirrors the implementations in earthsci-toolkit-rs/src/validate.rs,
+// earthsci_toolkit/src/earthsci_toolkit/parse.py::_check_pde_aware_assertions,
+// EarthSciSerialization.jl/src/validate.jl::validate_pde_aware_assertions, and
+// earthsci-toolkit/src/validate.ts::validatePdeAwareAssertions.
+func validatePDEAwareAssertions(modelName string, model *Model, result *StructuralValidationResult, file *EsmFile) {
+	spatialDims := collectSpatialDimNames(model, file)
+	is0D := spatialDims == nil
+
+	for ti, test := range model.Tests {
+		for ai, a := range test.Assertions {
+			path := fmt.Sprintf("/models/%s/tests/%d/assertions/%d", modelName, ti, ai)
+			hasCoords := len(a.Coords) > 0
+			hasReduce := a.Reduce != nil
+			if is0D {
+				if hasCoords || hasReduce {
+					offending := "coords"
+					if !hasCoords {
+						offending = "reduce"
+					}
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    path,
+						Code:    ErrorAssertionSpatialOn0D,
+						Message: fmt.Sprintf("Assertion on 0-D component '%s' must not set coords or reduce", modelName),
+						Details: map[string]interface{}{
+							"component":       modelName,
+							"test_id":         test.ID,
+							"assertion_index": ai,
+							"variable":        a.Variable,
+							"offending_field": offending,
+						},
+					})
+				}
+			} else {
+				if !hasCoords && !hasReduce {
+					result.Valid = false
+					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+						Path:    path,
+						Code:    ErrorAssertionMissingSpatialOnPDE,
+						Message: fmt.Sprintf("Assertion on PDE component '%s' must set either coords or reduce", modelName),
+						Details: map[string]interface{}{
+							"component":          modelName,
+							"test_id":            test.ID,
+							"assertion_index":    ai,
+							"variable":           a.Variable,
+							"spatial_dimensions": spatialDims,
+						},
+					})
+				}
+				if hasCoords {
+					for key := range a.Coords {
+						found := false
+						for _, d := range spatialDims {
+							if d == key {
+								found = true
+								break
+							}
+						}
+						if !found {
+							result.Valid = false
+							result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+								Path:    path,
+								Code:    ErrorAssertionCoordsUnknownDim,
+								Message: fmt.Sprintf("Assertion coords key '%s' is not a spatial dimension of component '%s'", key, modelName),
+								Details: map[string]interface{}{
+									"component":          modelName,
+									"test_id":            test.ID,
+									"assertion_index":    ai,
+									"variable":           a.Variable,
+									"unknown_key":        key,
+									"spatial_dimensions": spatialDims,
+								},
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for ei, example := range model.Examples {
+		for pi, plot := range example.Plots {
+			if plot.Type != "field_slice" && plot.Type != "field_snapshot" {
+				continue
+			}
+			path := fmt.Sprintf("/models/%s/examples/%d/plots/%d", modelName, ei, pi)
+			if is0D {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    path,
+					Code:    ErrorPlotFieldOn0D,
+					Message: fmt.Sprintf("Field plot type '%s' requires a component with a spatial domain, but component '%s' is 0-D", plot.Type, modelName),
+					Details: map[string]interface{}{
+						"component":  modelName,
+						"example_id": example.ID,
+						"plot_id":    plot.ID,
+						"plot_type":  plot.Type,
+					},
+				})
+				continue
+			}
+			usedAxes := []string{}
+			if plot.X.Variable != "" {
+				usedAxes = append(usedAxes, plot.X.Variable)
+			}
+			if plot.Type == "field_snapshot" && plot.Y.Variable != "" {
+				usedAxes = append(usedAxes, plot.Y.Variable)
+			}
+			var missing []string
+			for _, d := range spatialDims {
+				inAxes := false
+				for _, ax := range usedAxes {
+					if ax == d {
+						inAxes = true
+						break
+					}
+				}
+				if inAxes {
+					continue
+				}
+				if _, ok := plot.PinnedCoords[d]; !ok {
+					missing = append(missing, d)
+				}
+			}
+			if len(missing) > 0 {
+				result.Valid = false
+				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+					Path:    path,
+					Code:    ErrorPlotPinnedCoordsMissing,
+					Message: fmt.Sprintf("%s plot on component '%s' must pin non-axis spatial dimension '%s' in pinned_coords", plot.Type, modelName, missing[0]),
+					Details: map[string]interface{}{
+						"component":          modelName,
+						"example_id":         example.ID,
+						"plot_id":            plot.ID,
+						"plot_type":          plot.Type,
+						"missing_dimensions": missing,
+						"spatial_dimensions": spatialDims,
+					},
+				})
+			}
+		}
 	}
 }
 

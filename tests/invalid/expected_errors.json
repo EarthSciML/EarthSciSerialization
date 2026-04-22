@@ -2150,5 +2150,107 @@
     ],
     "is_valid": false,
     "notes": "The ideal gas constant 'R' is declared with units 'kcal/mol' — missing the temperature dimension — so the computed dimensions of 'n*R*T' in 'gas_law_calculation' do not match the canonical energy dimension expected from P*V = n*R*T. Python's validator pattern-matches a small registry of well-known constants (R, k_B, N_A) and flags dimensional (not numerical) mismatches at the first usage site. Julia/Rust/TS/Go currently do not implement this check — follow-up beads required for full cross-language support."
+  },
+
+  "assertion_coords_on_0d.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ScalarDecay/tests/0/assertions/0",
+        "code": "assertion_spatial_on_0d",
+        "message": "Assertion on 0-D component 'ScalarDecay' must not set coords or reduce",
+        "details": {
+          "component": "ScalarDecay",
+          "test_id": "bad_coords_on_scalar",
+          "assertion_index": 0,
+          "variable": "u",
+          "offending_field": "coords"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Per esm-spec.md §6.6.5: a 0-D component (component.domain is null/absent or points at a Domain with empty/missing spatial) MUST NOT carry an Assertion that sets coords or reduce. Pointwise scalar checks are the only meaningful shape on a scalar trajectory."
+  },
+
+  "assertion_reduce_on_0d.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ScalarDecay/tests/0/assertions/0",
+        "code": "assertion_spatial_on_0d",
+        "message": "Assertion on 0-D component 'ScalarDecay' must not set coords or reduce",
+        "details": {
+          "component": "ScalarDecay",
+          "test_id": "bad_reduce_on_scalar",
+          "assertion_index": 0,
+          "variable": "u",
+          "offending_field": "reduce"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Per esm-spec.md §6.6.5: a 0-D component must not carry an Assertion with reduce — there is no spatial domain to reduce over."
+  },
+
+  "assertion_pointwise_on_pde.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/Heat1D/tests/0/assertions/0",
+        "code": "assertion_missing_spatial_on_pde",
+        "message": "Assertion on PDE component 'Heat1D' must set either coords or reduce",
+        "details": {
+          "component": "Heat1D",
+          "test_id": "missing_spatial_on_pde",
+          "assertion_index": 0,
+          "variable": "u",
+          "spatial_dimensions": ["x"]
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Per esm-spec.md §6.6.5: on a component with a non-empty spatial domain, every assertion MUST select a scalar via either coords or reduce. Pointwise checks have no defined point on a field."
+  },
+
+  "assertion_coords_unknown_dim.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/Heat1D/tests/0/assertions/0",
+        "code": "assertion_coords_unknown_dim",
+        "message": "Assertion coords key 'y' is not a spatial dimension of component 'Heat1D'",
+        "details": {
+          "component": "Heat1D",
+          "test_id": "unknown_coord_key",
+          "assertion_index": 0,
+          "variable": "u",
+          "unknown_key": "y",
+          "spatial_dimensions": ["x"]
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Per esm-spec.md §6.6.5: coords keys MUST match dimension names declared in component.domain.spatial."
+  },
+
+  "plot_pinned_coords_missing.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/Heat2D/examples/0/plots/0",
+        "code": "plot_pinned_coords_missing",
+        "message": "field_slice plot on component 'Heat2D' must pin non-axis spatial dimension 'y' in pinned_coords",
+        "details": {
+          "component": "Heat2D",
+          "example_id": "heat_decay_2d",
+          "plot_id": "u_slice_missing_pin",
+          "plot_type": "field_slice",
+          "missing_dimensions": ["y"],
+          "spatial_dimensions": ["x", "y"]
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Per esm-spec.md §6.7.4: field_slice / field_snapshot plots MUST pin every spatial dimension that is not used by their x (or y) axis in pinned_coords."
   }
 }
