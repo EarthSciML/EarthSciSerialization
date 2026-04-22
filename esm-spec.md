@@ -1515,11 +1515,13 @@ Authentication, credential management, algorithm-specific regridding tuning, and
 
 | Field | Required | Description |
 |---|---|---|
-| `kind` | ✓ | Structural kind: `"grid"`, `"points"`, or `"static"`. Scientific role (emissions, meteorology, elevation, …) is **not** schema-validated and belongs in `metadata.tags`. |
+| `kind` | ✓ | Structural kind: `"grid"`, `"points"`, `"static"`, or `"mesh"`. The first three are the classical kinds (§8.2–§8.6); `"mesh"` (discretization RFC §8.A, see §8.9 below) declares a loader that publishes integer connectivity tables and float metric arrays for an unstructured grid. Scientific role (emissions, meteorology, elevation, …) is **not** schema-validated and belongs in `metadata.tags`. |
 | `source` | ✓ | File discovery object (see §8.2). |
 | `variables` | ✓ | Map of schema-level variable name → variable descriptor (see §8.5). At least one entry required. |
 | `temporal` | | Temporal coverage and record layout (see §8.3). |
 | `spatial` | | Spatial grid description (see §8.4). |
+| `mesh` | conditional | Mesh descriptor (see §8.9). **Required when `kind: "mesh"`**, ignored otherwise. |
+| `determinism` | | Reproducibility contract — endian / float format / integer width (see §8.9). Applies to any loader kind, but is most commonly declared on mesh loaders. |
 | `regridding` | | Regridding configuration (see §8.6). |
 | `reference` | | Data source citation. |
 | `metadata` | | Free-form metadata. The `tags` array is conventional for scientific role. |
@@ -1575,7 +1577,7 @@ spatial:
     <dim>: [min, max]
 ```
 
-`grid_type` is one of: `"latlon"`, `"lambert_conformal"`, `"mercator"`, `"polar_stereographic"`, `"rotated_pole"`, `"unstructured"`. Use `"unstructured"` (in combination with `kind: "points"`) for mesh or point-cloud datasets; mesh connectivity is out of scope for the schema and deferred to runtime.
+`grid_type` is one of: `"latlon"`, `"lambert_conformal"`, `"mercator"`, `"polar_stereographic"`, `"rotated_pole"`, `"unstructured"`. Use `"unstructured"` (in combination with `kind: "points"`) for point-cloud datasets. For mesh datasets with connectivity, prefer `kind: "mesh"` and declare topology + connectivity / metric fields under `mesh` (see §8.9); `spatial` may be omitted for mesh loaders.
 
 `staggering` is first-class rather than buried in `config`, because it changes how variables align to the grid and is needed for regridding. Dimensions not listed default to `"center"`.
 
@@ -1608,7 +1610,6 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
 - **Authentication / credentials.** Env vars, API keys, S3 credentials, CDS API tokens — all runtime-side. The schema stores **no** credential information.
 - **Per-variable temporal availability windows** (e.g. "CEDS covers 1750–2023 for NOx but 1850–2023 for CH4"). Runtime validation concern.
 - **Regridding algorithm tuning parameters.**
-- **Mesh connectivity for unstructured grids.** `kind: "points"` is a placeholder for future work.
 
 ### 8.8 Worked examples
 
@@ -1777,6 +1778,90 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
       "url": "https://www.usgs.gov/3d-elevation-program"
     },
     "metadata": { "tags": ["elevation", "static", "topography"] }
+  }
+}
+```
+
+### 8.9 `kind: "mesh"` — mesh loaders (discretization RFC §8.A)
+
+A loader declared with `kind: "mesh"` publishes the integer connectivity tables and float metric arrays that an unstructured `grids.<g>` entry (see the discretization RFC §6) resolves by `{loader, field}` reference. `"mesh"` is distinct from `kind: "grid"` (which describes a regular gridded dataset with a CRS under `spatial`) and from `kind: "points"` (which is a point-cloud placeholder with no connectivity).
+
+#### 8.9.1 `mesh` — mesh descriptor
+
+```
+mesh:
+  topology: enum                    # required — closed set, see below
+  connectivity_fields: [string]     # required — integer-typed fields
+  metric_fields: [string]           # required — float-typed fields
+  dimension_sizes:                  # optional
+    <dim>: integer | "from_file"
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `topology` | ✓ | Closed enum: `"mpas_voronoi"` (v0.2.0 MVP), `"fesom_triangular"` (reserved), `"icon_triangular"` (reserved). Adding a new value is a minor version bump. |
+| `connectivity_fields` | ✓ | List of integer-typed fields the loader exposes. Entries are referenceable from `grids.<g>.connectivity.<name>.field`. |
+| `metric_fields` | ✓ | List of float-typed fields the loader exposes. Entries are referenceable from `grids.<g>.metric_arrays.<name>.generator.field`. |
+| `dimension_sizes` | | Map of dimension name → integer extent or the literal string `"from_file"`. Values populate grid-level `parameters` marked `value: "from_loader"`. |
+
+#### 8.9.2 `determinism` — reproducibility contract
+
+```
+determinism:
+  endian: "little" | "big"
+  float_format: "ieee754_single" | "ieee754_double"
+  integer_width: 32 | 64
+```
+
+`determinism` is a loader-level contract for bit-exact reproducibility. All fields are optional; declared fields are a contract that bindings MUST honor. A binding that cannot honor a declared endian / float format / integer width MUST reject the file at load rather than silently reinterpreting bytes. `determinism` is meaningful for any loader kind but is most commonly declared on mesh loaders where on-wire integer layouts vary.
+
+#### 8.9.3 Worked example — MPAS cvmesh
+
+```json
+{
+  "data_loaders": {
+    "mpas_mesh": {
+      "kind": "mesh",
+      "source": { "url_template": "file:///data/mpas/x1.2562.grid.nc" },
+      "mesh": {
+        "topology": "mpas_voronoi",
+        "connectivity_fields": ["cellsOnEdge", "edgesOnCell", "verticesOnEdge", "nEdgesOnCell"],
+        "metric_fields":       ["dcEdge", "dvEdge", "areaCell"],
+        "dimension_sizes":     { "nCells": "from_file", "nEdges": "from_file", "maxEdges": "from_file" }
+      },
+      "determinism": {
+        "endian": "little",
+        "float_format": "ieee754_double",
+        "integer_width": 32
+      },
+      "variables": {
+        "cellsOnEdge":    { "file_variable": "cellsOnEdge",    "units": "1" },
+        "edgesOnCell":    { "file_variable": "edgesOnCell",    "units": "1" },
+        "verticesOnEdge": { "file_variable": "verticesOnEdge", "units": "1" },
+        "nEdgesOnCell":   { "file_variable": "nEdgesOnCell",   "units": "1" },
+        "dcEdge":         { "file_variable": "dcEdge",         "units": "m" },
+        "dvEdge":         { "file_variable": "dvEdge",         "units": "m" },
+        "areaCell":       { "file_variable": "areaCell",       "units": "m^2" }
+      },
+      "reference": { "doi": "10.5194/gmd-5-1115-2012" }
+    }
+  }
+}
+```
+
+The grid that consumes this loader references fields by name, not by kind:
+
+```json
+"grids": {
+  "mpas_cvmesh": {
+    "family": "unstructured",
+    "dimensions": ["cell", "edge", "vertex"],
+    "connectivity": {
+      "cellsOnEdge": { "shape": ["nEdges", 2], "rank": 2, "loader": "mpas_mesh", "field": "cellsOnEdge" }
+    },
+    "metric_arrays": {
+      "dcEdge": { "rank": 1, "dim": "edge", "generator": { "kind": "loader", "loader": "mpas_mesh", "field": "dcEdge" } }
+    }
   }
 }
 ```

@@ -331,6 +331,31 @@ class DataLoaderKind(Enum):
     GRID = "grid"
     POINTS = "points"
     STATIC = "static"
+    MESH = "mesh"
+
+
+class DataLoaderMeshTopology(Enum):
+    """Closed topology enum for mesh loaders (esm-spec §8.9, discretization RFC §8.A)."""
+    MPAS_VORONOI = "mpas_voronoi"
+    FESOM_TRIANGULAR = "fesom_triangular"
+    ICON_TRIANGULAR = "icon_triangular"
+
+
+@dataclass
+class DataLoaderMesh:
+    """Mesh descriptor for a DataLoader with kind='mesh' (esm-spec §8.9)."""
+    topology: DataLoaderMeshTopology
+    connectivity_fields: List[str]
+    metric_fields: List[str]
+    dimension_sizes: Dict[str, Union[int, str]] = field(default_factory=dict)
+
+
+@dataclass
+class DataLoaderDeterminism:
+    """Reproducibility contract a loader advertises to bindings (esm-spec §8.9.2)."""
+    endian: Optional[str] = None           # "little" | "big"
+    float_format: Optional[str] = None     # "ieee754_single" | "ieee754_double"
+    integer_width: Optional[int] = None    # 32 | 64
 
 
 @dataclass
@@ -393,6 +418,8 @@ class DataLoader:
     variables: Dict[str, DataLoaderVariable] = field(default_factory=dict)
     temporal: Optional[DataLoaderTemporal] = None
     spatial: Optional[DataLoaderSpatial] = None
+    mesh: Optional[DataLoaderMesh] = None
+    determinism: Optional[DataLoaderDeterminism] = None
     regridding: Optional[DataLoaderRegridding] = None
     reference: Optional['Reference'] = None
     metadata: Dict[str, Any] = field(default_factory=dict)

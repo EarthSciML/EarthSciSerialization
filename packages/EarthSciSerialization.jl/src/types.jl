@@ -748,6 +748,54 @@ struct DataLoaderRegridding
 end
 
 """
+    DataLoaderMesh
+
+Mesh descriptor attached to a [`DataLoader`](@ref) with `kind = "mesh"`
+(esm-spec §8.9, discretization RFC §8.A). Declares which loader fields are
+integer-typed connectivity tables vs float-typed metric arrays, alongside the
+topology family the loader serves.
+
+Fields:
+- `topology`: closed enum — "mpas_voronoi" (MVP), "fesom_triangular", "icon_triangular"
+- `connectivity_fields`: integer-typed fields exposed to `grids.<g>.connectivity.<name>.field`
+- `metric_fields`: float-typed fields exposed to `grids.<g>.metric_arrays.<name>.generator.field`
+- `dimension_sizes`: optional map of dim → Int or the sentinel String `"from_file"`
+"""
+struct DataLoaderMesh
+    topology::String
+    connectivity_fields::Vector{String}
+    metric_fields::Vector{String}
+    dimension_sizes::Union{Dict{String,Any},Nothing}
+
+    DataLoaderMesh(topology::String,
+                   connectivity_fields::Vector{String},
+                   metric_fields::Vector{String};
+                   dimension_sizes=nothing) =
+        new(topology, connectivity_fields, metric_fields, dimension_sizes)
+end
+
+"""
+    DataLoaderDeterminism
+
+Reproducibility contract a loader advertises to bindings (esm-spec §8.9.2).
+A binding that cannot honor the declared endian / float_format / integer_width
+MUST reject the file at load.
+
+Fields (all optional):
+- `endian`: "little" | "big"
+- `float_format`: "ieee754_single" | "ieee754_double"
+- `integer_width`: 32 | 64
+"""
+struct DataLoaderDeterminism
+    endian::Union{String,Nothing}
+    float_format::Union{String,Nothing}
+    integer_width::Union{Int,Nothing}
+
+    DataLoaderDeterminism(; endian=nothing, float_format=nothing, integer_width=nothing) =
+        new(endian, float_format, integer_width)
+end
+
+"""
     DataLoader
 
 Generic, runtime-agnostic description of an external data source. Carries
@@ -757,10 +805,12 @@ runtime handler. Authentication and algorithm-specific tuning are runtime-only
 and not part of the schema.
 
 Fields:
-- `kind`: "grid" | "points" | "static" (structural kind; scientific role goes in `metadata.tags`)
+- `kind`: "grid" | "points" | "static" | "mesh" (structural kind; scientific role goes in `metadata.tags`)
 - `source`: `DataLoaderSource` with url_template + optional mirrors
 - `temporal`: optional `DataLoaderTemporal`
 - `spatial`: optional `DataLoaderSpatial`
+- `mesh`: optional `DataLoaderMesh` (required when `kind == "mesh"`, esm-spec §8.9)
+- `determinism`: optional `DataLoaderDeterminism` (esm-spec §8.9.2)
 - `variables`: schema-level variable name → `DataLoaderVariable` (minimum one)
 - `regridding`: optional `DataLoaderRegridding`
 - `reference`: optional academic/data-source citation
@@ -771,6 +821,8 @@ struct DataLoader
     source::DataLoaderSource
     temporal::Union{DataLoaderTemporal,Nothing}
     spatial::Union{DataLoaderSpatial,Nothing}
+    mesh::Union{DataLoaderMesh,Nothing}
+    determinism::Union{DataLoaderDeterminism,Nothing}
     variables::Dict{String,DataLoaderVariable}
     regridding::Union{DataLoaderRegridding,Nothing}
     reference::Union{Reference,Nothing}
@@ -780,10 +832,13 @@ struct DataLoader
                variables::Dict{String,DataLoaderVariable};
                temporal=nothing,
                spatial=nothing,
+               mesh=nothing,
+               determinism=nothing,
                regridding=nothing,
                reference=nothing,
                metadata=nothing) =
-        new(kind, source, temporal, spatial, variables, regridding, reference, metadata)
+        new(kind, source, temporal, spatial, mesh, determinism,
+            variables, regridding, reference, metadata)
 end
 
 """

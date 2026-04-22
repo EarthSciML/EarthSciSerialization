@@ -1984,6 +1984,7 @@ impl fmt::Display for EsmFile {
                     crate::DataLoaderKind::Grid => "grid",
                     crate::DataLoaderKind::Points => "points",
                     crate::DataLoaderKind::Static => "static",
+                    crate::DataLoaderKind::Mesh => "mesh",
                 };
                 writeln!(
                     f,

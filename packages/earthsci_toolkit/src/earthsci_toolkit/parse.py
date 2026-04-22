@@ -37,7 +37,8 @@ from .esm_types import (
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderKind, DataLoaderSource, DataLoaderTemporal,
-    DataLoaderSpatial, DataLoaderVariable, DataLoaderRegridding, Operator,
+    DataLoaderSpatial, DataLoaderVariable, DataLoaderRegridding,
+    DataLoaderMesh, DataLoaderMeshTopology, DataLoaderDeterminism, Operator,
     CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
@@ -783,6 +784,25 @@ def _parse_data_loader_regridding(rg_data: Dict[str, Any]) -> DataLoaderRegriddi
     )
 
 
+def _parse_data_loader_mesh(mesh_data: Dict[str, Any]) -> DataLoaderMesh:
+    """Parse a mesh descriptor from JSON data (esm-spec §8.9)."""
+    return DataLoaderMesh(
+        topology=DataLoaderMeshTopology(mesh_data["topology"]),
+        connectivity_fields=list(mesh_data["connectivity_fields"]),
+        metric_fields=list(mesh_data["metric_fields"]),
+        dimension_sizes=dict(mesh_data.get("dimension_sizes", {})),
+    )
+
+
+def _parse_data_loader_determinism(det_data: Dict[str, Any]) -> DataLoaderDeterminism:
+    """Parse a determinism block from JSON data (esm-spec §8.9.2)."""
+    return DataLoaderDeterminism(
+        endian=det_data.get("endian"),
+        float_format=det_data.get("float_format"),
+        integer_width=det_data.get("integer_width"),
+    )
+
+
 def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     """Parse a data loader from JSON data."""
     kind = DataLoaderKind(loader_data["kind"])
@@ -801,6 +821,14 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     if "spatial" in loader_data:
         spatial = _parse_data_loader_spatial(loader_data["spatial"])
 
+    mesh = None
+    if "mesh" in loader_data:
+        mesh = _parse_data_loader_mesh(loader_data["mesh"])
+
+    determinism = None
+    if "determinism" in loader_data:
+        determinism = _parse_data_loader_determinism(loader_data["determinism"])
+
     regridding = None
     if "regridding" in loader_data:
         regridding = _parse_data_loader_regridding(loader_data["regridding"])
@@ -818,6 +846,8 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
         variables=variables,
         temporal=temporal,
         spatial=spatial,
+        mesh=mesh,
+        determinism=determinism,
         regridding=regridding,
         reference=reference,
         metadata=metadata,

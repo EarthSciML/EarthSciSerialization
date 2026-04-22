@@ -30,7 +30,8 @@ from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
-    DataLoader, DataLoaderKind, DataLoaderSource, DataLoaderTemporal,
+    DataLoader, DataLoaderKind, DataLoaderMesh, DataLoaderMeshTopology,
+    DataLoaderDeterminism, DataLoaderSource, DataLoaderTemporal,
     DataLoaderSpatial, DataLoaderVariable, DataLoaderRegridding, Operator,
     CouplingEntry, CouplingType, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
@@ -684,6 +685,30 @@ def _serialize_data_loader_regridding(regridding: DataLoaderRegridding) -> Dict[
     return result
 
 
+def _serialize_data_loader_mesh(mesh: DataLoaderMesh) -> Dict[str, Any]:
+    """Serialize a mesh descriptor (esm-spec §8.9)."""
+    result: Dict[str, Any] = {
+        "topology": mesh.topology.value,
+        "connectivity_fields": list(mesh.connectivity_fields),
+        "metric_fields": list(mesh.metric_fields),
+    }
+    if mesh.dimension_sizes:
+        result["dimension_sizes"] = dict(mesh.dimension_sizes)
+    return result
+
+
+def _serialize_data_loader_determinism(det: DataLoaderDeterminism) -> Dict[str, Any]:
+    """Serialize a determinism block (esm-spec §8.9.2)."""
+    result: Dict[str, Any] = {}
+    if det.endian is not None:
+        result["endian"] = det.endian
+    if det.float_format is not None:
+        result["float_format"] = det.float_format
+    if det.integer_width is not None:
+        result["integer_width"] = det.integer_width
+    return result
+
+
 def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
     """Serialize a data loader to JSON-compatible format."""
     result: Dict[str, Any] = {
@@ -700,6 +725,12 @@ def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
             result["temporal"] = temporal_dict
     if loader.spatial is not None:
         result["spatial"] = _serialize_data_loader_spatial(loader.spatial)
+    if loader.mesh is not None:
+        result["mesh"] = _serialize_data_loader_mesh(loader.mesh)
+    if loader.determinism is not None:
+        det_dict = _serialize_data_loader_determinism(loader.determinism)
+        if det_dict:
+            result["determinism"] = det_dict
     if loader.regridding is not None:
         regridding_dict = _serialize_data_loader_regridding(loader.regridding)
         if regridding_dict:

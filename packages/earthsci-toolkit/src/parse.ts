@@ -926,6 +926,50 @@ const schema = {
       }
     },
 
+    "DataLoaderMesh": {
+      "type": "object",
+      "description": "Mesh-loader descriptor (esm-spec §8.9, discretization RFC §8.A). Only meaningful when the enclosing DataLoader has kind='mesh'.",
+      "required": ["topology", "connectivity_fields", "metric_fields"],
+      "additionalProperties": false,
+      "properties": {
+        "topology": {
+          "type": "string",
+          "enum": ["mpas_voronoi", "fesom_triangular", "icon_triangular"],
+          "description": "Closed topology enum."
+        },
+        "connectivity_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "metric_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "dimension_sizes": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "integer", "minimum": 0 },
+              { "type": "string", "enum": ["from_file"] }
+            ]
+          }
+        }
+      }
+    },
+
+    "DataLoaderDeterminism": {
+      "type": "object",
+      "description": "Reproducibility contract a loader advertises to bindings (esm-spec §8.9.2).",
+      "additionalProperties": false,
+      "properties": {
+        "endian": { "type": "string", "enum": ["little", "big"] },
+        "float_format": { "type": "string", "enum": ["ieee754_single", "ieee754_double"] },
+        "integer_width": { "type": "integer", "enum": [32, 64] }
+      }
+    },
+
     "DataLoader": {
       "type": "object",
       "description": "A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.",
@@ -934,12 +978,14 @@ const schema = {
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["grid", "points", "static"],
-          "description": "Structural kind of the dataset. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags."
+          "enum": ["grid", "points", "static", "mesh"],
+          "description": "Structural kind of the dataset. 'grid' / 'points' / 'static' are the classical kinds; 'mesh' (esm-spec §8.9) declares a mesh loader. Scientific role is not schema-validated and belongs in metadata.tags."
         },
         "source": { "$ref": "#/$defs/DataLoaderSource" },
         "temporal": { "$ref": "#/$defs/DataLoaderTemporal" },
         "spatial": { "$ref": "#/$defs/DataLoaderSpatial" },
+        "mesh": { "$ref": "#/$defs/DataLoaderMesh" },
+        "determinism": { "$ref": "#/$defs/DataLoaderDeterminism" },
         "variables": {
           "type": "object",
           "description": "Variables exposed by this loader, keyed by schema-level variable name.",
@@ -959,7 +1005,13 @@ const schema = {
             }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "mesh" } }, "required": ["kind"] },
+          "then": { "required": ["mesh"] }
+        }
+      ]
     },
 
     "Operator": {
