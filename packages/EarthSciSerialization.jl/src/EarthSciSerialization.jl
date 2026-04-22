@@ -36,6 +36,7 @@ include("codegen.jl")
 include("canonicalize.jl")
 include("rule_engine.jl")
 include("discretize.jl")
+include("grid_accessor.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
 
@@ -118,6 +119,11 @@ export
     # MTK → ESM export (gt-dod2; Phase 1 migration tooling)
     mtk2esm, mtk2esm_gaps, GapReport,
     # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
-    build_evaluator, TreeWalkError
+    build_evaluator, TreeWalkError,
+    # GridAccessor interface (gt-hvl4; concrete impls live in ESD)
+    GridAccessor, GridAccessorError,
+    cell_centers, neighbors, metric_eval,
+    register_grid_accessor!, unregister_grid_accessor!,
+    grid_accessor_factory, registered_grid_families, make_grid_accessor
 
 end # module EarthSciSerialization
