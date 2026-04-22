@@ -2177,7 +2177,7 @@ Intended for tests and ESD hot-reload; not a production path.
 
 ### validate
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:1140`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:1222`
 
 **Signature:**
 ```typescript
