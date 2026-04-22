@@ -122,6 +122,30 @@ export {
 } from './discretize.js'
 export type { DiscretizeOptions } from './discretize.js'
 
+// Grid accessor contract (gt-j2b8, 2026-04-22 grid-inversion decision).
+// ESS owns the interface and registry; ESD ships concrete families and
+// registers them at runtime.
+export {
+  registerGridFamily,
+  unregisterGridFamily,
+  getGridFamily,
+  hasGridFamily,
+  listGridFamilies,
+  createGrid,
+  clearGridFamilies,
+  GridAccessorError,
+  E_GRID_FAMILY_UNKNOWN,
+  E_GRID_FAMILY_ALREADY_REGISTERED,
+  E_GRID_FAMILY_NAME_INVALID,
+} from './grid-accessor.js'
+export type {
+  GridAccessor,
+  GridAccessorFactory,
+  CellCenter,
+  CellIndex,
+  Dtype,
+} from './grid-accessor.js'
+
 // Package metadata
 export const VERSION = '0.1.0'
 export const SCHEMA_VERSION = '0.1.0'
