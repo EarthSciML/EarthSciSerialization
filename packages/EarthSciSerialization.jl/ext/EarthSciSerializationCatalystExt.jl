@@ -213,19 +213,19 @@ function EarthSciSerialization.ReactionSystem(rs::Catalyst.ReactionSystem)
 
     reactions = Reaction[]
     for rxn in Catalyst.reactions(rs)
-        reactants = Dict{String,Int}()
+        reactants = Dict{String,Float64}()
         if !isempty(rxn.substrates)
             for (i, s) in enumerate(rxn.substrates)
                 name = _strip_time(string(Catalyst.getname(s)))
-                stoich = length(rxn.substoich) >= i ? Int(rxn.substoich[i]) : 1
+                stoich = length(rxn.substoich) >= i ? Float64(rxn.substoich[i]) : 1.0
                 reactants[name] = stoich
             end
         end
-        products = Dict{String,Int}()
+        products = Dict{String,Float64}()
         if !isempty(rxn.products)
             for (i, pr) in enumerate(rxn.products)
                 name = _strip_time(string(Catalyst.getname(pr)))
-                stoich = length(rxn.prodstoich) >= i ? Int(rxn.prodstoich[i]) : 1
+                stoich = length(rxn.prodstoich) >= i ? Float64(rxn.prodstoich[i]) : 1.0
                 products[name] = stoich
             end
         end

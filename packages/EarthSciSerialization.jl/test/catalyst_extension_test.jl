@@ -70,6 +70,34 @@ _strip_time_suffix(s::AbstractString) = endswith(s, "(t)") ? s[1:end-3] : s
         @test length(recovered.reactions) == 1
     end
 
+    @testset "Fractional stoichiometry survives Catalyst → ESM reverse (gt-3ai5)" begin
+        # Catalyst ReactionSystems with fractional stoichiometry (e.g.
+        # CH3O2+CH3O2 -> 2.0 CH2O + 0.8 HO2) must reverse-convert without
+        # Int() truncation. Prior to the fix, Int(0.8) raised InexactError.
+        species = [
+            EarthSciSerialization.Species("CH3O2"),
+            EarthSciSerialization.Species("CH2O"),
+            EarthSciSerialization.Species("HO2"),
+        ]
+        params = [EarthSciSerialization.Parameter("k", 1.0e-13)]
+        rxns = EarthSciSerialization.Reaction[
+            EarthSciSerialization.Reaction(Dict("CH3O2" => 2.0),
+                                           Dict("CH2O" => 2.0, "HO2" => 0.8),
+                                           VarExpr("k")),
+        ]
+        esm_rsys = EarthSciSerialization.ReactionSystem(species, rxns;
+                                                        parameters=params)
+        cat_rsys = Catalyst.ReactionSystem(esm_rsys; name=:FracStoich)
+        recovered = EarthSciSerialization.ReactionSystem(cat_rsys)
+        @test length(recovered.reactions) == 1
+        rxn = recovered.reactions[1]
+        sub_by_name = Dict(e.species => e.stoichiometry for e in rxn.substrates)
+        prod_by_name = Dict(e.species => e.stoichiometry for e in rxn.products)
+        @test sub_by_name["CH3O2"] ≈ 2.0
+        @test prod_by_name["CH2O"] ≈ 2.0
+        @test prod_by_name["HO2"] ≈ 0.8
+    end
+
     @testset "Reservoir species (constant=true) maps to isconstantspecies (gt-ertm)" begin
         # Reservoir species must flow through Catalyst as parameters with the
         # isconstantspecies=true metadata (modern Catalyst rejects this
