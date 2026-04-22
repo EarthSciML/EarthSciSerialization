@@ -591,6 +591,7 @@
       "reference": {
         "notes": "Fluid mechanics equations with dimensional consistency"
       },
+      "domain": "fluid_1d",
       "variables": {
         "rho": {
           "type": "parameter",
@@ -1059,6 +1060,17 @@
           ]
         }
       ]
+    }
+  },
+  "domains": {
+    "fluid_1d": {
+      "spatial": {
+        "x": {
+          "min": 0.0,
+          "max": 1.0,
+          "units": "m"
+        }
+      }
     }
   }
 }

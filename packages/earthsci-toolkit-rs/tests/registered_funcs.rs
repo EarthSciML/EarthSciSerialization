@@ -3,7 +3,7 @@
 //! and exercise the calling contract — handler bodies are supplied by the
 //! host at runtime through a handler registry (esm-spec §4.4 / §9.2).
 
-use earthsci_toolkit::{load, save, Expr, EsmFile};
+use earthsci_toolkit::{EsmFile, Expr, load, save};
 
 const PURE_MATH: &str = include_str!("../../../tests/registered_funcs/pure_math.esm");
 const ONE_D: &str = include_str!("../../../tests/registered_funcs/one_d_interpolator.esm");

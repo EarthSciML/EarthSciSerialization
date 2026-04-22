@@ -16,8 +16,7 @@ fn fixture_dir() -> PathBuf {
 
 fn load_fixture(name: &str) -> EsmFile {
     let path = fixture_dir().join(name);
-    let raw = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {:?}: {}", path, e));
+    let raw = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {:?}: {}", path, e));
     load(&raw).unwrap_or_else(|e| panic!("parse {}: {:?}", name, e))
 }
 

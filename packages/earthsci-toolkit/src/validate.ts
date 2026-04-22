@@ -758,6 +758,86 @@ function validatePhysicalConstantUnits(model: Model, modelPath: string): Structu
     return errors;
 }
 
+const AFFINE_TEMP_UNITS = new Set(['C', 'degC', 'Celsius']);
+
+function isAffineTempUnit(u: string): boolean {
+    return AFFINE_TEMP_UNITS.has(u.trim());
+}
+
+/**
+ * Flag observed variables whose expression has the shape `<numeric> * <var>`
+ * (or `<var> * <numeric>`) when the declared output units and the source
+ * variable's units are dimensionally compatible but the numeric literal
+ * disagrees with the correct linear scale factor. Mirrors Python's
+ * parse._check_conversion_factor_consistency (gt-nvdv) and Go's
+ * checkConversionFactorConsistency (gt-abh1). Affine conversions
+ * (e.g., degC→K) are excluded.
+ */
+function validateConversionFactorConsistency(model: Model, modelPath: string): StructuralError[] {
+    const errors: StructuralError[] = [];
+    const variables = model.variables || {};
+
+    for (const [vname, vdef] of Object.entries(variables)) {
+        if (vdef.type !== 'observed') continue;
+        if (vdef.expression === undefined || vdef.expression === null) continue;
+        const lhsUnits = vdef.units;
+        if (!lhsUnits) continue;
+
+        const expr = vdef.expression;
+        if (typeof expr !== 'object' || !('op' in expr)) continue;
+        const node = expr as ExpressionNode;
+        if (node.op !== '*' || !node.args || node.args.length !== 2) continue;
+
+        let numeric: number | undefined;
+        let varRef: string | undefined;
+        for (const a of node.args) {
+            if (typeof a === 'number') {
+                numeric = a;
+            } else if (typeof a === 'string') {
+                varRef = a;
+            }
+        }
+        if (numeric === undefined || varRef === undefined) continue;
+
+        const src = variables[varRef];
+        if (!src || !src.units) continue;
+        const srcUnits = src.units;
+        if (srcUnits === lhsUnits) continue;
+
+        let srcU: ParsedUnit;
+        let lhsU: ParsedUnit;
+        try {
+            srcU = parseUnit(srcUnits);
+            lhsU = parseUnit(lhsUnits);
+        } catch {
+            continue;
+        }
+        if (!dimsEqual(srcU.dims, lhsU.dims)) continue;
+        if (isAffineTempUnit(srcUnits) || isAffineTempUnit(lhsUnits)) continue;
+        if (lhsU.scale === 0) continue;
+
+        const factor = srcU.scale / lhsU.scale;
+        if (factor === 0) continue;
+
+        const tol = 1e-9 * Math.max(Math.abs(factor), 1);
+        if (Math.abs(numeric - factor) <= tol) continue;
+
+        errors.push({
+            path: `${modelPath}/variables/${vname}`,
+            code: 'unit_inconsistency',
+            message: 'Unit conversion factor is incorrect for specified unit transformation',
+            details: {
+                variable: vname,
+                declared_units: lhsUnits,
+                source_units: srcUnits,
+                declared_factor: numeric,
+                expected_factor: factor,
+            },
+        });
+    }
+    return errors;
+}
+
 /**
  * Check coupling entries reference integrity
  */
@@ -1067,6 +1147,7 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
             }
             errors.push(...validateEventConsistency(model, modelPath));
             errors.push(...validatePhysicalConstantUnits(model, modelPath));
+            errors.push(...validateConversionFactorConsistency(model, modelPath));
 
             // Recursively validate subsystems
             if (model.subsystems) {
@@ -1078,6 +1159,7 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
                     }
                     errors.push(...validateEventConsistency(subsystem, subsystemPath));
                     errors.push(...validatePhysicalConstantUnits(subsystem, subsystemPath));
+                    errors.push(...validateConversionFactorConsistency(subsystem, subsystemPath));
                 }
             }
         }

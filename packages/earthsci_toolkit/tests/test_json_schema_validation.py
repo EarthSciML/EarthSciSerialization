@@ -513,7 +513,10 @@ class TestConstraintValidation:
                 }
             }
         }
-        with pytest.raises(ValidationError, match="is less than the minimum|below minimum"):
+        with pytest.raises(
+            ValidationError,
+            match="is less than the minimum|below minimum|less than or equal to the minimum",
+        ):
             jsonschema.validate(invalid_data, schema)
 
         # Test exclusiveMinimum for interval in periodic trigger

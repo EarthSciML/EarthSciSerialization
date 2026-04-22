@@ -89,11 +89,7 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub fn new(
-        name: impl Into<String>,
-        pattern: Expr,
-        replacement: Expr,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, pattern: Expr, replacement: Expr) -> Self {
         Self {
             name: name.into(),
             pattern,
@@ -157,15 +153,11 @@ pub fn match_pattern(pattern: &Expr, expr: &Expr) -> Option<HashMap<String, Expr
     match_inner(pattern, expr, HashMap::new())
 }
 
-fn match_inner(
-    pat: &Expr,
-    expr: &Expr,
-    b: HashMap<String, Expr>,
-) -> Option<HashMap<String, Expr>> {
-    if let Expr::Variable(name) = pat {
-        if is_pvar_string(name) {
-            return unify(name, expr.clone(), b);
-        }
+fn match_inner(pat: &Expr, expr: &Expr, b: HashMap<String, Expr>) -> Option<HashMap<String, Expr>> {
+    if let Expr::Variable(name) = pat
+        && is_pvar_string(name)
+    {
+        return unify(name, expr.clone(), b);
     }
     match (pat, expr) {
         (Expr::Integer(pi), Expr::Integer(ei)) if pi == ei => Some(b),
@@ -213,11 +205,7 @@ fn match_sibling_name(
     }
 }
 
-fn unify(
-    pvar: &str,
-    candidate: Expr,
-    b: HashMap<String, Expr>,
-) -> Option<HashMap<String, Expr>> {
+fn unify(pvar: &str, candidate: Expr, b: HashMap<String, Expr>) -> Option<HashMap<String, Expr>> {
     if let Some(prev) = b.get(pvar) {
         // Non-linear: existing binding must match canonically.
         let prev_json = canonical_json(prev).ok()?;
@@ -238,20 +226,14 @@ fn unify(
 ///
 /// Returns `Err(E_PATTERN_VAR_UNBOUND)` if `template` references a
 /// pattern variable that is not in `bindings`.
-pub fn apply_bindings(
-    template: &Expr,
-    b: &HashMap<String, Expr>,
-) -> Result<Expr, RuleEngineError> {
+pub fn apply_bindings(template: &Expr, b: &HashMap<String, Expr>) -> Result<Expr, RuleEngineError> {
     match template {
-        Expr::Variable(name) if is_pvar_string(name) => b
-            .get(name)
-            .cloned()
-            .ok_or_else(|| {
-                RuleEngineError::new(
-                    "E_PATTERN_VAR_UNBOUND",
-                    format!("pattern variable {name} is not bound"),
-                )
-            }),
+        Expr::Variable(name) if is_pvar_string(name) => b.get(name).cloned().ok_or_else(|| {
+            RuleEngineError::new(
+                "E_PATTERN_VAR_UNBOUND",
+                format!("pattern variable {name} is not bound"),
+            )
+        }),
         Expr::Operator(node) => {
             let mut new_args = Vec::with_capacity(node.args.len());
             for a in &node.args {
@@ -285,9 +267,7 @@ fn apply_name_field(
             Expr::Variable(s) => Ok(Some(s.clone())),
             _ => Err(RuleEngineError::new(
                 "E_PATTERN_VAR_TYPE",
-                format!(
-                    "pattern variable {f} used in name-class field must bind a bare name"
-                ),
+                format!("pattern variable {f} used in name-class field must bind a bare name"),
             )),
         }
     } else {
@@ -371,11 +351,7 @@ fn resolve_or_mark(
     }
 }
 
-fn bind_pvar_name(
-    b: &HashMap<String, Expr>,
-    pvar: &str,
-    name: &str,
-) -> HashMap<String, Expr> {
+fn bind_pvar_name(b: &HashMap<String, Expr>, pvar: &str, name: &str) -> HashMap<String, Expr> {
     let mut nb = b.clone();
     nb.insert(pvar.to_string(), Expr::Variable(name.to_string()));
     nb
@@ -401,10 +377,7 @@ fn guard_var_has_grid(
     }
 }
 
-fn dim_from_pvar_or_literal(
-    g: &Guard,
-    b: &HashMap<String, Expr>,
-) -> Option<String> {
+fn dim_from_pvar_or_literal(g: &Guard, b: &HashMap<String, Expr>) -> Option<String> {
     let pvar = param_str(g, "pvar")?;
     if is_pvar_string(pvar) {
         resolve_name(b, pvar)
@@ -530,12 +503,12 @@ fn rewrite_pass(
     changed: &mut bool,
 ) -> Result<Expr, RuleEngineError> {
     for rule in rules {
-        if let Some(m) = match_pattern(&rule.pattern, expr) {
-            if let Some(m2) = check_guards(&rule.where_, &m, ctx)? {
-                let new_expr = apply_bindings(&rule.replacement, &m2)?;
-                *changed = true;
-                return Ok(new_expr); // sealed: do not descend
-            }
+        if let Some(m) = match_pattern(&rule.pattern, expr)
+            && let Some(m2) = check_guards(&rule.where_, &m, ctx)?
+        {
+            let new_expr = apply_bindings(&rule.replacement, &m2)?;
+            *changed = true;
+            return Ok(new_expr); // sealed: do not descend
         }
     }
     if let Expr::Operator(node) = expr {
@@ -577,21 +550,13 @@ fn parse_rule_value(v: &serde_json::Value) -> Result<Rule, RuleEngineError> {
     let name = v
         .get("name")
         .and_then(|s| s.as_str())
-        .ok_or_else(|| {
-            RuleEngineError::new("E_RULE_PARSE", "array-form rule missing `name`")
-        })?;
+        .ok_or_else(|| RuleEngineError::new("E_RULE_PARSE", "array-form rule missing `name`"))?;
     parse_rule_named(name, v)
 }
 
-fn parse_rule_named(
-    name: &str,
-    v: &serde_json::Value,
-) -> Result<Rule, RuleEngineError> {
+fn parse_rule_named(name: &str, v: &serde_json::Value) -> Result<Rule, RuleEngineError> {
     let pattern = parse_expr(v.get("pattern").ok_or_else(|| {
-        RuleEngineError::new(
-            "E_RULE_PARSE",
-            format!("rule `{name}` missing `pattern`"),
-        )
+        RuleEngineError::new("E_RULE_PARSE", format!("rule `{name}` missing `pattern`"))
     })?)?;
     let replacement = v.get("replacement").ok_or_else(|| {
         RuleEngineError::new(
@@ -631,15 +596,13 @@ fn parse_rule_named(
 }
 
 fn parse_guard(v: &serde_json::Value) -> Result<Guard, RuleEngineError> {
-    let obj = v.as_object().ok_or_else(|| {
-        RuleEngineError::new("E_RULE_PARSE", "guard must be an object")
-    })?;
+    let obj = v
+        .as_object()
+        .ok_or_else(|| RuleEngineError::new("E_RULE_PARSE", "guard must be an object"))?;
     let name = obj
         .get("guard")
         .and_then(|s| s.as_str())
-        .ok_or_else(|| {
-            RuleEngineError::new("E_RULE_PARSE", "guard object missing `guard` field")
-        })?
+        .ok_or_else(|| RuleEngineError::new("E_RULE_PARSE", "guard object missing `guard` field"))?
         .to_string();
     let mut params = HashMap::new();
     for (k, val) in obj {
@@ -675,9 +638,7 @@ pub fn parse_expr(v: &serde_json::Value) -> Result<Expr, RuleEngineError> {
             let op = obj
                 .get("op")
                 .and_then(|x| x.as_str())
-                .ok_or_else(|| {
-                    RuleEngineError::new("E_RULE_PARSE", "operator node missing `op`")
-                })?
+                .ok_or_else(|| RuleEngineError::new("E_RULE_PARSE", "operator node missing `op`"))?
                 .to_string();
             let empty = Vec::new();
             let args_raw = obj.get("args").and_then(|a| a.as_array()).unwrap_or(&empty);
@@ -693,12 +654,13 @@ pub fn parse_expr(v: &serde_json::Value) -> Result<Expr, RuleEngineError> {
                 .get("dim")
                 .and_then(|s| s.as_str())
                 .map(|s| s.to_string());
-            let mut node = ExpressionNode::default();
-            node.op = op;
-            node.args = args;
-            node.wrt = wrt;
-            node.dim = dim;
-            Ok(Expr::Operator(node))
+            Ok(Expr::Operator(ExpressionNode {
+                op,
+                args,
+                wrt,
+                dim,
+                ..Default::default()
+            }))
         }
         _ => Err(RuleEngineError::new(
             "E_RULE_PARSE",
@@ -753,19 +715,21 @@ mod tests {
     use super::*;
 
     fn op(name: &str, args: Vec<Expr>) -> Expr {
-        let mut node = ExpressionNode::default();
-        node.op = name.to_string();
-        node.args = args;
-        Expr::Operator(node)
+        Expr::Operator(ExpressionNode {
+            op: name.to_string(),
+            args,
+            ..Default::default()
+        })
     }
 
     fn op_with(name: &str, args: Vec<Expr>, wrt: Option<&str>, dim: Option<&str>) -> Expr {
-        let mut node = ExpressionNode::default();
-        node.op = name.to_string();
-        node.args = args;
-        node.wrt = wrt.map(|s| s.to_string());
-        node.dim = dim.map(|s| s.to_string());
-        Expr::Operator(node)
+        Expr::Operator(ExpressionNode {
+            op: name.to_string(),
+            args,
+            wrt: wrt.map(|s| s.to_string()),
+            dim: dim.map(|s| s.to_string()),
+            ..Default::default()
+        })
     }
 
     fn var(s: &str) -> Expr {
@@ -850,10 +814,7 @@ mod tests {
         let out = rewrite(&seed, &[rule], &RuleContext::default(), 32).unwrap();
         let want = op(
             "*",
-            vec![
-                Expr::Integer(2),
-                op("*", vec![Expr::Integer(2), var("x")]),
-            ],
+            vec![Expr::Integer(2), op("*", vec![Expr::Integer(2), var("x")])],
         );
         assert_eq!(
             canonical_json(&out).unwrap(),
@@ -898,7 +859,7 @@ mod tests {
             },
         );
         let seed = op_with("grad", vec![var("T")], None, Some("x"));
-        let out = rewrite(&seed, &[rule.clone()], &ctx, 32).unwrap();
+        let out = rewrite(&seed, std::slice::from_ref(&rule), &ctx, 32).unwrap();
         assert_eq!(canonical_json(&out).unwrap(), "\"T\"");
         // Wrong grid: does not fire.
         let mut ctx2 = RuleContext::default();
@@ -932,8 +893,7 @@ mod tests {
             .join("discretization")
             .join("infra")
             .join("rule_engine");
-        let manifest_bytes =
-            std::fs::read(dir.join("manifest.json")).expect("read manifest");
+        let manifest_bytes = std::fs::read(dir.join("manifest.json")).expect("read manifest");
         let manifest: serde_json::Value =
             serde_json::from_slice(&manifest_bytes).expect("parse manifest");
         let fixtures = manifest["fixtures"].as_array().expect("fixtures array");
@@ -942,11 +902,9 @@ mod tests {
             let id = f["id"].as_str().unwrap();
             let path = dir.join(f["path"].as_str().unwrap());
             let raw = std::fs::read(&path).expect("read fixture");
-            let fixture: serde_json::Value =
-                serde_json::from_slice(&raw).expect("parse fixture");
+            let fixture: serde_json::Value = serde_json::from_slice(&raw).expect("parse fixture");
 
-            let rules =
-                parse_rules(&fixture["rules"]).expect("parse_rules");
+            let rules = parse_rules(&fixture["rules"]).expect("parse_rules");
             let input = parse_expr(&fixture["input"]).expect("parse_expr");
             let max_passes = fixture
                 .get("max_passes")
@@ -961,8 +919,7 @@ mod tests {
                 "output" => {
                     let out = rewrite(&input, &rules, &ctx, max_passes)
                         .unwrap_or_else(|e| panic!("fixture {id}: {e}"));
-                    let got =
-                        canonical_json(&out).expect("canonicalize output");
+                    let got = canonical_json(&out).expect("canonicalize output");
                     let want = expect["canonical_json"].as_str().unwrap();
                     assert_eq!(got, want, "fixture {id}: got {got}, want {want}");
                 }
@@ -985,38 +942,40 @@ mod tests {
         if let Some(grids) = ctx.get("grids").and_then(|v| v.as_object()) {
             for (k, v) in grids {
                 let mut meta = GridMeta::default();
-                if let Some(arr) =
-                    v.get("spatial_dims").and_then(|x| x.as_array())
-                {
-                    meta.spatial_dims =
-                        arr.iter().filter_map(|s| s.as_str().map(|x| x.to_string())).collect();
+                if let Some(arr) = v.get("spatial_dims").and_then(|x| x.as_array()) {
+                    meta.spatial_dims = arr
+                        .iter()
+                        .filter_map(|s| s.as_str().map(|x| x.to_string()))
+                        .collect();
                 }
-                if let Some(arr) =
-                    v.get("periodic_dims").and_then(|x| x.as_array())
-                {
-                    meta.periodic_dims =
-                        arr.iter().filter_map(|s| s.as_str().map(|x| x.to_string())).collect();
+                if let Some(arr) = v.get("periodic_dims").and_then(|x| x.as_array()) {
+                    meta.periodic_dims = arr
+                        .iter()
+                        .filter_map(|s| s.as_str().map(|x| x.to_string()))
+                        .collect();
                 }
-                if let Some(arr) =
-                    v.get("nonuniform_dims").and_then(|x| x.as_array())
-                {
-                    meta.nonuniform_dims =
-                        arr.iter().filter_map(|s| s.as_str().map(|x| x.to_string())).collect();
+                if let Some(arr) = v.get("nonuniform_dims").and_then(|x| x.as_array()) {
+                    meta.nonuniform_dims = arr
+                        .iter()
+                        .filter_map(|s| s.as_str().map(|x| x.to_string()))
+                        .collect();
                 }
                 out.grids.insert(k.clone(), meta);
             }
         }
         if let Some(vars) = ctx.get("variables").and_then(|v| v.as_object()) {
             for (k, v) in vars {
-                let mut meta = VariableMeta::default();
-                meta.grid = v
-                    .get("grid")
-                    .and_then(|x| x.as_str())
-                    .map(|s| s.to_string());
-                meta.location = v
-                    .get("location")
-                    .and_then(|x| x.as_str())
-                    .map(|s| s.to_string());
+                let mut meta = VariableMeta {
+                    grid: v
+                        .get("grid")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string()),
+                    location: v
+                        .get("location")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string()),
+                    ..Default::default()
+                };
                 if let Some(arr) = v.get("shape").and_then(|x| x.as_array()) {
                     meta.shape = Some(
                         arr.iter()

@@ -11,6 +11,11 @@ from earthsci_toolkit.esm_types import EsmFile, Metadata, ReactionSystem, Specie
 from earthsci_toolkit.validation import validate
 
 
+@pytest.mark.skip(
+    reason="Integer-only stoichiometry policy was replaced by positive-finite "
+    "fractional stoichiometry (gt-1e96). Tests preserved for context; the "
+    "contract they encode no longer matches the spec."
+)
 class TestStoichiometryIntegerValidation:
     """Test stoichiometry validation for positive integer requirement."""
 

@@ -113,8 +113,7 @@ pub trait GridAccessor: Send + Sync {
 ///
 /// The factory takes the ESM-wire-form [`Grid`] that ESS parses and
 /// returns a boxed [`GridAccessor`] specialized to that family.
-pub type GridAccessorFactory =
-    fn(&Grid) -> Result<Box<dyn GridAccessor>, GridAccessorError>;
+pub type GridAccessorFactory = fn(&Grid) -> Result<Box<dyn GridAccessor>, GridAccessorError>;
 
 fn registry() -> &'static RwLock<HashMap<String, GridAccessorFactory>> {
     static REG: OnceLock<RwLock<HashMap<String, GridAccessorFactory>>> = OnceLock::new();
@@ -226,12 +225,7 @@ mod tests {
             }
         }
 
-        fn metric_eval(
-            &self,
-            name: &str,
-            _i: usize,
-            _j: usize,
-        ) -> Result<f64, GridAccessorError> {
+        fn metric_eval(&self, name: &str, _i: usize, _j: usize) -> Result<f64, GridAccessorError> {
             match name {
                 "dx" | "dy" => Ok(1.0),
                 other => Err(GridAccessorError::UnknownMetric(other.to_string())),

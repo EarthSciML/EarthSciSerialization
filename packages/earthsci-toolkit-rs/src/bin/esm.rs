@@ -805,7 +805,9 @@ fn collect_unit_types(esm_file: &earthsci_toolkit::EsmFile) -> Vec<String> {
 #[cfg(feature = "cli")]
 fn expression_depth(expr: &earthsci_toolkit::Expr) -> usize {
     match expr {
-        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) | earthsci_toolkit::Expr::Variable(_) => 1,
+        earthsci_toolkit::Expr::Number(_)
+        | earthsci_toolkit::Expr::Integer(_)
+        | earthsci_toolkit::Expr::Variable(_) => 1,
         earthsci_toolkit::Expr::Operator(node) => {
             1 + node.args.iter().map(expression_depth).max().unwrap_or(0)
         }
@@ -815,7 +817,9 @@ fn expression_depth(expr: &earthsci_toolkit::Expr) -> usize {
 #[cfg(feature = "cli")]
 fn count_expression_nodes(expr: &earthsci_toolkit::Expr) -> usize {
     match expr {
-        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) | earthsci_toolkit::Expr::Variable(_) => 1,
+        earthsci_toolkit::Expr::Number(_)
+        | earthsci_toolkit::Expr::Integer(_)
+        | earthsci_toolkit::Expr::Variable(_) => 1,
         earthsci_toolkit::Expr::Operator(node) => {
             1 + node.args.iter().map(count_expression_nodes).sum::<usize>()
         }
@@ -1223,7 +1227,9 @@ fn collect_variables(expr: &earthsci_toolkit::Expr, vars: &mut std::collections:
 #[cfg(feature = "cli")]
 fn count_operations(expr: &earthsci_toolkit::Expr) -> usize {
     match expr {
-        earthsci_toolkit::Expr::Number(_) | earthsci_toolkit::Expr::Integer(_) | earthsci_toolkit::Expr::Variable(_) => 0,
+        earthsci_toolkit::Expr::Number(_)
+        | earthsci_toolkit::Expr::Integer(_)
+        | earthsci_toolkit::Expr::Variable(_) => 0,
         earthsci_toolkit::Expr::Operator(node) => {
             1 + node.args.iter().map(count_operations).sum::<usize>()
         }

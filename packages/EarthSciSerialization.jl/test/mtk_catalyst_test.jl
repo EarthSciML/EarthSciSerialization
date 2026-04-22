@@ -40,7 +40,7 @@ using BenchmarkTools
         @test length(mtk_sys.state_variables) == 2  # x, v
         @test length(mtk_sys.parameters) == 1        # omega
         @test length(mtk_sys.observed_variables) == 1 # energy
-        @test length(mtk_sys.equations) == 2          # dx/dt, dv/dt
+        @test length(mtk_sys.equations) == 3          # dx/dt, dv/dt, energy ~ expr
 
         # After flatten, names are namespaced with the system name.
         @test "HarmonicOscillator.x" in mtk_sys.state_variables

@@ -23,9 +23,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use earthsci_toolkit::types::{EsmFile, Metadata};
-use earthsci_toolkit::{
-    Compiled, SimulateOptions, SolverChoice, Tolerance, load_path,
-};
+use earthsci_toolkit::{Compiled, SimulateOptions, SolverChoice, Tolerance, load_path};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -80,10 +78,10 @@ fn empty_metadata() -> Metadata {
 
 fn model_only_subset(file: &EsmFile, model_key: &str) -> EsmFile {
     let mut models = std::collections::HashMap::new();
-    if let Some(all) = &file.models {
-        if let Some(m) = all.get(model_key) {
-            models.insert(model_key.to_string(), m.clone());
-        }
+    if let Some(all) = &file.models
+        && let Some(m) = all.get(model_key)
+    {
+        models.insert(model_key.to_string(), m.clone());
     }
     EsmFile {
         esm: file.esm.clone(),
@@ -103,10 +101,10 @@ fn model_only_subset(file: &EsmFile, model_key: &str) -> EsmFile {
 
 fn reaction_system_only_subset(file: &EsmFile, rs_key: &str) -> EsmFile {
     let mut rs = std::collections::HashMap::new();
-    if let Some(all) = &file.reaction_systems {
-        if let Some(r) = all.get(rs_key) {
-            rs.insert(rs_key.to_string(), r.clone());
-        }
+    if let Some(all) = &file.reaction_systems
+        && let Some(r) = all.get(rs_key)
+    {
+        rs.insert(rs_key.to_string(), r.clone());
     }
     EsmFile {
         esm: file.esm.clone(),
@@ -129,17 +127,17 @@ fn resolve_tol(
     test_tol: Option<&Tolerance>,
     assertion_tol: Option<&Tolerance>,
 ) -> (f64, f64) {
-    for cand in [assertion_tol, test_tol, model_tol].into_iter().flatten() {
+    if let Some(cand) = [assertion_tol, test_tol, model_tol]
+        .into_iter()
+        .flatten()
+        .next()
+    {
         return (cand.rel.unwrap_or(0.0), cand.abs.unwrap_or(0.0));
     }
     (1e-6, 0.0)
 }
 
-fn find_state_index(
-    state_names: &[String],
-    component: &str,
-    local: &str,
-) -> Option<usize> {
+fn find_state_index(state_names: &[String], component: &str, local: &str) -> Option<usize> {
     let namespaced = format!("{}.{}", component, local);
     if let Some(i) = state_names.iter().position(|n| n == &namespaced) {
         return Some(i);
@@ -155,8 +153,8 @@ fn execute_component(
     model_tol: Option<&Tolerance>,
     solver: SolverChoice,
 ) {
-    let compiled = Compiled::from_file(subset)
-        .unwrap_or_else(|e| panic!("{label}: compile failed: {e}"));
+    let compiled =
+        Compiled::from_file(subset).unwrap_or_else(|e| panic!("{label}: compile failed: {e}"));
 
     for t in tests {
         let mut params = HashMap::new();
@@ -190,8 +188,7 @@ fn execute_component(
 
         // output_times covers every assertion's `time` so we get direct
         // dense-output samples without a separate interpolation pass.
-        let mut sample_times: Vec<f64> =
-            t.assertions.iter().map(|a| a.time).collect();
+        let mut sample_times: Vec<f64> = t.assertions.iter().map(|a| a.time).collect();
         sample_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         sample_times.dedup_by(|a, b| (*a - *b).abs() < 0.0);
 
@@ -206,22 +203,16 @@ fn execute_component(
         let tspan = (t.time_span.start, t.time_span.end);
         let sol = compiled
             .simulate(tspan, &params, &ics, &opts)
-            .unwrap_or_else(|e| {
-                panic!("{label}/{}: simulate failed: {e:?}", t.id)
-            });
+            .unwrap_or_else(|e| panic!("{label}/{}: simulate failed: {e:?}", t.id));
 
         for a in &t.assertions {
-            let idx = find_state_index(
-                &sol.state_variable_names,
-                component,
-                &a.variable,
-            )
-            .unwrap_or_else(|| {
-                panic!(
-                    "{label}/{}: variable {:?} not in solution state names ({:?})",
-                    t.id, a.variable, sol.state_variable_names
-                )
-            });
+            let idx = find_state_index(&sol.state_variable_names, component, &a.variable)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{label}/{}: variable {:?} not in solution state names ({:?})",
+                        t.id, a.variable, sol.state_variable_names
+                    )
+                });
             // Locate the sample whose time matches this assertion's time.
             // output_times was dedup'd; find the nearest entry.
             let (k, _) = sol
@@ -242,8 +233,7 @@ fn execute_component(
                 a.time
             );
             let actual = sol.state[idx][k];
-            let (rel, abs_) =
-                resolve_tol(model_tol, t.tolerance.as_ref(), a.tolerance.as_ref());
+            let (rel, abs_) = resolve_tol(model_tol, t.tolerance.as_ref(), a.tolerance.as_ref());
             let diff = (actual - a.expected).abs();
             let mut bound = abs_;
             if rel > 0.0 {
@@ -275,8 +265,8 @@ fn execute_component(
 #[test]
 fn tests_blocks_execution_runner() {
     let dir = simulation_dir();
-    let entries = std::fs::read_dir(&dir)
-        .unwrap_or_else(|e| panic!("read {}: {}", dir.display(), e));
+    let entries =
+        std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {}", dir.display(), e));
 
     let mut fixtures: Vec<String> = entries
         .filter_map(|e| e.ok())
@@ -304,8 +294,7 @@ fn tests_blocks_execution_runner() {
             continue;
         }
         let path = dir.join(name);
-        let file = load_path(&path)
-            .unwrap_or_else(|e| panic!("{name}: load failed: {e}"));
+        let file = load_path(&path).unwrap_or_else(|e| panic!("{name}: load failed: {e}"));
 
         // Models.
         if let Some(models) = file.models.clone() {

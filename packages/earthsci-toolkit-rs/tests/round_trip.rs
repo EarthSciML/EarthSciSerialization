@@ -338,7 +338,11 @@ fn test_ornstein_uhlenbeck_sde_round_trip() {
     let fixture = include_str!("../../../tests/fixtures/sde/ornstein_uhlenbeck.esm");
 
     let parsed: EsmFile = load(fixture).expect("failed to parse OU SDE fixture");
-    let model = parsed.models.as_ref().and_then(|m| m.get("OU")).expect("OU model missing");
+    let model = parsed
+        .models
+        .as_ref()
+        .and_then(|m| m.get("OU"))
+        .expect("OU model missing");
     let bw = model.variables.get("Bw").expect("Bw variable missing");
     assert_eq!(bw.var_type, VariableType::Brownian);
     assert_eq!(bw.noise_kind.as_deref(), Some("wiener"));
@@ -382,7 +386,10 @@ fn test_correlated_noise_sde_round_trip() {
         .and_then(|m| m.get("TwoBody"))
         .expect("TwoBody model missing");
     for name in ["Bx", "By"] {
-        let bv = model.variables.get(name).unwrap_or_else(|| panic!("{} missing", name));
+        let bv = model
+            .variables
+            .get(name)
+            .unwrap_or_else(|| panic!("{} missing", name));
         assert_eq!(bv.var_type, VariableType::Brownian);
         assert_eq!(bv.correlation_group.as_deref(), Some("wind"));
     }

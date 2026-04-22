@@ -194,8 +194,8 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
                 expression: None,
                 shape: None,
                 location: None,
-            noise_kind: None,
-            correlation_group: None,
+                noise_kind: None,
+                correlation_group: None,
             },
         );
     }
@@ -343,14 +343,14 @@ pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<f64>> {
         // Process substrates (negative coefficients)
         for substrate in reaction.substrates.iter().flatten() {
             if let Some(&species_idx) = species_index.get(&substrate.species) {
-                matrix[species_idx][reaction_idx] -= substrate.coefficient as f64;
+                matrix[species_idx][reaction_idx] -= substrate.coefficient;
             }
         }
 
         // Process products (positive coefficients)
         for product in reaction.products.iter().flatten() {
             if let Some(&species_idx) = species_index.get(&product.species) {
-                matrix[species_idx][reaction_idx] += product.coefficient as f64;
+                matrix[species_idx][reaction_idx] += product.coefficient;
             }
         }
     }
@@ -384,11 +384,16 @@ pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<f64>> {
 ///
 /// // Assuming you have a reaction system
 /// let reaction_system = ReactionSystem {
-///     name: Some("Test System".to_string()),
-///     species: vec![],
+///     domain: None,
+///     coupletype: None,
+///     reference: None,
+///     species: std::collections::HashMap::new(),
 ///     parameters: std::collections::HashMap::new(),
 ///     reactions: vec![],
-///     description: None,
+///     constraint_equations: None,
+///     discrete_events: None,
+///     continuous_events: None,
+///     subsystems: None,
 /// };
 ///
 /// let matrix = stoichiometric_matrix_parallel(&reaction_system).unwrap();
@@ -544,14 +549,14 @@ fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationVi
             .substrates
             .iter()
             .flatten()
-            .map(|s| s.coefficient as f64)
+            .map(|s| s.coefficient)
             .sum();
 
         let product_sum: f64 = reaction
             .products
             .iter()
             .flatten()
-            .map(|p| p.coefficient as f64)
+            .map(|p| p.coefficient)
             .sum();
 
         // Check if mass is conserved (allowing for small numerical errors)
@@ -1271,7 +1276,11 @@ mod tests {
             parameters: HashMap::new(),
             reactions: vec![
                 // Sink reaction: A -> with rate k_deg (no products)
-                create_test_reaction(vec![("A", 1.0)], vec![], Expr::Variable("k_deg".to_string())),
+                create_test_reaction(
+                    vec![("A", 1.0)],
+                    vec![],
+                    Expr::Variable("k_deg".to_string()),
+                ),
             ],
             constraint_equations: None,
             discrete_events: None,
@@ -1741,7 +1750,11 @@ mod tests {
                     Expr::Variable("k_source".to_string()),
                 ),
                 // Sink: A ->
-                create_test_reaction(vec![("A", 1.0)], vec![], Expr::Variable("k_sink".to_string())),
+                create_test_reaction(
+                    vec![("A", 1.0)],
+                    vec![],
+                    Expr::Variable("k_sink".to_string()),
+                ),
             ],
             constraint_equations: None,
             discrete_events: None,

@@ -50,6 +50,10 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
                     default: Some(1.0),
                     description: None,
                     expression: None,
+                    shape: None,
+                    location: None,
+                    noise_kind: None,
+                    correlation_group: None,
                 },
             );
         }
@@ -80,6 +84,10 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             continuous_events: None,
             tolerance: None,
             tests: None,
+            boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
         };
 
         models.insert(format!("model_{}", i), model);
@@ -96,6 +104,9 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             modified: None,
             tags: None,
             references: None,
+            system_class: None,
+            dae_info: None,
+            discretized_from: None,
         },
         models: Some(models),
         reaction_systems: None,
@@ -104,6 +115,8 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         coupling: None,
         domains: None,
         interfaces: None,
+        grids: None,
+        registered_functions: None,
     }
 }
 
@@ -135,11 +148,11 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
             name: Some(format!("R{}", i)),
             substrates: Some(vec![StoichiometricEntry {
                 species: format!("S{}", substrate_idx),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
                 species: format!("S{}", product_idx),
-                coefficient: 1,
+                coefficient: 1.0,
             }]),
             rate: bin_op(
                 "*",

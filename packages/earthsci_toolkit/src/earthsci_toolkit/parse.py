@@ -26,7 +26,7 @@ except ImportError:
         files = None
 
 if TYPE_CHECKING:
-    from .esm_types import DataLoader
+    from .esm_types import DataLoader, RegisteredFunction
 
 import jsonschema
 from jsonschema import validate
@@ -2208,8 +2208,13 @@ def _walk_expression_for_spatial_operator_checks(
     args = expr.get("args", []) or []
     if op in ("grad", "div", "laplacian"):
         dim_name = expr.get("dim")
-        if dim_name is not None:
-            if coord_units is None or dim_name not in coord_units:
+        # Only enforce when the enclosing model has a declared domain —
+        # coord_units is None means "no info", so skip. This matches the
+        # Python Model type lacking a persisted `domain` field on round-trip
+        # and keeps the check aligned with when the author has opted in by
+        # declaring domain + spatial coordinates.
+        if dim_name is not None and coord_units is not None:
+            if dim_name not in coord_units:
                 errors.append(
                     f"{path}: operator '{op}' references coordinate '{dim_name}' "
                     f"not declared in model's domain (unit_inconsistency)"

@@ -114,11 +114,11 @@ fn canon_mul(node: &mut ExpressionNode) -> Result<Expr, CanonicalizeError> {
         if let Expr::Integer(0) = a {
             return Ok(Expr::Integer(0));
         }
-        if let Expr::Number(f) = a {
-            if *f == 0.0 {
-                // Preserve signbit of zero.
-                return Ok(Expr::Number(*f * 0.0_f64));
-            }
+        if let Expr::Number(f) = a
+            && *f == 0.0
+        {
+            // Preserve signbit of zero.
+            return Ok(Expr::Number(*f * 0.0_f64));
         }
     }
     let (mut others, _had_int_one, had_float_one) = partition_identity(flat, 1);
@@ -158,10 +158,11 @@ fn canon_sub(node: &mut ExpressionNode) -> Result<Expr, CanonicalizeError> {
         }
         // -(x, 0) -> x (type-preserving: float-zero with int x promotes)
         if is_zero_any(&b) {
-            if matches!(b, Expr::Number(_)) && matches!(a, Expr::Integer(_)) {
-                if let Expr::Integer(i) = a {
-                    return Ok(Expr::Number(i as f64));
-                }
+            if matches!(b, Expr::Number(_))
+                && matches!(a, Expr::Integer(_))
+                && let Expr::Integer(i) = a
+            {
+                return Ok(Expr::Number(i as f64));
             }
             return Ok(a);
         }
@@ -185,10 +186,11 @@ fn canon_div(node: &mut ExpressionNode) -> Result<Expr, CanonicalizeError> {
         return Err(CanonicalizeError::DivByZero);
     }
     if is_one_any(&b) {
-        if matches!(b, Expr::Number(_)) && matches!(a, Expr::Integer(_)) {
-            if let Expr::Integer(i) = a {
-                return Ok(Expr::Number(i as f64));
-            }
+        if matches!(b, Expr::Number(_))
+            && matches!(a, Expr::Integer(_))
+            && let Expr::Integer(i) = a
+        {
+            return Ok(Expr::Number(i as f64));
         }
         return Ok(a);
     }
@@ -392,7 +394,7 @@ pub fn format_canonical_float(f: f64) -> String {
         };
     }
     let abs = f.abs();
-    let use_exp = abs < 1e-6 || abs >= 1e21;
+    let use_exp = !(1e-6..1e21).contains(&abs);
     if use_exp {
         // Use Rust's shortest round-trip; format!("{:e}", f) emits e.g. "1e25", "3e-7"
         // (no leading + on exponent).
@@ -508,7 +510,10 @@ mod tests {
         let e = op(
             "+",
             vec![
-                op("+", vec![Expr::Variable("a".into()), Expr::Variable("b".into())]),
+                op(
+                    "+",
+                    vec![Expr::Variable("a".into()), Expr::Variable("b".into())],
+                ),
                 Expr::Variable("c".into()),
             ],
         );
@@ -571,10 +576,7 @@ mod tests {
     #[test]
     fn div_zero_by_zero() {
         let e = op("/", vec![Expr::Integer(0), Expr::Integer(0)]);
-        assert_eq!(
-            canonicalize(&e).unwrap_err(),
-            CanonicalizeError::DivByZero
-        );
+        assert_eq!(canonicalize(&e).unwrap_err(), CanonicalizeError::DivByZero);
     }
 
     /// Conformance fixture consumer — the same fixture set is run by every
@@ -591,7 +593,10 @@ mod tests {
             .parent()
             .unwrap()
             .to_path_buf();
-        let dir = repo_root.join("tests").join("conformance").join("canonical");
+        let dir = repo_root
+            .join("tests")
+            .join("conformance")
+            .join("canonical");
         let manifest_bytes = std::fs::read(dir.join("manifest.json")).expect("read manifest");
         let manifest: serde_json::Value =
             serde_json::from_slice(&manifest_bytes).expect("parse manifest");
@@ -601,11 +606,9 @@ mod tests {
             let id = f["id"].as_str().unwrap();
             let path = dir.join(f["path"].as_str().unwrap());
             let raw = std::fs::read(&path).expect("read fixture");
-            let fixture: serde_json::Value =
-                serde_json::from_slice(&raw).expect("parse fixture");
+            let fixture: serde_json::Value = serde_json::from_slice(&raw).expect("parse fixture");
             let input_json = fixture["input"].clone();
-            let expr: Expr =
-                serde_json::from_value(input_json).expect("decode input as Expr");
+            let expr: Expr = serde_json::from_value(input_json).expect("decode input as Expr");
             let got = canonical_json(&expr).expect("canonicalize");
             let want = fixture["expected"].as_str().unwrap();
             assert_eq!(got, want, "fixture {id}: got {got}, want {want}");

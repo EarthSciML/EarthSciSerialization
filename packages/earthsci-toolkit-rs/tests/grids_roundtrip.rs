@@ -5,7 +5,7 @@
 //! `serde_json::Value`. A fourth test mutates one fixture in-memory to point
 //! at a missing loader and asserts the parser rejects it.
 
-use earthsci_toolkit::{load, save, EsmFile};
+use earthsci_toolkit::{EsmFile, load, save};
 use serde_json::Value;
 
 /// Recursively normalize all JSON numbers to floats, so integer-literal
@@ -76,8 +76,14 @@ fn roundtrip_cubed_sphere() {
 #[test]
 fn rejects_unknown_loader() {
     let fixture = include_str!("../../../tests/grids/unstructured_mpas.esm");
-    let mutated = fixture.replace("\"loader\": \"mpas_mesh\"", "\"loader\": \"does_not_exist\"");
-    assert_ne!(fixture, mutated, "test mutation must actually change the fixture");
+    let mutated = fixture.replace(
+        "\"loader\": \"mpas_mesh\"",
+        "\"loader\": \"does_not_exist\"",
+    );
+    assert_ne!(
+        fixture, mutated,
+        "test mutation must actually change the fixture"
+    );
 
     let err = load(&mutated).expect_err("load should reject unknown loader");
     let msg = format!("{err}");
