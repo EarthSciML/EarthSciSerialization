@@ -350,6 +350,38 @@ export type Plot1 = {
   [k: string]: unknown;
 };
 /**
+ * A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.
+ */
+export type DataLoader = DataLoader1 & {
+  /**
+   * Structural kind of the dataset. 'grid' / 'points' / 'static' are the classical kinds; 'mesh' (discretization RFC §8.A) declares a mesh loader that publishes integer connectivity tables and float metric arrays under mesh.connectivity_fields / mesh.metric_fields. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags.
+   */
+  kind: "grid" | "points" | "static" | "mesh";
+  source: DataLoaderSource;
+  temporal?: DataLoaderTemporal;
+  spatial?: DataLoaderSpatial;
+  mesh?: DataLoaderMesh;
+  determinism?: DataLoaderDeterminism;
+  /**
+   * Variables exposed by this loader, keyed by schema-level variable name.
+   */
+  variables: {
+    [k: string]: DataLoaderVariable;
+  };
+  regridding?: DataLoaderRegridding;
+  reference?: Reference;
+  /**
+   * Free-form metadata about the data source. The "tags" field (array of strings) is conventional for expressing scientific role (e.g. "emissions", "reanalysis") and is not schema-validated.
+   */
+  metadata?: {
+    tags?: string[];
+    [k: string]: unknown;
+  };
+};
+export type DataLoader1 = {
+  [k: string]: unknown;
+};
+/**
  * A single coupling rule connecting models, reaction systems, data loaders, or operators.
  */
 export type CouplingEntry =
@@ -1256,7 +1288,7 @@ export interface Reaction {
   reference?: Reference;
 }
 /**
- * A species with its stoichiometric coefficient in a reaction.
+ * A species with its stoichiometric coefficient in a reaction. Coefficients MUST be positive and finite (NaN / ±Infinity are rejected at parse time). Fractional values are supported to preserve fidelity with atmospheric-chemistry mechanisms whose products include non-integer yields (e.g. `0.87 CH2O`, `1.86 CH3O2`). Integer values remain valid — they are a subset of the permitted number range.
  */
 export interface StoichiometryEntry {
   species: string;
@@ -1274,33 +1306,6 @@ export interface Tolerance3 {
    * Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel.
    */
   rel?: number;
-}
-/**
- * A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.
- */
-export interface DataLoader {
-  /**
-   * Structural kind of the dataset. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags.
-   */
-  kind: "grid" | "points" | "static";
-  source: DataLoaderSource;
-  temporal?: DataLoaderTemporal;
-  spatial?: DataLoaderSpatial;
-  /**
-   * Variables exposed by this loader, keyed by schema-level variable name.
-   */
-  variables: {
-    [k: string]: DataLoaderVariable;
-  };
-  regridding?: DataLoaderRegridding;
-  reference?: Reference;
-  /**
-   * Free-form metadata about the data source. The "tags" field (array of strings) is conventional for expressing scientific role (e.g. "emissions", "reanalysis") and is not schema-validated.
-   */
-  metadata?: {
-    tags?: string[];
-    [k: string]: unknown;
-  };
 }
 /**
  * File discovery configuration. Describes how to locate data files at runtime via URL templates with date/variable substitutions.
@@ -1379,6 +1384,50 @@ export interface DataLoaderSpatial {
  */
 export interface DataLoaderStaggering {
   [k: string]: "center" | "edge";
+}
+/**
+ * Mesh-loader descriptor (discretization RFC §8.A). Declares which loader fields are integer-typed connectivity tables vs float-typed metric arrays and the topological family the loader serves. Only meaningful when the enclosing DataLoader has kind='mesh'.
+ */
+export interface DataLoaderMesh {
+  /**
+   * Closed topology enum. 'mpas_voronoi' is the v0.2.0 MVP; 'fesom_triangular' and 'icon_triangular' are reserved. Adding a new value is a minor version bump (RFC §8.A.1).
+   */
+  topology: "mpas_voronoi" | "fesom_triangular" | "icon_triangular";
+  /**
+   * Integer-typed fields the loader exposes, which are referenceable from grids.<g>.connectivity.<name>.field (e.g. 'cellsOnEdge', 'edgesOnCell', 'verticesOnEdge', 'nEdgesOnCell').
+   *
+   * @minItems 1
+   */
+  connectivity_fields: [string, ...string[]];
+  /**
+   * Float-typed fields the loader exposes, which are referenceable from grids.<g>.metric_arrays.<name>.generator.field (e.g. 'dcEdge', 'dvEdge', 'areaCell').
+   *
+   * @minItems 1
+   */
+  metric_fields: [string, ...string[]];
+  /**
+   * Map of dimension name → integer extent or the literal string 'from_file'. Values feed grid-level parameters marked value='from_loader' (RFC §6.6).
+   */
+  dimension_sizes?: {
+    [k: string]: number | "from_file";
+  };
+}
+/**
+ * Reproducibility contract a mesh (or grid) loader advertises to bindings (discretization RFC §8.A and §14 item 4). A binding that cannot honor the declared endian / float_format / integer_width MUST reject the file at load rather than silently reinterpreting bytes.
+ */
+export interface DataLoaderDeterminism {
+  /**
+   * Byte order of on-wire numeric fields.
+   */
+  endian?: "little" | "big";
+  /**
+   * Floating-point format of metric fields.
+   */
+  float_format?: "ieee754_single" | "ieee754_double";
+  /**
+   * Integer width (in bits) of connectivity fields.
+   */
+  integer_width?: 32 | 64;
 }
 /**
  * A variable exposed by a data loader, mapped from a source-file variable.

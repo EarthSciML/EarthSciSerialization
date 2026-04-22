@@ -100,8 +100,10 @@ pub use substitute::{
 };
 pub use types::{
     AffectEquation, AutoRecords, ContinuousEvent, CouplingEntry, DaeInfo, DataLoader,
-    DataLoaderKind, DataLoaderMetadata, DataLoaderRegridding, DataLoaderSource, DataLoaderSpatial,
-    DataLoaderTemporal, DataLoaderVariable, DiscreteEvent, DiscreteEventTrigger, Domain, Equation,
+    DataLoaderDeterminism, DataLoaderKind, DataLoaderMesh, DataLoaderMeshDimensionSize,
+    DataLoaderMeshTopology, DataLoaderMetadata, DataLoaderRegridding, DataLoaderSource,
+    DataLoaderSpatial, DataLoaderTemporal, DataLoaderVariable, DiscreteEvent,
+    DiscreteEventTrigger, Domain, Equation,
     EsmFile, Expr, ExpressionNode, ExtrapolationMode, FunctionalAffect, Grid, GridConnectivity,
     GridExtent, GridMetricArray, GridMetricGenerator, GridType, Metadata, Model, ModelTest,
     ModelTestAssertion, ModelVariable, Operator, Reaction, ReactionSystem, RecordsPerFile, Species,

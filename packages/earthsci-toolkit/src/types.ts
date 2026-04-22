@@ -92,6 +92,8 @@ export type {
 
   // Data handling
   DataLoader,
+  DataLoaderMesh,
+  DataLoaderDeterminism,
   Operator,
 
   // System configuration

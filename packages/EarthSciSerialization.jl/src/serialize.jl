@@ -607,6 +607,32 @@ function serialize_data_loader_regridding(r::DataLoaderRegridding)::Dict{String,
 end
 
 """
+    serialize_data_loader_mesh(m::DataLoaderMesh) -> Dict{String,Any}
+"""
+function serialize_data_loader_mesh(m::DataLoaderMesh)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "topology" => m.topology,
+        "connectivity_fields" => m.connectivity_fields,
+        "metric_fields" => m.metric_fields,
+    )
+    if m.dimension_sizes !== nothing
+        result["dimension_sizes"] = m.dimension_sizes
+    end
+    return result
+end
+
+"""
+    serialize_data_loader_determinism(d::DataLoaderDeterminism) -> Dict{String,Any}
+"""
+function serialize_data_loader_determinism(d::DataLoaderDeterminism)::Dict{String,Any}
+    result = Dict{String,Any}()
+    d.endian !== nothing && (result["endian"] = d.endian)
+    d.float_format !== nothing && (result["float_format"] = d.float_format)
+    d.integer_width !== nothing && (result["integer_width"] = d.integer_width)
+    return result
+end
+
+"""
     serialize_data_loader(loader::DataLoader) -> Dict{String,Any}
 
 Serialize DataLoader to JSON-compatible format (STAC-like shape).
@@ -624,6 +650,13 @@ function serialize_data_loader(loader::DataLoader)::Dict{String,Any}
     end
     if loader.spatial !== nothing
         result["spatial"] = serialize_data_loader_spatial(loader.spatial)
+    end
+    if loader.mesh !== nothing
+        result["mesh"] = serialize_data_loader_mesh(loader.mesh)
+    end
+    if loader.determinism !== nothing
+        det_dict = serialize_data_loader_determinism(loader.determinism)
+        isempty(det_dict) || (result["determinism"] = det_dict)
     end
     if loader.regridding !== nothing
         result["regridding"] = serialize_data_loader_regridding(loader.regridding)

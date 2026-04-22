@@ -969,6 +969,29 @@ function coerce_data_loader_regridding(data::Any)::DataLoaderRegridding
 end
 
 """
+    coerce_data_loader_mesh(data::Any) -> DataLoaderMesh
+"""
+function coerce_data_loader_mesh(data::Any)::DataLoaderMesh
+    topology = string(data.topology)
+    connectivity_fields = [string(x) for x in data.connectivity_fields]
+    metric_fields = [string(x) for x in data.metric_fields]
+    dimension_sizes = haskey(data, :dimension_sizes) && data.dimension_sizes !== nothing ?
+                      Dict{String,Any}(string(k) => v for (k, v) in pairs(data.dimension_sizes)) : nothing
+    return DataLoaderMesh(topology, connectivity_fields, metric_fields;
+                          dimension_sizes=dimension_sizes)
+end
+
+"""
+    coerce_data_loader_determinism(data::Any) -> DataLoaderDeterminism
+"""
+function coerce_data_loader_determinism(data::Any)::DataLoaderDeterminism
+    endian = haskey(data, :endian) && data.endian !== nothing ? string(data.endian) : nothing
+    float_format = haskey(data, :float_format) && data.float_format !== nothing ? string(data.float_format) : nothing
+    integer_width = haskey(data, :integer_width) && data.integer_width !== nothing ? Int(data.integer_width) : nothing
+    return DataLoaderDeterminism(; endian=endian, float_format=float_format, integer_width=integer_width)
+end
+
+"""
     coerce_data_loader(data::Any) -> DataLoader
 
 Coerce JSON data into the STAC-like DataLoader type.
@@ -981,6 +1004,10 @@ function coerce_data_loader(data::Any)::DataLoader
                coerce_data_loader_temporal(data.temporal) : nothing
     spatial = haskey(data, :spatial) && data.spatial !== nothing ?
               coerce_data_loader_spatial(data.spatial) : nothing
+    mesh = haskey(data, :mesh) && data.mesh !== nothing ?
+           coerce_data_loader_mesh(data.mesh) : nothing
+    determinism = haskey(data, :determinism) && data.determinism !== nothing ?
+                  coerce_data_loader_determinism(data.determinism) : nothing
 
     variables = Dict{String,DataLoaderVariable}(
         string(k) => coerce_data_loader_variable(v) for (k, v) in pairs(data.variables)
@@ -996,6 +1023,8 @@ function coerce_data_loader(data::Any)::DataLoader
     return DataLoader(kind, source, variables;
                       temporal=temporal,
                       spatial=spatial,
+                      mesh=mesh,
+                      determinism=determinism,
                       regridding=regridding,
                       reference=reference,
                       metadata=metadata)

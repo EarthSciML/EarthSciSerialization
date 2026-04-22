@@ -749,6 +749,16 @@ pub struct DataLoader {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spatial: Option<DataLoaderSpatial>,
 
+    /// Mesh descriptor — required when `kind = "mesh"` (esm-spec §8.9).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub mesh: Option<DataLoaderMesh>,
+
+    /// Reproducibility contract — endian / float_format / integer_width
+    /// (esm-spec §8.9.2). A binding that cannot honor the declared
+    /// contract MUST reject the file at load.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub determinism: Option<DataLoaderDeterminism>,
+
     /// Variables exposed by this loader, keyed by schema-level variable name.
     pub variables: HashMap<String, DataLoaderVariable>,
 
@@ -775,6 +785,50 @@ pub enum DataLoaderKind {
     Points,
     /// Static dataset (no time dimension).
     Static,
+    /// Mesh dataset — publishes connectivity tables + metric arrays for an
+    /// unstructured grid (esm-spec §8.9, discretization RFC §8.A).
+    Mesh,
+}
+
+/// Closed topology enum for mesh loaders (esm-spec §8.9).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DataLoaderMeshTopology {
+    MpasVoronoi,
+    FesomTriangular,
+    IconTriangular,
+}
+
+/// Dimension extent in a mesh descriptor's `dimension_sizes` map — an integer
+/// literal or the sentinel string `"from_file"`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DataLoaderMeshDimensionSize {
+    Integer(u64),
+    FromFile(String),
+}
+
+/// Mesh descriptor attached to a DataLoader with `kind = "mesh"`
+/// (esm-spec §8.9).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataLoaderMesh {
+    pub topology: DataLoaderMeshTopology,
+    pub connectivity_fields: Vec<String>,
+    pub metric_fields: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub dimension_sizes: Option<HashMap<String, DataLoaderMeshDimensionSize>>,
+}
+
+/// Reproducibility contract a loader advertises to bindings
+/// (esm-spec §8.9.2).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DataLoaderDeterminism {
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub endian: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub float_format: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub integer_width: Option<u32>,
 }
 
 /// File discovery configuration. Describes how to locate data files at

@@ -1290,6 +1290,65 @@
       }
     },
 
+    "DataLoaderMesh": {
+      "type": "object",
+      "description": "Mesh-loader descriptor (discretization RFC §8.A). Declares which loader fields are integer-typed connectivity tables vs float-typed metric arrays and the topological family the loader serves. Only meaningful when the enclosing DataLoader has kind='mesh'.",
+      "required": ["topology", "connectivity_fields", "metric_fields"],
+      "additionalProperties": false,
+      "properties": {
+        "topology": {
+          "type": "string",
+          "enum": ["mpas_voronoi", "fesom_triangular", "icon_triangular"],
+          "description": "Closed topology enum. 'mpas_voronoi' is the v0.2.0 MVP; 'fesom_triangular' and 'icon_triangular' are reserved. Adding a new value is a minor version bump (RFC §8.A.1)."
+        },
+        "connectivity_fields": {
+          "type": "array",
+          "description": "Integer-typed fields the loader exposes, which are referenceable from grids.<g>.connectivity.<name>.field (e.g. 'cellsOnEdge', 'edgesOnCell', 'verticesOnEdge', 'nEdgesOnCell').",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "metric_fields": {
+          "type": "array",
+          "description": "Float-typed fields the loader exposes, which are referenceable from grids.<g>.metric_arrays.<name>.generator.field (e.g. 'dcEdge', 'dvEdge', 'areaCell').",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "dimension_sizes": {
+          "type": "object",
+          "description": "Map of dimension name → integer extent or the literal string 'from_file'. Values feed grid-level parameters marked value='from_loader' (RFC §6.6).",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "integer", "minimum": 0 },
+              { "type": "string", "enum": ["from_file"] }
+            ]
+          }
+        }
+      }
+    },
+
+    "DataLoaderDeterminism": {
+      "type": "object",
+      "description": "Reproducibility contract a mesh (or grid) loader advertises to bindings (discretization RFC §8.A and §14 item 4). A binding that cannot honor the declared endian / float_format / integer_width MUST reject the file at load rather than silently reinterpreting bytes.",
+      "additionalProperties": false,
+      "properties": {
+        "endian": {
+          "type": "string",
+          "enum": ["little", "big"],
+          "description": "Byte order of on-wire numeric fields."
+        },
+        "float_format": {
+          "type": "string",
+          "enum": ["ieee754_single", "ieee754_double"],
+          "description": "Floating-point format of metric fields."
+        },
+        "integer_width": {
+          "type": "integer",
+          "enum": [32, 64],
+          "description": "Integer width (in bits) of connectivity fields."
+        }
+      }
+    },
+
     "DataLoader": {
       "type": "object",
       "description": "A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.",
@@ -1298,12 +1357,14 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["grid", "points", "static"],
-          "description": "Structural kind of the dataset. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags."
+          "enum": ["grid", "points", "static", "mesh"],
+          "description": "Structural kind of the dataset. 'grid' / 'points' / 'static' are the classical kinds; 'mesh' (discretization RFC §8.A) declares a mesh loader that publishes integer connectivity tables and float metric arrays under mesh.connectivity_fields / mesh.metric_fields. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags."
         },
         "source": { "$ref": "#/$defs/DataLoaderSource" },
         "temporal": { "$ref": "#/$defs/DataLoaderTemporal" },
         "spatial": { "$ref": "#/$defs/DataLoaderSpatial" },
+        "mesh": { "$ref": "#/$defs/DataLoaderMesh" },
+        "determinism": { "$ref": "#/$defs/DataLoaderDeterminism" },
         "variables": {
           "type": "object",
           "description": "Variables exposed by this loader, keyed by schema-level variable name.",
@@ -1323,7 +1384,13 @@
             }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "mesh" } }, "required": ["kind"] },
+          "then": { "required": ["mesh"] }
+        }
+      ]
     },
 
     "RegisteredFunction": {

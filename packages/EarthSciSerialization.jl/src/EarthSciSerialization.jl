@@ -54,7 +54,7 @@ export
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger,
     # Data and operator types
     DataLoader, DataLoaderSource, DataLoaderTemporal, DataLoaderSpatial,
-    DataLoaderVariable, DataLoaderRegridding,
+    DataLoaderVariable, DataLoaderRegridding, DataLoaderMesh, DataLoaderDeterminism,
     Operator, RegisteredFunction, RegisteredFunctionSignature, CouplingEntry,
     # Concrete coupling types
     CouplingOperatorCompose, CouplingCouple, CouplingVariableMap,

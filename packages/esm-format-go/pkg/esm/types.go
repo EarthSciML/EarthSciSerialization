@@ -319,16 +319,38 @@ type ContinuousEvent struct {
 // DataLoader is a runtime-agnostic description of an external data source.
 // It carries enough structural information to locate files, map timestamps
 // to files, describe spatial and variable semantics, and regrid — rather
-// than pointing at a runtime handler. Shape matches the schema under gt-q4k.
+// than pointing at a runtime handler.
 type DataLoader struct {
-	Kind       string                        `json:"kind"` // "grid", "points", or "static"
-	Source     DataLoaderSource              `json:"source"`
-	Temporal   *DataLoaderTemporal           `json:"temporal,omitempty"`
-	Spatial    *DataLoaderSpatial            `json:"spatial,omitempty"`
-	Variables  map[string]DataLoaderVariable `json:"variables"`
-	Regridding *DataLoaderRegridding         `json:"regridding,omitempty"`
-	Reference  *Reference                    `json:"reference,omitempty"`
-	Metadata   map[string]interface{}        `json:"metadata,omitempty"`
+	Kind        string                        `json:"kind"` // "grid", "points", "static", or "mesh" (esm-spec §8.9)
+	Source      DataLoaderSource              `json:"source"`
+	Temporal    *DataLoaderTemporal           `json:"temporal,omitempty"`
+	Spatial     *DataLoaderSpatial            `json:"spatial,omitempty"`
+	Mesh        *DataLoaderMesh               `json:"mesh,omitempty"`
+	Determinism *DataLoaderDeterminism        `json:"determinism,omitempty"`
+	Variables   map[string]DataLoaderVariable `json:"variables"`
+	Regridding  *DataLoaderRegridding         `json:"regridding,omitempty"`
+	Reference   *Reference                    `json:"reference,omitempty"`
+	Metadata    map[string]interface{}        `json:"metadata,omitempty"`
+}
+
+// DataLoaderMesh is the mesh descriptor attached to a DataLoader with
+// Kind == "mesh" (esm-spec §8.9). Connectivity fields are integer-typed;
+// metric fields are float-typed. DimensionSizes entries are either an
+// integer extent or the literal string "from_file".
+type DataLoaderMesh struct {
+	Topology           string                 `json:"topology"`            // "mpas_voronoi" | "fesom_triangular" | "icon_triangular"
+	ConnectivityFields []string               `json:"connectivity_fields"` // e.g. cellsOnEdge
+	MetricFields       []string               `json:"metric_fields"`       // e.g. dcEdge
+	DimensionSizes     map[string]interface{} `json:"dimension_sizes,omitempty"`
+}
+
+// DataLoaderDeterminism is the reproducibility contract a loader advertises
+// to bindings (esm-spec §8.9.2). A binding that cannot honor the declared
+// contract MUST reject the file at load.
+type DataLoaderDeterminism struct {
+	Endian       *string `json:"endian,omitempty"`        // "little" | "big"
+	FloatFormat  *string `json:"float_format,omitempty"`  // "ieee754_single" | "ieee754_double"
+	IntegerWidth *int    `json:"integer_width,omitempty"` // 32 | 64
 }
 
 // DataLoaderSource describes file discovery for a data source. URL templates
