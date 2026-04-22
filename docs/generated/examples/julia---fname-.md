@@ -1,8 +1,8 @@
 # $(fname) (Julia)
 
-**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/tests_blocks_execution_test.jl`
+**Source:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/test/array_ops_test.jl`
 
 ```julia
-_execute_fixture_tests(fpath; label=fname)
+_run_fixture(joinpath(fixtures_dir, fname))
 ```
 

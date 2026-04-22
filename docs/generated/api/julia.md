@@ -632,6 +632,17 @@ DomainUnitMismatchError(...)
 
 ---
 
+### ESD
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+ESD(...)
+```
+
+---
+
 ### ESM
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -874,6 +885,42 @@ Grid(...)
 
 **Available in other languages:**
 - [Python](python.md#grid)
+
+---
+
+### GridAccessor
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+GridAccessor(...)
+```
+
+---
+
+### GridAccessor
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+GridAccessor(...)
+```
+
+---
+
+### GridAccessorError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+GridAccessorError(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#gridaccessorerror)
 
 ---
 
@@ -2705,6 +2752,41 @@ NaN/Inf or `0/0`.
 
 ---
 
+### cell_centers
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+cell_centers(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#cell_centers)
+
+---
+
+### cell_centers
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:58`
+
+**Signature:**
+```julia
+function cell_centers end
+```
+
+**Description:**
+cell_centers(grid::GridAccessor, idx...)
+
+Cell-center coordinates of the cell at `idx`. Return shape is
+family-dependent (e.g. `(lon, lat)` for spherical families,
+`(x, y, z)` for 3D cartesian).
+
+**Available in other languages:**
+- [Python](python.md#cell_centers)
+
+---
+
 ### check_guard
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -3514,6 +3596,17 @@ Convenience function to create an operator_compose coupling entry linking two sy
 
 **Available in other languages:**
 - [Typescript](typescript.md#compose)
+
+---
+
+### concrete
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+concrete(...)
+```
 
 ---
 
@@ -4606,6 +4699,45 @@ Get the domain of a system by name. Returns:
 
 ---
 
+### grid_accessor_factory
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+grid_accessor_factory(...)
+```
+
+---
+
+### grid_accessor_factory
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:133`
+
+**Signature:**
+```julia
+function grid_accessor_factory(family::AbstractString)
+```
+
+**Description:**
+grid_accessor_factory(family) -> factory
+
+Return the registered factory for `family`, or throw
+[`GridAccessorError`](@ref) if none is registered.
+
+---
+
+### gt
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+gt(...)
+```
+
+---
+
 ### gt
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4670,6 +4802,39 @@ has_spatial_operator(expr) -> Bool
 
 True if the expression contains any spatial operator (`grad`, `div`,
 `laplacian`, or `D` with `wrt != "t"`).
+
+---
+
+### hvl4
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+hvl4(...)
+```
+
+---
+
+### impls
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+impls(...)
+```
+
+---
+
+### in
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+in(...)
+```
 
 ---
 
@@ -4759,6 +4924,17 @@ int(...)
 
 ---
 
+### interface
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+interface(...)
+```
+
+---
+
 ### is_literal
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -4832,6 +5008,17 @@ Extract the dependent variable name from an equation LHS. For `D(x, t)`, returns
 **Signature:**
 ```julia
 literal_value(...)
+```
+
+---
+
+### live
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+live(...)
 ```
 
 ---
@@ -4923,6 +5110,34 @@ On a 0D domain (`domain === nothing`), the LHS is `D(X, t)`. On a PDE domain,
 the LHS is still `D(X, t)` symbolically — dimension promotion (§4.7.6) is
 applied by `flatten`, not here. The resulting equation lives on the caller's
 domain; spatial operators are added downstream when coupling adds them.
+
+---
+
+### make_grid_accessor
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+make_grid_accessor(...)
+```
+
+---
+
+### make_grid_accessor
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:154`
+
+**Signature:**
+```julia
+function make_grid_accessor(family::AbstractString, grid_data)
+```
+
+**Description:**
+make_grid_accessor(family, grid_data) -> GridAccessor
+
+Construct a `GridAccessor` for `family` by dispatching to the registered
+factory with `grid_data`.
 
 ---
 
@@ -5037,6 +5252,41 @@ from file_b take precedence.
 
 ---
 
+### metric_eval
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+metric_eval(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#metric_eval)
+
+---
+
+### metric_eval
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:75`
+
+**Signature:**
+```julia
+function metric_eval end
+```
+
+**Description:**
+metric_eval(grid::GridAccessor, name::AbstractString, idx...)
+
+Value of the named metric field at `idx`. Valid names are family-defined
+(typical: `"dx"`, `"dy"`, `"dz"`, `"area"`, `"volume"`). Implementations
+throw [`GridAccessorError`](@ref) for unknown names.
+
+**Available in other languages:**
+- [Python](python.md#metric_eval)
+
+---
+
 ### migration
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -5101,6 +5351,40 @@ function needs_parentheses(parent_op::String, child::Expr, is_right_operand::Boo
 needs_parentheses(parent_op::String, child::Expr, is_right_operand::Bool=false) -> Bool
 
 Check if parentheses are needed around a subexpression.
+
+---
+
+### neighbors
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+neighbors(...)
+```
+
+**Available in other languages:**
+- [Python](python.md#neighbors)
+
+---
+
+### neighbors
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:66`
+
+**Signature:**
+```julia
+function neighbors end
+```
+
+**Description:**
+neighbors(grid::GridAccessor, cell)
+
+Iterable of cells adjacent to `cell`. `cell` uses the index convention
+matching the family's `cell_centers` signature.
+
+**Available in other languages:**
+- [Python](python.md#neighbors)
 
 ---
 
@@ -5373,6 +5657,54 @@ reference(...)
 **Signature:**
 ```julia
 reference(...)
+```
+
+---
+
+### register_grid_accessor!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+register_grid_accessor!(...)
+```
+
+---
+
+### register_grid_accessor!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:110`
+
+**Signature:**
+```julia
+function register_grid_accessor!(family::AbstractString, factory)
+```
+
+**Description:**
+register_grid_accessor!(family, factory) -> previous_factory_or_nothing
+
+Register `factory` as the constructor for grid family `family`. `factory`
+is any callable `factory(grid_data) -> GridAccessor`, where `grid_data`
+is the RFC §6 grid dict (e.g. `EsmFile.grids["g1"].data`).
+
+Family names match the RFC §6 enum (`"cartesian"`, `"lat_lon"`,
+`"stretched_lat_lon"`, `"cubed_sphere"`, `"stretched_cubed_sphere"`,
+`"mpas"`, `"duo"`).
+
+Replacing an existing entry returns the previous factory. This is the
+ESS → ESD handshake: ESS owns the trait + registry; ESD registers
+concrete subtypes.
+
+---
+
+### registered_grid_families
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+registered_grid_families(...)
 ```
 
 ---
@@ -7084,6 +7416,34 @@ types(...)
 
 ---
 
+### unregister_grid_accessor!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+unregister_grid_accessor!(...)
+```
+
+---
+
+### unregister_grid_accessor!
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:123`
+
+**Signature:**
+```julia
+function unregister_grid_accessor!(family::AbstractString)
+```
+
+**Description:**
+unregister_grid_accessor!(family) -> Bool
+
+Remove the factory for `family`. Returns `true` if removed, `false` if
+none was registered.
+
+---
+
 ### validate
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -8501,6 +8861,27 @@ from the closed set {gnomonic_c6_neighbors, gnomonic_c6_d4_action}
 
 **Available in other languages:**
 - [Python](python.md#grid)
+
+---
+
+### GridAccessorError
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/grid_accessor.jl:46`
+
+**Definition:**
+```julia
+struct GridAccessorError <: Exception
+```
+
+**Description:**
+GridAccessorError(message)
+
+Thrown by the default (unimplemented) generic stubs and by
+[`grid_accessor_factory`](@ref) / [`make_grid_accessor`](@ref) when a
+family has no registered factory.
+
+**Available in other languages:**
+- [Python](python.md#gridaccessorerror)
 
 ---
 

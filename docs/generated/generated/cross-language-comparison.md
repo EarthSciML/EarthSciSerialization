@@ -99,6 +99,20 @@ Graph(...)
 
 ---
 
+### GridAccessor
+
+**Julia:**
+```julia
+GridAccessor(...)
+```
+
+**Julia:**
+```julia
+GridAccessor(...)
+```
+
+---
+
 ### MTK
 
 **Julia:**
@@ -285,6 +299,11 @@ Section(...)
 
 **Python:**
 ```python
+def __init__(self, code: str, message: str):
+```
+
+**Python:**
+```python
 def __init__(self):
 ```
 
@@ -292,15 +311,10 @@ def __init__(self):
 
 **Python:**
 ```python
-def __init__(self, message: str, from_version: str = "", to_version: str = ""):
+def __init__(self, esm_file: EsmFile):
 ```
 
-**Python:**
-```python
-def __init__(self, validate_after_edit: bool = True):
-```
-
-> Initialize the ESM editor.
+> Initialize the scope validator.
 
 **Python:**
 ```python
@@ -312,21 +326,9 @@ def __init__(self, code: str, message: str):
 def __init__(self, esm_file: EsmFile):
 ```
 
-> Initialize the ESM explorer.
-
 **Python:**
 ```python
-def __init__(self, code: str, message: str):
-```
-
-**Python:**
-```python
-def __init__(self, message: str = "E_CANONICAL_NONFINITE"):
-```
-
-**Python:**
-```python
-def __init__(self, message: str = "E_CANONICAL_DIVBY_ZERO"):
+def __init__(self, message: str, from_version: str = "", to_version: str = ""):
 ```
 
 **Python:**
@@ -351,13 +353,6 @@ def __init__(self, source: str, target: str, label: str = "", dependency_type: s
 
 **Python:**
 ```python
-def __init__(self, esm_file: EsmFile):
-```
-
-> Initialize the scope validator.
-
-**Python:**
-```python
 def __init__(self):
 ```
 
@@ -370,8 +365,27 @@ def __init__(self, esm_file: EsmFile):
 
 **Python:**
 ```python
+def __init__(self, validate_after_edit: bool = True):
+```
+
+> Initialize the ESM editor.
+
+**Python:**
+```python
+def __init__(self, message: str = "E_CANONICAL_NONFINITE"):
+```
+
+**Python:**
+```python
+def __init__(self, message: str = "E_CANONICAL_DIVBY_ZERO"):
+```
+
+**Python:**
+```python
 def __init__(self, esm_file: EsmFile):
 ```
+
+> Initialize the ESM explorer.
 
 **Python:**
 ```python
@@ -729,6 +743,27 @@ export function canonicalize(expr: Expr): Expr {
 
 ---
 
+### cell_centers
+
+**Julia:**
+```julia
+cell_centers(...)
+```
+
+**Julia:**
+```julia
+function cell_centers end
+```
+
+> cell_centers(grid::GridAccessor, idx.
+
+**Python:**
+```python
+def cell_centers(self, i, j):
+```
+
+---
+
 ### check_guard
 
 **Julia:**
@@ -1049,13 +1084,6 @@ export function extract(
 def fixtures_dir(self):
 ```
 
-> Get path to display fixtures.
-
-**Python:**
-```python
-def fixtures_dir(self):
-```
-
 > Get path to validation fixtures.
 
 **Python:**
@@ -1071,6 +1099,13 @@ def fixtures_dir(self):
 ```
 
 > Get path to test fixtures.
+
+**Python:**
+```python
+def fixtures_dir(self):
+```
+
+> Get path to display fixtures.
 
 **Python:**
 ```python
@@ -1246,7 +1281,31 @@ def get_stats(self):
 
 ---
 
+### grid_accessor_factory
+
+**Julia:**
+```julia
+grid_accessor_factory(...)
+```
+
+**Julia:**
+```julia
+function grid_accessor_factory(family::AbstractString)
+```
+
+> grid_accessor_factory(family) -> factory
+
+Return the registered factory for `family`, or throw
+[`GridAccessorError`](@ref) if none is registered.
+
+---
+
 ### gt
+
+**Julia:**
+```julia
+gt(...)
+```
 
 **Julia:**
 ```julia
@@ -1404,14 +1463,14 @@ mass-action kinetics: `d[X]/dt = Σ (stoich_ij * rate_j)`.
 def main():
 ```
 
-> Run all coupling error handling demonstrations.
+> Run all demonstrations.
 
 **Python:**
 ```python
 def main():
 ```
 
-> Demonstrate mathematical operators functionality.
+> Run all coupling error handling demonstrations.
 
 **Python:**
 ```python
@@ -1432,13 +1491,6 @@ def main():
 def main():
 ```
 
-> Run all demonstrations.
-
-**Python:**
-```python
-def main():
-```
-
 > Run all performance optimization demos.
 
 **Python:**
@@ -1446,7 +1498,33 @@ def main():
 def main():
 ```
 
+> Demonstrate mathematical operators functionality.
+
+**Python:**
+```python
+def main():
+```
+
 > Run all demonstrations.
+
+---
+
+### make_grid_accessor
+
+**Julia:**
+```julia
+make_grid_accessor(...)
+```
+
+**Julia:**
+```julia
+function make_grid_accessor(family::AbstractString, grid_data)
+```
+
+> make_grid_accessor(family, grid_data) -> GridAccessor
+
+Construct a `GridAccessor` for `family` by dispatching to the registered
+factory with `grid_data`.
 
 ---
 
@@ -1516,6 +1594,27 @@ export function merge(
 
 ---
 
+### metric_eval
+
+**Julia:**
+```julia
+metric_eval(...)
+```
+
+**Julia:**
+```julia
+function metric_eval end
+```
+
+> metric_eval(grid::GridAccessor, name::AbstractString, idx.
+
+**Python:**
+```python
+def metric_eval(self, name, i, j):
+```
+
+---
+
 ### migrate
 
 **Python:**
@@ -1531,6 +1630,29 @@ export function migrate(file: EsmFile, targetVersion: string): EsmFile {
 ```
 
 > Migrate an ESM file from its current schema version to the target version.
+
+---
+
+### neighbors
+
+**Julia:**
+```julia
+neighbors(...)
+```
+
+**Julia:**
+```julia
+function neighbors end
+```
+
+> neighbors(grid::GridAccessor, cell)
+
+Iterable of cells adjacent to `cell`.
+
+**Python:**
+```python
+def neighbors(self, cell):
+```
 
 ---
 
@@ -1679,6 +1801,24 @@ export function registerWebComponents() {
 
 > Register all ESM editor web components
 /.
+
+---
+
+### register_grid_accessor!
+
+**Julia:**
+```julia
+register_grid_accessor!(...)
+```
+
+**Julia:**
+```julia
+function register_grid_accessor!(family::AbstractString, factory)
+```
+
+> register_grid_accessor!(family, factory) -> previous_factory_or_nothing
+
+Register `factory` as the constructor for grid family `family`.
 
 ---
 
@@ -2089,14 +2229,14 @@ system(...)
 def test_empty_system(self):
 ```
 
-> Test handling of empty reaction system.
+> Test empty reaction system returns empty matrix.
 
 **Python:**
 ```python
 def test_empty_system(self):
 ```
 
-> Test empty reaction system returns empty matrix.
+> Test handling of empty reaction system.
 
 ---
 
@@ -2125,14 +2265,14 @@ def test_required_fields_validation(self):
 def test_source_and_sink_reactions(self):
 ```
 
-> Test source (null substrates) and sink (null products) reactions.
+> Test reactions with no reactants (source) or no products (sink).
 
 **Python:**
 ```python
 def test_source_and_sink_reactions(self):
 ```
 
-> Test reactions with no reactants (source) or no products (sink).
+> Test source (null substrates) and sink (null products) reactions.
 
 ---
 
@@ -2243,6 +2383,24 @@ types(...)
 ```julia
 types(...)
 ```
+
+---
+
+### unregister_grid_accessor!
+
+**Julia:**
+```julia
+unregister_grid_accessor!(...)
+```
+
+**Julia:**
+```julia
+function unregister_grid_accessor!(family::AbstractString)
+```
+
+> unregister_grid_accessor!(family) -> Bool
+
+Remove the factory for `family`.
 
 ---
 
@@ -2707,14 +2865,14 @@ struct CouplingEdge
 class CouplingEdge:
 ```
 
-> An edge representing coupling between components.
+> Represents a labeled edge in the coupling graph.
 
 **Python:**
 ```python
 class CouplingEdge:
 ```
 
-> Represents a labeled edge in the coupling graph.
+> An edge representing coupling between components.
 
 **Typescript:**
 ```typescript
@@ -3493,6 +3651,28 @@ export interface GridAccessor {
 ```
 
 > Accessor contract every ESD-provided concrete grid implements.
+
+---
+
+### GridAccessorError
+
+**Julia:**
+```julia
+struct GridAccessorError <: Exception
+```
+
+> GridAccessorError(message)
+
+Thrown by the default (unimplemented) generic stubs and by
+[`grid_accessor_factory`](@ref) / [`make_grid_accessor`](@ref) when a
+family has no registered factory.
+
+**Python:**
+```python
+class GridAccessorError:
+```
+
+> Base exception for grid-accessor registry and dispatch errors.
 
 ---
 
