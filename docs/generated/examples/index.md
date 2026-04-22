@@ -116,6 +116,7 @@ Collection of examples showing how to use the ESM Format libraries.
 - [Catalyst Extension Integration](julia-catalyst-extension-integration.md)
 - [Catalyst.ReactionSystem(::ESM ReactionSystem) builds a real ReactionSystem](julia-catalyst-reactionsystem---esm-reactionsystem--builds-a-real-reactionsystem.md)
 - [Round-trip: ESM ReactionSystem → Catalyst → ESM](julia-round-trip--esm-reactionsystem---catalyst---esm.md)
+- [Fractional stoichiometry survives Catalyst → ESM reverse (gt-3ai5)](julia-fractional-stoichiometry-survives-catalyst---esm-reverse--gt-3ai5-.md)
 - [Reservoir species (constant=true) maps to isconstantspecies (gt-ertm)](julia-reservoir-species--constant-true--maps-to-isconstantspecies--gt-ertm-.md)
 - [Subsystem Reference Resolution Tests](julia-subsystem-reference-resolution-tests.md)
 - [resolve_subsystem_refs! on file with no subsystems](julia-resolve_subsystem_refs--on-file-with-no-subsystems.md)
