@@ -91,11 +91,11 @@ _strip_time_suffix(s::AbstractString) = endswith(s, "(t)") ? s[1:end-3] : s
         recovered = EarthSciSerialization.ReactionSystem(cat_rsys)
         @test length(recovered.reactions) == 1
         rxn = recovered.reactions[1]
-        sub_by_name = Dict(e.species => e.stoichiometry for e in rxn.substrates)
-        prod_by_name = Dict(e.species => e.stoichiometry for e in rxn.products)
-        @test sub_by_name["CH3O2"] ≈ 2.0
-        @test prod_by_name["CH2O"] ≈ 2.0
-        @test prod_by_name["HO2"] ≈ 0.8
+        # rxn.reactants / rxn.products return Dict{String,Float64} via the
+        # backward-compatibility getproperty intercept.
+        @test rxn.reactants["CH3O2"] ≈ 2.0
+        @test rxn.products["CH2O"]  ≈ 2.0
+        @test rxn.products["HO2"]   ≈ 0.8
     end
 
     @testset "Reservoir species (constant=true) maps to isconstantspecies (gt-ertm)" begin
