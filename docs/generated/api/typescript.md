@@ -309,6 +309,22 @@ Classify expression complexity level
 
 ---
 
+### clearGridFamilies
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:185`
+
+**Signature:**
+```typescript
+export function clearGridFamilies(): void {
+```
+
+**Description:**
+Drop every registered family. Intended for test isolation; do not
+call in production code.
+/
+
+---
+
 ### compareAnalysis
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/analysis/index.ts:260`
@@ -508,6 +524,23 @@ Debounced validation hook for use in components that trigger validation
 ```typescript
 export function createDemoServer() {
 ```
+
+---
+
+### createGrid
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:170`
+
+**Signature:**
+```typescript
+export function createGrid(family: string, opts: Record<string, unknown> = {}): GridAccessor {
+```
+
+**Description:**
+Construct a grid via the registry. Raises
+`GridAccessorError(E_GRID_FAMILY_UNKNOWN)` if the family has no
+registered factory.
+/
 
 ---
 
@@ -1126,6 +1159,17 @@ Get the type of a component by its ID
 
 ---
 
+### getGridFamily
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:148`
+
+**Signature:**
+```typescript
+export function getGridFamily(family: string): GridAccessorFactory | undefined {
+```
+
+---
+
 ### getProfiler
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/error-handling.ts:486`
@@ -1184,6 +1228,17 @@ Group common subexpressions by their structure type
 @param commonSubexpressions Array of common subexpressions
 @returns Grouped subexpressions by operation type
 /
+
+---
+
+### hasGridFamily
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:153`
+
+**Signature:**
+```typescript
+export function hasGridFamily(family: string): boolean {
+```
 
 ---
 
@@ -1276,6 +1331,22 @@ export function isIntLit(x: unknown): x is NumericLiteral & { kind: 'int' } {
 ```typescript
 export function isNumericLiteral(x: unknown): x is NumericLiteral {
 ```
+
+---
+
+### listGridFamilies
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:161`
+
+**Signature:**
+```typescript
+export function listGridFamilies(): string[] {
+```
+
+**Description:**
+All registered family names, sorted lexicographically so output is
+deterministic across runs.
+/
 
 ---
 
@@ -1583,6 +1654,24 @@ Returns the product stoichiometric matrix (species × reactions) where:
 ```typescript
 export function profileOperation(operationName: string) {
 ```
+
+---
+
+### registerGridFamily
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:121`
+
+**Signature:**
+```typescript
+export function registerGridFamily(family: string, factory: GridAccessorFactory): void {
+```
+
+**Description:**
+Register a factory for `family`. Re-registering the same family is
+an error so downstream code cannot silently pick the wrong
+implementation when two packages ship the same name. Use
+`unregisterGridFamily` first if you need to swap.
+/
 
 ---
 
@@ -2070,6 +2159,22 @@ A non-throwing companion to `convertUnits`.
 
 ---
 
+### unregisterGridFamily
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:142`
+
+**Signature:**
+```typescript
+export function unregisterGridFamily(family: string): boolean {
+```
+
+**Description:**
+Remove a registration. Returns `true` iff the family was present.
+Intended for tests and ESD hot-reload; not a production path.
+/
+
+---
+
 ### validate
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/validate.ts:1140`
@@ -2199,6 +2304,23 @@ Model-level boundary condition entry (v0.2.0). Constrains one model variable on 
 ```typescript
 export interface CanonicalDims {
 ```
+
+---
+
+### CellCenter
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:30`
+
+**Definition:**
+```typescript
+export interface CellCenter {
+```
+
+**Description:**
+Geographic / cartesian center of a cell. Spherical families populate
+`lon`/`lat`; cartesian families populate `x`/`y`/`z`. The accessor
+may populate both for families that carry both coordinate systems.
+/
 
 ---
 
@@ -3223,6 +3345,23 @@ export interface Graph<N, E> {
 ```typescript
 export interface GraphExportOptions {
 ```
+
+---
+
+### GridAccessor
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/grid-accessor.ts:43`
+
+**Definition:**
+```typescript
+export interface GridAccessor {
+```
+
+**Description:**
+Accessor contract every ESD-provided concrete grid implements.
+Subsumes the GRIDS_API §3.4 `Grid` interface (family/dtype/toESM)
+and adds the three accessor methods called out in gt-j2b8.
+/
 
 ---
 
