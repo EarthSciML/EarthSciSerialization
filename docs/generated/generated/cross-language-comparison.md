@@ -2979,12 +2979,60 @@ class DataLoader:
 
 > Generic, runtime-agnostic description of an external data source.
 
-**Typescript:**
-```typescript
-export interface DataLoader {
+---
+
+### DataLoaderDeterminism
+
+**Julia:**
+```julia
+struct DataLoaderDeterminism
 ```
 
-> A generic, runtime-agnostic description of an external data source.
+> DataLoaderDeterminism
+
+Reproducibility contract a loader advertises to bindings (esm-spec §8.
+
+**Python:**
+```python
+class DataLoaderDeterminism:
+```
+
+> Reproducibility contract a loader advertises to bindings (esm-spec §8.
+
+**Typescript:**
+```typescript
+export interface DataLoaderDeterminism {
+```
+
+> Reproducibility contract a mesh (or grid) loader advertises to bindings (discretization RFC §8.
+
+---
+
+### DataLoaderMesh
+
+**Julia:**
+```julia
+struct DataLoaderMesh
+```
+
+> DataLoaderMesh
+
+Mesh descriptor attached to a [`DataLoader`](@ref) with `kind = "mesh"`
+(esm-spec §8.
+
+**Python:**
+```python
+class DataLoaderMesh:
+```
+
+> Mesh descriptor for a DataLoader with kind='mesh' (esm-spec §8.
+
+**Typescript:**
+```typescript
+export interface DataLoaderMesh {
+```
+
+> Mesh-loader descriptor (discretization RFC §8.
 
 ---
 
