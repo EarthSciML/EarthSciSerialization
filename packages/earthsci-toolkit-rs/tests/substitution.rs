@@ -557,7 +557,7 @@ fn test_substitute_deep_nesting() {
     for i in 0..DEPTH {
         expr = Expr::Operator(ExpressionNode {
             op: "+".to_string(),
-            args: vec![expr, Expr::Variable(format!("v{}", i))],
+            args: vec![expr, Expr::Variable(format!("v{i}"))],
             ..Default::default()
         });
     }

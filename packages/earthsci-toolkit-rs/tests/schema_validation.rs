@@ -32,7 +32,7 @@ fn test_missing_required_fields_schema_error() {
         Err(EsmError::SchemaValidation(_)) => {
             // Expected schema error
         }
-        Err(other) => panic!("Expected schema error, got: {:?}", other),
+        Err(other) => panic!("Expected schema error, got: {other:?}"),
         Ok(_) => panic!("Expected parsing to fail for missing required fields"),
     }
 }
@@ -49,7 +49,7 @@ fn test_wrong_data_types_schema_error() {
         Err(EsmError::SchemaValidation(_)) | Err(EsmError::JsonParse(_)) => {
             // Either schema or JSON parse error is acceptable for wrong data types
         }
-        Err(other) => panic!("Expected schema/JSON parse error, got: {:?}", other),
+        Err(other) => panic!("Expected schema/JSON parse error, got: {other:?}"),
         Ok(_) => panic!("Expected parsing to fail for wrong data types"),
     }
 }
@@ -112,7 +112,7 @@ fn test_metadata_validation_errors() {
 
     for (name, fixture) in fixtures.iter() {
         let result = load(fixture);
-        assert!(result.is_err(), "Expected {} to fail validation", name);
+        assert!(result.is_err(), "Expected {name} to fail validation");
     }
 }
 
@@ -158,8 +158,7 @@ fn test_data_loader_validation_errors() {
         let result = load(fixture);
         assert!(
             result.is_err(),
-            "Expected data loader {} to fail validation",
-            name
+            "Expected data loader {name} to fail validation"
         );
     }
 }
@@ -204,8 +203,7 @@ fn test_operator_validation_errors() {
 
         assert!(
             validation_failed,
-            "Expected operator {} to fail validation",
-            name
+            "Expected operator {name} to fail validation"
         );
     }
 }
@@ -237,7 +235,7 @@ fn test_version_compatibility_validation_errors() {
         // Note: Some version compatibility issues might be warnings rather than hard errors
         // depending on implementation, but generally malformed versions should fail
         if name.contains("malformed") || name.contains("invalid") {
-            assert!(result.is_err(), "Expected {} to fail validation", name);
+            assert!(result.is_err(), "Expected {name} to fail validation");
         }
     }
 }
@@ -274,8 +272,7 @@ fn test_coupling_validation_errors() {
         let result = load(fixture);
         assert!(
             result.is_err(),
-            "Expected coupling {} to fail validation",
-            name
+            "Expected coupling {name} to fail validation"
         );
     }
 }

@@ -240,9 +240,8 @@ fn earthscidata_loader_coverage_matches_amendment_list() {
         let found = FIXTURES.iter().any(|fx| fx.name.contains(needle));
         assert!(
             found,
-            "gt-0c7 coverage gap: no fixture mentions '{}' \
-             — update tests/fixtures/data_loaders/ and this test",
-            needle
+            "gt-0c7 coverage gap: no fixture mentions '{needle}' \
+             — update tests/fixtures/data_loaders/ and this test"
         );
     }
 }

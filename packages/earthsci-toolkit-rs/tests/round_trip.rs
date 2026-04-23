@@ -32,12 +32,12 @@ fn test_metadata_variations_round_trip() {
     ];
 
     for (i, fixture) in fixtures.iter().enumerate() {
-        let parsed: EsmFile = load(fixture)
-            .unwrap_or_else(|e| panic!("Failed to parse metadata fixture {}: {}", i, e));
+        let parsed: EsmFile =
+            load(fixture).unwrap_or_else(|e| panic!("Failed to parse metadata fixture {i}: {e}"));
         let serialized = save(&parsed)
-            .unwrap_or_else(|e| panic!("Failed to serialize metadata fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to serialize metadata fixture {i}: {e}"));
         let reparsed: EsmFile = load(&serialized)
-            .unwrap_or_else(|e| panic!("Failed to reparse metadata fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to reparse metadata fixture {i}: {e}"));
 
         assert_eq!(parsed.esm, reparsed.esm);
         assert_eq!(parsed.metadata.name, reparsed.metadata.name);
@@ -81,13 +81,13 @@ fn test_comprehensive_events_round_trip() {
             match (&model1.discrete_events, &model2.discrete_events) {
                 (Some(events1), Some(events2)) => assert_eq!(events1.len(), events2.len()),
                 (None, None) => {}
-                _ => panic!("Discrete events structure mismatch for model {}", name),
+                _ => panic!("Discrete events structure mismatch for model {name}"),
             }
             // Compare continuous events
             match (&model1.continuous_events, &model2.continuous_events) {
                 (Some(events1), Some(events2)) => assert_eq!(events1.len(), events2.len()),
                 (None, None) => {}
-                _ => panic!("Continuous events structure mismatch for model {}", name),
+                _ => panic!("Continuous events structure mismatch for model {name}"),
             }
         }
     }
@@ -102,12 +102,12 @@ fn test_spatial_operators_round_trip() {
     ];
 
     for (i, fixture) in fixtures.iter().enumerate() {
-        let parsed: EsmFile = load(fixture)
-            .unwrap_or_else(|e| panic!("Failed to parse spatial fixture {}: {}", i, e));
+        let parsed: EsmFile =
+            load(fixture).unwrap_or_else(|e| panic!("Failed to parse spatial fixture {i}: {e}"));
         let serialized = save(&parsed)
-            .unwrap_or_else(|e| panic!("Failed to serialize spatial fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to serialize spatial fixture {i}: {e}"));
         let reparsed: EsmFile = load(&serialized)
-            .unwrap_or_else(|e| panic!("Failed to reparse spatial fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to reparse spatial fixture {i}: {e}"));
 
         assert_eq!(parsed.esm, reparsed.esm);
         // Check operators are preserved
@@ -127,12 +127,12 @@ fn test_coupling_round_trip() {
     ];
 
     for (i, fixture) in fixtures.iter().enumerate() {
-        let parsed: EsmFile = load(fixture)
-            .unwrap_or_else(|e| panic!("Failed to parse coupling fixture {}: {}", i, e));
+        let parsed: EsmFile =
+            load(fixture).unwrap_or_else(|e| panic!("Failed to parse coupling fixture {i}: {e}"));
         let serialized = save(&parsed)
-            .unwrap_or_else(|e| panic!("Failed to serialize coupling fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to serialize coupling fixture {i}: {e}"));
         let reparsed: EsmFile = load(&serialized)
-            .unwrap_or_else(|e| panic!("Failed to reparse coupling fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to reparse coupling fixture {i}: {e}"));
 
         assert_eq!(parsed.esm, reparsed.esm);
         // Check coupling is preserved
@@ -168,12 +168,12 @@ fn test_version_compatibility_round_trip() {
     ];
 
     for (i, fixture) in fixtures.iter().enumerate() {
-        let parsed: EsmFile = load(fixture)
-            .unwrap_or_else(|e| panic!("Failed to parse version fixture {}: {}", i, e));
+        let parsed: EsmFile =
+            load(fixture).unwrap_or_else(|e| panic!("Failed to parse version fixture {i}: {e}"));
         let serialized = save(&parsed)
-            .unwrap_or_else(|e| panic!("Failed to serialize version fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to serialize version fixture {i}: {e}"));
         let reparsed: EsmFile = load(&serialized)
-            .unwrap_or_else(|e| panic!("Failed to reparse version fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to reparse version fixture {i}: {e}"));
 
         assert_eq!(parsed.esm, reparsed.esm);
         assert_eq!(parsed.metadata.name, reparsed.metadata.name);
@@ -191,11 +191,11 @@ fn test_mathematical_correctness_round_trip() {
 
     for (i, fixture) in fixtures.iter().enumerate() {
         let parsed: EsmFile =
-            load(fixture).unwrap_or_else(|e| panic!("Failed to parse math fixture {}: {}", i, e));
-        let serialized = save(&parsed)
-            .unwrap_or_else(|e| panic!("Failed to serialize math fixture {}: {}", i, e));
-        let reparsed: EsmFile = load(&serialized)
-            .unwrap_or_else(|e| panic!("Failed to reparse math fixture {}: {}", i, e));
+            load(fixture).unwrap_or_else(|e| panic!("Failed to parse math fixture {i}: {e}"));
+        let serialized =
+            save(&parsed).unwrap_or_else(|e| panic!("Failed to serialize math fixture {i}: {e}"));
+        let reparsed: EsmFile =
+            load(&serialized).unwrap_or_else(|e| panic!("Failed to reparse math fixture {i}: {e}"));
 
         assert_eq!(parsed.esm, reparsed.esm);
     }
@@ -237,12 +237,12 @@ fn test_scoping_round_trip() {
     ];
 
     for (i, fixture) in fixtures.iter().enumerate() {
-        let parsed: EsmFile = load(fixture)
-            .unwrap_or_else(|e| panic!("Failed to parse scoping fixture {}: {}", i, e));
+        let parsed: EsmFile =
+            load(fixture).unwrap_or_else(|e| panic!("Failed to parse scoping fixture {i}: {e}"));
         let serialized = save(&parsed)
-            .unwrap_or_else(|e| panic!("Failed to serialize scoping fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to serialize scoping fixture {i}: {e}"));
         let reparsed: EsmFile = load(&serialized)
-            .unwrap_or_else(|e| panic!("Failed to reparse scoping fixture {}: {}", i, e));
+            .unwrap_or_else(|e| panic!("Failed to reparse scoping fixture {i}: {e}"));
 
         assert_eq!(parsed.esm, reparsed.esm);
     }
@@ -389,7 +389,7 @@ fn test_correlated_noise_sde_round_trip() {
         let bv = model
             .variables
             .get(name)
-            .unwrap_or_else(|| panic!("{} missing", name));
+            .unwrap_or_else(|| panic!("{name} missing"));
         assert_eq!(bv.var_type, VariableType::Brownian);
         assert_eq!(bv.correlation_group.as_deref(), Some("wind"));
     }

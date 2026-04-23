@@ -30,13 +30,12 @@ const UNITS_FIXTURES: &[(&str, &str)] = &[
 #[test]
 fn units_fixtures_parse() {
     for (name, content) in UNITS_FIXTURES {
-        let file: EsmFile =
-            load(content).unwrap_or_else(|e| panic!("failed to load {}: {}", name, e));
+        let file: EsmFile = load(content).unwrap_or_else(|e| panic!("failed to load {name}: {e}"));
         let models = file
             .models
             .as_ref()
-            .unwrap_or_else(|| panic!("{}: expected at least one model", name));
-        assert!(!models.is_empty(), "{}: models map is empty", name);
+            .unwrap_or_else(|| panic!("{name}: expected at least one model"));
+        assert!(!models.is_empty(), "{name}: models map is empty");
     }
 }
 
@@ -59,8 +58,7 @@ fn units_fixtures_variable_units_parse_or_log() {
                     }
                     if let Err(err) = parse_unit(unit_str) {
                         println!(
-                            "[units coverage] {}::{}::{}: cannot parse {:?}: {}",
-                            fname, mname, vname, unit_str, err
+                            "[units coverage] {fname}::{mname}::{vname}: cannot parse {unit_str:?}: {err}"
                         );
                     }
                 }

@@ -56,8 +56,7 @@ fn test_undefined_species() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_undefined_species_error = validation_result
@@ -66,8 +65,7 @@ fn test_undefined_species() {
                     .any(|err| matches!(err.code, StructuralErrorCode::UndefinedSpecies));
                 assert!(
                     has_undefined_species_error,
-                    "Expected UndefinedSpecies error for {}",
-                    name
+                    "Expected UndefinedSpecies error for {name}"
                 );
             }
             Err(_) => {
@@ -103,8 +101,7 @@ fn test_undefined_parameter() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_undefined_param_error = validation_result
@@ -113,8 +110,7 @@ fn test_undefined_parameter() {
                     .any(|err| matches!(err.code, StructuralErrorCode::UndefinedParameter));
                 assert!(
                     has_undefined_param_error,
-                    "Expected UndefinedParameter error for {}",
-                    name
+                    "Expected UndefinedParameter error for {name}"
                 );
             }
             Err(_) => {
@@ -150,8 +146,7 @@ fn test_equation_count_mismatch() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_equation_count_error = validation_result
@@ -160,8 +155,7 @@ fn test_equation_count_mismatch() {
                     .any(|err| matches!(err.code, StructuralErrorCode::EquationCountMismatch));
                 assert!(
                     has_equation_count_error,
-                    "Expected EquationCountMismatch error for {}",
-                    name
+                    "Expected EquationCountMismatch error for {name}"
                 );
             }
             Err(_) => {
@@ -193,8 +187,7 @@ fn test_null_reaction() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_null_reaction_error = validation_result
@@ -203,8 +196,7 @@ fn test_null_reaction() {
                     .any(|err| matches!(err.code, StructuralErrorCode::NullReaction));
                 assert!(
                     has_null_reaction_error,
-                    "Expected NullReaction error for {}",
-                    name
+                    "Expected NullReaction error for {name}"
                 );
             }
             Err(_) => {
@@ -240,8 +232,7 @@ fn test_missing_observed_expression() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_missing_observed_error = validation_result
@@ -250,8 +241,7 @@ fn test_missing_observed_expression() {
                     .any(|err| matches!(err.code, StructuralErrorCode::MissingObservedExpr));
                 assert!(
                     has_missing_observed_error,
-                    "Expected MissingObservedExpr error for {}",
-                    name
+                    "Expected MissingObservedExpr error for {name}"
                 );
             }
             Err(_) => {
@@ -287,8 +277,7 @@ fn test_unresolved_scoped_reference() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_unresolved_ref_error = validation_result
@@ -297,8 +286,7 @@ fn test_unresolved_scoped_reference() {
                     .any(|err| matches!(err.code, StructuralErrorCode::UnresolvedScopedRef));
                 assert!(
                     has_unresolved_ref_error,
-                    "Expected UnresolvedScopedRef error for {}",
-                    name
+                    "Expected UnresolvedScopedRef error for {name}"
                 );
             }
             Err(_) => {
@@ -334,8 +322,7 @@ fn test_event_variable_undeclared() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_event_var_error = validation_result
@@ -344,8 +331,7 @@ fn test_event_variable_undeclared() {
                     .any(|err| matches!(err.code, StructuralErrorCode::EventVarUndeclared));
                 assert!(
                     has_event_var_error,
-                    "Expected EventVarUndeclared error for {}",
-                    name
+                    "Expected EventVarUndeclared error for {name}"
                 );
             }
             Err(_) => {
@@ -377,8 +363,7 @@ fn test_invalid_discrete_parameter() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_invalid_discrete_error = validation_result
@@ -387,8 +372,7 @@ fn test_invalid_discrete_parameter() {
                     .any(|err| matches!(err.code, StructuralErrorCode::InvalidDiscreteParam));
                 assert!(
                     has_invalid_discrete_error,
-                    "Expected InvalidDiscreteParam error for {}",
-                    name
+                    "Expected InvalidDiscreteParam error for {name}"
                 );
             }
             Err(_) => {
@@ -420,8 +404,7 @@ fn test_undefined_operator() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_undefined_operator_error = validation_result
@@ -430,8 +413,7 @@ fn test_undefined_operator() {
                     .any(|err| matches!(err.code, StructuralErrorCode::UndefinedOperator));
                 assert!(
                     has_undefined_operator_error,
-                    "Expected UndefinedOperator error for {}",
-                    name
+                    "Expected UndefinedOperator error for {name}"
                 );
             }
             Err(_) => {
@@ -463,8 +445,7 @@ fn test_undefined_variable_contexts() {
                 let validation_result = validate(&esm_file);
                 assert!(
                     validation_result.has_errors(),
-                    "Expected {} to have validation errors",
-                    name
+                    "Expected {name} to have validation errors"
                 );
 
                 let has_undefined_var_error = validation_result
@@ -473,8 +454,7 @@ fn test_undefined_variable_contexts() {
                     .any(|err| matches!(err.code, StructuralErrorCode::UndefinedVariable));
                 assert!(
                     has_undefined_var_error,
-                    "Expected UndefinedVariable error for {}",
-                    name
+                    "Expected UndefinedVariable error for {name}"
                 );
             }
             Err(_) => {
@@ -679,8 +659,7 @@ fn test_valid_cross_model_references() {
         }
         Err(e) => {
             panic!(
-                "Valid cross-model reference file should parse successfully, but got error: {}",
-                e
+                "Valid cross-model reference file should parse successfully, but got error: {e}"
             );
         }
     }

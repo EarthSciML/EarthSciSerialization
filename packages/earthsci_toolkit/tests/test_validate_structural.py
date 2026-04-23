@@ -384,7 +384,7 @@ class TestValidationWithFixtures:
         if not valid_dir.exists():
             pytest.skip("Valid fixtures directory not found")
 
-        valid_files = list(valid_dir.glob("*.esm"))
+        valid_files = sorted(valid_dir.glob("*.esm"))
         assert len(valid_files) > 0, "No valid fixture files found"
 
         failed_files = []

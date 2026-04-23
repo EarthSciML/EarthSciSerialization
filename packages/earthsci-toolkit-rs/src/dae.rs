@@ -115,7 +115,7 @@ pub fn apply_dae_contract(esm: &mut EsmFile, dae_support: bool) -> Result<DaeInf
                 if is_algebraic(eq, &indep) {
                     pre_factor_count += 1;
                     if first_path.is_none() {
-                        first_path = Some(format!("models.{}.equations[{}]", mname, i));
+                        first_path = Some(format!("models.{mname}.equations[{i}]"));
                     }
                 }
             }
@@ -164,7 +164,7 @@ pub fn apply_dae_contract(esm: &mut EsmFile, dae_support: bool) -> Result<DaeInf
             let (factored, residual) = factor_model(model, &indep);
             factored_total += factored;
             for idx in &residual {
-                residual_paths.push(format!("models.{}.equations[{}]", mname, idx));
+                residual_paths.push(format!("models.{mname}.equations[{idx}]"));
             }
             per_model.insert(mname, residual.len());
         }

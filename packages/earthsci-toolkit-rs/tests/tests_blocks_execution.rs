@@ -138,7 +138,7 @@ fn resolve_tol(
 }
 
 fn find_state_index(state_names: &[String], component: &str, local: &str) -> Option<usize> {
-    let namespaced = format!("{}.{}", component, local);
+    let namespaced = format!("{component}.{local}");
     if let Some(i) = state_names.iter().position(|n| n == &namespaced) {
         return Some(i);
     }
@@ -162,7 +162,7 @@ fn execute_component(
             for (k, v) in po {
                 // Rust's simulate validates against namespaced parameter
                 // names, so translate bare names to `component.name`.
-                let namespaced = format!("{}.{}", component, k);
+                let namespaced = format!("{component}.{k}");
                 if compiled.parameter_names().iter().any(|n| n == &namespaced) {
                     params.insert(namespaced, *v);
                 } else {
@@ -173,7 +173,7 @@ fn execute_component(
         let mut ics = HashMap::new();
         if let Some(ic) = &t.initial_conditions {
             for (k, v) in ic {
-                let namespaced = format!("{}.{}", component, k);
+                let namespaced = format!("{component}.{k}");
                 if compiled
                     .state_variable_names()
                     .iter()
@@ -305,7 +305,7 @@ fn tests_blocks_execution_runner() {
                 }
                 let subset = model_only_subset(&file, mname);
                 let tests = model.tests.as_ref().unwrap();
-                let label = format!("{}/models/{}", name, mname);
+                let label = format!("{name}/models/{mname}");
                 execute_component(
                     &label,
                     &subset,

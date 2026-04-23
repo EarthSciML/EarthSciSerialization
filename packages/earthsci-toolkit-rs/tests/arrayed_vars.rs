@@ -16,8 +16,8 @@ fn fixture_dir() -> PathBuf {
 
 fn load_fixture(name: &str) -> EsmFile {
     let path = fixture_dir().join(name);
-    let raw = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {:?}: {}", path, e));
-    load(&raw).unwrap_or_else(|e| panic!("parse {}: {:?}", name, e))
+    let raw = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
+    load(&raw).unwrap_or_else(|e| panic!("parse {name}: {e:?}"))
 }
 
 fn roundtrip(name: &str) -> (EsmFile, EsmFile) {
@@ -32,10 +32,10 @@ fn var<'a>(esm: &'a EsmFile, model: &str, name: &str) -> &'a ModelVariable {
         .as_ref()
         .expect("models map present")
         .get(model)
-        .unwrap_or_else(|| panic!("model {} missing", model))
+        .unwrap_or_else(|| panic!("model {model} missing"))
         .variables
         .get(name)
-        .unwrap_or_else(|| panic!("variable {} missing", name))
+        .unwrap_or_else(|| panic!("variable {name} missing"))
 }
 
 #[test]

@@ -274,8 +274,7 @@ impl ArrayCompiled {
                     return Err(CompileError::UnsupportedFeatureError {
                         feature: "brownian".to_string(),
                         message: format!(
-                            "Rust simulation backend does not support SDE (brownian) models; variable '{}' is brownian",
-                            name
+                            "Rust simulation backend does not support SDE (brownian) models; variable '{name}' is brownian"
                         ),
                     });
                 }
@@ -331,7 +330,7 @@ impl ArrayCompiled {
                         .map(|(v, o)| (v + *o as usize).to_string())
                         .collect::<Vec<_>>()
                         .join(",");
-                    let slot_name = format!("{}[{}]", name, idx_str);
+                    let slot_name = format!("{name}[{idx_str}]");
                     scalar_state_names.push(slot_name.clone());
                     scalar_state_index.insert(slot_name, flat_offset + flat);
                     state_defaults.push(default);

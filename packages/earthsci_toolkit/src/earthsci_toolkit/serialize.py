@@ -545,8 +545,9 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
             dim_data = {
                 "min": dim_spec.min,
                 "max": dim_spec.max,
-                "units": dim_spec.units
             }
+            if dim_spec.units is not None:
+                dim_data["units"] = dim_spec.units
             if dim_spec.grid_spacing is not None:
                 dim_data["grid_spacing"] = dim_spec.grid_spacing
             spatial_data[dim_name] = dim_data

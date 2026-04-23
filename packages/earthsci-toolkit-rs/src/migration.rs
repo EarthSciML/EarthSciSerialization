@@ -40,26 +40,26 @@ fn parse_version(version: &str) -> Result<VersionInfo, MigrationError> {
     let parts: Vec<&str> = version.split('.').collect();
     if parts.len() != 3 {
         return Err(MigrationError {
-            message: format!("Invalid version format: {}", version),
+            message: format!("Invalid version format: {version}"),
             from_version: version.to_string(),
             to_version: String::new(),
         });
     }
 
     let major = parts[0].parse::<u32>().map_err(|_| MigrationError {
-        message: format!("Invalid version format: {}", version),
+        message: format!("Invalid version format: {version}"),
         from_version: version.to_string(),
         to_version: String::new(),
     })?;
 
     let minor = parts[1].parse::<u32>().map_err(|_| MigrationError {
-        message: format!("Invalid version format: {}", version),
+        message: format!("Invalid version format: {version}"),
         from_version: version.to_string(),
         to_version: String::new(),
     })?;
 
     let patch = parts[2].parse::<u32>().map_err(|_| MigrationError {
-        message: format!("Invalid version format: {}", version),
+        message: format!("Invalid version format: {version}"),
         from_version: version.to_string(),
         to_version: String::new(),
     })?;
@@ -135,19 +135,16 @@ fn migrate_species_units(
 fn add_migration_notes(file: &EsmFile, from_version: &str, to_version: &str) -> EsmFile {
     let mut new_file = file.clone();
 
-    let migration_note = format!(
-        "Migrated from version {} to version {}",
-        from_version, to_version
-    );
+    let migration_note = format!("Migrated from version {from_version} to version {to_version}");
 
     // Add migration note to description
     match &new_file.metadata.description {
         Some(desc) if !desc.is_empty() => {
             new_file.metadata.description =
-                Some(format!("{}\nMigration notes: {}", desc, migration_note));
+                Some(format!("{desc}\nMigration notes: {migration_note}"));
         }
         _ => {
-            new_file.metadata.description = Some(format!("Migration notes: {}", migration_note));
+            new_file.metadata.description = Some(format!("Migration notes: {migration_note}"));
         }
     }
 
@@ -171,8 +168,7 @@ pub fn migrate(file: &EsmFile, target_version: &str) -> Result<EsmFile, Migratio
     if current.major != target.major {
         return Err(MigrationError {
             message: format!(
-                "Cannot migrate across major versions: {} to {}",
-                current_version, target_version
+                "Cannot migrate across major versions: {current_version} to {target_version}"
             ),
             from_version: current_version.clone(),
             to_version: target_version.to_string(),
@@ -184,8 +180,7 @@ pub fn migrate(file: &EsmFile, target_version: &str) -> Result<EsmFile, Migratio
     if comparison > 0 {
         return Err(MigrationError {
             message: format!(
-                "Backward migration not supported: {} to {}",
-                current_version, target_version
+                "Backward migration not supported: {current_version} to {target_version}"
             ),
             from_version: current_version.clone(),
             to_version: target_version.to_string(),

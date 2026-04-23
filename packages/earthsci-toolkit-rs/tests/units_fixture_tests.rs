@@ -112,8 +112,7 @@ fn check_assertion(label: &str, actual: f64, expected: f64, rel: f64, abs_: f64)
     };
     assert!(
         passed,
-        "{}: actual={} expected={} rel={} abs={} diff={}",
-        label, actual, expected, rel, abs_, diff
+        "{label}: actual={actual} expected={expected} rel={rel} abs={abs_} diff={diff}"
     );
 }
 
@@ -121,12 +120,11 @@ fn check_assertion(label: &str, actual: f64, expected: f64, rel: f64, abs_: f64)
 fn units_fixtures_inline_tests_execute() {
     let mut total_tests = 0usize;
     for (fname, content) in UNITS_FIXTURES {
-        let file: EsmFile =
-            load(content).unwrap_or_else(|e| panic!("failed to load {}: {}", fname, e));
+        let file: EsmFile = load(content).unwrap_or_else(|e| panic!("failed to load {fname}: {e}"));
         let models = file
             .models
             .as_ref()
-            .unwrap_or_else(|| panic!("{}: expected at least one model", fname));
+            .unwrap_or_else(|| panic!("{fname}: expected at least one model"));
         let mut fixture_tests = 0usize;
         for (mname, model) in models {
             let Some(tests) = &model.tests else { continue };
@@ -154,8 +152,7 @@ fn units_fixtures_inline_tests_execute() {
         }
         assert!(
             fixture_tests > 0,
-            "{}: expected at least one inline test across its models",
-            fname
+            "{fname}: expected at least one inline test across its models"
         );
     }
     assert!(

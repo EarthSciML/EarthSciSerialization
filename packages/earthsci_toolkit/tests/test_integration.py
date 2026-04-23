@@ -176,7 +176,7 @@ class TestFullWorkflowIntegration:
             pytest.skip("Valid fixtures directory not found")
 
         # Test a few representative files
-        valid_files = list(valid_dir.glob("*.esm"))
+        valid_files = sorted(valid_dir.glob("*.esm"))
         if not valid_files:
             pytest.skip("No valid fixture files found")
 

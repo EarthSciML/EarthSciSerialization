@@ -61,18 +61,15 @@ fn test_operator_formatting() {
 
         assert!(
             !unicode_result.is_empty(),
-            "Unicode formatting for {} should not be empty",
-            op
+            "Unicode formatting for {op} should not be empty"
         );
         assert!(
             !latex_result.is_empty(),
-            "LaTeX formatting for {} should not be empty",
-            op
+            "LaTeX formatting for {op} should not be empty"
         );
         assert!(
             !ascii_result.is_empty(),
-            "ASCII formatting for {} should not be empty",
-            op
+            "ASCII formatting for {op} should not be empty"
         );
     }
 }
@@ -192,8 +189,7 @@ fn test_number_formatting() {
             unicode_result.contains("e"); // Exponential notation
         assert!(
             has_number_representation,
-            "Number {} should be represented in unicode output",
-            num
+            "Number {num} should be represented in unicode output"
         );
     }
 }

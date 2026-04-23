@@ -377,7 +377,7 @@ fn emit_node_json(n: &ExpressionNode) -> String {
 }
 
 fn json_string(s: &str) -> String {
-    serde_json::to_string(s).unwrap_or_else(|_| format!("\"{}\"", s))
+    serde_json::to_string(s).unwrap_or_else(|_| format!("\"{s}\""))
 }
 
 /// Format a finite f64 per RFC §5.4.6.
@@ -398,7 +398,7 @@ pub fn format_canonical_float(f: f64) -> String {
     if use_exp {
         // Use Rust's shortest round-trip; format!("{:e}", f) emits e.g. "1e25", "3e-7"
         // (no leading + on exponent).
-        let s = format!("{:e}", f);
+        let s = format!("{f:e}");
         // Strip leading + (Rust doesn't emit it but be safe) and leading exponent zeros.
         normalize_exponent(&s)
     } else {
@@ -406,7 +406,7 @@ pub fn format_canonical_float(f: f64) -> String {
         // but may print `1` for `1.0`. Add trailing `.0` if no `.` present.
         let s = shortest_float_plain(f);
         if !s.contains('.') {
-            format!("{}.0", s)
+            format!("{s}.0")
         } else {
             s
         }
@@ -418,7 +418,7 @@ fn shortest_float_plain(f: f64) -> String {
     // Rust's Display for f64 may switch to exponent notation only for very large/small;
     // for the [1e-6, 1e21) range it emits plain decimal. But integer-valued floats
     // are printed as e.g. "1" (without decimal) — handled by the caller adding ".0".
-    let s = format!("{}", f);
+    let s = format!("{f}");
     // For values like 1e20, Rust may print "100000000000000000000" — that's fine.
     // For 1e-5, Rust prints "0.00001" — also fine.
     s
@@ -436,7 +436,7 @@ fn normalize_exponent(s: &str) -> String {
         };
         let digits = digits.trim_start_matches('0');
         let digits = if digits.is_empty() { "0" } else { digits };
-        format!("{}e{}{}", mant, sign, digits)
+        format!("{mant}e{sign}{digits}")
     } else {
         s.into()
     }
@@ -467,7 +467,7 @@ mod tests {
             (1e-7, "1e-7"),
         ];
         for (v, want) in cases {
-            assert_eq!(format_canonical_float(v), want, "for {}", v);
+            assert_eq!(format_canonical_float(v), want, "for {v}");
         }
         let mixed = 0.1_f64 + 0.2_f64;
         assert_eq!(format_canonical_float(mixed), "0.30000000000000004");

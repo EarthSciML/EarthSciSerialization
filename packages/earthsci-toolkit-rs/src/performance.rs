@@ -85,7 +85,7 @@ impl ParallelEvaluator {
                 .par_iter()
                 .map(|expr| {
                     crate::expression::evaluate(expr, variables)
-                        .map_err(|e| PerformanceError::ParallelError(format!("{:?}", e)))
+                        .map_err(|e| PerformanceError::ParallelError(format!("{e:?}")))
                 })
                 .collect()
         })
@@ -370,7 +370,7 @@ impl CompactExpr {
                 CompactNode::Number(n) => stack.push(*n),
                 CompactNode::Variable(name) => {
                     let value = variables.get(name).ok_or_else(|| {
-                        PerformanceError::ParallelError(format!("Undefined variable: {}", name))
+                        PerformanceError::ParallelError(format!("Undefined variable: {name}"))
                     })?;
                     stack.push(*value);
                 }
@@ -473,8 +473,7 @@ impl CompactExpr {
                     }
                     _ => {
                         return Err(PerformanceError::ParallelError(format!(
-                            "Unsupported operator: {}",
-                            op
+                            "Unsupported operator: {op}"
                         )));
                     }
                 },

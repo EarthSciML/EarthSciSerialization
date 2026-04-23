@@ -251,16 +251,16 @@ enum Commands {
 fn analyze_model_units(esm_file: &earthsci_toolkit::EsmFile) {
     if let Some(ref models) = esm_file.models {
         for (model_id, model) in models {
-            println!("Model: {}", model_id);
+            println!("Model: {model_id}");
 
             // Analyze variable units
             let mut unit_count = 0;
             for (var_name, var) in &model.variables {
                 if let Some(ref units) = var.units {
-                    println!("  Variable {}: {} [{}]", var_name, var_name, units);
+                    println!("  Variable {var_name}: {var_name} [{units}]");
                     unit_count += 1;
                 } else {
-                    println!("  Variable {}: {} [no units specified]", var_name, var_name);
+                    println!("  Variable {var_name}: {var_name} [no units specified]");
                 }
             }
 
@@ -283,16 +283,16 @@ fn analyze_model_units(esm_file: &earthsci_toolkit::EsmFile) {
 fn analyze_reaction_system_units(esm_file: &earthsci_toolkit::EsmFile) {
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (rs_id, rs) in reaction_systems {
-            println!("Reaction System: {}", rs_id);
+            println!("Reaction System: {rs_id}");
 
             // Analyze species units
             let mut species_with_units = 0;
             for (species_name, species) in &rs.species {
                 if let Some(ref units) = species.units {
-                    println!("  Species {}: [{}]", species_name, units);
+                    println!("  Species {species_name}: [{units}]");
                     species_with_units += 1;
                 } else {
-                    println!("  Species {}: [no units]", species_name);
+                    println!("  Species {species_name}: [no units]");
                 }
             }
 
@@ -320,18 +320,18 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
     code.push_str("using DifferentialEquations, ModelingToolkit\n\n");
 
     if let Some(ref name) = esm_file.metadata.name {
-        code.push_str(&format!("# Model: {}\n", name));
+        code.push_str(&format!("# Model: {name}\n"));
     }
     if let Some(ref description) = esm_file.metadata.description {
-        code.push_str(&format!("# {}\n", description));
+        code.push_str(&format!("# {description}\n"));
     }
     code.push('\n');
 
     // Generate variables and equations for each model
     if let Some(ref models) = esm_file.models {
         for (model_id, model) in models {
-            code.push_str(&format!("# Model: {}\n", model_id));
-            code.push_str(&format!("function {}!(du, u, p, t)\n", model_id));
+            code.push_str(&format!("# Model: {model_id}\n"));
+            code.push_str(&format!("function {model_id}!(du, u, p, t)\n"));
 
             // Variable mapping
             for (i, (var_name, _var)) in model.variables.iter().enumerate() {
@@ -365,8 +365,7 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
                                 ));
                             } else {
                                 code.push_str(&format!(
-                                    "    # Unknown variable in derivative: d{}/dt = {}\n",
-                                    var_name, rhs
+                                    "    # Unknown variable in derivative: d{var_name}/dt = {rhs}\n"
                                 ));
                             }
                         }
@@ -392,11 +391,11 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
 
             // Initial conditions
             if !model.variables.is_empty() {
-                code.push_str(&format!("# Initial conditions for {}\n", model_id));
+                code.push_str(&format!("# Initial conditions for {model_id}\n"));
                 code.push_str("u0 = [\n");
                 for (var_name, var) in &model.variables {
                     let init_val = var.default.unwrap_or(0.0);
-                    code.push_str(&format!("    {},  # {}\n", init_val, var_name));
+                    code.push_str(&format!("    {init_val},  # {var_name}\n"));
                 }
                 code.push_str("]\n\n");
             }
@@ -406,8 +405,8 @@ fn generate_julia_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
     // Generate reaction system code
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (rs_id, rs) in reaction_systems {
-            code.push_str(&format!("# Reaction System: {}\n", rs_id));
-            code.push_str(&format!("function {}!(du, u, p, t)\n", rs_id));
+            code.push_str(&format!("# Reaction System: {rs_id}\n"));
+            code.push_str(&format!("function {rs_id}!(du, u, p, t)\n"));
 
             // Species mapping (sorted for determinism, since species is a HashMap)
             let mut species_names: Vec<&String> = rs.species.keys().collect();
@@ -482,17 +481,17 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
     code.push_str("import matplotlib.pyplot as plt\n\n");
 
     if let Some(ref name) = esm_file.metadata.name {
-        code.push_str(&format!("# Model: {}\n", name));
+        code.push_str(&format!("# Model: {name}\n"));
     }
     if let Some(ref description) = esm_file.metadata.description {
-        code.push_str(&format!("# {}\n", description));
+        code.push_str(&format!("# {description}\n"));
     }
     code.push('\n');
 
     // Generate functions for each model
     if let Some(ref models) = esm_file.models {
         for (model_id, model) in models {
-            code.push_str(&format!("def {}(t, y):\n", model_id));
+            code.push_str(&format!("def {model_id}(t, y):\n"));
             code.push_str("    \"\"\"\n");
             code.push_str(&format!(
                 "    Model: {}\n",
@@ -502,7 +501,7 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
 
             // Variable unpacking
             for (i, (var_name, _var)) in model.variables.iter().enumerate() {
-                code.push_str(&format!("    {} = y[{}]  # {}\n", var_name, i, var_name));
+                code.push_str(&format!("    {var_name} = y[{i}]  # {var_name}\n"));
             }
             code.push('\n');
 
@@ -523,13 +522,11 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
                                 model.variables.keys().position(|v| v == var_name)
                             {
                                 code.push_str(&format!(
-                                    "    dydt[{}] = {}  # d{}/dt\n",
-                                    var_idx, rhs, var_name
+                                    "    dydt[{var_idx}] = {rhs}  # d{var_name}/dt\n"
                                 ));
                             } else {
                                 code.push_str(&format!(
-                                    "    # Unknown variable: d{}/dt = {}\n",
-                                    var_name, rhs
+                                    "    # Unknown variable: d{var_name}/dt = {rhs}\n"
                                 ));
                             }
                         }
@@ -555,11 +552,11 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
 
             // Initial conditions
             if !model.variables.is_empty() {
-                code.push_str(&format!("# Initial conditions for {}\n", model_id));
-                code.push_str(&format!("{}_y0 = np.array([\n", model_id));
+                code.push_str(&format!("# Initial conditions for {model_id}\n"));
+                code.push_str(&format!("{model_id}_y0 = np.array([\n"));
                 for (var_name, var) in &model.variables {
                     let init_val = var.default.unwrap_or(0.0);
-                    code.push_str(&format!("    {},  # {}\n", init_val, var_name));
+                    code.push_str(&format!("    {init_val},  # {var_name}\n"));
                 }
                 code.push_str("])\n\n");
             }
@@ -569,19 +566,16 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
     // Generate reaction system functions
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (rs_id, rs) in reaction_systems {
-            code.push_str(&format!("def {}(t, y):\n", rs_id));
+            code.push_str(&format!("def {rs_id}(t, y):\n"));
             code.push_str("    \"\"\"\n");
-            code.push_str(&format!("    Reaction System: {}\n", rs_id));
+            code.push_str(&format!("    Reaction System: {rs_id}\n"));
             code.push_str("    \"\"\"\n");
 
             // Species unpacking (sorted for determinism)
             let mut species_names: Vec<&String> = rs.species.keys().collect();
             species_names.sort();
             for (i, species_name) in species_names.iter().enumerate() {
-                code.push_str(&format!(
-                    "    {} = y[{}]  # {}\n",
-                    species_name, i, species_name
-                ));
+                code.push_str(&format!("    {species_name} = y[{i}]  # {species_name}\n"));
             }
             code.push('\n');
 
@@ -596,7 +590,7 @@ fn generate_python_code(esm_file: &earthsci_toolkit::EsmFile) -> String {
 
             // Species rate equations
             for (i, species_name) in species_names.iter().enumerate() {
-                code.push_str(&format!("    # d[{}]/dt\n", species_name));
+                code.push_str(&format!("    # d[{species_name}]/dt\n"));
 
                 for (j, reaction) in rs.reactions.iter().enumerate() {
                     // Check if species is a substrate
@@ -669,7 +663,7 @@ fn expr_to_julia(expr: &earthsci_toolkit::Expr) -> String {
                     if node.args.len() >= 2 {
                         let base = expr_to_julia(&node.args[0]);
                         let exp = expr_to_julia(&node.args[1]);
-                        format!("{}^{}", base, exp)
+                        format!("{base}^{exp}")
                     } else {
                         "1.0".to_string()
                     }
@@ -727,7 +721,7 @@ fn expr_to_python(expr: &earthsci_toolkit::Expr) -> String {
                     if node.args.len() >= 2 {
                         let base = expr_to_python(&node.args[0]);
                         let exp = expr_to_python(&node.args[1]);
-                        format!("{}**{}", base, exp)
+                        format!("{base}**{exp}")
                     } else {
                         "1.0".to_string()
                     }
@@ -735,7 +729,7 @@ fn expr_to_python(expr: &earthsci_toolkit::Expr) -> String {
                 "exp" => {
                     if !node.args.is_empty() {
                         let arg = expr_to_python(&node.args[0]);
-                        format!("np.exp({})", arg)
+                        format!("np.exp({arg})")
                     } else {
                         "np.exp".to_string()
                     }
@@ -743,7 +737,7 @@ fn expr_to_python(expr: &earthsci_toolkit::Expr) -> String {
                 "log" => {
                     if !node.args.is_empty() {
                         let arg = expr_to_python(&node.args[0]);
-                        format!("np.log({})", arg)
+                        format!("np.log({arg})")
                     } else {
                         "np.log".to_string()
                     }
@@ -837,7 +831,7 @@ fn analyze_expression_optimization(esm_file: &earthsci_toolkit::EsmFile) {
     // Analyze model expressions
     if let Some(ref models) = esm_file.models {
         for (model_id, model) in models {
-            println!("Model: {}", model_id);
+            println!("Model: {model_id}");
 
             for (i, equation) in model.equations.iter().enumerate() {
                 // Check expression complexity
@@ -871,7 +865,7 @@ fn analyze_expression_optimization(esm_file: &earthsci_toolkit::EsmFile) {
     // Analyze reaction expressions
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (rs_id, rs) in reaction_systems {
-            println!("Reaction System: {}", rs_id);
+            println!("Reaction System: {rs_id}");
 
             for (i, reaction) in rs.reactions.iter().enumerate() {
                 let rate_depth = expression_depth(&reaction.rate);
@@ -902,11 +896,10 @@ fn analyze_expression_optimization(esm_file: &earthsci_toolkit::EsmFile) {
         println!("✓ No obvious expression optimizations needed");
     } else {
         println!(
-            "Found {} complex expressions, {} redundant operations",
-            complex_expressions, redundant_operations
+            "Found {complex_expressions} complex expressions, {redundant_operations} redundant operations"
         );
         for suggestion in suggestions {
-            println!("{}", suggestion);
+            println!("{suggestion}");
         }
     }
 
@@ -931,8 +924,7 @@ fn analyze_structure_optimization(esm_file: &earthsci_toolkit::EsmFile) {
     let coupling_count = esm_file.coupling.as_ref().map(|c| c.len()).unwrap_or(0);
 
     println!(
-        "Structure: {} models, {} reaction systems, {} coupling rules",
-        model_count, rs_count, coupling_count
+        "Structure: {model_count} models, {rs_count} reaction systems, {coupling_count} coupling rules"
     );
 
     let mut suggestions: Vec<String> = Vec::new();
@@ -951,15 +943,13 @@ fn analyze_structure_optimization(esm_file: &earthsci_toolkit::EsmFile) {
 
             if var_count > 50 {
                 suggestions.push(format!(
-                    "Model '{}' has {} variables - consider splitting into smaller components",
-                    model_id, var_count
+                    "Model '{model_id}' has {var_count} variables - consider splitting into smaller components"
                 ));
             }
 
             if eq_count > 30 {
                 suggestions.push(format!(
-                    "Model '{}' has {} equations - consider modular decomposition",
-                    model_id, eq_count
+                    "Model '{model_id}' has {eq_count} equations - consider modular decomposition"
                 ));
             }
 
@@ -977,8 +967,7 @@ fn analyze_structure_optimization(esm_file: &earthsci_toolkit::EsmFile) {
                 .count();
             if unused_count > 0 {
                 suggestions.push(format!(
-                    "Model '{}' has {} potentially unused variables",
-                    model_id, unused_count
+                    "Model '{model_id}' has {unused_count} potentially unused variables"
                 ));
             }
         }
@@ -1011,7 +1000,7 @@ fn analyze_structure_optimization(esm_file: &earthsci_toolkit::EsmFile) {
     } else {
         println!("\n=== OPTIMIZATION SUGGESTIONS ===");
         for suggestion in suggestions {
-            println!("  - {}", suggestion);
+            println!("  - {suggestion}");
         }
     }
 
@@ -1031,7 +1020,7 @@ fn analyze_performance_optimization(esm_file: &earthsci_toolkit::EsmFile) {
 
     if let Some(ref models) = esm_file.models {
         for (model_id, model) in models {
-            println!("Model: {}", model_id);
+            println!("Model: {model_id}");
             let mut model_ops = 0;
 
             for equation in &model.equations {
@@ -1046,13 +1035,13 @@ fn analyze_performance_optimization(esm_file: &earthsci_toolkit::EsmFile) {
             }
 
             total_ops += model_ops;
-            println!("  Operations per timestep: ~{}", model_ops);
+            println!("  Operations per timestep: ~{model_ops}");
         }
     }
 
     if let Some(ref reaction_systems) = esm_file.reaction_systems {
         for (rs_id, rs) in reaction_systems {
-            println!("Reaction System: {}", rs_id);
+            println!("Reaction System: {rs_id}");
             let mut rs_ops = 0;
 
             for reaction in &rs.reactions {
@@ -1068,12 +1057,12 @@ fn analyze_performance_optimization(esm_file: &earthsci_toolkit::EsmFile) {
             rs_ops += rs.reactions.len() * rs.species.len(); // Approximate stoichiometric matrix operations
 
             total_ops += rs_ops;
-            println!("  Operations per timestep: ~{}", rs_ops);
+            println!("  Operations per timestep: ~{rs_ops}");
         }
     }
 
-    println!("\nTotal operations per timestep: ~{}", total_ops);
-    println!("Expensive operations found: {}", expensive_ops);
+    println!("\nTotal operations per timestep: ~{total_ops}");
+    println!("Expensive operations found: {expensive_ops}");
 
     // Performance suggestions
     println!("\n=== OPTIMIZATION SUGGESTIONS ===");
@@ -1082,8 +1071,7 @@ fn analyze_performance_optimization(esm_file: &earthsci_toolkit::EsmFile) {
     }
     if expensive_ops > 5 {
         println!(
-            "  - {} expensive operations found - consider lookup tables or approximations",
-            expensive_ops
+            "  - {expensive_ops} expensive operations found - consider lookup tables or approximations"
         );
     }
 
@@ -1268,10 +1256,7 @@ fn perform_structural_comparison(
     let models1_count = esm_file1.models.as_ref().map(|m| m.len()).unwrap_or(0);
     let models2_count = esm_file2.models.as_ref().map(|m| m.len()).unwrap_or(0);
     if models1_count != models2_count {
-        differences.push(format!(
-            "Model count: {} vs {}",
-            models1_count, models2_count
-        ));
+        differences.push(format!("Model count: {models1_count} vs {models2_count}"));
     }
 
     let rs1_count = esm_file1
@@ -1285,18 +1270,14 @@ fn perform_structural_comparison(
         .map(|rs| rs.len())
         .unwrap_or(0);
     if rs1_count != rs2_count {
-        differences.push(format!(
-            "Reaction system count: {} vs {}",
-            rs1_count, rs2_count
-        ));
+        differences.push(format!("Reaction system count: {rs1_count} vs {rs2_count}"));
     }
 
     let coupling1_count = esm_file1.coupling.as_ref().map(|c| c.len()).unwrap_or(0);
     let coupling2_count = esm_file2.coupling.as_ref().map(|c| c.len()).unwrap_or(0);
     if coupling1_count != coupling2_count {
         differences.push(format!(
-            "Coupling rule count: {} vs {}",
-            coupling1_count, coupling2_count
+            "Coupling rule count: {coupling1_count} vs {coupling2_count}"
         ));
     }
 
@@ -1310,10 +1291,10 @@ fn perform_structural_comparison(
             let only_in_2: Vec<_> = keys2.difference(&keys1).collect();
 
             if !only_in_1.is_empty() {
-                differences.push(format!("Models only in file1: {:?}", only_in_1));
+                differences.push(format!("Models only in file1: {only_in_1:?}"));
             }
             if !only_in_2.is_empty() {
-                differences.push(format!("Models only in file2: {:?}", only_in_2));
+                differences.push(format!("Models only in file2: {only_in_2:?}"));
             }
 
             // Compare common models
@@ -1343,7 +1324,7 @@ fn perform_structural_comparison(
                 let vars1: std::collections::HashSet<_> = model1.variables.keys().collect();
                 let vars2: std::collections::HashSet<_> = model2.variables.keys().collect();
                 if vars1 != vars2 {
-                    differences.push(format!("Model {}: different variable sets", model_id));
+                    differences.push(format!("Model {model_id}: different variable sets"));
                 }
             }
         }
@@ -1362,10 +1343,10 @@ fn perform_structural_comparison(
             let only_in_2: Vec<_> = keys2.difference(&keys1).collect();
 
             if !only_in_1.is_empty() {
-                differences.push(format!("Reaction systems only in file1: {:?}", only_in_1));
+                differences.push(format!("Reaction systems only in file1: {only_in_1:?}"));
             }
             if !only_in_2.is_empty() {
-                differences.push(format!("Reaction systems only in file2: {:?}", only_in_2));
+                differences.push(format!("Reaction systems only in file2: {only_in_2:?}"));
             }
 
             // Compare common reaction systems
@@ -1407,7 +1388,7 @@ fn perform_structural_comparison(
     } else {
         println!("✗ Structural differences found:");
         for diff in differences {
-            println!("  - {}", diff);
+            println!("  - {diff}");
         }
     }
 }
@@ -1435,8 +1416,7 @@ fn perform_numerical_comparison(
                         && (default1 - default2).abs() > tolerance
                     {
                         differences.push(format!(
-                            "Model {}, variable {}: default {} vs {}",
-                            model_id, var_name, default1, default2
+                            "Model {model_id}, variable {var_name}: default {default1} vs {default2}"
                         ));
                     }
                 }
@@ -1524,14 +1504,11 @@ fn perform_numerical_comparison(
 
     // Output results
     if differences.is_empty() {
-        println!(
-            "✓ Files are numerically equivalent (tolerance: {})",
-            tolerance
-        );
+        println!("✓ Files are numerically equivalent (tolerance: {tolerance})");
     } else {
-        println!("✗ Numerical differences found (tolerance: {}):", tolerance);
+        println!("✗ Numerical differences found (tolerance: {tolerance}):");
         for diff in differences {
-            println!("  - {}", diff);
+            println!("  - {diff}");
         }
     }
 
@@ -1541,10 +1518,7 @@ fn perform_numerical_comparison(
     count_numerical_values(esm_file1, &mut total_numbers1);
     count_numerical_values(esm_file2, &mut total_numbers2);
 
-    println!(
-        "\nNumerical values compared: {} vs {}",
-        total_numbers1, total_numbers2
-    );
+    println!("\nNumerical values compared: {total_numbers1} vs {total_numbers2}");
 }
 
 #[cfg(feature = "cli")]
@@ -1686,12 +1660,11 @@ fn perform_deep_coupling_analysis(esm_file: &earthsci_toolkit::EsmFile) {
     let max_connections = connection_counts.values().max().unwrap_or(&0);
     if *max_connections > 5 {
         println!(
-            "- Hub components detected (max {} connections) - consider architectural refactoring",
-            max_connections
+            "- Hub components detected (max {max_connections} connections) - consider architectural refactoring"
         );
         for (component, count) in &connection_counts {
             if *count > 5 {
-                println!("  High connectivity: {} ({} connections)", component, count);
+                println!("  High connectivity: {component} ({count} connections)");
             }
         }
     }
@@ -1704,16 +1677,13 @@ fn perform_deep_coupling_analysis(esm_file: &earthsci_toolkit::EsmFile) {
 
     println!("\n=== COUPLING TYPE ANALYSIS ===");
     for (coupling_type, count) in coupling_types {
-        println!("  {}: {} occurrences", coupling_type, count);
+        println!("  {coupling_type}: {count} occurrences");
     }
 
     // Calculate coupling metrics
     let coupling_density =
         graph.edges.len() as f64 / (graph.nodes.len() as f64 * (graph.nodes.len() - 1) as f64);
-    println!(
-        "\nCoupling density: {:.3} (0=no coupling, 1=fully coupled)",
-        coupling_density
-    );
+    println!("\nCoupling density: {coupling_density:.3} (0=no coupling, 1=fully coupled)");
 
     if coupling_density > 0.5 {
         println!("⚠ Very high coupling density - system may be difficult to maintain");
@@ -1755,24 +1725,21 @@ fn analyze_coupling_patterns(graph: &earthsci_toolkit::graph::ComponentGraph) {
     if !fan_out_components.is_empty() {
         println!("Fan-out patterns (components affecting many others):");
         for (component, degree) in fan_out_components {
-            println!("  {} -> {} components", component, degree);
+            println!("  {component} -> {degree} components");
         }
     }
 
     if !fan_in_components.is_empty() {
         println!("Fan-in patterns (components affected by many others):");
         for (component, degree) in fan_in_components {
-            println!("  {} <- {} components", component, degree);
+            println!("  {component} <- {degree} components");
         }
     }
 
     // Pattern 2: Chains (A->B->C->D)
     let chain_length = find_longest_dependency_chain(graph);
     if chain_length > 4 {
-        println!(
-            "Long dependency chain detected: {} components",
-            chain_length
-        );
+        println!("Long dependency chain detected: {chain_length} components");
         println!("  Consider reducing chain length for better parallelization");
     }
 }
@@ -1852,32 +1819,29 @@ fn analyze_coupling_strength(
                 earthsci_toolkit::CouplingEntry::VariableMap { from, to, .. } => {
                     // Variable mapping is weaker
                     weak_couplings += 1;
-                    println!("  Weak coupling: {} -> {} (variable mapping)", from, to);
+                    println!("  Weak coupling: {from} -> {to} (variable mapping)");
                 }
                 earthsci_toolkit::CouplingEntry::OperatorApply { operator, .. } => {
-                    println!("  Medium coupling: {} (operator application)", operator);
+                    println!("  Medium coupling: {operator} (operator application)");
                 }
                 earthsci_toolkit::CouplingEntry::Callback { callback_id, .. } => {
-                    println!("  Dynamic coupling: {} (callback)", callback_id);
+                    println!("  Dynamic coupling: {callback_id} (callback)");
                 }
                 earthsci_toolkit::CouplingEntry::Event { name, affects, .. } => {
                     let event_name = name.as_deref().unwrap_or("unnamed");
                     let affected_count = affects.as_ref().map(|a| a.len()).unwrap_or(0);
-                    println!(
-                        "  Event coupling: {} affects {} components",
-                        event_name, affected_count
-                    );
+                    println!("  Event coupling: {event_name} affects {affected_count} components");
                 }
             }
         }
 
         println!("\nCoupling strength distribution:");
-        println!("  Strong (bidirectional): {}", strong_couplings);
+        println!("  Strong (bidirectional): {strong_couplings}");
         println!(
             "  Medium (composition/operators): {}",
             coupling.len() - strong_couplings - weak_couplings
         );
-        println!("  Weak (variable mapping): {}", weak_couplings);
+        println!("  Weak (variable mapping): {weak_couplings}");
 
         if strong_couplings > weak_couplings {
             println!("⚠ Many strong couplings - consider loosening dependencies");
@@ -1926,8 +1890,7 @@ fn detect_coupling_antipatterns(
     for (pair, count) in &component_pairs {
         if *count > 2 {
             antipatterns_found.push(format!(
-                "Inappropriate intimacy: {} ({} coupling types)",
-                pair, count
+                "Inappropriate intimacy: {pair} ({count} coupling types)"
             ));
         }
     }
@@ -1938,7 +1901,7 @@ fn detect_coupling_antipatterns(
         println!("✓ No major coupling anti-patterns detected");
     } else {
         for antipattern in antipatterns_found {
-            println!("  ⚠ {}", antipattern);
+            println!("  ⚠ {antipattern}");
         }
     }
 }
@@ -1998,7 +1961,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if verbose && !validation_result.unit_warnings.is_empty() {
                     println!("Warnings:");
                     for warning in validation_result.unit_warnings {
-                        println!("  ⚠ {}", warning);
+                        println!("  ⚠ {warning}");
                     }
                 }
             } else {
@@ -2047,7 +2010,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             "latex" => earthsci_toolkit::to_latex(&equation.lhs),
                             "ascii" => earthsci_toolkit::to_ascii(&equation.lhs),
                             _ => {
-                                eprintln!("Unsupported format: {}", format);
+                                eprintln!("Unsupported format: {format}");
                                 std::process::exit(1);
                             }
                         };
@@ -2065,7 +2028,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Print reaction rates
             if let Some(ref reaction_systems) = esm_file.reaction_systems {
                 for (rs_id, rs) in reaction_systems {
-                    println!("\nReaction System: {}", rs_id);
+                    println!("\nReaction System: {rs_id}");
                     for (i, reaction) in rs.reactions.iter().enumerate() {
                         let rate = match format.as_str() {
                             "unicode" => earthsci_toolkit::to_unicode(&reaction.rate),
@@ -2088,7 +2051,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Check if component exists
             if !component_exists(&esm_file, &component) {
-                eprintln!("Component '{}' not found in the ESM file", component);
+                eprintln!("Component '{component}' not found in the ESM file");
                 std::process::exit(1);
             }
 
@@ -2150,7 +2113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     output_path.display()
                 );
             } else {
-                print!("{}", output_content);
+                print!("{output_content}");
             }
         }
         Commands::Diff { file1, file2 } => {
@@ -2178,7 +2141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let models1_count = esm_file1.models.as_ref().map(|m| m.len()).unwrap_or(0);
                 let models2_count = esm_file2.models.as_ref().map(|m| m.len()).unwrap_or(0);
                 if models1_count != models2_count {
-                    println!("  Model count: {} vs {}", models1_count, models2_count);
+                    println!("  Model count: {models1_count} vs {models2_count}");
                 }
 
                 let rs1_count = esm_file1
@@ -2192,7 +2155,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .map(|rs| rs.len())
                     .unwrap_or(0);
                 if rs1_count != rs2_count {
-                    println!("  Reaction system count: {} vs {}", rs1_count, rs2_count);
+                    println!("  Reaction system count: {rs1_count} vs {rs2_count}");
                 }
 
                 std::process::exit(1);
@@ -2204,7 +2167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if let Some(ref reaction_systems) = esm_file.reaction_systems {
                 if let Some(rs) = reaction_systems.get(&system) {
-                    println!("Stoichiometric matrix for reaction system '{}':", system);
+                    println!("Stoichiometric matrix for reaction system '{system}':");
 
                     // Build a stable (sorted) species order and index map
                     let mut sorted_species: Vec<&String> = rs.species.keys().collect();
@@ -2218,7 +2181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Print species header
                     print!("{:>15}", "");
                     for name in &sorted_species {
-                        print!("{:>10}", name);
+                        print!("{name:>10}");
                     }
                     println!();
 
@@ -2243,12 +2206,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
 
                         for coeff in coeffs {
-                            print!("{:>10.1}", coeff);
+                            print!("{coeff:>10.1}");
                         }
                         println!();
                     }
                 } else {
-                    eprintln!("Reaction system '{}' not found", system);
+                    eprintln!("Reaction system '{system}' not found");
                     std::process::exit(1);
                 }
             } else {
@@ -2349,8 +2312,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         _ => {
                             eprintln!(
-                                "Unsupported graph format: {}. Use dot, mermaid, or json.",
-                                format
+                                "Unsupported graph format: {format}. Use dot, mermaid, or json."
                             );
                             std::process::exit(1);
                         }
@@ -2360,8 +2322,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Expression-level graphs not yet implemented
                     if let Some(ref _sys) = system {
                         eprintln!(
-                            "Expression-level graphs for system '{}' not yet implemented",
-                            _sys
+                            "Expression-level graphs for system '{_sys}' not yet implemented"
                         );
                     } else {
                         eprintln!("Expression-level graphs not yet implemented");
@@ -2369,10 +2330,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::process::exit(1);
                 }
                 _ => {
-                    eprintln!(
-                        "Unsupported graph level: {}. Use component or expression.",
-                        level
-                    );
+                    eprintln!("Unsupported graph level: {level}. Use component or expression.");
                     std::process::exit(1);
                 }
             }
@@ -2388,8 +2346,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "python" => generate_python_code(&esm_file),
                 _ => {
                     eprintln!(
-                        "Unsupported format: {}. Use json, compact-json, julia, or python.",
-                        to
+                        "Unsupported format: {to}. Use json, compact-json, julia, or python."
                     );
                     std::process::exit(1);
                 }
@@ -2399,7 +2356,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 fs::write(&output_path, output_content)?;
                 println!("Converted {} to {}", input.display(), output_path.display());
             } else {
-                print!("{}", output_content);
+                print!("{output_content}");
             }
         }
         Commands::Analyze {
@@ -2410,7 +2367,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let esm_file = load(&content)?;
 
             println!("System Analysis for: {}", file.display());
-            println!("Analysis Type: {}", analysis_type);
+            println!("Analysis Type: {analysis_type}");
 
             match analysis_type.as_str() {
                 "all" | "structure" => {
@@ -2431,8 +2388,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let op_count = esm_file.operators.as_ref().map(|op| op.len()).unwrap_or(0);
 
                     println!(
-                        "Components: {} models, {} reaction systems, {} data loaders, {} operators",
-                        model_count, rs_count, dl_count, op_count
+                        "Components: {model_count} models, {rs_count} reaction systems, {dl_count} data loaders, {op_count} operators"
                     );
 
                     // Equation and variable analysis
@@ -2468,8 +2424,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     println!(
-                        "Total: {} variables, {} equations, {} species, {} reactions",
-                        total_vars, total_eqs, total_species, total_reactions
+                        "Total: {total_vars} variables, {total_eqs} equations, {total_species} species, {total_reactions} reactions"
                     );
                 }
                 "complexity" => {
@@ -2562,8 +2517,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => {
                     eprintln!(
-                        "Unsupported analysis type: {}. Use all, structure, complexity, or coupling.",
-                        analysis_type
+                        "Unsupported analysis type: {analysis_type}. Use all, structure, complexity, or coupling."
                     );
                     std::process::exit(1);
                 }
@@ -2574,7 +2528,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let esm_file = load(&content)?;
 
             println!("Running simulation for: {}", file.display());
-            println!("Simulation time: {}", time);
+            println!("Simulation time: {time}");
 
             // TODO: Implement basic simulation
             // For now, just validate the file and show what would be simulated
@@ -2585,7 +2539,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             println!("Basic simulation not yet implemented");
-            println!("Would simulate for {} time units", time);
+            println!("Would simulate for {time} time units");
 
             if let Some(output_path) = output {
                 println!("Results would be written to: {}", output_path.display());
@@ -2599,10 +2553,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("ESM Version: {}", esm_file.esm);
 
             if let Some(ref name) = esm_file.metadata.name {
-                println!("Model Name: {}", name);
+                println!("Model Name: {name}");
             }
             if let Some(ref description) = esm_file.metadata.description {
-                println!("Description: {}", description);
+                println!("Description: {description}");
             }
             if let Some(ref authors) = esm_file.metadata.authors {
                 println!("Authors: {}", authors.join(", "));
@@ -2660,7 +2614,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !validation_result.unit_warnings.is_empty() {
                     println!("Unit warnings:");
                     for warning in &validation_result.unit_warnings {
-                        println!("  ⚠ {}", warning);
+                        println!("  ⚠ {warning}");
                     }
                 } else {
                     println!("✓ All units are dimensionally consistent");
@@ -2681,7 +2635,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     println!("Unit types found:");
                     for unit_type in &unit_summary {
-                        println!("  - {}", unit_type);
+                        println!("  - {unit_type}");
                     }
 
                     // Unit system recommendations
@@ -2716,7 +2670,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let esm_file = load(&content)?;
 
             println!("Coupling Dependency Analysis for: {}", file.display());
-            println!("Depth: {}", depth);
+            println!("Depth: {depth}");
 
             let graph = component_graph(&esm_file);
             println!(
@@ -2737,7 +2691,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     perform_deep_coupling_analysis(&esm_file);
                 }
                 _ => {
-                    eprintln!("Unsupported depth: {}. Use shallow or deep.", depth);
+                    eprintln!("Unsupported depth: {depth}. Use shallow or deep.");
                     std::process::exit(1);
                 }
             }
@@ -2748,7 +2702,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let esm_file = load(&content)?;
 
             println!("Performance Profile for: {}", file.display());
-            println!("Profile type: {}", profile_type);
+            println!("Profile type: {profile_type}");
 
             match profile_type.as_str() {
                 "memory" => {
@@ -2870,8 +2824,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
 
                             println!(
-                                "  Model {}: max depth = {}, total nodes = {}",
-                                model_id, max_depth, total_nodes
+                                "  Model {model_id}: max depth = {max_depth}, total nodes = {total_nodes}"
                             );
                         }
                     }
@@ -2921,8 +2874,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => {
                     eprintln!(
-                        "Unsupported profile type: {}. Use memory, time, or both.",
-                        profile_type
+                        "Unsupported profile type: {profile_type}. Use memory, time, or both."
                     );
                     std::process::exit(1);
                 }
@@ -2940,7 +2892,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let esm_file2 = load(&content2)?;
 
             println!("Comparing {} and {}:", file1.display(), file2.display());
-            println!("Comparison type: {}", comparison_type);
+            println!("Comparison type: {comparison_type}");
 
             match comparison_type.as_str() {
                 "semantic" => {
@@ -2961,7 +2913,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let models1_count = esm_file1.models.as_ref().map(|m| m.len()).unwrap_or(0);
                         let models2_count = esm_file2.models.as_ref().map(|m| m.len()).unwrap_or(0);
                         if models1_count != models2_count {
-                            println!("  Model count: {} vs {}", models1_count, models2_count);
+                            println!("  Model count: {models1_count} vs {models2_count}");
                         }
 
                         let rs1_count = esm_file1
@@ -2975,7 +2927,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .map(|rs| rs.len())
                             .unwrap_or(0);
                         if rs1_count != rs2_count {
-                            println!("  Reaction system count: {} vs {}", rs1_count, rs2_count);
+                            println!("  Reaction system count: {rs1_count} vs {rs2_count}");
                         }
                     }
                 }
@@ -2987,8 +2939,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => {
                     eprintln!(
-                        "Unsupported comparison type: {}. Use semantic, structural, or numerical.",
-                        comparison_type
+                        "Unsupported comparison type: {comparison_type}. Use semantic, structural, or numerical."
                     );
                     std::process::exit(1);
                 }
@@ -3000,7 +2951,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let esm_file = load(&content)?;
 
             println!("Optimization Analysis for: {}", file.display());
-            println!("Optimization type: {}", opt_type);
+            println!("Optimization type: {opt_type}");
 
             match opt_type.as_str() {
                 "expression" => {
@@ -3014,8 +2965,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => {
                     eprintln!(
-                        "Unsupported optimization type: {}. Use expression, structure, or performance.",
-                        opt_type
+                        "Unsupported optimization type: {opt_type}. Use expression, structure, or performance."
                     );
                     std::process::exit(1);
                 }
@@ -3024,13 +2974,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // DEVELOPMENT COMMANDS
         Commands::Init { name, template } => {
-            println!("Creating new ESM project: {}", name);
-            println!("Template: {}", template);
+            println!("Creating new ESM project: {name}");
+            println!("Template: {template}");
 
             let project_dir = PathBuf::from(&name);
 
             if project_dir.exists() {
-                eprintln!("Directory '{}' already exists", name);
+                eprintln!("Directory '{name}' already exists");
                 std::process::exit(1);
             }
 
@@ -3143,8 +3093,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => {
                     eprintln!(
-                        "Unsupported template: {}. Use minimal, atmospheric, ecosystem, or coupling.",
-                        template
+                        "Unsupported template: {template}. Use minimal, atmospheric, ecosystem, or coupling."
                     );
                     std::process::exit(1);
                 }
@@ -3157,12 +3106,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .as_secs();
             let final_content = template_content
                 .replace("{name}", &name)
-                .replace("{timestamp}", &format!("{}", timestamp));
+                .replace("{timestamp}", &format!("{timestamp}"));
 
-            let esm_file = project_dir.join(format!("{}.esm", name));
+            let esm_file = project_dir.join(format!("{name}.esm"));
             fs::write(&esm_file, final_content)?;
 
-            println!("Created project '{}' with template '{}'", name, template);
+            println!("Created project '{name}' with template '{template}'");
             println!("Main file: {}", esm_file.display());
         }
 
@@ -3171,7 +3120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             recursive,
         } => {
             println!("Validating fixtures in: {}", directory.display());
-            println!("Recursive: {}", recursive);
+            println!("Recursive: {recursive}");
 
             if !directory.exists() {
                 eprintln!("Directory does not exist: {}", directory.display());
@@ -3182,7 +3131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // TODO: Use glob to find files and validate them
             println!("Batch validation not yet fully implemented");
-            println!("Would process files matching: {}", pattern);
+            println!("Would process files matching: {pattern}");
         }
 
         Commands::Benchmark {
@@ -3193,7 +3142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let content = fs::read_to_string(&file)?;
 
             println!("Benchmarking: {}", file.display());
-            println!("Type: {}, Iterations: {}", bench_type, iterations);
+            println!("Type: {bench_type}, Iterations: {iterations}");
 
             match bench_type.as_str() {
                 "all" | "parse" => {
@@ -3228,8 +3177,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => {
                     eprintln!(
-                        "Unsupported benchmark type: {}. Use all, parse, validate, or simulate.",
-                        bench_type
+                        "Unsupported benchmark type: {bench_type}. Use all, parse, validate, or simulate."
                     );
                     std::process::exit(1);
                 }
@@ -3244,14 +3192,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Schema check for: {}", file.display());
             if let Some(ref version) = schema_version {
-                println!("Target schema version: {}", version);
+                println!("Target schema version: {version}");
             }
 
             // Load performs schema validation
             match load(&content) {
                 Ok(_) => println!("✓ Schema validation passed"),
                 Err(e) => {
-                    println!("✗ Schema validation failed: {}", e);
+                    println!("✗ Schema validation failed: {e}");
                     std::process::exit(1);
                 }
             }
@@ -3272,7 +3220,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let esm_file = match load(&content) {
                     Ok(file) => file,
                     Err(e) => {
-                        eprintln!("Round {}: Load failed: {}", round, e);
+                        eprintln!("Round {round}: Load failed: {e}");
                         std::process::exit(1);
                     }
                 };
@@ -3281,12 +3229,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 content = match save(&esm_file) {
                     Ok(content) => content,
                     Err(e) => {
-                        eprintln!("Round {}: Save failed: {}", round, e);
+                        eprintln!("Round {round}: Save failed: {e}");
                         std::process::exit(1);
                     }
                 };
 
-                println!("Round {}: OK", round);
+                println!("Round {round}: OK");
             }
 
             // Check if final content matches original (semantically)

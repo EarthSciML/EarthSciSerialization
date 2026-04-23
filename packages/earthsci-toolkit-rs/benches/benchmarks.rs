@@ -41,7 +41,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
 
         // Create variables
         for j in 0..equations_per_model {
-            let var_name = format!("x{}_{}", i, j);
+            let var_name = format!("x{i}_{j}");
             variables.insert(
                 var_name.clone(),
                 earthsci_toolkit::ModelVariable {
@@ -60,7 +60,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
 
         // Create equations
         for j in 0..equations_per_model {
-            let var_name = format!("x{}_{}", i, j);
+            let var_name = format!("x{i}_{j}");
             equations.push(earthsci_toolkit::Equation {
                 lhs: Expr::Variable(var_name),
                 rhs: bin_op(
@@ -76,7 +76,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             domain: None,
             coupletype: None,
             subsystems: None,
-            name: Some(format!("model_{}", i)),
+            name: Some(format!("model_{i}")),
             variables,
             equations,
             description: None,
@@ -90,7 +90,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             system_kind: None,
         };
 
-        models.insert(format!("model_{}", i), model);
+        models.insert(format!("model_{i}"), model);
     }
 
     EsmFile {
@@ -128,7 +128,7 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
     // Create species (keyed by name in the new schema)
     for i in 0..num_species {
         species.insert(
-            format!("S{}", i),
+            format!("S{i}"),
             Species {
                 units: None,
                 default: None,
@@ -144,20 +144,20 @@ fn create_test_reaction_system(num_species: usize, num_reactions: usize) -> Reac
         let product_idx = (i + 1) % num_species;
 
         reactions.push(Reaction {
-            id: Some(format!("R{}", i)),
-            name: Some(format!("R{}", i)),
+            id: Some(format!("R{i}")),
+            name: Some(format!("R{i}")),
             substrates: Some(vec![StoichiometricEntry {
-                species: format!("S{}", substrate_idx),
+                species: format!("S{substrate_idx}"),
                 coefficient: 1.0,
             }]),
             products: Some(vec![StoichiometricEntry {
-                species: format!("S{}", product_idx),
+                species: format!("S{product_idx}"),
                 coefficient: 1.0,
             }]),
             rate: bin_op(
                 "*",
                 Expr::Number(0.1),
-                Expr::Variable(format!("S{}", substrate_idx)),
+                Expr::Variable(format!("S{substrate_idx}")),
             ),
             reference: None,
         });
@@ -230,7 +230,7 @@ fn benchmark_stoichiometric_matrix(c: &mut Criterion) {
         let system = create_test_reaction_system(*species, *reactions);
 
         group.bench_with_input(
-            BenchmarkId::new("sequential", format!("{}x{}", species, reactions)),
+            BenchmarkId::new("sequential", format!("{species}x{reactions}")),
             &system,
             |b, sys| b.iter(|| stoichiometric_matrix(black_box(sys))),
         );
@@ -239,7 +239,7 @@ fn benchmark_stoichiometric_matrix(c: &mut Criterion) {
         {
             let evaluator = ParallelEvaluator::new(None).unwrap();
             group.bench_with_input(
-                BenchmarkId::new("parallel", format!("{}x{}", species, reactions)),
+                BenchmarkId::new("parallel", format!("{species}x{reactions}")),
                 &system,
                 |b, sys| {
                     b.iter(|| {

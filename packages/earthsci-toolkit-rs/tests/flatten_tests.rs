@@ -173,7 +173,7 @@ fn flatten_reactions_only_file_produces_mass_action_odes() {
     // Every RHS reference must be namespaced.
     for eq in &flat.equations {
         for v in rhs_vars(eq) {
-            assert!(v.contains('.'), "RHS variable '{}' was not namespaced", v);
+            assert!(v.contains('.'), "RHS variable '{v}' was not namespaced");
         }
     }
     assert_eq!(flat.metadata.source_systems, vec!["chem".to_string()]);
@@ -439,11 +439,10 @@ fn flatten_conflicting_derivative_raises_error() {
         FlattenError::ConflictingDerivative { species } => {
             assert!(
                 species.iter().any(|s| s == "sys.X"),
-                "expected conflict for sys.X, got {:?}",
-                species
+                "expected conflict for sys.X, got {species:?}"
             );
         }
-        other => panic!("expected ConflictingDerivative, got {:?}", other),
+        other => panic!("expected ConflictingDerivative, got {other:?}"),
     }
 }
 
@@ -914,7 +913,7 @@ fn flatten_rejects_spatial_operators() {
         FlattenError::UnsupportedMapping { mapping_type, .. } => {
             assert_eq!(mapping_type, "grad");
         }
-        other => panic!("expected UnsupportedMapping, got {:?}", other),
+        other => panic!("expected UnsupportedMapping, got {other:?}"),
     }
 }
 
@@ -979,11 +978,10 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
         FlattenError::UnsupportedMapping { mapping_type, .. } => {
             assert!(
                 mapping_type.starts_with("D(wrt="),
-                "unexpected mapping_type '{}'",
-                mapping_type
+                "unexpected mapping_type '{mapping_type}'"
             );
         }
-        other => panic!("expected UnsupportedMapping, got {:?}", other),
+        other => panic!("expected UnsupportedMapping, got {other:?}"),
     }
 
     // Type-level parity check: the FlattenError::UnsupportedMapping variant
@@ -995,7 +993,7 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
         mapping_type: "slice".to_string(),
         reason: "slice not implemented in Rust Core tier".to_string(),
     };
-    let msg = format!("{}", err_slice);
+    let msg = format!("{err_slice}");
     assert!(msg.contains("slice"));
     assert!(msg.contains("Rust Core tier"));
 }

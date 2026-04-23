@@ -404,10 +404,7 @@ fn test_compact_expr_all_operators() {
         let result = compact.evaluate_fast(&variables).unwrap();
         assert!(
             (result - expected).abs() < 1e-10,
-            "Failed for operator {}: got {}, expected {}",
-            op,
-            result,
-            expected
+            "Failed for operator {op}: got {result}, expected {expected}"
         );
     }
 
@@ -433,10 +430,7 @@ fn test_compact_expr_all_operators() {
         let result = compact.evaluate_fast(&variables).unwrap();
         assert!(
             (result - expected).abs() < 1e-10,
-            "Failed for operator {}: got {}, expected {}",
-            op,
-            result,
-            expected
+            "Failed for operator {op}: got {result}, expected {expected}"
         );
     }
 }
@@ -622,9 +616,7 @@ fn test_model_allocator_with_capacity() {
     // (Note: Some allocators may not change allocated_bytes until a threshold is reached)
     assert!(
         bytes_after >= bytes_before,
-        "Expected allocated_bytes to be >= {} but was {}",
-        bytes_before,
-        bytes_after
+        "Expected allocated_bytes to be >= {bytes_before} but was {bytes_after}"
     );
 
     // Test that we can allocate more memory
@@ -632,9 +624,7 @@ fn test_model_allocator_with_capacity() {
     let bytes_after_second = allocator.allocated_bytes();
     assert!(
         bytes_after_second >= bytes_after,
-        "Expected allocated_bytes after second allocation to be >= {} but was {}",
-        bytes_after,
-        bytes_after_second
+        "Expected allocated_bytes after second allocation to be >= {bytes_after} but was {bytes_after_second}"
     );
 }
 

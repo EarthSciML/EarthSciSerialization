@@ -75,8 +75,7 @@ pub fn lower_reactions_to_equations(
         let no_products = reaction.products.as_ref().is_none_or(|v| v.is_empty());
         if no_substrates && no_products {
             return Err(DeriveError::InvalidStoichiometry(format!(
-                "Reaction {} has no substrates or products",
-                reaction_idx
+                "Reaction {reaction_idx} has no substrates or products"
             )));
         }
     }
@@ -586,8 +585,7 @@ fn detect_mass_balance_violations(system: &ReactionSystem) -> Vec<ConservationVi
                 species: species_involved,
                 magnitude: imbalance,
                 description: format!(
-                    "Reaction {} has mass imbalance: {:.6} substrates → {:.6} products (difference: {:.6})",
-                    reaction_idx, substrate_sum, product_sum, imbalance
+                    "Reaction {reaction_idx} has mass imbalance: {substrate_sum:.6} substrates → {product_sum:.6} products (difference: {imbalance:.6})"
                 ),
             });
         }
@@ -619,7 +617,7 @@ fn find_linear_invariants(matrix: &[Vec<f64>], species_names: &[String]) -> Vec<
                 LinearInvariant {
                     coefficients,
                     species_names: vec![name.clone()],
-                    description: format!("Conservation of {}", name),
+                    description: format!("Conservation of {name}"),
                 }
             })
             .collect();
@@ -1447,7 +1445,7 @@ mod tests {
                 },
                 _ => false,
             });
-            assert!(found, "Should have equation for species {}", species_name);
+            assert!(found, "Should have equation for species {species_name}");
         }
     }
 
@@ -1528,8 +1526,7 @@ mod tests {
             for (j, &val) in row.iter().enumerate() {
                 assert_eq!(
                     val, sequential_matrix[i][j],
-                    "Parallel and sequential results should match at position [{}, {}]",
-                    i, j
+                    "Parallel and sequential results should match at position [{i}, {j}]"
                 );
             }
         }

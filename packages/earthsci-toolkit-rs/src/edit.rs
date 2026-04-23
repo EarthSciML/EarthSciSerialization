@@ -33,17 +33,17 @@ pub enum EditError {
 impl std::fmt::Display for EditError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EditError::ComponentNotFound(name) => write!(f, "Component not found: {}", name),
-            EditError::InvalidOperation(msg) => write!(f, "Invalid operation: {}", msg),
-            EditError::VariableExists(name) => write!(f, "Variable already exists: {}", name),
+            EditError::ComponentNotFound(name) => write!(f, "Component not found: {name}"),
+            EditError::InvalidOperation(msg) => write!(f, "Invalid operation: {msg}"),
+            EditError::VariableExists(name) => write!(f, "Variable already exists: {name}"),
             EditError::EquationIndexError(idx) => {
-                write!(f, "Equation index out of bounds: {}", idx)
+                write!(f, "Equation index out of bounds: {idx}")
             }
-            EditError::SpeciesNotFound(name) => write!(f, "Species not found: {}", name),
-            EditError::ReactionNotFound(name) => write!(f, "Reaction not found: {}", name),
-            EditError::EventIndexError(idx) => write!(f, "Event index out of bounds: {}", idx),
+            EditError::SpeciesNotFound(name) => write!(f, "Species not found: {name}"),
+            EditError::ReactionNotFound(name) => write!(f, "Reaction not found: {name}"),
+            EditError::EventIndexError(idx) => write!(f, "Event index out of bounds: {idx}"),
             EditError::CouplingIndexError(idx) => {
-                write!(f, "Coupling index out of bounds: {}", idx)
+                write!(f, "Coupling index out of bounds: {idx}")
             }
         }
     }
@@ -73,8 +73,7 @@ pub fn add_model(esm_file: &EsmFile, model_id: &str, model: Model) -> EditResult
     // Check if model already exists
     if new_file.models.as_ref().unwrap().contains_key(model_id) {
         return Err(EditError::InvalidOperation(format!(
-            "Model '{}' already exists",
-            model_id
+            "Model '{model_id}' already exists"
         )));
     }
 
@@ -242,8 +241,7 @@ pub fn add_reaction_system(
         .contains_key(system_id)
     {
         return Err(EditError::InvalidOperation(format!(
-            "Reaction system '{}' already exists",
-            system_id
+            "Reaction system '{system_id}' already exists"
         )));
     }
 
@@ -277,8 +275,7 @@ pub fn add_species(
 
     if new_system.species.contains_key(name) {
         return Err(EditError::InvalidOperation(format!(
-            "Species '{}' already exists",
-            name
+            "Species '{name}' already exists"
         )));
     }
 
@@ -335,8 +332,7 @@ pub fn add_reaction(system: &ReactionSystem, reaction: Reaction) -> EditResult<R
 pub fn remove_reaction(system: &ReactionSystem, index: usize) -> EditResult<ReactionSystem> {
     if index >= system.reactions.len() {
         return Err(EditError::InvalidOperation(format!(
-            "Reaction index {} out of bounds",
-            index
+            "Reaction index {index} out of bounds"
         )));
     }
 

@@ -393,7 +393,7 @@ impl ScopedContext {
             // Check for nested variable names
             let nested_name = components.join(".");
             if model.variables.contains_key(&nested_name) {
-                return Some(format!("{}.{}", model_name, nested_name));
+                return Some(format!("{model_name}.{nested_name}"));
             }
         }
 

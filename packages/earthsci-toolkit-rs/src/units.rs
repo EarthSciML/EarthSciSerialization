@@ -53,9 +53,9 @@ pub enum UnitError {
 impl fmt::Display for UnitError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UnitError::ParseError(msg) => write!(f, "Parse error: {}", msg),
-            UnitError::DimensionMismatch(msg) => write!(f, "Dimension mismatch: {}", msg),
-            UnitError::UnknownUnit(unit) => write!(f, "Unknown unit: {}", unit),
+            UnitError::ParseError(msg) => write!(f, "Parse error: {msg}"),
+            UnitError::DimensionMismatch(msg) => write!(f, "Dimension mismatch: {msg}"),
+            UnitError::UnknownUnit(unit) => write!(f, "Unknown unit: {unit}"),
         }
     }
 }
@@ -178,7 +178,7 @@ impl Unit {
                     // Implicit time variable.
                     Ok(Unit::base(Dimension::Time, 1, 1.0))
                 } else {
-                    Err(UnitError::UnknownUnit(format!("Variable: {}", name)))
+                    Err(UnitError::UnknownUnit(format!("Variable: {name}")))
                 }
             }
             Expr::Operator(op) => propagate_operator(op, env, coords),
@@ -256,8 +256,7 @@ fn propagate_operator(
                     return Ok(base_unit.power(*n as i32));
                 }
                 return Err(UnitError::DimensionMismatch(format!(
-                    "Non-integer exponent {} applied to dimensional quantity",
-                    n
+                    "Non-integer exponent {n} applied to dimensional quantity"
                 )));
             }
             // Non-literal exponent with a dimensional base is ambiguous.
@@ -285,7 +284,7 @@ fn propagate_operator(
                     }
                 })
                 .ok_or_else(|| {
-                    UnitError::UnknownUnit(format!("Derivative wrt unknown variable: {}", wrt))
+                    UnitError::UnknownUnit(format!("Derivative wrt unknown variable: {wrt}"))
                 })?;
             Ok(arg_unit.divide(&wrt_unit))
         }
@@ -520,8 +519,7 @@ fn propagate_operator(
         // Unknown operator — fail loudly rather than silently returning
         // dimensionless, which used to mask propagation gaps.
         other => Err(UnitError::ParseError(format!(
-            "Unknown operator '{}' in dimensional propagation",
-            other
+            "Unknown operator '{other}' in dimensional propagation"
         ))),
     }
 }
@@ -651,7 +649,7 @@ pub fn parse_unit(unit_str: &str) -> Result<Unit, UnitError> {
         let power: i32 = pow_s
             .trim()
             .parse()
-            .map_err(|_| UnitError::ParseError(format!("Invalid power: {}", pow_s)))?;
+            .map_err(|_| UnitError::ParseError(format!("Invalid power: {pow_s}")))?;
         return Ok(base_unit.power(power));
     }
 

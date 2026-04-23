@@ -429,7 +429,7 @@ fn build_model_block(system_name: &str, model: &Model) -> Result<SystemBlock, Fl
     var_names.sort();
     for var_name in var_names {
         let var = &model.variables[var_name];
-        let namespaced = format!("{}.{}", system_name, var_name);
+        let namespaced = format!("{system_name}.{var_name}");
         let mut cloned = var.clone();
         if let Some(expr) = cloned.expression {
             cloned.expression = Some(namespace_expr(&expr, system_name));
@@ -497,7 +497,7 @@ fn build_reaction_block(
     species_names.sort();
     for species_name in species_names {
         let species = &rs.species[species_name];
-        let namespaced = format!("{}.{}", system_name, species_name);
+        let namespaced = format!("{system_name}.{species_name}");
         state_vars.insert(
             namespaced,
             ModelVariable {
@@ -518,7 +518,7 @@ fn build_reaction_block(
     param_names.sort();
     for param_name in param_names {
         let param = &rs.parameters[param_name];
-        let namespaced = format!("{}.{}", system_name, param_name);
+        let namespaced = format!("{system_name}.{param_name}");
         parameters.insert(
             namespaced,
             ModelVariable {
@@ -570,7 +570,7 @@ fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
             if name.contains('.') || name == "t" {
                 Expr::Variable(name.clone())
             } else {
-                Expr::Variable(format!("{}.{}", system_name, name))
+                Expr::Variable(format!("{system_name}.{name}"))
             }
         }
         Expr::Operator(node) => Expr::Operator(ExpressionNode {
@@ -584,7 +584,7 @@ fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
                 if w.contains('.') || w == "t" {
                     w.clone()
                 } else {
-                    format!("{}.{}", system_name, w)
+                    format!("{system_name}.{w}")
                 }
             }),
             dim: node.dim.clone(),
@@ -649,7 +649,7 @@ fn namespace_plain(name: &str, system_name: &str) -> String {
     if name.contains('.') {
         name.to_string()
     } else {
-        format!("{}.{}", system_name, name)
+        format!("{system_name}.{name}")
     }
 }
 
@@ -673,10 +673,9 @@ fn reject_spatial_operators(expr: &Expr) -> Result<(), FlattenError> {
                         && wrt != "t"
                     {
                         return Err(FlattenError::UnsupportedMapping {
-                            mapping_type: format!("D(wrt={})", wrt),
+                            mapping_type: format!("D(wrt={wrt})"),
                             reason: format!(
-                                "non-time derivative 'D(_, {})' requires PDE support",
-                                wrt
+                                "non-time derivative 'D(_, {wrt})' requires PDE support"
                             ),
                         });
                     }
@@ -753,13 +752,8 @@ fn apply_coupling_entry(
         } => {
             apply_variable_map(from, to, transform, *factor, per_system);
             coupling_rules_applied.push(description.clone().unwrap_or_else(|| {
-                let factor_str = factor
-                    .map(|f| format!(" [factor={}]", f))
-                    .unwrap_or_default();
-                format!(
-                    "variable_map({} -> {}, {}){}",
-                    from, to, transform, factor_str
-                )
+                let factor_str = factor.map(|f| format!(" [factor={f}]")).unwrap_or_default();
+                format!("variable_map({from} -> {to}, {transform}){factor_str}")
             }));
         }
         CouplingEntry::OperatorApply {
@@ -769,7 +763,7 @@ fn apply_coupling_entry(
             coupling_rules_applied.push(
                 description
                     .clone()
-                    .unwrap_or_else(|| format!("operator_apply({})", operator)),
+                    .unwrap_or_else(|| format!("operator_apply({operator})")),
             );
         }
         CouplingEntry::Callback {
@@ -780,7 +774,7 @@ fn apply_coupling_entry(
             coupling_rules_applied.push(
                 description
                     .clone()
-                    .unwrap_or_else(|| format!("callback({})", callback_id)),
+                    .unwrap_or_else(|| format!("callback({callback_id})")),
             );
         }
         CouplingEntry::Event {

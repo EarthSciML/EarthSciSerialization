@@ -110,7 +110,7 @@ impl std::fmt::Display for StructuralErrorCode {
             Self::CircularDependency => "circular_dependency",
             Self::UnitInconsistency => "unit_inconsistency",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -233,7 +233,7 @@ pub fn validate_complete(json_str: &str) -> ValidationResult {
             ValidationResult {
                 schema_errors: vec![SchemaError {
                     path: "".to_string(),
-                    message: format!("Failed to load ESM file: {}", e),
+                    message: format!("Failed to load ESM file: {e}"),
                     keyword: "parse".to_string(),
                 }],
                 structural_errors: vec![],
@@ -257,7 +257,7 @@ pub fn validate_with_schema(json_str: &str, esm_file: &EsmFile) -> ValidationRes
     if let Err(e) = serde_json::from_str::<Value>(json_str) {
         schema_errors.push(SchemaError {
             path: "".to_string(),
-            message: format!("Invalid JSON: {}", e),
+            message: format!("Invalid JSON: {e}"),
             keyword: "format".to_string(),
         });
     } else {
@@ -391,7 +391,7 @@ fn validate_model(
     errors: &mut Vec<StructuralError>,
     warnings: &mut Vec<String>,
 ) {
-    let model_path = format!("/models/{}", model_name);
+    let model_path = format!("/models/{model_name}");
 
     // Create a map of defined variables by type
     let mut state_vars = Vec::new();
@@ -454,7 +454,7 @@ fn validate_model(
 
     // Check that all equation references are defined and validate dimensional consistency
     for (eq_idx, equation) in model.equations.iter().enumerate() {
-        let eq_path = format!("{}/equations/{}", model_path, eq_idx);
+        let eq_path = format!("{model_path}/equations/{eq_idx}");
         validate_expression_references_with_systems(
             &equation.lhs,
             &defined_vars,
@@ -477,10 +477,7 @@ fn validate_model(
         if let Err(unit_error) =
             validate_equation_dimensions_with_coords(equation, &unit_env, coord_env_ref)
         {
-            warnings.push(format!(
-                "Equation {}: {} (in {})",
-                eq_idx, unit_error, eq_path
-            ));
+            warnings.push(format!("Equation {eq_idx}: {unit_error} (in {eq_path})"));
         }
     }
 
@@ -488,11 +485,10 @@ fn validate_model(
     for (var_name, variable) in &model.variables {
         if variable.var_type == crate::VariableType::Observed && variable.expression.is_none() {
             errors.push(StructuralError {
-                path: format!("{}/variables/{}", model_path, var_name),
+                path: format!("{model_path}/variables/{var_name}"),
                 code: StructuralErrorCode::MissingObservedExpr,
                 message: format!(
-                    "Observed variable \"{}\" is missing its expression field",
-                    var_name
+                    "Observed variable \"{var_name}\" is missing its expression field"
                 ),
                 details: serde_json::json!({
                     "variable_name": var_name,
@@ -502,7 +498,7 @@ fn validate_model(
         } else if variable.var_type == crate::VariableType::Observed {
             // If the expression exists, validate its variable references
             if let Some(ref expr) = variable.expression {
-                let expr_path = format!("{}/variables/{}/expression", model_path, var_name);
+                let expr_path = format!("{model_path}/variables/{var_name}/expression");
                 validate_expression_references_with_systems(
                     expr,
                     &defined_vars,
@@ -594,7 +590,7 @@ fn check_physical_constant_units(
         }
         let target = usage_site.unwrap_or(constant_name);
         errors.push(StructuralError {
-            path: format!("/models/{}/variables/{}", model_name, target),
+            path: format!("/models/{model_name}/variables/{target}"),
             code: StructuralErrorCode::UnitInconsistency,
             message: "Physical constant used with incorrect dimensional analysis".to_string(),
             details: serde_json::json!({
@@ -678,7 +674,7 @@ fn validate_model_gradient_units(
         return;
     };
     for (eq_idx, equation) in model.equations.iter().enumerate() {
-        let eq_path = format!("/models/{}/equations/{}", model_name, eq_idx);
+        let eq_path = format!("/models/{model_name}/equations/{eq_idx}");
         check_gradient_ops(&equation.lhs, &coords, model, &eq_path, eq_idx, errors);
         check_gradient_ops(&equation.rhs, &coords, model, &eq_path, eq_idx, errors);
     }
@@ -794,7 +790,7 @@ fn validate_reaction_system(
     _system_refs: &HashMap<String, SystemInfo>,
     errors: &mut Vec<StructuralError>,
 ) {
-    let rs_path = format!("/reaction_systems/{}", rs_name);
+    let rs_path = format!("/reaction_systems/{rs_name}");
 
     // Create a map of defined species (species name is the HashMap key)
     let defined_species: HashSet<String> = rs.species.keys().cloned().collect();
@@ -804,7 +800,7 @@ fn validate_reaction_system(
 
     // Check that all reaction references are defined
     for (rxn_idx, reaction) in rs.reactions.iter().enumerate() {
-        let rxn_path = format!("{}/reactions/{}", rs_path, rxn_idx);
+        let rxn_path = format!("{rs_path}/reactions/{rxn_idx}");
         let reaction_label = reaction
             .id
             .as_deref()
@@ -922,7 +918,7 @@ fn validate_reaction_rate_units(
     let time = Unit::base(crate::units::Dimension::Time, 1, 1.0);
 
     for (rxn_idx, reaction) in rs.reactions.iter().enumerate() {
-        let rxn_path = format!("/reaction_systems/{}/reactions/{}", rs_name, rxn_idx);
+        let rxn_path = format!("/reaction_systems/{rs_name}/reactions/{rxn_idx}");
         let reaction_label = reaction
             .id
             .as_deref()
@@ -1076,9 +1072,9 @@ fn power_factor(s: &str, n: i32) -> String {
         return s.to_string();
     }
     if s.contains('*') || s.contains('/') {
-        format!("({})^{}", s, n)
+        format!("({s})^{n}")
     } else {
-        format!("{}^{}", s, n)
+        format!("{s}^{n}")
     }
 }
 
@@ -1115,8 +1111,7 @@ fn validate_rate_expression(
                     path: reaction_path.to_string(),
                     code: StructuralErrorCode::UndefinedParameter,
                     message: format!(
-                        "Parameter '{}' referenced in rate expression is not declared",
-                        var_name
+                        "Parameter '{var_name}' referenced in rate expression is not declared"
                     ),
                     details: serde_json::json!({
                         "parameter": var_name,
@@ -1177,7 +1172,7 @@ fn validate_expression_references_with_systems(
                         errors.push(StructuralError {
                             path: base_path.to_string(),
                             code: StructuralErrorCode::UnresolvedScopedRef,
-                            message: format!("Scoped reference '{}' cannot be resolved", var_name),
+                            message: format!("Scoped reference '{var_name}' cannot be resolved"),
                             details: serde_json::json!({
                                 "reference": var_name,
                                 "equation_index": equation_index,
@@ -1190,7 +1185,7 @@ fn validate_expression_references_with_systems(
                     errors.push(StructuralError {
                         path: base_path.to_string(),
                         code: StructuralErrorCode::UnresolvedScopedRef,
-                        message: format!("Scoped reference '{}' cannot be resolved", var_name),
+                        message: format!("Scoped reference '{var_name}' cannot be resolved"),
                         details: serde_json::json!({
                             "reference": var_name,
                             "equation_index": equation_index,
@@ -1205,8 +1200,7 @@ fn validate_expression_references_with_systems(
                         path: base_path.to_string(),
                         code: StructuralErrorCode::UndefinedVariable,
                         message: format!(
-                            "Variable '{}' referenced in equation is not declared",
-                            var_name
+                            "Variable '{var_name}' referenced in equation is not declared"
                         ),
                         details: serde_json::json!({
                             "variable": var_name,
@@ -1269,7 +1263,7 @@ fn validate_discrete_event(
     defined_vars: &HashSet<String>,
     errors: &mut Vec<StructuralError>,
 ) {
-    let event_path = format!("{}/discrete_events/{}", parent_path, event_idx);
+    let event_path = format!("{parent_path}/discrete_events/{event_idx}");
 
     // Validate trigger expression
     if let crate::DiscreteEventTrigger::Condition { expression } = &event.trigger {
@@ -1340,10 +1334,7 @@ fn validate_event_expression(
                 errors.push(StructuralError {
                     path: event_path.to_string(),
                     code: StructuralErrorCode::EventVarUndeclared,
-                    message: format!(
-                        "Variable '{}' in event {} is not declared",
-                        var_name, location
-                    ),
+                    message: format!("Variable '{var_name}' in event {location} is not declared"),
                     details: serde_json::json!({
                         "variable": var_name,
                         "event_name": event_name,
@@ -1380,7 +1371,7 @@ fn validate_coupling(
     errors: &mut Vec<StructuralError>,
 ) {
     for (idx, entry) in coupling.iter().enumerate() {
-        let coupling_path = format!("/coupling/{}", idx);
+        let coupling_path = format!("/coupling/{idx}");
 
         match entry {
             crate::CouplingEntry::VariableMap { from, to, .. } => {
@@ -1399,7 +1390,7 @@ fn validate_coupling(
                         errors.push(StructuralError {
                             path: coupling_path.clone(),
                             code: StructuralErrorCode::UndefinedOperator,
-                            message: format!("Operator '{}' referenced in operator_apply coupling is not declared", operator),
+                            message: format!("Operator '{operator}' referenced in operator_apply coupling is not declared"),
                             details: serde_json::json!({
                                 "operator": operator,
                                 "coupling_type": "operator_apply",
@@ -1421,9 +1412,9 @@ fn validate_coupling(
                             for needed_var in &op.needed_vars {
                                 if !available_vars.contains(needed_var) {
                                     errors.push(StructuralError {
-                                        path: format!("{}.needed_vars", coupling_path),
+                                        path: format!("{coupling_path}.needed_vars"),
                                         code: StructuralErrorCode::OperatorVariableMissing,
-                                        message: format!("Operator '{}' requires variable '{}' which is not available", operator, needed_var),
+                                        message: format!("Operator '{operator}' requires variable '{needed_var}' which is not available"),
                                         details: serde_json::json!({
                                             "operator": operator,
                                             "variable": needed_var,
@@ -1439,9 +1430,9 @@ fn validate_coupling(
                                 for modified_var in modifies {
                                     if !available_vars.contains(modified_var) {
                                         errors.push(StructuralError {
-                                            path: format!("{}.modifies", coupling_path),
+                                            path: format!("{coupling_path}.modifies"),
                                             code: StructuralErrorCode::OperatorVariableMissing,
-                                            message: format!("Operator '{}' modifies variable '{}' which is not available", operator, modified_var),
+                                            message: format!("Operator '{operator}' modifies variable '{modified_var}' which is not available"),
                                             details: serde_json::json!({
                                                 "operator": operator,
                                                 "variable": modified_var,
@@ -1459,8 +1450,7 @@ fn validate_coupling(
                         path: coupling_path,
                         code: StructuralErrorCode::UndefinedOperator,
                         message: format!(
-                            "Operator '{}' referenced but no operators are declared",
-                            operator
+                            "Operator '{operator}' referenced but no operators are declared"
                         ),
                         details: serde_json::json!({
                             "operator": operator,
@@ -1477,7 +1467,7 @@ fn validate_coupling(
                             errors.push(StructuralError {
                                 path: coupling_path.clone(),
                                 code: StructuralErrorCode::UndefinedSystem,
-                                message: format!("Coupling entry references nonexistent system '{}'", system),
+                                message: format!("Coupling entry references nonexistent system '{system}'"),
                                 details: serde_json::json!({
                                     "system": system,
                                     "coupling_type": "couple",
@@ -1506,7 +1496,7 @@ fn validate_coupling(
                             errors.push(StructuralError {
                                 path: coupling_path.clone(),
                                 code: StructuralErrorCode::UndefinedSystem,
-                                message: format!("Coupling entry references nonexistent system '{}'", system),
+                                message: format!("Coupling entry references nonexistent system '{system}'"),
                                 details: serde_json::json!({
                                     "system": system,
                                     "coupling_type": "operator_compose",
@@ -1561,7 +1551,7 @@ fn validate_scoped_reference(
             errors.push(StructuralError {
                 path: coupling_path.to_string(),
                 code: StructuralErrorCode::UnresolvedScopedRef,
-                message: format!("Scoped reference '{}' cannot be resolved", reference),
+                message: format!("Scoped reference '{reference}' cannot be resolved"),
                 details: serde_json::json!({
                     "reference": reference,
                     "coupling_type": coupling_type,
@@ -1573,7 +1563,7 @@ fn validate_scoped_reference(
         errors.push(StructuralError {
             path: coupling_path.to_string(),
             code: StructuralErrorCode::UnresolvedScopedRef,
-            message: format!("Scoped reference '{}' cannot be resolved", reference),
+            message: format!("Scoped reference '{reference}' cannot be resolved"),
             details: serde_json::json!({
                 "reference": reference,
                 "coupling_type": coupling_type,
@@ -2720,8 +2710,7 @@ mod tests {
         // Should still be structurally valid
         assert!(
             result.is_valid,
-            "Structural validation should pass: {:?}",
-            result
+            "Structural validation should pass: {result:?}"
         );
         assert!(result.structural_errors.is_empty());
         // But should have unit warnings about exp requiring dimensionless input
@@ -2900,8 +2889,7 @@ mod tests {
         // Should pass validation
         assert!(
             result.is_valid,
-            "validate_complete should pass with valid JSON: {:?}",
-            result
+            "validate_complete should pass with valid JSON: {result:?}"
         );
         assert!(
             result.schema_errors.is_empty(),

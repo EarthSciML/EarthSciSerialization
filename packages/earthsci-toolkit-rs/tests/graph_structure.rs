@@ -617,24 +617,22 @@ fn test_complex_expression_graphs() {
 
     for (name, fixture) in fixtures.iter() {
         let fixture_data: serde_json::Value = serde_json::from_str(fixture)
-            .unwrap_or_else(|e| panic!("Failed to parse {} fixture: {}", name, e));
+            .unwrap_or_else(|e| panic!("Failed to parse {name} fixture: {e}"));
 
         // Basic structure validation
         if let Some(nodes) = fixture_data.get("nodes").and_then(|v| v.as_array()) {
-            assert!(!nodes.is_empty(), "{} should have nodes", name);
+            assert!(!nodes.is_empty(), "{name} should have nodes");
         }
 
         if let Some(edges) = fixture_data.get("edges").and_then(|v| v.as_array()) {
             for edge in edges {
                 assert!(
                     edge.get("source").is_some(),
-                    "Edge in {} should have source",
-                    name
+                    "Edge in {name} should have source"
                 );
                 assert!(
                     edge.get("target").is_some(),
-                    "Edge in {} should have target",
-                    name
+                    "Edge in {name} should have target"
                 );
             }
         }

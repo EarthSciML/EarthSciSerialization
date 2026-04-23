@@ -155,7 +155,7 @@ fn format_number_unicode(n: f64) -> String {
 
     // Use scientific notation for very large or very small numbers
     if abs_n >= 10000.0 || abs_n < 0.0001 && abs_n != 0.0 {
-        let sci = format!("{:.2e}", n);
+        let sci = format!("{n:.2e}");
         return format_scientific_unicode(&sci);
     }
 
@@ -169,7 +169,7 @@ fn format_number_unicode(n: f64) -> String {
         format!("{}", n as i64)
     } else {
         // 1-4 significant digits in decimal notation
-        let formatted = format!("{:.4}", n);
+        let formatted = format!("{n:.4}");
         // Remove trailing zeros
         formatted
             .trim_end_matches('0')
@@ -208,7 +208,7 @@ fn format_scientific_unicode(sci: &str) -> String {
             }
         }
 
-        format!("{}×10{}", mantissa, unicode_exp)
+        format!("{mantissa}×10{unicode_exp}")
     } else {
         sci.to_string()
     }
@@ -880,7 +880,7 @@ fn format_operator_unicode(
     };
 
     if needs_parens {
-        format!("({})", result)
+        format!("({result})")
     } else {
         result
     }
@@ -904,7 +904,7 @@ pub fn to_latex(expr: &Expr) -> String {
             } else {
                 let abs_n = n.abs();
                 if (0.0001..10000.0).contains(&abs_n) {
-                    let formatted = format!("{:.4}", n);
+                    let formatted = format!("{n:.4}");
                     formatted
                         .trim_end_matches('0')
                         .trim_end_matches('.')
@@ -1517,13 +1517,13 @@ pub fn to_ascii(expr: &Expr) -> String {
             } else {
                 let abs_n = n.abs();
                 if (0.0001..10000.0).contains(&abs_n) {
-                    let formatted = format!("{:.4}", n);
+                    let formatted = format!("{n:.4}");
                     formatted
                         .trim_end_matches('0')
                         .trim_end_matches('.')
                         .to_string()
                 } else {
-                    format!("{:.2e}", n)
+                    format!("{n:.2e}")
                 }
             }
         }
@@ -1947,9 +1947,9 @@ impl fmt::Display for EsmFile {
 
         writeln!(f, "ESM v{}: {}", self.esm, name)?;
         if !description.is_empty() {
-            writeln!(f, "  \"{}\"", description)?;
+            writeln!(f, "  \"{description}\"")?;
         }
-        writeln!(f, "  Authors: {}", authors)?;
+        writeln!(f, "  Authors: {authors}")?;
         writeln!(f)?;
 
         // Display reaction systems
@@ -1958,7 +1958,7 @@ impl fmt::Display for EsmFile {
         {
             writeln!(f, "  Reaction Systems:")?;
             for system in reaction_systems.values() {
-                write!(f, "{}", system)?;
+                write!(f, "{system}")?;
                 writeln!(f)?;
             }
         }
@@ -1969,7 +1969,7 @@ impl fmt::Display for EsmFile {
         {
             writeln!(f, "  Models:")?;
             for model in models.values() {
-                write!(f, "{}", model)?;
+                write!(f, "{model}")?;
                 writeln!(f)?;
             }
         }
@@ -2031,7 +2031,7 @@ impl fmt::Display for EsmFile {
         // Display domain information (EsmFile.domains is now a named map of Domain specs)
         if let Some(ref domains) = self.domains {
             for (domain_name, domain) in domains {
-                write!(f, "  Domain {}: ", domain_name)?;
+                write!(f, "  Domain {domain_name}: ")?;
 
                 let mut domain_parts = Vec::new();
                 if domain.spatial.is_some() {
@@ -2114,10 +2114,10 @@ mod tests {
     #[test]
     fn test_expr_display() {
         let expr = Expr::Variable("O3".to_string());
-        assert_eq!(format!("{}", expr), "O₃");
+        assert_eq!(format!("{expr}"), "O₃");
 
         let expr = Expr::Number(1.8e-12);
-        assert_eq!(format!("{}", expr), "1.80×10⁻¹²");
+        assert_eq!(format!("{expr}"), "1.80×10⁻¹²");
     }
 
     #[test]
@@ -2141,7 +2141,7 @@ mod tests {
             dim: None,
             ..Default::default()
         });
-        assert_eq!(format!("{}", add), "a·b + c");
+        assert_eq!(format!("{add}"), "a·b + c");
 
         let mul = Expr::Operator(ExpressionNode {
             op: "*".to_string(),
@@ -2162,7 +2162,7 @@ mod tests {
             dim: None,
             ..Default::default()
         });
-        assert_eq!(format!("{}", mul), "(a + b)·c");
+        assert_eq!(format!("{mul}"), "(a + b)·c");
     }
 
     #[test]
@@ -2263,7 +2263,7 @@ mod tests {
         };
 
         // Test the display output
-        let output = format!("{}", esm_file);
+        let output = format!("{esm_file}");
 
         // Check key components are present in the expected format
         assert!(output.contains("ESM v0.1.0: TestModel"));

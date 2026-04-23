@@ -136,10 +136,9 @@ fn warn_deprecated_domain_bc(json_value: &Value) {
     for (domain_name, domain) in domains {
         if domain.get("boundary_conditions").is_some() {
             eprintln!(
-                "[E_DEPRECATED_DOMAIN_BC] domains.{}.boundary_conditions is \
+                "[E_DEPRECATED_DOMAIN_BC] domains.{domain_name}.boundary_conditions is \
                  deprecated; migrate to models.<M>.boundary_conditions \
-                 (docs/rfcs/discretization.md §9).",
-                domain_name
+                 (docs/rfcs/discretization.md §9)."
             );
         }
     }

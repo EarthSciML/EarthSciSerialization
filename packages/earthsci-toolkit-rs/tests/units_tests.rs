@@ -105,8 +105,7 @@ fn validate_units_propagation_fixture_warning_free() {
         .collect();
     assert!(
         dim_warnings.is_empty(),
-        "Fixture should be dimensionally consistent; got: {:?}",
-        dim_warnings
+        "Fixture should be dimensionally consistent; got: {dim_warnings:?}"
     );
 }
 
@@ -117,12 +116,10 @@ fn validate_units_propagation_fixture_warning_free() {
 #[test]
 fn esm_mole_fraction_family_is_dimensionless() {
     for unit_str in &["ppm", "ppmv", "ppb", "ppbv", "ppt", "pptv"] {
-        let u =
-            parse_unit(unit_str).unwrap_or_else(|e| panic!("Failed to parse {}: {}", unit_str, e));
+        let u = parse_unit(unit_str).unwrap_or_else(|e| panic!("Failed to parse {unit_str}: {e}"));
         assert!(
             u.is_dimensionless(),
-            "{} should be dimensionless per ESM standard",
-            unit_str
+            "{unit_str} should be dimensionless per ESM standard"
         );
     }
     // Aliases must share dimension with their base form — cross-binding

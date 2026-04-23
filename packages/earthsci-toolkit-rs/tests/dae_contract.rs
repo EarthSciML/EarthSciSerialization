@@ -9,7 +9,7 @@
 use earthsci_toolkit::{DiscretizeOptions, EsmFile, Expr, apply_dae_contract, discretize, load};
 
 fn load_fixture(name: &str) -> EsmFile {
-    let path = format!("tests/fixtures/dae/{}.json", name);
+    let path = format!("tests/fixtures/dae/{name}.json");
     let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
     load(&src).unwrap_or_else(|e| panic!("parse {path}: {e:?}"))
 }
