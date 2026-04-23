@@ -352,7 +352,8 @@ jobs:
         # Python SBOM
         if [ -d "packages/earthsci_toolkit" ]; then
           cd packages/earthsci_toolkit
-          cyclonedx-py -o ../../sbom-reports/earthsci_toolkit-sbom.json
+          pip install -e .
+          cyclonedx-py environment -o ../../sbom-reports/earthsci_toolkit-sbom.json
           cd ../..
         fi
 
