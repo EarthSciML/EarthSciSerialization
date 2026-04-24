@@ -1064,6 +1064,13 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for name, r in esm_file.staggering_rules.items()
         }
 
+    # Serialize top-level discretizations (RFC §7 / §7.5). Held opaquely as
+    # dict-of-dicts, so a deep copy is enough to preserve the structure
+    # losslessly across load -> save round-trips.
+    if getattr(esm_file, "discretizations", None):
+        import copy as _copy
+        result["discretizations"] = _copy.deepcopy(esm_file.discretizations)
+
     # Serialize events at the top level. The schema only allows events nested
     # inside models/reaction_systems, but EsmFile.events stores them flat after
     # parsing. load() strips and reattaches top-level events on round-trip.

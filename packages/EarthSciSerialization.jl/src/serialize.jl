@@ -1034,6 +1034,12 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
         result["staggering_rules"] = Dict(k => serialize_staggering_rule(v)
                                           for (k, v) in file.staggering_rules)
     end
+    # Discretization schemes (RFC §7 / §7.5). Held opaquely as
+    # Dict{String,Any}, so serialization is a direct handoff — the parse-time
+    # deep conversion to native Dict is lossless at the JSON level.
+    if file.discretizations !== nothing
+        result["discretizations"] = file.discretizations
+    end
 
     return result
 end

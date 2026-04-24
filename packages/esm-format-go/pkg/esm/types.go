@@ -763,10 +763,17 @@ type EsmFile struct {
 	StaggeringRules     map[string]StaggeringRule     `json:"staggering_rules,omitempty"`
 }
 
-// Discretization is a named discretization scheme. Two kinds are supported:
-// "stencil" (the default when Kind is "") is a neighbor-combination template
-// per RFC §7.1; "dimensional_split" composes a 1D inner scheme along several
-// orthogonal axes via Strang/Lie operator splitting per RFC §7.4.
+// Discretization is a named discretization scheme. Three variants are
+// supported:
+//
+//   - "stencil" (the default when Kind is "") is a neighbor-combination
+//     template per RFC §7.1.
+//   - "dimensional_split" composes a 1D inner scheme along several orthogonal
+//     axes via Strang/Lie operator splitting per RFC §7.5.
+//   - "cross_metric" is a CrossMetricStencilRule composite (RFC §7.6) that
+//     combines per-axis 1D stencils with metric-tensor components for
+//     covariant operators on curvilinear grids; activated by a nonempty
+//     Terms field (the Kind="cross_metric" discriminator is optional).
 //
 // The AST-pattern fields (AppliesTo, Stencil[*].Coeff, NeighborSelector
 // expression slots) carry pattern variables like "$u" / "$target" that are
@@ -774,9 +781,14 @@ type EsmFile struct {
 // Expressions and thus are preserved as raw json.RawMessage for lossless
 // round-tripping.
 type Discretization struct {
-	// Kind discriminates scheme sub-types: "" / "stencil" = classic
-	// neighbor-combination template (§7.1); "dimensional_split" = axis-sweep
-	// composite (§7.4), which activates Axes / InnerRule / Splitting.
+	// Kind discriminates scheme sub-types:
+	//   "" or "stencil"      = classic neighbor-combination template (§7.1)
+	//   "dimensional_split"  = axis-sweep composite (§7.5); activates
+	//                          InnerRule / Splitting / OrderOfSweeps
+	//   "cross_metric"       = CrossMetricStencilRule composite (§7.6);
+	//                          activates Terms / BoundaryFallback. Optional
+	//                          discriminator — presence of Terms is the
+	//                          authoritative signal for the composite.
 	Kind               string            `json:"kind,omitempty"`
 	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
 	// this scheme discretizes. Preserved as raw JSON because the pattern may
@@ -785,13 +797,29 @@ type Discretization struct {
 	AppliesTo          json.RawMessage   `json:"applies_to"`
 	GridFamily         string            `json:"grid_family"`
 	Combine            string            `json:"combine,omitempty"`
+	// Stencil is the per-neighbor contribution list for a standard
+	// discretization (RFC §7.1). Mutually exclusive with Terms.
 	Stencil            []StencilEntry    `json:"stencil,omitempty"`
-	// Axes, InnerRule, Splitting, OrderOfSweeps are only meaningful when
-	// Kind == "dimensional_split"; they are omitted otherwise.
+
+	// Axes is the ordered coordinate-axis list shared by both composite
+	// kinds: "dimensional_split" (§7.5) and "cross_metric" (§7.6).
 	Axes               []string          `json:"axes,omitempty"`
+
+	// InnerRule, Splitting, OrderOfSweeps apply to "dimensional_split"
+	// composites (§7.5).
 	InnerRule          string            `json:"inner_rule,omitempty"`
 	Splitting          string            `json:"splitting,omitempty"`
 	OrderOfSweeps      string            `json:"order_of_sweeps,omitempty"`
+
+	// Terms is the array of CrossMetricTerm entries for a "cross_metric"
+	// composite (§7.6). Mutually exclusive with Stencil; nonempty Terms
+	// signals the composite variant.
+	Terms              []CrossMetricTerm `json:"terms,omitempty"`
+
+	// BoundaryFallback names another discretization (in the same block) to
+	// apply at edges / corners / cross-panel boundaries where the composite
+	// stencil cannot be evaluated. Cross-metric composite only.
+	BoundaryFallback   string            `json:"boundary_fallback,omitempty"`
 	Accuracy           string            `json:"accuracy,omitempty"`
 	// Order optionally selects stencil width / truncation order for
 	// families that admit a parameterized order (e.g. arbitrary-order
@@ -806,6 +834,33 @@ type Discretization struct {
 	FreeVariables      []string          `json:"free_variables,omitempty"`
 	Description        string            `json:"description,omitempty"`
 	Reference          *Reference        `json:"reference,omitempty"`
+}
+
+// IsCrossMetric reports whether this Discretization is a CrossMetricStencilRule
+// composite (RFC §7.4) rather than a standard stencil template.
+func (d *Discretization) IsCrossMetric() bool {
+	return len(d.Terms) > 0
+}
+
+// CrossMetricTerm is one term of a CrossMetricStencilRule composite (RFC §7.4).
+// Semantically contributes `Sign * MetricComponent(target) * AxisStencil(field)`
+// to the composite's combined sum.
+type CrossMetricTerm struct {
+	// AxisStencil names a per-axis Discretization (in the same discretizations
+	// block) whose expansion supplies this term's 1D directional derivative.
+	AxisStencil string `json:"axis_stencil"`
+
+	// MetricComponent names a metric array (entry of the grid's metric_arrays
+	// block, e.g. "J", "g_xixi", "g_etaeta", "g_xieta", "ginv_xixi") resolved
+	// point-wise at $target via the grid accessor's metric_eval contract.
+	MetricComponent string `json:"metric_component"`
+
+	// Sign is +1 (default) or -1, applied to this term's contribution.
+	// Omitted from JSON when zero-valued so defaulting surfaces at the
+	// consumer; callers should treat a missing Sign as +1 per the spec.
+	Sign int `json:"sign,omitempty"`
+
+	Description string `json:"description,omitempty"`
 }
 
 // StencilEntry is one neighbor contribution: a selector plus a symbolic

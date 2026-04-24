@@ -129,6 +129,11 @@ const schema = {
       "type": "object",
       "description": "Named discretization grids (v0.2.0). Each entry declares a cartesian/unstructured/cubed_sphere topology with dimensions, staggering locations, metric arrays, and (for unstructured/cubed-sphere) connectivity tables. See docs/rfcs/discretization.md §6.",
       "additionalProperties": { "$ref": "#/$defs/Grid" }
+    },
+    "discretizations": {
+      "type": "object",
+      "description": "Named stencil templates (discretization RFC §7). Each entry is either a standard stencil-template Discretization (§7.1) or a CrossMetricStencilRule composite (§7.4). The embedded TS schema validates these opaquely — full structural validation uses the canonical esm-schema.json in conformance.",
+      "additionalProperties": { "type": "object" }
     }
   },
 
