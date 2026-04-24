@@ -1545,6 +1545,50 @@ ReferenceResolution(...)
 
 ---
 
+### RegionBoundary
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RegionBoundary(...)
+```
+
+---
+
+### RegionIndexRange
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RegionIndexRange(...)
+```
+
+---
+
+### RegionMaskField
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RegionMaskField(...)
+```
+
+---
+
+### RegionPanelBoundary
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RegionPanelBoundary(...)
+```
+
+---
+
 ### RegisteredFunction
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -1630,6 +1674,17 @@ RuleEngineError(...)
 
 **Available in other languages:**
 - [Python](python.md#ruleengineerror)
+
+---
+
+### RuleRegion
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+RuleRegion(...)
+```
 
 ---
 
@@ -2117,6 +2172,28 @@ Emit a stoichiometric coefficient as an integer when the value is exact, else as
 its Float64 form. Integer exactness keeps existing integer-only fixtures
 byte-identical across a parse/re-emit cycle, while fractional values (e.g.
 `0.87 CH2O`, `1.86 CH3O2`) survive untouched.
+
+---
+
+### _eval_where_expr
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:808`
+
+**Signature:**
+```julia
+function _eval_where_expr(expr::Expr, b::Dict{String,Expr}, ctx::RuleContext)::Bool
+```
+
+**Description:**
+_eval_where_expr(expr, bindings, ctx) -> Bool
+
+Evaluate `expr` under pattern-variable bindings and query-point indices,
+returning a boolean. Supports the scalar subset of §4 ops: arithmetic,
+comparison, logical ops, and bare-string index references resolved
+against `ctx.query_point` and `bindings` (bindings to `VarExpr` are
+resolved as index names; bindings to `IntExpr` / `NumExpr` as constants).
+Unsupported ops, unresolved names, or non-scalar results cause the
+predicate to evaluate `false` (conservative fall-through).
 
 ---
 
@@ -2614,7 +2691,7 @@ apply_bindings(...)
 
 ### apply_bindings
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:170`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:241`
 
 **Signature:**
 ```julia
@@ -2829,7 +2906,7 @@ check_guard(...)
 
 ### check_guard
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:262`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:354`
 
 **Signature:**
 ```julia
@@ -2858,7 +2935,7 @@ check_guards(...)
 
 ### check_guards
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:245`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:337`
 
 **Signature:**
 ```julia
@@ -2876,6 +2953,41 @@ field is unbound at entry binds it to the variable's actual grid
 
 ---
 
+### check_scope
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+check_scope(...)
+```
+
+---
+
+### check_scope
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:739`
+
+**Signature:**
+```julia
+function check_scope(rule::Rule, bindings::Dict{String,Expr}, ctx::RuleContext)::Bool
+```
+
+**Description:**
+check_scope(rule, bindings, ctx) -> Bool
+
+Evaluate a rule's `region` scope (if an object) and `where_expr`
+predicate (if present) against `ctx.query_point`. Returns `true` when
+the rule should fire at the current query point, `false` otherwise
+(conservative fall-through).
+
+When `ctx.query_point` is empty and the rule carries any per-point
+scope, the rule is disabled (returns `false`) — see RFC §5.2.7's
+`W_UNEVAL_SCOPE` handling. A legacy string `region` and a missing
+`where_expr` pass unconditionally, preserving backwards compatibility.
+
+---
+
 ### check_unrewritten_pde_ops
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
@@ -2889,7 +3001,7 @@ check_unrewritten_pde_ops(...)
 
 ### check_unrewritten_pde_ops
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:581`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:901`
 
 **Signature:**
 ```julia
@@ -5251,7 +5363,7 @@ match_pattern(...)
 
 ### match_pattern
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:93`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:164`
 
 **Signature:**
 ```julia
@@ -5557,7 +5669,7 @@ parse_rule(...)
 
 ### parse_rule
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:457`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:552`
 
 **Signature:**
 ```julia
@@ -5570,7 +5682,9 @@ parse_rule(obj) -> Rule
 
 Build a [`Rule`](@ref) from a decoded JSON object (a `Dict` or similar).
 The object must contain `pattern` and `replacement` fields. Optional:
-`where` (array of guard objects), `region` (string).
+`where` (array of guard objects OR an expression-AST predicate per
+RFC §5.2.7), `region` (legacy advisory string OR a scope object per
+RFC §5.2.7).
 
 ---
 
@@ -5587,7 +5701,7 @@ parse_rules(...)
 
 ### parse_rules
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:490`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:646`
 
 **Signature:**
 ```julia
@@ -6138,7 +6252,7 @@ rewrite(...)
 
 ### rewrite
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:405`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:497`
 
 **Signature:**
 ```julia
@@ -8123,6 +8237,17 @@ walk(...)
 
 ---
 
+### with_query_point
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/EarthSciSerialization.jl:0`
+
+**Signature:**
+```julia
+with_query_point(...)
+```
+
+---
+
 ## Types
 
 ### AffectEquation
@@ -9496,6 +9621,70 @@ and its location information.
 
 ---
 
+### RegionBoundary
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:66`
+
+**Definition:**
+```julia
+struct RegionBoundary <: RuleRegion
+```
+
+**Description:**
+RegionBoundary(side::String)
+
+`{kind:"boundary", side}` scope (RFC §5.2.7).
+
+---
+
+### RegionIndexRange
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:94`
+
+**Definition:**
+```julia
+struct RegionIndexRange <: RuleRegion
+```
+
+**Description:**
+RegionIndexRange(axis::String, lo::Int, hi::Int)
+
+`{kind:"index_range", axis, lo, hi}` scope (inclusive bounds).
+
+---
+
+### RegionMaskField
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:85`
+
+**Definition:**
+```julia
+struct RegionMaskField <: RuleRegion
+```
+
+**Description:**
+RegionMaskField(field::String)
+
+`{kind:"mask_field", field}` scope.
+
+---
+
+### RegionPanelBoundary
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:75`
+
+**Definition:**
+```julia
+struct RegionPanelBoundary <: RuleRegion
+```
+
+**Description:**
+RegionPanelBoundary(panel::Int, side::String)
+
+`{kind:"panel_boundary", panel, side}` scope (cubed_sphere only).
+
+---
+
 ### RegisteredFunction
 
 **File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/types.jl:895`
@@ -9540,7 +9729,7 @@ Calling convention for a [`RegisteredFunction`](@ref). See esm-spec §9.2.
 
 ### Rule
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:53`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:117`
 
 **Definition:**
 ```julia
@@ -9548,12 +9737,21 @@ struct Rule
 ```
 
 **Description:**
-Rule(name, pattern, where, replacement, region)
+Rule(name, pattern, where, replacement, region, where_expr)
 
 A rewrite rule. `pattern` is an AST with `\$`-prefixed pattern variables;
-`where` is a vector of [`Guard`](@ref) constraints; `replacement` is an
-AST over the pattern variables. The MVP supports only the inline
-`replacement` form; `use:<scheme>` is reserved for Step 1b.
+`where` is a vector of [`Guard`](@ref) constraints applied at rule-
+selection time; `replacement` is an AST over the pattern variables. The
+MVP supports only the inline `replacement` form; `use:<scheme>` is
+reserved for Step 1b.
+
+`region` is the rule's spatial scope (RFC §5.2.7). It may be
+`nothing`, a `String` (legacy advisory tag — no runtime effect), or a
+concrete [`RuleRegion`](@ref) object (normative per-point scope).
+
+`where_expr` is an optional per-query-point boolean predicate AST
+(RFC §5.2.7). Mutually exclusive at the author level with guard-list
+`where`; structurally distinguished by JSON shape at parse time.
 
 **Available in other languages:**
 - [Python](python.md#rule)
@@ -9563,7 +9761,7 @@ AST over the pattern variables. The MVP supports only the inline
 
 ### RuleContext
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:228`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/EarthSciSerialization.jl/src/rule_engine.jl:299`
 
 **Definition:**
 ```julia

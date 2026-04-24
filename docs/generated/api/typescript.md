@@ -151,7 +151,7 @@ Analyze the complexity of an expression
 
 ### applyBindings
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:212`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:239`
 
 **Signature:**
 ```typescript
@@ -249,7 +249,7 @@ Follows ESM spec Section 3.3.1:
 
 ### checkGuard
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:280`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:307`
 
 **Signature:**
 ```typescript
@@ -260,7 +260,7 @@ export function checkGuard(g: Guard, b: Bindings, ctx: RuleContext): Bindings | 
 
 ### checkGuards
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:266`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:293`
 
 **Signature:**
 ```typescript
@@ -278,7 +278,7 @@ success, `null` on miss. Throws on unknown guard names.
 
 ### checkUnrewrittenPdeOps
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:595`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:699`
 
 **Signature:**
 ```typescript
@@ -719,7 +719,7 @@ mutated.
 
 ### emptyContext
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:90`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:117`
 
 **Signature:**
 ```typescript
@@ -1451,7 +1451,7 @@ Map a variable from one system to another with optional transformation
 
 ### matchPattern
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:136`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:163`
 
 **Signature:**
 ```typescript
@@ -1526,7 +1526,7 @@ at the boundary between kind-aware and kind-agnostic code.
 
 ### parseExpr
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:559`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:663`
 
 **Signature:**
 ```typescript
@@ -1543,7 +1543,7 @@ RFC §5.4 when the caller used `losslessJsonParse`.
 
 ### parseRules
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:472`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:503`
 
 **Signature:**
 ```typescript
@@ -1839,7 +1839,7 @@ Rename a variable throughout a model
 
 ### rewrite
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:410`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:437`
 
 **Signature:**
 ```typescript
@@ -3425,7 +3425,7 @@ Per-dimension extent for cartesian or cubed_sphere grids. `n` is either an integ
 
 ### GridMeta
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:73`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:100`
 
 **Definition:**
 ```typescript
@@ -3833,7 +3833,7 @@ A named pure function that may be invoked inside an expression via the 'call' op
 
 ### Rule
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:65`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:74`
 
 **Definition:**
 ```typescript
@@ -3848,7 +3848,7 @@ export interface Rule {
 
 ### RuleContext
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:85`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:112`
 
 **Definition:**
 ```typescript
@@ -4302,7 +4302,7 @@ Validation signals interface providing reactive validation state
 
 ### VariableMeta
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:79`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/rule-engine.ts:106`
 
 **Definition:**
 ```typescript

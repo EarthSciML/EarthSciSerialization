@@ -17,6 +17,10 @@ fixtures_dir = joinpath(@__DIR__, "..", "..", "..", "tests",
             for (k, v) in pairs(cx[:grids])
                 entry = Dict{String,Any}()
                 for (k2, v2) in pairs(v)
-                    entry[String(k2)] = [String(s) for s in v2]
+                    key = String(k2)
+                    if key == "dim_bounds"
+                        bounds = Dict{String,Any}()
+                        for (dk, dv) in pairs(v2)
+                            bounds[String(dk)] = [Int(x) for x in dv]
 ```
 

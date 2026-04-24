@@ -800,6 +800,25 @@ Evaluate the guard list left-to-right, threading bindings.
 
 ---
 
+### check_scope
+
+**Julia:**
+```julia
+check_scope(...)
+```
+
+**Julia:**
+```julia
+function check_scope(rule::Rule, bindings::Dict{String,Expr}, ctx::RuleContext)::Bool
+```
+
+> check_scope(rule, bindings, ctx) -> Bool
+
+Evaluate a rule's `region` scope (if an object) and `where_expr`
+predicate (if present) against `ctx.
+
+---
+
 ### check_unrewritten_pde_ops
 
 **Julia:**
@@ -4160,7 +4179,7 @@ class RegisteredFunctionSignature:
 struct Rule
 ```
 
-> Rule(name, pattern, where, replacement, region)
+> Rule(name, pattern, where, replacement, region, where_expr)
 
 A rewrite rule.
 
