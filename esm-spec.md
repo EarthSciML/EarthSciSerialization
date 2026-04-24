@@ -51,6 +51,7 @@ The two exceptions to full specification are **data loaders** and **registered o
 | `domains` | | Named spatial/temporal domain specifications (see Section 11) |
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
 | `grids` | | Named discretization grids (cartesian / unstructured / cubed_sphere) — see docs/rfcs/discretization.md §6 |
+| `discretizations` | | Named discretization schemes mapping PDE operators to stencil templates (§7.1) or cross-metric composites for curvilinear covariant operators (§7.4) — see docs/rfcs/discretization.md §7 |
 
 At least one of `models` or `reaction_systems` must be present.
 

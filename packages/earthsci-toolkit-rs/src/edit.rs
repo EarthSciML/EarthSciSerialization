@@ -627,6 +627,7 @@ mod tests {
             domains: None,
             interfaces: None,
             grids: None,
+            discretizations: None,
         }
     }
 

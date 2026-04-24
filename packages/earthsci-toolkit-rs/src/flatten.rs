@@ -395,6 +395,7 @@ pub fn flatten_model(model: &Model) -> Result<FlattenedSystem, FlattenError> {
         domains: None,
         interfaces: None,
         grids: None,
+        discretizations: None,
     };
 
     flatten(&file)
@@ -992,6 +993,7 @@ mod tests {
             domains: None,
             interfaces: None,
             grids: None,
+            discretizations: None,
         }
     }
 

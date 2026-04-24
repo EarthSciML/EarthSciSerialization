@@ -105,6 +105,7 @@ mod tests {
             domains: None,
             interfaces: None,
             grids: None,
+            discretizations: None,
         };
 
         let result = save(&esm_file);
@@ -184,6 +185,7 @@ mod tests {
             domains: None,
             interfaces: None,
             grids: None,
+            discretizations: None,
         };
 
         let result = save(&esm_file);
@@ -223,6 +225,7 @@ mod tests {
             domains: None,
             interfaces: None,
             grids: None,
+            discretizations: None,
         };
 
         let result = save_compact(&esm_file);

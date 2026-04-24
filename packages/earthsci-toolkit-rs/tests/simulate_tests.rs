@@ -57,6 +57,7 @@ fn esm_with_model(model_name: &str, model: Model) -> EsmFile {
         domains: None,
         interfaces: None,
         grids: None,
+        discretizations: None,
     }
 }
 
