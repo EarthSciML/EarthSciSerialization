@@ -778,6 +778,12 @@ type Discretization struct {
 	Combine            string            `json:"combine,omitempty"`
 	Stencil            []StencilEntry    `json:"stencil"`
 	Accuracy           string            `json:"accuracy,omitempty"`
+	// Order optionally selects stencil width / truncation order for
+	// families that admit a parameterized order (e.g. arbitrary-order
+	// centered uniform finite differences via Fornberg-recursion weights).
+	// Pointer-to-int so zero-vs-absent is preserved across round-trips.
+	// See discretization RFC §7.1.
+	Order              *int              `json:"order,omitempty"`
 	RequiresLocations  []string          `json:"requires_locations,omitempty"`
 	EmitsLocation      string            `json:"emits_location,omitempty"`
 	TargetBinding      string            `json:"target_binding,omitempty"`

@@ -936,6 +936,7 @@ symbolic coefficients.
 | `combine` | | `"+"` (default), `"*"`, `"min"`, or `"max"` — how stencil entries are combined. |
 | `stencil` | ✓ | Array of `{ selector, coeff }` entries (see §4). Exactly one entry for a `reduction` selector; one-or-more for the others. |
 | `accuracy` | | Informational: truncation order (string) |
+| `order` | | Optional positive integer selecting stencil width / truncation order for families that admit a parameterized order (e.g. centered uniform finite differences via Fornberg-recursion weights: `order: 2` is the classical 3-point stencil, `order: 4` is the 5-point stencil, `order: 6` is the 7-point stencil, …). Centered uniform schemes require even orders; one-sided / upwind schemes may use any positive integer. The parity constraint is enforced by the rule implementation, not the schema. Absence means the rule's per-scheme default applies. See §7.1.2 for a worked comparison of `order: 2` vs `order: 4`. |
 | `requires_locations` | | If set, the operand variable must carry one of these locations |
 | `emits_location` | | The output's staggered location (for staggered schemes) |
 | `target_binding` | | Reserved name for the target index (default: `"$target"`). Per grid family, `$target` resolves to the enclosing equation's LHS index (cartesian: `[i, j, k, ...]`; unstructured: bound to the iteration index of the operand's location, e.g. `c` for `cell`, `e` for `edge`, `v` for `vertex`; cubed sphere: `[p, i, j]`). |
@@ -1026,6 +1027,84 @@ coordinate and for unstructured is a topological location. The guard
 name is unchanged for v0.2.0 (renaming breaks every existing pattern);
 authors authoring unstructured schemes should read `dim` as "along
 which location does the operator reduce/emit".
+
+#### 7.1.2 The `order` field — worked comparison (esm-z6d)
+
+The optional `order` field selects stencil width / truncation order for
+families that admit a parameterized order. The schema accepts any
+positive integer; family-specific parity constraints (centered uniform
+FD: even; one-sided: any positive) are enforced by the rule
+implementation, not the schema. Absent `order` means the rule's
+per-scheme default (e.g. the hard-coded `order: 2` of
+`centered_2nd_uniform`).
+
+**`centered_2nd_uniform` — order implicit in shape.** The classical
+3-point centered second-order FD stores weights `[-1/(2·dx), 0,
++1/(2·dx)]` directly in `stencil` entries at offsets `-1, 0, +1`. The
+truncation order is `O(dx^2)`, recorded informally in `accuracy`; no
+`order` field is required because the width is hard-coded in the two
+`stencil` rows:
+
+```json
+{
+  "centered_2nd_uniform": {
+    "applies_to":  { "op": "grad", "args": ["$u"], "dim": "$x" },
+    "grid_family": "cartesian",
+    "combine":     "+",
+    "accuracy":    "O(dx^2)",
+    "stencil": [
+      { "selector": { "kind": "cartesian", "axis": "$x", "offset": -1 },
+        "coeff":    { "op": "/", "args": [-1, { "op": "*", "args": [2, "dx"] }] } },
+      { "selector": { "kind": "cartesian", "axis": "$x", "offset":  1 },
+        "coeff":    { "op": "/", "args": [ 1, { "op": "*", "args": [2, "dx"] }] } }
+    ]
+  }
+}
+```
+
+**`centered_arbitrary_order_uniform` — order selects a stencil
+family.** The arbitrary-order scheme is authored once against a
+selector family and delegates weight computation to the rule engine
+via Fornberg recursion. The `order` field picks the concrete scheme at
+materialization time — `order: 4` expands to a 5-point stencil with
+weights `[+1/(12·dx), -8/(12·dx), 0, +8/(12·dx), -1/(12·dx)]` at
+offsets `-2, -1, 0, +1, +2`; `order: 6` expands to a 7-point stencil;
+and so on. For authoring convenience, a scheme may either (a) inline
+the full stencil for a fixed `order` as in the example below, or (b)
+declare `order` alongside a `reduction`-selector that the rule engine
+materializes via `fornberg_weights`:
+
+```json
+{
+  "centered_arbitrary_order_uniform": {
+    "applies_to":  { "op": "grad", "args": ["$u"], "dim": "$x" },
+    "grid_family": "cartesian",
+    "combine":     "+",
+    "accuracy":    "O(dx^4)",
+    "order":       4,
+    "stencil": [
+      { "selector": { "kind": "cartesian", "axis": "$x", "offset": -2 },
+        "coeff":    { "op": "/", "args": [ 1, { "op": "*", "args": [12, "dx"] }] } },
+      { "selector": { "kind": "cartesian", "axis": "$x", "offset": -1 },
+        "coeff":    { "op": "/", "args": [-8, { "op": "*", "args": [12, "dx"] }] } },
+      { "selector": { "kind": "cartesian", "axis": "$x", "offset":  1 },
+        "coeff":    { "op": "/", "args": [ 8, { "op": "*", "args": [12, "dx"] }] } },
+      { "selector": { "kind": "cartesian", "axis": "$x", "offset":  2 },
+        "coeff":    { "op": "/", "args": [-1, { "op": "*", "args": [12, "dx"] }] } }
+    ]
+  }
+}
+```
+
+**Parity.** Centered uniform FD admits only even orders (2, 4, 6, 8,
+…); the authoring layer rejects `order: 3` for this family with an
+explicit diagnostic. One-sided and upwind schemes may use any positive
+integer order. The schema does not encode the parity rule so that the
+same `$def` can serve both families.
+
+**Backwards compatibility.** Omitting `order` is the v0.2.0 default
+and leaves every pre-existing scheme (including `centered_2nd_uniform`)
+unchanged. No runtime semantic change occurs when `order` is absent.
 
 ### 7.2 Expansion semantics
 

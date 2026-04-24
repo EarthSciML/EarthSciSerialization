@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+func intPtr(n int) *int { return &n }
+
 // assertJSONEqual compares two Go values by re-encoding to JSON and decoding
 // into generic interface{} form — so json.RawMessage byte differences due to
 // whitespace do not cause spurious mismatches.
@@ -43,11 +45,13 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 		schemeName   string
 		gridFamily   string
 		stencilLen   int
+		wantOrder    *int
 	}{
-		{"centered_2nd_uniform", "tests/discretizations/centered_2nd_uniform.esm", "centered_2nd_uniform", "cartesian", 2},
-		{"upwind_1st_advection", "tests/discretizations/upwind_1st_advection.esm", "upwind_1st", "cartesian", 3},
-		{"periodic_bc", "tests/discretizations/periodic_bc.esm", "periodic_bc_x", "cartesian", 1},
-		{"mpas_cell_div", "tests/discretizations/mpas_cell_div.esm", "mpas_cell_div", "unstructured", 1},
+		{"centered_2nd_uniform", "tests/discretizations/centered_2nd_uniform.esm", "centered_2nd_uniform", "cartesian", 2, nil},
+		{"upwind_1st_advection", "tests/discretizations/upwind_1st_advection.esm", "upwind_1st", "cartesian", 3, nil},
+		{"periodic_bc", "tests/discretizations/periodic_bc.esm", "periodic_bc_x", "cartesian", 1, nil},
+		{"mpas_cell_div", "tests/discretizations/mpas_cell_div.esm", "mpas_cell_div", "unstructured", 1, nil},
+		{"centered_arbitrary_order_uniform", "tests/discretizations/centered_arbitrary_order_uniform.esm", "centered_arbitrary_order_uniform", "cartesian", 4, intPtr(4)},
 	}
 	for _, f := range fixtures {
 		t.Run(f.id, func(t *testing.T) {
@@ -68,6 +72,14 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 			}
 			if len(scheme.Stencil) != f.stencilLen {
 				t.Errorf("stencil len = %d, want %d", len(scheme.Stencil), f.stencilLen)
+			}
+			switch {
+			case f.wantOrder == nil && scheme.Order != nil:
+				t.Errorf("order = %d, want absent", *scheme.Order)
+			case f.wantOrder != nil && scheme.Order == nil:
+				t.Errorf("order absent, want %d", *f.wantOrder)
+			case f.wantOrder != nil && scheme.Order != nil && *scheme.Order != *f.wantOrder:
+				t.Errorf("order = %d, want %d", *scheme.Order, *f.wantOrder)
 			}
 
 			out, err := json.Marshal(&parsed)

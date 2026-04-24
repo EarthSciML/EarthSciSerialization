@@ -1,0 +1,51 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "CenteredArbitraryOrderUniform",
+    "description": "Discretization scheme: 4th-order centered finite difference for grad on a uniform cartesian grid, authored against the arbitrary-order family via the order parameter. Exercises the RFC §7.1.2 order field (esm-z6d).",
+    "authors": ["esm-z6d"],
+    "created": "2026-04-24T00:00:00Z",
+    "tags": ["discretization", "cartesian", "gradient", "fornberg", "arbitrary-order"]
+  },
+  "models": {
+    "Empty": {
+      "variables": {
+        "phi": { "type": "state", "units": "1", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["phi"], "wrt": "t" },
+          "rhs": 0.0
+        }
+      ]
+    }
+  },
+  "discretizations": {
+    "centered_arbitrary_order_uniform": {
+      "applies_to": { "op": "grad", "args": ["$u"], "dim": "$x" },
+      "grid_family": "cartesian",
+      "combine": "+",
+      "accuracy": "O(dx^4)",
+      "order": 4,
+      "stencil": [
+        {
+          "selector": { "kind": "cartesian", "axis": "$x", "offset": -2 },
+          "coeff": { "op": "/", "args": [1, { "op": "*", "args": [12, "dx"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "$x", "offset": -1 },
+          "coeff": { "op": "/", "args": [-8, { "op": "*", "args": [12, "dx"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "$x", "offset": 1 },
+          "coeff": { "op": "/", "args": [8, { "op": "*", "args": [12, "dx"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "$x", "offset": 2 },
+          "coeff": { "op": "/", "args": [-1, { "op": "*", "args": [12, "dx"] }] }
+        }
+      ],
+      "description": "4th-order centered finite difference for gradient on a uniform grid, with Fornberg weights [+1, -8, 0, +8, -1] / (12·dx) at offsets [-2, -1, 0, +1, +2]. The order field selects stencil width; absent order would default to the rule's per-scheme value."
+    }
+  }
+}

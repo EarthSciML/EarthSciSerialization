@@ -1840,6 +1840,10 @@ export interface Discretization {
    */
   accuracy?: string;
   /**
+   * Optional scalar selector for stencil width / truncation order. Positive integer. For families that admit a parameterized order (e.g. arbitrary-order centered uniform finite differences via Fornberg-recursion weights), this field picks the concrete scheme: centered uniform FD uses positive even integers (2, 4, 6, 8, …); one-sided or upwind schemes use any positive integer. Absence means the rule's default applies (e.g. the hard-coded order=2 of centered_2nd_uniform). The field is consumed by the rule engine / scheme authoring layer — schema accepts any positive integer; family-specific parity constraints (even for centered) are enforced by the rule implementation, not the schema. See discretization RFC §7.1.
+   */
+  order?: number;
+  /**
    * If set, the operand variable must carry one of these staggered-grid locations.
    */
   requires_locations?: string[];
