@@ -95,6 +95,12 @@ describe('rule engine cross-binding conformance (§13.1 Step 1)', () => {
       const rules = parseRules(fixture.rules)
       const input = parseExpr(fixture.input)
       const ctx = buildContext(fixture)
+      // RFC §5.2.7: fixtures requiring a per-query-point scope evaluator
+      // are parse-only for the TypeScript binding — parseRules above has
+      // already asserted the fixture loads; skip the evaluation check.
+      if (fixture.requires_per_point_scope === true) {
+        return
+      }
       const maxPassesRaw = fixture.max_passes
       const maxPasses =
         typeof maxPassesRaw === 'number'

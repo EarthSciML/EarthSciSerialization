@@ -77,15 +77,38 @@ pub struct Guard {
 // Rule
 // ============================================================================
 
+/// Spatial scope of a rule (RFC §5.2.7). Absent when the rule applies
+/// everywhere its pattern matches, a legacy advisory [`RuleRegion::Tag`]
+/// string with no runtime effect, or a concrete per-query-point scope.
+#[derive(Debug, Clone)]
+pub enum RuleRegion {
+    /// Legacy advisory tag (no runtime effect). Pre-v0.3 authoring idiom.
+    Tag(String),
+    /// `{kind:"boundary", side}` — rule applies only on the named axis side.
+    Boundary { side: String },
+    /// `{kind:"panel_boundary", panel, side}` — cubed_sphere only.
+    PanelBoundary { panel: i64, side: String },
+    /// `{kind:"mask_field", field}` — rule applies where the named field is truthy.
+    MaskField { field: String },
+    /// `{kind:"index_range", axis, lo, hi}` — inclusive index-range scope.
+    IndexRange { axis: String, lo: i64, hi: i64 },
+}
+
 /// A rewrite rule (RFC §5.2). MVP supports the inline `replacement`
 /// form only; `use:<scheme>` is tracked as Step 1b follow-up.
+///
+/// `where_expr`, if present, is a per-query-point boolean predicate
+/// AST (RFC §5.2.7) — mutually exclusive with the guard-list `where_`
+/// at the author level, structurally distinguished by JSON shape at
+/// parse time.
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub name: String,
     pub pattern: Expr,
     pub where_: Vec<Guard>,
     pub replacement: Expr,
-    pub region: Option<String>,
+    pub region: Option<RuleRegion>,
+    pub where_expr: Option<Expr>,
 }
 
 impl Rule {
@@ -96,6 +119,7 @@ impl Rule {
             where_: Vec::new(),
             replacement,
             region: None,
+            where_expr: None,
         }
     }
 }
@@ -114,6 +138,13 @@ impl Rule {
 pub struct RuleContext {
     pub grids: HashMap<String, GridMeta>,
     pub variables: HashMap<String, VariableMeta>,
+    /// Per-query-point index bindings used to evaluate RFC §5.2.7
+    /// region / where-expression scopes. Empty for ordinary tree
+    /// rewriting (scope-bearing rules then fall through).
+    pub query_point: HashMap<String, i64>,
+    /// Name of the grid the `query_point` refers to (used to resolve
+    /// `region.boundary.side` against `GridMeta::dim_bounds`).
+    pub grid_name: Option<String>,
 }
 
 /// Subset of grid metadata consumed by the closed-set guards.
@@ -122,6 +153,10 @@ pub struct GridMeta {
     pub spatial_dims: Vec<String>,
     pub periodic_dims: Vec<String>,
     pub nonuniform_dims: Vec<String>,
+    /// Optional per-dim `[lo, hi]` index bounds, used by
+    /// `region.boundary` scope evaluation (RFC §5.2.7). Absence is
+    /// equivalent to "scope disabled" (conservative fall-through).
+    pub dim_bounds: HashMap<String, [i64; 2]>,
 }
 
 /// Subset of variable metadata consumed by the closed-set guards.
@@ -505,6 +540,7 @@ fn rewrite_pass(
     for rule in rules {
         if let Some(m) = match_pattern(&rule.pattern, expr)
             && let Some(m2) = check_guards(&rule.where_, &m, ctx)?
+            && check_scope(rule, &m2, ctx)
         {
             let new_expr = apply_bindings(&rule.replacement, &m2)?;
             *changed = true;
@@ -568,31 +604,112 @@ fn parse_rule_named(name: &str, v: &serde_json::Value) -> Result<Rule, RuleEngin
         )
     })?;
     let replacement = parse_expr(replacement)?;
-    let where_ = match v.get("where") {
-        Some(ws) => ws
-            .as_array()
-            .ok_or_else(|| {
-                RuleEngineError::new(
-                    "E_RULE_PARSE",
-                    format!("rule `{name}`: `where` must be an array"),
-                )
-            })?
-            .iter()
-            .map(parse_guard)
-            .collect::<Result<Vec<_>, _>>()?,
-        None => Vec::new(),
-    };
-    let region = v
-        .get("region")
-        .and_then(|s| s.as_str())
-        .map(|s| s.to_string());
+    let (where_, where_expr) = parse_where(name, v.get("where"))?;
+    let region = parse_region(name, v.get("region"))?;
     Ok(Rule {
         name: name.to_string(),
         pattern,
         where_,
         replacement,
         region,
+        where_expr,
     })
+}
+
+/// Discriminate the RFC §5.2.7 `where` forms by JSON shape: array of
+/// guards (legacy, selection-time) vs expression-node object (new,
+/// per-query-point predicate).
+fn parse_where(
+    name: &str,
+    v: Option<&serde_json::Value>,
+) -> Result<(Vec<Guard>, Option<Expr>), RuleEngineError> {
+    let Some(v) = v else {
+        return Ok((Vec::new(), None));
+    };
+    if let Some(arr) = v.as_array() {
+        let guards = arr.iter().map(parse_guard).collect::<Result<Vec<_>, _>>()?;
+        return Ok((guards, None));
+    }
+    if let Some(obj) = v.as_object() {
+        if !obj.contains_key("op") {
+            return Err(RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!("rule `{name}`: `where` object must be an expression node with an `op` field"),
+            ));
+        }
+        return Ok((Vec::new(), Some(parse_expr(v)?)));
+    }
+    Err(RuleEngineError::new(
+        "E_RULE_PARSE",
+        format!("rule `{name}`: `where` must be an array of guards or an expression object"),
+    ))
+}
+
+/// Discriminate the RFC §5.2.7 `region` forms: a legacy advisory
+/// string vs a scope object with a `kind` tag.
+fn parse_region(
+    name: &str,
+    v: Option<&serde_json::Value>,
+) -> Result<Option<RuleRegion>, RuleEngineError> {
+    let Some(v) = v else {
+        return Ok(None);
+    };
+    if let Some(s) = v.as_str() {
+        return Ok(Some(RuleRegion::Tag(s.to_string())));
+    }
+    let obj = v.as_object().ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!("rule `{name}`: `region` must be a string (legacy) or object (normative scope)"),
+        )
+    })?;
+    let kind = obj.get("kind").and_then(|s| s.as_str()).ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!("rule `{name}`: region object must carry a `kind` field"),
+        )
+    })?;
+    let missing = |field: &str| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!("rule `{name}`: region.{kind} requires `{field}`"),
+        )
+    };
+    let str_field = |field: &str| -> Result<String, RuleEngineError> {
+        obj.get(field)
+            .and_then(|s| s.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| missing(field))
+    };
+    let int_field = |field: &str| -> Result<i64, RuleEngineError> {
+        obj.get(field)
+            .and_then(|s| s.as_i64())
+            .ok_or_else(|| missing(field))
+    };
+    match kind {
+        "boundary" => Ok(Some(RuleRegion::Boundary {
+            side: str_field("side")?,
+        })),
+        "panel_boundary" => Ok(Some(RuleRegion::PanelBoundary {
+            panel: int_field("panel")?,
+            side: str_field("side")?,
+        })),
+        "mask_field" => Ok(Some(RuleRegion::MaskField {
+            field: str_field("field")?,
+        })),
+        "index_range" => Ok(Some(RuleRegion::IndexRange {
+            axis: str_field("axis")?,
+            lo: int_field("lo")?,
+            hi: int_field("hi")?,
+        })),
+        other => Err(RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!(
+                "rule `{name}`: unknown region.kind `{other}` \
+                 (closed set: boundary, panel_boundary, mask_field, index_range)"
+            ),
+        )),
+    }
 }
 
 fn parse_guard(v: &serde_json::Value) -> Result<Guard, RuleEngineError> {
@@ -666,6 +783,237 @@ pub fn parse_expr(v: &serde_json::Value) -> Result<Expr, RuleEngineError> {
             "E_RULE_PARSE",
             format!("cannot parse expression of JSON type {v}"),
         )),
+    }
+}
+
+// ============================================================================
+// Scope evaluation — region object + where expression (RFC §5.2.7)
+// ============================================================================
+
+/// Evaluate a rule's per-query-point scope: `region` (when an object
+/// variant) and `where_expr` (expression predicate). Returns `true`
+/// when the rule should fire at the current query point, `false`
+/// otherwise (conservative fall-through).
+///
+/// A legacy string `region` and a missing `where_expr` pass
+/// unconditionally, preserving v0.2 semantics.
+pub fn check_scope(rule: &Rule, bindings: &HashMap<String, Expr>, ctx: &RuleContext) -> bool {
+    if let Some(region) = &rule.region
+        && !eval_region(region, ctx)
+    {
+        return false;
+    }
+    if let Some(where_expr) = &rule.where_expr
+        && !eval_where_expr(where_expr, bindings, ctx)
+    {
+        return false;
+    }
+    true
+}
+
+fn eval_region(region: &RuleRegion, ctx: &RuleContext) -> bool {
+    match region {
+        // Legacy advisory tag: no runtime effect.
+        RuleRegion::Tag(_) => true,
+        RuleRegion::IndexRange { axis, lo, hi } => match ctx.query_point.get(axis) {
+            Some(v) => lo <= v && v <= hi,
+            None => false,
+        },
+        RuleRegion::Boundary { side } => eval_boundary(side, ctx),
+        // Deferred variants — round-trip only.
+        RuleRegion::PanelBoundary { .. } | RuleRegion::MaskField { .. } => false,
+    }
+}
+
+fn eval_boundary(side: &str, ctx: &RuleContext) -> bool {
+    let Some(grid_name) = &ctx.grid_name else {
+        return false;
+    };
+    let Some(meta) = ctx.grids.get(grid_name) else {
+        return false;
+    };
+    let (dim, which_hi) = match side {
+        "xmin" | "west" => ("x", false),
+        "xmax" | "east" => ("x", true),
+        "ymin" | "south" => ("y", false),
+        "ymax" | "north" => ("y", true),
+        "zmin" | "bottom" => ("z", false),
+        "zmax" | "top" => ("z", true),
+        _ => return false,
+    };
+    let Some(bounds) = meta.dim_bounds.get(dim) else {
+        return false;
+    };
+    let Some(idx_pos) = meta.spatial_dims.iter().position(|d| d == dim) else {
+        return false;
+    };
+    let canonical = ["i", "j", "k", "l", "m"];
+    if idx_pos >= canonical.len() {
+        return false;
+    }
+    let idx_name = canonical[idx_pos];
+    let Some(v) = ctx.query_point.get(idx_name) else {
+        return false;
+    };
+    let target = if which_hi { bounds[1] } else { bounds[0] };
+    *v == target
+}
+
+fn eval_where_expr(expr: &Expr, bindings: &HashMap<String, Expr>, ctx: &RuleContext) -> bool {
+    if ctx.query_point.is_empty() {
+        return false;
+    }
+    match eval_scalar(expr, bindings, ctx) {
+        Some(ScalarValue::Bool(b)) => b,
+        Some(ScalarValue::Int(i)) => i != 0,
+        Some(ScalarValue::Float(f)) => f != 0.0,
+        _ => false,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ScalarValue {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+}
+
+impl ScalarValue {
+    fn to_f64(self) -> f64 {
+        match self {
+            ScalarValue::Bool(b) => {
+                if b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            ScalarValue::Int(i) => i as f64,
+            ScalarValue::Float(f) => f,
+        }
+    }
+
+    fn truthy(self) -> bool {
+        match self {
+            ScalarValue::Bool(b) => b,
+            ScalarValue::Int(i) => i != 0,
+            ScalarValue::Float(f) => f != 0.0,
+        }
+    }
+}
+
+fn eval_scalar(
+    e: &Expr,
+    b: &HashMap<String, Expr>,
+    ctx: &RuleContext,
+) -> Option<ScalarValue> {
+    match e {
+        Expr::Integer(i) => Some(ScalarValue::Int(*i)),
+        Expr::Number(f) => Some(ScalarValue::Float(*f)),
+        Expr::Variable(name) => {
+            if is_pvar_string(name)
+                && let Some(bound) = b.get(name)
+            {
+                return eval_scalar(bound, b, ctx);
+            }
+            ctx.query_point.get(name).map(|v| ScalarValue::Int(*v))
+        }
+        Expr::Operator(node) => eval_op(node, b, ctx),
+    }
+}
+
+fn eval_op(
+    node: &ExpressionNode,
+    b: &HashMap<String, Expr>,
+    ctx: &RuleContext,
+) -> Option<ScalarValue> {
+    let args: Option<Vec<ScalarValue>> =
+        node.args.iter().map(|a| eval_scalar(a, b, ctx)).collect();
+    match node.op.as_str() {
+        "==" | "!=" | "<" | "<=" | ">" | ">=" => {
+            let args = args?;
+            if args.len() != 2 {
+                return None;
+            }
+            let (l, r) = (args[0].to_f64(), args[1].to_f64());
+            let b = match node.op.as_str() {
+                "==" => l == r,
+                "!=" => l != r,
+                "<" => l < r,
+                "<=" => l <= r,
+                ">" => l > r,
+                ">=" => l >= r,
+                _ => unreachable!(),
+            };
+            Some(ScalarValue::Bool(b))
+        }
+        "+" => {
+            let args = args?;
+            let all_int = args.iter().all(|v| matches!(v, ScalarValue::Int(_)));
+            if all_int {
+                Some(ScalarValue::Int(
+                    args.into_iter()
+                        .map(|v| match v {
+                            ScalarValue::Int(i) => i,
+                            _ => unreachable!(),
+                        })
+                        .sum(),
+                ))
+            } else {
+                Some(ScalarValue::Float(args.into_iter().map(|v| v.to_f64()).sum()))
+            }
+        }
+        "-" => {
+            let args = args?;
+            if args.len() == 1 {
+                return match args[0] {
+                    ScalarValue::Int(i) => Some(ScalarValue::Int(-i)),
+                    ScalarValue::Float(f) => Some(ScalarValue::Float(-f)),
+                    ScalarValue::Bool(_) => None,
+                };
+            }
+            if args.len() != 2 {
+                return None;
+            }
+            let (l, r) = (args[0], args[1]);
+            if let (ScalarValue::Int(li), ScalarValue::Int(ri)) = (l, r) {
+                Some(ScalarValue::Int(li - ri))
+            } else {
+                Some(ScalarValue::Float(l.to_f64() - r.to_f64()))
+            }
+        }
+        "*" => {
+            let args = args?;
+            let all_int = args.iter().all(|v| matches!(v, ScalarValue::Int(_)));
+            if all_int {
+                Some(ScalarValue::Int(
+                    args.into_iter()
+                        .map(|v| match v {
+                            ScalarValue::Int(i) => i,
+                            _ => unreachable!(),
+                        })
+                        .product(),
+                ))
+            } else {
+                Some(ScalarValue::Float(args.into_iter().map(|v| v.to_f64()).product()))
+            }
+        }
+        "and" => {
+            let args = args?;
+            Some(ScalarValue::Bool(args.iter().all(|v| v.truthy())))
+        }
+        "or" => {
+            let args = args?;
+            Some(ScalarValue::Bool(args.iter().any(|v| v.truthy())))
+        }
+        "not" => {
+            let args = args?;
+            if args.len() != 1 {
+                return None;
+            }
+            Some(ScalarValue::Bool(!args[0].truthy()))
+        }
+        _ => None,
     }
 }
 
@@ -849,6 +1197,7 @@ mod tests {
             }],
             replacement: var("$u"),
             region: None,
+            where_expr: None,
         };
         let mut ctx = RuleContext::default();
         ctx.variables.insert(
@@ -960,8 +1309,29 @@ mod tests {
                         .filter_map(|s| s.as_str().map(|x| x.to_string()))
                         .collect();
                 }
+                if let Some(bounds) = v.get("dim_bounds").and_then(|x| x.as_object()) {
+                    for (dk, dv) in bounds {
+                        if let Some(arr) = dv.as_array()
+                            && arr.len() == 2
+                            && let (Some(lo), Some(hi)) =
+                                (arr[0].as_i64(), arr[1].as_i64())
+                        {
+                            meta.dim_bounds.insert(dk.clone(), [lo, hi]);
+                        }
+                    }
+                }
                 out.grids.insert(k.clone(), meta);
             }
+        }
+        if let Some(qp) = ctx.get("query_point").and_then(|v| v.as_object()) {
+            for (k, v) in qp {
+                if let Some(i) = v.as_i64() {
+                    out.query_point.insert(k.clone(), i);
+                }
+            }
+        }
+        if let Some(g) = ctx.get("grid_name").and_then(|v| v.as_str()) {
+            out.grid_name = Some(g.to_string());
         }
         if let Some(vars) = ctx.get("variables").and_then(|v| v.as_object()) {
             for (k, v) in vars {

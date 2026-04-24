@@ -110,9 +110,13 @@ export
     to_ascii, format_expression_ascii,
     # Canonical AST form (RFC §5.4)
     canonicalize, canonical_json, format_canonical_float, CanonicalizeError,
-    # Rule engine (RFC §5.2)
+    # Rule engine (RFC §5.2, §5.2.7)
     Rule, Guard, RuleContext, RuleEngineError,
-    match_pattern, apply_bindings, rewrite, check_guards, check_guard,
+    RuleRegion, RegionBoundary, RegionPanelBoundary,
+    RegionMaskField, RegionIndexRange,
+    match_pattern, apply_bindings, rewrite,
+    check_guards, check_guard, check_scope,
+    with_query_point,
     parse_rule, parse_rules, check_unrewritten_pde_ops,
     # Discretization pipeline (RFC §11, gt-gbs2)
     discretize,

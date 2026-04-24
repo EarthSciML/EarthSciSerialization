@@ -43,25 +43,96 @@ struct Guard
 end
 
 """
-    Rule(name, pattern, where, replacement, region)
+    RuleRegion
+
+Spatial scope of a rule (RFC §5.2.7). Abstract type with four concrete
+variants:
+
+- [`RegionBoundary`](@ref) — `{kind:"boundary", side}`
+- [`RegionPanelBoundary`](@ref) — `{kind:"panel_boundary", panel, side}`
+- [`RegionMaskField`](@ref) — `{kind:"mask_field", field}`
+- [`RegionIndexRange`](@ref) — `{kind:"index_range", axis, lo, hi}`
+
+The legacy advisory string form is stored as a plain `String` on the
+enclosing [`Rule`](@ref) and does not use this type.
+"""
+abstract type RuleRegion end
+
+"""
+    RegionBoundary(side::String)
+
+`{kind:"boundary", side}` scope (RFC §5.2.7).
+"""
+struct RegionBoundary <: RuleRegion
+    side::String
+end
+
+"""
+    RegionPanelBoundary(panel::Int, side::String)
+
+`{kind:"panel_boundary", panel, side}` scope (cubed_sphere only).
+"""
+struct RegionPanelBoundary <: RuleRegion
+    panel::Int
+    side::String
+end
+
+"""
+    RegionMaskField(field::String)
+
+`{kind:"mask_field", field}` scope.
+"""
+struct RegionMaskField <: RuleRegion
+    field::String
+end
+
+"""
+    RegionIndexRange(axis::String, lo::Int, hi::Int)
+
+`{kind:"index_range", axis, lo, hi}` scope (inclusive bounds).
+"""
+struct RegionIndexRange <: RuleRegion
+    axis::String
+    lo::Int
+    hi::Int
+end
+
+"""
+    Rule(name, pattern, where, replacement, region, where_expr)
 
 A rewrite rule. `pattern` is an AST with `\$`-prefixed pattern variables;
-`where` is a vector of [`Guard`](@ref) constraints; `replacement` is an
-AST over the pattern variables. The MVP supports only the inline
-`replacement` form; `use:<scheme>` is reserved for Step 1b.
+`where` is a vector of [`Guard`](@ref) constraints applied at rule-
+selection time; `replacement` is an AST over the pattern variables. The
+MVP supports only the inline `replacement` form; `use:<scheme>` is
+reserved for Step 1b.
+
+`region` is the rule's spatial scope (RFC §5.2.7). It may be
+`nothing`, a `String` (legacy advisory tag — no runtime effect), or a
+concrete [`RuleRegion`](@ref) object (normative per-point scope).
+
+`where_expr` is an optional per-query-point boolean predicate AST
+(RFC §5.2.7). Mutually exclusive at the author level with guard-list
+`where`; structurally distinguished by JSON shape at parse time.
 """
 struct Rule
     name::String
     pattern::Expr
     where::Vector{Guard}
     replacement::Expr
-    region::Union{String,Nothing}
+    region::Union{String,RuleRegion,Nothing}
+    where_expr::Union{Expr,Nothing}
 end
 
 Rule(name::String, pattern::Expr, replacement::Expr;
      where::Vector{Guard}=Guard[],
-     region::Union{String,Nothing}=nothing) =
-    Rule(name, pattern, where, replacement, region)
+     region::Union{String,RuleRegion,Nothing}=nothing,
+     where_expr::Union{Expr,Nothing}=nothing) =
+    Rule(name, pattern, where, replacement, region, where_expr)
+
+# Backward-compatible 5-arg positional constructor (pre-§5.2.7 callers).
+Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
+     region::Union{String,RuleRegion,Nothing}) =
+    Rule(name, pattern, where, replacement, region, nothing)
 
 # ============================================================================
 # Pattern variable detection
@@ -228,10 +299,31 @@ grid metadata and variable table needed by the closed-set guards in
 struct RuleContext
     grids::Dict{String,Dict{String,Any}}
     variables::Dict{String,Dict{String,Any}}
+    query_point::Dict{String,Int}
+    grid_name::Union{String,Nothing}
 end
 
 RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
-                            Dict{String,Dict{String,Any}}())
+                            Dict{String,Dict{String,Any}}(),
+                            Dict{String,Int}(),
+                            nothing)
+
+RuleContext(grids, variables) = RuleContext(grids, variables,
+                                            Dict{String,Int}(), nothing)
+
+"""
+    with_query_point(ctx, point; grid=nothing) -> RuleContext
+
+Return a copy of `ctx` with the given per-point index bindings (e.g.
+`Dict("i"=>0, "j"=>3)`) installed, used to evaluate per-query-point
+`region` / `where`-expression scopes per RFC §5.2.7. `grid`, when
+supplied, names which grid entry in `ctx.grids` the point refers to —
+used to resolve `region.boundary.side` against grid dim bounds.
+"""
+with_query_point(ctx::RuleContext, point::Dict{String,Int};
+                 grid::Union{String,Nothing}=nothing) =
+    RuleContext(ctx.grids, ctx.variables, point,
+                grid === nothing ? ctx.grid_name : grid)
 
 """
     check_guards(guards, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
@@ -421,6 +513,7 @@ function _rewrite_pass(expr::Expr, rules::Vector{Rule}, ctx::RuleContext,
         m === nothing && continue
         m2 = check_guards(rule.where, m, ctx)
         m2 === nothing && continue
+        check_scope(rule, m2, ctx) || continue
         new_expr = apply_bindings(rule.replacement, m2)
         changed[] = true
         return new_expr  # sealed: do not descend
@@ -452,7 +545,9 @@ end
 
 Build a [`Rule`](@ref) from a decoded JSON object (a `Dict` or similar).
 The object must contain `pattern` and `replacement` fields. Optional:
-`where` (array of guard objects), `region` (string).
+`where` (array of guard objects OR an expression-AST predicate per
+RFC §5.2.7), `region` (legacy advisory string OR a scope object per
+RFC §5.2.7).
 """
 function parse_rule(name::AbstractString, obj)::Rule
     pat = _parse_expr(_getkey(obj, "pattern"))
@@ -461,10 +556,71 @@ function parse_rule(name::AbstractString, obj)::Rule
         "rule $name: MVP supports only the 'replacement' form; 'use:' rules are deferred"))
     repl = _parse_expr(repl_raw)
     where_raw = _getkey(obj, "where"; default=nothing)
-    guards = where_raw === nothing ? Guard[] : [_parse_guard(g) for g in where_raw]
+    guards, where_expr = _parse_where(String(name), where_raw)
     region_raw = _getkey(obj, "region"; default=nothing)
-    region = region_raw === nothing ? nothing : String(region_raw)
-    return Rule(String(name), pat, guards, repl, region)
+    region = _parse_region(String(name), region_raw)
+    return Rule(String(name), pat, guards, repl, region, where_expr)
+end
+
+# Discriminate array-of-guards vs expression predicate (RFC §5.2.7).
+function _parse_where(name::String, raw)
+    raw === nothing && return (Guard[], nothing)
+    if raw isa AbstractVector
+        return ([_parse_guard(g) for g in raw], nothing)
+    end
+    if _is_dict_like(raw)
+        # Must have an `op` field to be a valid expression predicate.
+        op = _getkey(raw, "op"; default=nothing)
+        op === nothing && throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `where` object must be an expression node with an `op` field"))
+        return (Guard[], _parse_expr(raw))
+    end
+    throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: `where` must be an array of guards or an expression object"))
+end
+
+# Discriminate legacy advisory string vs per-point scope object.
+function _parse_region(name::String, raw)::Union{String,RuleRegion,Nothing}
+    raw === nothing && return nothing
+    if raw isa AbstractString
+        return String(raw)
+    end
+    if _is_dict_like(raw)
+        kind = _getkey(raw, "kind"; default=nothing)
+        kind === nothing && throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `region` object must carry a `kind` field"))
+        k = String(kind)
+        if k == "boundary"
+            side = _getkey(raw, "side"; default=nothing)
+            side === nothing && throw(RuleEngineError("E_RULE_PARSE",
+                "rule $name: region.boundary requires `side`"))
+            return RegionBoundary(String(side))
+        elseif k == "panel_boundary"
+            panel = _getkey(raw, "panel"; default=nothing)
+            side = _getkey(raw, "side"; default=nothing)
+            (panel === nothing || side === nothing) && throw(RuleEngineError(
+                "E_RULE_PARSE",
+                "rule $name: region.panel_boundary requires `panel` and `side`"))
+            return RegionPanelBoundary(Int(panel), String(side))
+        elseif k == "mask_field"
+            field = _getkey(raw, "field"; default=nothing)
+            field === nothing && throw(RuleEngineError("E_RULE_PARSE",
+                "rule $name: region.mask_field requires `field`"))
+            return RegionMaskField(String(field))
+        elseif k == "index_range"
+            axis = _getkey(raw, "axis"; default=nothing)
+            lo = _getkey(raw, "lo"; default=nothing)
+            hi = _getkey(raw, "hi"; default=nothing)
+            (axis === nothing || lo === nothing || hi === nothing) && throw(
+                RuleEngineError("E_RULE_PARSE",
+                    "rule $name: region.index_range requires `axis`, `lo`, `hi`"))
+            return RegionIndexRange(String(axis), Int(lo), Int(hi))
+        end
+        throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: unknown region.kind `$k` (closed set: boundary, panel_boundary, mask_field, index_range)"))
+    end
+    throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: `region` must be a string (legacy advisory) or object (normative scope)"))
 end
 
 parse_rule(obj) = parse_rule(_getkey(obj, "name"), obj)
@@ -561,6 +717,170 @@ function _jvalue(v)
         return Any[_jvalue(x) for x in v]
     end
     return v
+end
+
+# ============================================================================
+# Scope evaluation — region object + where expression (RFC §5.2.7)
+# ============================================================================
+
+"""
+    check_scope(rule, bindings, ctx) -> Bool
+
+Evaluate a rule's `region` scope (if an object) and `where_expr`
+predicate (if present) against `ctx.query_point`. Returns `true` when
+the rule should fire at the current query point, `false` otherwise
+(conservative fall-through).
+
+When `ctx.query_point` is empty and the rule carries any per-point
+scope, the rule is disabled (returns `false`) — see RFC §5.2.7's
+`W_UNEVAL_SCOPE` handling. A legacy string `region` and a missing
+`where_expr` pass unconditionally, preserving backwards compatibility.
+"""
+function check_scope(rule::Rule, bindings::Dict{String,Expr}, ctx::RuleContext)::Bool
+    # Region check.
+    if rule.region isa RuleRegion
+        _eval_region(rule.region, bindings, ctx) || return false
+    end
+    # Per-point where-expression check.
+    if rule.where_expr !== nothing
+        _eval_where_expr(rule.where_expr, bindings, ctx) || return false
+    end
+    return true
+end
+
+function _eval_region(r::RegionIndexRange, b::Dict{String,Expr}, ctx::RuleContext)::Bool
+    isempty(ctx.query_point) && return false
+    haskey(ctx.query_point, r.axis) || return false
+    v = ctx.query_point[r.axis]
+    return r.lo <= v <= r.hi
+end
+
+function _eval_region(r::RegionBoundary, b::Dict{String,Expr}, ctx::RuleContext)::Bool
+    isempty(ctx.query_point) && return false
+    ctx.grid_name === nothing && return false
+    meta = get(ctx.grids, ctx.grid_name, nothing)
+    meta === nothing && return false
+    bounds = get(meta, "dim_bounds", nothing)
+    bounds === nothing && return false
+    side = r.side
+    # Map side name to (axis, lo-or-hi).
+    side_map = Dict(
+        "xmin" => ("x", :lo), "xmax" => ("x", :hi),
+        "ymin" => ("y", :lo), "ymax" => ("y", :hi),
+        "zmin" => ("z", :lo), "zmax" => ("z", :hi),
+        "west" => ("x", :lo), "east" => ("x", :hi),
+        "south" => ("y", :lo), "north" => ("y", :hi),
+        "bottom" => ("z", :lo), "top" => ("z", :hi),
+    )
+    haskey(side_map, side) || return false
+    (dim, which) = side_map[side]
+    haskey(bounds, dim) || return false
+    dim_bounds = bounds[dim]
+    # Look up the canonical index name for that dim via grid.spatial_dims order.
+    spatial_dims = get(meta, "spatial_dims", String[])
+    idx_pos = findfirst(==(dim), spatial_dims)
+    idx_pos === nothing && return false
+    canonical = ("i", "j", "k", "l", "m")
+    idx_pos > length(canonical) && return false
+    idx_name = canonical[idx_pos]
+    haskey(ctx.query_point, idx_name) || return false
+    v = ctx.query_point[idx_name]
+    target = which == :lo ? Int(dim_bounds[1]) : Int(dim_bounds[2])
+    return v == target
+end
+
+# Deferred variants: parse round-trips but evaluation disables the rule
+# (W_UNEVAL_SCOPE) — per RFC §5.2.7 MVP rollout.
+_eval_region(::RegionPanelBoundary, ::Dict{String,Expr}, ::RuleContext) = false
+_eval_region(::RegionMaskField, ::Dict{String,Expr}, ::RuleContext) = false
+
+"""
+    _eval_where_expr(expr, bindings, ctx) -> Bool
+
+Evaluate `expr` under pattern-variable bindings and query-point indices,
+returning a boolean. Supports the scalar subset of §4 ops: arithmetic,
+comparison, logical ops, and bare-string index references resolved
+against `ctx.query_point` and `bindings` (bindings to `VarExpr` are
+resolved as index names; bindings to `IntExpr` / `NumExpr` as constants).
+Unsupported ops, unresolved names, or non-scalar results cause the
+predicate to evaluate `false` (conservative fall-through).
+"""
+function _eval_where_expr(expr::Expr, b::Dict{String,Expr}, ctx::RuleContext)::Bool
+    isempty(ctx.query_point) && return false
+    val = _eval_scalar(expr, b, ctx)
+    val === nothing && return false
+    if val isa Bool
+        return val
+    elseif val isa Integer
+        return val != 0
+    elseif val isa AbstractFloat
+        return val != 0.0
+    end
+    return false
+end
+
+function _eval_scalar(e::Expr, b::Dict{String,Expr}, ctx::RuleContext)
+    if e isa IntExpr
+        return e.value
+    elseif e isa NumExpr
+        return e.value
+    elseif e isa VarExpr
+        n = e.name
+        # Pattern variable bound to something concrete?
+        if _is_pvar_string(n) && haskey(b, n)
+            return _eval_scalar(b[n], b, ctx)
+        end
+        # Query-point index?
+        haskey(ctx.query_point, n) && return ctx.query_point[n]
+        return nothing
+    elseif e isa OpExpr
+        return _eval_op(e, b, ctx)
+    end
+    return nothing
+end
+
+function _eval_op(e::OpExpr, b, ctx)
+    op = e.op
+    args = [_eval_scalar(a, b, ctx) for a in e.args]
+    any(a -> a === nothing, args) && !(op in ("and", "or")) && return nothing
+    if op == "+"
+        return reduce(+, args; init=0)
+    elseif op == "-"
+        length(args) == 1 && return -args[1]
+        return args[1] - reduce(+, args[2:end]; init=0)
+    elseif op == "*"
+        return reduce(*, args; init=1)
+    elseif op == "/"
+        length(args) >= 2 || return nothing
+        return args[1] / args[2]
+    elseif op == "=="
+        length(args) == 2 || return nothing
+        return args[1] == args[2]
+    elseif op == "!="
+        length(args) == 2 || return nothing
+        return args[1] != args[2]
+    elseif op == "<"
+        length(args) == 2 || return nothing
+        return args[1] < args[2]
+    elseif op == "<="
+        length(args) == 2 || return nothing
+        return args[1] <= args[2]
+    elseif op == ">"
+        length(args) == 2 || return nothing
+        return args[1] > args[2]
+    elseif op == ">="
+        length(args) == 2 || return nothing
+        return args[1] >= args[2]
+    elseif op == "and"
+        return all(a -> a === true || (a isa Number && a != 0), args)
+    elseif op == "or"
+        return any(a -> a === true || (a isa Number && a != 0), args)
+    elseif op == "not"
+        length(args) == 1 || return nothing
+        v = args[1]
+        return !(v === true || (v isa Number && v != 0))
+    end
+    return nothing
 end
 
 # ============================================================================

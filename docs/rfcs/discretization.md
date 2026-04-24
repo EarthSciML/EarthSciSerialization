@@ -157,11 +157,11 @@ serializable. A rule object has three fields:
 | Field | Type | Purpose |
 |---|---|---|
 | `pattern` | AST with `$`-prefixed pattern variables | Matches an input expression |
-| `where` | array of guard objects | Optional constraints on pattern variables |
+| `where` | array of guard objects OR an expression-AST predicate | See §5.2.7 below. Array form is the legacy rule-selection-time guard vocabulary (§5.2.4). Object form (an `ExpressionNode`) is a per-query-point predicate: the rule applies only at points where the predicate evaluates true. |
 | `replacement` | AST over the same pattern variables | Inline replacement expression. Mutually exclusive with `use`. |
 | `use` | string — a scheme name from `discretizations.<name>` | Use the named scheme; its `applies_to` is matched as a guard (§7.2.1). Mutually exclusive with `replacement`. |
 | `produces` | array of `{kind, emit|value, ...}` entries | Optional; emits additional equations or ghost variables (§9.4). A rule with `produces` alone (no `replacement`/`use`) is legal and means "leave the matched subtree alone and emit these side equations". |
-| `region` | string (optional) | Informational tag naming the region of the grid this rule targets (`"interior"`, `"xmin_boundary"`, `"panel_seam"`, author-defined). The tag is advisory: it does NOT participate in matching (no runtime check), it is NOT schema-validated against a closed set, and bindings MAY use it for authoring UX (grouping rules in an editor) but MUST NOT let it affect rewrite output. Two rules that differ only in `region` tag are otherwise equivalent. This preserves the v1 authoring idiom (see §5.2.6 example) without adding a normative region-dispatch mechanism. |
+| `region` | string OR object (optional) | See §5.2.7 below. String form is the legacy advisory tag (no runtime effect). Object form is a normative spatial-scope predicate: the rule applies only at points in scope. Variants: `{kind:"boundary",side:...}`, `{kind:"panel_boundary",panel:int,side:...}`, `{kind:"mask_field",field:...}`, `{kind:"index_range",axis:...,lo:int,hi:int}`. |
 
 Pattern variables are strings prefixed by `$`: `"$u"`, `"$x"`. The sub-language
 is a closed AST shape, not a DSL string; every binding can load it with its
@@ -313,6 +313,94 @@ After matching (with `$u := "T"`, `$x := "x"`), the engine invokes the
 
 After canonicalization (§5.4), every binding emits the **byte-identical** JSON
 above. This is the byte-for-byte reference any binding must meet.
+
+#### 5.2.7 `region` (object form) and `where` (expression form) — per-query-point scoping (resolves esm-b1n)
+
+Several BC and regional-physics rules need to apply only at a **subset**
+of the grid — a boundary edge, a set of seam cells, a mask-field-defined
+region, or an index range. v0.2's `region` string (advisory only) and
+`where` array (rule-selection-time guards only) cannot express these
+scopes. v0.3 adds **two optional normative forms** on the Rule object,
+both of which scope rule application **per query point**:
+
+- **`region` object form.** A structural scoping predicate. Discriminated
+  by a `kind` tag:
+  | `kind` | Required fields | Semantics |
+  |---|---|---|
+  | `"boundary"` | `side` (axis-side name; e.g. `"xmin"`, `"north"`) | Rule applies only at query points on the named boundary of the enclosing grid. |
+  | `"panel_boundary"` | `panel` (int), `side` | Cubed-sphere-only: rule applies only at (panel, side) edge points. Undefined on other grid families — bindings MUST emit `E_REGION_GRID_MISMATCH` at rewrite time if applied to a non-cubed-sphere grid. |
+  | `"mask_field"` | `field` (name) | Rule applies only at query points where the named field (a `data_loaders` entry or a boolean-typed variable) evaluates truthy. Indexed per query point. |
+  | `"index_range"` | `axis`, `lo`, `hi` (int, inclusive) | Rule applies only where the named canonical index (`i`, `j`, `k`, …) lies in `[lo, hi]`. |
+
+- **`where` expression form.** A per-point boolean predicate authored as
+  an `ExpressionNode` over canonical index names (`i`, `j`, `k`), the
+  `$target` components, and any pattern-variable bindings produced by
+  `pattern`. Ops are drawn from §4's expression vocabulary — comparison,
+  `and`/`or`/`not`, arithmetic, `index`. Rule fires at a given query
+  point iff the expression evaluates to true there (non-zero / non-false).
+
+**Shape discrimination.** Loaders discriminate the two `where` forms by
+JSON type: an ARRAY is a guard list (§5.2.4 legacy semantics, applied
+once per rule match); an OBJECT is an expression predicate (applied per
+query point). Similarly, `region` as a STRING is the legacy advisory
+tag; `region` as an OBJECT is the new normative scope. Mixing is legal:
+a rule may carry guards (array `where`), a structural scope (object
+`region`), and a fine-grained predicate (the expression form of `where`
+is authored under a separate field; see below).
+
+**`where` overloading — authoring cost.** Because `where: [...]` and
+`where: {...}` are structurally distinct but share the same field name,
+a rule MUST NOT author both a guard list AND an expression predicate in
+the same `where`. When a rule needs both, the guard list remains in
+`where` and the expression predicate moves into `region.kind = "boundary"`
+or a synthetic `mask_field` — or, equivalently, the author gates rule
+firing with both a guard and a predicate by writing TWO rules.
+
+**Fall-through.** A rule whose `region` / `where`-point predicate
+evaluates false at the current query point does NOT fire at that
+point; the engine falls through to the **next** matching rule in
+declaration order (§5.2.5). Fall-through preserves the v0.2
+rule-ordering contract: a region-scoped rule listed first can
+shadow a general rule listed second only at points inside its
+scope.
+
+**Evaluation timing (normative).** Predicate evaluation is a
+**rewrite-time** concern, not a load-time or a run-time concern.
+Specifically:
+
+1. When a rule's `pattern` matches an AST subtree and its
+   `where`-array guards pass, the engine enters the scope-check
+   step.
+2. The engine determines the **query point** for the match. For
+   rules firing inside an equation parameterized by `$target`
+   (cartesian: `[i, j, k, …]`; unstructured: `c` / `e` / `v`;
+   cubed sphere: `[p, i, j]`), the query point is `$target`. For
+   rules firing outside a `$target` context (coupling-rule rewrites,
+   top-level expressions), the engine MUST emit
+   `E_SCOPE_OUTSIDE_TARGET` rather than silently widen scope.
+3. If `region` is absent or a string → scope check passes.
+4. If `region` is an object → evaluate the per-kind predicate against
+   the query point; pass iff the predicate is true.
+5. If `where` is an expression → evaluate against the query point
+   with pattern-variable bindings in scope; pass iff the expression
+   canonicalizes to a truthy constant (non-zero integer / float,
+   non-empty string, or `true`).
+6. If steps 4–5 pass, the rule fires as usual. Otherwise the engine
+   falls through.
+
+**Partial binding support.** Bindings that do not yet implement a
+per-point evaluator MUST still **parse** both forms (load-time round-
+trip), and MUST treat any rule carrying an object `region` or an
+expression `where` as **disabled** (conservative fall-through) until
+the evaluator lands. A load-time warning `W_UNEVAL_SCOPE` is
+recommended so authors know their rule is inert in that binding.
+
+**Conformance rollout.** The MVP for v0.3 requires Julia and Rust
+to evaluate `region.boundary`, `region.index_range`, and the
+expression form of `where`. `region.panel_boundary` and
+`region.mask_field` are deferred to v0.3.1 because they require
+grid-family integration (cubed_sphere seam metadata; loader field
+access) that is out of scope for v0.3.0.
 
 ### 5.3 `regrid` op (new)
 

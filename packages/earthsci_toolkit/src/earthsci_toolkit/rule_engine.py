@@ -50,13 +50,27 @@ class Guard:
 
 @dataclass
 class Rule:
-    """A rewrite rule (RFC §5.2)."""
+    """A rewrite rule (RFC §5.2, §5.2.7).
+
+    ``region`` may be ``None``, a legacy advisory ``str``, or a ``dict``
+    representing an object scope variant (``{kind: "boundary"/"panel_boundary"
+    /"mask_field"/"index_range", ...}``). ``where_expr`` is an optional
+    per-query-point predicate ``Expr`` — mutually exclusive with the
+    ``where`` guard list at the author level, structurally discriminated
+    by JSON shape at parse time.
+
+    The Python binding parses both new forms (round-trip) but does not
+    evaluate them; rules carrying an object ``region`` or a ``where_expr``
+    are treated as disabled (conservative fall-through) by the rewrite
+    engine in this binding — equivalent to RFC §5.2.7's W_UNEVAL_SCOPE.
+    """
 
     name: str
     pattern: Expr
     replacement: Expr
     where: List[Guard] = field(default_factory=list)
-    region: Optional[str] = None
+    region: Optional[Any] = None
+    where_expr: Optional[Expr] = None
 
 
 @dataclass
@@ -411,6 +425,11 @@ def _rewrite_pass(
         m2 = check_guards(rule.where, m, ctx)
         if m2 is None:
             continue
+        # RFC §5.2.7: rules carrying an object `region` or a `where_expr`
+        # are disabled in the Python binding (no per-query-point evaluator
+        # implemented). Conservative fall-through: skip to the next rule.
+        if isinstance(rule.region, Mapping) or rule.where_expr is not None:
+            continue
         new_expr = apply_bindings(rule.replacement, m2)
         state["changed"] = True
         return new_expr
@@ -491,11 +510,50 @@ def parse_rule(obj: Mapping[str, Any], name: Optional[str] = None) -> Rule:
         )
     repl = _parse_expr(obj["replacement"])
     where_raw = obj.get("where")
-    guards = [] if where_raw is None else [_parse_guard(g) for g in where_raw]
+    guards: List[Guard] = []
+    where_expr: Optional[Expr] = None
+    if where_raw is not None:
+        if isinstance(where_raw, list):
+            guards = [_parse_guard(g) for g in where_raw]
+        elif isinstance(where_raw, Mapping):
+            if "op" not in where_raw:
+                raise RuleEngineError(
+                    "E_RULE_PARSE",
+                    f"rule {name}: 'where' object must be an expression node with an 'op' field",
+                )
+            where_expr = _parse_expr(where_raw)
+        else:
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: 'where' must be an array of guards or an expression object",
+            )
     region_raw = obj.get("region")
-    region = None if region_raw is None else str(region_raw)
+    region: Optional[Any]
+    if region_raw is None:
+        region = None
+    elif isinstance(region_raw, str):
+        region = region_raw  # legacy advisory tag
+    elif isinstance(region_raw, Mapping):
+        kind = region_raw.get("kind")
+        if kind not in ("boundary", "panel_boundary", "mask_field", "index_range"):
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: unknown region.kind `{kind}` "
+                f"(closed set: boundary, panel_boundary, mask_field, index_range)",
+            )
+        region = dict(region_raw)
+    else:
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {name}: 'region' must be a string (legacy) or object (scope)",
+        )
     return Rule(
-        name=name, pattern=pat, replacement=repl, where=guards, region=region
+        name=name,
+        pattern=pat,
+        replacement=repl,
+        where=guards,
+        region=region,
+        where_expr=where_expr,
     )
 
 

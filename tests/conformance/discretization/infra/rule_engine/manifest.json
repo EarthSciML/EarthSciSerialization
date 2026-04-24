@@ -8,9 +8,13 @@
     {"id": "not_converged",      "path": "not_converged.json",      "tags": ["not_converged", "max_passes"]},
     {"id": "nonlinear_match",    "path": "nonlinear_match.json",    "tags": ["nonlinear"]},
     {"id": "sibling_field",      "path": "sibling_field.json",      "tags": ["sibling_field"]},
-    {"id": "guard_var_has_grid", "path": "guard_var_has_grid.json", "tags": ["guard", "var_has_grid"]}
+    {"id": "guard_var_has_grid", "path": "guard_var_has_grid.json", "tags": ["guard", "var_has_grid"]},
+    {"id": "region_index_range", "path": "region_index_range.json", "tags": ["region", "index_range"]},
+    {"id": "region_index_range_fall_through", "path": "region_index_range_fall_through.json", "tags": ["region", "index_range", "fall_through"]},
+    {"id": "region_boundary", "path": "region_boundary.json", "tags": ["region", "boundary"]},
+    {"id": "where_expr_predicate", "path": "where_expr_predicate.json", "tags": ["where_expr", "per_point"]}
   ],
   "bindings_required": ["julia", "rust"],
   "bindings_optional": ["python", "go", "typescript"],
-  "note": "Julia and Rust are the only bindings required to produce rule-engine output for Step 1 (RFC §13.1). Other bindings may round-trip the fixture's rule/input JSON without executing, or stub the rewrite step."
+  "note": "Julia and Rust are the only bindings required to produce rule-engine output for Step 1 (RFC §13.1). Other bindings may round-trip the fixture's rule/input JSON without executing, or stub the rewrite step. Fixtures tagged with 'region' or 'where_expr' exercise RFC §5.2.7 per-query-point scoping; Julia and Rust must evaluate them against the fixture's context.query_point, while parse-only bindings MUST still load the fixture without error."
 }

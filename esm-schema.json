@@ -2254,6 +2254,155 @@
       ]
     },
 
+    "RuleGuard": {
+      "type": "object",
+      "description": "A rule-selection-time guard constraining a pattern-variable binding. Drawn from the §5.2.4 closed vocabulary; unknown guard names MUST be rejected at parse time.",
+      "required": ["guard"],
+      "additionalProperties": true,
+      "properties": {
+        "guard": {
+          "type": "string",
+          "description": "Guard name (one of the §5.2.4 closed set: 'dim_is_spatial_dim_of', 'var_location_is', 'var_has_grid', 'dim_is_periodic', 'dim_is_nonuniform', 'var_shape_rank', 'var_is_spatial_dim_of' legacy alias).",
+          "enum": [
+            "dim_is_spatial_dim_of",
+            "var_is_spatial_dim_of",
+            "var_location_is",
+            "var_has_grid",
+            "dim_is_periodic",
+            "dim_is_nonuniform",
+            "var_shape_rank"
+          ]
+        },
+        "pvar": {
+          "type": "string",
+          "description": "Pattern variable the guard constrains (prefixed '$')."
+        }
+      }
+    },
+
+    "RuleRegion": {
+      "description": "Spatial scope of a rule (discretization RFC §7.2). When absent the rule applies everywhere the pattern matches. When a string, it is an informational/advisory tag with no runtime effect (legacy form from v0.2 §5.2). When an object, it is a normative scoping predicate evaluated per query point; the rule applies ONLY at points satisfying the predicate, and falls through to the next matching rule otherwise.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Legacy advisory tag. No runtime effect — authors may group rules by region in editors but the rule engine does not consult it."
+        },
+        {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["boundary", "panel_boundary", "mask_field", "index_range"],
+              "description": "Scope variant tag."
+            },
+            "side": {
+              "type": "string",
+              "description": "For kind='boundary' and kind='panel_boundary': the boundary side (e.g. 'xmin', 'xmax', 'west', 'east', 'south', 'north', 'top', 'bottom'). Site-specific sides (seams) are permitted when declared by the grid.",
+              "enum": [
+                "xmin", "xmax", "ymin", "ymax", "zmin", "zmax",
+                "tmin", "tmax",
+                "west", "east", "south", "north", "top", "bottom",
+                "panel_seam", "mesh_boundary"
+              ]
+            },
+            "panel": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "For kind='panel_boundary' (cubed_sphere): panel index. Combined with 'side' to identify a specific panel edge."
+            },
+            "field": {
+              "type": "string",
+              "description": "For kind='mask_field': name of a data_loaders entry OR a boolean-typed model variable whose per-point value gates rule application (truthy ⇒ rule applies)."
+            },
+            "axis": {
+              "type": "string",
+              "description": "For kind='index_range': canonical grid-family index name (cartesian: 'i', 'j', 'k', 'l', 'm'; cubed_sphere: 'i', 'j'; unstructured: 'c', 'e', 'v' or a reduction 'k_bound' name)."
+            },
+            "lo": {
+              "type": "integer",
+              "description": "For kind='index_range': inclusive lower bound on the axis index."
+            },
+            "hi": {
+              "type": "integer",
+              "description": "For kind='index_range': inclusive upper bound on the axis index."
+            }
+          },
+          "allOf": [
+            {
+              "if":   { "properties": { "kind": { "const": "boundary" } }, "required": ["kind"] },
+              "then": { "required": ["side"] }
+            },
+            {
+              "if":   { "properties": { "kind": { "const": "panel_boundary" } }, "required": ["kind"] },
+              "then": { "required": ["panel", "side"] }
+            },
+            {
+              "if":   { "properties": { "kind": { "const": "mask_field" } }, "required": ["kind"] },
+              "then": { "required": ["field"] }
+            },
+            {
+              "if":   { "properties": { "kind": { "const": "index_range" } }, "required": ["kind"] },
+              "then": { "required": ["axis", "lo", "hi"] }
+            }
+          ]
+        }
+      ]
+    },
+
+    "Rule": {
+      "type": "object",
+      "description": "A single rewrite rule (discretization RFC §5.2). Matches an AST pattern with pattern variables, optionally guarded, and replaces the match with an inline AST ('replacement') or a named scheme ('use'). Region-of-applicability and per-point predicates are optional.",
+      "required": ["pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Rule identifier. When rules are authored as an object keyed by name, the name is the key; when rules are authored as an array, 'name' is a required field of each entry."
+        },
+        "pattern": {
+          "$ref": "#/$defs/PatternNode",
+          "description": "Match pattern — an AST with '$'-prefixed pattern variables (§5.2). Depth and shape are enforced by the rule engine, not the schema."
+        },
+        "where": {
+          "description": "Rule-selection-time predicate. Accepts either (a) an ARRAY of §5.2.4 guard objects constraining pattern-variable bindings before the rule fires, or (b) an OBJECT expression-AST predicate evaluated per query point (§7.2; reuses §4 expression ops — e.g. {\"op\":\"==\",\"args\":[\"i\",0]}) whose value is coerced to bool. When an expression predicate is supplied, the rule applies ONLY at points where it evaluates true; the engine falls through to the next matching rule otherwise. Bindings that do not implement the per-point evaluator treat an object 'where' as a load-time parse success plus a runtime no-op that disables the rule (conservative fall-through).",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/RuleGuard" }
+            },
+            { "$ref": "#/$defs/ExpressionNode" }
+          ]
+        },
+        "region": {
+          "$ref": "#/$defs/RuleRegion"
+        },
+        "replacement": {
+          "$ref": "#/$defs/PatternNode",
+          "description": "Inline replacement AST over the same pattern variables. Mutually exclusive with 'use'."
+        },
+        "use": {
+          "type": "string",
+          "description": "Name of a scheme from 'discretizations.<name>' to invoke for expansion (§7.2.1). Mutually exclusive with 'replacement'."
+        },
+        "produces": {
+          "type": "array",
+          "description": "Optional side-equation emission entries (§9.4). A rule with 'produces' alone (no 'replacement'/'use') is legal.",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "description": { "type": "string" }
+      },
+      "oneOf": [
+        { "required": ["replacement"] },
+        { "required": ["use"] },
+        { "required": ["produces"] }
+      ]
+    },
+
     "NeighborSelector": {
       "type": "object",
       "description": "Discretization stencil neighbor selector (RFC §4, §7.2). The selector.kind tag discriminates between cartesian, panel, indirect, and reduction selectors. Additional per-kind fields are permitted so that pattern variables such as $x can appear in e.g. axis/offset positions.",

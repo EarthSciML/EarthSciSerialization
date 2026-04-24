@@ -17,7 +17,16 @@ using JSON3
             for (k, v) in pairs(cx[:grids])
                 entry = Dict{String,Any}()
                 for (k2, v2) in pairs(v)
-                    entry[String(k2)] = [String(s) for s in v2]
+                    key = String(k2)
+                    if key == "dim_bounds"
+                        bounds = Dict{String,Any}()
+                        for (dk, dv) in pairs(v2)
+                            bounds[String(dk)] = [Int(x) for x in dv]
+                        end
+                        entry[key] = bounds
+                    else
+                        entry[key] = [String(s) for s in v2]
+                    end
                 end
                 grids[String(k)] = entry
             end
@@ -32,7 +41,14 @@ using JSON3
                 vars[String(k)] = entry
             end
         end
-        return RuleContext(grids, vars)
+        qp = Dict{String,Int}()
+        if haskey(cx, :query_point)
+            for (k, v) in pairs(cx[:query_point])
+                qp[String(k)] = Int(v)
+            end
+        end
+        grid_name = haskey(cx, :grid_name) ? String(cx[:grid_name]) : nothing
+        return RuleContext(grids, vars, qp, grid_name)
     end
 
     for fx in manifest[:fixtures]

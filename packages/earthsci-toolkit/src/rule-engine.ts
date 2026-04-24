@@ -19,7 +19,7 @@
 
 import { canonicalJson } from './canonicalize.js'
 import type { Expr } from './expression.js'
-import { isNumericLiteral, type NumericLiteral } from './numeric-literal.js'
+import { isIntLit, isNumericLiteral, numericValue, type NumericLiteral } from './numeric-literal.js'
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -62,12 +62,39 @@ export interface Guard {
   params: Record<string, unknown>
 }
 
+/**
+ * Object-form `region` scope per RFC §5.2.7. Discriminated by `kind`.
+ */
+export type RuleRegionScope =
+  | { kind: 'boundary'; side: string }
+  | { kind: 'panel_boundary'; panel: number; side: string }
+  | { kind: 'mask_field'; field: string }
+  | { kind: 'index_range'; axis: string; lo: number; hi: number }
+
 export interface Rule {
   name: string
   pattern: Expr
   where: Guard[]
   replacement: Expr
+  /**
+   * Legacy advisory tag (string) per v0.2. No runtime effect. Mutually
+   * exclusive with `regionScope` at parse time — JSON shape picks which.
+   */
   region?: string
+  /**
+   * Object-form spatial scope per RFC §5.2.7. When present the rule
+   * applies only at query points inside the scope. The TypeScript
+   * binding parses but does not evaluate these; rules carrying
+   * `regionScope` or `whereExpr` are treated as disabled (conservative
+   * fall-through) by the rewrite engine — equivalent to W_UNEVAL_SCOPE.
+   */
+  regionScope?: RuleRegionScope
+  /**
+   * Per-query-point boolean predicate AST per RFC §5.2.7. Mutually
+   * exclusive with the guard-list `where` at author level; structurally
+   * discriminated by JSON shape at parse time.
+   */
+  whereExpr?: Expr
 }
 
 export interface GridMeta {
@@ -454,6 +481,10 @@ function tryFireAt(expr: Expr, rules: Rule[], ctx: RuleContext): Expr | null {
     if (m === null) continue
     const m2 = checkGuards(rule.where, m, ctx)
     if (m2 === null) continue
+    // RFC §5.2.7: rules carrying an object region or where-expression
+    // are disabled in the TS binding (no per-query-point evaluator).
+    // Conservative fall-through.
+    if (rule.regionScope !== undefined || rule.whereExpr !== undefined) continue
     return applyBindings(rule.replacement, m2)
   }
   return null
@@ -512,17 +543,90 @@ function parseRuleNamed(name: string, v: unknown): Rule {
   const pattern = parseExpr(obj.pattern)
   const replacement = parseExpr(obj.replacement)
   let where: Guard[] = []
+  let whereExpr: Expr | undefined
   if ('where' in obj && obj.where !== undefined) {
-    if (!Array.isArray(obj.where)) {
+    const w = obj.where
+    if (Array.isArray(w)) {
+      where = w.map(parseGuard)
+    } else if (typeof w === 'object' && w !== null) {
+      const wObj = w as Record<string, unknown>
+      if (typeof wObj.op !== 'string') {
+        throw new RuleEngineError(
+          E_RULE_PARSE,
+          `rule \`${name}\`: \`where\` object must be an expression node with an \`op\` field`,
+        )
+      }
+      whereExpr = parseExpr(w)
+    } else {
       throw new RuleEngineError(
         E_RULE_PARSE,
-        `rule \`${name}\`: \`where\` must be an array`,
+        `rule \`${name}\`: \`where\` must be an array of guards or an expression object`,
       )
     }
-    where = obj.where.map(parseGuard)
   }
-  const region = typeof obj.region === 'string' ? obj.region : undefined
-  return { name, pattern, where, replacement, region }
+  let region: string | undefined
+  let regionScope: RuleRegionScope | undefined
+  if ('region' in obj && obj.region !== undefined) {
+    const r = obj.region
+    if (typeof r === 'string') {
+      region = r
+    } else if (typeof r === 'object' && r !== null) {
+      regionScope = parseRegionScope(name, r as Record<string, unknown>)
+    } else {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`region\` must be a string (legacy) or object (scope)`,
+      )
+    }
+  }
+  return { name, pattern, where, replacement, region, regionScope, whereExpr }
+}
+
+function parseRegionScope(
+  ruleName: string,
+  obj: Record<string, unknown>,
+): RuleRegionScope {
+  const kind = obj.kind
+  if (typeof kind !== 'string') {
+    throw new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: region object must carry a string \`kind\` field`,
+    )
+  }
+  const missing = (f: string) =>
+    new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: region.${kind} requires \`${f}\``,
+    )
+  const str = (f: string): string => {
+    const v = obj[f]
+    if (typeof v !== 'string') throw missing(f)
+    return v
+  }
+  const int = (f: string): number => {
+    const v = obj[f]
+    if (typeof v === 'number' && Number.isInteger(v)) return v
+    if (isIntLit(v)) {
+      const n = numericValue(v)
+      if (n !== undefined && Number.isInteger(n)) return n
+    }
+    throw missing(f)
+  }
+  switch (kind) {
+    case 'boundary':
+      return { kind, side: str('side') }
+    case 'panel_boundary':
+      return { kind, panel: int('panel'), side: str('side') }
+    case 'mask_field':
+      return { kind, field: str('field') }
+    case 'index_range':
+      return { kind, axis: str('axis'), lo: int('lo'), hi: int('hi') }
+    default:
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: unknown region.kind \`${kind}\` (closed set: boundary, panel_boundary, mask_field, index_range)`,
+      )
+  }
 }
 
 function parseGuard(v: unknown): Guard {

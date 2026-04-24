@@ -44,12 +44,37 @@ type Guard struct {
 
 // Rule is a rewrite rule (§5.2). MVP supports the inline `replacement`
 // form only.
+//
+// Region carries the legacy advisory string when the rule author wrote a
+// string-form `region` (per v0.2). RegionScope carries a parsed object-form
+// scope (RFC §5.2.7) — mutually exclusive. WhereExpr carries an optional
+// per-query-point boolean predicate AST (RFC §5.2.7); structurally
+// distinguished from the guard-list Where at parse time by JSON shape.
+//
+// The Go binding parses both new forms (round-trip) but does not evaluate
+// them; rules carrying a RegionScope or WhereExpr are treated as disabled
+// (conservative fall-through) by the rewrite engine — equivalent to
+// RFC §5.2.7's W_UNEVAL_SCOPE.
 type Rule struct {
 	Name        string
 	Pattern     Expression
 	Where       []Guard
 	Replacement Expression
 	Region      string
+	RegionScope *RuleRegionScope
+	WhereExpr   Expression
+}
+
+// RuleRegionScope is the parsed object-form `region` per RFC §5.2.7.
+// Only one of the tagged fields is populated for a given Kind.
+type RuleRegionScope struct {
+	Kind  string // "boundary" | "panel_boundary" | "mask_field" | "index_range"
+	Side  string // boundary, panel_boundary
+	Panel int    // panel_boundary
+	Field string // mask_field
+	Axis  string // index_range
+	Lo    int    // index_range
+	Hi    int    // index_range
 }
 
 // GridMeta is the subset of grid metadata consulted by the closed-set
@@ -576,6 +601,12 @@ func rewritePass(expr Expression, rules []Rule, ctx RuleContext, changed *bool) 
 		if !ok {
 			continue
 		}
+		// RFC §5.2.7: rules carrying an object region or a where-expression
+		// predicate are disabled in the Go binding (no per-query-point
+		// evaluator implemented). Conservative fall-through.
+		if r.RegionScope != nil || r.WhereExpr != nil {
+			continue
+		}
 		newExpr, err := ApplyBindings(r.Replacement, m2)
 		if err != nil {
 			return nil, err
@@ -703,25 +734,48 @@ func parseRuleObject(name string, obj map[string]interface{}) (Rule, error) {
 		return Rule{}, err
 	}
 	var guards []Guard
+	var whereExpr Expression
 	if wraw, has := obj["where"]; has {
-		warr, ok := wraw.([]interface{})
-		if !ok {
-			return Rule{}, newRuleErr("E_RULE_PARSE",
-				fmt.Sprintf("rule `%s`: `where` must be an array", name))
-		}
-		guards = make([]Guard, 0, len(warr))
-		for _, gv := range warr {
-			g, err := parseGuardValue(gv)
+		switch w := wraw.(type) {
+		case []interface{}:
+			guards = make([]Guard, 0, len(w))
+			for _, gv := range w {
+				g, err := parseGuardValue(gv)
+				if err != nil {
+					return Rule{}, err
+				}
+				guards = append(guards, g)
+			}
+		case map[string]interface{}:
+			if _, has := w["op"]; !has {
+				return Rule{}, newRuleErr("E_RULE_PARSE",
+					fmt.Sprintf("rule `%s`: `where` object must be an expression node with an `op` field", name))
+			}
+			ex, err := parseExprValue(w)
 			if err != nil {
 				return Rule{}, err
 			}
-			guards = append(guards, g)
+			whereExpr = ex
+		default:
+			return Rule{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `where` must be an array of guards or an expression object", name))
 		}
 	}
 	var region string
+	var regionScope *RuleRegionScope
 	if rraw, has := obj["region"]; has {
-		if rs, ok := rraw.(string); ok {
-			region = rs
+		switch r := rraw.(type) {
+		case string:
+			region = r
+		case map[string]interface{}:
+			scope, err := parseRegionScope(name, r)
+			if err != nil {
+				return Rule{}, err
+			}
+			regionScope = scope
+		default:
+			return Rule{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `region` must be a string (legacy) or object (scope)", name))
 		}
 	}
 	return Rule{
@@ -730,7 +784,105 @@ func parseRuleObject(name string, obj map[string]interface{}) (Rule, error) {
 		Where:       guards,
 		Replacement: repl,
 		Region:      region,
+		RegionScope: regionScope,
+		WhereExpr:   whereExpr,
 	}, nil
+}
+
+func parseRegionScope(ruleName string, obj map[string]interface{}) (*RuleRegionScope, error) {
+	kindV, has := obj["kind"]
+	if !has {
+		return nil, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: region object must carry a `kind` field", ruleName))
+	}
+	kind, ok := kindV.(string)
+	if !ok {
+		return nil, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: region.kind must be a string", ruleName))
+	}
+	scope := &RuleRegionScope{Kind: kind}
+	missing := func(f string) error {
+		return newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: region.%s requires `%s`", ruleName, kind, f))
+	}
+	strField := func(f string) (string, error) {
+		v, has := obj[f]
+		if !has {
+			return "", missing(f)
+		}
+		s, ok := v.(string)
+		if !ok {
+			return "", missing(f)
+		}
+		return s, nil
+	}
+	intField := func(f string) (int, error) {
+		v, has := obj[f]
+		if !has {
+			return 0, missing(f)
+		}
+		switch x := v.(type) {
+		case float64:
+			return int(x), nil
+		case int:
+			return x, nil
+		case int64:
+			return int(x), nil
+		case json.Number:
+			n, err := x.Int64()
+			if err != nil {
+				return 0, missing(f)
+			}
+			return int(n), nil
+		default:
+			return 0, missing(f)
+		}
+	}
+	switch kind {
+	case "boundary":
+		side, err := strField("side")
+		if err != nil {
+			return nil, err
+		}
+		scope.Side = side
+	case "panel_boundary":
+		panel, err := intField("panel")
+		if err != nil {
+			return nil, err
+		}
+		side, err := strField("side")
+		if err != nil {
+			return nil, err
+		}
+		scope.Panel = panel
+		scope.Side = side
+	case "mask_field":
+		fld, err := strField("field")
+		if err != nil {
+			return nil, err
+		}
+		scope.Field = fld
+	case "index_range":
+		axis, err := strField("axis")
+		if err != nil {
+			return nil, err
+		}
+		lo, err := intField("lo")
+		if err != nil {
+			return nil, err
+		}
+		hi, err := intField("hi")
+		if err != nil {
+			return nil, err
+		}
+		scope.Axis = axis
+		scope.Lo = lo
+		scope.Hi = hi
+	default:
+		return nil, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: unknown region.kind `%s` (closed set: boundary, panel_boundary, mask_field, index_range)", ruleName, kind))
+	}
+	return scope, nil
 }
 
 func parseGuardValue(v interface{}) (Guard, error) {
