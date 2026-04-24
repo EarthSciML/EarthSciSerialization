@@ -1,0 +1,90 @@
+{
+  "esm": "0.2.0",
+  "metadata": {
+    "name": "CrossMetricCartesianToy",
+    "description": "Cross-metric composite stencil rule (RFC §7.4): 2D full-covariant Laplacian expressed as a tensor-product composite on a uniform cartesian grid. The cartesian case is degenerate — g_xixi = g_etaeta = 1 and g_xieta = 0 — which makes the composite reduce structurally to the standard 5-point Laplacian. This fixture exercises parse + round-trip of the composite structure itself; bindings need not execute the expansion.",
+    "authors": ["esm-vwo"],
+    "created": "2026-04-24T00:00:00Z",
+    "tags": ["discretization", "cartesian", "cross-metric", "laplacian", "composite"]
+  },
+  "models": {
+    "Empty": {
+      "variables": {
+        "u": { "type": "state", "units": "1", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": 0.0
+        }
+      ]
+    }
+  },
+  "discretizations": {
+    "d2_dxi2_uniform": {
+      "applies_to": { "op": "d2", "args": ["$u"], "dim": "xi" },
+      "grid_family": "cartesian",
+      "combine": "+",
+      "accuracy": "O(dxi^2)",
+      "stencil": [
+        {
+          "selector": { "kind": "cartesian", "axis": "xi", "offset": -1 },
+          "coeff": { "op": "/", "args": [1, { "op": "*", "args": ["dxi", "dxi"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "xi", "offset": 0 },
+          "coeff": { "op": "/", "args": [-2, { "op": "*", "args": ["dxi", "dxi"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "xi", "offset": 1 },
+          "coeff": { "op": "/", "args": [1, { "op": "*", "args": ["dxi", "dxi"] }] }
+        }
+      ],
+      "description": "3-point centered O(dxi^2) second derivative along xi."
+    },
+    "d2_deta2_uniform": {
+      "applies_to": { "op": "d2", "args": ["$u"], "dim": "eta" },
+      "grid_family": "cartesian",
+      "combine": "+",
+      "accuracy": "O(deta^2)",
+      "stencil": [
+        {
+          "selector": { "kind": "cartesian", "axis": "eta", "offset": -1 },
+          "coeff": { "op": "/", "args": [1, { "op": "*", "args": ["deta", "deta"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "eta", "offset": 0 },
+          "coeff": { "op": "/", "args": [-2, { "op": "*", "args": ["deta", "deta"] }] }
+        },
+        {
+          "selector": { "kind": "cartesian", "axis": "eta", "offset": 1 },
+          "coeff": { "op": "/", "args": [1, { "op": "*", "args": ["deta", "deta"] }] }
+        }
+      ],
+      "description": "3-point centered O(deta^2) second derivative along eta."
+    },
+    "laplacian_full_covariant_toy": {
+      "kind": "cross_metric",
+      "applies_to": { "op": "laplacian", "args": ["$u"] },
+      "grid_family": "cartesian",
+      "combine": "+",
+      "accuracy": "O(h^2)",
+      "axes": ["xi", "eta"],
+      "terms": [
+        {
+          "axis_stencil": "d2_dxi2_uniform",
+          "metric_component": "g_xixi",
+          "sign": 1,
+          "description": "Diagonal term: g^{xi xi} · ∂²/∂ξ² (= 1 · d2_dxi2 on a uniform cartesian grid)."
+        },
+        {
+          "axis_stencil": "d2_deta2_uniform",
+          "metric_component": "g_etaeta",
+          "sign": 1,
+          "description": "Diagonal term: g^{eta eta} · ∂²/∂η² (= 1 · d2_deta2 on a uniform cartesian grid)."
+        }
+      ],
+      "description": "2D full-covariant Laplacian composite on a uniform cartesian grid. The off-diagonal g_xieta term is omitted because g_xieta ≡ 0 on a cartesian grid — in the cubed-sphere setting a third term weighted by 2·g_xieta · ∂²/∂ξ∂η would appear here; see docs/rfcs/discretization.md §7.4 for the worked curvilinear example."
+    }
+  }
+}
