@@ -2261,6 +2261,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         // Test the display output

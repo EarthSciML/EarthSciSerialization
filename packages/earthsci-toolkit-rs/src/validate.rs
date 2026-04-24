@@ -1755,6 +1755,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -1839,6 +1840,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -1950,6 +1952,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -1997,6 +2000,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -2077,6 +2081,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -2213,6 +2218,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -2388,6 +2394,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -2501,6 +2508,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -2613,6 +2621,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -2714,6 +2723,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = validate(&esm_file);
@@ -2767,6 +2777,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         // JSON that should fail schema validation (has invalid variable type)

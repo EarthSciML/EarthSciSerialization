@@ -957,6 +957,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let graph = component_graph(&esm_file);
@@ -1036,6 +1037,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let graph = component_graph(&esm_file);
@@ -1101,6 +1103,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         assert!(component_exists(&esm_file, "test_model"));
@@ -1175,6 +1178,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         assert_eq!(
@@ -1343,6 +1347,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let graph = component_graph(&esm_file);

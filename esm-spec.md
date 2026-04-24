@@ -52,6 +52,7 @@ The two exceptions to full specification are **data loaders** and **registered o
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
 | `grids` | | Named discretization grids (cartesian / unstructured / cubed_sphere) — see docs/rfcs/discretization.md §6 |
 | `staggering_rules` | | Named staggering conventions that declare where quantities live on a grid (e.g. MPAS unstructured C-grid) — see docs/rfcs/discretization.md §7.4 |
+| `discretizations` | | Named discretization schemes mapping PDE operators to stencil templates (§7.1) or cross-metric composites for curvilinear covariant operators (§7.4) — see docs/rfcs/discretization.md §7 |
 
 At least one of `models` or `reaction_systems` must be present.
 

@@ -107,6 +107,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = save(&esm_file);
@@ -187,6 +188,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = save(&esm_file);
@@ -227,6 +229,7 @@ mod tests {
             interfaces: None,
             grids: None,
             staggering_rules: None,
+            discretizations: None,
         };
 
         let result = save_compact(&esm_file);

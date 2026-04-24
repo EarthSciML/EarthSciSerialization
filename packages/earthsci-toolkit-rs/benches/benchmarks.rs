@@ -116,6 +116,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         domains: None,
         interfaces: None,
         grids: None,
+        discretizations: None,
         registered_functions: None,
     }
 }

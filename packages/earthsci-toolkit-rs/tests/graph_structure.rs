@@ -104,6 +104,7 @@ fn test_component_graph_generation() {
         domains: None,
         interfaces: None,
         grids: None,
+        discretizations: None,
     };
 
     // Generate component graph
@@ -184,6 +185,7 @@ fn test_component_graph_exports() {
         domains: None,
         interfaces: None,
         grids: None,
+        discretizations: None,
     };
 
     let comp_graph = component_graph(&esm_file);
@@ -447,6 +449,7 @@ fn test_component_existence() {
         domains: None,
         interfaces: None,
         grids: None,
+        discretizations: None,
     };
 
     // Test component existence

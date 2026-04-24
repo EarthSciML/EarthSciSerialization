@@ -2069,6 +2069,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 interfaces: esm_file.interfaces.clone(),
                 grids: esm_file.grids.clone(),
                 staggering_rules: esm_file.staggering_rules.clone(),
+                discretizations: None,
             };
 
             // Extract the specific component
