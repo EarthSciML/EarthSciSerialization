@@ -89,3 +89,22 @@ Shared test fixtures in `tests/` (valid, invalid, conformance) ensure cross-lang
 - Follow conventional commits: `type(scope): description` (e.g. `feat(julia): add expression support`)
 - All implementations must conform to `esm-schema.json` and pass `./scripts/test-conformance.sh`
 - Follow each language's idiomatic style (see [CONTRIBUTING.md](CONTRIBUTING.md#language-specific-standards))
+
+## Authoring ESM files (rules, models, reactions)
+
+**Prefer the AST.** Expression right-hand-sides SHOULD be written using the
+built-in AST ops defined in `esm-spec.md` §4 (e.g. `^`, `*`, `+`, `max`, `min`,
+`ifelse`, `sign`, and the standard trig / exp / log / sqrt family). Do NOT
+introduce a `registered_functions` entry and a `{op: "call", handler_id: ...}`
+node for anything that can be written as a finite closed-form expression —
+`x²` is `{op: "^", args: [x, 2]}`, never `{op: "call", handler_id: "sq", args: [x]}`.
+
+The `call` op is an escape hatch for operations that **cannot** be expressed in
+the AST: tabulated lookups (photolysis rates, 2D deposition tables), implicit
+or iterative solves (equilibrium, Newton), and platform-dependent adapters.
+Every registered function costs a per-binding handler implementation in all
+five languages, so the bar is high.
+
+See `esm-spec.md` §9.2 ("When to use `call` vs. AST ops") for the full decision
+table. When reviewing another agent's or contributor's ESM changes, reject any
+`call` node whose body can be written with existing AST ops.

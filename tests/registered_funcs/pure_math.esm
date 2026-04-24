@@ -2,9 +2,9 @@
   "esm": "0.1.0",
   "metadata": {
     "name": "registered_funcs_pure_math",
-    "description": "Exercises the `call` op + `registered_functions` registry with a trivial pure math handler (squared) invoked from a scalar ODE RHS. Handler body is supplied by the runtime test harness; the fixture only declares the calling contract. All five bindings MUST parse and round-trip this fixture (gt-p3ep).",
+    "description": "NEGATIVE EXAMPLE / MECHANISM TEST — DO NOT EMULATE IN PRODUCTION MODELS. This fixture deliberately registers `sq(x) = x^2` to exercise the `call` op + `registered_functions` round-trip across all five bindings; the handler body is supplied by the runtime test harness and the fixture only declares the calling contract. In real model code, `x^2` MUST be written as {op: \"^\", args: [x, 2]} using the AST, not as a call to a registered function. The `call` op is reserved for operations that cannot be expressed as a finite AST expression — tabulated lookups, iterative solves, and platform adapters. See esm-spec.md §9.2 (\"When to use `call` vs. AST ops\") and CLAUDE.md (\"Authoring ESM files\") for the AST-first authoring policy. All five bindings MUST parse and round-trip this fixture (gt-p3ep, esm-n3t).",
     "authors": ["EarthSciSerialization/polecats/enclave"],
-    "tags": ["registered_functions", "call", "conformance", "gt-p3ep"]
+    "tags": ["registered_functions", "call", "conformance", "mechanism-test", "negative-example", "gt-p3ep", "esm-n3t"]
   },
   "registered_functions": {
     "sq": {
@@ -25,7 +25,7 @@
       },
       "equations": [
         {
-          "_comment": "D(y) = sq(x) — expression embeds a registered-function call.",
+          "_comment": "D(y) = sq(x) — deliberately uses `call` to exercise the round-trip. Real models MUST write this as {op: \"^\", args: [\"x\", 2]} (esm-spec.md §9.2).",
           "lhs": { "op": "D", "args": ["y"], "wrt": "t" },
           "rhs": { "op": "call", "handler_id": "sq", "args": ["x"] }
         }

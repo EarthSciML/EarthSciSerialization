@@ -1932,6 +1932,27 @@ Use a registered function when:
 
 Use an operator (Section 9.1) instead when the callable mutates simulator state (dry deposition applied to a grid, wet scavenging, an advection scheme).
 
+#### When to use `call` vs. AST ops (authoring guidance)
+
+**Prefer the AST.** A `{op: "call", handler_id: ...}` node is an escape hatch for operations that *cannot* be expressed as a finite closed-form composition of the built-in AST ops (Section 4). Before registering a new function and emitting a `call`, check whether the expression can be written directly using existing ops — almost all ordinary math can, and AST form is cross-binding-portable without a per-language handler implementation.
+
+Rule of thumb: **if you can write the math on paper as a finite expression, it belongs in the AST.** A registered function is justified only when the callable's value at a point requires data or control flow that has no finite AST encoding (table lookups, iterative solves, platform adapters).
+
+| Scenario | Preferred AST form | When to use `call` |
+|---|---|---|
+| Polynomial / power / product (`x²`, `x³ − 2x`, `a·b·c`) | `{op: "^", args: [x, 2]}`, nested `*` / `+` / `-` | Never |
+| Clip / clamp / saturate | `{op: "max", ...}`, `{op: "min", ...}`, `ifelse` | Never |
+| Sign-dependent branching (branch on positive/negative argument) | `ifelse` combined with `sign` or comparison ops | Never |
+| Trig, exp, log, sqrt, pow | Corresponding AST op — all are supported (Section 4) | Never |
+| Piecewise defined over a finite set of intervals | Nested `ifelse` over comparisons | Never |
+| **Tabulated lookup** — value comes from data, not a closed-form expression | — | Yes: register the interpolator (e.g. `flux_interp_O3`) |
+| **Implicit / iterative solve** — equilibrium, Newton iteration, root-find | — | Yes: register the solver |
+| **Platform-dependent callable** — GPU kernel, external database / service, parameterization whose body is not symbolic | — | Yes: register the adapter |
+
+Every registered function is a per-binding implementation burden: each of the five language bindings must ship (or accept at runtime) a concrete handler for the `id`. AST expressions, by contrast, evaluate uniformly across bindings without any per-binding code. Authors and code reviewers should reject a `call` node whose body can be written with existing AST ops.
+
+See the `pure_math.esm` conformance fixture under `tests/registered_funcs/` for a deliberate *mechanism* test of the `call` op — it registers `sq(x) = x²` purely to exercise the round-trip path. It is **not** a pattern to emulate in real model code, where `x²` MUST be written as `{op: "^", args: [x, 2]}`.
+
 ```json
 {
   "registered_functions": {

@@ -384,6 +384,34 @@ All packages follow semantic versioning:
 3. Implement in each language package
 4. Update format specification (`esm-spec.md`)
 
+**Adding a registered function (the `call` escape hatch):**
+
+Registered functions are a deliberate escape hatch for operations that cannot be
+written as a finite composition of built-in AST ops. Prefer the AST — every new
+registered function imposes a per-binding implementation burden on all five
+languages. Before filing a PR that adds one, work through this checklist:
+
+1. **Verify the operation is NOT expressible in existing AST ops.** Consult the
+   decision table in `esm-spec.md` §9.2 ("When to use `call` vs. AST ops"). In
+   particular, `x^n`, `max`/`min`, clip/clamp, sign-dependent branching, and the
+   standard trig / exp / log / sqrt family all have native AST ops and MUST be
+   written as such. A `call` is justified only for tabulated lookups,
+   implicit/iterative solves, or platform-dependent adapters.
+2. **Declare the calling contract** in the owning rule's `registered_functions`
+   block: `id`, `signature` (`arg_count`, `arg_types`, `return_type`), `units`,
+   and `arg_units`. Unit hints are strongly encouraged so bindings can dimension-check.
+3. **Provide a reference implementation in at least Julia and Python** so that
+   authors of the remaining three bindings (Rust, Go, TypeScript) have a
+   template for their handler wiring.
+4. **Acknowledge the burden.** Each new registered function means five
+   binding-level handler registrations and five sets of tests. If the
+   functionality could instead be delivered as an AST op or a stateful operator
+   (Section 9.1), that path is almost always preferable.
+5. **Code review gate.** PRs that add a `registered_functions` entry are
+   rejected unless step 1 is explicitly addressed in the PR description — the
+   reviewer MUST confirm the operation cannot be written in existing AST ops
+   before approving.
+
 **Adding a new validation rule:**
 1. Add invalid test cases to `tests/invalid/`
 2. Update `expected_errors.json` with error codes
