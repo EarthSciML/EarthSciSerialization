@@ -4367,6 +4367,26 @@ export interface Species {
 
 ---
 
+### StaggeringRule
+
+**Julia:**
+```julia
+struct StaggeringRule
+```
+
+> StaggeringRule
+
+Top-level staggering-rule declaration (RFC §7.
+
+**Python:**
+```python
+class StaggeringRule:
+```
+
+> Top-level staggering-rule declaration (RFC §7.
+
+---
+
 ### StoichiometryEntry
 
 **Julia:**

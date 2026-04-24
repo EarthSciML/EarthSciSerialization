@@ -89,6 +89,8 @@ Collection of examples showing how to use the ESM Format libraries.
 - [Error Collector](julia-error-collector.md)
 - [Performance Profiler](julia-performance-profiler.md)
 - [Function Existence](julia-function-existence.md)
+- [RFC §7.4 staggering_rules round-trip](julia-rfc--7-4-staggering_rules-round-trip.md)
+- [RFC §7.4 staggering_rules — unstructured-family guard](julia-rfc--7-4-staggering_rules---unstructured-family-guard.md)
 - [mtk2esm: basic ODESystem export](julia-mtk2esm--basic-odesystem-export.md)
 - [mtk2esm: metadata kwargs pass through](julia-mtk2esm--metadata-kwargs-pass-through.md)
 - [mtk2esm: JSON-serializable output](julia-mtk2esm--json-serializable-output.md)
