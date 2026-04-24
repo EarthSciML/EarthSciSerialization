@@ -1193,6 +1193,187 @@ index variable valid inside `arrayop.expr` (per spec §4.3.3), so `"k"` as a
 bare string is permitted and resolves to the arrayop index variable — no
 `regrid` is needed because we remain on grid `mpas_cvmesh`.
 
+### 7.4 Cross-metric stencil composition (resolves esm-vwo)
+
+A class of covariant PDE operators on curvilinear grids — most
+prominently the full covariant Laplacian on a cubed-sphere panel — does
+not fit the single-axis `stencil` shape of §7.1. Their discretization
+requires combining **per-axis 1D stencils** with **metric-tensor
+components** (J, g_xixi, g_etaeta, g_xieta, ginv_*) in a structural way:
+"apply stencil A along ξ and stencil B along η and weight by
+g_xieta(i,j)" as one rule, not as a rule-engine artifact.
+
+v0.2.0 introduces the `CrossMetricStencilRule` as a sibling type of
+`Discretization` under `discretizations.<name>`. The two are
+distinguished by the presence of `terms` (and, optionally, `kind:
+"cross_metric"`) on the composite rule. Existing standard
+`Discretization` entries parse unchanged.
+
+#### 7.4.1 Shape
+
+```jsonc
+{
+  "discretizations": {
+    "<name>": {
+      "kind": "cross_metric",              // optional discriminator
+      "applies_to": { "op": "laplacian", "args": ["$u"] },
+      "grid_family": "cubed_sphere",
+      "axes": ["xi", "eta"],
+      "combine": "+",
+      "terms": [
+        { "axis_stencil": "<scheme>", "metric_component": "<metric>", "sign": 1 },
+        ...
+      ],
+      "boundary_fallback": "<scheme-or-composite>"   // optional
+    }
+  }
+}
+```
+
+**Fields.** `applies_to`, `grid_family`, `accuracy`,
+`requires_locations`, `emits_location`, `target_binding`,
+`free_variables`, `description`, and `reference` mirror §7.1 exactly.
+The composite-specific fields are:
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | | Discriminator literal `"cross_metric"`. Optional (presence of `terms` is sufficient), but recommended for statically-typed bindings. |
+| `axes` | ✓ | Ordered list of coordinate axes the composition spans (e.g. `["xi", "eta"]`). Informational; the order does not affect expansion. |
+| `combine` | | How terms are combined. Defaults to `"+"` — the natural choice for a summed tensor expansion. |
+| `terms` | ✓ | Non-empty array of `CrossMetricTerm` entries. |
+| `boundary_fallback` | | Name of another entry in the same `discretizations` block to apply at edges / corners / cross-panel patches where the full stencil cannot be evaluated (e.g. cubed-sphere corner halos with incomplete metric support). When omitted, boundary handling falls through to the model's `boundary_conditions` (§9). |
+
+Each `CrossMetricTerm` has:
+
+| Field | Required | Description |
+|---|---|---|
+| `axis_stencil` | ✓ | Name of a per-axis `Discretization` (in the same `discretizations` block) whose expansion supplies this term's 1D directional derivative. |
+| `metric_component` | ✓ | Name of a metric array (entry of the grid's `metric_arrays` block — e.g. `J`, `g_xixi`, `g_etaeta`, `g_xieta`, `ginv_xixi`). Resolved point-wise at `$target`. |
+| `sign` | | `+1` or `-1`; defaults to `+1`. |
+| `description` | | Informational. |
+
+#### 7.4.2 Expansion semantics
+
+Given a rule match at `$target`, a `CrossMetricStencilRule` expands to
+
+```
+combine_t( sign_t · metric_component_t($target) · axis_stencil_t(field, axis_t) )
+```
+
+where, for each term `t`:
+
+- `axis_stencil_t` is the expansion of the referenced `Discretization`
+  at `$target` — per §7.2 / §7.2.1 with the outer rule's pattern-variable
+  bindings in scope. The referenced scheme's `applies_to` must agree on
+  the operand variable by name (per §7.2.1); the composite does not
+  rebind.
+- `metric_component_t($target)` is an `index` node into the named
+  metric array, resolved via the grid's `metric_eval` accessor contract
+  (§6.5). Metric arrays of rank > 0 are indexed by `$target`'s
+  components; rank-0 (scalar) metrics are emitted bare.
+- `sign_t` is a multiplicative ±1.
+- `combine_t` is the composite's `combine` (default `+`).
+
+This is a pure AST transform: no runtime array data is touched. The
+composite reduces to a sum of standard §4.3.1 `arrayop` nodes after one
+lowering step, so every `CrossMetricStencilRule` is observationally
+equivalent to the §4 architectural claim that "discretization = AST
+rewrite".
+
+**Pattern-variable flow.** Bindings flow by name from the triggering
+rule into the composite (identical protocol to §7.2.1). Each term's
+`axis_stencil` is invoked with the same inherited bindings; the
+referenced per-axis scheme sees `$u` / `$target` / `$x` just as if it
+had been selected directly.
+
+**Boundary handling.** When a term's `axis_stencil` cannot be
+materialized at `$target` (edge, corner, or cross-panel halo where the
+required neighbors or metric values are undefined), the engine falls
+back to the composite's `boundary_fallback` if set; otherwise the
+model's `boundary_conditions` (§9) are consulted. Authors are expected
+to ensure that at least one of these resolves the gap for every target
+in the domain.
+
+#### 7.4.3 Worked cubed-sphere full-covariant Laplacian
+
+The canonical consumer is
+`fv_laplacian_full_covariant_cubed_sphere` (ESD rule catalog P1, L). On
+a cubed-sphere panel, the full covariant Laplacian of `u` is
+
+```
+Δu = (1/J) · [ ∂ξ( J · g^{ξξ} · ∂ξ u ) + ∂ξ( J · g^{ξη} · ∂η u )
+             + ∂η( J · g^{ηξ} · ∂ξ u ) + ∂η( J · g^{ηη} · ∂η u ) ]
+```
+
+which the conservative-form FV scheme approximates with a 9-point
+composite. In `CrossMetricStencilRule` form (using `ginv_*` for the
+inverse-metric flux coefficients and splitting the Jacobian-weighted
+derivatives into per-axis 2nd-order schemes `d2_dxi2_panel` and
+`d2_deta2_panel` and cross-derivative `d2_dxieta_panel`):
+
+```jsonc
+{
+  "discretizations": {
+    "fv_laplacian_full_covariant_cubed_sphere": {
+      "kind": "cross_metric",
+      "applies_to": { "op": "laplacian", "args": ["$u"] },
+      "grid_family": "cubed_sphere",
+      "axes": ["xi", "eta"],
+      "combine": "+",
+      "terms": [
+        { "axis_stencil": "d2_dxi2_panel",    "metric_component": "ginv_xixi",   "sign": 1 },
+        { "axis_stencil": "d2_deta2_panel",   "metric_component": "ginv_etaeta", "sign": 1 },
+        { "axis_stencil": "d2_dxieta_panel",  "metric_component": "ginv_xieta",  "sign": 1 },
+        { "axis_stencil": "d2_dxieta_panel",  "metric_component": "ginv_etaxi",  "sign": 1 }
+      ],
+      "boundary_fallback": "fv_laplacian_edge_onesided_cubed_sphere",
+      "accuracy": "O(h^2)",
+      "requires_locations": ["cell_center"],
+      "emits_location": "cell_center",
+      "reference": {
+        "notes": "Ronchi, Iacono & Paolucci (1996), J. Comput. Phys. 124, for the gnomonic cubed-sphere metric; the FV-form expansion here follows Putman & Lin (2007)."
+      }
+    }
+  }
+}
+```
+
+At `$target = [p, i, j]`, the expansion produces a 9-point stencil
+whose stencil weights fold `ginv_*(p, i, j)` into the two diagonal
+per-axis stencils and the symmetric cross-derivative stencil. Bindings
+that only need structural round-trip may treat the composite
+opaquely; bindings that execute discretization (ESD et al.) realize
+the expansion above via `metric_eval` and the named per-axis schemes.
+
+**Degenerate cartesian case.** On a uniform cartesian grid
+`g_xieta ≡ 0` and `g_xixi = g_etaeta = 1`, so the composite reduces
+to the standard 5-point Laplacian. The conformance fixture
+`tests/discretizations/cross_metric_cartesian.esm` exercises this
+degenerate case and is the cross-language round-trip anchor for
+§7.4.
+
+#### 7.4.4 Validation
+
+Bindings MUST:
+
+1. Accept a `discretizations.<name>` whose value matches the
+   `CrossMetricStencilRule` shape, alongside standard
+   `Discretization` entries, and round-trip the composite structure
+   losslessly (parse → serialize → parse returns the same JSON
+   structure, modulo whitespace and number formatting).
+2. Resolve each term's `axis_stencil` to an entry in the same
+   `discretizations` block. An unresolved reference is an authoring
+   error (`E_UNKNOWN_AXIS_STENCIL`), caught at loader time.
+3. When `boundary_fallback` is set, resolve it to an entry in the
+   same `discretizations` block (same error code family,
+   `E_UNKNOWN_BOUNDARY_FALLBACK`).
+
+Bindings MAY defer actual expansion of the composite to the
+runtime engine; round-trip fidelity is the language-agnostic
+contract. Conformance tests in
+`tests/conformance/discretization/` verify parse + round-trip
+only.
+
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
 v0.2.0 extends `data_loaders` with a new `kind: "mesh"` that covers MPAS-

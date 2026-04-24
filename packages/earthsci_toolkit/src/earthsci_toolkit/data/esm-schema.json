@@ -59,8 +59,13 @@
     },
     "discretizations": {
       "type": "object",
-      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. See discretization RFC §7.",
-      "additionalProperties": { "$ref": "#/$defs/Discretization" }
+      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (§7.1) or a CrossMetricStencilRule composite (§7.4) that combines per-axis stencils and metric components for covariant operators on curvilinear grids.",
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/$defs/Discretization" },
+          { "$ref": "#/$defs/CrossMetricStencilRule" }
+        ]
+      }
     },
     "grids": {
       "type": "object",
@@ -2398,6 +2403,100 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Optional list of free pattern-variable names (e.g. [\"$u\", \"$x\"]) that the scheme expects the triggering rule to bind; informational / for validator use."
+        },
+        "description": { "type": "string" },
+        "reference": { "$ref": "#/$defs/Reference" }
+      }
+    },
+
+    "CrossMetricTerm": {
+      "type": "object",
+      "description": "One term of a CrossMetricStencilRule composite expansion (RFC §7.4). Semantically, the term contributes `sign * metric_component(target) * axis_stencil(field, axis)` to the composite, where `axis_stencil` names another Discretization whose expansion is substituted point-wise and `metric_component` names a metric array from the grid's metric_arrays block. Terms with identical `axis_stencil` but distinct `metric_component` are how cross-derivative composites (e.g. g_xieta · ∂²/∂ξ∂η) are assembled.",
+      "required": ["axis_stencil", "metric_component"],
+      "additionalProperties": false,
+      "properties": {
+        "axis_stencil": {
+          "type": "string",
+          "description": "Name of a per-axis Discretization entry (in the same discretizations block) whose expansion supplies this term's 1D directional derivative. Must resolve to a Discretization whose grid_family is compatible with the composite's grid_family."
+        },
+        "metric_component": {
+          "type": "string",
+          "description": "Name of a metric array (entry of the grid's metric_arrays block, e.g. 'J', 'g_xixi', 'g_etaeta', 'g_xieta', 'ginv_xixi'). Resolved point-wise at $target via the grid accessor's metric_eval contract."
+        },
+        "sign": {
+          "type": "integer",
+          "enum": [-1, 1],
+          "default": 1,
+          "description": "Sign applied to this term's contribution; defaults to +1."
+        },
+        "description": { "type": "string" }
+      }
+    },
+
+    "CrossMetricStencilRule": {
+      "type": "object",
+      "description": "Cross-metric composite stencil rule (RFC §7.4). Expresses operators whose discretization does not fit the single-axis stencil shape — specifically covariant PDE operators on curvilinear grids where metric-tensor components (J, g_xixi, g_etaeta, g_xieta, ginv_*) weight a sum of per-axis stencil applications. The canonical example is the full covariant Laplacian on a cubed-sphere panel, which combines ∂/∂ξ and ∂/∂η stencils with metric weights in a 9-point composite.\n\nExpansion semantics: given a rule match at $target, the composite expands to `Σ_terms[ sign_t · metric_component_t($target) · axis_stencil_t(field, axes_t) ]`, where each `axis_stencil_t` is the expansion of the referenced Discretization at $target along its declared axis. The composite's own `combine` field (default '+') determines how terms are combined.",
+      "required": ["applies_to", "grid_family", "axes", "terms"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "cross_metric",
+          "description": "Discriminator for bindings that need to distinguish this rule type from a standard Discretization. Optional (presence of `terms` is sufficient), but recommended for statically-typed bindings."
+        },
+        "applies_to": {
+          "description": "Shallow (depth-1) AST pattern identifying the operator this composite discretizes (e.g. a 2D Laplacian). Guard only — bindings flow from the triggering rule by name (RFC §7.2.1). Same shape as Discretization.applies_to.",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "grid_family": {
+          "type": "string",
+          "enum": ["cartesian", "cubed_sphere", "unstructured"],
+          "description": "Grid family this composite targets. In practice cross-metric composites are primarily used on 'cubed_sphere' (curvilinear, non-orthogonal panels) and 'cartesian' (as a conformance-friendly degenerate case where off-diagonal metric components vanish)."
+        },
+        "axes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Ordered list of coordinate axes the composition spans (e.g. ['xi','eta']). Each axis name must match an axis referenced by one of the composite's terms' axis_stencil. The order is informational (binding-readable) and does not affect expansion."
+        },
+        "combine": {
+          "type": "string",
+          "enum": ["+", "*", "min", "max"],
+          "default": "+",
+          "description": "How the composite's terms are combined. Defaults to '+' (the natural choice for a summed tensor expansion)."
+        },
+        "terms": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/CrossMetricTerm" },
+          "description": "Array of CrossMetricTerm entries. Must contain at least one term."
+        },
+        "boundary_fallback": {
+          "type": "string",
+          "description": "Name of another Discretization or CrossMetricStencilRule (in the same discretizations block) to apply at edges, corners, or cross-panel boundaries where the composite's full stencil cannot be evaluated (e.g. cubed-sphere corner halos with incomplete metric support). Optional — when omitted, boundary handling falls through to the model's boundary_conditions."
+        },
+        "accuracy": {
+          "type": "string",
+          "description": "Informational: truncation order (e.g. 'O(dx^2)')."
+        },
+        "requires_locations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "If set, the operand variable must carry one of these staggered-grid locations (mirrors Discretization.requires_locations)."
+        },
+        "emits_location": {
+          "type": "string",
+          "description": "Staggered-grid location the composite emits (mirrors Discretization.emits_location)."
+        },
+        "target_binding": {
+          "type": "string",
+          "default": "$target",
+          "description": "Reserved name for the target index binding (mirrors Discretization.target_binding)."
+        },
+        "free_variables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional list of free pattern-variable names (e.g. ['$u']) that the composite expects the triggering rule to bind; informational / for validator use."
         },
         "description": { "type": "string" },
         "reference": { "$ref": "#/$defs/Reference" }
