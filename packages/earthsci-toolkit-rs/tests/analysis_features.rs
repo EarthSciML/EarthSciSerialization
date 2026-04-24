@@ -166,6 +166,7 @@ fn test_analysis_features_integration() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 

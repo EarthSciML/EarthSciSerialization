@@ -46,6 +46,7 @@ use crate::{EsmFile, error::EsmError};
 ///     interfaces: None,
 ///     grids: None,
 ///     staggering_rules: None,
+///     discretizations: None,
 /// };
 ///
 /// let json = save(&esm_file).expect("Failed to serialize ESM file");

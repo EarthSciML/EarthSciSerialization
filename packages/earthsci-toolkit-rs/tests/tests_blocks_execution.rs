@@ -96,6 +96,7 @@ fn model_only_subset(file: &EsmFile, model_key: &str) -> EsmFile {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     }
 }
@@ -120,6 +121,7 @@ fn reaction_system_only_subset(file: &EsmFile, rs_key: &str) -> EsmFile {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     }
 }

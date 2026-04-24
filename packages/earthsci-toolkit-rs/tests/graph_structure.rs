@@ -104,6 +104,7 @@ fn test_component_graph_generation() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 
@@ -185,6 +186,7 @@ fn test_component_graph_exports() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 
@@ -449,6 +451,7 @@ fn test_component_existence() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 

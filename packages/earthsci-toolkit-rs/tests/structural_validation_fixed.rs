@@ -77,6 +77,7 @@ fn test_undefined_variable_in_model() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 
@@ -186,6 +187,7 @@ fn test_equation_count_mismatch() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 
@@ -279,6 +281,7 @@ fn test_undefined_species_in_reaction() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 
@@ -397,6 +400,7 @@ fn test_valid_file_passes() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 

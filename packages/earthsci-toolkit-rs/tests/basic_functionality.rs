@@ -129,6 +129,7 @@ fn test_structural_validation() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 
@@ -284,6 +285,7 @@ fn test_component_graph() {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     };
 

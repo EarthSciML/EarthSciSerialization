@@ -44,6 +44,7 @@ fn empty_file() -> EsmFile {
         domains: None,
         interfaces: None,
         grids: None,
+        staggering_rules: None,
         discretizations: None,
     }
 }
