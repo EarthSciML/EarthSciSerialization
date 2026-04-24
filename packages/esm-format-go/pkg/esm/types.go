@@ -759,6 +759,8 @@ type EsmFile struct {
 	Discretizations     map[string]Discretization     `json:"discretizations,omitempty"`
 	// Grids holds top-level discretization grid declarations (v0.2.0, RFC §6).
 	Grids               map[string]Grid               `json:"grids,omitempty"`
+	// StaggeringRules holds top-level staggering-rule declarations (RFC §7.4).
+	StaggeringRules     map[string]StaggeringRule     `json:"staggering_rules,omitempty"`
 }
 
 // Discretization is a named stencil template (discretization RFC §7.1).
@@ -815,6 +817,20 @@ type NeighborSelector struct {
 	CountExpr  json.RawMessage `json:"count_expr,omitempty"`
 	KBound     string          `json:"k_bound,omitempty"`
 	Combine    string          `json:"combine,omitempty"`
+}
+
+// StaggeringRule is a named staggering convention declaring where quantities
+// live on a grid (RFC §7.4). Kind discriminates the staggering family; v0.2.0
+// defines "unstructured_c_grid" (MPAS Voronoi). The referenced Grid must be
+// of family "unstructured".
+type StaggeringRule struct {
+	Kind                   string            `json:"kind"`
+	Grid                   string            `json:"grid"`
+	Description            string            `json:"description,omitempty"`
+	CellQuantityLocations  map[string]string `json:"cell_quantity_locations,omitempty"`
+	EdgeNormalConvention   string            `json:"edge_normal_convention,omitempty"`
+	DualMeshRef            string            `json:"dual_mesh_ref,omitempty"`
+	Reference              *Reference        `json:"reference,omitempty"`
 }
 
 // GhostVarDecl declares a ghost-cell variable used by a discretization scheme.
@@ -1127,6 +1143,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 		Interfaces          map[string]Interface          `json:"interfaces,omitempty"`
 		Discretizations     map[string]Discretization     `json:"discretizations,omitempty"`
 		Grids               map[string]Grid               `json:"grids,omitempty"`
+		StaggeringRules     map[string]StaggeringRule     `json:"staggering_rules,omitempty"`
 	}
 
 	var temp TempEsmFile
@@ -1146,6 +1163,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.Interfaces = temp.Interfaces
 	esm.Discretizations = temp.Discretizations
 	esm.Grids = temp.Grids
+	esm.StaggeringRules = temp.StaggeringRules
 
 	// Handle coupling array with proper type deserialization
 	if len(temp.Coupling) > 0 && string(temp.Coupling) != "null" {

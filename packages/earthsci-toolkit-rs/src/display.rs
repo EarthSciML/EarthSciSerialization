@@ -2260,6 +2260,7 @@ mod tests {
             domains: None,
             interfaces: None,
             grids: None,
+            staggering_rules: None,
         };
 
         // Test the display output

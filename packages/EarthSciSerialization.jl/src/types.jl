@@ -943,6 +943,23 @@ struct Grid
 end
 
 """
+    StaggeringRule
+
+Top-level staggering-rule declaration (RFC §7.4). Declares where quantities
+live on a grid; the `kind` field discriminates the staggering family
+(v0.2.0 ships `"unstructured_c_grid"`). The full rule tree is preserved as
+an opaque `Dict{String,Any}` so round-trips are lossless. Post-parse
+validation in `coerce_staggering_rules` enforces the semantic constraint
+that a `kind="unstructured_c_grid"` rule must reference a grid whose family
+is `"unstructured"`.
+"""
+struct StaggeringRule
+    data::Dict{String,Any}
+
+    StaggeringRule(data::Dict{String,Any}) = new(data)
+end
+
+"""
     Interface
 
 Defines the geometric relationship between two domains of potentially different
@@ -1070,6 +1087,7 @@ struct EsmFile
     domains::Union{Dict{String,Domain},Nothing}
     interfaces::Union{Dict{String,Interface},Nothing}
     grids::Union{Dict{String,Grid},Nothing}
+    staggering_rules::Union{Dict{String,StaggeringRule},Nothing}
 
     # Constructor with optional parameters
     EsmFile(esm::String, metadata::Metadata;
@@ -1081,9 +1099,11 @@ struct EsmFile
             coupling=CouplingEntry[],
             domains=nothing,
             interfaces=nothing,
-            grids=nothing) =
+            grids=nothing,
+            staggering_rules=nothing) =
         new(esm, metadata, models, reaction_systems, data_loaders, operators,
-            registered_functions, coupling, domains, interfaces, grids)
+            registered_functions, coupling, domains, interfaces, grids,
+            staggering_rules)
 end
 
 # ========================================

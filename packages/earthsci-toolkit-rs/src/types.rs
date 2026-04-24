@@ -51,6 +51,46 @@ pub struct EsmFile {
     /// cartesian/unstructured/cubed_sphere topology per docs/rfcs/discretization.md §6.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grids: Option<HashMap<String, Grid>>,
+
+    /// Named staggering-rule declarations (v0.2.0, RFC §7.4). Each entry
+    /// declares a staggering convention (e.g. MPAS unstructured C-grid)
+    /// referencing a grids.<g> entry by name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staggering_rules: Option<HashMap<String, StaggeringRule>>,
+}
+
+/// A named staggering convention that declares where quantities live on a
+/// grid (RFC §7.4). `kind` discriminates the staggering family; v0.2.0 ships
+/// `unstructured_c_grid` for MPAS Voronoi meshes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaggeringRule {
+    /// Staggering family discriminant.
+    pub kind: String,
+
+    /// Name of a grids.<g> entry this rule applies to; for
+    /// `unstructured_c_grid` the referenced grid's family must be
+    /// `unstructured`.
+    pub grid: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Mapping of quantity names to their staggered locations
+    /// (cell_center, edge_midpoint, vertex).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cell_quantity_locations: Option<HashMap<String, String>>,
+
+    /// Orientation semantics for edge-normal fluxes
+    /// (outward_from_first_cell, outward_from_second_cell, right_hand_tangent).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edge_normal_convention: Option<String>,
+
+    /// Optional name of a grids.<g> entry naming the Delaunay dual mesh.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dual_mesh_ref: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Reference>,
 }
 
 /// Academic citation or data source reference

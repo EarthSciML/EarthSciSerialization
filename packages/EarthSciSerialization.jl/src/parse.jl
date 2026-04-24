@@ -308,6 +308,12 @@ function coerce_esm_file(data::Any)::EsmFile
         nothing
     end
 
+    staggering_rules = if haskey(data, :staggering_rules) && data.staggering_rules !== nothing
+        coerce_staggering_rules(data.staggering_rules, grids)
+    else
+        nothing
+    end
+
     return EsmFile(esm, metadata,
                   models=models,
                   reaction_systems=reaction_systems,
@@ -317,7 +323,8 @@ function coerce_esm_file(data::Any)::EsmFile
                   coupling=coupling,
                   domains=domains,
                   interfaces=interfaces,
-                  grids=grids)
+                  grids=grids,
+                  staggering_rules=staggering_rules)
 end
 
 # Closed set of allowed builtin generator names (RFC §6.4.1).
@@ -390,6 +397,52 @@ function _validate_grid_refs(gname::String, grid::Dict{String,Any}, loader_names
                     end
                 end
             end
+        end
+    end
+    return
+end
+
+"""
+    coerce_staggering_rules(data, grids) -> Dict{String,StaggeringRule}
+
+Coerce the top-level `staggering_rules` section (RFC §7.4) into
+`Dict{String,StaggeringRule}`. Each rule is preserved opaquely as a
+`Dict{String,Any}` for lossless round-trip. After coercion, this function
+enforces the single semantic constraint the JSON Schema cannot express:
+for `kind == "unstructured_c_grid"`, the referenced `grid` must exist in
+the top-level `grids` map and have family `"unstructured"`.
+"""
+function coerce_staggering_rules(data, grids)::Dict{String,StaggeringRule}
+    rules = Dict{String,StaggeringRule}()
+    for (rname, rdata) in pairs(data)
+        rule_dict = _to_native_json(rdata)::Dict{String,Any}
+        _validate_staggering_rule(string(rname), rule_dict, grids)
+        rules[string(rname)] = StaggeringRule(rule_dict)
+    end
+    return rules
+end
+
+function _validate_staggering_rule(rname::String, rule::Dict{String,Any}, grids)
+    kind = get(rule, "kind", nothing)
+    kind === nothing && return
+    if kind == "unstructured_c_grid"
+        grid_ref = get(rule, "grid", nothing)
+        if grid_ref === nothing
+            throw(ParseError(
+                "staggering_rules.$(rname): kind='unstructured_c_grid' requires 'grid'"))
+        end
+        grid_name = string(grid_ref)
+        if grids === nothing || !haskey(grids, grid_name)
+            throw(ParseError(
+                "[E_UNKNOWN_GRID] staggering_rules.$(rname).grid references unknown " *
+                "grids entry '$grid_name' (RFC §7.4)"))
+        end
+        referenced = grids[grid_name].data
+        family = string(get(referenced, "family", ""))
+        if family != "unstructured"
+            throw(ParseError(
+                "staggering_rules.$(rname): kind='unstructured_c_grid' requires grid " *
+                "family 'unstructured', but grids.$(grid_name) has family '$family' (RFC §7.4)"))
         end
     end
     return

@@ -42,6 +42,7 @@ from .esm_types import (
     PlotAxis, PlotValue, PlotSeries, Plot,
     SweepRange, SweepDimension, ParameterSweep, Example,
     Grid, GridExtent, GridMetricArray, GridMetricGenerator, GridConnectivity,
+    StaggeringRule,
 )
 
 
@@ -964,6 +965,25 @@ def _serialize_grid(grid: Grid) -> Dict[str, Any]:
     return result
 
 
+def _serialize_staggering_rule(rule: "StaggeringRule") -> Dict[str, Any]:
+    """Serialize a top-level staggering-rule declaration (RFC §7.4)."""
+    result: Dict[str, Any] = {
+        "kind": rule.kind,
+        "grid": rule.grid,
+    }
+    if rule.description is not None:
+        result["description"] = rule.description
+    if rule.cell_quantity_locations:
+        result["cell_quantity_locations"] = dict(rule.cell_quantity_locations)
+    if rule.edge_normal_convention is not None:
+        result["edge_normal_convention"] = rule.edge_normal_convention
+    if rule.dual_mesh_ref is not None:
+        result["dual_mesh_ref"] = rule.dual_mesh_ref
+    if rule.reference is not None:
+        result["reference"] = rule.reference
+    return result
+
+
 def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     """Serialize an ESM file to JSON-compatible format."""
     result = {
@@ -1035,6 +1055,13 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     if getattr(esm_file, "grids", None):
         result["grids"] = {
             name: _serialize_grid(g) for name, g in esm_file.grids.items()
+        }
+
+    # Serialize top-level staggering_rules (RFC §7.4).
+    if getattr(esm_file, "staggering_rules", None):
+        result["staggering_rules"] = {
+            name: _serialize_staggering_rule(r)
+            for name, r in esm_file.staggering_rules.items()
         }
 
     # Serialize events at the top level. The schema only allows events nested

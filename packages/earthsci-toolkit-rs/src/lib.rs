@@ -111,8 +111,8 @@ pub use types::{
     Domain, Equation, EsmFile, Expr, ExpressionNode, ExtrapolationMode, FunctionalAffect, Grid,
     GridConnectivity, GridExtent, GridMetricArray, GridMetricGenerator, GridType, Metadata, Model,
     ModelTest, ModelTestAssertion, ModelVariable, Operator, Reaction, ReactionSystem,
-    RecordsPerFile, Species, StaggeringMode, StoichiometricEntry, TimeSpan, Tolerance,
-    UnitConversion, VariableType,
+    RecordsPerFile, Species, StaggeringMode, StaggeringRule, StoichiometricEntry, TimeSpan,
+    Tolerance, UnitConversion, VariableType,
 };
 pub use validate::{
     SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,

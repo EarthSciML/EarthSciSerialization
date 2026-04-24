@@ -688,6 +688,38 @@ export type GridMetricGenerator2 = {
    */
   name?: string;
 };
+/**
+ * A named staggering convention declaring where quantities live on a grid. The `kind` discriminant selects the staggering family. For MPAS Voronoi meshes (kind='unstructured_c_grid'), scalars live at Voronoi cell centers, normal velocities at edge midpoints, and vorticity at triangle vertices — a topology fundamentally unstructured. The referenced `grid` must be a grids.<g> entry of family 'unstructured'. See discretization RFC §7.4.
+ */
+export type StaggeringRule = StaggeringRule1 & {
+  /**
+   * Staggering family discriminant. v0.2.0 defines one kind: 'unstructured_c_grid' (MPAS Voronoi C-grid). Future kinds (e.g. 'arakawa_c_structured') require a spec bump.
+   */
+  kind: "unstructured_c_grid";
+  /**
+   * Name of a grids.<g> entry that this staggering rule applies to. For kind='unstructured_c_grid', the referenced grid's family must be 'unstructured' and its `locations` list must include the C-grid staples ('cell_center', 'edge_normal', 'vertex').
+   */
+  grid: string;
+  description?: string;
+  /**
+   * Mapping of quantity names (variable or metric names) to their staggered locations on the grid. Each value is one of the three C-grid staples. Consumers (e.g. the mpas_divergence_flux_form discretization) read this map to know that, e.g., normal-velocity `u` lives at 'edge_midpoint' so that flux divergence can be emitted at 'cell_center' via the reduction selector over edgesOnCell.
+   */
+  cell_quantity_locations?: {
+    [k: string]: "cell_center" | "edge_midpoint" | "vertex";
+  };
+  /**
+   * Orientation semantics for edge-normal fluxes. 'outward_from_first_cell' is the MPAS convention: the normal at edge e points from cellsOnEdge[e, 0] (interior) to cellsOnEdge[e, 1] (exterior). 'outward_from_second_cell' is the reverse. 'right_hand_tangent' orients by verticesOnEdge (used by some vorticity schemes).
+   */
+  edge_normal_convention?: "outward_from_first_cell" | "outward_from_second_cell" | "right_hand_tangent";
+  /**
+   * Optional name of a grids.<g> entry representing the Delaunay dual of the Voronoi primal grid. MPAS needs the dual mesh for vorticity computations at triangle vertices; leaving this unset is legal when the rule is used only for divergence/gradient schemes that do not touch vorticity.
+   */
+  dual_mesh_ref?: string;
+  reference?: Reference;
+};
+export type StaggeringRule1 = {
+  [k: string]: unknown;
+};
 
 export interface ESMFormat2 {
   /**
@@ -752,6 +784,12 @@ export interface ESMFormat2 {
    */
   grids?: {
     [k: string]: Grid;
+  };
+  /**
+   * Named staggering conventions that declare where quantities live on a grid. The unstructured_c_grid kind (RFC §7.4) captures MPAS-style C-grid placement — scalars at Voronoi cell centers, normal velocities at edge midpoints, vorticity at triangle vertices — and is the prerequisite declaration for the §7.3 worked-example discretizations (mpas_divergence_flux_form, mpas_gradient_edge_difference). Each entry references a grids.<g> entry by name.
+   */
+  staggering_rules?: {
+    [k: string]: StaggeringRule;
   };
 }
 /**

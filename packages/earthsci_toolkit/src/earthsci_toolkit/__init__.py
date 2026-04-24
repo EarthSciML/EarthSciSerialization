@@ -45,6 +45,7 @@ from .esm_types import (
     Reference,
     Metadata,
     EsmFile,
+    StaggeringRule,
 )
 
 # Core parsing and serialization

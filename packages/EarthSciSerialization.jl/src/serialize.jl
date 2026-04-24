@@ -1030,8 +1030,22 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     if file.grids !== nothing
         result["grids"] = Dict(k => serialize_grid(v) for (k, v) in file.grids)
     end
+    if file.staggering_rules !== nothing
+        result["staggering_rules"] = Dict(k => serialize_staggering_rule(v)
+                                          for (k, v) in file.staggering_rules)
+    end
 
     return result
+end
+
+"""
+    serialize_staggering_rule(rule::StaggeringRule) -> Dict{String,Any}
+
+Serialize a StaggeringRule back to its JSON-compatible dict. Opaque
+dictionary pass-through (round-trip lossless), mirroring `serialize_grid`.
+"""
+function serialize_staggering_rule(rule::StaggeringRule)::Dict{String,Any}
+    return rule.data
 end
 
 """

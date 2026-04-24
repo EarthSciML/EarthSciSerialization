@@ -1360,6 +1360,77 @@ index variable valid inside `arrayop.expr` (per spec §4.3.3), so `"k"` as a
 bare string is permitted and resolves to the arrayop index variable — no
 `regrid` is needed because we remain on grid `mpas_cvmesh`.
 
+### 7.4 Schema — `staggering_rules` (unstructured C-grid, resolves esm-15f)
+
+The §7.3 worked example consumes normal-velocity `F` at `edge_midpoint` and
+emits flux divergence at `cell_center`. Before a binding can wire such a
+scheme end-to-end (i.e. author `mpas_divergence_flux_form` or
+`mpas_gradient_edge_difference` against a concrete MPAS mesh), the format
+must carry an explicit declaration of where each quantity lives: scalars at
+Voronoi cell centers, normal velocities at edge midpoints, vorticity at
+triangle vertices.
+
+v0.2.0 adds a new top-level section `staggering_rules`, keyed by rule name.
+Each entry is a `StaggeringRule` object with a `kind` discriminant:
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | ✓ | Staggering family. v0.2.0 defines `"unstructured_c_grid"` (MPAS Voronoi). Future kinds (e.g. `"arakawa_c_structured"`) require a spec bump. |
+| `grid` | ✓ | Name of a `grids.<g>` entry this rule applies to. For `kind="unstructured_c_grid"`, the referenced grid's `family` must be `"unstructured"`. Bindings enforce this as a semantic post-parse check. |
+| `cell_quantity_locations` | ✓ (for `unstructured_c_grid`) | Map: quantity name → one of `"cell_center"`, `"edge_midpoint"`, `"vertex"`. Consumers (§7.3) read this map to know that e.g. normal-velocity `u` lives at `edge_midpoint`, so flux divergence emits at `cell_center` via a reduction selector over `edgesOnCell`. |
+| `edge_normal_convention` | ✓ (for `unstructured_c_grid`) | Orientation semantics for edge-normal fluxes. `"outward_from_first_cell"` is the MPAS convention (normal at edge `e` points from `cellsOnEdge[e, 0]` to `cellsOnEdge[e, 1]`); `"outward_from_second_cell"` is the reverse; `"right_hand_tangent"` orients by `verticesOnEdge` (used by some vorticity schemes). |
+| `dual_mesh_ref` | | Optional name of a `grids.<g>` entry representing the Delaunay dual of the Voronoi primal grid. MPAS needs the dual mesh for vorticity at triangle vertices; omit when the rule is used only for divergence/gradient schemes. |
+| `description` | | Human-readable note. |
+| `reference` | | Optional bibliographic reference (same shape as `Reference` elsewhere). |
+
+**Worked example** — the MPAS C-grid staggering (Skamarock et al. 2012,
+Eq. 24):
+
+```json
+{
+  "staggering_rules": {
+    "mpas_c_grid_staggering": {
+      "kind":  "unstructured_c_grid",
+      "grid":  "mpas_cvmesh",
+      "cell_quantity_locations": {
+        "h": "cell_center", "q": "cell_center", "theta": "cell_center",
+        "u": "edge_midpoint", "F": "edge_midpoint",
+        "zeta": "vertex"
+      },
+      "edge_normal_convention": "outward_from_first_cell"
+    }
+  }
+}
+```
+
+**Validation.** Bindings enforce three semantic constraints beyond JSON
+Schema:
+
+1. The referenced `grid` name must exist in the top-level `grids` map.
+2. For `kind="unstructured_c_grid"`, that grid's family must be
+   `"unstructured"` (otherwise the cell/edge/vertex vocabulary is
+   meaningless).
+3. `dual_mesh_ref`, if present, must also resolve to an `unstructured`
+   grid.
+
+**Relationship to §6 and §7.3.** `staggering_rules` is a sibling of `grids`
+(§6) and `discretizations` (§7.1–§7.3): `grids` owns topology and metric
+arrays; `staggering_rules` owns the quantity-location map over that
+topology; `discretizations` owns the stencil templates that consume both.
+The §7.3 worked example (`mpas_cell_div`) does not yet reference a
+staggering rule by name because it reads locations off the scheme's
+`requires_locations` / `emits_location` tags; `staggering_rules` formalizes
+the same information at the *model* level so the same mesh can serve
+multiple schemes without re-declaration. A follow-up bead will wire
+`mpas_divergence_flux_form` (P0) and `mpas_gradient_edge_difference` (P1)
+to read from `staggering_rules.<name>` explicitly.
+
+**Round-trip contract.** The `staggering_rules` subtree must survive a
+binding's load → save → load cycle byte-for-byte at the JSON-value level.
+All five bindings (Julia, Python, TypeScript, Rust, Go) carry explicit
+round-trip tests against the `tests/grids/mpas_c_grid_staggering.esm`
+fixture.
+
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
 v0.2.0 extends `data_loaders` with a new `kind: "mesh"` that covers MPAS-

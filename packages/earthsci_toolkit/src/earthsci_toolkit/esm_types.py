@@ -761,6 +761,24 @@ class Grid:
 
 
 @dataclass
+class StaggeringRule:
+    """Top-level staggering-rule declaration (RFC §7.4).
+
+    ``kind`` discriminates the staggering family; v0.2.0 ships
+    ``unstructured_c_grid`` (MPAS Voronoi C-grid). The referenced ``grid``
+    must be a ``grids.<g>`` entry of family ``unstructured``.
+    """
+    kind: str
+    grid: str
+    name: str = ""
+    description: Optional[str] = None
+    cell_quantity_locations: Dict[str, str] = field(default_factory=dict)
+    edge_normal_convention: Optional[str] = None
+    dual_mesh_ref: Optional[str] = None
+    reference: Optional[Any] = None
+
+
+@dataclass
 class EsmFile:
     """Root container for an ESM format file."""
     version: str
@@ -774,6 +792,7 @@ class EsmFile:
     coupling: List[CouplingEntry] = field(default_factory=list)
     domains: Dict[str, Domain] = field(default_factory=dict)
     grids: Dict[str, Grid] = field(default_factory=dict)
+    staggering_rules: Dict[str, StaggeringRule] = field(default_factory=dict)
 
     @property
     def esm(self) -> str:

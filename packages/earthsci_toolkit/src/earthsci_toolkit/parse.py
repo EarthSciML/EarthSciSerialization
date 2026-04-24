@@ -48,6 +48,7 @@ from .esm_types import (
     PlotAxis, PlotValue, PlotSeries, Plot,
     SweepRange, SweepDimension, ParameterSweep, Example,
     Grid, GridExtent, GridMetricArray, GridMetricGenerator, GridConnectivity,
+    StaggeringRule,
 )
 
 
@@ -1369,6 +1370,50 @@ def _parse_grid(
     )
 
 
+def _parse_staggering_rule(
+    rule_name: str,
+    rule_data: Dict[str, Any],
+    *,
+    grids: Dict[str, Grid],
+) -> StaggeringRule:
+    """Parse a top-level staggering-rule declaration (RFC §7.4).
+
+    For ``kind='unstructured_c_grid'`` the referenced ``grid`` must exist
+    in the top-level ``grids`` map and have family ``unstructured``.
+    """
+    for required in ("kind", "grid"):
+        if required not in rule_data:
+            raise ValueError(
+                f"staggering_rules['{rule_name}']: missing required field "
+                f"'{required}' (RFC §7.4)"
+            )
+    kind = rule_data["kind"]
+    grid_ref = rule_data["grid"]
+    if kind == "unstructured_c_grid":
+        if grid_ref not in grids:
+            raise ValueError(
+                f"staggering_rules['{rule_name}']: references unknown grid "
+                f"'{grid_ref}' (RFC §7.4)"
+            )
+        referenced = grids[grid_ref]
+        if referenced.family != "unstructured":
+            raise ValueError(
+                f"staggering_rules['{rule_name}']: kind='unstructured_c_grid' "
+                f"requires grid family 'unstructured', but grids['{grid_ref}'] "
+                f"has family '{referenced.family}' (RFC §7.4)"
+            )
+    return StaggeringRule(
+        kind=kind,
+        grid=grid_ref,
+        name=rule_name,
+        description=rule_data.get("description"),
+        cell_quantity_locations=dict(rule_data.get("cell_quantity_locations") or {}),
+        edge_normal_convention=rule_data.get("edge_normal_convention"),
+        dual_mesh_ref=rule_data.get("dual_mesh_ref"),
+        reference=rule_data.get("reference"),
+    )
+
+
 def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
     """Parse ESM data from validated JSON."""
     # Parse metadata
@@ -1441,6 +1486,21 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
                 grid_name, grid_data, data_loaders=data_loaders,
             )
 
+    # Parse staggering_rules (RFC §7.4). Must happen after grids so we can
+    # validate that referenced grid entries exist and have a compatible family.
+    staggering_rules: Dict[str, StaggeringRule] = {}
+    if "staggering_rules" in data:
+        sr_map = data["staggering_rules"]
+        if not isinstance(sr_map, dict):
+            raise ValueError(
+                "Top-level 'staggering_rules' must be an object keyed by rule id "
+                f"(RFC §7.4). Got: {type(sr_map).__name__}"
+            )
+        for rule_name, rule_data in sr_map.items():
+            staggering_rules[rule_name] = _parse_staggering_rule(
+                rule_name, rule_data, grids=grids,
+            )
+
     # Collect events from models and reaction systems
     events = []
 
@@ -1476,6 +1536,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         coupling=coupling,
         domains=domains,
         grids=grids,
+        staggering_rules=staggering_rules,
     )
 
 
