@@ -497,13 +497,13 @@ export type InitialConditions =
       };
     };
 /**
- * A named discretization scheme. Two kinds are supported: (a) "stencil" (default) — a template mapping a PDE operator class (via applies_to) to a combination (combine) over neighbors with symbolic coefficients (RFC §7.1); (b) "dimensional_split" — a composite scheme that applies a 1D inner scheme along each of several orthogonal axes via Strang/Lie operator splitting (RFC §7.5).
+ * A named discretization scheme. Three kinds are supported: (a) "stencil" (default) — a template mapping a PDE operator class (via applies_to) to a combination (combine) over neighbors with symbolic coefficients (RFC §7.1); (b) "dimensional_split" — a composite scheme that applies a 1D inner scheme along each of several orthogonal axes via Strang/Lie operator splitting (RFC §7.5); (c) "flux_form_semi_lagrangian" — a flux-form semi-Lagrangian (FFSL) advection scheme (Lin & Rood 1996 MWR) that combines a piecewise reconstruction with flux-form remapping over declared advection axes, described in RFC §7.7.
  */
 export type Discretization = Discretization1 & {
   /**
-   * Scheme kind discriminator. "stencil" (default when omitted) selects the neighbor-combination template described in RFC §7.1; "dimensional_split" selects the axis-sweep composite described in RFC §7.5, which requires axes / inner_rule / splitting.
+   * Scheme kind discriminator. "stencil" (default when omitted) selects the neighbor-combination template described in RFC §7.1; "dimensional_split" selects the axis-sweep composite described in RFC §7.5, which requires axes / inner_rule / splitting; "flux_form_semi_lagrangian" selects the FFSL advection family described in RFC §7.7, which requires reconstruction / remap / cfl_policy / dimensions (and forbids stencil / axes / inner_rule).
    */
-  kind?: "stencil" | "dimensional_split";
+  kind?: "stencil" | "dimensional_split" | "flux_form_semi_lagrangian";
   /**
    * Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1). For dimensional_split schemes this names the N-D operator that the sweep composite stands in for (e.g. a 2D advection op whose inner_rule is a 1D PPM flux divergence).
    */
@@ -548,6 +548,66 @@ export type Discretization = Discretization1 & {
    * dimensional_split: optional direction pattern governing the per-timestep axis traversal. "forward" walks axes in listed order each step; "reverse" walks them in reverse; "alternating" flips direction on successive timesteps to reduce splitting bias (Strang-typical). Ignored when splitting is "strang" (which defines its own symmetric order) or "none".
    */
   order_of_sweeps?: "forward" | "reverse" | "alternating";
+  /**
+   * flux_form_semi_lagrangian (RFC §7.7): the sub-cell reconstruction used to build cell-edge fluxes. Either a string naming a sibling discretizations entry (rule ref), or an inline object declaring a reconstruction scheme — `order` (e.g. "PPM", "PLM", "centered") plus optional free-form `parameters`. Composes with `limiter` when one is declared.
+   */
+  reconstruction?:
+    | string
+    | {
+        /**
+         * Reconstruction order / family name (e.g. "PPM", "PLM", "centered", "WENO5"). Not an enum — runtimes may add families; unknown values are the rule engine's responsibility to reject.
+         */
+        order: string;
+        /**
+         * Free-form key/value parameters for the reconstruction (e.g. monotonicity controls). Schema is intentionally open; consumers validate per-order.
+         */
+        parameters?: {
+          [k: string]: unknown;
+        };
+      };
+  /**
+   * flux_form_semi_lagrangian (RFC §7.7): flux-form remap semantics — how reconstructed sub-cell profiles are integrated across cell faces and used to update cell averages.
+   */
+  remap?: {
+    /**
+     * Remap family. `conservative` preserves the volume-integrated tracer mass per Lin & Rood (1996) §2. `non_conservative` uses pointwise trajectory remap (Staniforth & Côté 1991).
+     */
+    semantics: "conservative" | "non_conservative";
+    /**
+     * Optional sub-kind identifier (e.g. "lin_rood_1996", "colella_woodward_1984").
+     */
+    flux_form?: string;
+    /**
+     * Free-form parameters for the remap (e.g. sub-cycle count, flux clipping thresholds).
+     */
+    parameters?: {
+      [k: string]: unknown;
+    };
+  };
+  /**
+   * flux_form_semi_lagrangian (RFC §7.7): optional slope/flux limiter applied during reconstruction to preserve monotonicity. Either a string naming a sibling discretizations entry (rule ref — e.g. a named monotonic limiter scheme), or an inline object declaring a limiter family.
+   */
+  limiter?:
+    | string
+    | {
+        /**
+         * Limiter family name (e.g. "monotonic", "van_leer", "positive_definite").
+         */
+        family: string;
+        parameters?: {
+          [k: string]: unknown;
+        };
+      };
+  /**
+   * flux_form_semi_lagrangian (RFC §7.7): CFL policy governing the reconstruction/remap pairing. `conservative`: mass-conserving flux-form (Lin & Rood 1996); `non_conservative`: pointwise SL trajectory without flux conservation.
+   */
+  cfl_policy?: "conservative" | "non_conservative";
+  /**
+   * flux_form_semi_lagrangian (RFC §7.7): axis names along which the rule advects, in application order. The named axes must appear in the enclosing grid's `dimensions`; each axis is swept once per step. Composes with dimensional_split (a dimensional_split scheme's `inner_rule` may reference an FFSL scheme whose `dimensions` is a single axis).
+   *
+   * @minItems 1
+   */
+  dimensions?: [string, ...string[]];
   /**
    * Informational: truncation order (e.g. "O(dx^2)", or for dimensional_split "O(dt^2)" under Strang splitting).
    */

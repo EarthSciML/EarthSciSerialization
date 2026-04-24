@@ -763,7 +763,7 @@ type EsmFile struct {
 	StaggeringRules     map[string]StaggeringRule     `json:"staggering_rules,omitempty"`
 }
 
-// Discretization is a named discretization scheme. Three variants are
+// Discretization is a named discretization scheme. Four variants are
 // supported:
 //
 //   - "stencil" (the default when Kind is "") is a neighbor-combination
@@ -774,21 +774,29 @@ type EsmFile struct {
 //     combines per-axis 1D stencils with metric-tensor components for
 //     covariant operators on curvilinear grids; activated by a nonempty
 //     Terms field (the Kind="cross_metric" discriminator is optional).
+//   - "flux_form_semi_lagrangian" is a flux-form semi-Lagrangian (FFSL)
+//     advection scheme (Lin & Rood 1996) per RFC §7.7 that uses
+//     Reconstruction / Remap / Limiter / CflPolicy / Dimensions instead of
+//     Stencil.
 //
 // The AST-pattern fields (AppliesTo, Stencil[*].Coeff, NeighborSelector
 // expression slots) carry pattern variables like "$u" / "$target" that are
 // bound by the rule engine at expansion time — they are not ordinary
 // Expressions and thus are preserved as raw json.RawMessage for lossless
-// round-tripping.
+// round-tripping. Reconstruction and Limiter are raw JSON because they may
+// be either a string (rule ref) or an inline object.
 type Discretization struct {
 	// Kind discriminates scheme sub-types:
-	//   "" or "stencil"      = classic neighbor-combination template (§7.1)
-	//   "dimensional_split"  = axis-sweep composite (§7.5); activates
-	//                          InnerRule / Splitting / OrderOfSweeps
-	//   "cross_metric"       = CrossMetricStencilRule composite (§7.6);
-	//                          activates Terms / BoundaryFallback. Optional
-	//                          discriminator — presence of Terms is the
-	//                          authoritative signal for the composite.
+	//   "" or "stencil"             = classic neighbor-combination template (§7.1)
+	//   "dimensional_split"         = axis-sweep composite (§7.5); activates
+	//                                 InnerRule / Splitting / OrderOfSweeps
+	//   "cross_metric"              = CrossMetricStencilRule composite (§7.6);
+	//                                 activates Terms / BoundaryFallback. Optional
+	//                                 discriminator — presence of Terms is the
+	//                                 authoritative signal for the composite.
+	//   "flux_form_semi_lagrangian" = FFSL advection rule (§7.7); activates
+	//                                 Reconstruction / Remap / Limiter /
+	//                                 CflPolicy / Dimensions.
 	Kind               string            `json:"kind,omitempty"`
 	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
 	// this scheme discretizes. Preserved as raw JSON because the pattern may
@@ -820,6 +828,19 @@ type Discretization struct {
 	// apply at edges / corners / cross-panel boundaries where the composite
 	// stencil cannot be evaluated. Cross-metric composite only.
 	BoundaryFallback   string            `json:"boundary_fallback,omitempty"`
+
+	// Reconstruction (FFSL §7.7): sub-cell reconstruction — string rule-ref
+	// or inline {order, parameters} object.
+	Reconstruction     json.RawMessage   `json:"reconstruction,omitempty"`
+	// Remap (FFSL §7.7): flux-form remap semantics.
+	Remap              *FfslRemap        `json:"remap,omitempty"`
+	// Limiter (FFSL §7.7, optional): slope/flux limiter — string rule-ref or
+	// inline {family, parameters} object.
+	Limiter            json.RawMessage   `json:"limiter,omitempty"`
+	// CflPolicy (FFSL §7.7): "conservative" or "non_conservative".
+	CflPolicy          string            `json:"cfl_policy,omitempty"`
+	// Dimensions (FFSL §7.7): axis names, in application order.
+	Dimensions         []string          `json:"dimensions,omitempty"`
 	Accuracy           string            `json:"accuracy,omitempty"`
 	// Order optionally selects stencil width / truncation order for
 	// families that admit a parameterized order (e.g. arbitrary-order
@@ -837,12 +858,12 @@ type Discretization struct {
 }
 
 // IsCrossMetric reports whether this Discretization is a CrossMetricStencilRule
-// composite (RFC §7.4) rather than a standard stencil template.
+// composite (RFC §7.6) rather than a standard stencil template.
 func (d *Discretization) IsCrossMetric() bool {
 	return len(d.Terms) > 0
 }
 
-// CrossMetricTerm is one term of a CrossMetricStencilRule composite (RFC §7.4).
+// CrossMetricTerm is one term of a CrossMetricStencilRule composite (RFC §7.6).
 // Semantically contributes `Sign * MetricComponent(target) * AxisStencil(field)`
 // to the composite's combined sum.
 type CrossMetricTerm struct {
@@ -861,6 +882,14 @@ type CrossMetricTerm struct {
 	Sign int `json:"sign,omitempty"`
 
 	Description string `json:"description,omitempty"`
+}
+
+// FfslRemap is the `remap` field of a flux-form semi-Lagrangian rule
+// (RFC §7.7). Semantics is "conservative" or "non_conservative".
+type FfslRemap struct {
+	Semantics  string                 `json:"semantics"`
+	FluxForm   string                 `json:"flux_form,omitempty"`
+	Parameters map[string]interface{} `json:"parameters,omitempty"`
 }
 
 // StencilEntry is one neighbor contribution: a selector plus a symbolic

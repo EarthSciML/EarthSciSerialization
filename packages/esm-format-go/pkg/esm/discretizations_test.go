@@ -188,3 +188,44 @@ func TestDimensionalSplitScheme(t *testing.T) {
 	}
 	assertJSONEqual(t, parsed.Discretizations, reparsed.Discretizations, "discretizations (dim-split)")
 }
+
+// TestFfslDiscretizationStructuralAsserts verifies the structural invariants
+// of the CAM5 FFSL fixture: the kind discriminator, absence of a stencil,
+// and presence + shape of the FFSL-specific fields (reconstruction, remap,
+// cfl_policy, dimensions). See RFC §7.7.
+func TestFfslDiscretizationStructuralAsserts(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..")
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "tests/discretizations/cam5_ffsl_advection.esm"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var parsed EsmFile
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	d, ok := parsed.Discretizations["cam5_ffsl_1d"]
+	if !ok {
+		t.Fatal("cam5_ffsl_1d not found")
+	}
+	if d.Kind != "flux_form_semi_lagrangian" {
+		t.Errorf("kind = %q, want %q", d.Kind, "flux_form_semi_lagrangian")
+	}
+	if len(d.Stencil) != 0 {
+		t.Errorf("FFSL rule must not carry a stencil; got %d entries", len(d.Stencil))
+	}
+	if d.Remap == nil {
+		t.Fatal("remap missing")
+	}
+	if d.Remap.Semantics != "conservative" {
+		t.Errorf("remap.semantics = %q, want %q", d.Remap.Semantics, "conservative")
+	}
+	if d.CflPolicy != "conservative" {
+		t.Errorf("cfl_policy = %q, want %q", d.CflPolicy, "conservative")
+	}
+	if len(d.Dimensions) != 1 || d.Dimensions[0] != "x" {
+		t.Errorf("dimensions = %v, want [x]", d.Dimensions)
+	}
+	if len(d.Reconstruction) == 0 {
+		t.Error("reconstruction missing")
+	}
+}

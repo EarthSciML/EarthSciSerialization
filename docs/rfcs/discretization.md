@@ -1695,6 +1695,88 @@ contract. Conformance tests in
 `tests/conformance/discretization/` verify parse + round-trip
 only.
 
+### 7.7 Flux-form semi-Lagrangian schemes (new; resolves esm-1rj)
+
+The CAM5 finite-volume dycore and related transport solvers build advection
+as a **flux-form semi-Lagrangian (FFSL)** family (Lin & Rood, *Mon. Wea. Rev.*
+124, 2046–2070, 1996): a sub-cell reconstruction is combined with flux-form
+remapping so that advection conserves the volume-integrated tracer mass. FFSL
+rules are structurally distinct from stencil entries (they do not enumerate a
+neighbor list with symbolic coefficients) and from dimensional-split composites
+(they name a concrete reconstruction/remap/limiter triple and the axes along
+which the rule advects). A `Discretization` entry with
+
+```json
+{ "kind": "flux_form_semi_lagrangian",
+  "applies_to": { "op": "adv", "args": ["$u"], "dim": "$x" },
+  "grid_family": "cartesian",
+  "reconstruction": { "order": "PPM" },
+  "remap": { "semantics": "conservative", "flux_form": "lin_rood_1996" },
+  "cfl_policy": "conservative",
+  "dimensions": ["x"] }
+```
+
+declares a 1D FFSL rule. v0.2.0 treats parse + round-trip + structural
+rejection as the binding contract; concrete runtime dispatch (execution of
+the reconstruction / remap pair) lives in ESD.
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | ✓ (value `"flux_form_semi_lagrangian"`) | Discriminates FFSL rules from `"stencil"` and `"dimensional_split"`. |
+| `applies_to` | ✓ | Shallow AST pattern identifying the operator the rule discretizes (guard only, per §7.2.1). |
+| `grid_family` | ✓ | Target grid family. |
+| `reconstruction` | ✓ | Either a **string** naming a sibling `discretizations.<name>` entry that provides the reconstruction stencil, or an inline object `{ "order": <name>, "parameters": {…} }`. `order` is a free-form family tag (`"PPM"`, `"PLM"`, `"centered"`, `"WENO5"`, …) — the schema does not enumerate orders because runtimes may add families; unknown values are the rule engine's responsibility to reject. |
+| `remap` | ✓ | Object `{ "semantics": "conservative" \| "non_conservative", "flux_form"?: string, "parameters"?: object }`. `conservative` preserves cell-integrated mass per Lin & Rood (1996) §2; `non_conservative` uses pointwise semi-Lagrangian trajectory remap (Staniforth & Côté 1991). `flux_form` is an optional sub-kind tag (e.g. `"lin_rood_1996"`). |
+| `limiter` |   | Optional monotonicity limiter. Either a string rule-ref (a sibling `discretizations.<name>` providing the limiter stencil), or an inline `{ "family": <name>, "parameters"?: object }` object. |
+| `cfl_policy` | ✓ | `"conservative"` or `"non_conservative"` — governs the reconstruction/remap pairing. |
+| `dimensions` | ✓ | Ordered list of axis names along which the rule advects. Each axis must appear in the enclosing grid's `dimensions`. Composes with §7.5 dimensional-split: a dimensional-split scheme's `inner_rule` may reference an FFSL rule whose `dimensions` is a single axis. |
+| `accuracy`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference` |   | Same meaning as for stencil schemes. |
+| `stencil`, `combine`, `axes`, `inner_rule`, `splitting`, `order_of_sweeps` | ✗ | Must **not** appear on `kind: "flux_form_semi_lagrangian"` entries; `axes`/`inner_rule`/`splitting` are the §7.5 dimensional-split fields. The loader-level schema enforces this via conditional `required` / `not.required`. |
+
+**CAM5 worked sketch.** The full 2D CAM5 FV FFSL advection is assembled by
+composing a 1D FFSL rule under a §7.5 dimensional-split composite:
+
+```json
+{ "discretizations": {
+    "cam5_ffsl_1d": {
+      "kind": "flux_form_semi_lagrangian",
+      "applies_to": { "op": "adv", "args": ["$u"], "dim": "$x" },
+      "grid_family": "cartesian",
+      "reconstruction": { "order": "PPM" },
+      "remap": { "semantics": "conservative", "flux_form": "lin_rood_1996" },
+      "limiter": { "family": "monotonic" },
+      "cfl_policy": "conservative",
+      "dimensions": ["x"]
+    },
+    "cam5_fv_ffsl_advection": {
+      "kind": "dimensional_split",
+      "applies_to": { "op": "adv", "args": ["$u"] },
+      "grid_family": "cartesian",
+      "axes": ["x", "y"],
+      "inner_rule": "cam5_ffsl_1d",
+      "splitting": "strang",
+      "order_of_sweeps": "alternating"
+    }
+  }
+}
+```
+
+The rule engine matches the 2D `adv` operator to `cam5_fv_ffsl_advection`;
+the dimensional-split composite delegates each per-axis Δt/2 (or Δt) sweep
+to the 1D `cam5_ffsl_1d` rule.
+
+**Binding contract.** All five bindings (Julia, TypeScript, Python, Rust,
+Go) parse and round-trip `kind: "flux_form_semi_lagrangian"` schemes
+losslessly and reject structural violations of the discriminator contract
+(stencil-on-FFSL, missing `cfl_policy`, FFSL-field-on-stencil). Execution
+of the reconstruction / remap pair is **out of scope** for v0.2.0 and is
+tracked in ESD (`cam5_fv_ffsl_advection`, P1; `fv3_lin_rood_advection`, P1,
+composes FFSL with dimensional-split). The conformance manifest adds
+`tests/discretizations/cam5_ffsl_advection.esm` — a minimal 1D FFSL rule
+with centered reconstruction and conservative remap — as the cross-binding
+fixture.
+
+
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
 v0.2.0 extends `data_loaders` with a new `kind: "mesh"` that covers MPAS-
