@@ -2346,34 +2346,61 @@
 
     "Discretization": {
       "type": "object",
-      "description": "A named stencil template. Each entry maps a PDE operator class (via an applies_to pattern) to a combination (combine) over neighbors with symbolic coefficients. See RFC §7.1.",
-      "required": ["applies_to", "grid_family", "stencil"],
+      "description": "A named discretization scheme. Two kinds are supported: (a) \"stencil\" (default) — a template mapping a PDE operator class (via applies_to) to a combination (combine) over neighbors with symbolic coefficients (RFC §7.1); (b) \"dimensional_split\" — a composite scheme that applies a 1D inner scheme along each of several orthogonal axes via Strang/Lie operator splitting (RFC §7.4).",
+      "required": ["applies_to", "grid_family"],
       "additionalProperties": false,
       "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["stencil", "dimensional_split"],
+          "default": "stencil",
+          "description": "Scheme kind discriminator. \"stencil\" (default when omitted) selects the neighbor-combination template described in RFC §7.1; \"dimensional_split\" selects the axis-sweep composite described in RFC §7.4, which requires axes / inner_rule / splitting."
+        },
         "applies_to": {
-          "description": "Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1).",
+          "description": "Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1). For dimensional_split schemes this names the N-D operator that the sweep composite stands in for (e.g. a 2D advection op whose inner_rule is a 1D PPM flux divergence).",
           "$ref": "#/$defs/PatternNode"
         },
         "grid_family": {
           "type": "string",
           "enum": ["cartesian", "cubed_sphere", "unstructured"],
-          "description": "Grid family this scheme targets; the stencil's selector.kind must match this family."
+          "description": "Grid family this scheme targets; the stencil's selector.kind must match this family. dimensional_split requires \"cartesian\" or \"cubed_sphere\" (unstructured grids have no intrinsic orthogonal-axis ordering)."
         },
         "combine": {
           "type": "string",
           "enum": ["+", "*", "min", "max"],
           "default": "+",
-          "description": "How stencil entries are combined."
+          "description": "stencil: how stencil entries are combined. Not applicable to dimensional_split schemes."
         },
         "stencil": {
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/StencilEntry" },
-          "description": "Array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1)."
+          "description": "stencil: array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1). Required when kind is \"stencil\" or omitted; must be absent when kind is \"dimensional_split\"."
+        },
+        "axes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "dimensional_split: ordered list of spatial axes (names from the target grid's dimensions) along which the inner scheme is swept. Each axis is visited once per Lie step and twice (symmetrically) per Strang step. See RFC §7.4."
+        },
+        "inner_rule": {
+          "type": "string",
+          "description": "dimensional_split: name of a sibling discretization scheme (must be declared under the enclosing file's \"discretizations\" section) that provides the 1D operator applied on each axis. The inner scheme is typically itself kind=\"stencil\" with grid_family=\"cartesian\" and a single cartesian axis in its selector."
+        },
+        "splitting": {
+          "type": "string",
+          "enum": ["strang", "lie", "none"],
+          "description": "dimensional_split: operator-splitting convention. \"lie\" applies each axis once in sequence (first-order in time). \"strang\" uses a symmetric half-step pattern with axes swept forward at Δt/2, the last axis applied at Δt, then the remaining axes swept in reverse at Δt/2 (second-order in time). \"none\" declares the composite structurally without prescribing a splitting order (e.g. for static metadata or parallel-split runtimes that choose their own order)."
+        },
+        "order_of_sweeps": {
+          "type": "string",
+          "enum": ["forward", "reverse", "alternating"],
+          "default": "forward",
+          "description": "dimensional_split: optional direction pattern governing the per-timestep axis traversal. \"forward\" walks axes in listed order each step; \"reverse\" walks them in reverse; \"alternating\" flips direction on successive timesteps to reduce splitting bias (Strang-typical). Ignored when splitting is \"strang\" (which defines its own symmetric order) or \"none\"."
         },
         "accuracy": {
           "type": "string",
-          "description": "Informational: truncation order (e.g. \"O(dx^2)\")."
+          "description": "Informational: truncation order (e.g. \"O(dx^2)\", or for dimensional_split \"O(dt^2)\" under Strang splitting)."
         },
         "requires_locations": {
           "type": "array",
@@ -2401,7 +2428,17 @@
         },
         "description": { "type": "string" },
         "reference": { "$ref": "#/$defs/Reference" }
-      }
+      },
+      "allOf": [
+        {
+          "if":   { "properties": { "kind": { "const": "dimensional_split" } }, "required": ["kind"] },
+          "then": {
+            "required": ["axes", "inner_rule", "splitting"],
+            "not": { "required": ["stencil"] }
+          },
+          "else": { "required": ["stencil"] }
+        }
+      ]
     }
   }
 }

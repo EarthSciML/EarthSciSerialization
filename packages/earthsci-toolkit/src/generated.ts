@@ -497,6 +497,88 @@ export type InitialConditions =
       };
     };
 /**
+ * A named discretization scheme. Two kinds are supported: (a) "stencil" (default) — a template mapping a PDE operator class (via applies_to) to a combination (combine) over neighbors with symbolic coefficients (RFC §7.1); (b) "dimensional_split" — a composite scheme that applies a 1D inner scheme along each of several orthogonal axes via Strang/Lie operator splitting (RFC §7.4).
+ */
+export type Discretization = Discretization1 & {
+  /**
+   * Scheme kind discriminator. "stencil" (default when omitted) selects the neighbor-combination template described in RFC §7.1; "dimensional_split" selects the axis-sweep composite described in RFC §7.4, which requires axes / inner_rule / splitting.
+   */
+  kind?: "stencil" | "dimensional_split";
+  /**
+   * Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1). For dimensional_split schemes this names the N-D operator that the sweep composite stands in for (e.g. a 2D advection op whose inner_rule is a 1D PPM flux divergence).
+   */
+  applies_to:
+    | number
+    | string
+    | boolean
+    | null
+    | {
+        [k: string]: unknown;
+      }
+    | PatternNode[];
+  /**
+   * Grid family this scheme targets; the stencil's selector.kind must match this family. dimensional_split requires "cartesian" or "cubed_sphere" (unstructured grids have no intrinsic orthogonal-axis ordering).
+   */
+  grid_family: "cartesian" | "cubed_sphere" | "unstructured";
+  /**
+   * stencil: how stencil entries are combined. Not applicable to dimensional_split schemes.
+   */
+  combine?: "+" | "*" | "min" | "max";
+  /**
+   * stencil: array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1). Required when kind is "stencil" or omitted; must be absent when kind is "dimensional_split".
+   *
+   * @minItems 1
+   */
+  stencil?: [StencilEntry, ...StencilEntry[]];
+  /**
+   * dimensional_split: ordered list of spatial axes (names from the target grid's dimensions) along which the inner scheme is swept. Each axis is visited once per Lie step and twice (symmetrically) per Strang step. See RFC §7.4.
+   *
+   * @minItems 1
+   */
+  axes?: [string, ...string[]];
+  /**
+   * dimensional_split: name of a sibling discretization scheme (must be declared under the enclosing file's "discretizations" section) that provides the 1D operator applied on each axis. The inner scheme is typically itself kind="stencil" with grid_family="cartesian" and a single cartesian axis in its selector.
+   */
+  inner_rule?: string;
+  /**
+   * dimensional_split: operator-splitting convention. "lie" applies each axis once in sequence (first-order in time). "strang" uses a symmetric half-step pattern with axes swept forward at Δt/2, the last axis applied at Δt, then the remaining axes swept in reverse at Δt/2 (second-order in time). "none" declares the composite structurally without prescribing a splitting order (e.g. for static metadata or parallel-split runtimes that choose their own order).
+   */
+  splitting?: "strang" | "lie" | "none";
+  /**
+   * dimensional_split: optional direction pattern governing the per-timestep axis traversal. "forward" walks axes in listed order each step; "reverse" walks them in reverse; "alternating" flips direction on successive timesteps to reduce splitting bias (Strang-typical). Ignored when splitting is "strang" (which defines its own symmetric order) or "none".
+   */
+  order_of_sweeps?: "forward" | "reverse" | "alternating";
+  /**
+   * Informational: truncation order (e.g. "O(dx^2)", or for dimensional_split "O(dt^2)" under Strang splitting).
+   */
+  accuracy?: string;
+  /**
+   * If set, the operand variable must carry one of these staggered-grid locations.
+   */
+  requires_locations?: string[];
+  /**
+   * Staggered-grid location the scheme emits (e.g. "cell_center", "edge_normal"). Used to pin $target on unstructured grids (RFC §7.1.1).
+   */
+  emits_location?: string;
+  /**
+   * Reserved name for the target index binding.
+   */
+  target_binding?: string;
+  /**
+   * Optional ghost-cell variable declarations used by the scheme.
+   */
+  ghost_vars?: GhostVarDecl[];
+  /**
+   * Optional list of free pattern-variable names (e.g. ["$u", "$x"]) that the scheme expects the triggering rule to bind; informational / for validator use.
+   */
+  free_variables?: string[];
+  description?: string;
+  reference?: Reference;
+};
+export type Discretization1 = {
+  [k: string]: unknown;
+};
+/**
  * A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.
  */
 export type PatternNode =
@@ -1804,63 +1886,6 @@ export interface InterfaceConstraint {
    */
   value: ("min" | "max" | "boundary") | number;
   description?: string;
-}
-/**
- * A named stencil template. Each entry maps a PDE operator class (via an applies_to pattern) to a combination (combine) over neighbors with symbolic coefficients. See RFC §7.1.
- */
-export interface Discretization {
-  /**
-   * Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1).
-   */
-  applies_to:
-    | number
-    | string
-    | boolean
-    | null
-    | {
-        [k: string]: unknown;
-      }
-    | PatternNode[];
-  /**
-   * Grid family this scheme targets; the stencil's selector.kind must match this family.
-   */
-  grid_family: "cartesian" | "cubed_sphere" | "unstructured";
-  /**
-   * How stencil entries are combined.
-   */
-  combine?: "+" | "*" | "min" | "max";
-  /**
-   * Array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1).
-   *
-   * @minItems 1
-   */
-  stencil: [StencilEntry, ...StencilEntry[]];
-  /**
-   * Informational: truncation order (e.g. "O(dx^2)").
-   */
-  accuracy?: string;
-  /**
-   * If set, the operand variable must carry one of these staggered-grid locations.
-   */
-  requires_locations?: string[];
-  /**
-   * Staggered-grid location the scheme emits (e.g. "cell_center", "edge_normal"). Used to pin $target on unstructured grids (RFC §7.1.1).
-   */
-  emits_location?: string;
-  /**
-   * Reserved name for the target index binding.
-   */
-  target_binding?: string;
-  /**
-   * Optional ghost-cell variable declarations used by the scheme.
-   */
-  ghost_vars?: GhostVarDecl[];
-  /**
-   * Optional list of free pattern-variable names (e.g. ["$u", "$x"]) that the scheme expects the triggering rule to bind; informational / for validator use.
-   */
-  free_variables?: string[];
-  description?: string;
-  reference?: Reference;
 }
 /**
  * One neighbor contribution to a discretization stencil: a selector picking out the neighbor(s) and a coefficient expression.

@@ -48,6 +48,12 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 		{"upwind_1st_advection", "tests/discretizations/upwind_1st_advection.esm", "upwind_1st", "cartesian", 3},
 		{"periodic_bc", "tests/discretizations/periodic_bc.esm", "periodic_bc_x", "cartesian", 1},
 		{"mpas_cell_div", "tests/discretizations/mpas_cell_div.esm", "mpas_cell_div", "unstructured", 1},
+		// dim_split_2d_strang exercises the kind="dimensional_split" branch:
+		// its primary scheme (strang_grad_xy) has no stencil body. The test
+		// references the *inner* 1D scheme ("centered_2nd_uniform") so the
+		// generic stencil assertions still apply; a dedicated assertion
+		// below checks the dimensional-split fields round-trip.
+		{"dim_split_2d_strang", "tests/discretizations/dim_split_2d_strang.esm", "centered_2nd_uniform", "cartesian", 2},
 	}
 	for _, f := range fixtures {
 		t.Run(f.id, func(t *testing.T) {
@@ -94,4 +100,60 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 			assertJSONEqual(t, reparsed.Discretizations, reparsed2.Discretizations, "discretizations (second hop)")
 		})
 	}
+}
+
+// TestDimensionalSplitScheme exercises the structured fields of a
+// kind="dimensional_split" Discretization (axes/inner_rule/splitting/
+// order_of_sweeps) on the RFC §7.4 worked example fixture.
+func TestDimensionalSplitScheme(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..")
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "tests/discretizations/dim_split_2d_strang.esm"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var parsed EsmFile
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	scheme, ok := parsed.Discretizations["strang_grad_xy"]
+	if !ok {
+		t.Fatalf("scheme strang_grad_xy not found")
+	}
+	if scheme.Kind != "dimensional_split" {
+		t.Errorf("Kind = %q, want \"dimensional_split\"", scheme.Kind)
+	}
+	if len(scheme.Stencil) != 0 {
+		t.Errorf("dimensional_split scheme must have no stencil, got %d entries", len(scheme.Stencil))
+	}
+	if got, want := scheme.Axes, []string{"x", "y"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Axes = %v, want %v", got, want)
+	}
+	if scheme.InnerRule != "centered_2nd_uniform" {
+		t.Errorf("InnerRule = %q, want \"centered_2nd_uniform\"", scheme.InnerRule)
+	}
+	if scheme.Splitting != "strang" {
+		t.Errorf("Splitting = %q, want \"strang\"", scheme.Splitting)
+	}
+	if scheme.OrderOfSweeps != "alternating" {
+		t.Errorf("OrderOfSweeps = %q, want \"alternating\"", scheme.OrderOfSweeps)
+	}
+	// Verify the inner scheme also parses (kind="stencil" explicit form).
+	inner, ok := parsed.Discretizations["centered_2nd_uniform"]
+	if !ok {
+		t.Fatalf("inner scheme centered_2nd_uniform not found")
+	}
+	if inner.Kind != "stencil" {
+		t.Errorf("inner Kind = %q, want \"stencil\"", inner.Kind)
+	}
+
+	// Round-trip and confirm the dim-split scheme survives intact.
+	out, err := json.Marshal(&parsed)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var reparsed EsmFile
+	if err := json.Unmarshal(out, &reparsed); err != nil {
+		t.Fatalf("unmarshal round-trip: %v", err)
+	}
+	assertJSONEqual(t, parsed.Discretizations, reparsed.Discretizations, "discretizations (dim-split)")
 }
