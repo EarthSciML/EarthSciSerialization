@@ -1431,6 +1431,89 @@ All five bindings (Julia, Python, TypeScript, Rust, Go) carry explicit
 round-trip tests against the `tests/grids/mpas_c_grid_staggering.esm`
 fixture.
 
+### 7.5 Dimensional-split schemes (new; resolves esm-okt)
+
+Certain families of transport operators — notably the FV3 Lin–Rood PPM
+advection (Lin & Rood 1996 MWR) and the CAM5 flux-form semi-Lagrangian
+scheme — are most naturally authored as a **sequence of 1D applications
+along orthogonal axes**, not as a native N-D stencil. A `Discretization`
+entry with
+
+```json
+{ "kind": "dimensional_split",
+  "axes": ["x", "y"],
+  "inner_rule": "centered_2nd_uniform",
+  "splitting": "strang",
+  "order_of_sweeps": "alternating" }
+```
+
+declares this composition structurally. The rule engine is not required
+to materialize dimensional-split schemes into a single stencil body at
+loader time; runtimes that own the sweep loop (e.g. ESD) consume the
+declaration directly and orchestrate the 1D applications themselves.
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | ✓ (value `"dimensional_split"`) | Discriminates this scheme from classic `"stencil"` entries. |
+| `applies_to` | ✓ | Shallow AST pattern for the N-D operator this composite stands in for (guard only, per §7.2.1). |
+| `grid_family` | ✓ | Must be `"cartesian"` or `"cubed_sphere"` — unstructured grids have no intrinsic orthogonal-axis ordering. |
+| `axes` | ✓ | Ordered list of spatial axis names (from the target grid's `dimensions`). Each axis is swept once per Lie step and twice (symmetrically) per Strang step. |
+| `inner_rule` | ✓ | Name of a sibling scheme in the file's `discretizations` section. The inner scheme provides the 1D operator applied on each axis; it is typically `kind: "stencil"`, `grid_family: "cartesian"`, with a single-axis cartesian selector. |
+| `splitting` | ✓ | `"lie"`, `"strang"`, or `"none"` — operator-splitting convention (see below). |
+| `order_of_sweeps` | | `"forward"` (default), `"reverse"`, or `"alternating"` — per-timestep axis traversal direction. Ignored when `splitting` is `"strang"` (which prescribes its own symmetric order) or `"none"`. |
+| `accuracy`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference` | | Same meaning as for stencil schemes; `ghost_vars` declared here apply to the composite's outer boundary, not the inner scheme's. |
+| `stencil`, `combine` | ✗ | Must **not** appear on `kind: "dimensional_split"` entries. The loader-level schema enforces this via conditional `required` / `not.required`. |
+
+**Splitting semantics.**
+
+- `lie`: apply the inner rule along `axes[0]` for time Δt, then `axes[1]`
+  for Δt, … then `axes[N−1]` for Δt. First-order accurate in time.
+- `strang`: apply the inner rule along `axes[0]` for Δt/2, then
+  `axes[1]` for Δt/2, … then `axes[N−1]` for Δt, then `axes[N−2]` for
+  Δt/2, … back to `axes[0]` for Δt/2. Symmetric, second-order accurate
+  in time.
+- `none`: structurally declares the composite without prescribing a
+  timestep order. Useful when the consuming runtime chooses the
+  splitting at dispatch time (e.g. parallel-split solvers), or when the
+  file is a static catalogue entry used for documentation only.
+
+**FV3 Lin–Rood worked sketch.** A 2D PPM advection on a cubed-sphere
+panel would look like
+
+```json
+{ "discretizations": {
+    "fv3_lin_rood_ppm_1d": {
+      "kind": "stencil",
+      "grid_family": "cubed_sphere",
+      "applies_to": { "op": "adv", "args": ["$u"], "dim": "$x" },
+      "stencil": [ /* PPM reconstruction entries, omitted for brevity */ ]
+    },
+    "fv3_lin_rood_advection": {
+      "kind": "dimensional_split",
+      "applies_to": { "op": "adv", "args": ["$u"] },
+      "grid_family": "cubed_sphere",
+      "axes": ["panel_i", "panel_j"],
+      "inner_rule": "fv3_lin_rood_ppm_1d",
+      "splitting": "strang",
+      "order_of_sweeps": "alternating"
+    }
+  }
+}
+```
+
+The rule engine matches the 2D `adv` operator to `fv3_lin_rood_advection`.
+Runtimes that can lower Strang-split advection into the inner 1D calls
+do so using `inner_rule` and `axes`; those that cannot simply carry the
+composite through as-is for ESD to execute.
+
+**Binding contract.** All five bindings (Julia, TypeScript, Python, Rust,
+Go) parse and round-trip `kind: "dimensional_split"` schemes losslessly.
+Structured expansion semantics (inlining the N·Δt/2 sweep into a single
+AST) is **out of scope** for v0.2.0 and tracked separately in ESD. The
+conformance manifest adds `tests/discretizations/dim_split_2d_strang.esm`
+— a 2D Strang-split scheme over `centered_2nd_uniform` — as the
+cross-binding fixture.
+
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
 v0.2.0 extends `data_loaders` with a new `kind: "mesh"` that covers MPAS-

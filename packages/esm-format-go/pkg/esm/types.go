@@ -763,7 +763,10 @@ type EsmFile struct {
 	StaggeringRules     map[string]StaggeringRule     `json:"staggering_rules,omitempty"`
 }
 
-// Discretization is a named stencil template (discretization RFC §7.1).
+// Discretization is a named discretization scheme. Two kinds are supported:
+// "stencil" (the default when Kind is "") is a neighbor-combination template
+// per RFC §7.1; "dimensional_split" composes a 1D inner scheme along several
+// orthogonal axes via Strang/Lie operator splitting per RFC §7.4.
 //
 // The AST-pattern fields (AppliesTo, Stencil[*].Coeff, NeighborSelector
 // expression slots) carry pattern variables like "$u" / "$target" that are
@@ -771,6 +774,10 @@ type EsmFile struct {
 // Expressions and thus are preserved as raw json.RawMessage for lossless
 // round-tripping.
 type Discretization struct {
+	// Kind discriminates scheme sub-types: "" / "stencil" = classic
+	// neighbor-combination template (§7.1); "dimensional_split" = axis-sweep
+	// composite (§7.4), which activates Axes / InnerRule / Splitting.
+	Kind               string            `json:"kind,omitempty"`
 	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
 	// this scheme discretizes. Preserved as raw JSON because the pattern may
 	// contain pattern variables ($u, $x, ...) that are not valid
@@ -778,7 +785,13 @@ type Discretization struct {
 	AppliesTo          json.RawMessage   `json:"applies_to"`
 	GridFamily         string            `json:"grid_family"`
 	Combine            string            `json:"combine,omitempty"`
-	Stencil            []StencilEntry    `json:"stencil"`
+	Stencil            []StencilEntry    `json:"stencil,omitempty"`
+	// Axes, InnerRule, Splitting, OrderOfSweeps are only meaningful when
+	// Kind == "dimensional_split"; they are omitted otherwise.
+	Axes               []string          `json:"axes,omitempty"`
+	InnerRule          string            `json:"inner_rule,omitempty"`
+	Splitting          string            `json:"splitting,omitempty"`
+	OrderOfSweeps      string            `json:"order_of_sweeps,omitempty"`
 	Accuracy           string            `json:"accuracy,omitempty"`
 	// Order optionally selects stencil width / truncation order for
 	// families that admit a parameterized order (e.g. arbitrary-order
