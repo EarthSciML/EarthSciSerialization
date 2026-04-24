@@ -1352,7 +1352,7 @@ deterministic across runs.
 
 ### load
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:2312`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:2317`
 
 **Signature:**
 ```typescript
@@ -2199,7 +2199,7 @@ Validate ESM data and return structured validation result.
 
 ### validateSchema
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1848`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:1853`
 
 **Signature:**
 ```typescript
@@ -2560,6 +2560,38 @@ Replace a parameter in one system with a variable from another.
 
 **Available in other languages:**
 - [Julia](julia.md#couplingvariablemap)
+
+---
+
+### CrossMetricStencilRule
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1969`
+
+**Definition:**
+```typescript
+export interface CrossMetricStencilRule {
+```
+
+**Description:**
+Cross-metric composite stencil rule (RFC §7.4). Expresses operators whose discretization does not fit the single-axis stencil shape — specifically covariant PDE operators on curvilinear grids where metric-tensor components (J, g_xixi, g_etaeta, g_xieta, ginv_*) weight a sum of per-axis stencil applications. The canonical example is the full covariant Laplacian on a cubed-sphere panel, which combines ∂/∂ξ and ∂/∂η stencils with metric weights in a 9-point composite.
+
+Expansion semantics: given a rule match at $target, the composite expands to `Σ_terms[ sign_t · metric_component_t($target) · axis_stencil_t(field, axes_t) ]`, where each `axis_stencil_t` is the expansion of the referenced Discretization at $target along its declared axis. The composite's own `combine` field (default '+') determines how terms are combined.
+/
+
+---
+
+### CrossMetricTerm
+
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:2036`
+
+**Definition:**
+```typescript
+export interface CrossMetricTerm {
+```
+
+**Description:**
+One term of a CrossMetricStencilRule composite expansion (RFC §7.4). Semantically, the term contributes `sign * metric_component(target) * axis_stencil(field, axis)` to the composite, where `axis_stencil` names another Discretization whose expansion is substituted point-wise and `metric_component` names a metric array from the grid's metric_arrays block. Terms with identical `axis_stencil` but distinct `metric_component` are how cross-derivative composites (e.g. g_xieta · ∂²/∂ξ∂η) are assembled.
+/
 
 ---
 
@@ -3374,7 +3406,7 @@ and adds the three accessor methods called out in gt-j2b8.
 
 ### GridConnectivity
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1996`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:2083`
 
 **Definition:**
 ```typescript
@@ -3392,7 +3424,7 @@ Unstructured-grid connectivity table (e.g., cellsOnEdge, edgesOnCell). Integer-i
 
 ### GridExtent
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1989`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:2076`
 
 **Definition:**
 ```typescript
@@ -3421,7 +3453,7 @@ export interface GridMeta {
 
 ### GridMetricArray
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:1967`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/generated.ts:2054`
 
 **Definition:**
 ```typescript
@@ -3535,7 +3567,7 @@ export interface LayoutResult<N> {
 
 ### LoadOptions
 
-**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:2286`
+**File:** `/home/runner/work/EarthSciSerialization/EarthSciSerialization/packages/earthsci-toolkit/src/parse.ts:2291`
 
 **Definition:**
 ```typescript
