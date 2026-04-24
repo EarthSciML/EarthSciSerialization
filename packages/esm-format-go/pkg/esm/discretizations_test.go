@@ -48,6 +48,11 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 		{"upwind_1st_advection", "tests/discretizations/upwind_1st_advection.esm", "upwind_1st", "cartesian", 3},
 		{"periodic_bc", "tests/discretizations/periodic_bc.esm", "periodic_bc_x", "cartesian", 1},
 		{"mpas_cell_div", "tests/discretizations/mpas_cell_div.esm", "mpas_cell_div", "unstructured", 1},
+		// The cross-metric fixture's *named* entry is a composite (no stencil);
+		// stencilLen 0 signals "composite — inspect Terms instead".
+		{"cross_metric_cartesian_composite", "tests/discretizations/cross_metric_cartesian.esm", "laplacian_full_covariant_toy", "cartesian", 0},
+		{"cross_metric_cartesian_dxi2", "tests/discretizations/cross_metric_cartesian.esm", "d2_dxi2_uniform", "cartesian", 3},
+		{"cross_metric_cartesian_deta2", "tests/discretizations/cross_metric_cartesian.esm", "d2_deta2_uniform", "cartesian", 3},
 	}
 	for _, f := range fixtures {
 		t.Run(f.id, func(t *testing.T) {
@@ -68,6 +73,16 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 			}
 			if len(scheme.Stencil) != f.stencilLen {
 				t.Errorf("stencil len = %d, want %d", len(scheme.Stencil), f.stencilLen)
+			}
+			// For composite entries (stencilLen == 0 and no Stencil) we expect
+			// a nonempty Terms array and IsCrossMetric()==true (RFC §7.4).
+			if f.stencilLen == 0 && len(scheme.Stencil) == 0 {
+				if !scheme.IsCrossMetric() {
+					t.Errorf("scheme %q: expected composite (Terms nonempty), got Terms=%v", f.schemeName, scheme.Terms)
+				}
+				if len(scheme.Axes) == 0 {
+					t.Errorf("scheme %q: composite must declare axes", f.schemeName)
+				}
 			}
 
 			out, err := json.Marshal(&parsed)

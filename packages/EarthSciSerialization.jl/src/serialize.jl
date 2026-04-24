@@ -1030,6 +1030,12 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     if file.grids !== nothing
         result["grids"] = Dict(k => serialize_grid(v) for (k, v) in file.grids)
     end
+    # Discretization schemes (RFC §7 / §7.4). Held opaquely as
+    # Dict{String,Any}, so serialization is a direct handoff — the parse-time
+    # deep conversion to native Dict is lossless at the JSON level.
+    if file.discretizations !== nothing
+        result["discretizations"] = file.discretizations
+    end
 
     return result
 end

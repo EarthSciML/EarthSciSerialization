@@ -308,6 +308,16 @@ function coerce_esm_file(data::Any)::EsmFile
         nothing
     end
 
+    # Discretization schemes (RFC §7). Held opaquely as Dict{String,Any} —
+    # standard stencil templates and CrossMetricStencilRule composites (§7.4)
+    # both pass through unchanged. Schema-level validation already ran above.
+    discretizations = if haskey(data, :discretizations) && data.discretizations !== nothing
+        d = _to_native_json(data.discretizations)::Dict{String,Any}
+        d
+    else
+        nothing
+    end
+
     return EsmFile(esm, metadata,
                   models=models,
                   reaction_systems=reaction_systems,
@@ -317,7 +327,8 @@ function coerce_esm_file(data::Any)::EsmFile
                   coupling=coupling,
                   domains=domains,
                   interfaces=interfaces,
-                  grids=grids)
+                  grids=grids,
+                  discretizations=discretizations)
 end
 
 # Closed set of allowed builtin generator names (RFC §6.4.1).

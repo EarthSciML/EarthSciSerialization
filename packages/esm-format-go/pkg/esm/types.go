@@ -761,7 +761,15 @@ type EsmFile struct {
 	Grids               map[string]Grid               `json:"grids,omitempty"`
 }
 
-// Discretization is a named stencil template (discretization RFC §7.1).
+// Discretization is a named stencil template (discretization RFC §7.1) OR a
+// cross-metric composite stencil rule (RFC §7.4).
+//
+// The two variants share nearly all fields; the composite adds Axes, Terms,
+// BoundaryFallback, and an optional Kind="cross_metric" discriminator, while
+// standard discretizations carry Stencil and (optionally) GhostVars. A
+// nonempty Terms field signals the composite variant; a nonempty Stencil
+// field signals the standard variant. Exactly one of the two is set on any
+// given instance.
 //
 // The AST-pattern fields (AppliesTo, Stencil[*].Coeff, NeighborSelector
 // expression slots) carry pattern variables like "$u" / "$target" that are
@@ -769,6 +777,11 @@ type EsmFile struct {
 // Expressions and thus are preserved as raw json.RawMessage for lossless
 // round-tripping.
 type Discretization struct {
+	// Kind is an optional discriminator literal "cross_metric" for the
+	// composite variant (RFC §7.4). Absent (empty) for standard
+	// discretizations. Presence of Terms is the authoritative signal.
+	Kind string `json:"kind,omitempty"`
+
 	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
 	// this scheme discretizes. Preserved as raw JSON because the pattern may
 	// contain pattern variables ($u, $x, ...) that are not valid
@@ -776,7 +789,25 @@ type Discretization struct {
 	AppliesTo          json.RawMessage   `json:"applies_to"`
 	GridFamily         string            `json:"grid_family"`
 	Combine            string            `json:"combine,omitempty"`
-	Stencil            []StencilEntry    `json:"stencil"`
+
+	// Stencil is the per-neighbor contribution list for a standard
+	// discretization (RFC §7.1). Mutually exclusive with Terms.
+	Stencil            []StencilEntry    `json:"stencil,omitempty"`
+
+	// Axes is the ordered coordinate-axis list for a CrossMetricStencilRule
+	// composite (RFC §7.4). Nonempty iff this entry is a composite.
+	Axes               []string          `json:"axes,omitempty"`
+
+	// Terms is the array of CrossMetricTerm entries for a composite rule.
+	// Mutually exclusive with Stencil; nonempty Terms signals the composite
+	// variant.
+	Terms              []CrossMetricTerm `json:"terms,omitempty"`
+
+	// BoundaryFallback names another discretization (in the same block) to
+	// apply at edges / corners / cross-panel boundaries where the composite
+	// stencil cannot be evaluated. Composite-only.
+	BoundaryFallback   string            `json:"boundary_fallback,omitempty"`
+
 	Accuracy           string            `json:"accuracy,omitempty"`
 	RequiresLocations  []string          `json:"requires_locations,omitempty"`
 	EmitsLocation      string            `json:"emits_location,omitempty"`
@@ -785,6 +816,33 @@ type Discretization struct {
 	FreeVariables      []string          `json:"free_variables,omitempty"`
 	Description        string            `json:"description,omitempty"`
 	Reference          *Reference        `json:"reference,omitempty"`
+}
+
+// IsCrossMetric reports whether this Discretization is a CrossMetricStencilRule
+// composite (RFC §7.4) rather than a standard stencil template.
+func (d *Discretization) IsCrossMetric() bool {
+	return len(d.Terms) > 0
+}
+
+// CrossMetricTerm is one term of a CrossMetricStencilRule composite (RFC §7.4).
+// Semantically contributes `Sign * MetricComponent(target) * AxisStencil(field)`
+// to the composite's combined sum.
+type CrossMetricTerm struct {
+	// AxisStencil names a per-axis Discretization (in the same discretizations
+	// block) whose expansion supplies this term's 1D directional derivative.
+	AxisStencil string `json:"axis_stencil"`
+
+	// MetricComponent names a metric array (entry of the grid's metric_arrays
+	// block, e.g. "J", "g_xixi", "g_etaeta", "g_xieta", "ginv_xixi") resolved
+	// point-wise at $target via the grid accessor's metric_eval contract.
+	MetricComponent string `json:"metric_component"`
+
+	// Sign is +1 (default) or -1, applied to this term's contribution.
+	// Omitted from JSON when zero-valued so defaulting surfaces at the
+	// consumer; callers should treat a missing Sign as +1 per the spec.
+	Sign int `json:"sign,omitempty"`
+
+	Description string `json:"description,omitempty"`
 }
 
 // StencilEntry is one neighbor contribution: a selector plus a symbolic

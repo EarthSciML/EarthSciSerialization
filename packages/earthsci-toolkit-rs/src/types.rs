@@ -51,6 +51,15 @@ pub struct EsmFile {
     /// cartesian/unstructured/cubed_sphere topology per docs/rfcs/discretization.md §6.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grids: Option<HashMap<String, Grid>>,
+
+    /// Named discretization schemes (RFC §7). Held opaquely as
+    /// `HashMap<String, serde_json::Value>` because stencil coefficients and
+    /// applies_to patterns carry pattern-variable strings (`$u`, `$x`,
+    /// `$target`) that don't map onto the `Expr` coercion pipeline. Standard
+    /// `Discretization` (§7.1) and `CrossMetricStencilRule` (§7.4) entries
+    /// both pass through unchanged, preserving round-trip fidelity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discretizations: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// Academic citation or data source reference

@@ -1070,6 +1070,12 @@ struct EsmFile
     domains::Union{Dict{String,Domain},Nothing}
     interfaces::Union{Dict{String,Interface},Nothing}
     grids::Union{Dict{String,Grid},Nothing}
+    # Named discretization schemes (RFC §7). Held opaquely as Dict{String,Any}
+    # because stencil coefficients and applies_to patterns carry pattern-
+    # variable strings (\$u, \$x, \$target) that don't map onto the Expression
+    # coercion pipeline. Standard Discretization (§7.1) and
+    # CrossMetricStencilRule (§7.4) entries pass through unchanged.
+    discretizations::Union{Dict{String,Any},Nothing}
 
     # Constructor with optional parameters
     EsmFile(esm::String, metadata::Metadata;
@@ -1081,9 +1087,10 @@ struct EsmFile
             coupling=CouplingEntry[],
             domains=nothing,
             interfaces=nothing,
-            grids=nothing) =
+            grids=nothing,
+            discretizations=nothing) =
         new(esm, metadata, models, reaction_systems, data_loaders, operators,
-            registered_functions, coupling, domains, interfaces, grids)
+            registered_functions, coupling, domains, interfaces, grids, discretizations)
 end
 
 # ========================================

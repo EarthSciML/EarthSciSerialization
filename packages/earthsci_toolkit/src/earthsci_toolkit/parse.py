@@ -5,6 +5,7 @@ This module provides functions to parse JSON data into ESM format objects,
 with schema validation using the bundled esm-schema.json file.
 """
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -1464,6 +1465,13 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
                 for event_data in rs_data["continuous_events"]:
                     events.append(_parse_continuous_event(event_data))
 
+    # Discretization schemes (RFC §7). Held opaquely — standard stencil
+    # templates and CrossMetricStencilRule composites (§7.4) both pass through
+    # unchanged. Schema-level validation already ran above in `validate(...)`.
+    discretizations = {}
+    if "discretizations" in data and data["discretizations"] is not None:
+        discretizations = copy.deepcopy(data["discretizations"])
+
     return EsmFile(
         version=data["esm"],
         metadata=metadata,
@@ -1476,6 +1484,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         coupling=coupling,
         domains=domains,
         grids=grids,
+        discretizations=discretizations,
     )
 
 
