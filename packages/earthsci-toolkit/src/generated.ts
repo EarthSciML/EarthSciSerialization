@@ -497,6 +497,134 @@ export type InitialConditions =
       };
     };
 /**
+ * A named discretization rule. The `kind` discriminator selects the rule family: `stencil` (default, §7.1) for classical stencil templates — each entry maps a PDE operator class (via an applies_to pattern) to a combination (combine) over neighbors with symbolic coefficients; `flux_form_semi_lagrangian` (§7.4) for flux-form semi-Lagrangian (FFSL) rules (Lin & Rood 1996 MWR) which are 2D dimensionally-split, conservative advection families combining a piecewise reconstruction with flux-form remapping and use `reconstruction`/`remap`/`limiter`/`cfl_policy`/`dimensions` instead of `stencil`.
+ */
+export type Discretization = Discretization1 & {
+  /**
+   * Rule family discriminator. `stencil` (default, §7.1): classical finite-difference/volume stencil template — requires `stencil`. `flux_form_semi_lagrangian` (§7.4): FFSL advection rule — requires `reconstruction`, `remap`, `cfl_policy`, and `dimensions`; `stencil` is not used.
+   */
+  kind?: "stencil" | "flux_form_semi_lagrangian";
+  /**
+   * Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1).
+   */
+  applies_to:
+    | number
+    | string
+    | boolean
+    | null
+    | {
+        [k: string]: unknown;
+      }
+    | PatternNode[];
+  /**
+   * Grid family this scheme targets; the stencil's selector.kind must match this family.
+   */
+  grid_family: "cartesian" | "cubed_sphere" | "unstructured";
+  /**
+   * How stencil entries are combined.
+   */
+  combine?: "+" | "*" | "min" | "max";
+  /**
+   * Array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1). Required when `kind` is `stencil` (or absent); must not be used when `kind` is `flux_form_semi_lagrangian`.
+   *
+   * @minItems 1
+   */
+  stencil?: [StencilEntry, ...StencilEntry[]];
+  /**
+   * FFSL only (§7.4): the sub-cell reconstruction used to build cell-edge fluxes. Either a string naming a discretizations entry (rule ref), or an inline object declaring a reconstruction scheme — `order` (e.g. `"PPM"`, `"PLM"`, `"centered"`) plus optional free-form `parameters`. Composes with a limiter when one is declared.
+   */
+  reconstruction?:
+    | string
+    | {
+        /**
+         * Reconstruction order / family name (e.g. "PPM", "PLM", "centered", "WENO5"). Not an enum — runtimes may add families; unknown values are the rule engine's responsibility to reject.
+         */
+        order: string;
+        /**
+         * Free-form key/value parameters for the reconstruction (e.g. monotonicity controls). Schema is intentionally open; consumers validate per-order.
+         */
+        parameters?: {
+          [k: string]: unknown;
+        };
+      };
+  /**
+   * FFSL only (§7.4): flux-form remap semantics — how reconstructed sub-cell profiles are integrated across cell faces and used to update cell averages. The `semantics` enum is open-ended but currently closed to `conservative` (finite-volume flux divergence preserving cell integrals) and `non_conservative` (pointwise semi-Lagrangian trajectory).
+   */
+  remap?: {
+    /**
+     * Remap family. `conservative` preserves the volume-integrated tracer mass per Lin & Rood (1996) §2. `non_conservative` uses pointwise trajectory remap (Staniforth & Côté 1991).
+     */
+    semantics: "conservative" | "non_conservative";
+    /**
+     * Optional sub-kind identifier (e.g. "lin_rood_1996", "colella_woodward_1984").
+     */
+    flux_form?: string;
+    /**
+     * Free-form parameters for the remap (e.g. sub-cycle count, flux clipping thresholds).
+     */
+    parameters?: {
+      [k: string]: unknown;
+    };
+  };
+  /**
+   * FFSL only (§7.4): optional slope/flux limiter applied during reconstruction to preserve monotonicity. Either a string naming a discretizations entry (rule ref — e.g. a named monotonic limiter scheme), or an inline object declaring a limiter family.
+   */
+  limiter?:
+    | string
+    | {
+        /**
+         * Limiter family name (e.g. "monotonic", "van_leer", "positive_definite").
+         */
+        family: string;
+        parameters?: {
+          [k: string]: unknown;
+        };
+      };
+  /**
+   * FFSL only (§7.4): CFL policy governing the reconstruction/remap pairing. `conservative`: mass-conserving flux-form (Lin & Rood 1996); `non_conservative`: pointwise SL trajectory without flux conservation.
+   */
+  cfl_policy?: "conservative" | "non_conservative";
+  /**
+   * FFSL only (§7.4): axis names along which the rule advects, in application order. Composes with a dimensional-split rule (sibling RFC bead): the named axes must appear in the enclosing grid's `dimensions`; each axis is swept once per step.
+   *
+   * @minItems 1
+   */
+  dimensions?: [string, ...string[]];
+  /**
+   * Informational: truncation order (e.g. "O(dx^2)").
+   */
+  accuracy?: string;
+  /**
+   * Optional scalar selector for stencil width / truncation order. Positive integer. For families that admit a parameterized order (e.g. arbitrary-order centered uniform finite differences via Fornberg-recursion weights), this field picks the concrete scheme: centered uniform FD uses positive even integers (2, 4, 6, 8, …); one-sided or upwind schemes use any positive integer. Absence means the rule's default applies (e.g. the hard-coded order=2 of centered_2nd_uniform). The field is consumed by the rule engine / scheme authoring layer — schema accepts any positive integer; family-specific parity constraints (even for centered) are enforced by the rule implementation, not the schema. See discretization RFC §7.1.
+   */
+  order?: number;
+  /**
+   * If set, the operand variable must carry one of these staggered-grid locations.
+   */
+  requires_locations?: string[];
+  /**
+   * Staggered-grid location the scheme emits (e.g. "cell_center", "edge_normal"). Used to pin $target on unstructured grids (RFC §7.1.1).
+   */
+  emits_location?: string;
+  /**
+   * Reserved name for the target index binding.
+   */
+  target_binding?: string;
+  /**
+   * Optional ghost-cell variable declarations used by the scheme.
+   */
+  ghost_vars?: GhostVarDecl[];
+  /**
+   * Optional list of free pattern-variable names (e.g. ["$u", "$x"]) that the scheme expects the triggering rule to bind; informational / for validator use.
+   */
+  free_variables?: string[];
+  description?: string;
+  reference?: Reference;
+};
+export type Discretization1 = {
+  [k: string]: unknown;
+};
+/**
  * A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.
  */
 export type PatternNode =
@@ -1804,67 +1932,6 @@ export interface InterfaceConstraint {
    */
   value: ("min" | "max" | "boundary") | number;
   description?: string;
-}
-/**
- * A named stencil template. Each entry maps a PDE operator class (via an applies_to pattern) to a combination (combine) over neighbors with symbolic coefficients. See RFC §7.1.
- */
-export interface Discretization {
-  /**
-   * Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1).
-   */
-  applies_to:
-    | number
-    | string
-    | boolean
-    | null
-    | {
-        [k: string]: unknown;
-      }
-    | PatternNode[];
-  /**
-   * Grid family this scheme targets; the stencil's selector.kind must match this family.
-   */
-  grid_family: "cartesian" | "cubed_sphere" | "unstructured";
-  /**
-   * How stencil entries are combined.
-   */
-  combine?: "+" | "*" | "min" | "max";
-  /**
-   * Array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1).
-   *
-   * @minItems 1
-   */
-  stencil: [StencilEntry, ...StencilEntry[]];
-  /**
-   * Informational: truncation order (e.g. "O(dx^2)").
-   */
-  accuracy?: string;
-  /**
-   * Optional scalar selector for stencil width / truncation order. Positive integer. For families that admit a parameterized order (e.g. arbitrary-order centered uniform finite differences via Fornberg-recursion weights), this field picks the concrete scheme: centered uniform FD uses positive even integers (2, 4, 6, 8, …); one-sided or upwind schemes use any positive integer. Absence means the rule's default applies (e.g. the hard-coded order=2 of centered_2nd_uniform). The field is consumed by the rule engine / scheme authoring layer — schema accepts any positive integer; family-specific parity constraints (even for centered) are enforced by the rule implementation, not the schema. See discretization RFC §7.1.
-   */
-  order?: number;
-  /**
-   * If set, the operand variable must carry one of these staggered-grid locations.
-   */
-  requires_locations?: string[];
-  /**
-   * Staggered-grid location the scheme emits (e.g. "cell_center", "edge_normal"). Used to pin $target on unstructured grids (RFC §7.1.1).
-   */
-  emits_location?: string;
-  /**
-   * Reserved name for the target index binding.
-   */
-  target_binding?: string;
-  /**
-   * Optional ghost-cell variable declarations used by the scheme.
-   */
-  ghost_vars?: GhostVarDecl[];
-  /**
-   * Optional list of free pattern-variable names (e.g. ["$u", "$x"]) that the scheme expects the triggering rule to bind; informational / for validator use.
-   */
-  free_variables?: string[];
-  description?: string;
-  reference?: Reference;
 }
 /**
  * One neighbor contribution to a discretization stencil: a selector picking out the neighbor(s) and a coefficient expression.

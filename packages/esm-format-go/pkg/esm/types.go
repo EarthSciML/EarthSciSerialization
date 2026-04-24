@@ -761,14 +761,24 @@ type EsmFile struct {
 	Grids               map[string]Grid               `json:"grids,omitempty"`
 }
 
-// Discretization is a named stencil template (discretization RFC §7.1).
+// Discretization is a named discretization rule (RFC §7.1, §7.4).
+//
+// The Kind field discriminates the rule family: "stencil" (default, §7.1)
+// for classical stencil templates and "flux_form_semi_lagrangian" (§7.4)
+// for flux-form semi-Lagrangian (FFSL) rules (Lin & Rood 1996 MWR). Stencil
+// rules use Stencil; FFSL rules use Reconstruction / Remap / Limiter /
+// CflPolicy / Dimensions instead.
 //
 // The AST-pattern fields (AppliesTo, Stencil[*].Coeff, NeighborSelector
 // expression slots) carry pattern variables like "$u" / "$target" that are
 // bound by the rule engine at expansion time — they are not ordinary
 // Expressions and thus are preserved as raw json.RawMessage for lossless
-// round-tripping.
+// round-tripping. Reconstruction and Limiter are raw JSON because they may
+// be either a string (rule ref) or an inline object.
 type Discretization struct {
+	// Kind selects the rule family: "stencil" (default, empty string also
+	// means stencil) or "flux_form_semi_lagrangian".
+	Kind               string            `json:"kind,omitempty"`
 	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
 	// this scheme discretizes. Preserved as raw JSON because the pattern may
 	// contain pattern variables ($u, $x, ...) that are not valid
@@ -776,7 +786,21 @@ type Discretization struct {
 	AppliesTo          json.RawMessage   `json:"applies_to"`
 	GridFamily         string            `json:"grid_family"`
 	Combine            string            `json:"combine,omitempty"`
-	Stencil            []StencilEntry    `json:"stencil"`
+	// Stencil is required when Kind is "stencil" (or empty) and forbidden
+	// when Kind is "flux_form_semi_lagrangian".
+	Stencil            []StencilEntry    `json:"stencil,omitempty"`
+	// Reconstruction (FFSL §7.4): sub-cell reconstruction — string rule-ref
+	// or inline {order, parameters} object.
+	Reconstruction     json.RawMessage   `json:"reconstruction,omitempty"`
+	// Remap (FFSL §7.4): flux-form remap semantics.
+	Remap              *FfslRemap        `json:"remap,omitempty"`
+	// Limiter (FFSL §7.4, optional): slope/flux limiter — string rule-ref or
+	// inline {family, parameters} object.
+	Limiter            json.RawMessage   `json:"limiter,omitempty"`
+	// CflPolicy (FFSL §7.4): "conservative" or "non_conservative".
+	CflPolicy          string            `json:"cfl_policy,omitempty"`
+	// Dimensions (FFSL §7.4): axis names, in application order.
+	Dimensions         []string          `json:"dimensions,omitempty"`
 	Accuracy           string            `json:"accuracy,omitempty"`
 	// Order optionally selects stencil width / truncation order for
 	// families that admit a parameterized order (e.g. arbitrary-order
@@ -791,6 +815,14 @@ type Discretization struct {
 	FreeVariables      []string          `json:"free_variables,omitempty"`
 	Description        string            `json:"description,omitempty"`
 	Reference          *Reference        `json:"reference,omitempty"`
+}
+
+// FfslRemap is the `remap` field of a flux-form semi-Lagrangian rule
+// (RFC §7.4). Semantics is "conservative" or "non_conservative".
+type FfslRemap struct {
+	Semantics  string                 `json:"semantics"`
+	FluxForm   string                 `json:"flux_form,omitempty"`
+	Parameters map[string]interface{} `json:"parameters,omitempty"`
 }
 
 // StencilEntry is one neighbor contribution: a selector plus a symbolic

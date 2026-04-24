@@ -52,6 +52,8 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 		{"periodic_bc", "tests/discretizations/periodic_bc.esm", "periodic_bc_x", "cartesian", 1, nil},
 		{"mpas_cell_div", "tests/discretizations/mpas_cell_div.esm", "mpas_cell_div", "unstructured", 1, nil},
 		{"centered_arbitrary_order_uniform", "tests/discretizations/centered_arbitrary_order_uniform.esm", "centered_arbitrary_order_uniform", "cartesian", 4, intPtr(4)},
+		// FFSL rule (RFC §7.4): no stencil — stencilLen=0 is expected.
+		{"cam5_ffsl_advection", "tests/discretizations/cam5_ffsl_advection.esm", "cam5_ffsl_1d", "cartesian", 0, nil},
 	}
 	for _, f := range fixtures {
 		t.Run(f.id, func(t *testing.T) {
@@ -105,5 +107,46 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 			}
 			assertJSONEqual(t, reparsed.Discretizations, reparsed2.Discretizations, "discretizations (second hop)")
 		})
+	}
+}
+
+// TestFfslDiscretizationStructuralAsserts verifies the structural invariants
+// of the CAM5 FFSL fixture: the kind discriminator, absence of a stencil,
+// and presence + shape of the FFSL-specific fields (reconstruction, remap,
+// cfl_policy, dimensions).
+func TestFfslDiscretizationStructuralAsserts(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..")
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "tests/discretizations/cam5_ffsl_advection.esm"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var parsed EsmFile
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	d, ok := parsed.Discretizations["cam5_ffsl_1d"]
+	if !ok {
+		t.Fatal("cam5_ffsl_1d not found")
+	}
+	if d.Kind != "flux_form_semi_lagrangian" {
+		t.Errorf("kind = %q, want %q", d.Kind, "flux_form_semi_lagrangian")
+	}
+	if len(d.Stencil) != 0 {
+		t.Errorf("FFSL rule must not carry a stencil; got %d entries", len(d.Stencil))
+	}
+	if d.Remap == nil {
+		t.Fatal("remap missing")
+	}
+	if d.Remap.Semantics != "conservative" {
+		t.Errorf("remap.semantics = %q, want %q", d.Remap.Semantics, "conservative")
+	}
+	if d.CflPolicy != "conservative" {
+		t.Errorf("cfl_policy = %q, want %q", d.CflPolicy, "conservative")
+	}
+	if len(d.Dimensions) != 1 || d.Dimensions[0] != "x" {
+		t.Errorf("dimensions = %v, want [x]", d.Dimensions)
+	}
+	if len(d.Reconstruction) == 0 {
+		t.Error("reconstruction missing")
 	}
 }

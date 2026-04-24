@@ -1360,6 +1360,99 @@ index variable valid inside `arrayop.expr` (per spec §4.3.3), so `"k"` as a
 bare string is permitted and resolves to the arrayop index variable — no
 `regrid` is needed because we remain on grid `mpas_cvmesh`.
 
+### 7.4 Flux-form semi-Lagrangian (FFSL) rules (resolves esm-1rj)
+
+CAM5's finite-volume dycore and FV3's Lin-Rood transport use flux-form
+semi-Lagrangian (FFSL) advection — a 2D dimensionally-split, conservative
+family introduced by Lin & Rood (1996 MWR). FFSL rules are structurally
+distinct from Eulerian stencil templates: each directional sweep combines a
+piecewise sub-cell reconstruction (PPM, PLM, centered) with a flux-form
+remap that integrates the reconstructed profile across cell faces. They do
+not fit the §7.1 `{selector, coeff}` stencil shape.
+
+A §7 discretization may therefore carry a `kind` discriminator:
+
+- `kind: "stencil"` (default, absent kind also means stencil) — the §7.1
+  stencil template.
+- `kind: "flux_form_semi_lagrangian"` — the FFSL rule type defined here.
+
+**FFSL rule fields** (additions to the §7.1 table):
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | | `"flux_form_semi_lagrangian"` selects this rule family. |
+| `reconstruction` | ✓ | Sub-cell reconstruction used to build cell-edge fluxes. Either a string naming a sibling `discretizations` entry (rule ref) — e.g. a PPM scheme already present in ESD's `src/operators/reconstruction.jl` — or an inline `{order, parameters?}` object. `order` is a free-form family name (`"PPM"`, `"PLM"`, `"centered"`, `"WENO5"`, …); the rule engine rejects unknown orders at expansion time. |
+| `remap` | ✓ | Flux-form remap semantics: `{semantics, flux_form?, parameters?}`. `semantics` is closed to `"conservative"` (Lin & Rood 1996 §2: flux-divergence form, preserves cell-integrated tracer mass) or `"non_conservative"` (pointwise SL trajectory, Staniforth & Côté 1991). `flux_form` is an optional sub-kind identifier (e.g. `"lin_rood_1996"`, `"colella_woodward_1984"`). |
+| `limiter` | | Optional slope/flux limiter preserving monotonicity. String rule-ref or inline `{family, parameters?}`. |
+| `cfl_policy` | ✓ | `"conservative"` or `"non_conservative"` — mirrors and constrains the remap choice; the two must agree in the canonical (Lin-Rood) case. |
+| `dimensions` | ✓ | Ordered array of axis names along which the rule advects. Composes with a dimensional-split rule: each listed axis is swept once per step. For a 1D rule, a single entry; for the full CAM5 2D scheme, a dimensional-split rule selects a pair. |
+
+`applies_to`, `grid_family`, `free_variables`, `requires_locations`,
+`emits_location`, `accuracy`, `description`, and `reference` retain their
+§7.1 meanings. `stencil` MUST NOT be used together with
+`kind: "flux_form_semi_lagrangian"`; the schema enforces this via a
+conditional `allOf` that swaps `stencil` for `reconstruction / remap /
+cfl_policy / dimensions` based on the discriminator.
+
+**Expansion semantics.** Runtime dispatch is stubbed at v0.2.0 — the rule
+engine recognizes the FFSL kind, resolves the `reconstruction` and
+`limiter` rule refs (when given as strings), and delegates concrete
+application to the grid library (ESD). The v0.2.0 contract is:
+
+1. Parse and round-trip MUST preserve every FFSL field unchanged (covered
+   by the conformance fixture `tests/discretizations/cam5_ffsl_advection.esm`).
+2. Structural validation MUST reject `stencil` in an FFSL rule, `kind:
+   "flux_form_semi_lagrangian"` without all four required FFSL fields, and
+   any FFSL field appearing on a stencil rule.
+3. A string `reconstruction` MUST name a peer `discretizations` entry when
+   the rule engine resolves it; inline objects MAY appear but unknown
+   `order` values are the engine's responsibility to reject at expansion
+   time (not the schema's).
+
+The 2D scheme is expressed as `{dimensional_split_rule, [ffsl_x, ffsl_y]}`
+where the FFSL rules name the 1D sweeps. That composition is the job of
+the dimensional-split rule type (sibling bead) — an FFSL rule alone
+advects one axis per step.
+
+**Worked example — CAM5 FV FFSL (1D building block).**
+
+```json
+{
+  "discretizations": {
+    "cam5_ffsl_1d": {
+      "kind": "flux_form_semi_lagrangian",
+      "applies_to": { "op": "grad", "args": ["$u"], "dim": "$x" },
+      "grid_family": "cartesian",
+      "reconstruction": { "order": "centered" },
+      "remap": {
+        "semantics": "conservative",
+        "flux_form": "lin_rood_1996"
+      },
+      "cfl_policy": "conservative",
+      "dimensions": ["x"],
+      "accuracy": "O(dx^2)",
+      "free_variables": ["$u", "$x"],
+      "reference": {
+        "citation": "Lin, S.-J., and R. B. Rood (1996), Mon. Wea. Rev., 124, 2046-2070.",
+        "doi": "10.1175/1520-0493(1996)124<2046:MFFSLT>2.0.CO;2"
+      }
+    }
+  }
+}
+```
+
+Conformance fixture: `tests/discretizations/cam5_ffsl_advection.esm`.
+Structural asserts exercise (a) kind discriminator, (b) absence of
+`stencil`, and (c) presence + shape of `reconstruction`, `remap`,
+`cfl_policy`, and `dimensions`. The Lin-Rood MWR citation lives in the
+fixture's `metadata.references` so every binding's parse+round-trip
+covers it.
+
+Upstream consumers in the ESD rule-catalog:
+- `cam5_fv_ffsl_advection` (P1) — CAM5's 2D FFSL advection.
+- `fv3_lin_rood_advection` (P1) — composes FFSL with the dimensional-split
+  rule type (sibling RFC bead).
+
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
 v0.2.0 extends `data_loaders` with a new `kind: "mesh"` that covers MPAS-
