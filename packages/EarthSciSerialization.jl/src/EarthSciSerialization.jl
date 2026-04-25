@@ -37,6 +37,8 @@ include("canonicalize.jl")
 include("rule_engine.jl")
 include("discretize.jl")
 include("grid_accessor.jl")
+include("abstract_grid.jl")
+include("grid_assembly.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
 
@@ -128,6 +130,17 @@ export
     GridAccessor, GridAccessorError,
     cell_centers, neighbors, metric_eval,
     register_grid_accessor!, unregister_grid_accessor!,
-    grid_accessor_factory, registered_grid_families, make_grid_accessor
+    grid_accessor_factory, registered_grid_families, make_grid_accessor,
+    # AbstractGrid trait (esm-a3z; concrete impls live in ESD)
+    AbstractGrid, AbstractCurvilinearGrid, AbstractStaggeredGrid,
+    AbstractVerticalGrid, AbstractUnstructuredGrid, GridTraitError,
+    cell_volume, cell_widths, neighbor_indices, boundary_mask,
+    n_cells, n_dims, axis_names,
+    metric_g, metric_ginv, metric_jacobian, metric_dgij_dxk,
+    coord_jacobian, coord_jacobian_second,
+    # FV grid-metric assembly (esm-xom; ported from ESD src/fv_stencil.jl)
+    FVLaplacianStencil, FVGradientStencil,
+    precompute_laplacian_stencil, precompute_gradient_stencil,
+    apply_laplacian!, apply_gradient!
 
 end # module EarthSciSerialization

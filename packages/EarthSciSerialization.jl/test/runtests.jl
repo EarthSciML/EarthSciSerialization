@@ -38,6 +38,7 @@ using JSON3
     include("staggering_rules_test.jl")
     include("discretizations_roundtrip_test.jl")
     include("grid_accessor_test.jl")
+    include("grid_assembly_test.jl")
     include("mtk_export_test.jl")
     include("tree_walk_test.jl")
 
