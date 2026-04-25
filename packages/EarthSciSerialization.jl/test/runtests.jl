@@ -41,6 +41,7 @@ using JSON3
     include("grid_assembly_test.jl")
     include("ghost_cells_test.jl")
     include("pde_discretize_test.jl")
+    include("grid_assembly_symbolic_test.jl")
     include("mtk_export_test.jl")
     include("tree_walk_test.jl")
 

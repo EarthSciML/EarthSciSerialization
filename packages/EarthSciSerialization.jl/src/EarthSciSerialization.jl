@@ -144,6 +144,11 @@ export
     precompute_laplacian_stencil, precompute_gradient_stencil,
     apply_laplacian!, apply_gradient!,
     # Trait-generic ghost-cell gathering (esm-dlz; ported from ESD src/ghost_cells.jl)
-    extend_with_ghosts, fill_ghost_cells!, extend_with_ghosts_vector
+    extend_with_ghosts, fill_ghost_cells!, extend_with_ghosts_vector,
+    # Symbolic ArrayOp assembly (esm-tet; ported from ESD src/discretization.jl)
+    # — concrete methods live in ext/grid_assembly_symbolic.jl, loaded with MTK.
+    fv_laplacian_extended, fv_gradient_extended,
+    laplacian_neighbor_table, gradient_neighbor_table,
+    const_wrap, get_idx_vars, make_arrayop, evaluate_arrayop
 
 end # module EarthSciSerialization

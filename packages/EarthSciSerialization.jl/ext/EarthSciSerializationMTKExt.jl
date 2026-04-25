@@ -25,6 +25,16 @@ using Symbolics: Num
 const SymUtils = Symbolics.SymbolicUtils
 using DomainSets: Interval
 
+# Symbolic ArrayOp grid-assembly port (esm-tet) — these methods extend the
+# stub functions declared in src/grid_assembly.jl. Pulled in early so other
+# code in this ext can call them if needed.
+using EarthSciSerialization: AbstractCurvilinearGrid,
+    n_cells, cell_widths, neighbor_indices,
+    metric_ginv, metric_jacobian,
+    coord_jacobian, coord_jacobian_second,
+    precompute_laplacian_stencil, precompute_gradient_stencil
+include("grid_assembly_symbolic.jl")
+
 # ========================================
 # ESM Expr → Symbolics conversion
 # ========================================

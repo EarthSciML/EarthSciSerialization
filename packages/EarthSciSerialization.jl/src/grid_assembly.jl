@@ -344,3 +344,26 @@ function apply_gradient!(
     end
     return (du_t1, du_t2)
 end
+
+# ---------------------------------------------------------------------------
+# Symbolic ArrayOp assembly (esm-tet) — MTK-ext stubs
+#
+# The Symbolics/ModelingToolkit-dependent counterparts of the numeric
+# stencils above live in ext/grid_assembly_symbolic.jl and only become
+# callable when the MTK extension loads. We declare empty `function` bodies
+# here so the symbol exists at parent-module load time and downstream code
+# can `import EarthSciSerialization: fv_laplacian_extended` even when the
+# extension has not yet been triggered. Calling any of these without
+# loading `ModelingToolkit` (which triggers the extension) hits the usual
+# Julia "no method matching" — that's the intended diagnostic.
+# ---------------------------------------------------------------------------
+
+function fv_laplacian_extended end
+function fv_gradient_extended end
+function const_wrap end
+function get_idx_vars end
+function make_arrayop end
+function evaluate_arrayop end
+function laplacian_neighbor_table end
+function gradient_neighbor_table end
+function _build_rhs_arrayop end
