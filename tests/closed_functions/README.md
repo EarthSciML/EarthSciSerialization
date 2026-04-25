@@ -1,0 +1,77 @@
+# Closed Function Registry — cross-binding conformance fixtures
+
+Fixtures pinning the bit-exact-where-possible semantics of the v0.3.0 closed
+function registry (esm-spec.md §9.2 / `docs/rfcs/closed-function-registry.md`).
+
+Every binding (Julia, Rust, Python, Go, TypeScript) MUST exercise these
+fixtures from its test harness and assert per-element agreement with each
+`expected.json` reference output, within the per-function tolerance declared
+in esm-spec.md §9.2.
+
+## Layout
+
+```
+tests/closed_functions/
+├── datetime/
+│   ├── year/                 (datetime.year — proleptic-Gregorian year)
+│   │   ├── canonical.esm     (trivial ODE invoking the function from RHS)
+│   │   └── expected.json     (input vectors + expected outputs + tolerance)
+│   ├── month/                (datetime.month)
+│   ├── day/                  (datetime.day)
+│   ├── hour/                 (datetime.hour)
+│   ├── minute/               (datetime.minute)
+│   ├── second/               (datetime.second)
+│   ├── day_of_year/          (datetime.day_of_year)
+│   ├── julian_day/           (datetime.julian_day)
+│   └── is_leap_year/         (datetime.is_leap_year)
+└── interp/
+    └── searchsorted/         (interp.searchsorted)
+        ├── canonical.esm
+        └── expected.json
+```
+
+## `expected.json` schema
+
+```jsonc
+{
+  "function": "datetime.year",                    // dotted module path
+  "tolerance": { "abs": 0, "rel": 0 },            // per esm-spec §9.2
+  "scenarios": [
+    {
+      "name": "epoch",                            // human-readable label
+      "description": "Unix epoch — 1970-01-01T00:00:00Z",
+      "inputs": [ 0.0 ],                          // positional args
+      "expected": 1970                            // scalar (number) or array
+    }
+  ]
+}
+```
+
+## What bindings MUST do
+
+For each `expected.json`:
+
+1. Parse `canonical.esm` (this exercises the parser's `fn`-op handling).
+2. For each scenario in `scenarios`, evaluate the named function with the
+   given inputs and assert the result agrees with `expected` within the
+   declared `tolerance`.
+3. Report per-binding pass/fail in the cross-language harness
+   (`scripts/test-conformance.sh`).
+
+A binding that fails any fixture fails CI (esm-spec §9.4).
+
+## Boundary-case coverage
+
+The scenario sets cover the boundary semantics pinned in esm-spec §9.2:
+
+- **Leap-year edges**: 2000 (div by 400), 2100 (div by 100, not 400),
+  2400 (div by 400) — the trio that catches naïve `year % 4` implementations.
+- **Calendar boundaries**: Feb 29 / Mar 1 transitions, year-end, day-of-year
+  rollover (especially day 366 in leap years).
+- **Pre-epoch (negative `t_utc`)**: 1969-12-31, 1900-01-01 — extends the
+  proleptic-Gregorian calendar backwards without modification.
+- **Sub-second / fractional days**: julian_day is the only registry entry
+  with fractional output; its scenarios pin the noon-UTC offset.
+- **searchsorted**: empty array, single element, duplicates, exact-on-
+  boundary, x ≤ xs[1], x > xs[N], NaN x, NaN-in-xs (error), non-monotonic
+  xs (error).

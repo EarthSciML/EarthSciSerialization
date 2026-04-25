@@ -75,8 +75,13 @@ Operator expression node containing:
 - `perm`: for `transpose`, optional 0-based axis permutation.
 - `axis`: for `concat`, 0-based axis to concatenate along.
 - `fn`: for `broadcast`, the scalar operator to apply element-wise.
-- `handler_id`: for `call`, id of an entry in the top-level `registered_functions`
-  map. The handler receives the evaluated `args` positionally (see esm-spec §4.4).
+- `name`: for the `fn` op, the dotted module path of a function in the closed
+  function registry (esm-spec §9.2). The set of valid `name` values is fixed by
+  the spec version; bindings MUST reject unknown names with diagnostic
+  `unknown_closed_function`.
+- `value`: for the `const` op, the inline literal value carried by this node.
+  Any JSON value (number, integer, or nested array thereof); `args` MUST be
+  empty for a const node.
 """
 struct OpExpr <: Expr
     op::String
@@ -93,15 +98,22 @@ struct OpExpr <: Expr
     perm::Union{Vector{Int},Nothing}
     axis::Union{Int,Nothing}
     fn::Union{String,Nothing}
-    handler_id::Union{String,Nothing}
+    name::Union{String,Nothing}
+    value::Any
 
     OpExpr(op::String, args::Vector{Expr};
            wrt=nothing, dim=nothing,
-           output_idx=nothing, expr_body=nothing, reduce=nothing, ranges=nothing,
-           regions=nothing, values=nothing, shape=nothing, perm=nothing,
-           axis=nothing, fn=nothing, handler_id=nothing) =
+           output_idx=nothing, expr_body=nothing, reduce=nothing,
+           ranges=nothing, regions=nothing, values=nothing,
+           shape=nothing, perm=nothing, axis=nothing, fn=nothing,
+           name=nothing, value=nothing,
+           # `handler_id` was the v0.2.x field for the now-removed `call`
+           # op (esm-spec §9.2 closure). Accept and ignore on construction
+           # so internal helpers that still pass it through don't break
+           # mid-migration; the field is no longer stored or serialized.
+           handler_id=nothing) =
         new(op, args, wrt, dim, output_idx, expr_body, reduce, ranges,
-            regions, values, shape, perm, axis, fn, handler_id)
+            regions, values, shape, perm, axis, fn, name, value)
 end
 
 # Accept any AbstractVector of Expr-subtypes (e.g. Vector{VarExpr},
@@ -114,6 +126,14 @@ function OpExpr(op::String, args::AbstractVector; kwargs...)
         widened[i] = a
     end
     return OpExpr(op, widened; kwargs...)
+end
+
+# `handler_id` was the removed v0.2.x identifier for the closed `call` op.
+# A few internal builders still read `expr.handler_id`; report `nothing`
+# uniformly so those paths gracefully degrade.
+function Base.getproperty(e::OpExpr, name::Symbol)
+    name === :handler_id && return nothing
+    return getfield(e, name)
 end
 
 # ========================================
@@ -1094,6 +1114,11 @@ struct EsmFile
     # coercion pipeline. Standard Discretization (§7.1) and
     # CrossMetricStencilRule (§7.5) entries pass through unchanged.
     discretizations::Union{Dict{String,Any},Nothing}
+    # File-local enum mappings used by the `enum` AST op (esm-spec §9.3).
+    # Keys are enum names; each value maps a symbol → positive integer.
+    # `enum`-op nodes are lowered to `const`-int nodes at load time, so the
+    # in-memory expression tree never carries enum strings.
+    enums::Union{Dict{String,Dict{String,Int}},Nothing}
 
     # Constructor with optional parameters
     EsmFile(esm::String, metadata::Metadata;
@@ -1107,10 +1132,12 @@ struct EsmFile
             interfaces=nothing,
             grids=nothing,
             staggering_rules=nothing,
-            discretizations=nothing) =
-        new(esm, metadata, models, reaction_systems, data_loaders, operators,
-            registered_functions, coupling, domains, interfaces, grids,
-            staggering_rules, discretizations)
+            discretizations=nothing,
+            enums=nothing) =
+        new(esm, metadata, models, reaction_systems, data_loaders,
+            operators, registered_functions,
+            coupling, domains, interfaces, grids,
+            staggering_rules, discretizations, enums)
 end
 
 # ========================================

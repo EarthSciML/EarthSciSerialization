@@ -1,0 +1,66 @@
+{
+    "scenarios": [
+        {
+            "name": "epoch",
+            "expected": 0,
+            "description": "Unix epoch — 1970-01-01T00:00:00 UTC.",
+            "inputs": [
+                0
+            ]
+        },
+        {
+            "name": "leap_2000_feb29",
+            "expected": 12,
+            "description": "2000-02-29T12:00:00Z — leap year (div by 400). Calendar boundary.",
+            "inputs": [
+                951825600
+            ]
+        },
+        {
+            "name": "not_leap_2100_feb28",
+            "expected": 23,
+            "description": "2100-02-28T23:59:59Z — divisible by 100 but not 400 (NOT a leap year).",
+            "inputs": [
+                4107542399
+            ]
+        },
+        {
+            "name": "leap_2400_mar01",
+            "expected": 0,
+            "description": "2400-03-01T00:00:00Z — far-future leap year (div by 400).",
+            "inputs": [
+                13574649600
+            ]
+        },
+        {
+            "name": "leap_2024_dec31",
+            "expected": 18,
+            "description": "2024-12-31T18:30:45Z — last day of leap year (day_of_year=366).",
+            "inputs": [
+                1735669845
+            ]
+        },
+        {
+            "name": "pre_epoch_1969",
+            "expected": 23,
+            "description": "1969-12-31T23:59:59Z — one second before epoch (negative t_utc).",
+            "inputs": [
+                -1
+            ]
+        },
+        {
+            "name": "century_1900",
+            "expected": 12,
+            "description": "1900-01-01T12:00:00Z — divisible by 100 (NOT a leap year), pre-epoch.",
+            "inputs": [
+                -2208945600
+            ]
+        }
+    ],
+    "function": "datetime.hour",
+    "_comment": "Cross-binding conformance reference. Inputs are positional args to the closed function; expected is the spec-pinned scalar output. Tolerance is the per-function spec tolerance (esm-spec §9.2). All five bindings MUST produce results within (abs OR rel) of expected.",
+    "tolerance": {
+        "rel": 0,
+        "abs": 0
+    }
+}

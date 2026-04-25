@@ -202,6 +202,22 @@ function evaluate(expr::IntExpr, bindings::Dict{String,Float64})::Float64
     return Float64(expr.value)
 end
 
+"""
+    _extract_const_array(arg::Expr, fname::String) -> AbstractVector
+
+Extract the inline array from a `const`-op AST node, without numeric
+evaluation. Used by closed functions (`interp.searchsorted`) whose array
+argument arrives as `{op: "const", value: [...]}` and would otherwise be
+collapsed to a scalar by the recursive `evaluate` walk.
+"""
+function _extract_const_array(arg::Expr, fname::String)::AbstractVector
+    if arg isa OpExpr && arg.op == "const" && arg.value isa AbstractVector
+        return arg.value
+    end
+    throw(ArgumentError("$(fname): array argument must be a `const`-op AST node carrying " *
+                        "an inline array (got $(typeof(arg)))"))
+end
+
 function evaluate(expr::VarExpr, bindings::Dict{String,Float64})::Float64
     if !haskey(bindings, expr.name)
         throw(UnboundVariableError(expr.name, "Variable '$(expr.name)' not found in bindings"))
@@ -210,10 +226,55 @@ function evaluate(expr::VarExpr, bindings::Dict{String,Float64})::Float64
 end
 
 function evaluate(expr::OpExpr, bindings::Dict{String,Float64})::Float64
+    op = expr.op
+
+    # ============================================================
+    # Closed function registry (esm-spec §9.2 / esm-tzp)
+    # ============================================================
+    if op == "fn"
+        fname = expr.name
+        if fname === nothing
+            throw(ArgumentError("`fn` op missing required `name` field (esm-spec §4.4)"))
+        end
+        # `interp.searchsorted` takes an array as its second argument; the
+        # array MUST arrive as a `const`-op AST node and is extracted without
+        # numeric evaluation.
+        if fname == "interp.searchsorted"
+            if length(expr.args) != 2
+                throw(ClosedFunctionError("closed_function_arity",
+                    "interp.searchsorted expects 2 arguments, got $(length(expr.args))"))
+            end
+            x_val = evaluate(expr.args[1], bindings)
+            xs = _extract_const_array(expr.args[2], "interp.searchsorted")
+            return Float64(evaluate_closed_function(fname, Any[x_val, xs]))
+        end
+        evaluated = Any[evaluate(a, bindings) for a in expr.args]
+        result = evaluate_closed_function(fname, evaluated)
+        return Float64(result)
+    end
+
+    # `const` ops carry inline literal values; for scalar consts the value is
+    # numeric and returned directly. Non-scalar consts are only valid as
+    # arguments to ops that consume arrays (`interp.searchsorted`, `index`),
+    # which extract the array via `_extract_const_array` above without going
+    # through this scalar path.
+    if op == "const"
+        v = expr.value
+        if v isa Real && !(v isa Bool)
+            return Float64(v)
+        end
+        throw(ArgumentError("`const` op with non-scalar value cannot be evaluated as Float64; " *
+                            "non-scalar consts are valid only as array arguments to specific ops"))
+    end
+
+    # `enum` ops MUST be lowered to `const` integers before evaluation
+    # (esm-spec §9.3 / `lower_enums!` in registered_functions.jl).
+    if op == "enum"
+        throw(ArgumentError("`enum` op encountered during evaluation; expected `lower_enums!` to have replaced it with a `const` integer (esm-spec §9.3)"))
+    end
+
     args = [evaluate(arg, bindings) for arg in expr.args]
 
-    # Handle different operators
-    op = expr.op
 
     # Arithmetic operators
     if op == "+"

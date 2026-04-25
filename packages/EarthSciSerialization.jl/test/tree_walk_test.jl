@@ -39,9 +39,13 @@ function _eval1(expr::ESM.Expr; u_vals=Dict{String,Float64}(),
     end
     # Anchor with a dummy state "_probe" whose derivative = expr so we
     # can read the result out of du[1].
+    # Qualify ESM.Equation explicitly: the test suite earlier loads
+    # ModelingToolkit (pde_discretize_test, grid_assembly_symbolic_test),
+    # whose `Equation` export shadows ESM's at the Main namespace level
+    # under MTK 11.
     vars["_probe"] = ModelVariable(StateVariable; default=0.0)
-    eq = Equation(_D("_probe"), expr)
-    model = Model(vars, [eq])
+    eq = ESM.Equation(_D("_probe"), expr)
+    model = ESM.Model(vars, [eq])
     f!, u0, p, _tspan, var_map = build_evaluator(model;
         registered_functions=registered_functions)
     # Override state values from u_vals
@@ -120,11 +124,25 @@ end
         @test _eval1(_op("Pre", _v("x")); u_vals=Dict("x" => 2.0)) == 2.0
     end
 
-    @testset "Registered function (call)" begin
-        # Double the argument via a user-supplied handler.
-        doubler(x) = 2 * x
-        expr = _op("call", _n(21.0); handler_id="double")
-        @test _eval1(expr; registered_functions=Dict("double" => doubler)) == 42.0
+    @testset "Closed function registry (fn op)" begin
+        # esm-spec §9.2: `fn` op invokes a name from the closed registry.
+        # `datetime.year` returns the proleptic-Gregorian year (Int32, lifted
+        # to Float64 by tree_walk).
+        # 2026-01-01T00:00:00Z = 1767225600 seconds since epoch.
+        expr_year = _op("fn", _n(1767225600.0); name="datetime.year")
+        @test _eval1(expr_year) == 2026.0
+
+        # `interp.searchsorted` with const-array second arg.
+        const_xs = OpExpr("const", ESM.Expr[]; value=[1.0, 2.0, 3.0, 4.0, 5.0])
+        expr_ss = _op("fn", _n(2.5), const_xs; name="interp.searchsorted")
+        @test _eval1(expr_ss) == 3.0  # smallest 1-based i with xs[i] >= 2.5
+
+        # Unknown closed-function name → TreeWalkError.
+        bad = _op("fn", _n(1.0); name="datetime.century")
+        @test_throws ESM.TreeWalkError _eval1(bad)
+
+        # Removed `call` op fails compile.
+        @test_throws ESM.TreeWalkError _eval1(_op("call", _n(1.0); handler_id="x"))
     end
 
     @testset "Graceful errors on unsupported ops" begin
@@ -150,10 +168,10 @@ end
         )
         # y = 2*k; D(x) = -y*x
         eqs = [
-            Equation(_v("y"), _op("*", _n(2.0), _v("k"))),
-            Equation(_D("x"), _op("-", _op("*", _v("y"), _v("x")))),
+            ESM.Equation(_v("y"), _op("*", _n(2.0), _v("k"))),
+            ESM.Equation(_D("x"), _op("-", _op("*", _v("y"), _v("x")))),
         ]
-        model = Model(vars, eqs)
+        model = ESM.Model(vars, eqs)
         f!, u0, p, _tspan, var_map = build_evaluator(model)
         du = similar(u0)
         f!(du, u0, p, 0.0)
@@ -169,8 +187,8 @@ end
             "x" => ModelVariable(StateVariable; default=1.0),
             "k" => ModelVariable(ParameterVariable; default=0.1),
         )
-        eq = Equation(_D("x"), _op("*", _op("-", _v("k")), _v("x")))
-        model = Model(vars, [eq])
+        eq = ESM.Equation(_D("x"), _op("*", _op("-", _v("k")), _v("x")))
+        model = ESM.Model(vars, [eq])
         f!, u0, p, _tspan, var_map = build_evaluator(model)
         prob = OrdinaryDiffEqTsit5.ODEProblem(f!, u0, (0.0, 10.0), p)
         sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
@@ -186,11 +204,11 @@ end
             "x" => ModelVariable(StateVariable; default=1.0),
             "k" => ModelVariable(ParameterVariable; default=0.1),
         )
-        eq = Equation(_D("x"), _op("*", _op("-", _v("k")), _v("x")))
+        eq = ESM.Equation(_D("x"), _op("*", _op("-", _v("k")), _v("x")))
         tests = [ESM.Test("default_span",
                        ESM.TimeSpan(0.0, 25.0),
                        ESM.Assertion[]; description="default")]
-        model = Model(vars, [eq]; tests=tests)
+        model = ESM.Model(vars, [eq]; tests=tests)
         _, _, _, tspan_default, _ = build_evaluator(model)
         @test tspan_default == (0.0, 25.0)
     end
@@ -203,7 +221,7 @@ end
         dx = 1.0 / (N + 1)
         α = 0.5
         vars = Dict{String,ModelVariable}()
-        eqs = Equation[]
+        eqs = ESM.Equation[]
         for i in 1:N
             name = "u_$i"
             # Initial: sin(π x_i). Interior i=1..N, x_i = i*dx.
@@ -224,9 +242,9 @@ end
             rhs = _op("*",
                 _v("alpha"),
                 _op("/", lap_num, _n(dx^2)))
-            push!(eqs, Equation(_D("u_$i"), rhs))
+            push!(eqs, ESM.Equation(_D("u_$i"), rhs))
         end
-        model = Model(vars, eqs)
+        model = ESM.Model(vars, eqs)
         f!, u0, p, _tspan, var_map = build_evaluator(model)
         # Diffusion time ~ L² / α = 1 / 0.5 = 2. Integrate to t = 5.
         prob = OrdinaryDiffEqTsit5.ODEProblem(f!, u0, (0.0, 5.0), p)
@@ -247,7 +265,7 @@ end
         dx = 1.0 / (N + 1)
         α = 0.75
         vars = Dict{String,ModelVariable}()
-        eqs = Equation[]
+        eqs = ESM.Equation[]
         for i in 1:N
             vars["u_$i"] = ModelVariable(StateVariable; default=sinpi(i * dx))
         end
@@ -261,9 +279,9 @@ end
                 _op("/",
                     _op("+", _op("-", left, here), _op("-", right, here)),
                     _n(dx^2)))
-            push!(eqs, Equation(_D("u_$i"), rhs))
+            push!(eqs, ESM.Equation(_D("u_$i"), rhs))
         end
-        model = Model(vars, eqs)
+        model = ESM.Model(vars, eqs)
 
         # Tree-walk path
         f_tw!, u0_tw, p_tw, _tspan, var_map = build_evaluator(model)
@@ -353,7 +371,7 @@ end
         dy = 1.0 / Ny
         vx, vy = 1.0, 0.5
         vars = Dict{String,ModelVariable}()
-        eqs = Equation[]
+        eqs = ESM.Equation[]
         # Initial condition: a single bump at (0.5, 0.5).
         for i in 1:Nx, j in 1:Ny
             x = (i - 0.5) * dx
@@ -376,9 +394,9 @@ end
                          _op("/", _op("-", here, below), _n(dy)))
             # D(u_ij)/dt = -(flux_x + flux_y)  (continuity form)
             rhs = _op("-", _op("+", flux_x, flux_y))
-            push!(eqs, Equation(_D("u_$(i)_$(j)"), rhs))
+            push!(eqs, ESM.Equation(_D("u_$(i)_$(j)"), rhs))
         end
-        model = Model(vars, eqs)
+        model = ESM.Model(vars, eqs)
         # Build acceptance: < 5 s wall-clock.
         t_build = @elapsed begin
             f!, u0, p, _tspan, var_map = build_evaluator(model)
@@ -414,16 +432,16 @@ end
     @testset "Large diagonal system (1024 states) — build + evaluate" begin
         N = 1024
         vars = Dict{String,ModelVariable}()
-        eqs = Equation[]
+        eqs = ESM.Equation[]
         for i in 1:N
             vars["u_$i"] = ModelVariable(StateVariable; default=0.1)
         end
         vars["alpha"] = ModelVariable(ParameterVariable; default=1.0)
         for i in 1:N
-            push!(eqs, Equation(_D("u_$i"),
+            push!(eqs, ESM.Equation(_D("u_$i"),
                 _op("-", _op("*", _v("alpha"), _v("u_$i")))))
         end
-        model = Model(vars, eqs)
+        model = ESM.Model(vars, eqs)
         t_build = @elapsed begin
             f!, u0, p, _tspan, var_map = build_evaluator(model)
         end
