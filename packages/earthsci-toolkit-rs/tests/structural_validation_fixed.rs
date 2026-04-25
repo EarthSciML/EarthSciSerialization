@@ -71,8 +71,8 @@ fn test_undefined_variable_in_model() {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,
@@ -181,8 +181,8 @@ fn test_equation_count_mismatch() {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,
@@ -275,8 +275,8 @@ fn test_undefined_species_in_reaction() {
         reaction_systems: Some(reaction_systems),
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,
@@ -394,8 +394,8 @@ fn test_valid_file_passes() {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,

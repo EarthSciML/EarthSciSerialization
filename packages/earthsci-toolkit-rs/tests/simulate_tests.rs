@@ -51,8 +51,8 @@ fn esm_with_model(model_name: &str, model: Model) -> EsmFile {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,

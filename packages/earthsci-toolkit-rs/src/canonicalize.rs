@@ -72,7 +72,8 @@ fn canon_op(node: &ExpressionNode) -> Result<Expr, CanonicalizeError> {
         perm: node.perm.clone(),
         axis: node.axis,
         broadcast_fn: node.broadcast_fn.clone(),
-        handler_id: node.handler_id.clone(),
+        name: node.name.clone(),
+        value: node.value.clone(),
     };
     match work.op.as_str() {
         "+" => canon_add(&mut work),
@@ -365,8 +366,14 @@ fn emit_node_json(n: &ExpressionNode) -> String {
     if let Some(ref s) = n.dim {
         entries.push(("dim".into(), json_string(s)));
     }
-    if let Some(ref s) = n.handler_id {
-        entries.push(("handler_id".into(), json_string(s)));
+    if let Some(ref s) = n.name {
+        entries.push(("name".into(), json_string(s)));
+    }
+    if let Some(ref v) = n.value {
+        entries.push(("value".into(), emit_canonical_json_value(v)));
+    }
+    if let Some(ref s) = n.broadcast_fn {
+        entries.push(("fn".into(), json_string(s)));
     }
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     let body: Vec<String> = entries
@@ -378,6 +385,33 @@ fn emit_node_json(n: &ExpressionNode) -> String {
 
 fn json_string(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_else(|_| format!("\"{s}\""))
+}
+
+// Canonicalize a `const`-op `value` JSON payload. Numbers carrying a fraction
+// or exponent emit using `format_canonical_float`; integers emit verbatim;
+// arrays recurse. Strings/objects/booleans/null fall through to serde_json's
+// default rendering — `value` is constrained to numeric / nested-numeric in the
+// schema, but we keep the fallback so a stray string doesn't crash canonical
+// emission.
+fn emit_canonical_json_value(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                i.to_string()
+            } else if let Some(u) = n.as_u64() {
+                u.to_string()
+            } else if let Some(f) = n.as_f64() {
+                format_canonical_float(f)
+            } else {
+                n.to_string()
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            let parts: Vec<String> = arr.iter().map(emit_canonical_json_value).collect();
+            format!("[{}]", parts.join(","))
+        }
+        _ => v.to_string(),
+    }
 }
 
 /// Format a finite f64 per RFC §5.4.6.

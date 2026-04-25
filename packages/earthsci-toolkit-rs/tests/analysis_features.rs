@@ -160,8 +160,8 @@ fn test_analysis_features_integration() {
         reaction_systems: Some(reaction_systems),
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,
