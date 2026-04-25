@@ -590,17 +590,17 @@ func validateCouplingReferences(file *EsmFile, result *DetailedValidationResult)
 			}
 
 		case OperatorApplyCoupling:
-			// Validate operator exists if operators section is present
-			if file.Operators != nil {
-				if _, exists := file.Operators[c.Operator]; !exists {
-					result.Valid = false
-					result.Messages = append(result.Messages, ValidationMessage{
-						Level:   "error",
-						Message: fmt.Sprintf("Unknown operator '%s' in coupling", c.Operator),
-						Path:    fmt.Sprintf("%s.operator", basePath),
-					})
-				}
-			}
+			// `operator_apply` was removed in v0.3.0 along with the top-level
+			// `operators` block (esm-spec §10 / closed-function-registry RFC).
+			// The schema rejects new files; this arm is retained only to
+			// surface a clear error if a v0.2.x file leaks through direct
+			// JSON unmarshaling.
+			result.Valid = false
+			result.Messages = append(result.Messages, ValidationMessage{
+				Level:   "error",
+				Message: fmt.Sprintf("'operator_apply' coupling has been removed (v0.3.0); referenced operator '%s'", c.Operator),
+				Path:    fmt.Sprintf("%s.operator", basePath),
+			})
 
 		case CallbackCoupling:
 			// Callback coupling validated by schema; no additional structural checks needed
@@ -665,29 +665,10 @@ func validateDataLoaderReferences(file *EsmFile, result *DetailedValidationResul
 	}
 }
 
-// validateOperatorReferences validates operator configurations
-func validateOperatorReferences(file *EsmFile, result *DetailedValidationResult) {
-	for operatorName, operator := range file.Operators {
-		basePath := fmt.Sprintf("$.operators.%s", operatorName)
-
-		if operator.OperatorID == "" {
-			result.Valid = false
-			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "error",
-				Message: "Operator ID is required",
-				Path:    fmt.Sprintf("%s.operator_id", basePath),
-			})
-		}
-
-		if len(operator.NeededVars) == 0 {
-			result.Messages = append(result.Messages, ValidationMessage{
-				Level:   "warning",
-				Message: "Operator requires no variables",
-				Path:    fmt.Sprintf("%s.needed_vars", basePath),
-			})
-		}
-	}
-}
+// validateOperatorReferences was used to walk the now-removed top-level
+// `operators` block. v0.3.0 closes the registry (closed-function-registry
+// RFC); the function is retained as a no-op to keep call sites stable.
+func validateOperatorReferences(_ *EsmFile, _ *DetailedValidationResult) {}
 
 // validateEquationUnknownBalance validates equation-unknown balance for models
 // as per ESM libraries specification Section 3.2.1
@@ -1057,22 +1038,20 @@ func validateCouplingReferencesWithCodes(file *EsmFile, result *StructuralValida
 			}
 
 		case OperatorApplyCoupling:
-			// For operator_apply coupling, check if the operator exists
-			if file.Operators != nil {
-				if _, exists := file.Operators[c.Operator]; !exists {
-					result.Valid = false
-					result.StructuralErrors = append(result.StructuralErrors, StructuralError{
-						Path:    fmt.Sprintf("%s.operator", basePath),
-						Code:    ErrorUndefinedOperator,
-						Message: fmt.Sprintf("Undefined operator '%s' in coupling", c.Operator),
-						Details: map[string]interface{}{
-							"operator":       c.Operator,
-							"coupling_type":  "operator_apply",
-							"coupling_index": i,
-						},
-					})
-				}
-			}
+			// `operator_apply` was removed in v0.3.0 along with the top-level
+			// `operators` block. Surface a structural error if a v0.2.x file
+			// reaches this validator via direct unmarshaling.
+			result.Valid = false
+			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+				Path:    fmt.Sprintf("%s.operator", basePath),
+				Code:    ErrorUndefinedOperator,
+				Message: fmt.Sprintf("'operator_apply' coupling has been removed (v0.3.0); referenced operator '%s'", c.Operator),
+				Details: map[string]interface{}{
+					"operator":       c.Operator,
+					"coupling_type":  "operator_apply",
+					"coupling_index": i,
+				},
+			})
 
 		case CallbackCoupling:
 			// Callback coupling validated by schema; no additional structural checks needed
@@ -1153,28 +1132,10 @@ func validateDataLoaderReferencesWithCodes(file *EsmFile, result *StructuralVali
 	}
 }
 
-// validateOperatorReferencesWithCodes validates operator configurations with structured codes
-func validateOperatorReferencesWithCodes(file *EsmFile, result *StructuralValidationResult) {
-	for operatorName, operator := range file.Operators {
-		basePath := fmt.Sprintf("$.operators.%s", operatorName)
-
-		if operator.OperatorID == "" {
-			result.Valid = false
-			result.StructuralErrors = append(result.StructuralErrors, StructuralError{
-				Path:    fmt.Sprintf("%s.operator_id", basePath),
-				Code:    "missing_operator_id", // Not in spec, but needed for validation
-				Message: "Operator ID is required",
-				Details: map[string]interface{}{
-					"operator": operatorName,
-				},
-			})
-		}
-
-		// An operator with zero needed_vars is legal (pure transformations
-		// without input dependencies); no warning needed.
-		_ = basePath
-	}
-}
+// validateOperatorReferencesWithCodes was used to walk the now-removed
+// top-level `operators` block. v0.3.0 closes the registry; no-op preserved
+// to keep call sites stable.
+func validateOperatorReferencesWithCodes(_ *EsmFile, _ *StructuralValidationResult) {}
 
 // validateDiscreteEventWithCodes validates discrete event structure with structured codes
 func validateDiscreteEventWithCodes(event *DiscreteEvent, allVars map[string]bool, path string, result *StructuralValidationResult, file *EsmFile, currentSystem string) {

@@ -89,8 +89,8 @@ func parseFile(filename string) {
 	if len(esmFile.DataLoaders) > 0 {
 		fmt.Printf("Data Loaders: %d\n", len(esmFile.DataLoaders))
 	}
-	if len(esmFile.Operators) > 0 {
-		fmt.Printf("Operators: %d\n", len(esmFile.Operators))
+	if len(esmFile.Enums) > 0 {
+		fmt.Printf("Enums: %d\n", len(esmFile.Enums))
 	}
 }
 

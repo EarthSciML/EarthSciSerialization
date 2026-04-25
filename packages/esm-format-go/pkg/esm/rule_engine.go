@@ -316,11 +316,12 @@ func applyBindingsNode(node ExprNode, b map[string]Expression) (Expression, erro
 		return nil, err
 	}
 	out := ExprNode{
-		Op:        node.Op,
-		Args:      newArgs,
-		Wrt:       newWrt,
-		Dim:       newDim,
-		HandlerID: node.HandlerID,
+		Op:    node.Op,
+		Args:  newArgs,
+		Wrt:   newWrt,
+		Dim:   newDim,
+		Name:  node.Name,
+		Value: node.Value,
 	}
 	return out, nil
 }
@@ -638,11 +639,12 @@ func rewritePass(expr Expression, rules []Rule, ctx RuleContext, changed *bool) 
 		newArgs[i] = v
 	}
 	out := ExprNode{
-		Op:        node.Op,
-		Args:      newArgs,
-		Wrt:       node.Wrt,
-		Dim:       node.Dim,
-		HandlerID: node.HandlerID,
+		Op:    node.Op,
+		Args:  newArgs,
+		Wrt:   node.Wrt,
+		Dim:   node.Dim,
+		Name:  node.Name,
+		Value: node.Value,
 	}
 	return out, nil
 }

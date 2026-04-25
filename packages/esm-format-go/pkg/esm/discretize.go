@@ -465,8 +465,11 @@ func exprNodeToJSON(n ExprNode) map[string]interface{} {
 	if n.Dim != nil {
 		out["dim"] = *n.Dim
 	}
-	if n.HandlerID != nil {
-		out["handler_id"] = *n.HandlerID
+	if n.Name != nil {
+		out["name"] = *n.Name
+	}
+	if n.Value != nil {
+		out["value"] = n.Value
 	}
 	return out
 }

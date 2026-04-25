@@ -140,20 +140,7 @@ func ComponentGraphFromFile(file *EsmFile) *ComponentGraph {
 		nodeMap[id] = node
 	}
 
-	// Add nodes for operators
-	for id, operator := range file.Operators {
-		node := ComponentNode{
-			ID:   id,
-			Type: "operator",
-			Name: id,
-			Metadata: map[string]interface{}{
-				"operator_id": operator.OperatorID,
-			},
-		}
-
-		graph.Nodes = append(graph.Nodes, node)
-		nodeMap[id] = node
-	}
+	// `operators` block removed in v0.3.0 (closed-function-registry RFC).
 
 	// Add edges for coupling entries
 	for _, coupling := range file.Coupling {

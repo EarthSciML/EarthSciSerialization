@@ -338,6 +338,23 @@ func Evaluate(expr Expression, bindings map[string]float64) (float64, error) {
 
 // evaluateExprNode evaluates an expression node
 func evaluateExprNode(node ExprNode, bindings map[string]float64) (float64, error) {
+	// `const` and `fn` carry inline literals / typed payloads that the
+	// scalar-only fast path below would reject (a `const` array is not a
+	// float; a closed-fn arg may legally be one). Handle them first.
+	switch node.Op {
+	case "const":
+		f, ok := toFloat64(node.Value)
+		if !ok {
+			return 0, fmt.Errorf("const-op node has non-numeric value (%T): scalar evaluator cannot reduce", node.Value)
+		}
+		return f, nil
+	case "enum":
+		// `enum` MUST have been lowered to `const` at load time
+		// (esm-spec §9.3). Reaching it here is a bug in the loader.
+		return 0, fmt.Errorf("enum op encountered at evaluation time — should have been lowered at load (esm-spec §9.3)")
+	case "fn":
+		return evaluateFnNode(node, bindings)
+	}
 	// Evaluate all arguments first
 	args := make([]float64, len(node.Args))
 	for i, arg := range node.Args {
@@ -513,6 +530,71 @@ func isPositive(expr interface{}) bool {
 		return num > 0.0
 	}
 	return false
+}
+
+// evaluateFnNode dispatches a closed-registry `fn` op (esm-spec §4.4 / §9.2).
+// Each argument is normally evaluated as a scalar; a `const`-op array
+// argument (e.g. the `xs` table to `interp.searchsorted`) is passed
+// through to the closed function as []float64 without reduction.
+//
+// The result is lifted to float64 so the rest of the scalar evaluator can
+// continue with no special casing — integer outputs of datetime.* widen
+// losslessly (≤ 31-bit per the §9.2 contract).
+func evaluateFnNode(node ExprNode, bindings map[string]float64) (float64, error) {
+	if node.Name == nil || *node.Name == "" {
+		return 0, fmt.Errorf("fn op missing required `name` field (esm-spec §4.4)")
+	}
+	args := make([]interface{}, len(node.Args))
+	for i, raw := range node.Args {
+		v, err := evaluateFnArg(raw, bindings)
+		if err != nil {
+			return 0, err
+		}
+		args[i] = v
+	}
+	out, err := EvaluateClosedFunction(*node.Name, args)
+	if err != nil {
+		return 0, err
+	}
+	switch v := out.(type) {
+	case float64:
+		return v, nil
+	case int32:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	default:
+		return 0, fmt.Errorf("closed function %q returned unsupported scalar type %T", *node.Name, out)
+	}
+}
+
+// evaluateFnArg evaluates a single argument to a `fn` op. Most args are
+// reduced to scalar float64 via the standard evaluator. A `const`-op
+// child carrying an array Value is passed through as []interface{} so
+// that closed functions like `interp.searchsorted` receive the table.
+func evaluateFnArg(arg interface{}, bindings map[string]float64) (interface{}, error) {
+	switch a := arg.(type) {
+	case ExprNode:
+		if a.Op == "const" {
+			return constNodeValue(a)
+		}
+	case *ExprNode:
+		if a != nil && a.Op == "const" {
+			return constNodeValue(*a)
+		}
+	}
+	// Scalar path.
+	return Evaluate(arg, bindings)
+}
+
+// constNodeValue returns the typed payload of a `const`-op node. Numeric
+// values come back as float64 / int64 (the parser's normalized literal
+// types); arrays come back as []interface{}.
+func constNodeValue(node ExprNode) (interface{}, error) {
+	if node.Value == nil {
+		return nil, fmt.Errorf("const op missing required `value` field (esm-spec §4.2)")
+	}
+	return node.Value, nil
 }
 
 // isSameExprNode checks if an expression is the same ExprNode (avoids struct comparison issues)

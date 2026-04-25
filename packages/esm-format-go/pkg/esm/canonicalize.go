@@ -65,11 +65,12 @@ func canonOp(node ExprNode) (Expression, error) {
 		newArgs[i] = ca
 	}
 	work := ExprNode{
-		Op:        node.Op,
-		Args:      newArgs,
-		Wrt:       node.Wrt,
-		Dim:       node.Dim,
-		HandlerID: node.HandlerID,
+		Op:    node.Op,
+		Args:  newArgs,
+		Wrt:   node.Wrt,
+		Dim:   node.Dim,
+		Name:  node.Name,
+		Value: node.Value,
 	}
 
 	// Step 2: operator-specific rewrites.
@@ -476,9 +477,16 @@ func emitExprNodeJSON(n ExprNode) (string, error) {
 		b, _ := json.Marshal(*n.Dim)
 		kv = append(kv, [2]string{"dim", string(b)})
 	}
-	if n.HandlerID != nil {
-		b, _ := json.Marshal(*n.HandlerID)
-		kv = append(kv, [2]string{"handler_id", string(b)})
+	if n.Name != nil {
+		b, _ := json.Marshal(*n.Name)
+		kv = append(kv, [2]string{"name", string(b)})
+	}
+	if n.Value != nil {
+		s, err := emitCanonicalJSON(n.Value)
+		if err != nil {
+			return "", err
+		}
+		kv = append(kv, [2]string{"value", s})
 	}
 	sort.Slice(kv, func(i, j int) bool { return kv[i][0] < kv[j][0] })
 	var buf bytes.Buffer

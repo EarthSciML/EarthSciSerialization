@@ -103,6 +103,25 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 		}
 	}
 
+	// v0.3.0 closes the function registry (closed-function-registry RFC).
+	// Reject any v0.2.x file that still carries the removed top-level
+	// `operators` / `registered_functions` blocks or an explicit `call`
+	// op anywhere in an expression tree. The schema also rejects these,
+	// but we add structural checks at the file boundary so callers that
+	// bypass schema validation still see a clear error.
+	if err := rejectDeprecatedV02Blocks(jsonStr); err != nil {
+		return nil, err
+	}
+	if err := rejectCallOps(&esmFile); err != nil {
+		return nil, err
+	}
+
+	// Lower `enum` ops to `const` integer nodes per esm-spec §9.3. After
+	// this pass, no `enum` op remains in the in-memory representation.
+	if err := LowerEnums(&esmFile); err != nil {
+		return nil, err
+	}
+
 	// Validate grid cross-references (§6). Schema already handles shape, but we
 	// check that loader-kind generators/connectivity point at a real data_loaders
 	// entry and that builtin names are in the closed set §6.4.1 defines.
@@ -310,6 +329,92 @@ func normalizeReactionSystemLiterals(rs *ReactionSystem) {
 		rs.ConstraintEquations[i].LHS = normalizeExpression(rs.ConstraintEquations[i].LHS)
 		rs.ConstraintEquations[i].RHS = normalizeExpression(rs.ConstraintEquations[i].RHS)
 	}
+}
+
+// rejectDeprecatedV02Blocks fails LoadString with a structural error when
+// the input still declares the v0.2.x `operators` or `registered_functions`
+// top-level blocks removed by the closed-function-registry RFC. The schema
+// already rejects these for v0.3.0 inputs; this is a redundant boundary
+// check that survives bypassed schema validation.
+func rejectDeprecatedV02Blocks(jsonStr string) error {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(jsonStr), &top); err != nil {
+		// Non-object root would have failed schema validation upstream.
+		return nil
+	}
+	if _, ok := top["operators"]; ok {
+		return fmt.Errorf("deprecated_v02_block: top-level `operators` was removed in v0.3.0 " +
+			"(closed-function-registry RFC §6); migrate to discretization schemes or AST equations")
+	}
+	if _, ok := top["registered_functions"]; ok {
+		return fmt.Errorf("deprecated_v02_block: top-level `registered_functions` was removed in v0.3.0 " +
+			"(closed-function-registry RFC §6); rewrite call ops as AST or use the closed registry (esm-spec §9.2)")
+	}
+	return nil
+}
+
+// rejectCallOps walks every expression tree and fails LoadString if any
+// node carries `op: "call"`. The `call` op was removed in v0.3.0 in favor
+// of the closed-registry `fn` op (esm-spec §4.4 / §9.2).
+func rejectCallOps(file *EsmFile) error {
+	var visit func(expr Expression) error
+	visit = func(expr Expression) error {
+		switch e := expr.(type) {
+		case ExprNode:
+			if e.Op == "call" {
+				return fmt.Errorf("deprecated_call_op: `call` op was removed in v0.3.0; " +
+					"use `fn` with a closed-registry name (esm-spec §4.4 / §9.2)")
+			}
+			for _, a := range e.Args {
+				if err := visit(a); err != nil {
+					return err
+				}
+			}
+		case *ExprNode:
+			if e == nil {
+				return nil
+			}
+			return visit(*e)
+		}
+		return nil
+	}
+	if file.Models != nil {
+		for _, m := range file.Models {
+			for _, v := range m.Variables {
+				if v.Expression != nil {
+					if err := visit(v.Expression); err != nil {
+						return err
+					}
+				}
+			}
+			for _, eq := range m.Equations {
+				if err := visit(eq.LHS); err != nil {
+					return err
+				}
+				if err := visit(eq.RHS); err != nil {
+					return err
+				}
+			}
+			for _, eq := range m.InitializationEquations {
+				if err := visit(eq.LHS); err != nil {
+					return err
+				}
+				if err := visit(eq.RHS); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if file.ReactionSystems != nil {
+		for _, rs := range file.ReactionSystems {
+			for _, r := range rs.Reactions {
+				if err := visit(r.Rate); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // validateJSONSchema validates the JSON string against the ESM JSON schema
