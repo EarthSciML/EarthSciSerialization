@@ -126,36 +126,11 @@
       }
     }
   },
-  "operators": {
-    "TestOperator": {
-      "operator_id": "test_op",
-      "needed_vars": [
-        "nonexistent_needed_var"
-      ],
-      "modifies": [
-        "another_nonexistent_var"
-      ]
-    }
-  },
   "coupling": [
     {
       "type": "variable_map",
       "from": "NonExistentSystem.var",
       "to": "BadModel.x"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "MissingOperator",
-      "systems": [
-        "BadModel"
-      ]
-    },
-    {
-      "type": "operator_apply",
-      "operator": "TestOperator",
-      "systems": [
-        "BadModel"
-      ]
     }
   ]
 }

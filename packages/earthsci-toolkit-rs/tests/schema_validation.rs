@@ -163,51 +163,6 @@ fn test_data_loader_validation_errors() {
     }
 }
 
-/// Test operator validation errors
-#[test]
-fn test_operator_validation_errors() {
-    let fixtures = [
-        (
-            "missing_operator_id",
-            include_str!("../../../tests/invalid/operator_missing_operator_id.esm"),
-        ),
-        (
-            "missing_needed_vars",
-            include_str!("../../../tests/invalid/operator_missing_needed_vars.esm"),
-        ),
-        (
-            "variable_mismatch",
-            include_str!("../../../tests/invalid/operator_variable_mismatch.esm"),
-        ),
-        (
-            "interpolation_method_invalid",
-            include_str!("../../../tests/invalid/interpolation_method_invalid.esm"),
-        ),
-        (
-            "temporal_resolution_invalid",
-            include_str!("../../../tests/invalid/temporal_resolution_invalid.esm"),
-        ),
-    ];
-
-    for (name, fixture) in fixtures.iter() {
-        let load_result = load(fixture);
-
-        let validation_failed = match load_result {
-            Err(_) => true, // JSON parsing or schema validation failed
-            Ok(esm_file) => {
-                // JSON parsing passed, check structural validation
-                let validation_result = validate(&esm_file);
-                !validation_result.is_valid
-            }
-        };
-
-        assert!(
-            validation_failed,
-            "Expected operator {name} to fail validation"
-        );
-    }
-}
-
 /// Test version compatibility validation errors
 #[test]
 fn test_version_compatibility_validation_errors() {

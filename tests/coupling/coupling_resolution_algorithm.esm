@@ -288,34 +288,6 @@
       }
     }
   },
-  "operators": {
-    "BiogenicEmissions": {
-      "operator_id": "MEGAN",
-      "config": {
-        "emission_factor_map": "megan_ef.nc",
-        "subsystems": {
-          "TemperatureDependence": {
-            "variables": {
-              "beta": {
-                "type": "parameter",
-                "units": "1/K",
-                "default": 0.09,
-                "description": "Temperature dependence factor"
-              }
-            }
-          }
-        }
-      },
-      "needed_vars": [
-        "temperature",
-        "solar_radiation"
-      ],
-      "modifies": [
-        "emission_rate_isoprene"
-      ],
-      "description": "MEGAN biogenic emissions model"
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -360,13 +332,6 @@
       "to": "SurfaceModel.VegetationLayer.leaf_area_index",
       "transform": "multiplicative",
       "description": "TEST CASE 6: Data loader subsystem resolution - MeteorologicalData.QualityControl.data_quality_flag. Tests resolution in data_loaders section."
-    },
-    {
-      "type": "variable_map",
-      "from": "BiogenicEmissions.TemperatureDependence.beta",
-      "to": "AtmosphereModel.Chemistry.FastReactions.k2",
-      "transform": "multiplicative",
-      "description": "TEST CASE 7: Operator subsystem resolution - BiogenicEmissions.TemperatureDependence.beta. Tests resolution in operators section."
     },
     {
       "type": "couple",

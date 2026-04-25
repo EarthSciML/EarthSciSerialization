@@ -145,23 +145,6 @@
     "is_valid": false
   },
 
-  "undefined_operator.esm": {
-    "schema_errors": [],
-    "structural_errors": [
-      {
-        "path": "/coupling/0",
-        "code": "undefined_operator",
-        "message": "Operator 'NonExistentOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "NonExistentOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      }
-    ],
-    "is_valid": false
-  },
-
   "invalid_discrete_param.esm": {
     "schema_errors": [],
     "structural_errors": [
@@ -191,7 +174,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.temperature",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -494,23 +477,6 @@
     "is_valid": false
   },
 
-  "undefined_operator_in_apply.esm": {
-    "schema_errors": [],
-    "structural_errors": [
-      {
-        "path": "/coupling/0",
-        "code": "undefined_operator",
-        "message": "Operator 'NonExistentAdvectionOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "NonExistentAdvectionOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      }
-    ],
-    "is_valid": false
-  },
-
   "multiple_errors_combined.esm": {
     "schema_errors": [],
     "structural_errors": [
@@ -614,16 +580,6 @@
           "reference": "NonExistentSystem.var",
           "coupling_type": "variable_map",
           "missing_component": "NonExistentSystem"
-        }
-      },
-      {
-        "path": "/coupling/1",
-        "code": "undefined_operator",
-        "message": "Operator 'MissingOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "MissingOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
         }
       }
     ],
@@ -846,70 +802,6 @@
           "data_loader": "WeatherData",
           "coupling_type": "variable_map",
           "available_variables": ["T", "P"]
-        }
-      }
-    ],
-    "is_valid": false
-  },
-
-  "operator_missing_operator_id.esm": {
-    "schema_errors": [
-      {
-        "path": "/operators/BadOperator",
-        "message": "Required property 'operator_id' is missing",
-        "keyword": "required"
-      }
-    ],
-    "structural_errors": [],
-    "is_valid": false
-  },
-
-  "operator_missing_needed_vars.esm": {
-    "schema_errors": [
-      {
-        "path": "/operators/BadOperator",
-        "message": "Required property 'needed_vars' is missing",
-        "keyword": "required"
-      }
-    ],
-    "structural_errors": [],
-    "is_valid": false
-  },
-
-  "operator_variable_mismatch.esm": {
-    "schema_errors": [],
-    "structural_errors": [
-      {
-        "path": "/coupling/0",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' requires variable 'nonexistent_variable' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "nonexistent_variable",
-          "coupling_type": "operator_apply",
-          "available_systems": ["ChemistryModel"]
-        }
-      },
-      {
-        "path": "/coupling/0",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' requires variable 'NO2' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "NO2",
-          "coupling_type": "operator_apply",
-          "available_systems": ["ChemistryModel"]
-        }
-      },
-      {
-        "path": "/coupling/0",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' modifies variable 'another_nonexistent_var' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "another_nonexistent_var",
-          "coupling_type": "operator_apply",
-          "available_systems": ["ChemistryModel"]
         }
       }
     ],
@@ -1207,39 +1099,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
-        }
-      },
-      {
-        "path": "/coupling/1",
-        "code": "undefined_operator",
-        "message": "Operator 'MissingOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "MissingOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      },
-      {
-        "path": "/coupling/2",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' requires variable 'nonexistent_needed_var' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "nonexistent_needed_var",
-          "coupling_type": "operator_apply",
-          "available_systems": ["BadModel"]
-        }
-      },
-      {
-        "path": "/coupling/2",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' modifies variable 'another_nonexistent_var' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "another_nonexistent_var",
-          "coupling_type": "operator_apply",
-          "available_systems": ["BadModel"]
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -1454,7 +1314,7 @@
           "system": "NonExistentModel",
           "coupling_type": "variable_map",
           "reference": "NonExistentModel.valid_var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1504,7 +1364,7 @@
         "details": {
           "system": "NonExistentModel",
           "coupling_type": "operator_compose",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1514,7 +1374,7 @@
         "details": {
           "system": "NonExistentModel",
           "coupling_type": "couple",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -1532,7 +1392,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.some_var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1623,7 +1483,7 @@
         "details": {
           "system": "NonExistentSystem",
           "coupling_type": "couple",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1771,7 +1631,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.some_var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -1789,7 +1649,7 @@
         "details": {
           "system": "NonExistentSystem",
           "coupling_type": "operator_compose",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1829,7 +1689,7 @@
         "details": {
           "system": "NonExistentSystem",
           "coupling_type": "couple",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1851,30 +1711,10 @@
           "coupling_type": "couple",
           "location": "connector"
         }
-      },
-      {
-        "path": "/coupling/13",
-        "code": "undefined_operator",
-        "message": "Operator 'NonExistentOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "NonExistentOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      },
-      {
-        "path": "/coupling/14",
-        "code": "undefined_system",
-        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
-        "details": {
-          "system": "NonExistentSystem",
-          "coupling_type": "operator_apply",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
-        }
       }
     ],
     "is_valid": false,
-    "notes": "This file contains 20 annotated error cases. Some entries may also produce schema errors (e.g., invalid enum values for transform, invalid coupling types) depending on the validator. The structural errors listed here are the errors that survive schema-valid entries."
+    "notes": "This file contains annotated error cases. Some entries may also produce schema errors (e.g., invalid enum values for transform, invalid coupling types) depending on the validator. The structural errors listed here are the errors that survive schema-valid entries."
   },
 
   "units_coupling_mismatch.esm": {

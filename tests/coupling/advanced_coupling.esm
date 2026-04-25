@@ -212,40 +212,6 @@
       ]
     }
   },
-  "operators": {
-    "DryDeposition": {
-      "operator_id": "FirstOrderDeposition",
-      "reference": {
-        "notes": "Surface deposition based on resistance model"
-      },
-      "config": {
-        "surface_type": "vegetation"
-      },
-      "needed_vars": [
-        "O3",
-        "temperature",
-        "deposition_velocity"
-      ],
-      "modifies": [
-        "O3"
-      ],
-      "description": "Apply dry deposition loss to O3"
-    },
-    "PhotolysisRates": {
-      "operator_id": "TUVPhotolysis",
-      "reference": {
-        "notes": "Photolysis rate calculation"
-      },
-      "config": {
-        "solar_zenith_angle": 45.0
-      },
-      "needed_vars": [
-        "temperature"
-      ],
-      "modifies": [],
-      "description": "Compute photolysis rates based on solar conditions"
-    }
-  },
   "data_loaders": {
     "MeteoData": {
       "kind": "grid",
@@ -368,16 +334,6 @@
       "transform": "conversion_factor",
       "factor": 1.0,
       "description": "Map wind speed (simplified)"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "DryDeposition",
-      "description": "Apply dry deposition operator"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "PhotolysisRates",
-      "description": "Apply photolysis rate calculation"
     },
     {
       "type": "callback",

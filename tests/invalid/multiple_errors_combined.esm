@@ -59,10 +59,6 @@
       "from": "NonExistentSystem.var",
       "to": "BadModel.x",
       "transform": "identity"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "MissingOperator"
     }
   ]
 }

@@ -1503,76 +1503,6 @@
       }
     }
   },
-  "operators": {
-    "LandSurfaceAlbedo": {
-      "operator_id": "MODIS_BRDF",
-      "reference": {
-        "citation": "Schaaf et al., 2002. First operational BRDF, albedo nadir reflectance products from MODIS",
-        "doi": "10.1016/S0034-4257(02)00091-3"
-      },
-      "config": {
-        "bands": [
-          "visible",
-          "near_infrared"
-        ],
-        "angular_dependence": true,
-        "seasonal_variation": true
-      },
-      "needed_vars": [
-        "leaf_area_index",
-        "above_ground_biomass",
-        "soil_moisture_layer1"
-      ],
-      "modifies": [
-        "albedo"
-      ],
-      "description": "Vegetation and soil moisture dependent albedo"
-    },
-    "StomatalConductance": {
-      "operator_id": "Ball_Berry_Leuning",
-      "reference": {
-        "citation": "Leuning, 1995. A critical appraisal of a combined stomatal-photosynthesis model",
-        "doi": "10.1007/BF00386231"
-      },
-      "config": {
-        "model": "Leuning",
-        "CO2_compensation_point": 42.75,
-        "empirical_coefficient": 9.0
-      },
-      "needed_vars": [
-        "photosynthesis_rate",
-        "specific_humidity",
-        "air_temperature",
-        "incoming_radiation"
-      ],
-      "modifies": [
-        "stomatal_conductance"
-      ],
-      "description": "Photosynthesis and environment dependent stomatal conductance"
-    },
-    "SoilHeatCapacity": {
-      "operator_id": "Campbell_Norman",
-      "reference": {
-        "citation": "Campbell & Norman, 1998. Environmental Biophysics",
-        "notes": "Soil thermal properties as functions of moisture and texture"
-      },
-      "config": {
-        "method": "texture_dependent",
-        "organic_matter_effects": true
-      },
-      "needed_vars": [
-        "soil_moisture_layer1",
-        "soil_moisture_layer2",
-        "soil_moisture_layer3",
-        "porosity"
-      ],
-      "modifies": [
-        "thermal_conductivity",
-        "heat_capacity"
-      ],
-      "description": "Soil moisture dependent thermal properties"
-    }
-  },
   "coupling": [
     {
       "type": "couple",
@@ -1756,21 +1686,6 @@
       "to": "SoilHydrologyThermal.wilting_point",
       "transform": "param_to_var",
       "description": "Use SoilGrids wilting point"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "LandSurfaceAlbedo",
-      "description": "Update surface albedo based on vegetation and soil moisture"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "StomatalConductance",
-      "description": "Calculate stomatal conductance from photosynthesis and environment"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "SoilHeatCapacity",
-      "description": "Update soil thermal properties based on moisture content"
     },
     {
       "type": "callback",

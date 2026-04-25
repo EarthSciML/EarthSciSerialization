@@ -944,22 +944,6 @@
       }
     }
   },
-  "operators": {
-    "BoundaryInterpolator": {
-      "operator_id": "boundary_interpolation",
-      "needed_vars": [
-        "phi",
-        "psi"
-      ],
-      "config": {
-        "method": "cubic_spline",
-        "boundary_treatment": "extrapolate"
-      },
-      "reference": {
-        "notes": "Boundary condition interpolation"
-      }
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -985,10 +969,6 @@
       "from": "WindField.temperature_2m",
       "to": "FluidDynamics.T",
       "transform": "param_to_var"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "BoundaryInterpolator"
     }
   ],
   "domains": {
