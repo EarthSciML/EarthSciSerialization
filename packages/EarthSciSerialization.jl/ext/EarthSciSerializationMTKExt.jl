@@ -2000,4 +2000,420 @@ function mtk2esm_gaps(sys::ModelingToolkit.AbstractSystem)
     return gaps
 end
 
+# ========================================
+# PDE discretization on AbstractCurvilinearGrid (esm-2qw)
+# ========================================
+# Port of EarthSciDiscretizations' SciMLBase.discretize(sys::PDESystem,
+# disc::FVCubedSphere) refactored against the esm-a3z Grid trait. The original
+# code took a CubedSphereGrid and addressed cells with (panel, i, j) tuples;
+# this version takes any AbstractCurvilinearGrid and uses flat cell indices
+# resolved via neighbor_indices(grid, axis, ±1). The chain-rule transform
+# from computational (ξ, η) to physical (target) coordinates uses
+# coord_jacobian(grid, target) and coord_jacobian_second(grid, target).
+
+"""
+    EarthSciSerialization.discretize(sys::ModelingToolkit.PDESystem,
+                                     grid::AbstractCurvilinearGrid;
+                                     target::Symbol=:auto,
+                                     xi_axis::Symbol=:xi,
+                                     eta_axis::Symbol=:eta,
+                                     kwargs...) -> ODEProblem
+
+Discretize a `ModelingToolkit.PDESystem` onto a curvilinear grid via the
+2D centered-FD chain-rule pipeline ported from EarthSciDiscretizations.
+Returns an `ODEProblem` ready for `solve`.
+
+The grid is queried only through the esm-a3z Grid trait — no struct fields:
+
+  - `n_cells(grid)`, `cell_centers(grid, axis)`, `cell_widths(grid, axis)`
+  - `neighbor_indices(grid, axis, ±1)` for ξ/η stencil neighbors. Cross-panel
+    / periodic / cubed-sphere connectivity is resolved inside the impl.
+    Sentinel `0` (boundary) falls back to the cell itself.
+  - `coord_jacobian(grid, target)`        — `(N, 2, 2)`, `∂(comp)/∂(target)`
+  - `coord_jacobian_second(grid, target)` — `(N, 2, 2, 2)`, second derivs
+
+`target` defaults to a symbol joining the spatial IV names (e.g. for
+`(t, lon, lat)` the default is `:lon_lat`). `xi_axis`/`eta_axis` name the
+two computational axes the grid impl exposes through `cell_widths` and
+`neighbor_indices` — pass `:x`/`:y` for the test-Cartesian grid.
+
+Each spatial Differential is interpreted as either:
+  - direct in (`:xi`, `:eta`, `:ξ`, `:η`, `xi_axis`, `eta_axis`) → centered
+    finite difference in computational space, or
+  - target axis matching one of the spatial IVs → chain-rule expansion via
+    `coord_jacobian` (and `coord_jacobian_second` for second derivatives).
+
+Initial conditions come from BCs of the form `dv(t0, ivs...) ~ rhs(ivs...)`;
+unmatched DVs default to zero. The single time domain in `sys.domain`
+defines `tspan`.
+"""
+function EarthSciSerialization.discretize(
+        sys::PDESystem,
+        grid::EarthSciSerialization.AbstractCurvilinearGrid;
+        target::Symbol = :auto,
+        xi_axis::Symbol = :xi,
+        eta_axis::Symbol = :eta,
+        kwargs...,
+    )
+    ESM_ = EarthSciSerialization
+    N = ESM_.n_cells(grid)
+    dξ = ESM_._uniform_dx(grid, xi_axis)
+    dη = ESM_._uniform_dx(grid, eta_axis)
+
+    # Split sys.ivs into the time IV and the spatial IVs (in declared order).
+    spatial_ivs = Any[]
+    t_iv = nothing
+    for iv in sys.ivs
+        nm = Symbol(Symbolics.tosymbol(iv, escape=false))
+        if nm === :t
+            t_iv = iv
+        else
+            push!(spatial_ivs, iv)
+        end
+    end
+    t_iv === nothing &&
+        error("discretize: PDESystem missing a time independent variable named :t")
+    isempty(spatial_ivs) &&
+        error("discretize: PDESystem has no spatial independent variables")
+    spatial_iv_names = Symbol[
+        Symbol(Symbolics.tosymbol(iv, escape=false)) for iv in spatial_ivs
+    ]
+
+    if target === :auto
+        target = Symbol(join(string.(spatial_iv_names), "_"))
+    end
+
+    # Bulk metric arrays. The chain-rule path needs the coordinate Jacobian
+    # and its second derivative; the FV stencil itself is built from neighbor
+    # indices + dξ, dη, so we don't need metric_g / metric_ginv here.
+    cj  = ESM_.coord_jacobian(grid, target)         # (N, 2, T)
+    cj2 = ESM_.coord_jacobian_second(grid, target)  # (N, 2, T, T)
+    size(cj, 1)  == N || error("discretize: coord_jacobian first dim $(size(cj,1)) != n_cells=$N")
+    size(cj2, 1) == N || error("discretize: coord_jacobian_second first dim $(size(cj2,1)) != n_cells=$N")
+
+    # Neighbor index arrays. Boundary sentinels (0) fall back to self so the
+    # generated stencils stay well-defined; concrete grids that wrap (periodic,
+    # cubed-sphere, MPAS) hide the boundary inside neighbor_indices.
+    self_idx = collect(1:N)
+    _safe(arr) = map((n, s) -> n == 0 ? s : n, arr, self_idx)
+    nbE  = _safe(ESM_.neighbor_indices(grid, xi_axis,  +1))
+    nbW  = _safe(ESM_.neighbor_indices(grid, xi_axis,  -1))
+    nbNp = _safe(ESM_.neighbor_indices(grid, eta_axis, +1))
+    nbSp = _safe(ESM_.neighbor_indices(grid, eta_axis, -1))
+    nbNE = _safe(ESM_.neighbor_indices(grid, eta_axis, +1)[nbE])
+    nbNW = _safe(ESM_.neighbor_indices(grid, eta_axis, +1)[nbW])
+    nbSE = _safe(ESM_.neighbor_indices(grid, eta_axis, -1)[nbE])
+    nbSW = _safe(ESM_.neighbor_indices(grid, eta_axis, -1)[nbW])
+
+    # Per-cell symbolic state arrays of length N, one per dependent variable.
+    dvs = sys.dvs
+    disc_vars = Dict{Any,Any}()
+    for dv in dvs
+        nm = Symbol(replace(String(Symbolics.tosymbol(dv, escape=false)), '.' => '_'))
+        arr = _make_array_dep_var(nm, Any[t_iv], [1:N])
+        disc_vars[dv] = arr
+    end
+
+    # Per-cell ODE equations. Each PDE equation expands into N scalar eqns.
+    Dt = ModelingToolkit.Differential(t_iv)
+    all_eqs = Symbolics.Equation[]
+    for eq in sys.eqs
+        lhs_dv = _identify_lhs_dv_pde(eq.lhs, dvs)
+        lhs_arr = disc_vars[lhs_dv]
+        for c in 1:N
+            nb = (E=nbE[c], W=nbW[c], Np=nbNp[c], Sp=nbSp[c],
+                  NE=nbNE[c], NW=nbNW[c], SE=nbSE[c], SW=nbSW[c])
+            rhs_c = _substitute_at_cell(
+                eq.rhs, disc_vars, dvs, spatial_iv_names,
+                xi_axis, eta_axis, c, nb, dξ, dη, cj, cj2,
+            )
+            push!(all_eqs, Dt(lhs_arr[c]) ~ rhs_c)
+        end
+    end
+
+    sys_disc = ModelingToolkit.System(all_eqs, t_iv; name=:disc_pde)
+    compiled = ModelingToolkit.mtkcompile(sys_disc)
+
+    u0 = _build_u0_pde(sys, disc_vars, dvs, spatial_ivs, spatial_iv_names, grid, t_iv)
+    tspan = _extract_tspan_pde(sys, t_iv)
+    return ModelingToolkit.ODEProblem(compiled, u0, tspan; kwargs...)
+end
+
+# Identify which dependent variable's time derivative sits on the LHS of an
+# equation `D(u(t, ...)) ~ rhs`.
+function _identify_lhs_dv_pde(lhs, dvs)
+    ex = Symbolics.unwrap(lhs)
+    if Symbolics.iscall(ex) && Symbolics.operation(ex) isa ModelingToolkit.Differential
+        inner = Symbolics.wrap(Symbolics.arguments(ex)[1])
+        for dv in dvs
+            isequal(Symbolics.unwrap(inner), Symbolics.unwrap(dv)) && return dv
+        end
+        # Name-based fallback (common when the LHS DV came from a different
+        # @variables call than the one stored in sys.dvs).
+        inner_name = Symbol(Symbolics.tosymbol(inner, escape=false))
+        for dv in dvs
+            Symbol(Symbolics.tosymbol(dv, escape=false)) == inner_name && return dv
+        end
+    end
+    error("discretize: cannot identify dependent variable for LHS $(lhs)")
+end
+
+# Read the order field off a Differential, falling back to 1 for older
+# Symbolics versions that don't carry one.
+_diff_order(op::ModelingToolkit.Differential) =
+    hasproperty(op, :order) ? Int(getproperty(op, :order)) : 1
+
+# Resolve a Differential's wrt-symbol to either a direct computational axis
+# tag (`:xi`, `:eta`) or a `(:target, k)` tag indicating the k-th target
+# axis (chain-rule path via `coord_jacobian[:, :, k]`).
+function _resolve_axis(name::Symbol, xi_axis::Symbol, eta_axis::Symbol,
+                      spatial_iv_names::Vector{Symbol})
+    name == xi_axis  && return :xi
+    name == eta_axis && return :eta
+    name in (:xi, :ξ)  && return :xi
+    name in (:eta, :η) && return :eta
+    for (k, nm) in pairs(spatial_iv_names)
+        nm == name && return (:target, k)
+    end
+    error("discretize: cannot resolve axis '$name' (not $xi_axis, $eta_axis, or one of $(spatial_iv_names))")
+end
+
+# Recursively walk a symbolic RHS expression at flat cell index `c`,
+# substituting DV calls with `disc_vars[dv][c]` and Differential nodes with
+# their centered-FD form (with chain-rule transform when the wrt-axis is a
+# target axis). Nonlinear terms are preserved by recursing into operator
+# arguments — `u^2` becomes `u_arr[c]^2`, `sin(u)` becomes `sin(u_arr[c])`.
+function _substitute_at_cell(expr, disc_vars, dvs, spatial_iv_names,
+                              xi_axis, eta_axis, c, nb, dξ, dη, cj, cj2)
+    ex = Symbolics.unwrap(expr)
+    if !Symbolics.iscall(ex)
+        return Symbolics.wrap(ex)
+    end
+    op = Symbolics.operation(ex)
+    args = Symbolics.arguments(ex)
+
+    # DV call (e.g. u(t, lon, lat))?
+    for dv in dvs
+        isequal(Symbolics.wrap(ex), dv) && return disc_vars[dv][c]
+    end
+
+    # Differential — first or second order. Symbolics ≥ 7 fuses repeated
+    # Differentials in the same variable into a single `Differential(x, 2)`
+    # node carrying an `order` field, so we need to handle BOTH that fused
+    # form AND the explicit `Differential(y)(Differential(x)(u))` nesting
+    # (which stays separate when the wrt-variables differ).
+    if op isa ModelingToolkit.Differential
+        outer = _resolve_axis(Symbol(op.x), xi_axis, eta_axis, spatial_iv_names)
+        inner_arg = args[1]
+        order = _diff_order(op)
+
+        if order == 2
+            # ∂²/∂x² form — outer and inner axis are the same.
+            return _second_deriv_cell(inner_arg, outer, outer, disc_vars, dvs,
+                                       c, nb, dξ, dη, cj, cj2)
+        end
+        order > 2 && error("discretize: Differential order $(order) not supported (≤ 2 only)")
+
+        # First-order outer Differential. Look for a nested Differential to
+        # promote to a mixed second derivative ∂²/∂x∂y.
+        if Symbolics.iscall(inner_arg) &&
+           Symbolics.operation(inner_arg) isa ModelingToolkit.Differential
+            inner_op = Symbolics.operation(inner_arg)
+            inner_order = _diff_order(inner_op)
+            inner_order == 1 ||
+                error("discretize: nested Differential of order $(inner_order) not supported")
+            inner = _resolve_axis(Symbol(inner_op.x), xi_axis, eta_axis, spatial_iv_names)
+            innermost = Symbolics.arguments(inner_arg)[1]
+            return _second_deriv_cell(innermost, outer, inner, disc_vars, dvs,
+                                       c, nb, dξ, dη, cj, cj2)
+        end
+        return _first_deriv_cell(inner_arg, outer, disc_vars, dvs,
+                                  c, nb, dξ, dη, cj)
+    end
+
+    # General operator — recurse into arguments (preserves nonlinear structure).
+    new_args = [
+        _substitute_at_cell(Symbolics.wrap(a), disc_vars, dvs, spatial_iv_names,
+                            xi_axis, eta_axis, c, nb, dξ, dη, cj, cj2)
+        for a in args
+    ]
+    return Symbolics.wrap(op(Symbolics.unwrap.(new_args)...))
+end
+
+# Evaluate a (possibly nonlinear) symbolic expression at neighbor cell `cn`,
+# replacing every DV call with `disc_vars[dv][cn]`. Used to build the value
+# of `f(u, v, ...)` at each stencil point during second-derivative assembly.
+function _eval_expr_at(expr, disc_vars, dvs, cn)
+    ex = Symbolics.unwrap(expr)
+    if !Symbolics.iscall(ex)
+        return Symbolics.wrap(ex)
+    end
+    for dv in dvs
+        isequal(Symbolics.wrap(ex), dv) && return disc_vars[dv][cn]
+    end
+    op = Symbolics.operation(ex)
+    args = Symbolics.arguments(ex)
+    new_args = [_eval_expr_at(Symbolics.wrap(a), disc_vars, dvs, cn) for a in args]
+    return Symbolics.wrap(op(Symbolics.unwrap.(new_args)...))
+end
+
+# Centered first derivative w.r.t. an axis, with chain-rule transform when
+# the axis is a physical target axis.
+function _first_deriv_cell(inner_arg, outer, disc_vars, dvs,
+                            c, nb, dξ, dη, cj)
+    f_E = _eval_expr_at(inner_arg, disc_vars, dvs, nb.E)
+    f_W = _eval_expr_at(inner_arg, disc_vars, dvs, nb.W)
+    f_N = _eval_expr_at(inner_arg, disc_vars, dvs, nb.Np)
+    f_S = _eval_expr_at(inner_arg, disc_vars, dvs, nb.Sp)
+    df_dξ = (f_E - f_W) / (2 * dξ)
+    df_dη = (f_N - f_S) / (2 * dη)
+    if outer === :xi
+        return df_dξ
+    elseif outer === :eta
+        return df_dη
+    elseif outer isa Tuple && outer[1] === :target
+        k = outer[2]
+        return cj[c, 1, k] * df_dξ + cj[c, 2, k] * df_dη
+    end
+    error("discretize: bad outer axis tag $(outer)")
+end
+
+# Full chain-rule second derivative at cell `c`:
+#   ∂²u/∂x∂y = Σ_kl (∂ξ_k/∂x)(∂ξ_l/∂y) ∂²u/(∂ξ_k∂ξ_l)
+#            + Σ_k  (∂²ξ_k/∂x∂y)         ∂u/∂ξ_k
+# Computational-axis derivatives use plain centered second / mixed FD.
+function _second_deriv_cell(innermost, outer, inner, disc_vars, dvs,
+                              c, nb, dξ, dη, cj, cj2)
+    f_C  = _eval_expr_at(innermost, disc_vars, dvs, c)
+    f_E  = _eval_expr_at(innermost, disc_vars, dvs, nb.E)
+    f_W  = _eval_expr_at(innermost, disc_vars, dvs, nb.W)
+    f_N  = _eval_expr_at(innermost, disc_vars, dvs, nb.Np)
+    f_S  = _eval_expr_at(innermost, disc_vars, dvs, nb.Sp)
+    f_NE = _eval_expr_at(innermost, disc_vars, dvs, nb.NE)
+    f_NW = _eval_expr_at(innermost, disc_vars, dvs, nb.NW)
+    f_SE = _eval_expr_at(innermost, disc_vars, dvs, nb.SE)
+    f_SW = _eval_expr_at(innermost, disc_vars, dvs, nb.SW)
+
+    d2f_dξ2  = (f_E - 2 * f_C + f_W) / dξ^2
+    d2f_dη2  = (f_N - 2 * f_C + f_S) / dη^2
+    d2f_dξdη = (f_NE - f_NW - f_SE + f_SW) / (4 * dξ * dη)
+    df_dξ    = (f_E - f_W) / (2 * dξ)
+    df_dη    = (f_N - f_S) / (2 * dη)
+
+    a_ξ_o, a_η_o = _chain_coeffs(outer, c, cj)
+    a_ξ_i, a_η_i = _chain_coeffs(inner, c, cj)
+    b_ξ,   b_η   = _second_chain_coeffs(outer, inner, c, cj2)
+
+    return (
+        a_ξ_o * a_ξ_i * d2f_dξ2 +
+        (a_ξ_o * a_η_i + a_η_o * a_ξ_i) * d2f_dξdη +
+        a_η_o * a_η_i * d2f_dη2 +
+        b_ξ * df_dξ + b_η * df_dη
+    )
+end
+
+# (∂ξ/∂axis, ∂η/∂axis): identity for computational axes, coord-jacobian
+# lookup for target axes.
+function _chain_coeffs(axis, c, cj)
+    if axis === :xi
+        return (1.0, 0.0)
+    elseif axis === :eta
+        return (0.0, 1.0)
+    elseif axis isa Tuple && axis[1] === :target
+        k = axis[2]
+        return (cj[c, 1, k], cj[c, 2, k])
+    end
+    error("discretize: bad axis tag $(axis)")
+end
+
+# (∂²ξ/∂outer∂inner, ∂²η/∂outer∂inner): nonzero only when both axes are
+# target (physical) axes — second derivatives of computational axes vanish.
+function _second_chain_coeffs(outer, inner, c, cj2)
+    if outer isa Tuple && outer[1] === :target &&
+       inner isa Tuple && inner[1] === :target
+        ko, ki = outer[2], inner[2]
+        return (cj2[c, 1, ko, ki], cj2[c, 2, ko, ki])
+    end
+    return (0.0, 0.0)
+end
+
+# Project initial conditions from `sys.bcs` of form `dv(t0, ivs...) ~ rhs(ivs...)`
+# onto each cell. Unmatched DVs default to zero per the ESD reference.
+function _build_u0_pde(sys, disc_vars, dvs, spatial_ivs, spatial_iv_names,
+                       grid, t_iv)
+    N = EarthSciSerialization.n_cells(grid)
+    tspan = _extract_tspan_pde(sys, t_iv)
+    t0 = tspan[1]
+
+    # Cache cell-center coordinates per spatial IV.
+    coord_arrays = Dict{Symbol,Vector{Float64}}()
+    for nm in spatial_iv_names
+        coord_arrays[nm] = Vector{Float64}(EarthSciSerialization.cell_centers(grid, nm))
+    end
+
+    u0 = Pair[]
+    for dv in dvs
+        arr = disc_vars[dv]
+        ic_found = false
+        for bc in sys.bcs
+            if _is_initial_condition_pde(bc, dv, t0)
+                rhs = bc.rhs
+                for c in 1:N
+                    val = _eval_ic_pde(rhs, spatial_ivs, spatial_iv_names,
+                                        coord_arrays, c)
+                    push!(u0, arr[c] => val)
+                end
+                ic_found = true
+                break
+            end
+        end
+        if !ic_found
+            for c in 1:N
+                push!(u0, arr[c] => 0.0)
+            end
+        end
+    end
+    return u0
+end
+
+function _is_initial_condition_pde(bc, dv, t0)
+    lhs = Symbolics.unwrap(bc.lhs)
+    Symbolics.iscall(lhs) || return false
+    args = Symbolics.arguments(lhs)
+    isempty(args) && return false
+    lhs_name = Symbol(Symbolics.tosymbol(Symbolics.wrap(lhs), escape=false))
+    dv_name  = Symbol(Symbolics.tosymbol(dv, escape=false))
+    lhs_name == dv_name || return false
+    t_val = Symbolics.value(Symbolics.wrap(args[1]))
+    return t_val isa Number && isapprox(Float64(t_val), t0)
+end
+
+function _eval_ic_pde(rhs, spatial_ivs, spatial_iv_names, coord_arrays, c)
+    subs = Dict{Any,Any}()
+    for (iv, nm) in zip(spatial_ivs, spatial_iv_names)
+        val = coord_arrays[nm][c]
+        # Insert under both wrapped and unwrapped forms so substitute matches
+        # whichever form the BC's RHS happens to carry.
+        subs[iv] = val
+        subs[Symbolics.unwrap(iv)] = val
+    end
+    v = Symbolics.value(Symbolics.substitute(rhs, subs))
+    if v isa Number
+        return Float64(v)
+    end
+    # Fall through: substitute left a still-symbolic form (e.g. `cos(0.5)`
+    # that the simplifier didn't fold). Round-trip through Julia's expression
+    # evaluator — matches ESD's `_eval_ic` reference path.
+    return Float64(Core.eval(Main, Symbolics.toexpr(v)))
+end
+
+function _extract_tspan_pde(sys, t_iv)
+    t_name = Symbol(Symbolics.tosymbol(t_iv, escape=false))
+    for d in sys.domain
+        Symbol(d.variables) == t_name &&
+            return (Float64(d.domain.left), Float64(d.domain.right))
+    end
+    error("discretize: no time domain found in PDESystem.domain")
+end
+
 end # module EarthSciSerializationMTKExt
