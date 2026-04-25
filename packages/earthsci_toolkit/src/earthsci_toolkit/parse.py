@@ -2983,14 +2983,16 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     # Parse into ESM objects
     esm_file = _parse_esm_data(data)
 
+    # Resolve subsystem references first so subsystems land as concrete Model
+    # / ReactionSystem objects (rather than `{ref: ...}` dicts) before the
+    # enum-lowering pass walks their expression trees.
+    resolve_subsystem_refs(esm_file, base_path)
+
     # Lower `enum` op nodes to `const` integers using the file's `enums` block
-    # (esm-spec §9.3). Runs after parsing so every expression tree — including
-    # those in subsystems — sees only the resolved integer values.
+    # (esm-spec §9.3). Runs after subsystem resolution so every expression
+    # tree — including those in resolved subsystems — sees the integer values.
     from .registered_functions import lower_enums
     lower_enums(esm_file)
-
-    # Resolve subsystem references
-    resolve_subsystem_refs(esm_file, base_path)
 
     # Append top-level events that were stripped earlier
     if top_continuous_events:
