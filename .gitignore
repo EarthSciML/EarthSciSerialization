@@ -8,8 +8,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
+# Note: top-level /lib/ is the ESS standard subsystem library
+# (lib/solar.esm, lib/calendar.esm, lib/interp.esm — see docs/standard_library.md).
+# It is intentionally tracked. The Python-convention `lib/` build-artifact
+# ignore is dropped here; rely on `build/`, `dist/`, `*.egg-info/` above instead.
 parts/
 sdist/
 var/
