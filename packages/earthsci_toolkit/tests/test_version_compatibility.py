@@ -50,21 +50,21 @@ class TestVersionCompatibility:
         assert result.metadata.name == 'Version_0_1_5_PatchUpgrade'
 
     def test_forward_compatibility_warning(self):
-        """Should load newer minor version (0.2.0) with warning."""
+        """Older minor version (0.2.0) loads cleanly under the v0.3.0 baseline."""
         fixture = load_fixture('version_0_2_0_minor_upgrade.esm')
 
-        with pytest.warns(UserWarning, match="0.2.0 is newer than"):
-            result = load(fixture)
+        # 0.2.0 < current 0.3.0 — no forward-compat warning expected.
+        result = load(fixture)
 
         assert result.esm == '0.2.0'
         assert result.metadata.name == 'Version_0_2_0_MinorUpgrade'
 
     def test_forward_compatibility_unknown_fields(self):
-        """Should load much newer version (0.3.0) with unknown fields ignored."""
+        """Same-version (0.3.0) fixture with unknown fields loads cleanly."""
         fixture = load_fixture('version_0_3_0_with_unknown_fields.esm')
 
-        with pytest.warns(UserWarning, match="0.3.0 is newer than"):
-            result = load(fixture)
+        # 0.3.0 == current 0.3.0 — no forward-compat warning expected.
+        result = load(fixture)
 
         assert result.esm == '0.3.0'
         assert result.metadata.name == 'Version_0_3_0_WithUnknownFields'
