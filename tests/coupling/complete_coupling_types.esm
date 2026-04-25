@@ -524,55 +524,6 @@
       }
     }
   },
-  "operators": {
-    "DryDeposition": {
-      "operator_id": "ResistanceBasedDeposition",
-      "reference": {
-        "doi": "10.1016/0004-6981(89)90153-4",
-        "citation": "Wesely, 1989. Parameterization of surface resistances"
-      },
-      "config": {
-        "method": "resistance_model",
-        "species": [
-          "O3",
-          "NO2"
-        ],
-        "land_use_categories": 11
-      },
-      "needed_vars": [
-        "O3",
-        "NO2",
-        "temperature",
-        "surface_resistance"
-      ],
-      "modifies": [
-        "O3",
-        "NO2"
-      ],
-      "description": "Resistance-based dry deposition for reactive gases"
-    },
-    "TurbulentMixing": {
-      "operator_id": "KProfile_PBL",
-      "reference": {
-        "notes": "K-profile turbulent mixing in planetary boundary layer"
-      },
-      "config": {
-        "mixing_scheme": "k_profile",
-        "richardson_critical": 0.25
-      },
-      "needed_vars": [
-        "boundary_layer_height",
-        "u_wind",
-        "v_wind"
-      ],
-      "modifies": [
-        "O3",
-        "NO",
-        "NO2"
-      ],
-      "description": "Vertical turbulent mixing using K-profile method"
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -652,16 +603,6 @@
       "to": "EmissionSources.NOx_emission_rate",
       "transform": "param_to_var",
       "description": "Use inventory emission rates"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "DryDeposition",
-      "description": "Apply dry deposition operator to surface grid cells"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "TurbulentMixing",
-      "description": "Apply vertical mixing operator in boundary layer"
     },
     {
       "type": "callback",

@@ -382,47 +382,6 @@ fn test_invalid_discrete_parameter() {
     }
 }
 
-/// Test undefined operator errors
-#[test]
-fn test_undefined_operator() {
-    let fixtures = [
-        (
-            "undefined_operator",
-            include_str!("../../../tests/invalid/undefined_operator.esm"),
-        ),
-        (
-            "undefined_operator_in_apply",
-            include_str!("../../../tests/invalid/undefined_operator_in_apply.esm"),
-        ),
-    ];
-
-    for (name, fixture) in fixtures {
-        let parsed_result = load(fixture);
-
-        match parsed_result {
-            Ok(esm_file) => {
-                let validation_result = validate(&esm_file);
-                assert!(
-                    validation_result.has_errors(),
-                    "Expected {name} to have validation errors"
-                );
-
-                let has_undefined_operator_error = validation_result
-                    .errors()
-                    .iter()
-                    .any(|err| matches!(err.code, StructuralErrorCode::UndefinedOperator));
-                assert!(
-                    has_undefined_operator_error,
-                    "Expected UndefinedOperator error for {name}"
-                );
-            }
-            Err(_) => {
-                // Parse failure is also acceptable
-            }
-        }
-    }
-}
-
 /// Test undefined variable in various contexts
 #[test]
 fn test_undefined_variable_contexts() {

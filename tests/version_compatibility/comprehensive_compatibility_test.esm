@@ -478,21 +478,6 @@
       }
     }
   },
-  "operators": {
-    "WetDeposition": {
-      "operator_id": "henry_law_washout",
-      "description": "Henry's law wet deposition",
-      "config": {
-        "henry_constants": {
-          "NO2": 0.01,
-          "O3": 0.001,
-          "CO": 0.0001
-        },
-        "precipitation_threshold": 0.1
-      },
-      "needed_vars": []
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -545,11 +530,6 @@
       "transform": "conversion_factor",
       "factor": 2.14e+19,
       "description": "Convert kg/m^2/s to molec/cm^3/s for NO"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "WetDeposition",
-      "description": "Apply wet deposition to all chemical species"
     }
   ],
   "domains": {

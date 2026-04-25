@@ -527,10 +527,6 @@
       "transform": "param_to_var"
     },
     {
-      "type": "operator_apply",
-      "operator": "unknown"
-    },
-    {
       "type": "couple",
       "systems": [
         "AtmosphericChemistry.Aerosols",

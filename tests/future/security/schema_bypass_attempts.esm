@@ -17,7 +17,7 @@
       "equations": [
         {
           "lhs": { "op": "D", "args": ["__proto__"], "wrt": "t" },
-          "rhs": { "op": "call", "args": ["constructor", "toString"] }
+          "rhs": { "op": "fn", "name": "constructor.toString", "args": [] }
         }
       ]
     }

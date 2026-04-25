@@ -1039,76 +1039,6 @@
       }
     }
   },
-  "operators": {
-    "CarbonateChemistry": {
-      "operator_id": "CO2SYS_v3",
-      "reference": {
-        "citation": "Lewis et al., 1998. Program developed for CO2 system calculations",
-        "doi": "10.2172/639712"
-      },
-      "config": {
-        "K1K2_constants": "Mehrbach_refit",
-        "KSO4_constant": "Dickson",
-        "pH_scale": "Total",
-        "pressure_correction": true
-      },
-      "needed_vars": [
-        "DIC",
-        "ALK",
-        "temperature_ocean",
-        "salinity",
-        "pressure"
-      ],
-      "modifies": [
-        "CO2_solubility"
-      ],
-      "description": "Full carbonate system calculations"
-    },
-    "GasTransferVelocity": {
-      "operator_id": "Wanninkhof2014",
-      "reference": {
-        "citation": "Wanninkhof, 2014. Relationship between wind speed and gas exchange over the ocean",
-        "doi": "10.4319/lom.2014.12.351"
-      },
-      "config": {
-        "parameterization": "cubic_wind_speed",
-        "temperature_dependence": "schmidt_number_scaling"
-      },
-      "needed_vars": [
-        "wind_speed",
-        "temperature_ocean",
-        "Schmidt_CO2",
-        "Schmidt_O2"
-      ],
-      "modifies": [
-        "k_CO2",
-        "k_O2"
-      ],
-      "description": "Wind speed and temperature dependent gas transfer velocities"
-    },
-    "BiologicalPump": {
-      "operator_id": "Export_Production",
-      "reference": {
-        "notes": "Biological carbon pump with export to deep ocean"
-      },
-      "config": {
-        "export_ratio": 0.25,
-        "sinking_velocity": 10.0,
-        "remineralization_depth": 1000.0
-      },
-      "needed_vars": [
-        "primary_production",
-        "phytoplankton",
-        "detritus"
-      ],
-      "modifies": [
-        "DIC",
-        "ALK",
-        "nutrients"
-      ],
-      "description": "Export production and deep ocean remineralization"
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -1391,21 +1321,6 @@
       "to": "MarineEcosystem.light",
       "transform": "param_to_var",
       "description": "Use CESM2 surface solar radiation"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "CarbonateChemistry",
-      "description": "Calculate full carbonate system equilibrium"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "GasTransferVelocity",
-      "description": "Update gas transfer velocities with wind and temperature"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "BiologicalPump",
-      "description": "Export production to deep ocean"
     },
     {
       "type": "callback",

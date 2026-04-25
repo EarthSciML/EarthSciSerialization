@@ -57,7 +57,7 @@ def test_load_works_end_to_end():
         Path(__file__).resolve().parents[3]
         / "tests"
         / "valid"
-        / "basic_interpolation_operators.esm"
+        / "data_loaders_comprehensive.esm"
     )
     if not fixture.exists():
         # Fixture not present in this checkout — skip rather than fabricate one.

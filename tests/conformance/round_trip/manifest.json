@@ -23,10 +23,6 @@
     { "id": "valid/events_discrete_periodic",       "path": "valid/events_discrete_periodic.esm",       "tags": ["events"] },
     { "id": "valid/events_discrete_preset_times",   "path": "valid/events_discrete_preset_times.esm",   "tags": ["events"] },
 
-    { "id": "valid/operators_comprehensive",        "path": "valid/operators_comprehensive.esm",        "tags": ["operators"] },
-    { "id": "valid/basic_interpolation_operators",  "path": "valid/basic_interpolation_operators.esm",  "tags": ["operators", "interpolation"] },
-    { "id": "valid/interpolation_operators_comprehensive", "path": "valid/interpolation_operators_comprehensive.esm", "tags": ["operators", "interpolation"] },
-
     { "id": "valid/units_conversions",              "path": "valid/units_conversions.esm",              "tags": ["units"] },
     { "id": "valid/units_dimensional_analysis",     "path": "valid/units_dimensional_analysis.esm",     "tags": ["units"] },
     { "id": "valid/units_propagation",              "path": "valid/units_propagation.esm",              "tags": ["units"] },
@@ -58,9 +54,6 @@
 
     { "id": "fixtures/sde/ornstein_uhlenbeck",       "path": "fixtures/sde/ornstein_uhlenbeck.esm",       "tags": ["sde", "brownian"] },
     { "id": "fixtures/sde/correlated_noise",         "path": "fixtures/sde/correlated_noise.esm",         "tags": ["sde", "brownian", "correlated"] },
-    { "id": "registered_funcs/pure_math",            "path": "registered_funcs/pure_math.esm",            "tags": ["registered_functions", "call", "gt-p3ep"] },
-    { "id": "registered_funcs/one_d_interpolator",   "path": "registered_funcs/one_d_interpolator.esm",   "tags": ["registered_functions", "call", "interpolation", "gt-p3ep"] },
-    { "id": "registered_funcs/two_d_table_lookup",   "path": "registered_funcs/two_d_table_lookup.esm",   "tags": ["registered_functions", "call", "table_lookup", "gt-p3ep"] },
 
     { "id": "discretizations/centered_2nd_uniform",  "path": "discretizations/centered_2nd_uniform.esm",  "tags": ["discretization", "cartesian"] },
     { "id": "discretizations/centered_arbitrary_order_uniform", "path": "discretizations/centered_arbitrary_order_uniform.esm", "tags": ["discretization", "cartesian", "arbitrary-order", "esm-z6d"] },

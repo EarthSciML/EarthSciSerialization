@@ -411,37 +411,6 @@
       }
     }
   },
-  "operators": {
-    "SpatialInterpolator": {
-      "operator_id": "bilinear_interp",
-      "needed_vars": [
-        "u",
-        "v",
-        "T"
-      ],
-      "config": {
-        "method": "bilinear",
-        "extrapolation": "nearest"
-      },
-      "reference": {
-        "notes": "Spatial interpolation operator"
-      }
-    },
-    "UnitConverter": {
-      "operator_id": "unit_conversion",
-      "needed_vars": [
-        "NOx_emissions"
-      ],
-      "config": {
-        "from": "kg/m^2/s",
-        "to": "mol/mol/s",
-        "molecular_weight": 46.0
-      },
-      "reference": {
-        "notes": "NOx unit conversion"
-      }
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -467,10 +436,6 @@
       "from": "MeteoData.v",
       "to": "Transport.v",
       "transform": "param_to_var"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "UnitConverter"
     },
     {
       "type": "callback",

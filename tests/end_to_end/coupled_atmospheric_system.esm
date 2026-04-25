@@ -977,89 +977,6 @@
       }
     }
   },
-  "operators": {
-    "DryDepositionOperator": {
-      "operator_id": "ResistanceModel_v2",
-      "reference": {
-        "citation": "Zhang et al., 2003. A revised parameterization for gaseous dry deposition",
-        "doi": "10.5194/acp-3-2067-2003"
-      },
-      "config": {
-        "method": "big_leaf_resistance",
-        "species_list": [
-          "O3",
-          "NO2",
-          "HCHO"
-        ],
-        "land_use_categories": 15,
-        "seasonal_dependence": true
-      },
-      "needed_vars": [
-        "O3",
-        "NO2",
-        "HCHO",
-        "temperature",
-        "humidity",
-        "u_wind",
-        "land_use_type"
-      ],
-      "modifies": [
-        "O3",
-        "NO2",
-        "HCHO"
-      ],
-      "description": "Advanced dry deposition using big-leaf resistance model"
-    },
-    "TurbulentMixingOperator": {
-      "operator_id": "YSU_PBL_Scheme",
-      "reference": {
-        "citation": "Hong et al., 2006. A new vertical diffusion package",
-        "doi": "10.1175/MWR3199.1"
-      },
-      "config": {
-        "scheme": "YSU",
-        "entrainment": true,
-        "counter_gradient": true
-      },
-      "needed_vars": [
-        "boundary_layer_height",
-        "u_wind",
-        "v_wind",
-        "temperature"
-      ],
-      "modifies": [
-        "O3",
-        "NO",
-        "NO2",
-        "HCHO",
-        "HO2"
-      ],
-      "description": "Yonsei University PBL turbulent mixing scheme"
-    },
-    "PhotolysisOperator": {
-      "operator_id": "FAST_JX_v7",
-      "reference": {
-        "citation": "Bian & Prather, 2002. Fast-JX: Accurate simulation of in- and below-cloud photolysis",
-        "doi": "10.1029/2002JD002204"
-      },
-      "config": {
-        "wavelength_bins": 18,
-        "altitude_levels": 60,
-        "aerosol_effects": true,
-        "cloud_effects": true
-      },
-      "needed_vars": [
-        "temperature",
-        "pressure",
-        "humidity"
-      ],
-      "modifies": [
-        "jNO2",
-        "jHCHO"
-      ],
-      "description": "Fast-JX photolysis rate calculations"
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -1184,21 +1101,6 @@
       "to": "EmissionSources.VOC_emission_rate",
       "transform": "param_to_var",
       "description": "Use NEI VOC emissions"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "DryDepositionOperator",
-      "description": "Apply advanced dry deposition to surface cells"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "TurbulentMixingOperator",
-      "description": "Apply YSU PBL mixing scheme"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "PhotolysisOperator",
-      "description": "Update photolysis rates with Fast-JX"
     },
     {
       "type": "callback",

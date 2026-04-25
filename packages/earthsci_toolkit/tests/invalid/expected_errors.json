@@ -145,23 +145,6 @@
     "is_valid": false
   },
 
-  "undefined_operator.esm": {
-    "schema_errors": [],
-    "structural_errors": [
-      {
-        "path": "/coupling/0",
-        "code": "undefined_operator",
-        "message": "Operator 'NonExistentOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "NonExistentOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      }
-    ],
-    "is_valid": false
-  },
-
   "invalid_discrete_param.esm": {
     "schema_errors": [],
     "structural_errors": [
@@ -191,7 +174,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.temperature",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -494,23 +477,6 @@
     "is_valid": false
   },
 
-  "undefined_operator_in_apply.esm": {
-    "schema_errors": [],
-    "structural_errors": [
-      {
-        "path": "/coupling/0",
-        "code": "undefined_operator",
-        "message": "Operator 'NonExistentAdvectionOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "NonExistentAdvectionOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      }
-    ],
-    "is_valid": false
-  },
-
   "multiple_errors_combined.esm": {
     "schema_errors": [],
     "structural_errors": [
@@ -614,16 +580,6 @@
           "reference": "NonExistentSystem.var",
           "coupling_type": "variable_map",
           "missing_component": "NonExistentSystem"
-        }
-      },
-      {
-        "path": "/coupling/1",
-        "code": "undefined_operator",
-        "message": "Operator 'MissingOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "MissingOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
         }
       }
     ],
@@ -846,70 +802,6 @@
           "data_loader": "WeatherData",
           "coupling_type": "variable_map",
           "available_variables": ["T", "P"]
-        }
-      }
-    ],
-    "is_valid": false
-  },
-
-  "operator_missing_operator_id.esm": {
-    "schema_errors": [
-      {
-        "path": "/operators/BadOperator",
-        "message": "Required property 'operator_id' is missing",
-        "keyword": "required"
-      }
-    ],
-    "structural_errors": [],
-    "is_valid": false
-  },
-
-  "operator_missing_needed_vars.esm": {
-    "schema_errors": [
-      {
-        "path": "/operators/BadOperator",
-        "message": "Required property 'needed_vars' is missing",
-        "keyword": "required"
-      }
-    ],
-    "structural_errors": [],
-    "is_valid": false
-  },
-
-  "operator_variable_mismatch.esm": {
-    "schema_errors": [],
-    "structural_errors": [
-      {
-        "path": "/coupling/0",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' requires variable 'nonexistent_variable' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "nonexistent_variable",
-          "coupling_type": "operator_apply",
-          "available_systems": ["ChemistryModel"]
-        }
-      },
-      {
-        "path": "/coupling/0",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' requires variable 'NO2' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "NO2",
-          "coupling_type": "operator_apply",
-          "available_systems": ["ChemistryModel"]
-        }
-      },
-      {
-        "path": "/coupling/0",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' modifies variable 'another_nonexistent_var' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "another_nonexistent_var",
-          "coupling_type": "operator_apply",
-          "available_systems": ["ChemistryModel"]
         }
       }
     ],
@@ -1207,39 +1099,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
-        }
-      },
-      {
-        "path": "/coupling/1",
-        "code": "undefined_operator",
-        "message": "Operator 'MissingOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "MissingOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      },
-      {
-        "path": "/coupling/2",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' requires variable 'nonexistent_needed_var' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "nonexistent_needed_var",
-          "coupling_type": "operator_apply",
-          "available_systems": ["BadModel"]
-        }
-      },
-      {
-        "path": "/coupling/2",
-        "code": "operator_variable_missing",
-        "message": "Operator 'TestOperator' modifies variable 'another_nonexistent_var' which is not available in coupled systems",
-        "details": {
-          "operator": "TestOperator",
-          "missing_variable": "another_nonexistent_var",
-          "coupling_type": "operator_apply",
-          "available_systems": ["BadModel"]
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -1454,7 +1314,7 @@
           "system": "NonExistentModel",
           "coupling_type": "variable_map",
           "reference": "NonExistentModel.valid_var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1504,7 +1364,7 @@
         "details": {
           "system": "NonExistentModel",
           "coupling_type": "operator_compose",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1514,7 +1374,7 @@
         "details": {
           "system": "NonExistentModel",
           "coupling_type": "couple",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -1532,7 +1392,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.some_var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1623,7 +1483,7 @@
         "details": {
           "system": "NonExistentSystem",
           "coupling_type": "couple",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1771,7 +1631,7 @@
           "system": "NonExistentSystem",
           "coupling_type": "variable_map",
           "reference": "NonExistentSystem.some_var",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       }
     ],
@@ -1789,7 +1649,7 @@
         "details": {
           "system": "NonExistentSystem",
           "coupling_type": "operator_compose",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1829,7 +1689,7 @@
         "details": {
           "system": "NonExistentSystem",
           "coupling_type": "couple",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
+          "expected_in": "models, reaction_systems, data_loaders"
         }
       },
       {
@@ -1851,30 +1711,10 @@
           "coupling_type": "couple",
           "location": "connector"
         }
-      },
-      {
-        "path": "/coupling/13",
-        "code": "undefined_operator",
-        "message": "Operator 'NonExistentOperator' referenced in operator_apply coupling is not declared",
-        "details": {
-          "operator": "NonExistentOperator",
-          "coupling_type": "operator_apply",
-          "expected_in": "operators"
-        }
-      },
-      {
-        "path": "/coupling/14",
-        "code": "undefined_system",
-        "message": "Coupling entry references nonexistent system 'NonExistentSystem'",
-        "details": {
-          "system": "NonExistentSystem",
-          "coupling_type": "operator_apply",
-          "expected_in": "models, reaction_systems, data_loaders, operators"
-        }
       }
     ],
     "is_valid": false,
-    "notes": "This file contains 20 annotated error cases. Some entries may also produce schema errors (e.g., invalid enum values for transform, invalid coupling types) depending on the validator. The structural errors listed here are the errors that survive schema-valid entries."
+    "notes": "This file contains annotated error cases. Some entries may also produce schema errors (e.g., invalid enum values for transform, invalid coupling types) depending on the validator. The structural errors listed here are the errors that survive schema-valid entries."
   },
 
   "units_coupling_mismatch.esm": {
@@ -1956,6 +1796,125 @@
     "is_valid": false
   },
 
+  "units_inconsistent_subtraction.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_diff",
+        "code": "unit_inconsistency",
+        "message": "Cannot subtract quantities with different units: 'Pa' - 'K'",
+        "details": {
+          "operation": "subtraction",
+          "left_units": "Pa",
+          "right_units": "K",
+          "variable": "invalid_diff"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_exponent.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/variables/invalid_power",
+        "code": "unit_inconsistency",
+        "message": "Exponent must be dimensionless, got 'kg' for base with units 'm'",
+        "details": {
+          "operation": "exponentiation",
+          "base_units": "m",
+          "exponent_units": "kg",
+          "variable": "invalid_power"
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_invalid_derivative.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/BadUnitsModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Derivative d(x)/dt has units 'm/s' but assigned expression has units 'kg'",
+        "details": {
+          "derivative_variable": "x",
+          "derivative_variable_units": "m",
+          "wrt_variable": "t",
+          "wrt_variable_units": "s",
+          "expected_units": "m/s",
+          "actual_units": "kg",
+          "equation_index": 0
+        }
+      }
+    ],
+    "is_valid": false
+  },
+
+  "units_gradient_operator_mismatch.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/SpatialModel/equations/0",
+        "code": "unit_inconsistency",
+        "message": "Gradient operator applied to variable with incompatible spatial units",
+        "details": {
+          "operator": "grad",
+          "variable": "c",
+          "variable_units": "mol/m^3",
+          "dim": "x",
+          "coordinate_units": null,
+          "equation_index": 0
+        }
+      },
+      {
+        "path": "/models/SpatialModel/variables/bad_sum",
+        "code": "unit_inconsistency",
+        "message": "Cannot add quantities with different units: 'm' + 'kg'",
+        "details": {
+          "operation": "addition",
+          "left_units": "m",
+          "right_units": "kg",
+          "variable": "bad_sum"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Primary demonstration: grad applied over coordinate 'x' whose units are undeclared in the domain — validators that model grad/div/laplacian must not assume a hardcoded metre denominator. The companion bad_sum observed variable is a secondary demonstration included so bindings that do not yet validate grad/div/laplacian (Julia, Rust, Python, Go) still surface this fixture as invalid. Currently the TypeScript validator is the only binding to surface the grad-specific inconsistency; follow-up beads track gradient support elsewhere."
+  },
+
+  "units_mixed_dimensional_operations.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ComplexUnitsModel/variables/invalid_sum",
+        "code": "unit_inconsistency",
+        "message": "Cannot add quantities with different units: 'm^2' + 'kg*m/s^2'",
+        "details": {
+          "operation": "addition",
+          "left_units": "m^2",
+          "right_units": "kg*m/s^2",
+          "variable": "invalid_sum"
+        }
+      },
+      {
+        "path": "/models/ComplexUnitsModel/variables/invalid_transcendental",
+        "code": "unit_inconsistency",
+        "message": "Exponential argument must be dimensionless, got units 'kg'",
+        "details": {
+          "operation": "exponential",
+          "function": "exp",
+          "argument_units": "kg",
+          "variable": "invalid_transcendental"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "Demonstrates two independent unit inconsistencies (addition of incompatible units, and transcendental function on dimensional argument) in one fixture. Validators may surface one or both depending on coverage; Python's validator currently only surfaces the addition case, while Julia/Rust/TS/Go also surface the transcendental case."
+  },
+
   "units_parameter_default_mismatch.esm": {
     "schema_errors": [],
     "structural_errors": [
@@ -1971,7 +1930,8 @@
         }
       }
     ],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Parameter declares units='K' but supplies default_units='degC'. Python's validator flags any difference between the declared and default unit identities (including same-dimension mismatches like K vs degC and dimensionally incompatible pairs like K vs kg). Julia/Rust/TS/Go currently accept the default_units field in the schema but do not yet emit this check — follow-up beads required for full cross-language support."
   },
 
   "units_reaction_rate_mismatch.esm": {
@@ -1990,7 +1950,7 @@
       }
     ],
     "is_valid": false,
-    "notes": "Julia's validate_reaction_system_dimensions enforces this check; Python/Rust/TS/Go currently accept the file without this error. Follow-up beads required for full cross-language support."
+    "notes": "2nd-order reaction A + B -> C whose rate parameter 'k' is declared with 1/s units (appropriate for a 1st-order rate constant) instead of 1/(M*s). Julia's validate_reaction_system_dimensions compares the observed rate dimension to concentration^(1-total_order)/time derived from the first substrate's units and fails with @warn on mismatch. Rust/Python/TS/Go currently ignore this check — follow-up beads required for full cross-language support."
   },
 
   "units_conversion_factor_error.esm": {
@@ -2010,6 +1970,25 @@
       }
     ],
     "is_valid": false,
-    "notes": "Observed variable declared in Pa is assigned '50000 * p_atm' where p_atm is in atm; dimensions match but the numeric scale factor should be 101325 Pa/atm. Python's parse._check_conversion_factor_consistency compares the numeric literal in a '*' expression against pint's computed conversion factor. Affine conversions (e.g., degC→K) are excluded. Julia/Rust/TS/Go currently accept the file without this error — follow-up beads required for full cross-language support."
+    "notes": "Observed variable declared in Pa is assigned '50000 * p_atm' where p_atm is in atm; dimensions match but the numeric scale factor should be 101325 Pa/atm. Python's validator (parse._check_conversion_factor_consistency) detects linear-scale conversion errors by comparing the numeric literal in a '*' expression against pint's computed conversion factor. Affine conversions (e.g., degC→K) are excluded. Julia/Rust/TS/Go currently accept the file without this error — follow-up beads required for full cross-language support."
+  },
+
+  "units_dimensional_constant_error.esm": {
+    "schema_errors": [],
+    "structural_errors": [
+      {
+        "path": "/models/ConstantUnitsModel/variables/gas_law_calculation",
+        "code": "unit_inconsistency",
+        "message": "Physical constant used with incorrect dimensional analysis",
+        "details": {
+          "constant_name": "R",
+          "constant_description": "ideal gas constant",
+          "declared_units": "kcal/mol",
+          "canonical_units": "J/(mol*K)"
+        }
+      }
+    ],
+    "is_valid": false,
+    "notes": "The ideal gas constant 'R' is declared with units 'kcal/mol' — missing the temperature dimension — so the computed dimensions of 'n*R*T' in 'gas_law_calculation' do not match the canonical energy dimension expected from P*V = n*R*T. Python's validator pattern-matches a small registry of well-known constants (R, k_B, N_A) and flags dimensional (not numerical) mismatches at the first usage site. Julia/Rust/TS/Go currently do not implement this check — follow-up beads required for full cross-language support."
   }
 }

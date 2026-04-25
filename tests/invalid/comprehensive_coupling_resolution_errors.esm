@@ -134,18 +134,6 @@
       }
     }
   },
-  "operators": {
-    "ValidOperator": {
-      "description": "Valid operator for testing error conditions",
-      "inputs": [
-        "input_var"
-      ],
-      "outputs": [
-        "output_var"
-      ],
-      "algorithm": "test_algorithm"
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -369,28 +357,6 @@
         "code": "missing_required_field",
         "message": "Connector equation missing required 'expression' field",
         "algorithm_step": "Connector equation validation"
-      }
-    },
-    {
-      "type": "operator_apply",
-      "operator": "NonExistentOperator",
-      "target": "ValidSystem",
-      "description": "ERROR CASE 14: Invalid operator reference in operator_apply",
-      "_expected_error": {
-        "code": "undefined_operator",
-        "message": "Operator 'NonExistentOperator' not found in operators section",
-        "algorithm_step": "Operator resolution"
-      }
-    },
-    {
-      "type": "operator_apply",
-      "operator": "ValidOperator",
-      "target": "NonExistentSystem",
-      "description": "ERROR CASE 15: Invalid target system in operator_apply",
-      "_expected_error": {
-        "code": "undefined_system",
-        "message": "Target system 'NonExistentSystem' not found",
-        "algorithm_step": "Target system resolution"
       }
     },
     {

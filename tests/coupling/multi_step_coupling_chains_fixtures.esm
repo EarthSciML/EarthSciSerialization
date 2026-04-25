@@ -583,24 +583,6 @@
       }
     }
   },
-  "operators": {
-    "PhotolysisCalculator": {
-      "description": "Calculate photolysis rates from solar radiation",
-      "operator_id": "PhotolysisCalculator",
-      "needed_vars": [],
-      "config": {
-        "inputs": [
-          "solar_flux",
-          "O3_column"
-        ],
-        "outputs": [
-          "j_O3",
-          "j_NO2"
-        ],
-        "algorithm": "TUV_photolysis"
-      }
-    }
-  },
   "coupling": [
     {
       "type": "operator_compose",
@@ -630,11 +612,6 @@
       "to": "AtmosphereChemistry.temperature",
       "transform": "param_to_var",
       "description": "STEP 4: Replace constant temperature with meteorological forcing"
-    },
-    {
-      "type": "operator_apply",
-      "operator": "PhotolysisCalculator",
-      "description": "STEP 5: Calculate photolysis rates from solar radiation and ozone column"
     },
     {
       "type": "variable_map",
