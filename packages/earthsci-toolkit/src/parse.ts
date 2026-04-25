@@ -10,6 +10,7 @@ import addFormats from 'ajv-formats'
 import type { EsmFile, Expression, CouplingEntry } from './types.js'
 import { validateUnits } from './units.js'
 import { isNumericLiteral, losslessJsonParse } from './numeric-literal.js'
+import { lowerEnums } from './lower_enums.js'
 
 /**
  * Schema validation error with JSON Pointer path
@@ -68,9 +69,9 @@ const KNOWN_GRID_BUILTINS = new Set<string>([
 // Embedded ESM schema - browser-compatible (no file system access required)
 const schema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://earthsciml.org/schemas/esm/0.1.0/esm.schema.json",
+  "$id": "https://earthsciml.org/schemas/esm/0.3.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.1.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration.",
+  "description": "EarthSciML Serialization Format (v0.3.0) — closes the function-registry extension point. The top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn`, `enum`, and `const` AST ops are added (esm-spec §9 / docs/rfcs/closed-function-registry.md).",
   "type": "object",
   "required": ["esm", "metadata"],
   "additionalProperties": false,
@@ -81,8 +82,8 @@ const schema = {
   "properties": {
     "esm": {
       "type": "string",
-      "enum": ["0.1.0", "0.2.0"],
-      "description": "Format version string (semver). v0.2.0 adds model-level boundary_conditions (RFC §9)."
+      "enum": ["0.1.0", "0.2.0", "0.3.0"],
+      "description": "Format version string (semver). v0.3.0 closes the function registry; see esm-spec §9."
     },
     "metadata": { "$ref": "#/$defs/Metadata" },
     "models": {
@@ -100,15 +101,10 @@ const schema = {
       "description": "External data source registrations (by reference).",
       "additionalProperties": { "$ref": "#/$defs/DataLoader" }
     },
-    "operators": {
+    "enums": {
       "type": "object",
-      "description": "Registered runtime operators (by reference).",
-      "additionalProperties": { "$ref": "#/$defs/Operator" }
-    },
-    "registered_functions": {
-      "type": "object",
-      "description": "Registry of named pure functions invoked inside expressions via the 'call' op (esm-spec §9.2).",
-      "additionalProperties": { "$ref": "#/$defs/RegisteredFunction" }
+      "description": "File-local symbol-to-positive-integer mappings used by the 'enum' AST op to make categorical lookups cross-binding-portable. Each entry is an enum name; its value is an object mapping symbolic names (strings) to positive integers. See esm-spec §9.3.",
+      "additionalProperties": { "$ref": "#/$defs/EnumDeclaration" }
     },
     "coupling": {
       "type": "array",
@@ -226,14 +222,14 @@ const schema = {
             "Pre",
             "sign",
             "index",
-            "call",
+            "fn", "enum", "const",
             "bc"
           ]
         },
         "args": {
           "type": "array",
           "items": { "$ref": "#/$defs/Expression" },
-          "minItems": 1
+          "minItems": 0
         },
         "wrt": {
           "type": "string",
@@ -243,9 +239,12 @@ const schema = {
           "type": "string",
           "description": "Spatial dimension for grad operator (e.g., \"x\", \"y\", \"z\")."
         },
-        "handler_id": {
+        "name": {
           "type": "string",
-          "description": "For call: id of a registered function (esm-spec §4.4)."
+          "description": "For fn: dotted module path of a function in the closed function registry (esm-spec §9.2). v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted."
+        },
+        "value": {
+          "description": "For const: inline literal value carried by the node (number, integer, or nested array thereof). args MUST be empty for a const node."
         },
         "kind": {
           "type": "string",
@@ -260,8 +259,28 @@ const schema = {
       "additionalProperties": false,
       "allOf": [
         {
-          "if": { "properties": { "op": { "const": "call" } }, "required": ["op"] },
-          "then": { "required": ["handler_id"] }
+          "if": { "properties": { "op": { "const": "fn" } }, "required": ["op"] },
+          "then": { "required": ["name"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "const" } }, "required": ["op"] },
+          "then": {
+            "required": ["value"],
+            "properties": { "args": { "type": "array", "maxItems": 0 } }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "enum" } }, "required": ["op"] },
+          "then": {
+            "properties": {
+              "args": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": { "type": "string" }
+              }
+            }
+          }
         }
       ]
     },
@@ -1019,70 +1038,13 @@ const schema = {
       ]
     },
 
-    "Operator": {
+    "EnumDeclaration": {
       "type": "object",
-      "description": "A registered runtime operator (e.g., dry deposition, wet scavenging).",
-      "required": ["operator_id", "needed_vars"],
-      "additionalProperties": false,
-      "properties": {
-        "operator_id": {
-          "type": "string",
-          "description": "Registered identifier the runtime uses to find the implementation."
-        },
-        "reference": { "$ref": "#/$defs/Reference" },
-        "config": {
-          "type": "object",
-          "description": "Implementation-specific configuration.",
-          "additionalProperties": true
-        },
-        "needed_vars": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Variables required by the operator."
-        },
-        "modifies": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Variables the operator modifies."
-        },
-        "description": { "type": "string" }
-      }
-    },
-
-    "RegisteredFunction": {
-      "type": "object",
-      "description": "A named pure function invoked inside expressions via the 'call' op (esm-spec §9.2).",
-      "required": ["id", "signature"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "type": "string" },
-        "signature": {
-          "type": "object",
-          "required": ["arg_count"],
-          "additionalProperties": false,
-          "properties": {
-            "arg_count": { "type": "integer", "minimum": 0 },
-            "arg_types": {
-              "type": "array",
-              "items": { "type": "string", "enum": ["scalar", "array", "index"] }
-            },
-            "return_type": { "type": "string", "enum": ["scalar", "array"] }
-          }
-        },
-        "units": { "type": "string" },
-        "arg_units": {
-          "type": "array",
-          "items": { "oneOf": [ { "type": "string" }, { "type": "null" } ] }
-        },
-        "description": { "type": "string" },
-        "references": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/Reference" }
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": true
-        }
+      "description": "A file-local enum mapping symbolic names to positive integers (esm-spec §9.3). Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum is its own namespace). Bindings resolve enum-op nodes at load time before evaluating expressions.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
       }
     },
 
@@ -2339,6 +2301,11 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
   // Step 2: Version compatibility check (before schema validation)
   checkVersionCompatibility(validationView)
 
+  // Step 2a: v0.3.0 file-boundary rejection of removed v0.2.x extension
+  // points (esm-spec §9 / closed function registry RFC). Mirrors the
+  // Julia ref `parse.jl` rejection so cross-binding behavior is uniform.
+  rejectRemovedV02Blocks(validationView)
+
   // Step 3: Schema validation with version compatibility
   const schemaErrors = validateSchemaWithVersionCompatibility(validationView)
   if (schemaErrors.length > 0) {
@@ -2375,20 +2342,91 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
     }
   }
 
-  // Step 4b: Grid generator validation (RFC §6).
+  // Step 4b: Lower `enum` ops to `const` integer nodes against the
+  // file-local `enums` block (esm-spec §9.3). After this pass, downstream
+  // evaluators see only `const` — `evaluate()` rejects any leftover
+  // `enum` op as an unlowered file.
+  const loweredData = lowerEnums(typedData)
+
+  // Step 4c: Grid generator validation (RFC §6).
   //   - For kind='loader': the referenced loader name must exist in top-level data_loaders.
   //   - For kind='builtin': name must be one of the closed set of canonical builtins
   //     (currently gnomonic_c6_neighbors, gnomonic_c6_d4_action); unknown names
   //     are rejected with E_UNKNOWN_BUILTIN per §6.4.1.
-  validateGridGenerators(typedData)
+  validateGridGenerators(loweredData)
 
   // Step 5: Dimensional analysis — emit warnings but never fail the load.
   // Mirrors the Julia @warn behavior so TS callers get the same signal
   // without an API break.
-  for (const warning of validateUnits(typedData)) {
+  for (const warning of validateUnits(loweredData)) {
     const location = warning.location ? ` [${warning.location}]` : ''
     console.warn(`ESM unit validation${location}: ${warning.message}`)
   }
 
-  return typedData
+  return loweredData
+}
+
+/**
+ * Reject the v0.2.x extension points that v0.3.0 closed (esm-spec §9 /
+ * docs/rfcs/closed-function-registry.md):
+ *
+ *   - top-level `operators` block — replaced by AST equations + named
+ *     `discretizations` schemes.
+ *   - top-level `registered_functions` block — replaced by the closed
+ *     `fn`-op registry (datetime + interp.searchsorted).
+ *   - any expression-tree `call` op — replaced by `fn`.
+ *
+ * Throws `SchemaValidationError` with one entry per offending location
+ * so the caller surfaces all of them at once. Operates on the
+ * pre-coercion view (plain JS objects) so it sees `op: "call"` exactly
+ * as the file declared it.
+ */
+function rejectRemovedV02Blocks(view: unknown): void {
+  if (!view || typeof view !== 'object') return
+  const errors: SchemaError[] = []
+  const root = view as Record<string, unknown>
+
+  if ('operators' in root) {
+    errors.push({
+      path: '/operators',
+      keyword: 'removed_in_v0_3',
+      message: "top-level 'operators' block was removed in ESM v0.3.0; migrate to AST equations + 'discretizations' (closed-function-registry RFC §6).",
+    })
+  }
+  if ('registered_functions' in root) {
+    errors.push({
+      path: '/registered_functions',
+      keyword: 'removed_in_v0_3',
+      message: "top-level 'registered_functions' block was removed in ESM v0.3.0; migrate to the closed 'fn'-op registry (esm-spec §9.2).",
+    })
+  }
+
+  // Walk the tree looking for `call` ops anywhere they could appear.
+  const callPaths: string[] = []
+  const walk = (node: unknown, path: string): void => {
+    if (!node) return
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) walk(node[i], `${path}/${i}`)
+      return
+    }
+    if (typeof node !== 'object') return
+    const obj = node as Record<string, unknown>
+    if (obj.op === 'call') callPaths.push(path)
+    for (const k of Object.keys(obj)) walk(obj[k], `${path}/${k}`)
+  }
+  walk(root, '')
+  for (const p of callPaths) {
+    errors.push({
+      path: p,
+      keyword: 'removed_in_v0_3',
+      message: "'call' AST op was removed in ESM v0.3.0; migrate to AST equations or the closed 'fn'-op registry (esm-spec §9.2).",
+    })
+  }
+
+  if (errors.length > 0) {
+    throw new SchemaValidationError(
+      `ESM v0.3.0 rejects ${errors.length} removed v0.2.x construct(s)`,
+      errors,
+    )
+  }
 }

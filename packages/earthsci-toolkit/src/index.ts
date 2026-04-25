@@ -122,6 +122,19 @@ export {
 } from './discretize.js'
 export type { DiscretizeOptions } from './discretize.js'
 
+// Closed function registry (esm-spec §9.2 / RFC closed-function-registry).
+export {
+  CLOSED_FUNCTION_NAMES,
+  ClosedFunctionError,
+  dispatchClosedFunction,
+  searchsortedFirst,
+  validateSearchsortedTable,
+} from './registered_functions.js'
+export type { ClosedFunctionErrorCode } from './registered_functions.js'
+
+// Load-time enum lowering (esm-spec §9.3).
+export { lowerEnums, EnumLoweringError } from './lower_enums.js'
+
 // Grid accessor contract (gt-j2b8, 2026-04-22 grid-inversion decision).
 // ESS owns the interface and registry; ESD ships concrete families and
 // registers them at runtime.

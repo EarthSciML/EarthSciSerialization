@@ -881,7 +881,7 @@ export function parseExpr(v: unknown): Expr {
     const node: ExprNode = { op, args }
     if (typeof obj.wrt === 'string') node.wrt = obj.wrt
     if (typeof obj.dim === 'string') node.dim = obj.dim
-    // Preserve other pass-through fields (kind, side, handler_id, etc.)
+    // Preserve other pass-through fields (kind, side, name, value, etc.)
     // so pattern matching and replacement can observe them.
     for (const [k, val] of Object.entries(obj)) {
       if (k === 'op' || k === 'args' || k === 'wrt' || k === 'dim') continue

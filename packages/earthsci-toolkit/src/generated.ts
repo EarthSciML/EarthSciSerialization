@@ -6,7 +6,7 @@
  */
 
 /**
- * EarthSciML Serialization Format (v0.2.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.2.0 promotes boundary_conditions from a domain property to a first-class model-level section (see docs/rfcs/discretization.md §9). Files declaring domains.<d>.boundary_conditions are no longer valid under this schema and must be migrated via the spec.migrate_0_1_to_0_2 convention (RFC §16.1).
+ * EarthSciML Serialization Format (v0.3.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.3.0 closes the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family and `interp.searchsorted`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).
  */
 export type ESMFormat = ESMFormat1 & ESMFormat2;
 export type ESMFormat1 = {
@@ -103,7 +103,9 @@ export type ExpressionNode = ExpressionNode1 & {
     | "reshape"
     | "transpose"
     | "concat"
-    | "call"
+    | "fn"
+    | "enum"
+    | "const"
     | "bc";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
@@ -168,9 +170,15 @@ export type ExpressionNode = ExpressionNode1 & {
    */
   fn?: string;
   /**
-   * For call: the identifier of a registered function (a key in the top-level `registered_functions` map). The handler receives the evaluated `args` positionally.
+   * For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted.
    */
-  handler_id?: string;
+  name?: string;
+  /**
+   * For const: the inline literal value carried by this expression node. Any JSON number, integer, or nested array thereof. `args` MUST be empty for a const node.
+   */
+  value?: {
+    [k: string]: unknown;
+  };
   /**
    * For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib'). See RFC §9.2.
    */
@@ -382,13 +390,12 @@ export type DataLoader1 = {
   [k: string]: unknown;
 };
 /**
- * A single coupling rule connecting models, reaction systems, data loaders, or operators.
+ * A single coupling rule connecting models, reaction systems, or data loaders.
  */
 export type CouplingEntry =
   | CouplingOperatorCompose
   | CouplingCouple
   | CouplingVariableMap
-  | CouplingOperatorApply
   | CouplingCallback
   | CouplingEvent;
 /**
@@ -892,16 +899,10 @@ export interface ESMFormat2 {
     [k: string]: DataLoader;
   };
   /**
-   * Registered runtime operators (by reference).
+   * File-local symbol-to-positive-integer mappings used by the 'enum' AST op to make categorical lookups cross-binding-portable. Each entry is an enum name; its value is an object mapping symbolic names (strings) to positive integers. Two .esm files may declare an enum of the same name with different mappings; enums are file-local and never merged across files. See esm-spec.md §9.3.
    */
-  operators?: {
-    [k: string]: Operator;
-  };
-  /**
-   * Registry of named pure functions that may be invoked inside expressions via the 'call' op. Each entry names a handler the runtime binds to a concrete implementation (e.g. an interpolation table lookup, a @register_symbolic stub in Julia).
-   */
-  registered_functions?: {
-    [k: string]: RegisteredFunction;
+  enums?: {
+    [k: string]: EnumDeclaration;
   };
   /**
    * Composition and coupling rules.
@@ -1646,71 +1647,10 @@ export interface DataLoaderRegridding {
   extrapolation?: "clamp" | "nan" | "periodic";
 }
 /**
- * A registered runtime operator (e.g., dry deposition, wet scavenging).
+ * A file-local enum mapping symbolic names to positive integers (esm-spec.md §9.3). Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum is its own namespace). Bindings resolve enum-op nodes at load time before evaluating expressions.
  */
-export interface Operator {
-  /**
-   * Registered identifier the runtime uses to find the implementation.
-   */
-  operator_id: string;
-  reference?: Reference;
-  /**
-   * Implementation-specific configuration.
-   */
-  config?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Variables required by the operator.
-   */
-  needed_vars: string[];
-  /**
-   * Variables the operator modifies.
-   */
-  modifies?: string[];
-  description?: string;
-}
-/**
- * A named pure function that may be invoked inside an expression via the 'call' op. Analogous to Operator, but intended for side-effect-free callables embedded directly in expression trees (e.g. interpolation handlers, Julia @register_symbolic stubs, table lookups).
- */
-export interface RegisteredFunction {
-  /**
-   * Registered identifier. Must match the key in the `registered_functions` map and the `handler_id` used by 'call' op nodes that reference this function.
-   */
-  id: string;
-  /**
-   * Calling convention.
-   */
-  signature: {
-    /**
-     * Number of positional arguments the handler expects.
-     */
-    arg_count: number;
-    /**
-     * Optional per-argument type hints. Each entry is one of 'scalar', 'array', 'index'. When present the array length must equal arg_count.
-     */
-    arg_types?: ("scalar" | "array" | "index")[];
-    /**
-     * Optional return-type hint.
-     */
-    return_type?: "scalar" | "array";
-  };
-  /**
-   * Optional output units string (same grammar as variable units).
-   */
-  units?: string;
-  /**
-   * Optional per-argument units hints. Each entry is either a units string or null (no hint). When present the array length must equal signature.arg_count.
-   */
-  arg_units?: (string | null)[];
-  description?: string;
-  references?: Reference[];
-  /**
-   * Implementation-specific configuration passed to the handler at bind time (e.g. table data, grid descriptors).
-   */
-  config?: {
-    [k: string]: unknown;
-  };
+export interface EnumDeclaration {
+  [k: string]: number;
 }
 /**
  * Match LHS time derivatives and add RHS terms together.
@@ -1816,17 +1756,6 @@ export interface CouplingVariableMap {
    * Strategy for mapping between 0D and spatial systems.
    */
   lifting?: "pointwise" | "broadcast" | "mean" | "integral";
-  description?: string;
-}
-/**
- * Register an Operator to run during simulation.
- */
-export interface CouplingOperatorApply {
-  type: "operator_apply";
-  /**
-   * Name of the operator (key in the operators section).
-   */
-  operator: string;
   description?: string;
 }
 /**
