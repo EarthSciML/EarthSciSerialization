@@ -39,8 +39,13 @@
     },
     "registered_functions": {
       "type": "object",
-      "description": "Registry of named pure functions that may be invoked inside expressions via the 'call' op. Each entry names a handler the runtime binds to a concrete implementation (e.g. an interpolation table lookup, a @register_symbolic stub in Julia).",
+      "description": "Registry of named pure functions that may be invoked inside expressions via the 'call' op. Each entry names a handler the runtime binds to a concrete implementation (e.g. an interpolation table lookup, a @register_symbolic stub in Julia). DEPRECATED in v0.3.0 in favor of the closed function registry (`fn` op + `enums` block); see `docs/rfcs/closed-function-registry.md`.",
       "additionalProperties": { "$ref": "#/$defs/RegisteredFunction" }
+    },
+    "enums": {
+      "type": "object",
+      "description": "File-local symbol-to-positive-integer mappings used by the 'enum' AST op to make categorical lookups cross-binding-portable. Each entry is an enum name; its value is an object mapping symbolic names (strings) to positive integers. Two .esm files may declare an enum of the same name with different mappings; enums are file-local and never merged across files. See esm-spec.md §9.3.",
+      "additionalProperties": { "$ref": "#/$defs/EnumDeclaration" }
     },
     "coupling": {
       "type": "array",
@@ -159,7 +164,8 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "call", "bc"
+            "call", "bc",
+            "fn", "enum", "const"
           ]
         },
         "args": {
@@ -254,6 +260,13 @@
           "type": "string",
           "description": "For call: the identifier of a registered function (a key in the top-level `registered_functions` map). The handler receives the evaluated `args` positionally."
         },
+        "name": {
+          "type": "string",
+          "description": "For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted."
+        },
+        "value": {
+          "description": "For const: the inline literal value carried by this expression node. Any JSON number, integer, or nested array thereof. `args` MUST be empty for a const node."
+        },
         "kind": {
           "type": "string",
           "description": "For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib'). See RFC §9.2.",
@@ -289,6 +302,27 @@
         {
           "if": { "properties": { "op": { "const": "call" } }, "required": ["op"] },
           "then": { "required": ["handler_id"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "fn" } }, "required": ["op"] },
+          "then": { "required": ["name"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "const" } }, "required": ["op"] },
+          "then": { "required": ["value"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "enum" } }, "required": ["op"] },
+          "then": {
+            "properties": {
+              "args": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": { "type": "string" }
+              }
+            }
+          }
         },
         {
           "if": { "properties": { "op": { "const": "bc" } }, "required": ["op"] },
@@ -1401,6 +1435,15 @@
           "then": { "required": ["mesh"] }
         }
       ]
+    },
+
+    "EnumDeclaration": {
+      "type": "object",
+      "description": "A file-local enum mapping symbolic names to positive integers (esm-spec.md §9.3). Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum is its own namespace). Bindings resolve enum-op nodes at load time before evaluating expressions.",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
     },
 
     "RegisteredFunction": {

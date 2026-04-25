@@ -38,6 +38,14 @@ class ExprNode:
     fn: Optional[str] = None
     # call (registered function invocation, see esm-spec §4.4 / §9.2):
     handler_id: Optional[str] = None
+    # fn (closed function registry — esm-spec §9.2): the dotted module path of
+    # a function in the spec-defined closed set (e.g. "datetime.year",
+    # "interp.searchsorted").
+    name: Optional[str] = None
+    # const (inline literal): the carried value. Any JSON number or nested
+    # array thereof. Used to thread const-array tables through the AST without
+    # premature numeric collapse (notably as `xs` for `interp.searchsorted`).
+    value: Optional[Any] = None
 
 
 # Recursive type definition for expressions
@@ -790,6 +798,10 @@ class EsmFile:
     operators: List[Operator] = field(default_factory=list)
     registered_functions: Dict[str, RegisteredFunction] = field(default_factory=dict)
     coupling: List[CouplingEntry] = field(default_factory=list)
+    # File-local enum mappings for the `enum` AST op (esm-spec §9.3). Keyed by
+    # enum name; each value maps symbolic names to positive integers. Resolved
+    # at load time by `lower_enums` before expression evaluation.
+    enums: Dict[str, Dict[str, int]] = field(default_factory=dict)
     domains: Dict[str, Domain] = field(default_factory=dict)
     grids: Dict[str, Grid] = field(default_factory=dict)
     staggering_rules: Dict[str, StaggeringRule] = field(default_factory=dict)

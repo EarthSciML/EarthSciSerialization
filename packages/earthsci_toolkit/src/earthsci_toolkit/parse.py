@@ -81,8 +81,10 @@ class SubsystemRefError(Exception):
     pass
 
 
-# Current library version for compatibility checking
-_CURRENT_VERSION = (0, 1, 0)
+# Current library version for compatibility checking. Bumped to 0.3.0 with the
+# closed function registry (esm-spec.md §9.2 / §9.3 / esm-tzp / esm-4ia):
+# the `fn`/`enum`/`const` AST ops and the top-level `enums` block.
+_CURRENT_VERSION = (0, 3, 0)
 
 
 def _check_version_compatibility(version_string: str) -> None:
@@ -170,9 +172,15 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         axis = expr_data.get("axis")
         fn = expr_data.get("fn")
         handler_id = expr_data.get("handler_id")
+        name = expr_data.get("name")
+        value = expr_data.get("value")
 
         if op == "call" and handler_id is None:
             raise ValueError("Operator 'call' requires 'handler_id' field to be specified")
+        if op == "fn" and name is None:
+            raise ValueError("Operator 'fn' requires 'name' field to be specified")
+        if op == "const" and "value" not in expr_data:
+            raise ValueError("Operator 'const' requires 'value' field to be specified")
 
         return ExprNode(
             op=op,
@@ -190,6 +198,8 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
             axis=axis,
             fn=fn,
             handler_id=handler_id,
+            name=name,
+            value=value,
         )
     else:
         raise ValueError(f"Invalid expression data: {expr_data}")
@@ -1460,11 +1470,39 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             operator.name = op_name
             operators.append(operator)
 
-    # Parse registered_functions (esm-spec §9.2)
+    # Parse registered_functions (esm-spec §9.2 — DEPRECATED in v0.3.0)
     registered_functions = {}
     if "registered_functions" in data:
         for rf_name, rf_data in data["registered_functions"].items():
             registered_functions[rf_name] = _parse_registered_function(rf_data)
+
+    # Parse top-level enums block (esm-spec §9.3). Values are validated to be
+    # positive integers by the schema; unique-within-enum is also enforced.
+    enums: Dict[str, Dict[str, int]] = {}
+    if "enums" in data and data["enums"] is not None:
+        for enum_name, mapping in data["enums"].items():
+            if not isinstance(mapping, dict):
+                raise ValueError(
+                    f"enums/{enum_name}: must be an object mapping symbol names "
+                    f"to positive integers (esm-spec §9.3)"
+                )
+            seen_values: Dict[int, str] = {}
+            decoded: Dict[str, int] = {}
+            for sym, val in mapping.items():
+                if not isinstance(val, int) or isinstance(val, bool) or val < 1:
+                    raise ValueError(
+                        f"enums/{enum_name}/{sym}: value must be a positive "
+                        f"integer (got {val!r})"
+                    )
+                if val in seen_values:
+                    raise ValueError(
+                        f"enums/{enum_name}: duplicate value {val} for symbols "
+                        f"`{seen_values[val]}` and `{sym}` (values must be unique "
+                        f"within an enum, esm-spec §9.3)"
+                    )
+                seen_values[val] = sym
+                decoded[sym] = val
+            enums[enum_name] = decoded
 
     # Parse coupling entries
     coupling = []
@@ -1541,6 +1579,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         data_loaders=data_loaders,
         operators=operators,
         registered_functions=registered_functions,
+        enums=enums,
         coupling=coupling,
         domains=domains,
         grids=grids,
@@ -1768,6 +1807,10 @@ _OPERATOR_ARITY = {
     ">": (2, 2), "<": (2, 2), ">=": (2, 2), "<=": (2, 2),
     "==": (2, 2), "!=": (2, 2), "and": (2, None), "or": (2, None),
     "not": (1, 1), "Pre": (1, 1), "sign": (1, 1),
+    # Closed function registry (esm-spec §9.2 / §9.3). `fn` arity is checked
+    # by the dispatcher (1 for datetime.*, 2 for interp.searchsorted).
+    "enum": (2, 2),
+    "const": (0, 0),
 }
 
 # Built-in symbols always available in expressions
@@ -2939,6 +2982,12 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
 
     # Parse into ESM objects
     esm_file = _parse_esm_data(data)
+
+    # Lower `enum` op nodes to `const` integers using the file's `enums` block
+    # (esm-spec §9.3). Runs after parsing so every expression tree — including
+    # those in subsystems — sees only the resolved integer values.
+    from .registered_functions import lower_enums
+    lower_enums(esm_file)
 
     # Resolve subsystem references
     resolve_subsystem_refs(esm_file, base_path)
