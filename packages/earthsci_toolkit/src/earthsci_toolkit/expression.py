@@ -93,6 +93,13 @@ def _collect_unbound_variables(expr: Expr, bindings: Dict[str, float]) -> Set[st
             return {expr}
         return set()
     elif isinstance(expr, ExprNode):
+        # `const` op carries a literal `value` payload — its `args` are empty
+        # by spec and string entries inside `value` are data, not symbol
+        # references. Same for `fn` (the args may include a sibling `const`
+        # op which we recurse into normally; the `name` is a function id, not
+        # a symbol).
+        if expr.op == "const":
+            return set()
         unbound_vars = set()
         for arg in expr.args:
             unbound_vars.update(_collect_unbound_variables(arg, bindings))
@@ -135,6 +142,46 @@ def evaluate(expr: Expr, bindings: Dict[str, float]) -> float:
             # This should never happen due to the check above, but keep for safety
             raise ValueError(f"Unbound variable: {expr}")
     elif isinstance(expr, ExprNode):
+        # Closed function registry (esm-spec §9.2). Evaluate `fn`, `const`,
+        # and `enum` ops before the generic arg-evaluation path because their
+        # children carry data (value / enum-symbol strings), not sub-expressions.
+        if expr.op == "const":
+            v = expr.value
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                return float(v)
+            # Array-valued `const` (e.g. interp.searchsorted xs table) is not
+            # representable as a scalar; raise a typed error.
+            raise TypeError(
+                "evaluate() returns a scalar; use a `fn` op or array evaluator "
+                "for non-scalar `const` payloads"
+            )
+        if expr.op == "fn":
+            from .registered_functions import evaluate_closed_function, extract_const_array
+            if expr.name is None:
+                raise ValueError("`fn` op requires a `name` field")
+            evaluated_args = []
+            # `interp.searchsorted` takes the second arg as an inline `const`
+            # array (not a per-element value); pass through the raw list.
+            for i, a in enumerate(expr.args):
+                if (
+                    expr.name == "interp.searchsorted"
+                    and i == 1
+                    and isinstance(a, ExprNode)
+                    and a.op == "const"
+                ):
+                    evaluated_args.append(extract_const_array(a))
+                else:
+                    evaluated_args.append(evaluate(a, bindings))
+            result = evaluate_closed_function(expr.name, evaluated_args)
+            return float(result)
+        if expr.op == "enum":
+            # Should have been lowered by `lower_enums` at load time. If still
+            # present, the file's `enums` block was never resolved.
+            raise ValueError(
+                "`enum` op encountered at evaluate() time — call `lower_enums(file)` "
+                "after parsing to resolve enum symbols to integers (esm-spec §9.3)"
+            )
+
         # Evaluate arguments first
         arg_values = [evaluate(arg, bindings) for arg in expr.args]
 

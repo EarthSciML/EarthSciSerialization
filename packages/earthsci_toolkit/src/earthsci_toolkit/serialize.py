@@ -82,6 +82,10 @@ def _serialize_expression(expr: Expr) -> Union[int, float, str, Dict[str, Any]]:
             result["fn"] = expr.fn
         if expr.handler_id is not None:
             result["handler_id"] = expr.handler_id
+        if expr.name is not None:
+            result["name"] = expr.name
+        if expr.value is not None:
+            result["value"] = expr.value
         return result
     else:
         raise ValueError(f"Invalid expression type: {type(expr)}")
@@ -1037,11 +1041,18 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             for operator in esm_file.operators
         }
 
-    # Serialize registered_functions (esm-spec §9.2)
+    # Serialize registered_functions (esm-spec §9.2 — DEPRECATED in v0.3.0)
     if esm_file.registered_functions:
         result["registered_functions"] = {
             name: _serialize_registered_function(rf)
             for name, rf in esm_file.registered_functions.items()
+        }
+
+    # Serialize top-level enums block (esm-spec §9.3).
+    if getattr(esm_file, "enums", None):
+        result["enums"] = {
+            enum_name: dict(mapping)
+            for enum_name, mapping in esm_file.enums.items()
         }
 
     # Serialize coupling

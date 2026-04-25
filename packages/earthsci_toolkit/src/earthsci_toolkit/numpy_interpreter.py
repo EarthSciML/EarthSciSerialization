@@ -139,6 +139,38 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
         raise NumpyInterpreterError(f"Cannot evaluate expression of type {type(expr).__name__}")
 
     op = expr.op
+    # --- closed function registry ops (esm-spec §9.2 / §9.3) ---
+    if op == "const":
+        v = expr.value
+        if isinstance(v, (list, tuple)):
+            return np.asarray(v, dtype=float)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+        raise NumpyInterpreterError(
+            f"`const` op value must be a number or nested array, got {type(v).__name__}"
+        )
+    if op == "fn":
+        from .registered_functions import evaluate_closed_function, extract_const_array
+        if expr.name is None:
+            raise NumpyInterpreterError("`fn` op requires a `name` field")
+        evaluated_args = []
+        for i, a in enumerate(expr.args):
+            if (
+                expr.name == "interp.searchsorted"
+                and i == 1
+                and isinstance(a, ExprNode)
+                and a.op == "const"
+            ):
+                evaluated_args.append(extract_const_array(a))
+            else:
+                evaluated_args.append(eval_expr(a, ctx))
+        return float(evaluate_closed_function(expr.name, evaluated_args))
+    if op == "enum":
+        raise NumpyInterpreterError(
+            "`enum` op encountered at evaluate time — `lower_enums(file)` should "
+            "have run during load (esm-spec §9.3)"
+        )
+
     # --- scalar arithmetic / elementwise ---
     if op == "+":
         if not expr.args:

@@ -279,6 +279,10 @@ def _emit_node_json(n: ExprNode) -> str:
         entries.append(("dim", _json_string(n.dim)))
     if getattr(n, "handler_id", None) is not None:
         entries.append(("handler_id", _json_string(n.handler_id)))
+    if getattr(n, "name", None) is not None:
+        entries.append(("name", _json_string(n.name)))
+    if getattr(n, "value", None) is not None:
+        entries.append(("value", _emit_value_json(n.value)))
     entries.sort(key=lambda kv: kv[0])
     body = ",".join(f"{_json_string(k)}:{v}" for k, v in entries)
     return "{" + body + "}"
@@ -289,6 +293,32 @@ def _json_string(s: str) -> str:
     import json
 
     return json.dumps(s, ensure_ascii=False)
+
+
+def _emit_value_json(v: Any) -> str:
+    """Emit a `const` op `value` payload (scalar or nested-array literal).
+
+    The `value` field carries an inline literal — a number, integer, or
+    nested list thereof — that does NOT recurse through the expression
+    canonicalizer (it is data, not AST). Floats are emitted via the same
+    canonical-float formatter so a const-array of floats round-trips
+    byte-identically across bindings.
+    """
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        if not math.isfinite(v):
+            raise NonFiniteError()
+        return format_canonical_float(v)
+    if isinstance(v, str):
+        return _json_string(v)
+    if isinstance(v, (list, tuple)):
+        return "[" + ",".join(_emit_value_json(x) for x in v) + "]"
+    if v is None:
+        return "null"
+    raise TypeError(f"cannot canonicalize const value of type {type(v).__name__}")
 
 
 def format_canonical_float(f: float) -> str:
