@@ -49,20 +49,3 @@ jobs:
     - name: Check documentation changes
       run: |
         git diff --exit-code docs/ || echo "Documentation updated"
-
-    - name: Commit documentation updates
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add docs/
-        git reset HEAD -- '**/api-data.json'
-        git diff --staged --quiet || git commit -m "Auto-update generated documentation"
-        # Retry push with rebase to handle concurrent pushes to main
-        for attempt in 1 2 3; do
-          git pull --rebase origin main && git push && exit 0
-          echo "Push failed (attempt $attempt/3), retrying in 5s..."
-          sleep 5
-        done
-        echo "Push failed after 3 attempts"
-        exit 1

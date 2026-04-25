@@ -108,7 +108,7 @@ conformance-results/
 
 # Generated documentation data
 **/api-data.json
-docs/generated/api/python.md
+docs/generated/
 
 # Beads / Dolt files
 .dolt/

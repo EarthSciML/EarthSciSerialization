@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - 'docs/**'
+      - 'packages/**'
+      - 'scripts/generate_docs.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -27,6 +29,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Generate documentation
+        run: python scripts/generate_docs.py --output docs/generated
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
