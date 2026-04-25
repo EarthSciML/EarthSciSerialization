@@ -44,6 +44,7 @@ using JSON3
     include("grid_assembly_symbolic_test.jl")
     include("mtk_export_test.jl")
     include("tree_walk_test.jl")
+    include("mms_evaluator_test.jl")
 
     # Comprehensive test suite for full verification
     @testset "Comprehensive Test Suite" begin

@@ -42,6 +42,7 @@ include("grid_assembly.jl")
 include("ghost_cells.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
+include("mms_evaluator.jl")
 
 export
     # Expression types
@@ -149,6 +150,11 @@ export
     # — concrete methods live in ext/grid_assembly_symbolic.jl, loaded with MTK.
     fv_laplacian_extended, fv_gradient_extended,
     laplacian_neighbor_table, gradient_neighbor_table,
-    const_wrap, get_idx_vars, make_arrayop, evaluate_arrayop
+    const_wrap, get_idx_vars, make_arrayop, evaluate_arrayop,
+    # MMS convergence harness (esm-ivo; ESD walker Layer B driver)
+    MMSEvaluatorError, ManufacturedSolution, MMSConvergenceResult,
+    parse_accuracy_order, lookup_manufactured_solution,
+    register_manufactured_solution!, eval_coeff,
+    apply_stencil_periodic_1d, mms_convergence, verify_mms_convergence
 
 end # module EarthSciSerialization
