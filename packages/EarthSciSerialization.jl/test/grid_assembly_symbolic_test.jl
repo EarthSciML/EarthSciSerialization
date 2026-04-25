@@ -33,7 +33,7 @@ struct SymTestCartesianGrid <: AbstractCurvilinearGrid
 end
 
 _flat(g::SymTestCartesianGrid, i::Int, j::Int) = i + (j - 1) * g.Nx
-_wrap(idx::Int, n::Int) = mod(idx - 1, n) + 1
+_sym_sym_wrap(idx::Int, n::Int) = mod(idx - 1, n) + 1
 
 EarthSciSerialization.n_cells(g::SymTestCartesianGrid) = g.Nx * g.Ny
 EarthSciSerialization.n_dims(g::SymTestCartesianGrid)  = 2
@@ -71,10 +71,10 @@ function EarthSciSerialization.neighbor_indices(g::SymTestCartesianGrid, axis::S
     for j in 1:g.Ny, i in 1:g.Nx
         c = _flat(g, i, j)
         if axis === :x
-            ni = _wrap(i + offset, g.Nx)
+            ni = _sym_wrap(i + offset, g.Nx)
             out[c] = _flat(g, ni, j)
         elseif axis === :y
-            nj = _wrap(j + offset, g.Ny)
+            nj = _sym_wrap(j + offset, g.Ny)
             out[c] = _flat(g, i, nj)
         else
             throw(ArgumentError("unknown axis $axis"))

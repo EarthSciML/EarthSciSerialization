@@ -23,48 +23,60 @@
 #                    6=NE, 7=NW, 8=SE, 9=SW
 #   Gradient  (K=5): 1=C, 2=E, 3=W, 4=N, 5=S
 #
-# Symbolics-API note: written against Symbolics v6's `Symbolics.ArrayOp`
-# constructor, which takes `(T::Type, output_idx, expr, reduce, term, ranges)`
-# and accepts direct array indexing in the body (no `Const` wrapper). The
-# field-gather array is built as `Array{Num}` so getindex returns `BasicSymbolic{Num}`,
-# which arithmetic-combines with `Float64` weight entries without type promotion.
+# Symbolics-API note: written against the SymbolicUtils v4 / Symbolics v7
+# API (`SymbolicUtils.SymReal`, `SymbolicUtils.idxs_for_arrayop`,
+# `SymbolicUtils.Const`, `SymbolicUtils.ArrayOp`). This is what
+# `Project.toml` declares as compatible (`Symbolics = "7"`) and what
+# `Pkg.test` resolves to. ESD uses the same API, so the trait-based port
+# is a near-mechanical refactor of the cubed-sphere code.
 
 # ---------------------------------------------------------------------------
-# ArrayOp utilities (ported from ESD src/operators/arrayop_utils.jl, adapted
-# to Symbolics v6 API).
+# ArrayOp utilities (ported from ESD src/operators/arrayop_utils.jl)
 # ---------------------------------------------------------------------------
 
-"Pass-through retained for source-port compatibility. Symbolics v6 indexes\nordinary `Array{Num}` / `Array{Float64}` directly inside an ArrayOp body,\nso no `Const` wrapper is needed."
-const_wrap(arr) = arr
+const SymReal = SymUtils.SymReal
+const ConstSR = SymUtils.Const{SymReal}
+
+"""
+    const_wrap(arr) -> Const{SymReal}
+
+Wrap a numerical or symbolic array in `SymbolicUtils.Const{SymReal}` so it
+can be indexed inside an ArrayOp body with the shared `SymReal` integer
+indices returned by `get_idx_vars`.
+"""
+const_wrap(arr) = ConstSR(arr)
 
 """
     get_idx_vars(ndim) -> Vector
 
-Get `ndim` symbolic integer index variables (`Sym{Int}`) suitable for use as
-ArrayOp `output_idx`. Wraps `Symbolics.makesubscripts(ndim)`.
+Get `ndim` symbolic integer index variables from the shared ArrayOp index
+pool (`SymbolicUtils.idxs_for_arrayop(SymReal)`). All ArrayOps in this
+package draw indices from this pool so indices interoperate cleanly when
+ArrayOps are composed.
 """
-get_idx_vars(ndim::Int) = collect(Symbolics.makesubscripts(ndim))
+function get_idx_vars(ndim::Int)
+    idxs_arr = SymUtils.idxs_for_arrayop(SymReal)
+    return [idxs_arr[d] for d in 1:ndim]
+end
 
 """
-    make_arrayop(idx_vars, expr, ranges) -> ArrayOp
+    make_arrayop(idx_vars, expr, ranges) -> ArrayOp{SymReal}
 
-Construct a `Symbolics.ArrayOp` over the given `idx_vars` with the given body
-expression and per-index ranges. Reduction op is `+` (matches all existing
-ArrayOp uses in this package). Output element type is `Real` (concrete
-output is recovered via `Symbolics.scalarize`).
+Construct a `SymbolicUtils.ArrayOp{SymReal}` over `idx_vars` with the given
+body expression and per-index ranges. Reduction op is `+` (matches all
+existing ArrayOp uses in this package).
 """
 function make_arrayop(idx_vars, expr, ranges)
-    nd = length(idx_vars)
-    return Symbolics.ArrayOp(Array{Real, nd}, Tuple(idx_vars),
-        Symbolics.unwrap(expr), +, nothing, ranges)
+    return SymUtils.ArrayOp{SymReal}(idx_vars, Symbolics.unwrap(expr),
+        +, nothing, ranges)
 end
 
 """
     evaluate_arrayop(ao) -> Array{Float64}
 
-Scalarize an ArrayOp built from numeric data and extract Float64 values.
-For tests and validation; production callers should keep the ArrayOp
-symbolic and let MTK compile it.
+Scalarize an ArrayOp built from `Const`-wrapped numeric data and extract
+Float64 values. For tests and validation; production callers should keep
+the ArrayOp symbolic and let MTK compile it.
 """
 function evaluate_arrayop(ao)
     s = Symbolics.scalarize(Symbolics.wrap(ao))
@@ -143,12 +155,11 @@ function gradient_neighbor_table(grid::AbstractCurvilinearGrid;
 end
 
 """
-    _build_symbolic_ghost_extension(u_sym, neighbor_table) -> Array
+    _build_symbolic_ghost_extension(u_sym, neighbor_table) -> Array{Any}
 
 Per-cell stencil-point gather table from a flat field array `u_sym` and
-the K-point `neighbor_table`. Returns `(N, K) Array{Num}` if `u_sym`
-contains symbolic entries; `(N, K) Array{Float64}` for purely numeric
-input. `out[c, k] = u_sym[neighbor_table[c, k]]`.
+the K-point `neighbor_table`. Returns `(N, K) Array{Any}` of `unwrap`'d
+expressions: `out[c, k] = unwrap(u_sym[neighbor_table[c, k]])`.
 
 Trait analog of ESD's cubed-sphere-specific
 `_build_symbolic_ghost_extension(u_sym, grid::CubedSphereGrid)`. Cross-panel
@@ -161,10 +172,11 @@ function _build_symbolic_ghost_extension(u_sym::AbstractVector,
     length(u_sym) == N || throw(DimensionMismatch(
         "_build_symbolic_ghost_extension: length(u_sym)=$(length(u_sym)) ≠ N=$N"))
 
-    # Choose element type so `out[c, k]` returns a value that arithmetic-
-    # combines with the `Float64` stencil weights without promotion errors.
-    # `Num` is `<: Number` but cannot convert to `Float64` unless it wraps a
-    # numeric literal — gate on `<: Real`'s leaf concrete branches instead.
+    # Element-type policy: a purely-numeric `u_sym` produces a `Matrix{Float64}`
+    # so that `Const{SymReal}(out)` indexing carries `symtype = Float64`,
+    # which arithmetic-combines with the `Float64` stencil weights inside
+    # the ArrayOp body. A symbolic `u_sym` produces a `Matrix{Any}` of
+    # `unwrap`'d expressions, matching the ESD source convention.
     is_numeric = eltype(u_sym) <: AbstractFloat || eltype(u_sym) <: Integer
     if is_numeric
         out = Array{Float64}(undef, N, K)
@@ -173,9 +185,9 @@ function _build_symbolic_ghost_extension(u_sym::AbstractVector,
         end
         return out
     else
-        out = Array{Symbolics.Num}(undef, N, K)
+        out = Array{Any}(undef, N, K)
         @inbounds for c in 1:N, k in 1:K
-            out[c, k] = Symbolics.Num(u_sym[neighbor_table[c, k]])
+            out[c, k] = Symbolics.unwrap(u_sym[neighbor_table[c, k]])
         end
         return out
     end
@@ -187,11 +199,11 @@ end
 
 """
     fv_laplacian_extended(u_sym, grid::AbstractCurvilinearGrid;
-                          xi_axis=:xi, eta_axis=:eta) -> ArrayOp
+                          xi_axis=:xi, eta_axis=:eta) -> ArrayOp{SymReal}
 
-Build a `Symbolics.ArrayOp` for the full covariant Laplacian on
-`AbstractCurvilinearGrid`, operating on a flat field array `u_sym` of length
-`n_cells(grid)`. Output is a 1-D ArrayOp indexed by flat cell `c`.
+Build a `SymbolicUtils.ArrayOp{SymReal}` for the full covariant Laplacian
+on `AbstractCurvilinearGrid`, operating on a flat field array `u_sym` of
+length `n_cells(grid)`. Output is a 1-D ArrayOp indexed by flat cell `c`.
 
 Trait reformulation of ESD's cubed-sphere `fv_laplacian_extended(u_ext, grid::CubedSphereGrid)`.
 Reuses the numeric `precompute_laplacian_stencil(grid)` for weight assembly,
@@ -219,12 +231,12 @@ end
 """
     fv_gradient_extended(u_sym, grid::AbstractCurvilinearGrid, target::Symbol;
                          xi_axis=:xi, eta_axis=:eta)
-        -> (ArrayOp, ArrayOp)
+        -> (ArrayOp{SymReal}, ArrayOp{SymReal})
 
-Build two `Symbolics.ArrayOp`s for the gradient `(∂u/∂t1, ∂u/∂t2)` in the
-physical `target` coordinate system, where `target` is passed through to
-`coord_jacobian(grid, target)`. Operates on a flat field array `u_sym` of
-length `n_cells(grid)`.
+Build two `SymbolicUtils.ArrayOp{SymReal}`s for the gradient
+`(∂u/∂t1, ∂u/∂t2)` in the physical `target` coordinate system, where
+`target` is passed through to `coord_jacobian(grid, target)`. Operates on a
+flat field array `u_sym` of length `n_cells(grid)`.
 
 Trait reformulation of ESD's cubed-sphere `fv_gradient_extended(u_ext, grid, dim)`.
 The chain rule `∂u/∂t = (∂ξ/∂t)·∂u/∂ξ + (∂η/∂t)·∂u/∂η` is encoded in the
@@ -245,18 +257,21 @@ function fv_gradient_extended(u_sym::AbstractVector,
 end
 
 # Build a 1-D ArrayOp over flat cell `c`: `du[c] = Σ_k weights[c, k] · u_ext[c, k]`,
-# with the K-sum unrolled (Symbolics v6 ArrayOp has no inner reduction).
+# with the K-sum unrolled (the ArrayOp body must already be a scalar in `c`).
 function _stencil_arrayop(u_sym, neighbor_table, weights)
     N, K = size(neighbor_table)
     u_ext = _build_symbolic_ghost_extension(u_sym, neighbor_table)
 
-    c = first(get_idx_vars(1))
-    expr = weights[c, 1] * u_ext[c, 1]
+    idx = get_idx_vars(1); c = idx[1]
+    w_c = const_wrap(weights)
+    u_c = const_wrap(u_ext)
+
+    expr = Symbolics.wrap(w_c[c, 1]) * Symbolics.wrap(u_c[c, 1])
     for k in 2:K
-        expr = expr + weights[c, k] * u_ext[c, k]
+        expr += Symbolics.wrap(w_c[c, k]) * Symbolics.wrap(u_c[c, k])
     end
 
-    return make_arrayop([c], Symbolics.unwrap(expr), Dict(c => 1:N))
+    return make_arrayop(idx, Symbolics.unwrap(expr), Dict(c => 1:1:N))
 end
 
 # ---------------------------------------------------------------------------
@@ -298,11 +313,6 @@ function _stencil_k(di::Int, dj::Int)
     end
 end
 
-"""
-Match a symbolic expression against the list of dependent variables.
-Returns the matching DV (so the caller can index the matching gather table)
-or `nothing`.
-"""
 function _match_dv(expr, dvs)
     for dv in dvs
         if isequal(Symbolics.wrap(expr), dv)
@@ -326,8 +336,8 @@ Evaluate a symbolic expression at a stencil-point offset `(di, dj)` from
 the current cell `c`. Each dependent variable in the expression is replaced
 by the corresponding entry in `gather_tables[dv]` at column `k = _stencil_k(di, dj)`.
 
-`gather_tables` is `Dict{dv => Array{Num}(N, 9)}` produced by
-`_build_symbolic_ghost_extension(u_sym[dv], laplacian_neighbor_table(grid))`.
+`gather_tables` is `Dict{dv => Const{SymReal}}` produced by
+`const_wrap(_build_symbolic_ghost_extension(u_sym[dv], laplacian_neighbor_table(grid)))`.
 """
 function _eval_at_gridpoint(expr, dvs, gather_tables, c_idx, di::Int, dj::Int)
     ex = Symbolics.unwrap(expr)
@@ -339,8 +349,8 @@ function _eval_at_gridpoint(expr, dvs, gather_tables, c_idx, di::Int, dj::Int)
 
     dv = _match_dv(ex, dvs)
     if dv !== nothing
-        u_ext = gather_tables[dv]
-        return Symbolics.wrap(u_ext[c_idx, k])
+        u_c = gather_tables[dv]
+        return Symbolics.wrap(u_c[c_idx, k])
     end
 
     op = Symbolics.operation(ex); args = Symbolics.arguments(ex)
@@ -349,8 +359,9 @@ function _eval_at_gridpoint(expr, dvs, gather_tables, c_idx, di::Int, dj::Int)
     return Symbolics.wrap(op(new_args...))
 end
 
-# Identify the dimension symbol for a Differential. Recognises the four
-# canonical names: the two named target axes plus computational `:xi`/`:eta`.
+# Identify the dimension symbol for a Differential. Returns a tag in
+# `(:t1, :t2, :xi, :eta)`. The two named target axes are caller-supplied so
+# this helper is trait-agnostic.
 function _identify_dim(diff_x, target_axes::NTuple{2, Symbol})
     name = Symbol(diff_x)
     if name === target_axes[1]
@@ -366,8 +377,8 @@ function _identify_dim(diff_x, target_axes::NTuple{2, Symbol})
     end
 end
 
-# Chain-rule coefficients (∂ξ/∂t, ∂η/∂t) for a single derivative, expressed
-# as scalar terms at flat cell `c_idx`. Returns `(a_xi, a_eta)`.
+# Chain-rule coefficients (∂ξ/∂t, ∂η/∂t) for a single derivative, returned
+# as scalar terms at flat cell `c_idx`.
 function _arrayop_chain_coeffs(dim::Symbol, c_idx,
         cj_t1xi, cj_t1eta, cj_t2xi, cj_t2eta)
     if dim === :t1
@@ -375,14 +386,14 @@ function _arrayop_chain_coeffs(dim::Symbol, c_idx,
     elseif dim === :t2
         return (Symbolics.wrap(cj_t2xi[c_idx]), Symbolics.wrap(cj_t2eta[c_idx]))
     elseif dim === :xi
-        return (Symbolics.Num(1.0), Symbolics.Num(0.0))
+        return (Symbolics.wrap(Symbolics.value(1.0)), Symbolics.wrap(Symbolics.value(0.0)))
     elseif dim === :eta
-        return (Symbolics.Num(0.0), Symbolics.Num(1.0))
+        return (Symbolics.wrap(Symbolics.value(0.0)), Symbolics.wrap(Symbolics.value(1.0)))
     end
-    return (Symbolics.Num(0.0), Symbolics.Num(0.0))
+    return (Symbolics.wrap(Symbolics.value(0.0)), Symbolics.wrap(Symbolics.value(0.0)))
 end
 
-# Second-derivative chain-rule correction. Returns `(b_xi, b_eta)`.
+# Second-derivative chain-rule correction (∂²ξ/∂t1∂t2, ∂²η/∂t1∂t2).
 function _arrayop_second_chain_coeffs(dim_outer::Symbol, dim_inner::Symbol, c_idx,
         cjs_t11_xi, cjs_t11_eta, cjs_t22_xi, cjs_t22_eta, cjs_t12_xi, cjs_t12_eta)
     if dim_outer === :t1 && dim_inner === :t1
@@ -392,7 +403,7 @@ function _arrayop_second_chain_coeffs(dim_outer::Symbol, dim_inner::Symbol, c_id
     elseif (dim_outer === :t1 && dim_inner === :t2) || (dim_outer === :t2 && dim_inner === :t1)
         return (Symbolics.wrap(cjs_t12_xi[c_idx]), Symbolics.wrap(cjs_t12_eta[c_idx]))
     end
-    return (Symbolics.Num(0.0), Symbolics.Num(0.0))
+    return (Symbolics.wrap(Symbolics.value(0.0)), Symbolics.wrap(Symbolics.value(0.0)))
 end
 
 """
@@ -410,11 +421,11 @@ struct _RhsContext
     dξ::Float64
     dη::Float64
     gather_tables::Dict{Any, Any}
-    cj_t1xi::Vector{Float64}; cj_t1eta::Vector{Float64}
-    cj_t2xi::Vector{Float64}; cj_t2eta::Vector{Float64}
-    cjs_t11_xi::Vector{Float64}; cjs_t11_eta::Vector{Float64}
-    cjs_t22_xi::Vector{Float64}; cjs_t22_eta::Vector{Float64}
-    cjs_t12_xi::Vector{Float64}; cjs_t12_eta::Vector{Float64}
+    cj_t1xi::ConstSR; cj_t1eta::ConstSR
+    cj_t2xi::ConstSR; cj_t2eta::ConstSR
+    cjs_t11_xi::ConstSR; cjs_t11_eta::ConstSR
+    cjs_t22_xi::ConstSR; cjs_t22_eta::ConstSR
+    cjs_t12_xi::ConstSR; cjs_t12_eta::ConstSR
 end
 
 function _build_rhs_context(grid::AbstractCurvilinearGrid, dvs, u_syms,
@@ -423,7 +434,8 @@ function _build_rhs_context(grid::AbstractCurvilinearGrid, dvs, u_syms,
     nb = laplacian_neighbor_table(grid; xi_axis = xi_axis, eta_axis = eta_axis)
     gather_tables = Dict{Any, Any}()
     for dv in dvs
-        gather_tables[dv] = _build_symbolic_ghost_extension(u_syms[dv], nb)
+        u_ext = _build_symbolic_ghost_extension(u_syms[dv], nb)
+        gather_tables[dv] = const_wrap(u_ext)
     end
 
     cj  = coord_jacobian(grid, target)
@@ -434,16 +446,16 @@ function _build_rhs_context(grid::AbstractCurvilinearGrid, dvs, u_syms,
 
     return _RhsContext(
         target, target_axes, dξ, dη, gather_tables,
-        Float64.(view(cj, :, 1, 1)),
-        Float64.(view(cj, :, 2, 1)),
-        Float64.(view(cj, :, 1, 2)),
-        Float64.(view(cj, :, 2, 2)),
-        Float64.(view(cjs, :, 1, 1, 1)),
-        Float64.(view(cjs, :, 2, 1, 1)),
-        Float64.(view(cjs, :, 1, 2, 2)),
-        Float64.(view(cjs, :, 2, 2, 2)),
-        Float64.(view(cjs, :, 1, 1, 2)),
-        Float64.(view(cjs, :, 2, 1, 2)),
+        const_wrap(collect(view(cj, :, 1, 1))),
+        const_wrap(collect(view(cj, :, 2, 1))),
+        const_wrap(collect(view(cj, :, 1, 2))),
+        const_wrap(collect(view(cj, :, 2, 2))),
+        const_wrap(collect(view(cjs, :, 1, 1, 1))),
+        const_wrap(collect(view(cjs, :, 2, 1, 1))),
+        const_wrap(collect(view(cjs, :, 1, 2, 2))),
+        const_wrap(collect(view(cjs, :, 2, 2, 2))),
+        const_wrap(collect(view(cjs, :, 1, 1, 2))),
+        const_wrap(collect(view(cjs, :, 2, 1, 2))),
     )
 end
 
@@ -463,7 +475,7 @@ function _rhs_to_arrayop_expr(expr, dvs, ctx::_RhsContext, c_idx, coeff)
     if !Symbolics.iscall(expr)
         v = Symbolics.value(Symbolics.wrap(expr))
         if v isa Number
-            return Symbolics.Num(coeff * Float64(v))
+            return Symbolics.wrap(Symbolics.value(coeff * Float64(v)))
         end
         return Symbolics.wrap(expr)
     end
@@ -502,7 +514,7 @@ function _rhs_to_arrayop_expr(expr, dvs, ctx::_RhsContext, c_idx, coeff)
         if length(sym_factors) == 1
             return _rhs_to_arrayop_expr(sym_factors[1], dvs, ctx, c_idx, coeff * num_coeff)
         elseif isempty(sym_factors)
-            return Symbolics.Num(coeff * num_coeff)
+            return Symbolics.wrap(Symbolics.value(coeff * num_coeff))
         end
     end
 
@@ -573,8 +585,8 @@ function _rhs_to_arrayop_expr(expr, dvs, ctx::_RhsContext, c_idx, coeff)
     # DV reference (reaction term) — gather at center.
     dv = _match_dv(expr, dvs)
     if dv !== nothing
-        u_ext = ctx.gather_tables[dv]
-        return coeff * Symbolics.wrap(u_ext[c_idx, _STENCIL_K_C])
+        u_c = ctx.gather_tables[dv]
+        return coeff * Symbolics.wrap(u_c[c_idx, _STENCIL_K_C])
     end
 
     return coeff * Symbolics.wrap(expr)
@@ -583,10 +595,10 @@ end
 """
     _build_rhs_arrayop(rhs, dvs, u_syms, grid::AbstractCurvilinearGrid;
                        target::Symbol, target_axes::NTuple{2, Symbol},
-                       xi_axis=:xi, eta_axis=:eta) -> ArrayOp
+                       xi_axis=:xi, eta_axis=:eta) -> ArrayOp{SymReal}
 
-Lower a symbolic PDE RHS expression `rhs` into a `Symbolics.ArrayOp` over
-flat cells `1:n_cells(grid)`. Trait port of ESD's `_build_rhs_arrayop`.
+Lower a symbolic PDE RHS expression `rhs` into a `SymbolicUtils.ArrayOp{SymReal}`
+over flat cells `1:n_cells(grid)`. Trait port of ESD's `_build_rhs_arrayop`.
 
 Arguments:
 - `dvs`              — vector of dependent-variable symbols (`u(t,x,y)`, `v(t,x,y)`, …)
@@ -605,9 +617,9 @@ function _build_rhs_arrayop(rhs, dvs, u_syms, grid::AbstractCurvilinearGrid;
     ctx = _build_rhs_context(grid, dvs, u_syms, target, target_axes;
         xi_axis = xi_axis, eta_axis = eta_axis)
     N = n_cells(grid)
-    c = first(get_idx_vars(1))
+    idx = get_idx_vars(1); c = idx[1]
     body = _rhs_to_arrayop_expr(Symbolics.unwrap(rhs), dvs, ctx, c, 1.0)
-    return make_arrayop([c], Symbolics.unwrap(body), Dict(c => 1:N))
+    return make_arrayop(idx, Symbolics.unwrap(body), Dict(c => 1:1:N))
 end
 
 # Re-export under the EarthSciSerialization namespace for downstream callers.
