@@ -7,6 +7,7 @@
 
 import type { Expression, ExpressionNode, Model } from './types.js'
 import { isNumericLiteral, type NumericLiteral } from './numeric-literal.js'
+import { dispatchClosedFunction } from './registered_functions.js'
 
 /**
  * Type alias for better readability. Widened to accept `NumericLiteral`
@@ -98,6 +99,43 @@ export function evaluate(expr: Expr, bindings: Map<string, number>): number {
   } else if (typeof expr === 'object' && (expr as ExpressionNode).op) {
     // ExpressionNode - evaluate based on operator
     const node = expr as any
+
+    // const: inline literal — only meaningful as a scalar when its value
+    // is a number; array-valued const nodes are extracted by callers
+    // that consume them (e.g. interp.searchsorted's xs argument).
+    if (node.op === 'const') {
+      const v = node.value
+      if (typeof v === 'number') return v
+      if (Array.isArray(v)) {
+        throw new Error('const node with array value cannot be evaluated as a scalar; arrays are consumed by container ops (e.g. interp.searchsorted, index)')
+      }
+      throw new Error(`const node with non-numeric value: ${typeof v}`)
+    }
+
+    // enum nodes should have been lowered to const at load time. If we
+    // see one here, the file was evaluated before the lowering pass ran.
+    if (node.op === 'enum') {
+      throw new Error("enum op encountered during evaluate(); enum nodes must be lowered to 'const' integer nodes via lowerEnums() at load time")
+    }
+
+    // fn: closed function registry dispatch (esm-spec §9.2). Most args
+    // evaluate to scalars; interp.searchsorted's second arg is a const
+    // array that we extract WITHOUT evaluating it through the scalar path.
+    if (node.op === 'fn') {
+      const fnName = node.name
+      if (typeof fnName !== 'string') {
+        throw new Error('fn op missing required string `name` field')
+      }
+      const fnArgs = node.args.map((arg: any) => {
+        if (arg && typeof arg === 'object' && (arg as ExpressionNode).op === 'const' && Array.isArray((arg as any).value)) {
+          // Array-valued const argument — pass the raw array through.
+          return (arg as any).value
+        }
+        return evaluate(arg, bindings)
+      })
+      return dispatchClosedFunction(fnName, fnArgs)
+    }
+
     const args: any = node.args.map((arg: any) => evaluate(arg, bindings))
 
     switch (node.op) {

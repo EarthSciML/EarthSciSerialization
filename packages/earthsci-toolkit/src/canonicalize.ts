@@ -322,7 +322,7 @@ function compareExprs(
   return aj < bj ? -1 : aj > bj ? 1 : 0
 }
 
-function emitJson(e: Expr): string {
+function emitJson(e: Expr | unknown): string {
   if (isIntLit(e)) {
     // Value is guaranteed integer-valued and finite by intLit().
     const s = String(e.value)
@@ -340,7 +340,12 @@ function emitJson(e: Expr): string {
     return formatCanonicalFloat(e)
   }
   if (isString(e)) return JSON.stringify(e)
-  if (isNode(e)) return emitNodeJson(e)
+  if (Array.isArray(e)) {
+    // const-op `value` may be a (nested) numeric array. Emit each
+    // element via emitJson so floats/ints round-trip canonically.
+    return `[${(e as unknown[]).map((v) => emitJson(v)).join(',')}]`
+  }
+  if (isNode(e)) return emitNodeJson(e as Expr)
   if (e === null) return 'null'
   return JSON.stringify(e)
 }
@@ -355,8 +360,11 @@ function emitNodeJson(n: Node): string {
   if ('dim' in n && (n as Record<string, unknown>).dim !== undefined) {
     entries.push(['dim', JSON.stringify((n as Record<string, unknown>).dim)])
   }
-  if ('handler_id' in n && (n as Record<string, unknown>).handler_id !== undefined) {
-    entries.push(['handler_id', JSON.stringify((n as Record<string, unknown>).handler_id)])
+  if ('name' in n && (n as Record<string, unknown>).name !== undefined) {
+    entries.push(['name', JSON.stringify((n as Record<string, unknown>).name)])
+  }
+  if ('value' in n && (n as Record<string, unknown>).value !== undefined) {
+    entries.push(['value', emitJson((n as Record<string, unknown>).value)])
   }
   entries.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0))
   const body = entries.map(([k, v]) => `${JSON.stringify(k)}:${v}`).join(',')

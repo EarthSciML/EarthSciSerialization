@@ -94,7 +94,9 @@ export type {
   DataLoader,
   DataLoaderMesh,
   DataLoaderDeterminism,
-  Operator,
+
+  // Closed function registry (v0.3.0)
+  EnumDeclaration,
 
   // System configuration
   Domain,
