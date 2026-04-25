@@ -1,7 +1,30 @@
 {
   "version_compatibility_test_matrix": {
     "description": "Expected behavior for ESM format version compatibility testing",
-    "library_version": "0.1.0",
+    "library_version": "0.3.0",
+    "migration_notes": {
+      "0.2.0_to_0.3.0": {
+        "summary": "Closed function registry — removes the open-set extension points (`call` op + `registered_functions` block) and the runtime-registered `operators` block; adds a top-level `enums` block and the `fn` / `enum` AST ops. See docs/rfcs/closed-function-registry.md.",
+        "breaking_changes": [
+          "Top-level `registered_functions` block removed; files declaring it are rejected by the v0.3.0 schema.",
+          "Top-level `operators` block removed; files declaring it are rejected by the v0.3.0 schema.",
+          "AST op `call` (with `handler_id`) removed; replaced by `fn` (with `name`) drawing from the closed registry in esm-spec.md §9.2.",
+          "Coupling type `operator_apply` removed (it referenced the removed `operators` block); grid-level loss processes migrate to discretization schemes per docs/rfcs/discretization.md §7."
+        ],
+        "added": [
+          "Top-level `enums` block — file-local symbol-to-positive-integer mappings (esm-spec.md §9.3).",
+          "AST op `fn` — invokes a spec-defined closed function from §9.2 by dotted name.",
+          "AST op `enum` — resolves a file-local symbol to its declared integer at load time.",
+          "Closed function set v1: `datetime.year`, `datetime.month`, `datetime.day`, `datetime.hour`, `datetime.minute`, `datetime.second`, `datetime.day_of_year`, `datetime.julian_day`, `datetime.is_leap_year`, `interp.searchsorted`."
+        ],
+        "migration_path": [
+          "Math expressible in finite closed form (e.g. `sq(x) = x²`): rewrite as AST (`{op:'^', args:[x,2]}`); delete the corresponding `registered_functions` entry and any `call` node referencing it.",
+          "Tabulated lookups: replace `{op:'call', handler_id:'flux_interp_O3', args:[sza]}` with `{op:'index', args:['table', {op:'fn', name:'interp.searchsorted', args:[sza, {op:'const', value:[...]}]}]}` (boundary handling shifts from per-binding handler to the spec-pinned `searchsorted` semantics).",
+          "Categorical lookups (Wesely-style land-use × season): declare an `enums` block, replace string keys with `{op:'enum', args:['enum_name', 'symbol']}`, and use the existing `index` op into a `const` table.",
+          "State-mutating numerical schemes (advection, diffusion, deposition application): migrate to the `discretizations` block per docs/rfcs/discretization.md §7."
+        ]
+      }
+    },
     "test_cases": [
       {
         "file": "version_0_1_0_baseline.esm",

@@ -1,6 +1,6 @@
 # ESM Format Specification
 
-**EarthSciML Serialization Format — Version 0.1.0 Draft**
+**EarthSciML Serialization Format — Version 0.3.0 Draft**
 
 ## 1. Overview
 
@@ -12,7 +12,13 @@ The ESM (`.esm`) format is a JSON-based serialization format for EarthSciML mode
 
 ESM is **language-agnostic**. Every model must be fully self-describing: all equations, variables, parameters, species, and reactions are specified in the format itself. A conforming parser in any language can reconstruct the complete mathematical system from the `.esm` file alone, without access to any particular software package.
 
-The two exceptions to full specification are **data loaders** and **registered operators**, which are inherently runtime-specific (file I/O, GPU kernels, platform-specific code) and are therefore referenced by type/name rather than fully defined.
+The single exception to full specification is **data loaders**, which are inherently runtime-specific (file I/O, format adapters, regridding, large external grids) and are therefore referenced by type/name rather than fully defined. There is no in-file registry of arbitrary user-defined functions or operators: every callable invoked from an expression is drawn from the **closed function registry** (Section 9), whose entries are spec-defined with fixed names, signatures, and tolerances. See `docs/rfcs/closed-function-registry.md` for the rationale.
+
+### 1.1 Authoring Policy: AST first, registry second
+
+Authors and reviewers MUST prefer the built-in expression AST (Section 4) over the closed function registry (Section 9). A `{"op": "fn", ...}` node is justified **only** when the desired primitive cannot be written as a finite closed-form composition of the AST ops in §4.2 — typically because it requires non-AST ingredients (calendar arithmetic, table search). Anything expressible in finite closed form (powers, polynomials, transcendentals, conditionals, piecewise, clip/clamp) belongs in the AST. Reviewers MUST reject `fn` nodes whose body can be written using existing AST ops; `^`, `min`, `max`, `ifelse`, `sign` and the trig / exp / log family already cover ordinary scalar math.
+
+The closed function registry is **closed**: bindings MUST reject any `fn` node whose `name` is not in the spec-defined set for the file's declared `esm` version. There is no per-file declaration of new functions, no `handler_id` lookup, and no out-of-band runtime registry. Adding a primitive requires a spec rev (see `docs/rfcs/closed-function-registry.md` §7).
 
 **File extension:** `.esm`  
 **MIME type:** `application/vnd.earthsciml+json`  
@@ -24,13 +30,12 @@ The two exceptions to full specification are **data loaders** and **registered o
 
 ```json
 {
-  "esm": "0.2.0",
+  "esm": "0.3.0",
   "metadata": { ... },
   "models": { ... },
   "reaction_systems": { ... },
   "data_loaders": { ... },
-  "operators": { ... },
-  "registered_functions": { ... },
+  "enums": { ... },
   "coupling": [ ... ],
   "domains": { ... },
   "interfaces": { ... },
@@ -45,14 +50,15 @@ The two exceptions to full specification are **data loaders** and **registered o
 | `models` | | ODE-based model components (fully specified) |
 | `reaction_systems` | | Reaction network components (fully specified) |
 | `data_loaders` | | External data source registrations (by reference) |
-| `operators` | | Registered runtime operators (by reference) |
-| `registered_functions` | | Registry of pure named functions invoked inside expressions via the `call` op (see Section 9.2) |
+| `enums` | | File-local symbol → positive-integer mappings used by the `enum` op to make categorical lookups cross-binding-portable (see Section 9.3) |
 | `coupling` | | Composition and coupling rules |
 | `domains` | | Named spatial/temporal domain specifications (see Section 11) |
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
 | `grids` | | Named discretization grids (cartesian / unstructured / cubed_sphere) — see docs/rfcs/discretization.md §6 |
 | `staggering_rules` | | Named staggering conventions that declare where quantities live on a grid (e.g. MPAS unstructured C-grid) — see docs/rfcs/discretization.md §7.4 |
 | `discretizations` | | Named discretization schemes mapping PDE operators to stencil templates (§7.1) or cross-metric composites for curvilinear covariant operators (§7.4) — see docs/rfcs/discretization.md §7 |
+
+The `operators` and `registered_functions` blocks present in earlier drafts are **removed** in this revision. State-mutating numerical schemes (advection, gridded diffusion) are now expressed as discretization schemes (`discretizations`) with PDE operators in the model equations; pure functions are drawn from the closed function registry (Section 9) via the `fn` op. See `docs/rfcs/closed-function-registry.md` for the migration plan.
 
 At least one of `models` or `reaction_systems` must be present.
 
@@ -141,11 +147,18 @@ All take their standard mathematical arguments in `args`.
 |---|---|---|
 | `Pre` | `[var]` | Value of variable immediately before an event fires (see Section 5) |
 
-#### Registered Function Invocation
+#### Closed-registry Invocation
 
 | Op | Required extra fields | Meaning |
 |---|---|---|
-| `call` | `handler_id` | Invoke a named pure function from the top-level `registered_functions` registry with the evaluated `args`. See Section 4.4 for semantics and Section 9.2 for the registry schema. |
+| `fn` | `name` | Invoke a spec-defined closed function. `name` is a dotted module path (e.g. `"datetime.julian_day"`) drawn from the closed registry in Section 9. `args` are the evaluated argument expressions, passed positionally. See Section 4.4. |
+| `enum` | — | Resolve a file-local symbolic name to its declared positive integer. `args` is `[enum_name, symbol]`, both string literals; lowering happens at load time. See Section 4.5 and the `enums` top-level block (Section 9.3). |
+
+#### Inline Constants
+
+| Op | Required extra fields | Meaning |
+|---|---|---|
+| `const` | `value` | Inline literal value embedded in the expression tree. `value` is any JSON value (number, integer, or nested array of numbers/integers); `args` MUST be empty `[]`. Used to carry small inline tables that participate in `index` lookups, `interp.searchsorted` queries, and other AST positions where a JSON array is needed but a bare scalar number won't do. Large arrays belong in `data_loaders`. |
 
 #### Array / Tensor
 
@@ -353,49 +366,71 @@ The following are intentionally *not* represented in the schema:
 - Broadcast fusion — handled by the runtime, not the serialization.
 - The `term` optimization hint on `SymbolicUtils.ArrayOp` (a pre-computed array-valued form used to short-circuit codegen). It is an optimization cache, not part of the mathematical semantics, and is recomputed at load time.
 
-### 4.4 Registered Function Invocation (`call`)
+### 4.4 Closed Function Invocation (`fn`)
 
-The `call` op invokes a named pure function that has been pre-registered in the top-level `registered_functions` map (see Section 9.2). This is the expression-embedded analogue of an [`@register_symbolic`](https://docs.sciml.ai/ModelingToolkit/stable/basics/Validation/#Custom-Function-Registration) stub in ModelingToolkit.jl and lets models serialize calls to interpolation tables, physics parameterizations, or any other externally-implemented scalar or array function without inlining the implementation.
+The `fn` op invokes a function from the **closed function registry** defined in Section 9. The set of valid `name` values is fixed by the spec version: bindings MUST reject `fn` nodes whose `name` is not in the registry for the file's declared `esm` version. There is no per-file declaration of new functions and no `handler_id` lookup. See `docs/rfcs/closed-function-registry.md` for the rationale and addition process.
 
 Fields:
 
-- `op`: `"call"`.
-- `handler_id`: string. Must match an entry key in the top-level `registered_functions` map.
-- `args`: array of sub-expressions. Evaluated and passed positionally to the registered handler.
+- `op`: `"fn"`.
+- `name`: string. Dotted module path of a function declared in Section 9 (e.g. `"datetime.julian_day"`, `"interp.searchsorted"`).
+- `args`: array of sub-expressions. Evaluated in the current context and passed positionally to the named function.
 
-**Semantics.** At evaluation time, `handler_id` resolves via the `registered_functions` map to a concrete implementation supplied by the runtime (e.g. a Julia function bound through `@register_symbolic`, a Rust closure in a handler registry, a Python callable). Each argument in `args` is evaluated in the current context and passed positionally. The return value takes the place of the `call` node in the enclosing expression. Handlers are expected to be **pure** (no side effects on simulator state); stateful runtime operators should instead use the `operators` section.
+**Semantics.** `name` resolves at load time to a spec-pinned implementation contract — argument types, return type, boundary semantics, and tolerance are defined in the registry entry (Section 9). Each binding ships a built-in implementation that satisfies the contract; the conformance suite verifies cross-binding agreement against per-function reference outputs. The return value takes the place of the `fn` node in the enclosing expression. All registry entries are **pure**: same inputs → same output, no hidden state.
 
-**Validation.** A schema-valid `call` node must reference a `handler_id` that appears as a key in `registered_functions`. Bindings SHOULD emit a `missing_registered_function` diagnostic when this invariant is violated. When `arg_units` are declared, bindings SHOULD additionally check that the unit of each argument sub-expression is compatible with the declared hint (same permissive rules as other dimensional checks).
+**Validation.** A schema-valid `fn` node must carry a `name` listed in the §9 registry table for the file's `esm` version. Bindings MUST emit an `unknown_closed_function` error when this invariant is violated; loading MUST fail. Argument arity and type compatibility are checked against the registry entry's signature.
 
-**Example — 1D photolysis-rate interpolator:**
+**Example — Julian day from UTC time:**
 
 ```json
 {
-  "op": "call",
-  "handler_id": "flux_interp_O3",
-  "args": ["sza"]
+  "op": "fn",
+  "name": "datetime.julian_day",
+  "args": ["t_utc"]
 }
 ```
 
-References the `flux_interp_O3` entry declared under `registered_functions`, invoked on the solar-zenith-angle variable `sza`.
-
-**Example — scaled table lookup as a product term:**
+**Example — table search as a categorical index:**
 
 ```json
 {
-  "op": "*",
+  "op": "index",
   "args": [
-    "c_species",
-    {
-      "op": "call",
-      "handler_id": "wesely_r_c",
-      "args": ["T", "LAI", "season"]
-    }
+    "deposition_table",
+    { "op": "fn",
+      "name": "interp.searchsorted",
+      "args": ["sza", { "op": "const", "value": [0.0, 0.5, 1.0, 1.5] }] }
   ]
 }
 ```
 
-### 4.5 Scoped References
+### 4.5 Enum References (`enum`)
+
+The `enum` op resolves a file-local symbolic name to its declared positive integer. It is the spec's mechanism for cross-binding-portable categorical lookups: authors keep human-readable names in the source file (`"summer"`, `"deciduous_forest"`), while bindings only ever see the resolved integers downstream of load.
+
+Fields:
+
+- `op`: `"enum"`.
+- `args`: a 2-element array `[enum_name, symbol]`, both JSON string literals (not sub-expressions). `enum_name` MUST match a key in the top-level `enums` block (Section 9.3); `symbol` MUST match a key declared under that enum.
+
+**Semantics.** Lowered at load time to the corresponding positive integer constant, equivalent to a `{"op": "const", "value": <integer>}` node. Bindings MUST reject references to undeclared enums or undeclared symbols within an enum at load time, with diagnostic codes `unknown_enum` and `unknown_enum_symbol` respectively.
+
+**Example — categorical index into a tabulated coefficient array:**
+
+```json
+{
+  "op": "index",
+  "args": [
+    "r_c_table",
+    { "op": "enum", "args": ["land_use_class", "deciduous_forest"] },
+    { "op": "enum", "args": ["season", "summer"] }
+  ]
+}
+```
+
+After load this lowers to `{"op": "index", "args": ["r_c_table", 3, 3]}` — the bindings see only integers and never need to know the symbolic vocabulary.
+
+### 4.6 Scoped References
 
 Variables are referenced across systems using **hierarchical dot notation**. Systems can contain subsystems to arbitrary depth, and the dot-separated path walks the hierarchy from the top-level system down to the variable:
 
@@ -413,11 +448,11 @@ The **last** segment is always the variable (or species/parameter) name. All pre
 | `"SuperFast.GasPhase.O3"` | Variable `O3` in subsystem `GasPhase` of model `SuperFast` |
 | `"Atmosphere.Chemistry.FastChem.NO2"` | Variable `NO2` in `Atmosphere` → `Chemistry` → `FastChem` |
 
-**Resolution algorithm:** Given a scoped reference string, split on `"."` to produce segments `[s₁, s₂, …, sₙ]`. The final segment `sₙ` is the variable name. The preceding segments `[s₁, …, sₙ₋₁]` form a path: `s₁` must match a key in the top-level `models`, `reaction_systems`, `data_loaders`, or `operators` section, and each subsequent segment must match a key in the parent system's `subsystems` map.
+**Resolution algorithm:** Given a scoped reference string, split on `"."` to produce segments `[s₁, s₂, …, sₙ]`. The final segment `sₙ` is the variable name. The preceding segments `[s₁, …, sₙ₋₁]` form a path: `s₁` must match a key in the top-level `models`, `reaction_systems`, or `data_loaders` section, and each subsequent segment must match a key in the parent system's `subsystems` map.
 
 **Bare references** (no dot) refer to a variable within the current system context. In coupling entries, all references must be fully qualified from the top-level system name.
 
-### 4.6 Subsystem Inclusion by Reference
+### 4.7 Subsystem Inclusion by Reference
 
 Subsystems can be defined inline (as described in Sections 6 and 7) or included by reference from an external ESM file. A reference is an object with a single `ref` field containing a local file path or URL:
 
@@ -678,7 +713,7 @@ A parameter listed in `discrete_parameters` of an event:
 
 Some events require behavior too complex for symbolic affect equations — for example, calling external code, performing interpolation lookups, or implementing control logic. These are analogous to MTK's functional affects.
 
-Since ESM is language-agnostic, functional affects cannot embed executable code. Instead, they reference a **registered affect handler**, similar to how operators and data loaders are registered:
+Since ESM is language-agnostic, functional affects cannot embed executable code. Instead, they reference a **registered affect handler**, analogous to how data loaders are registered. Affect handlers are intentionally *out of scope* for the §9 closed function registry: handlers mutate simulator state at event-firing time, while §9 entries are pure expression-embedded callables. The `handler_id` mechanism survives only here, only for event affects.
 
 ```json
 {
@@ -865,7 +900,7 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `initialization_equations` | | Equations that hold only at t=0, solved before time-stepping begins. Typical uses: aerosol equilibrium / plume-rise style models (`system_kind='nonlinear'`) that need extra constraints for initialization, and ODE models whose initial state is determined by solving an auxiliary system. |
 | `guesses` | | Initial-guess seeds for nonlinear solvers during initialization, keyed by variable name. Values are `Expression` graphs (numbers, strings, or nodes). |
 | `system_kind` | | Discriminates the MTK system type: `"ode"` (default; time-stepped), `"nonlinear"` (algebraic-only equilibrium — no time derivative), `"sde"` (stochastic — brownian variables present), `"pde"` (spatial domain + differential operators). Each binding's MTK integration uses this to select between `System`, `NonlinearSystem`, `SDESystem`, and `PDESystem` constructors. |
-| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.6). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.5). |
+| `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.7). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.6). |
 | `tolerance` | | Model-level default numerical tolerance used by tests (see Section 6.6). Object with optional `abs` and/or `rel` fields. |
 | `tests` | | Inline validation tests that exercise this model in isolation (see Section 6.6). |
 | `examples` | | Inline illustrative examples showing how to run this model (see Section 6.7). |
@@ -927,7 +962,7 @@ The special variable `"_var"` is a placeholder used in operator-style models. Wh
 
 ### 6.5 Dry Deposition Model Example
 
-A model that computes deposition velocities from surface resistance parameters. This model is coupled to a chemistry system via `couple` to provide deposition loss terms, while a separate operator (see Section 9) handles grid-level application.
+A model that computes deposition velocities from surface resistance parameters. This model is coupled to a chemistry system via `couple` to provide deposition loss terms; grid-level application of those losses is expressed via the `discretizations` block (`docs/rfcs/discretization.md` §7), not as an opaque registered operator.
 
 ```json
 {
@@ -1461,7 +1496,7 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 | `constraint_equations` | | Additional algebraic or ODE constraints (in expression AST form) |
 | `discrete_events` | | Discrete events (see Section 5.3) |
 | `continuous_events` | | Continuous events (see Section 5.2) |
-| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.6). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.5). |
+| `subsystems` | | Named child reaction systems (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.7). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.6). |
 | `tolerance` | | System-level default numerical tolerance for tests. Same semantics as Section 6.6.4. |
 | `tests` | | Inline validation tests for this reaction system. Semantics, field shape, and tolerance resolution are identical to Section 6.6. Assertion `variable` names refer to species or observed quantities of this reaction system. |
 | `examples` | | Inline illustrative examples. Semantics, field shape, and plot/sweep rules are identical to Section 6.7. |
@@ -1870,146 +1905,127 @@ The grid that consumes this loader references fields by name, not by kind:
 
 ---
 
-## 9. Operators and Registered Functions
+## 9. Closed Function Registry
 
-### 9.1 Operators
+### 9.1 Closed-set principle
 
-Operators correspond to `EarthSciMLBase.Operator` — objects that modify the simulator state directly via `SciMLOperators`. They cannot be expressed purely as ODEs because they involve operations like numerical advection schemes, diffusion stencils, or deposition algorithms that operate on the full discretized state array.
+Every callable that may appear inside an expression is drawn from this section's **closed registry**. There is no per-file declaration of new functions, no `handler_id` lookup, and no out-of-band runtime extension point. The set of valid `fn` `name` values is fixed by the spec version: bindings MUST reject any `fn` node whose `name` is not declared in §9.2 for the file's `esm` version, with diagnostic code `unknown_closed_function`. Loading MUST fail.
 
-Like data loaders, operators are **registered by type** rather than fully specified, since their implementation is inherently tied to the discretization and runtime.
+The closed-set rule is a deliberate constraint that recovers cross-binding bit-equivalence: an `.esm` file plus the spec version uniquely determines numerical behavior. The trade-off is that adding a primitive requires a spec rev (the addition process, deprecation policy, and compatibility-matrix discipline are described in `docs/rfcs/closed-function-registry.md` §7).
+
+A function belongs in the closed registry **only** when **all three** of the following hold:
+
+- Not expressible in finite closed form using the §4.2 AST ops (powers, polynomials, `min`/`max`/`ifelse`/`sign`, trig / exp / log / sqrt, comparisons, n-ary arithmetic).
+- Has well-defined cross-binding semantics that the proposer can pin (formula, edge cases, tolerance).
+- There is no cleaner `data_loaders` path: the function operates on inline scalars or small arrays passed via `const`, not on bulk gridded fields.
+
+Anything that fails one of these tests does not belong here. The §1.1 authoring policy MUST be enforced at review time.
+
+### 9.2 v1 closed function set
+
+The v1 set is intentionally narrow: calendar arithmetic on UTC time, plus a single search-into-sorted-table primitive that, composed with the existing `index` op, covers the categorical / interpolation lookups motivated in `docs/rfcs/closed-function-registry.md`. All real-valued time inputs are IEEE-754 `binary64` UTC seconds since the Unix epoch (1970-01-01T00:00:00Z, proleptic Gregorian, no leap-second consultation — the deliberate cross-binding contract). All integer outputs are signed 32-bit; bindings MUST raise `closed_function_overflow` if a result would overflow.
+
+#### `datetime.*` — calendar decomposition
+
+Decomposes a UTC scalar time into proleptic-Gregorian calendar fields. All entries are pure: same input → same output, no system-clock or timezone consultation. Bindings MUST use exact integer arithmetic on the decomposed `(date, time-of-day)` pair after a single floor-divmod by 86400; this guarantees per-binding agreement to the integer (zero ulp drift on the integer outputs, ≤ 1 ulp on `julian_day` because of one floating-point divide).
+
+| Name | Arity | Args | Return | Range / convention |
+|---|---|---|---|---|
+| `datetime.year` | 1 | `t_utc: scalar [s]` | integer scalar | proleptic-Gregorian year (e.g. 2026) |
+| `datetime.month` | 1 | `t_utc: scalar [s]` | integer scalar (1..12) | 1 = January |
+| `datetime.day` | 1 | `t_utc: scalar [s]` | integer scalar (1..31) | day of month |
+| `datetime.hour` | 1 | `t_utc: scalar [s]` | integer scalar (0..23) | UTC hour |
+| `datetime.minute` | 1 | `t_utc: scalar [s]` | integer scalar (0..59) | UTC minute |
+| `datetime.second` | 1 | `t_utc: scalar [s]` | integer scalar (0..59) | UTC second (no leap-second slot) |
+| `datetime.day_of_year` | 1 | `t_utc: scalar [s]` | integer scalar (1..366) | 1 = Jan 1 |
+| `datetime.julian_day` | 1 | `t_utc: scalar [s]` | scalar | continuous Julian Day Number incl. fractional time-of-day |
+| `datetime.is_leap_year` | 1 | `t_utc: scalar [s]` | integer scalar (0 or 1) | 1 if the proleptic-Gregorian year of `t_utc` is a leap year, else 0 |
+
+**Boundary semantics:**
+
+- Negative `t_utc` (pre-1970) is supported. The proleptic-Gregorian calendar extends backwards without modification; `datetime.year` of a pre-1970 instant is the proleptic-Gregorian year (e.g. `1969`, `1900`, `-1` for 2 BC by ISO 8601 convention).
+- `datetime.julian_day` returns the standard JDN convention (JD 0 = noon UTC on 4713 BC Jan 1, proleptic Julian calendar). The reference computation is the Fliegel–van Flandern (1968) integer formula applied to the date part of `t_utc`, plus `(time_of_day_seconds − 43200) / 86400` for the fractional part. Bindings MAY use a faster equivalent if it is bit-exact on the supported domain.
+- All other entries decompose using the rule that the calendar date is `floor(t_utc / 86400)` days after 1970-01-01, with `t_utc mod 86400` giving the time-of-day seconds. Negative-modulo edge cases use Python-style floored division (so `floor(-1.0 / 86400) = -1` and `(-1.0) mod 86400 = 86399`).
+
+**Tolerance:** integer outputs are exact (zero error). `datetime.julian_day` is ≤ 1 ulp.
+
+#### `interp.*` — search
+
+| Name | Arity | Args | Return |
+|---|---|---|---|
+| `interp.searchsorted` | 2 | `x: scalar, xs: const array[N]` | integer scalar (1..N) |
+
+**Semantics — `interp.searchsorted`:**
+
+Returns the 1-based index `i` of the first element of `xs` that is `≥ x` (left-side bias, equivalent to Julia's `searchsortedfirst`).
+
+- `xs` MUST be a `const`-op array of strictly non-decreasing floats. Bindings MUST reject non-monotonic `xs` at load time with diagnostic `searchsorted_non_monotonic`.
+- Equal values in `xs` (duplicates): the returned index is the **smallest** `i` for which `xs[i] ≥ x`. This makes the result deterministic on duplicate runs and lets authors compose searches (e.g. find the first interval containing `x` even when boundaries coincide).
+- Out-of-range query: if `x ≤ xs[1]`, return `1`. If `x > xs[N]`, return `N + 1` (one past the end). Authors who need clamping wrap the result in `min(N, ...)` using the AST.
+- NaN `x`: result is `N + 1` (treated as "greater than every finite element"). NaN entries in `xs` are forbidden.
+
+**Tolerance:** exact (the returned index is integer; the comparison is the IEEE-754 `≥` predicate, which has no rounding tolerance).
+
+The `interp.searchsorted` primitive composes with the existing `index` op (§4.3.3) to express tabulated lookups: `{"op": "index", "args": ["table", {"op": "fn", "name": "interp.searchsorted", "args": ["x", {"op": "const", "value": [...]}]}]}`. Linear blends between adjacent table entries are written in AST: subtract neighbouring `index`-ed values, multiply by a fractional weight, add. There is no `interp.linear_1d` in v1; it is recoverable from `searchsorted` + `index` + AST arithmetic, and adding it would create a redundant primitive whose behavior the spec would have to pin to ulp.
+
+### 9.3 The `enums` block
+
+The `enums` top-level block declares file-local symbol → positive-integer mappings used by the `enum` op (§4.5). The block's purpose is to keep human-readable categorical labels in the source file while ensuring bindings only see resolved integers downstream of load — no per-binding string-to-int convention is required.
 
 ```json
 {
-  "operators": {
-    "DryDepGrid": {
-      "operator_id": "WesleyDryDep",
-      "reference": {
-        "doi": "10.1016/0004-6981(89)90153-4",
-        "citation": "Wesely, 1989. Parameterization of surface resistances to gaseous dry deposition in regional-scale numerical models.",
-        "notes": "Resistance-based model: r_total = r_a + r_b + r_c"
-      },
-      "config": {
-        "season": "summer",
-        "land_use_categories": 11
-      },
-      "needed_vars": ["O3", "NO2", "SO2", "T", "u_star", "LAI"],
-      "modifies": ["O3", "NO2", "SO2"],
-      "description": "First-order dry deposition loss based on surface resistance parameterization"
+  "enums": {
+    "land_use_class": {
+      "urban": 1,
+      "agricultural": 2,
+      "deciduous_forest": 3,
+      "coniferous_forest": 4,
+      "mixed_forest": 5,
+      "shrubland": 6,
+      "grassland": 7,
+      "wetland": 8,
+      "water": 9,
+      "barren": 10,
+      "snow_ice": 11
     },
-
-    "WetScavenging": {
-      "operator_id": "BelowCloudScav",
-      "reference": {
-        "doi": "10.1029/2001JD001480"
-      },
-      "needed_vars": ["precip_rate", "cloud_fraction"],
-      "modifies": ["H2O2", "CH2O", "HNO3"],
-      "description": "Below-cloud washout of soluble species"
+    "season": {
+      "winter": 1,
+      "spring": 2,
+      "summer": 3,
+      "autumn": 4
     }
   }
 }
 ```
 
-#### Operator Fields
+**Schema:**
 
-| Field | Required | Description |
-|---|---|---|
-| `operator_id` | ✓ | Registered identifier the runtime uses to find the implementation |
-| `reference` | | Academic citation |
-| `config` | | Implementation-specific configuration |
-| `needed_vars` | ✓ | Variables required by the operator (input to `get_needed_vars`) |
-| `modifies` | | Variables the operator modifies (informational, for dependency analysis) |
-| `description` | | Human-readable description |
+- `enums` is a JSON object. Keys are enum names (strings); values are objects mapping **string** keys (the symbolic names) to **positive integers** (the resolved values).
+- Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum defines its own namespace).
+- Two `.esm` files may declare an enum of the same name with different mappings: enums are file-local and never merged across files. References from a subsystem `ref` (§4.7) inherit the enums declared in the *referenced* file, not the enclosing one.
 
-### 9.2 Registered Functions
+**Lowering contract:**
 
-Registered functions are **pure**, named callables that are invoked *inside* expression trees via the `call` op (see Section 4.4). Unlike operators — which mutate simulator state at discrete points in the integration loop — registered functions are embedded directly in equation right-hand-sides and evaluated whenever the enclosing expression is evaluated. They are the serialization-level analogue of ModelingToolkit.jl's `@register_symbolic`.
+- The `enum` op (§4.5) MUST resolve at load time, before any expression evaluation. After lowering, no `enum`-op nodes remain in the in-memory representation; each is replaced by a `{"op": "const", "value": <integer>}` node. Bindings MUST NOT propagate enum strings into evaluated expressions.
+- An `enum` op that names an undeclared enum (`unknown_enum`) or a symbol not declared under that enum (`unknown_enum_symbol`) MUST be rejected at load time. Loading MUST fail.
 
-Use a registered function when:
+**Use with the `index` op:** the canonical use of `enums` is to keep categorical lookups portable. Tables are encoded as `const` arrays; categorical keys are written as `enum` ops; the existing `index` op (§4.3.3) does the actual lookup. See §13 for a worked example using a Wesely-style canopy resistance table.
 
-- The callable is side-effect-free and its output depends only on its arguments (e.g. a 1D/2D interpolation, a tabulated rate coefficient, an empirical surface-resistance formula).
-- It needs to appear directly inside symbolic expressions or reaction rate laws.
+### 9.4 Conformance contract
 
-Use an operator (Section 9.1) instead when the callable mutates simulator state (dry deposition applied to a grid, wet scavenging, an advection scheme).
+Each function in §9.2 ships, in lockstep with the spec rev that introduces it, with:
 
-#### When to use `call` vs. AST ops (authoring guidance)
+1. A spec section (§9.2) defining arity, types, units, boundary semantics, tolerance.
+2. A conformance fixture under `tests/closed_functions/<module>/<name>/` containing a canonical `.esm` file invoking the function from a trivial RHS, a reference output (`expected_<scenario>.json`) at the spec tolerance, and at least one boundary-case scenario (NaN input, edge index, leap-year boundary, negative epoch, etc.).
+3. A binding implementation contract: each binding's test harness loads the fixture, evaluates the `fn` node against the inputs, and asserts per-element agreement with the reference output within the declared tolerance.
 
-**Prefer the AST.** A `{op: "call", handler_id: ...}` node is an escape hatch for operations that *cannot* be expressed as a finite closed-form composition of the built-in AST ops (Section 4). Before registering a new function and emitting a `call`, check whether the expression can be written directly using existing ops — almost all ordinary math can, and AST form is cross-binding-portable without a per-language handler implementation.
-
-Rule of thumb: **if you can write the math on paper as a finite expression, it belongs in the AST.** A registered function is justified only when the callable's value at a point requires data or control flow that has no finite AST encoding (table lookups, iterative solves, platform adapters).
-
-| Scenario | Preferred AST form | When to use `call` |
-|---|---|---|
-| Polynomial / power / product (`x²`, `x³ − 2x`, `a·b·c`) | `{op: "^", args: [x, 2]}`, nested `*` / `+` / `-` | Never |
-| Clip / clamp / saturate | `{op: "max", ...}`, `{op: "min", ...}`, `ifelse` | Never |
-| Sign-dependent branching (branch on positive/negative argument) | `ifelse` combined with `sign` or comparison ops | Never |
-| Trig, exp, log, sqrt, pow | Corresponding AST op — all are supported (Section 4) | Never |
-| Piecewise defined over a finite set of intervals | Nested `ifelse` over comparisons | Never |
-| **Tabulated lookup** — value comes from data, not a closed-form expression | — | Yes: register the interpolator (e.g. `flux_interp_O3`) |
-| **Implicit / iterative solve** — equilibrium, Newton iteration, root-find | — | Yes: register the solver |
-| **Platform-dependent callable** — GPU kernel, external database / service, parameterization whose body is not symbolic | — | Yes: register the adapter |
-
-Every registered function is a per-binding implementation burden: each of the five language bindings must ship (or accept at runtime) a concrete handler for the `id`. AST expressions, by contrast, evaluate uniformly across bindings without any per-binding code. Authors and code reviewers should reject a `call` node whose body can be written with existing AST ops.
-
-See the `pure_math.esm` conformance fixture under `tests/registered_funcs/` for a deliberate *mechanism* test of the `call` op — it registers `sq(x) = x²` purely to exercise the round-trip path. It is **not** a pattern to emulate in real model code, where `x²` MUST be written as `{op: "^", args: [x, 2]}`.
-
-```json
-{
-  "registered_functions": {
-    "flux_interp_O3": {
-      "id": "flux_interp_O3",
-      "signature": { "arg_count": 1, "arg_types": ["scalar"], "return_type": "scalar" },
-      "units": "s^-1",
-      "arg_units": ["rad"],
-      "description": "Fast-JX photolysis flux interpolator for O3 as a function of solar zenith angle.",
-      "references": [
-        { "doi": "10.1029/1999GL011190" }
-      ]
-    },
-
-    "wesely_r_c": {
-      "id": "wesely_r_c",
-      "signature": { "arg_count": 3, "arg_types": ["scalar", "scalar", "scalar"], "return_type": "scalar" },
-      "units": "s/m",
-      "arg_units": ["K", "m^2/m^2", null],
-      "description": "Wesely (1989) canopy resistance as a function of temperature, LAI, and season."
-    },
-
-    "A_table": {
-      "id": "A_table",
-      "signature": { "arg_count": 2, "arg_types": ["scalar", "scalar"], "return_type": "scalar" },
-      "description": "2D deposition coefficient table lookup (land-use × season)."
-    }
-  }
-}
-```
-
-#### Registered Function Fields
-
-| Field | Required | Description |
-|---|---|---|
-| `id` | ✓ | Registered identifier. Must equal the map key and the `handler_id` used by `call` ops that reference this function. |
-| `signature` | ✓ | Calling convention. Contains `arg_count` (required), optional `arg_types` (array of `"scalar"`/`"array"`/`"index"`, length must equal `arg_count`), and optional `return_type` (`"scalar"` or `"array"`). |
-| `units` | | Output units string. |
-| `arg_units` | | Per-argument units hints (length must equal `signature.arg_count`; each entry is a units string or `null`). |
-| `description` | | Human-readable description. |
-| `references` | | Academic citations. |
-| `config` | | Implementation-specific configuration (table data, grid descriptors, etc.) passed to the handler at bind time. |
-
-#### Runtime Binding
-
-Bindings establish a mapping from `id` to a concrete implementation at load time:
-
-- **Julia** (reference): each `id` is bound to a `@register_symbolic` stub whose body is supplied by the enclosing application.
-- **Rust / Python / Go / TypeScript**: each `id` is looked up in a runtime-supplied handler registry; evaluation of a `call` node invokes the registered handler with evaluated arguments.
-
-Handlers are out-of-band: the ESM file declares the calling contract, while the actual function bodies live in host code and are attached by the runtime. This preserves the ESM-as-contract invariant while enabling integration with parameterizations that resist direct serialization.
+`scripts/test-conformance.sh` MUST run the closed-function fixtures across all five bindings on every PR. A binding that fails any fixture fails CI.
 
 ---
 
 ## 10. Coupling
 
-The coupling section defines how models, reaction systems, data loaders, and operators connect to form a `CoupledSystem`. Each entry maps to an EarthSciML composition mechanism.
+The coupling section defines how models, reaction systems, and data loaders connect to form a `CoupledSystem`. Each entry maps to an EarthSciML composition mechanism.
 
 ```json
 {
@@ -2069,22 +2085,12 @@ The coupling section defines how models, reaction systems, data loaders, and ope
       "from": "NEI_Emissions.emission_rate_NO",
       "to": "SuperFastReactions.emission_rate_NO",
       "transform": "param_to_var"
-    },
-
-    {
-      "type": "operator_apply",
-      "operator": "DryDepGrid",
-      "description": "Apply dry deposition operator during simulation"
-    },
-
-    {
-      "type": "operator_apply",
-      "operator": "WetScavenging",
-      "description": "Apply wet scavenging operator during simulation"
     }
   ]
 }
 ```
+
+Grid-level loss processes (dry deposition, below-cloud scavenging) that earlier drafts expressed as `operator_apply` coupling entries are now expressed via the `discretizations` block plus PDE operators in the model equations themselves; see `docs/rfcs/discretization.md` §7.
 
 ### 10.1 Coupling Types
 
@@ -2093,7 +2099,6 @@ The coupling section defines how models, reaction systems, data loaders, and ope
 | `operator_compose` | `operator_compose(a, b)` | Match LHS time derivatives and add RHS terms together |
 | `couple` | `couple(a, b, connector)` | Bi-directional coupling via explicit `ConnectorSystem` equations. The `connector` field specifies the equations that link the two systems. |
 | `variable_map` | `param_to_var` + connection | Replace a parameter in one system with a variable from another |
-| `operator_apply` | `Operator` in `CoupledSystem.ops` | Register an Operator to run during simulation |
 | `callback` | `init_callback` | Register a callback for simulation events |
 | `event` | Cross-system event | Continuous or discrete event involving multiple coupled systems (see Section 5.6) |
 
@@ -2251,7 +2256,7 @@ Advection.u_wind          # parameter u_wind from the Advection model
 Atmosphere.Chemistry.NO2  # species NO2 from a nested subsystem
 ```
 
-The last dot-separated segment is always the variable name; all preceding segments form the system path. This convention is consistent with the scoped reference notation used in coupling entries (Section 4.5) — the difference is that in the flattened system, **all** variable references are fully qualified, not just cross-system references.
+The last dot-separated segment is always the variable name; all preceding segments form the system path. This convention is consistent with the scoped reference notation used in coupling entries (Section 4.6) — the difference is that in the flattened system, **all** variable references are fully qualified, not just cross-system references.
 
 **Flattening is a core operation.** All libraries (not just simulation-tier) must be able to flatten a coupled system. The flattened representation is the input to:
 
@@ -3101,9 +3106,9 @@ Every equation, species, reaction, parameter, and variable must be present in th
 - The format is **archival** — it remains meaningful years later even if packages change
 - **Diffs are meaningful** — every change to the science is visible in version control
 
-### Data loaders and operators are registered by reference
+### Data loaders are the only externally-registered mechanism
 
-These are runtime-specific: they involve I/O, numerical discretization schemes, GPU kernels, and platform code that cannot be meaningfully serialized as math. The `.esm` file declares *what* they provide and *what* they need, but delegates *how* to the runtime.
+Data loaders are runtime-specific: they involve I/O, format adapters, regridding, and large external grids that cannot be meaningfully serialized as math. The `.esm` file declares *what* they provide and *what* they need, but delegates *how* to the runtime. State-mutating numerical schemes (advection, diffusion stencils, deposition algorithms) are **not** an externally-registered mechanism: they are expressed via PDE operators in model equations and named entries in the `discretizations` block (`docs/rfcs/discretization.md` §7). Pure callables embedded inside expressions are **not** an externally-registered mechanism either: they are drawn from the closed function registry (Section 9), whose entries are spec-pinned with fixed names, signatures, and tolerances.
 
 ### Expression AST over string math
 
