@@ -396,13 +396,27 @@ the evaluator lands. A load-time warning `W_UNEVAL_SCOPE` is
 recommended so authors know their rule is inert in that binding.
 
 **Conformance rollout.** The MVP for v0.3 requires Julia and Rust
-to evaluate `region.boundary`, `region.index_range`, `region.panel_boundary`,
-and the expression form of `where`. `region.panel_boundary` is
-cubed_sphere-only and requires `panel_connectivity` (§6.4) on the grid
-metadata as the runtime family marker; applying it to a grid without
-that marker MUST emit `E_REGION_GRID_MISMATCH` at rewrite time.
-`region.mask_field` remains deferred to v0.3.1 because it requires
-loader field access plumbing out of scope for v0.3.0.
+to evaluate `region.boundary`, `region.index_range`,
+`region.panel_boundary`, `region.mask_field`, and the expression form
+of `where`. `region.panel_boundary` is cubed_sphere-only and requires
+`panel_connectivity` (§6.4) on the grid metadata as the runtime family
+marker; applying it to a grid without that marker MUST emit
+`E_REGION_GRID_MISMATCH` at rewrite time.
+
+**`region.mask_field` integration.** Bindings resolve a mask-field
+scope by consulting a per-rewrite-context `mask_fields` table
+(`Julia: RuleContext.mask_fields`, `Rust: RuleContext::mask_fields`):
+each entry is a per-name list of truthy query-point coordinates. A
+mask entry matches the current query point iff every (axis, value)
+it declares agrees with the query point; axes the mask entry does
+not declare are ignored, so a lower-dimensional surface mask can
+scope rules on a higher-dimensional grid. The `field` name resolves
+to either a `data_loaders` entry (materialized at rewrite time by
+the caller) or to a boolean-typed variable — the evaluator is
+agnostic to the upstream source; only the populated
+`ctx.mask_fields[field]` is consulted. When the field is absent
+from `ctx.mask_fields`, the rule falls through (same
+W_UNEVAL_SCOPE handling as any unimplemented scope).
 
 ### 5.3 `regrid` op (new)
 

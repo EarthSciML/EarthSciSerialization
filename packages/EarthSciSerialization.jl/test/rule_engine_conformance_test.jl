@@ -54,7 +54,21 @@ using JSON3
             end
         end
         grid_name = haskey(cx, :grid_name) ? String(cx[:grid_name]) : nothing
-        return RuleContext(grids, vars, qp, grid_name)
+        mask_fields = Dict{String,Vector{Dict{String,Int}}}()
+        if haskey(cx, :mask_fields)
+            for (k, v) in pairs(cx[:mask_fields])
+                pts = Dict{String,Int}[]
+                for entry in v
+                    pt = Dict{String,Int}()
+                    for (ek, ev) in pairs(entry)
+                        pt[String(ek)] = Int(ev)
+                    end
+                    push!(pts, pt)
+                end
+                mask_fields[String(k)] = pts
+            end
+        end
+        return RuleContext(grids, vars, qp, grid_name, mask_fields)
     end
 
     for fx in manifest[:fixtures]

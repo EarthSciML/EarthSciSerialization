@@ -88,7 +88,9 @@ pub enum RuleRegion {
     Boundary { side: String },
     /// `{kind:"panel_boundary", panel, side}` — cubed_sphere only.
     PanelBoundary { panel: i64, side: String },
-    /// `{kind:"mask_field", field}` — rule applies where the named field is truthy.
+    /// `{kind:"mask_field", field}` — rule applies where the named
+    /// field is truthy. Resolved at rewrite time against
+    /// [`RuleContext::mask_fields`].
     MaskField { field: String },
     /// `{kind:"index_range", axis, lo, hi}` — inclusive index-range scope.
     IndexRange { axis: String, lo: i64, hi: i64 },
@@ -145,6 +147,14 @@ pub struct RuleContext {
     /// Name of the grid the `query_point` refers to (used to resolve
     /// `region.boundary.side` against `GridMeta::dim_bounds`).
     pub grid_name: Option<String>,
+    /// Resolved per-point boolean masks for [`RuleRegion::MaskField`]
+    /// scope (RFC §5.2.7). Each entry lists the query points at which
+    /// the named mask is truthy; the evaluator fires the rule iff
+    /// `query_point` agrees with one of those entries on every axis
+    /// the entry declares. Production callers materialize this from
+    /// the referenced `data_loaders` entry (or a boolean variable) at
+    /// rewrite time; tests inject it directly.
+    pub mask_fields: HashMap<String, Vec<HashMap<String, i64>>>,
 }
 
 /// Subset of grid metadata consumed by the closed-set guards.
@@ -844,8 +854,7 @@ fn eval_region(region: &RuleRegion, ctx: &RuleContext) -> Result<bool, RuleEngin
         }),
         RuleRegion::Boundary { side } => Ok(eval_boundary(side, ctx)),
         RuleRegion::PanelBoundary { panel, side } => eval_panel_boundary(*panel, side, ctx),
-        // Deferred — mask_field needs data_loaders plumbing (follow-up).
-        RuleRegion::MaskField { .. } => Ok(false),
+        RuleRegion::MaskField { field } => Ok(eval_mask_field(field, ctx)),
     }
 }
 
@@ -903,6 +912,32 @@ fn eval_panel_boundary(
     };
     let target = if which_hi { bounds[1] } else { bounds[0] };
     Ok(*v == target)
+}
+
+fn eval_mask_field(field: &str, ctx: &RuleContext) -> bool {
+    if ctx.query_point.is_empty() {
+        return false;
+    }
+    let Some(points) = ctx.mask_fields.get(field) else {
+        return false;
+    };
+    points.iter().any(|pt| mask_entry_matches(pt, &ctx.query_point))
+}
+
+// A mask entry matches when every (axis, value) it declares agrees
+// with the corresponding entry in `query_point`. Axes present in the
+// query point but absent from the mask entry are ignored, so a 2D
+// surface mask can scope rules on a 3D grid (matches on i,j for any k).
+fn mask_entry_matches(
+    mask_pt: &HashMap<String, i64>,
+    query_pt: &HashMap<String, i64>,
+) -> bool {
+    if mask_pt.is_empty() {
+        return false;
+    }
+    mask_pt
+        .iter()
+        .all(|(axis, v)| query_pt.get(axis) == Some(v))
 }
 
 fn eval_boundary(side: &str, ctx: &RuleContext) -> bool {
@@ -1451,6 +1486,25 @@ mod tests {
                     );
                 }
                 out.variables.insert(k.clone(), meta);
+            }
+        }
+        if let Some(masks) = ctx.get("mask_fields").and_then(|v| v.as_object()) {
+            for (k, v) in masks {
+                let Some(points) = v.as_array() else { continue };
+                let mut parsed = Vec::with_capacity(points.len());
+                for entry in points {
+                    let Some(obj) = entry.as_object() else {
+                        continue;
+                    };
+                    let mut pt = HashMap::new();
+                    for (axis, val) in obj {
+                        if let Some(i) = val.as_i64() {
+                            pt.insert(axis.clone(), i);
+                        }
+                    }
+                    parsed.push(pt);
+                }
+                out.mask_fields.insert(k.clone(), parsed);
             }
         }
         out

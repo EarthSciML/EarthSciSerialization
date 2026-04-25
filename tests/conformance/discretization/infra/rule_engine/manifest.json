@@ -15,6 +15,8 @@
     {"id": "region_panel_boundary", "path": "region_panel_boundary.json", "tags": ["region", "panel_boundary", "cubed_sphere"]},
     {"id": "region_panel_boundary_fall_through", "path": "region_panel_boundary_fall_through.json", "tags": ["region", "panel_boundary", "cubed_sphere", "fall_through"]},
     {"id": "region_panel_boundary_grid_mismatch", "path": "region_panel_boundary_grid_mismatch.json", "tags": ["region", "panel_boundary", "grid_mismatch", "error"]},
+    {"id": "region_mask_field", "path": "region_mask_field.json", "tags": ["region", "mask_field"]},
+    {"id": "region_mask_field_fall_through", "path": "region_mask_field_fall_through.json", "tags": ["region", "mask_field", "fall_through"]},
     {"id": "where_expr_predicate", "path": "where_expr_predicate.json", "tags": ["where_expr", "per_point"]}
   ],
   "bindings_required": ["julia", "rust"],

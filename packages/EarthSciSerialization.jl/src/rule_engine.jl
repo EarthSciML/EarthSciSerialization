@@ -80,7 +80,10 @@ end
 """
     RegionMaskField(field::String)
 
-`{kind:"mask_field", field}` scope.
+`{kind:"mask_field", field}` scope. `field` names a boolean-valued mask
+resolved at rewrite time against [`RuleContext.mask_fields`](@ref
+RuleContext). The scope fires at a given query point iff
+`ctx.mask_fields[field]` contains a truthy entry for that point.
 """
 struct RegionMaskField <: RuleRegion
     field::String
@@ -295,21 +298,40 @@ grid metadata and variable table needed by the closed-set guards in
 - `variables::Dict{String, Dict{String,Any}}`: per-variable metadata.
   Each entry may carry `"grid"` (String), `"location"` (String),
   `"shape"` (Vector or Vector{String}).
+- `mask_fields::Dict{String, Vector{Dict{String,Int}}}`: per-point
+  boolean masks resolving [`RegionMaskField`](@ref) scope (RFC §5.2.7).
+  Each entry is the list of query points at which the mask is truthy;
+  the evaluator fires the rule iff `ctx.query_point` matches one of
+  the listed points on all keys the mask entry declares. Production
+  callers populate this by materializing the relevant `data_loaders`
+  entry (or a boolean variable) at the current rewrite time; tests
+  inject it directly.
 """
 struct RuleContext
     grids::Dict{String,Dict{String,Any}}
     variables::Dict{String,Dict{String,Any}}
     query_point::Dict{String,Int}
     grid_name::Union{String,Nothing}
+    mask_fields::Dict{String,Vector{Dict{String,Int}}}
 end
 
 RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
                             Dict{String,Dict{String,Any}}(),
                             Dict{String,Int}(),
-                            nothing)
+                            nothing,
+                            Dict{String,Vector{Dict{String,Int}}}())
 
 RuleContext(grids, variables) = RuleContext(grids, variables,
-                                            Dict{String,Int}(), nothing)
+                                            Dict{String,Int}(), nothing,
+                                            Dict{String,Vector{Dict{String,Int}}}())
+
+# Backward-compatible 4-arg constructor (pre-mask_field callers).
+RuleContext(grids::Dict{String,Dict{String,Any}},
+            variables::Dict{String,Dict{String,Any}},
+            query_point::Dict{String,Int},
+            grid_name::Union{String,Nothing}) =
+    RuleContext(grids, variables, query_point, grid_name,
+                Dict{String,Vector{Dict{String,Int}}}())
 
 """
     with_query_point(ctx, point; grid=nothing) -> RuleContext
@@ -323,7 +345,8 @@ used to resolve `region.boundary.side` against grid dim bounds.
 with_query_point(ctx::RuleContext, point::Dict{String,Int};
                  grid::Union{String,Nothing}=nothing) =
     RuleContext(ctx.grids, ctx.variables, point,
-                grid === nothing ? ctx.grid_name : grid)
+                grid === nothing ? ctx.grid_name : grid,
+                ctx.mask_fields)
 
 """
     check_guards(guards, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
@@ -835,10 +858,30 @@ function _eval_region(r::RegionPanelBoundary, ::Dict{String,Expr}, ctx::RuleCont
     return ctx.query_point[axis] == target
 end
 
-# Deferred variant: parse round-trips but evaluation disables the rule
-# (W_UNEVAL_SCOPE) — per RFC §5.2.7 MVP rollout. (region.mask_field needs
-# data_loaders plumbing, tracked as follow-up.)
-_eval_region(::RegionMaskField, ::Dict{String,Expr}, ::RuleContext) = false
+function _eval_region(r::RegionMaskField, b::Dict{String,Expr}, ctx::RuleContext)::Bool
+    isempty(ctx.query_point) && return false
+    haskey(ctx.mask_fields, r.field) || return false
+    points = ctx.mask_fields[r.field]
+    for pt in points
+        _point_subset_matches(pt, ctx.query_point) && return true
+    end
+    return false
+end
+
+# A truthy mask entry matches when every (axis, value) it declares
+# agrees with the corresponding entry in `ctx.query_point`. Axes present
+# in the query point but absent from the mask entry are ignored —
+# mask entries can be as coarse as the mask's intrinsic dimensionality
+# (e.g. a 2D surface mask on a 3D grid matches on i,j regardless of k).
+function _point_subset_matches(mask_pt::Dict{String,Int},
+                               query_pt::Dict{String,Int})::Bool
+    isempty(mask_pt) && return false
+    for (axis, v) in mask_pt
+        haskey(query_pt, axis) || return false
+        query_pt[axis] == v || return false
+    end
+    return true
+end
 
 """
     _eval_where_expr(expr, bindings, ctx) -> Bool
