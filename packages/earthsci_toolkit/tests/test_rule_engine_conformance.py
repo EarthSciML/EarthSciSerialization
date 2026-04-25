@@ -54,9 +54,16 @@ def _load_manifest():
 def _build_ctx(raw):
     if raw is None:
         return RuleContext()
+    query_point = {}
+    for k, v in (raw.get("query_point") or {}).items():
+        if isinstance(v, int) and not isinstance(v, bool):
+            query_point[k] = v
+    grid_name = raw.get("grid_name") if isinstance(raw.get("grid_name"), str) else None
     return RuleContext(
         grids=dict(raw.get("grids", {})),
         variables=dict(raw.get("variables", {})),
+        query_point=query_point,
+        grid_name=grid_name,
     )
 
 
@@ -74,16 +81,6 @@ def test_rule_engine_conformance(fixture_id):
     expr = _wire_to_expr(fixture["input"])
     ctx = _build_ctx(fixture.get("context"))
     max_passes = fixture.get("max_passes", 32)
-
-    # RFC §5.2.7 fixtures require a per-query-point scope evaluator. The
-    # Python binding is a parse-only consumer for these (see manifest note);
-    # `parse_rules` above already asserted the fixture loads, so skip the
-    # evaluation assertion.
-    if fixture.get("requires_per_point_scope"):
-        pytest.skip(
-            "fixture requires RFC §5.2.7 per-query-point scope evaluator "
-            "(Python binding is parse-only for this capability)"
-        )
 
     expect = fixture["expect"]
     if expect["kind"] == "output":

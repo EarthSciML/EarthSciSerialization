@@ -84,9 +84,11 @@ export interface Rule {
   /**
    * Object-form spatial scope per RFC §5.2.7. When present the rule
    * applies only at query points inside the scope. The TypeScript
-   * binding parses but does not evaluate these; rules carrying
-   * `regionScope` or `whereExpr` are treated as disabled (conservative
-   * fall-through) by the rewrite engine — equivalent to W_UNEVAL_SCOPE.
+   * binding evaluates `regionScope.index_range` and `regionScope.boundary`
+   * (and the where-expression predicate) per query point; the
+   * `panel_boundary` and `mask_field` variants parse and round-trip but
+   * do not evaluate (conservative fall-through, equivalent to
+   * W_UNEVAL_SCOPE).
    */
   regionScope?: RuleRegionScope
   /**
@@ -101,6 +103,12 @@ export interface GridMeta {
   spatial_dims?: string[]
   periodic_dims?: string[]
   nonuniform_dims?: string[]
+  /**
+   * Optional per-dim [lo, hi] integer bounds, used by RFC §5.2.7
+   * region.boundary scope evaluation. Absence is equivalent to "scope
+   * disabled" (conservative fall-through).
+   */
+  dim_bounds?: Record<string, [number, number]>
 }
 
 export interface VariableMeta {
@@ -112,6 +120,17 @@ export interface VariableMeta {
 export interface RuleContext {
   grids: Record<string, GridMeta>
   variables: Record<string, VariableMeta>
+  /**
+   * Per-query-point index bindings (canonical names i, j, k, ...) used
+   * to evaluate RFC §5.2.7 region / where-expression scopes. Empty for
+   * ordinary tree rewriting; scope-bearing rules then fall through.
+   */
+  query_point?: Record<string, number>
+  /**
+   * Grid the `query_point` refers to (used to resolve
+   * region.boundary.side against `dim_bounds`).
+   */
+  grid_name?: string
 }
 
 export function emptyContext(): RuleContext {
@@ -481,13 +500,200 @@ function tryFireAt(expr: Expr, rules: Rule[], ctx: RuleContext): Expr | null {
     if (m === null) continue
     const m2 = checkGuards(rule.where, m, ctx)
     if (m2 === null) continue
-    // RFC §5.2.7: rules carrying an object region or where-expression
-    // are disabled in the TS binding (no per-query-point evaluator).
-    // Conservative fall-through.
-    if (rule.regionScope !== undefined || rule.whereExpr !== undefined) continue
+    if (!checkScope(rule, m2, ctx)) continue
     return applyBindings(rule.replacement, m2)
   }
   return null
+}
+
+// ---------------------------------------------------------------------------
+// Scope evaluation — region object + where expression (RFC §5.2.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluate a rule's per-query-point scope. Returns true when the rule
+ * should fire at the current query point, false otherwise (conservative
+ * fall-through). A legacy string `region` and a missing `whereExpr`
+ * pass unconditionally, preserving v0.2 semantics.
+ */
+function checkScope(rule: Rule, bindings: Bindings, ctx: RuleContext): boolean {
+  if (rule.regionScope !== undefined && !evalRegion(rule.regionScope, ctx)) {
+    return false
+  }
+  if (rule.whereExpr !== undefined && !evalWhereExpr(rule.whereExpr, bindings, ctx)) {
+    return false
+  }
+  return true
+}
+
+const CANONICAL_INDEX_NAMES = ['i', 'j', 'k', 'l', 'm']
+
+function evalRegion(region: RuleRegionScope, ctx: RuleContext): boolean {
+  switch (region.kind) {
+    case 'index_range': {
+      const v = ctx.query_point?.[region.axis]
+      if (v === undefined) return false
+      return region.lo <= v && v <= region.hi
+    }
+    case 'boundary':
+      return evalBoundary(region.side, ctx)
+    case 'panel_boundary':
+    case 'mask_field':
+      // Deferred — conservative fall-through.
+      return false
+  }
+}
+
+function evalBoundary(side: string, ctx: RuleContext): boolean {
+  if (ctx.grid_name === undefined) return false
+  const meta = ctx.grids[ctx.grid_name]
+  if (meta === undefined) return false
+  const sides: Record<string, [string, boolean]> = {
+    xmin: ['x', false], west: ['x', false],
+    xmax: ['x', true],  east: ['x', true],
+    ymin: ['y', false], south: ['y', false],
+    ymax: ['y', true],  north: ['y', true],
+    zmin: ['z', false], bottom: ['z', false],
+    zmax: ['z', true],  top: ['z', true],
+  }
+  const entry = sides[side]
+  if (entry === undefined) return false
+  const [dim, whichHi] = entry
+  const bounds = meta.dim_bounds?.[dim]
+  if (bounds === undefined) return false
+  const idxPos = (meta.spatial_dims ?? []).indexOf(dim)
+  const idxName = CANONICAL_INDEX_NAMES[idxPos]
+  if (idxName === undefined) return false
+  const v = ctx.query_point?.[idxName]
+  if (v === undefined) return false
+  const target = whichHi ? bounds[1] : bounds[0]
+  return v === target
+}
+
+function evalWhereExpr(expr: Expr, bindings: Bindings, ctx: RuleContext): boolean {
+  if (ctx.query_point === undefined || Object.keys(ctx.query_point).length === 0) {
+    return false
+  }
+  const v = evalScalar(expr, bindings, ctx)
+  if (v === undefined) return false
+  return scalarTruthy(v)
+}
+
+type ScalarValue =
+  | { kind: 'bool'; value: boolean }
+  | { kind: 'int'; value: number }
+  | { kind: 'float'; value: number }
+
+function scalarToFloat(s: ScalarValue): number {
+  if (s.kind === 'bool') return s.value ? 1 : 0
+  return s.value
+}
+
+function scalarTruthy(s: ScalarValue): boolean {
+  if (s.kind === 'bool') return s.value
+  return s.value !== 0
+}
+
+function evalScalar(e: Expr, b: Bindings, ctx: RuleContext): ScalarValue | undefined {
+  if (typeof e === 'boolean') return { kind: 'bool', value: e }
+  if (typeof e === 'number') {
+    return Number.isInteger(e)
+      ? { kind: 'int', value: e }
+      : { kind: 'float', value: e }
+  }
+  if (isNumericLiteral(e)) {
+    const v = numericValue(e)
+    if (v === undefined) return undefined
+    return e.kind === 'int'
+      ? { kind: 'int', value: v }
+      : { kind: 'float', value: v }
+  }
+  if (typeof e === 'string') {
+    if (isPvarString(e)) {
+      const bound = b.get(e)
+      if (bound === undefined) return undefined
+      return evalScalar(bound, b, ctx)
+    }
+    const v = ctx.query_point?.[e]
+    if (v === undefined) return undefined
+    return { kind: 'int', value: v }
+  }
+  if (isOpNode(e)) {
+    return evalOp(e, b, ctx)
+  }
+  return undefined
+}
+
+function evalOp(node: ExprNode, b: Bindings, ctx: RuleContext): ScalarValue | undefined {
+  const args: ScalarValue[] = []
+  for (const a of node.args) {
+    const sv = evalScalar(a, b, ctx)
+    if (sv === undefined) return undefined
+    args.push(sv)
+  }
+  switch (node.op) {
+    case '==':
+    case '!=':
+    case '<':
+    case '<=':
+    case '>':
+    case '>=': {
+      const a0 = args[0]
+      const a1 = args[1]
+      if (args.length !== 2 || a0 === undefined || a1 === undefined) return undefined
+      const l = scalarToFloat(a0)
+      const r = scalarToFloat(a1)
+      const cmp =
+        node.op === '==' ? l === r :
+        node.op === '!=' ? l !== r :
+        node.op === '<'  ? l <   r :
+        node.op === '<=' ? l <=  r :
+        node.op === '>'  ? l >   r :
+                           l >=  r
+      return { kind: 'bool', value: cmp }
+    }
+    case '+': {
+      if (allInt(args)) {
+        return { kind: 'int', value: args.reduce((s, a) => s + a.value, 0) }
+      }
+      return { kind: 'float', value: args.reduce((s, a) => s + scalarToFloat(a), 0) }
+    }
+    case '-': {
+      if (args.length === 1) {
+        const a = args[0]
+        if (a === undefined || a.kind === 'bool') return undefined
+        return { kind: a.kind, value: -a.value }
+      }
+      const a0 = args[0]
+      const a1 = args[1]
+      if (args.length !== 2 || a0 === undefined || a1 === undefined) return undefined
+      if (a0.kind === 'int' && a1.kind === 'int') {
+        return { kind: 'int', value: a0.value - a1.value }
+      }
+      return { kind: 'float', value: scalarToFloat(a0) - scalarToFloat(a1) }
+    }
+    case '*': {
+      if (allInt(args)) {
+        return { kind: 'int', value: args.reduce((p, a) => p * a.value, 1) }
+      }
+      return { kind: 'float', value: args.reduce((p, a) => p * scalarToFloat(a), 1) }
+    }
+    case 'and':
+      return { kind: 'bool', value: args.every(scalarTruthy) }
+    case 'or':
+      return { kind: 'bool', value: args.some(scalarTruthy) }
+    case 'not': {
+      const a = args[0]
+      if (args.length !== 1 || a === undefined) return undefined
+      return { kind: 'bool', value: !scalarTruthy(a) }
+    }
+    default:
+      return undefined
+  }
+}
+
+function allInt(args: ScalarValue[]): args is Array<{ kind: 'int'; value: number }> {
+  return args.every((a) => a.kind === 'int')
 }
 
 // ---------------------------------------------------------------------------

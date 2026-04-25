@@ -59,10 +59,24 @@ function buildContext(fixture: Record<string, unknown>): RuleContext {
   if (typeof c.grids === 'object' && c.grids !== null) {
     for (const [k, v] of Object.entries(c.grids as Record<string, unknown>)) {
       const meta = v as Record<string, unknown>
+      let dimBounds: Record<string, [number, number]> | undefined
+      if (typeof meta.dim_bounds === 'object' && meta.dim_bounds !== null) {
+        dimBounds = {}
+        for (const [dim, b] of Object.entries(meta.dim_bounds as Record<string, unknown>)) {
+          if (Array.isArray(b) && b.length === 2) {
+            const lo = asInt(b[0])
+            const hi = asInt(b[1])
+            if (lo !== undefined && hi !== undefined) {
+              dimBounds[dim] = [lo, hi]
+            }
+          }
+        }
+      }
       ctx.grids[k] = {
         spatial_dims: asStringArray(meta.spatial_dims),
         periodic_dims: asStringArray(meta.periodic_dims),
         nonuniform_dims: asStringArray(meta.nonuniform_dims),
+        dim_bounds: dimBounds,
       }
     }
   }
@@ -76,12 +90,36 @@ function buildContext(fixture: Record<string, unknown>): RuleContext {
       }
     }
   }
+  if (typeof c.query_point === 'object' && c.query_point !== null) {
+    const qp: Record<string, number> = {}
+    for (const [k, v] of Object.entries(c.query_point as Record<string, unknown>)) {
+      const i = asInt(v)
+      if (i !== undefined) qp[k] = i
+    }
+    ctx.query_point = qp
+  }
+  if (typeof c.grid_name === 'string') {
+    ctx.grid_name = c.grid_name
+  }
   return ctx
 }
 
 function asStringArray(x: unknown): string[] | undefined {
   if (!Array.isArray(x)) return undefined
   return x.filter((s): s is string => typeof s === 'string')
+}
+
+function asInt(x: unknown): number | undefined {
+  if (typeof x === 'number' && Number.isInteger(x)) return x
+  if (
+    typeof x === 'object' &&
+    x !== null &&
+    (x as { kind?: unknown }).kind === 'int' &&
+    typeof (x as { value?: unknown }).value === 'number'
+  ) {
+    return (x as { value: number }).value
+  }
+  return undefined
 }
 
 describe('rule engine cross-binding conformance (§13.1 Step 1)', () => {
@@ -95,12 +133,6 @@ describe('rule engine cross-binding conformance (§13.1 Step 1)', () => {
       const rules = parseRules(fixture.rules)
       const input = parseExpr(fixture.input)
       const ctx = buildContext(fixture)
-      // RFC §5.2.7: fixtures requiring a per-query-point scope evaluator
-      // are parse-only for the TypeScript binding — parseRules above has
-      // already asserted the fixture loads; skip the evaluation check.
-      if (fixture.requires_per_point_scope === true) {
-        return
-      }
       const maxPassesRaw = fixture.max_passes
       const maxPasses =
         typeof maxPassesRaw === 'number'

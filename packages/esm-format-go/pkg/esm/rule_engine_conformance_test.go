@@ -1,6 +1,7 @@
 package esm
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -41,13 +42,12 @@ func TestRuleEngineConformanceFixtures(t *testing.T) {
 				t.Fatalf("read fixture: %v", err)
 			}
 			var fixture struct {
-				ID                     string          `json:"id"`
-				Rules                  json.RawMessage `json:"rules"`
-				Input                  json.RawMessage `json:"input"`
-				MaxPasses              *int            `json:"max_passes,omitempty"`
-				Context                json.RawMessage `json:"context,omitempty"`
-				RequiresPerPointScope  bool            `json:"requires_per_point_scope,omitempty"`
-				Expect                 struct {
+				ID        string          `json:"id"`
+				Rules     json.RawMessage `json:"rules"`
+				Input     json.RawMessage `json:"input"`
+				MaxPasses *int            `json:"max_passes,omitempty"`
+				Context   json.RawMessage `json:"context,omitempty"`
+				Expect    struct {
 					Kind          string `json:"kind"`
 					CanonicalJSON string `json:"canonical_json,omitempty"`
 					Code          string `json:"code,omitempty"`
@@ -60,14 +60,6 @@ func TestRuleEngineConformanceFixtures(t *testing.T) {
 			rules, err := ParseRules(fixture.Rules)
 			if err != nil {
 				t.Fatalf("parse rules: %v", err)
-			}
-			// RFC §5.2.7 fixtures require a per-query-point scope evaluator.
-			// The Go binding is parse-only for this capability (see manifest
-			// note); parse_rules above asserted the fixture loads — skip the
-			// evaluation assertion.
-			if fixture.RequiresPerPointScope {
-				t.Skipf("fixture %s requires RFC §5.2.7 per-query-point scope evaluator "+
-					"(Go binding is parse-only for this capability)", f.ID)
 			}
 			input, err := ParseExpr(fixture.Input)
 			if err != nil {
@@ -124,11 +116,15 @@ func buildFixtureContext(raw json.RawMessage) (RuleContext, error) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return ctx, nil
 	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
 	var obj struct {
-		Grids     map[string]map[string]interface{} `json:"grids"`
-		Variables map[string]map[string]interface{} `json:"variables"`
+		Grids      map[string]map[string]interface{} `json:"grids"`
+		Variables  map[string]map[string]interface{} `json:"variables"`
+		QueryPoint map[string]interface{}            `json:"query_point"`
+		GridName   string                            `json:"grid_name"`
 	}
-	if err := json.Unmarshal(raw, &obj); err != nil {
+	if err := dec.Decode(&obj); err != nil {
 		return ctx, err
 	}
 	for k, v := range obj.Grids {
@@ -141,6 +137,21 @@ func buildFixtureContext(raw json.RawMessage) (RuleContext, error) {
 		}
 		if arr, ok := v["nonuniform_dims"].([]interface{}); ok {
 			meta.NonuniformDims = stringSlice(arr)
+		}
+		if db, ok := v["dim_bounds"].(map[string]interface{}); ok {
+			meta.DimBounds = map[string][2]int64{}
+			for dim, raw := range db {
+				arr, ok := raw.([]interface{})
+				if !ok || len(arr) != 2 {
+					continue
+				}
+				lo, lok := jsonToInt64(arr[0])
+				hi, hok := jsonToInt64(arr[1])
+				if !lok || !hok {
+					continue
+				}
+				meta.DimBounds[dim] = [2]int64{lo, hi}
+			}
 		}
 		ctx.Grids[k] = meta
 	}
@@ -158,7 +169,31 @@ func buildFixtureContext(raw json.RawMessage) (RuleContext, error) {
 		}
 		ctx.Variables[k] = meta
 	}
+	for k, v := range obj.QueryPoint {
+		if i, ok := jsonToInt64(v); ok {
+			ctx.QueryPoint[k] = i
+		}
+	}
+	ctx.GridName = obj.GridName
 	return ctx, nil
+}
+
+func jsonToInt64(v interface{}) (int64, bool) {
+	switch x := v.(type) {
+	case json.Number:
+		if i, err := x.Int64(); err == nil {
+			return i, true
+		}
+	case float64:
+		if x == float64(int64(x)) {
+			return int64(x), true
+		}
+	case int:
+		return int64(x), true
+	case int64:
+		return x, true
+	}
+	return 0, false
 }
 
 func stringSlice(arr []interface{}) []string {

@@ -51,10 +51,10 @@ type Guard struct {
 // per-query-point boolean predicate AST (RFC §5.2.7); structurally
 // distinguished from the guard-list Where at parse time by JSON shape.
 //
-// The Go binding parses both new forms (round-trip) but does not evaluate
-// them; rules carrying a RegionScope or WhereExpr are treated as disabled
-// (conservative fall-through) by the rewrite engine — equivalent to
-// RFC §5.2.7's W_UNEVAL_SCOPE.
+// The Go binding evaluates region.index_range, region.boundary, and the
+// where-expression predicate per query point (RFC §5.2.7). region.panel_boundary
+// and region.mask_field parse and round-trip but do not evaluate
+// (conservative fall-through, equivalent to W_UNEVAL_SCOPE).
 type Rule struct {
 	Name        string
 	Pattern     Expression
@@ -78,11 +78,15 @@ type RuleRegionScope struct {
 }
 
 // GridMeta is the subset of grid metadata consulted by the closed-set
-// guards.
+// guards and by RFC §5.2.7 region.boundary scope evaluation.
 type GridMeta struct {
 	SpatialDims    []string
 	PeriodicDims   []string
 	NonuniformDims []string
+	// Optional per-dim [lo, hi] index bounds, used by region.boundary
+	// scope evaluation (RFC §5.2.7). Absence is equivalent to "scope
+	// disabled" (conservative fall-through).
+	DimBounds map[string][2]int64
 }
 
 // VariableMeta is the subset of variable metadata consulted by the
@@ -94,17 +98,27 @@ type VariableMeta struct {
 	HasShape bool
 }
 
-// RuleContext supplies grid and variable metadata to guard evaluation.
+// RuleContext supplies grid and variable metadata to guard evaluation
+// (§5.2.4), plus a per-query-point index map for RFC §5.2.7 region /
+// where-expression scope evaluation.
 type RuleContext struct {
 	Grids     map[string]GridMeta
 	Variables map[string]VariableMeta
+	// QueryPoint binds canonical index names (i, j, k, ...) to integer
+	// coordinates at the current rewrite point. Empty for ordinary tree
+	// rewriting — scope-bearing rules then fall through.
+	QueryPoint map[string]int64
+	// GridName is the grid the QueryPoint refers to (used to resolve
+	// region.boundary.side against GridMeta.DimBounds).
+	GridName string
 }
 
 // NewRuleContext returns an empty RuleContext with initialized maps.
 func NewRuleContext() RuleContext {
 	return RuleContext{
-		Grids:     map[string]GridMeta{},
-		Variables: map[string]VariableMeta{},
+		Grids:      map[string]GridMeta{},
+		Variables:  map[string]VariableMeta{},
+		QueryPoint: map[string]int64{},
 	}
 }
 
@@ -601,10 +615,7 @@ func rewritePass(expr Expression, rules []Rule, ctx RuleContext, changed *bool) 
 		if !ok {
 			continue
 		}
-		// RFC §5.2.7: rules carrying an object region or a where-expression
-		// predicate are disabled in the Go binding (no per-query-point
-		// evaluator implemented). Conservative fall-through.
-		if r.RegionScope != nil || r.WhereExpr != nil {
+		if !checkScope(r, m2, ctx) {
 			continue
 		}
 		newExpr, err := ApplyBindings(r.Replacement, m2)
@@ -634,6 +645,294 @@ func rewritePass(expr Expression, rules []Rule, ctx RuleContext, changed *bool) 
 		HandlerID: node.HandlerID,
 	}
 	return out, nil
+}
+
+// ============================================================================
+// Scope evaluation — region object + where expression (RFC §5.2.7)
+// ============================================================================
+
+// checkScope evaluates a rule's per-query-point scope. Returns true when
+// the rule should fire at the current query point, false otherwise
+// (conservative fall-through). A legacy string region and a missing
+// where_expr pass unconditionally, preserving v0.2 semantics.
+func checkScope(r *Rule, bindings map[string]Expression, ctx RuleContext) bool {
+	if r.RegionScope != nil && !evalRegion(r.RegionScope, ctx) {
+		return false
+	}
+	if r.WhereExpr != nil && !evalWhereExpr(r.WhereExpr, bindings, ctx) {
+		return false
+	}
+	return true
+}
+
+func evalRegion(scope *RuleRegionScope, ctx RuleContext) bool {
+	switch scope.Kind {
+	case "index_range":
+		v, has := ctx.QueryPoint[scope.Axis]
+		if !has {
+			return false
+		}
+		return int64(scope.Lo) <= v && v <= int64(scope.Hi)
+	case "boundary":
+		return evalBoundary(scope.Side, ctx)
+	}
+	// panel_boundary, mask_field: deferred — conservative fall-through.
+	return false
+}
+
+func evalBoundary(side string, ctx RuleContext) bool {
+	if ctx.GridName == "" {
+		return false
+	}
+	meta, ok := ctx.Grids[ctx.GridName]
+	if !ok {
+		return false
+	}
+	var dim string
+	var whichHi bool
+	switch side {
+	case "xmin", "west":
+		dim, whichHi = "x", false
+	case "xmax", "east":
+		dim, whichHi = "x", true
+	case "ymin", "south":
+		dim, whichHi = "y", false
+	case "ymax", "north":
+		dim, whichHi = "y", true
+	case "zmin", "bottom":
+		dim, whichHi = "z", false
+	case "zmax", "top":
+		dim, whichHi = "z", true
+	default:
+		return false
+	}
+	bounds, ok := meta.DimBounds[dim]
+	if !ok {
+		return false
+	}
+	idxPos := -1
+	for i, d := range meta.SpatialDims {
+		if d == dim {
+			idxPos = i
+			break
+		}
+	}
+	if idxPos < 0 {
+		return false
+	}
+	canonical := []string{"i", "j", "k", "l", "m"}
+	if idxPos >= len(canonical) {
+		return false
+	}
+	v, has := ctx.QueryPoint[canonical[idxPos]]
+	if !has {
+		return false
+	}
+	target := bounds[0]
+	if whichHi {
+		target = bounds[1]
+	}
+	return v == target
+}
+
+func evalWhereExpr(e Expression, b map[string]Expression, ctx RuleContext) bool {
+	if len(ctx.QueryPoint) == 0 {
+		return false
+	}
+	v, ok := evalScalar(e, b, ctx)
+	if !ok {
+		return false
+	}
+	return v.truthy()
+}
+
+// scalarValue is the dynamically-typed value produced by the where-expr
+// scalar interpreter. Bool/Int/Float discrimination mirrors the Rust
+// reference (rule_engine.rs::ScalarValue).
+type scalarValue struct {
+	kind  byte // 'b' bool, 'i' int, 'f' float
+	bool  bool
+	int   int64
+	float float64
+}
+
+func sBool(b bool) scalarValue    { return scalarValue{kind: 'b', bool: b} }
+func sInt(i int64) scalarValue    { return scalarValue{kind: 'i', int: i} }
+func sFloat(f float64) scalarValue { return scalarValue{kind: 'f', float: f} }
+
+func (s scalarValue) toFloat() float64 {
+	switch s.kind {
+	case 'b':
+		if s.bool {
+			return 1.0
+		}
+		return 0.0
+	case 'i':
+		return float64(s.int)
+	default:
+		return s.float
+	}
+}
+
+func (s scalarValue) truthy() bool {
+	switch s.kind {
+	case 'b':
+		return s.bool
+	case 'i':
+		return s.int != 0
+	default:
+		return s.float != 0
+	}
+}
+
+func evalScalar(e Expression, b map[string]Expression, ctx RuleContext) (scalarValue, bool) {
+	switch v := e.(type) {
+	case bool:
+		return sBool(v), true
+	case int:
+		return sInt(int64(v)), true
+	case int64:
+		return sInt(v), true
+	case float64:
+		return sFloat(v), true
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			return sInt(i), true
+		}
+		if f, err := v.Float64(); err == nil {
+			return sFloat(f), true
+		}
+		return scalarValue{}, false
+	case string:
+		if isPvarString(v) {
+			bound, has := b[v]
+			if !has {
+				return scalarValue{}, false
+			}
+			return evalScalar(bound, b, ctx)
+		}
+		i, has := ctx.QueryPoint[v]
+		if !has {
+			return scalarValue{}, false
+		}
+		return sInt(i), true
+	}
+	if node, ok := asExprNode(e); ok {
+		return evalOp(node, b, ctx)
+	}
+	return scalarValue{}, false
+}
+
+func evalOp(node ExprNode, b map[string]Expression, ctx RuleContext) (scalarValue, bool) {
+	args := make([]scalarValue, 0, len(node.Args))
+	for _, a := range node.Args {
+		sv, ok := evalScalar(a, b, ctx)
+		if !ok {
+			return scalarValue{}, false
+		}
+		args = append(args, sv)
+	}
+	switch node.Op {
+	case "==", "!=", "<", "<=", ">", ">=":
+		if len(args) != 2 {
+			return scalarValue{}, false
+		}
+		l, r := args[0].toFloat(), args[1].toFloat()
+		var out bool
+		switch node.Op {
+		case "==":
+			out = l == r
+		case "!=":
+			out = l != r
+		case "<":
+			out = l < r
+		case "<=":
+			out = l <= r
+		case ">":
+			out = l > r
+		case ">=":
+			out = l >= r
+		}
+		return sBool(out), true
+	case "+":
+		allInt := true
+		for _, a := range args {
+			if a.kind != 'i' {
+				allInt = false
+				break
+			}
+		}
+		if allInt {
+			var sum int64
+			for _, a := range args {
+				sum += a.int
+			}
+			return sInt(sum), true
+		}
+		var sum float64
+		for _, a := range args {
+			sum += a.toFloat()
+		}
+		return sFloat(sum), true
+	case "-":
+		if len(args) == 1 {
+			switch args[0].kind {
+			case 'i':
+				return sInt(-args[0].int), true
+			case 'f':
+				return sFloat(-args[0].float), true
+			default:
+				return scalarValue{}, false
+			}
+		}
+		if len(args) != 2 {
+			return scalarValue{}, false
+		}
+		if args[0].kind == 'i' && args[1].kind == 'i' {
+			return sInt(args[0].int - args[1].int), true
+		}
+		return sFloat(args[0].toFloat() - args[1].toFloat()), true
+	case "*":
+		allInt := true
+		for _, a := range args {
+			if a.kind != 'i' {
+				allInt = false
+				break
+			}
+		}
+		if allInt {
+			var prod int64 = 1
+			for _, a := range args {
+				prod *= a.int
+			}
+			return sInt(prod), true
+		}
+		prod := 1.0
+		for _, a := range args {
+			prod *= a.toFloat()
+		}
+		return sFloat(prod), true
+	case "and":
+		for _, a := range args {
+			if !a.truthy() {
+				return sBool(false), true
+			}
+		}
+		return sBool(true), true
+	case "or":
+		for _, a := range args {
+			if a.truthy() {
+				return sBool(true), true
+			}
+		}
+		return sBool(false), true
+	case "not":
+		if len(args) != 1 {
+			return scalarValue{}, false
+		}
+		return sBool(!args[0].truthy()), true
+	}
+	return scalarValue{}, false
 }
 
 // ============================================================================

@@ -59,10 +59,10 @@ class Rule:
     ``where`` guard list at the author level, structurally discriminated
     by JSON shape at parse time.
 
-    The Python binding parses both new forms (round-trip) but does not
-    evaluate them; rules carrying an object ``region`` or a ``where_expr``
-    are treated as disabled (conservative fall-through) by the rewrite
-    engine in this binding — equivalent to RFC §5.2.7's W_UNEVAL_SCOPE.
+    The Python binding evaluates ``region.index_range``, ``region.boundary``,
+    and the ``where_expr`` predicate per query point. ``region.panel_boundary``
+    and ``region.mask_field`` parse and round-trip but do not evaluate
+    (conservative fall-through, equivalent to RFC §5.2.7's W_UNEVAL_SCOPE).
     """
 
     name: str
@@ -75,16 +75,25 @@ class Rule:
 
 @dataclass
 class RuleContext:
-    """Context supplied to guard evaluation (RFC §5.2.4).
+    """Context supplied to guard and scope evaluation (RFC §5.2.4, §5.2.7).
 
     - ``grids``: per-grid metadata. Each entry may carry ``spatial_dims``,
-      ``periodic_dims``, ``nonuniform_dims`` (lists of strings).
+      ``periodic_dims``, ``nonuniform_dims`` (lists of strings) and
+      ``dim_bounds`` (dict mapping dim name to ``[lo, hi]``).
     - ``variables``: per-variable metadata. Each entry may carry ``grid``,
       ``location``, ``shape``.
+    - ``query_point``: per-query-point index bindings used to evaluate
+      RFC §5.2.7 region / where-expression scopes. Empty for ordinary
+      tree rewriting (scope-bearing rules then fall through).
+    - ``grid_name``: name of the grid the ``query_point`` refers to
+      (used to resolve ``region.boundary.side`` against
+      ``dim_bounds``).
     """
 
     grids: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     variables: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    query_point: Dict[str, int] = field(default_factory=dict)
+    grid_name: Optional[str] = None
 
 
 # ============================================================================
@@ -425,10 +434,7 @@ def _rewrite_pass(
         m2 = check_guards(rule.where, m, ctx)
         if m2 is None:
             continue
-        # RFC §5.2.7: rules carrying an object `region` or a `where_expr`
-        # are disabled in the Python binding (no per-query-point evaluator
-        # implemented). Conservative fall-through: skip to the next rule.
-        if isinstance(rule.region, Mapping) or rule.where_expr is not None:
+        if not check_scope(rule, m2, ctx):
             continue
         new_expr = apply_bindings(rule.replacement, m2)
         state["changed"] = True
@@ -437,6 +443,173 @@ def _rewrite_pass(
         new_args = [_rewrite_pass(a, rules, ctx, state) for a in expr.args]
         return replace(expr, args=new_args)
     return expr
+
+
+# ============================================================================
+# Scope evaluation — region object + where expression (RFC §5.2.7)
+# ============================================================================
+
+
+def check_scope(rule: Rule, bindings: Bindings, ctx: RuleContext) -> bool:
+    """Evaluate a rule's per-query-point scope.
+
+    Returns ``True`` when the rule should fire at the current query
+    point, ``False`` otherwise (conservative fall-through). A legacy
+    string ``region`` and a missing ``where_expr`` pass
+    unconditionally, preserving v0.2 semantics.
+    """
+    region = rule.region
+    if isinstance(region, Mapping) and not _eval_region(region, ctx):
+        return False
+    if rule.where_expr is not None and not _eval_where_expr(
+        rule.where_expr, bindings, ctx
+    ):
+        return False
+    return True
+
+
+_CANONICAL_INDEX_NAMES = ("i", "j", "k", "l", "m")
+
+
+def _eval_region(region: Mapping[str, Any], ctx: RuleContext) -> bool:
+    kind = region.get("kind")
+    if kind == "index_range":
+        axis = region.get("axis")
+        if not isinstance(axis, str):
+            return False
+        v = ctx.query_point.get(axis)
+        if v is None:
+            return False
+        lo = region.get("lo")
+        hi = region.get("hi")
+        if not isinstance(lo, int) or not isinstance(hi, int):
+            return False
+        return lo <= v <= hi
+    if kind == "boundary":
+        side = region.get("side")
+        return isinstance(side, str) and _eval_boundary(side, ctx)
+    # panel_boundary, mask_field: deferred — conservative fall-through.
+    return False
+
+
+def _eval_boundary(side: str, ctx: RuleContext) -> bool:
+    grid_name = ctx.grid_name
+    if grid_name is None:
+        return False
+    meta = ctx.grids.get(grid_name)
+    if meta is None:
+        return False
+    sides = {
+        "xmin": ("x", False), "west": ("x", False),
+        "xmax": ("x", True), "east": ("x", True),
+        "ymin": ("y", False), "south": ("y", False),
+        "ymax": ("y", True), "north": ("y", True),
+        "zmin": ("z", False), "bottom": ("z", False),
+        "zmax": ("z", True), "top": ("z", True),
+    }
+    if side not in sides:
+        return False
+    dim, which_hi = sides[side]
+    bounds = meta.get("dim_bounds", {}).get(dim)
+    if not isinstance(bounds, (list, tuple)) or len(bounds) != 2:
+        return False
+    spatial_dims = meta.get("spatial_dims", [])
+    try:
+        idx_pos = list(spatial_dims).index(dim)
+    except ValueError:
+        return False
+    if idx_pos >= len(_CANONICAL_INDEX_NAMES):
+        return False
+    idx_name = _CANONICAL_INDEX_NAMES[idx_pos]
+    v = ctx.query_point.get(idx_name)
+    if v is None:
+        return False
+    target = bounds[1] if which_hi else bounds[0]
+    return v == target
+
+
+def _eval_where_expr(expr: Expr, bindings: Bindings, ctx: RuleContext) -> bool:
+    if not ctx.query_point:
+        return False
+    val = _eval_scalar(expr, bindings, ctx)
+    if val is None:
+        return False
+    return bool(val)
+
+
+def _eval_scalar(e: Expr, b: Bindings, ctx: RuleContext):
+    if isinstance(e, bool):
+        return e
+    if isinstance(e, int):
+        return e
+    if isinstance(e, float):
+        return e
+    if isinstance(e, str):
+        if _is_pvar_string(e):
+            bound = b.get(e)
+            if bound is None:
+                return None
+            return _eval_scalar(bound, b, ctx)
+        v = ctx.query_point.get(e)
+        if v is None:
+            return None
+        return v
+    if isinstance(e, ExprNode):
+        return _eval_op(e, b, ctx)
+    return None
+
+
+def _eval_op(node: ExprNode, b: Bindings, ctx: RuleContext):
+    op = node.op
+    args = [_eval_scalar(a, b, ctx) for a in node.args]
+    if any(a is None for a in args):
+        return None
+    if op in ("==", "!=", "<", "<=", ">", ">="):
+        if len(args) != 2:
+            return None
+        left, right = float(args[0]), float(args[1])
+        return {
+            "==": left == right,
+            "!=": left != right,
+            "<": left < right,
+            "<=": left <= right,
+            ">": left > right,
+            ">=": left >= right,
+        }[op]
+    if op == "+":
+        if all(isinstance(a, int) and not isinstance(a, bool) for a in args):
+            return sum(args)
+        return sum(float(a) for a in args)
+    if op == "-":
+        if len(args) == 1:
+            return -args[0]
+        if len(args) != 2:
+            return None
+        left, right = args
+        if isinstance(left, int) and isinstance(right, int) and not isinstance(
+            left, bool
+        ) and not isinstance(right, bool):
+            return left - right
+        return float(left) - float(right)
+    if op == "*":
+        if all(isinstance(a, int) and not isinstance(a, bool) for a in args):
+            result = 1
+            for a in args:
+                result *= a
+            return result
+        result = 1.0
+        for a in args:
+            result *= float(a)
+        return result
+    if op == "and":
+        return all(bool(a) for a in args)
+    if op == "or":
+        return any(bool(a) for a in args)
+    if op == "not":
+        if len(args) != 1:
+            return None
+        return not bool(args[0])
+    return None
 
 
 # ============================================================================
