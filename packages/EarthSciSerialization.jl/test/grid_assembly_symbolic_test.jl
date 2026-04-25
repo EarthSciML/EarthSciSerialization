@@ -33,7 +33,7 @@ struct SymTestCartesianGrid <: AbstractCurvilinearGrid
 end
 
 _flat(g::SymTestCartesianGrid, i::Int, j::Int) = i + (j - 1) * g.Nx
-_sym_sym_wrap(idx::Int, n::Int) = mod(idx - 1, n) + 1
+_sym_wrap(idx::Int, n::Int) = mod(idx - 1, n) + 1
 
 EarthSciSerialization.n_cells(g::SymTestCartesianGrid) = g.Nx * g.Ny
 EarthSciSerialization.n_dims(g::SymTestCartesianGrid)  = 2
