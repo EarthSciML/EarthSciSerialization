@@ -24,6 +24,12 @@ using JSON3
                             bounds[String(dk)] = [Int(x) for x in dv]
                         end
                         entry[key] = bounds
+                    elseif key == "panel_connectivity"
+                        pc = Dict{String,Any}()
+                        for (tk, tv) in pairs(v2)
+                            pc[String(tk)] = [[Int(x) for x in row] for row in tv]
+                        end
+                        entry[key] = pc
                     else
                         entry[key] = [String(s) for s in v2]
                     end

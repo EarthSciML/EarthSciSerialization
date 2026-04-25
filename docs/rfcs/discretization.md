@@ -396,11 +396,13 @@ the evaluator lands. A load-time warning `W_UNEVAL_SCOPE` is
 recommended so authors know their rule is inert in that binding.
 
 **Conformance rollout.** The MVP for v0.3 requires Julia and Rust
-to evaluate `region.boundary`, `region.index_range`, and the
-expression form of `where`. `region.panel_boundary` and
-`region.mask_field` are deferred to v0.3.1 because they require
-grid-family integration (cubed_sphere seam metadata; loader field
-access) that is out of scope for v0.3.0.
+to evaluate `region.boundary`, `region.index_range`, `region.panel_boundary`,
+and the expression form of `where`. `region.panel_boundary` is
+cubed_sphere-only and requires `panel_connectivity` (§6.4) on the grid
+metadata as the runtime family marker; applying it to a grid without
+that marker MUST emit `E_REGION_GRID_MISMATCH` at rewrite time.
+`region.mask_field` remains deferred to v0.3.1 because it requires
+loader field access plumbing out of scope for v0.3.0.
 
 ### 5.3 `regrid` op (new)
 

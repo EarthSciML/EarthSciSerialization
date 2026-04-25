@@ -789,9 +789,55 @@ function _eval_region(r::RegionBoundary, b::Dict{String,Expr}, ctx::RuleContext)
     return v == target
 end
 
-# Deferred variants: parse round-trips but evaluation disables the rule
-# (W_UNEVAL_SCOPE) — per RFC §5.2.7 MVP rollout.
-_eval_region(::RegionPanelBoundary, ::Dict{String,Expr}, ::RuleContext) = false
+"""
+    _eval_region(r::RegionPanelBoundary, bindings, ctx) -> Bool
+
+Evaluate a `{kind:"panel_boundary", panel, side}` scope against
+`ctx.query_point` (RFC §5.2.7, §6.4). Cubed_sphere only.
+
+A grid is recognized as cubed_sphere when its metadata entry in
+`ctx.grids` carries a `"panel_connectivity"` sub-dict (the
+`neighbors` / `axis_flip` tables of §6.4). Applying the rule to a grid
+without that marker throws [`RuleEngineError`](@ref) with code
+`E_REGION_GRID_MISMATCH`.
+
+The canonical cubed_sphere query-point axes are `p`, `i`, `j` (§7 query-
+point table). `side` names map to the panel-local axes: `xmin`/`west` →
+`-i`, `xmax`/`east` → `+i`, `ymin`/`south` → `-j`, `ymax`/`north` → `+j`.
+Edge detection uses the `dim_bounds` entries on the grid; absence or a
+side name outside the closed set falls through (returns `false`).
+"""
+function _eval_region(r::RegionPanelBoundary, ::Dict{String,Expr}, ctx::RuleContext)::Bool
+    ctx.grid_name === nothing && return false
+    meta = get(ctx.grids, ctx.grid_name, nothing)
+    meta === nothing && return false
+    haskey(meta, "panel_connectivity") || throw(RuleEngineError(
+        "E_REGION_GRID_MISMATCH",
+        "rule region.panel_boundary applied to grid `$(ctx.grid_name)` " *
+        "which has no panel_connectivity metadata (cubed_sphere-only scope)"))
+    isempty(ctx.query_point) && return false
+    haskey(ctx.query_point, "p") || return false
+    ctx.query_point["p"] == r.panel || return false
+    side_map = Dict(
+        "xmin" => ("i", :lo), "xmax" => ("i", :hi),
+        "west" => ("i", :lo), "east" => ("i", :hi),
+        "ymin" => ("j", :lo), "ymax" => ("j", :hi),
+        "south" => ("j", :lo), "north" => ("j", :hi),
+    )
+    haskey(side_map, r.side) || return false
+    (axis, which) = side_map[r.side]
+    bounds = get(meta, "dim_bounds", nothing)
+    bounds === nothing && return false
+    haskey(bounds, axis) || return false
+    axis_bounds = bounds[axis]
+    target = which == :lo ? Int(axis_bounds[1]) : Int(axis_bounds[2])
+    haskey(ctx.query_point, axis) || return false
+    return ctx.query_point[axis] == target
+end
+
+# Deferred variant: parse round-trips but evaluation disables the rule
+# (W_UNEVAL_SCOPE) — per RFC §5.2.7 MVP rollout. (region.mask_field needs
+# data_loaders plumbing, tracked as follow-up.)
 _eval_region(::RegionMaskField, ::Dict{String,Expr}, ::RuleContext) = false
 
 """

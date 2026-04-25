@@ -157,6 +157,25 @@ pub struct GridMeta {
     /// `region.boundary` scope evaluation (RFC §5.2.7). Absence is
     /// equivalent to "scope disabled" (conservative fall-through).
     pub dim_bounds: HashMap<String, [i64; 2]>,
+    /// Cubed-sphere panel connectivity tables (RFC §6.4). Present only
+    /// on `cubed_sphere` grids; its presence is the runtime marker used
+    /// by `region.panel_boundary` scope evaluation (RFC §5.2.7) to
+    /// distinguish cubed-sphere from other grid families. Applying a
+    /// `panel_boundary`-scoped rule to a grid without this field emits
+    /// `E_REGION_GRID_MISMATCH`.
+    pub panel_connectivity: Option<PanelConnectivity>,
+}
+
+/// Cubed-sphere panel-connectivity tables (RFC §6.4). `neighbors[p][s]`
+/// gives the neighboring panel index at (panel `p`, side `s` ∈ {0:−i,
+/// 1:+i, 2:−j, 3:+j}); `axis_flip[p][s]` encodes the D₄ group element
+/// (§6.4.1) acting on local (Δi, Δj) displacements when crossing that
+/// seam. Consumed by `region.panel_boundary` scope evaluation and,
+/// downstream, by `regrid` with `method: "panel_seam"`.
+#[derive(Debug, Clone, Default)]
+pub struct PanelConnectivity {
+    pub neighbors: Vec<Vec<i64>>,
+    pub axis_flip: Vec<Vec<i64>>,
 }
 
 /// Subset of variable metadata consumed by the closed-set guards.
@@ -540,7 +559,7 @@ fn rewrite_pass(
     for rule in rules {
         if let Some(m) = match_pattern(&rule.pattern, expr)
             && let Some(m2) = check_guards(&rule.where_, &m, ctx)?
-            && check_scope(rule, &m2, ctx)
+            && check_scope(rule, &m2, ctx)?
         {
             let new_expr = apply_bindings(&rule.replacement, &m2)?;
             *changed = true;
@@ -797,32 +816,93 @@ pub fn parse_expr(v: &serde_json::Value) -> Result<Expr, RuleEngineError> {
 ///
 /// A legacy string `region` and a missing `where_expr` pass
 /// unconditionally, preserving v0.2 semantics.
-pub fn check_scope(rule: &Rule, bindings: &HashMap<String, Expr>, ctx: &RuleContext) -> bool {
+pub fn check_scope(
+    rule: &Rule,
+    bindings: &HashMap<String, Expr>,
+    ctx: &RuleContext,
+) -> Result<bool, RuleEngineError> {
     if let Some(region) = &rule.region
-        && !eval_region(region, ctx)
+        && !eval_region(region, ctx)?
     {
-        return false;
+        return Ok(false);
     }
     if let Some(where_expr) = &rule.where_expr
         && !eval_where_expr(where_expr, bindings, ctx)
     {
-        return false;
+        return Ok(false);
     }
-    true
+    Ok(true)
 }
 
-fn eval_region(region: &RuleRegion, ctx: &RuleContext) -> bool {
+fn eval_region(region: &RuleRegion, ctx: &RuleContext) -> Result<bool, RuleEngineError> {
     match region {
         // Legacy advisory tag: no runtime effect.
-        RuleRegion::Tag(_) => true,
-        RuleRegion::IndexRange { axis, lo, hi } => match ctx.query_point.get(axis) {
+        RuleRegion::Tag(_) => Ok(true),
+        RuleRegion::IndexRange { axis, lo, hi } => Ok(match ctx.query_point.get(axis) {
             Some(v) => lo <= v && v <= hi,
             None => false,
-        },
-        RuleRegion::Boundary { side } => eval_boundary(side, ctx),
-        // Deferred variants — round-trip only.
-        RuleRegion::PanelBoundary { .. } | RuleRegion::MaskField { .. } => false,
+        }),
+        RuleRegion::Boundary { side } => Ok(eval_boundary(side, ctx)),
+        RuleRegion::PanelBoundary { panel, side } => eval_panel_boundary(*panel, side, ctx),
+        // Deferred — mask_field needs data_loaders plumbing (follow-up).
+        RuleRegion::MaskField { .. } => Ok(false),
     }
+}
+
+/// Evaluate a `{kind:"panel_boundary", panel, side}` scope (RFC §5.2.7,
+/// §6.4). Cubed-sphere only: presence of `GridMeta::panel_connectivity`
+/// is the runtime marker for that family. Applying the scope to a grid
+/// without it emits `E_REGION_GRID_MISMATCH`.
+///
+/// Canonical cubed-sphere query-point axes are `p`, `i`, `j` (§7 query-
+/// point table). `side` names map to the panel-local axes:
+/// `xmin`/`west` → `-i`, `xmax`/`east` → `+i`, `ymin`/`south` → `-j`,
+/// `ymax`/`north` → `+j`. Edge detection uses `GridMeta::dim_bounds`;
+/// absent bounds or an unrecognised `side` fall through (returns `Ok(false)`).
+fn eval_panel_boundary(
+    panel: i64,
+    side: &str,
+    ctx: &RuleContext,
+) -> Result<bool, RuleEngineError> {
+    let Some(grid_name) = &ctx.grid_name else {
+        return Ok(false);
+    };
+    let Some(meta) = ctx.grids.get(grid_name) else {
+        return Ok(false);
+    };
+    if meta.panel_connectivity.is_none() {
+        return Err(RuleEngineError::new(
+            "E_REGION_GRID_MISMATCH",
+            format!(
+                "rule region.panel_boundary applied to grid `{grid_name}` \
+                 which has no panel_connectivity metadata (cubed_sphere-only scope)"
+            ),
+        ));
+    }
+    if ctx.query_point.is_empty() {
+        return Ok(false);
+    }
+    let Some(p) = ctx.query_point.get("p") else {
+        return Ok(false);
+    };
+    if *p != panel {
+        return Ok(false);
+    }
+    let (axis, which_hi) = match side {
+        "xmin" | "west" => ("i", false),
+        "xmax" | "east" => ("i", true),
+        "ymin" | "south" => ("j", false),
+        "ymax" | "north" => ("j", true),
+        _ => return Ok(false),
+    };
+    let Some(bounds) = meta.dim_bounds.get(axis) else {
+        return Ok(false);
+    };
+    let Some(v) = ctx.query_point.get(axis) else {
+        return Ok(false);
+    };
+    let target = if which_hi { bounds[1] } else { bounds[0] };
+    Ok(*v == target)
 }
 
 fn eval_boundary(side: &str, ctx: &RuleContext) -> bool {
@@ -1319,6 +1399,23 @@ mod tests {
                             meta.dim_bounds.insert(dk.clone(), [lo, hi]);
                         }
                     }
+                }
+                if let Some(pc) = v.get("panel_connectivity").and_then(|x| x.as_object()) {
+                    let parse_table = |key: &str| -> Vec<Vec<i64>> {
+                        pc.get(key)
+                            .and_then(|x| x.as_array())
+                            .map(|rows| {
+                                rows.iter()
+                                    .filter_map(|r| r.as_array())
+                                    .map(|r| r.iter().filter_map(|x| x.as_i64()).collect())
+                                    .collect()
+                            })
+                            .unwrap_or_default()
+                    };
+                    meta.panel_connectivity = Some(PanelConnectivity {
+                        neighbors: parse_table("neighbors"),
+                        axis_flip: parse_table("axis_flip"),
+                    });
                 }
                 out.grids.insert(k.clone(), meta);
             }
