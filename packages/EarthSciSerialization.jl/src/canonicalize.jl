@@ -49,7 +49,8 @@ function canonicalize(e::OpExpr)
                   wrt=e.wrt, dim=e.dim, output_idx=e.output_idx,
                   expr_body=e.expr_body, reduce=e.reduce, ranges=e.ranges,
                   regions=e.regions, values=e.values, shape=e.shape,
-                  perm=e.perm, axis=e.axis, fn=e.fn, handler_id=e.handler_id)
+                  perm=e.perm, axis=e.axis, fn=e.fn,
+                  name=e.name, value=e.value)
     if work.op == "+"
         return _canon_add(work)
     elseif work.op == "*"
@@ -279,8 +280,11 @@ function _emit_node_json(n::OpExpr)::String
     if n.dim !== nothing
         push!(entries, ("dim", _json_string(n.dim::String)))
     end
-    if n.handler_id !== nothing
-        push!(entries, ("handler_id", _json_string(n.handler_id::String)))
+    if n.name !== nothing
+        push!(entries, ("name", _json_string(n.name::String)))
+    end
+    if n.value !== nothing
+        push!(entries, ("value", _emit_canonical_value(n.value)))
     end
     sort!(entries, by = kv -> kv[1])
     body = join(("$(_json_string(k)):$v" for (k, v) in entries), ",")
@@ -291,6 +295,26 @@ function _json_string(s::AbstractString)::String
     # Use JSON3 to escape, but JSON3.write returns a string with surrounding
     # quotes. Strip and re-quote to avoid newlines/etc.
     return JSON3.write(String(s))
+end
+
+# Canonical JSON for `const`-op values. Values are JSON-typed (integer,
+# Float64, AbstractString, or nested arrays thereof per esm-spec §4.2 / §9.2).
+# Floats use the same canonical-float formatter as `NumExpr`; integers emit
+# as bare digit-only tokens; arrays recurse element-wise.
+function _emit_canonical_value(v)::String
+    if v isa Bool
+        return v ? "true" : "false"
+    elseif v isa Integer
+        return string(v)
+    elseif v isa AbstractFloat
+        return format_canonical_float(Float64(v))
+    elseif v isa AbstractString
+        return _json_string(v)
+    elseif v isa AbstractArray
+        return "[" * join((_emit_canonical_value(x) for x in v), ",") * "]"
+    end
+    throw(CanonicalizeError("E_CANONICAL_NONFINITE",
+        "unsupported `const` value type: $(typeof(v))"))
 end
 
 """

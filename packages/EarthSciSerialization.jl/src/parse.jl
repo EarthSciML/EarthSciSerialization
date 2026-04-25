@@ -59,12 +59,12 @@ function parse_expression(data::Any)::Expr
         return _parse_op_dict(data, "op", "args", "wrt", "dim",
                               "output_idx", "expr", "reduce", "ranges",
                               "regions", "values", "shape", "perm", "axis", "fn",
-                              "handler_id")
+                              "name", "value")
     elseif hasfield(typeof(data), :op) || (hasmethod(haskey, (typeof(data), String)) && haskey(data, "op"))
         return _parse_op_dict(data, :op, :args, :wrt, :dim,
                               :output_idx, :expr, :reduce, :ranges,
                               :regions, :values, :shape, :perm, :axis, :fn,
-                              :handler_id)
+                              :name, :value)
     else
         throw(ParseError("Invalid expression format: expected number, string, or object with 'op' field. Got: $(typeof(data))"))
     end
@@ -75,8 +75,16 @@ end
 function _parse_op_dict(data, kop, kargs, kwrt, kdim,
                         koutput_idx, kexpr, kreduce, kranges,
                         kregions, kvalues, kshape, kperm, kaxis, kfn,
-                        khandler_id)
+                        kname, kvalue)
     op = string(data[kop])
+    if op == "call"
+        # The `call` op + `registered_functions` extension point was removed in
+        # v0.3.0 (esm-spec §9 closure, RFC `closed-function-registry.md`).
+        # Files written against the v0.2.x escape hatch must migrate to AST
+        # ops or `fn` invocations of closed registry entries.
+        throw(ParseError("`call` op is not valid in v0.3.0+ (removed by esm-spec §9 closure). " *
+                         "Migrate to AST ops or `fn` invocations of the closed function registry."))
+    end
     args_data = get(data, kargs, [])
     args = Vector{EarthSciSerialization.Expr}([parse_expression(arg) for arg in args_data])
     wrt = get(data, kwrt, nothing)
@@ -99,15 +107,21 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     axis_int = axis_val === nothing ? nothing : Int(axis_val)
     fn_val = get(data, kfn, nothing)
     fn_str = fn_val === nothing ? nothing : string(fn_val)
-    handler_id_val = get(data, khandler_id, nothing)
-    handler_id_str = handler_id_val === nothing ? nothing : string(handler_id_val)
+    name_val = get(data, kname, nothing)
+    name_str = name_val === nothing ? nothing : string(name_val)
+    value_raw = get(data, kvalue, nothing)
+    # `const` value is JSON-typed (number, integer, or nested array); convert
+    # JSON3 arrays / objects to native Julia containers so downstream code
+    # doesn't have to special-case JSON3 types.
+    value_native = value_raw === nothing ? nothing : _to_native_json(value_raw)
 
     return OpExpr(op, args;
         wrt=(wrt === nothing ? nothing : string(wrt)),
         dim=(dim === nothing ? nothing : string(dim)),
         output_idx=output_idx, expr_body=expr_body, reduce=reduce_str,
         ranges=ranges, regions=regions, values=values_vec, shape=shape_vec,
-        perm=perm_vec, axis=axis_int, fn=fn_str, handler_id=handler_id_str)
+        perm=perm_vec, axis=axis_int, fn=fn_str,
+        name=name_str, value=value_native)
 end
 
 function _coerce_output_idx(data)
@@ -273,13 +287,22 @@ function coerce_esm_file(data::Any)::EsmFile
     end
 
     operators = if haskey(data, :operators) && data.operators !== nothing
-        Dict{String,Operator}(string(k) => coerce_operator(v) for (k, v) in pairs(data.operators))
+        # esm-spec v0.3.0 (§9 closure) removed the top-level `operators` block:
+        # Track-A parameterizations migrate to AST + closed-function calls;
+        # Track-B state-mutating schemes route through the discretization
+        # RFC's named schemes (`docs/rfcs/closed-function-registry.md` §6).
+        # File-loaded `operators` are now a hard error.
+        throw(ParseError("`operators` block is not valid in v0.3.0+ " *
+                         "(removed by esm-spec §9 closure). Migrate per " *
+                         "`docs/rfcs/closed-function-registry.md` §6."))
     else
         nothing
     end
 
     registered_functions = if haskey(data, :registered_functions) && data.registered_functions !== nothing
-        Dict{String,RegisteredFunction}(string(k) => coerce_registered_function(v) for (k, v) in pairs(data.registered_functions))
+        throw(ParseError("`registered_functions` block is not valid in v0.3.0+ " *
+                         "(removed by esm-spec §9 closure). Use the closed " *
+                         "function registry via `fn` ops with spec-defined names."))
     else
         nothing
     end
@@ -324,7 +347,17 @@ function coerce_esm_file(data::Any)::EsmFile
         nothing
     end
 
-    return EsmFile(esm, metadata,
+    # File-local enum mappings (esm-spec §9.3). Used by the `enum` AST op to
+    # carry symbolic categorical labels in the source while the on-disk file
+    # is loaded; `enum` ops are then lowered to integer `const` nodes
+    # immediately after parsing so the in-memory tree never carries strings.
+    enums = if haskey(data, :enums) && data.enums !== nothing
+        coerce_enums(data.enums)
+    else
+        nothing
+    end
+
+    file = EsmFile(esm, metadata,
                   models=models,
                   reaction_systems=reaction_systems,
                   data_loaders=data_loaders,
@@ -335,7 +368,61 @@ function coerce_esm_file(data::Any)::EsmFile
                   interfaces=interfaces,
                   grids=grids,
                   staggering_rules=staggering_rules,
-                  discretizations=discretizations)
+                  discretizations=discretizations,
+                  enums=enums)
+    # Lower every `enum` op to a `const` integer using the file-local map.
+    # This runs once at load time so downstream consumers (evaluators,
+    # canonicalize, codegen) never see enum strings in expression trees.
+    lower_enums!(file)
+    return file
+end
+
+"""
+    coerce_enums(data) -> Dict{String,Dict{String,Int}}
+
+Coerce the top-level `enums` JSON block into the typed map carried on
+[`EsmFile`](@ref). Validates per esm-spec §9.3:
+
+- enum names are non-empty strings
+- symbolic keys are non-empty strings
+- values are positive integers
+- within a single enum, integer values are unique
+
+Throws [`ParseError`](@ref) on any violation.
+"""
+function coerce_enums(data)::Dict{String,Dict{String,Int}}
+    out = Dict{String,Dict{String,Int}}()
+    for (enum_name_raw, mapping_raw) in pairs(data)
+        enum_name = string(enum_name_raw)
+        if isempty(enum_name)
+            throw(ParseError("enums: enum name must be non-empty"))
+        end
+        if !(mapping_raw isa AbstractDict || mapping_raw isa JSON3.Object)
+            throw(ParseError("enums.$(enum_name): mapping must be a JSON object"))
+        end
+        mapping = Dict{String,Int}()
+        seen_values = Set{Int}()
+        for (sym_raw, int_raw) in pairs(mapping_raw)
+            sym = string(sym_raw)
+            if isempty(sym)
+                throw(ParseError("enums.$(enum_name): symbol name must be non-empty"))
+            end
+            if !(int_raw isa Integer) || int_raw isa Bool
+                throw(ParseError("enums.$(enum_name).$(sym): value must be a positive integer (got $(typeof(int_raw)))"))
+            end
+            int_v = Int(int_raw)
+            if int_v <= 0
+                throw(ParseError("enums.$(enum_name).$(sym): value must be a positive integer (got $(int_v))"))
+            end
+            if int_v in seen_values
+                throw(ParseError("enums.$(enum_name): integer value $(int_v) is duplicated"))
+            end
+            push!(seen_values, int_v)
+            mapping[sym] = int_v
+        end
+        out[enum_name] = mapping
+    end
+    return out
 end
 
 # Closed set of allowed builtin generator names (RFC §6.4.1).

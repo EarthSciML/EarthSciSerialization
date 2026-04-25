@@ -260,7 +260,7 @@ function apply_bindings(template::Expr, b::Dict{String,Expr})::Expr
                       regions=template.regions, values=template.values,
                       shape=template.shape, perm=template.perm,
                       axis=template.axis, fn=template.fn,
-                      handler_id=template.handler_id)
+                      name=template.name, value=template.value)
     end
     return template
 end
@@ -553,7 +553,7 @@ function _rewrite_pass(expr::Expr, rules::Vector{Rule}, ctx::RuleContext,
                       regions=expr.regions, values=expr.values,
                       shape=expr.shape, perm=expr.perm,
                       axis=expr.axis, fn=expr.fn,
-                      handler_id=expr.handler_id)
+                      name=expr.name, value=expr.value)
     end
     return expr
 end

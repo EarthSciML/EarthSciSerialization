@@ -1,0 +1,99 @@
+{
+  "function": "interp.searchsorted",
+  "tolerance": { "abs": 0, "rel": 0 },
+  "_comment": "Cross-binding conformance reference for interp.searchsorted (esm-spec §9.2). Index outputs are exact (no rounding tolerance). Each `success` scenario gives positional inputs [x, xs] and the expected 1-based index. The `error` scenarios pin spec-defined load-time errors and identify the diagnostic code each binding MUST raise. Bindings construct the table via {op: const, value: [...]} in the .esm; this expected.json carries the same arrays so the harness can drive the function directly without re-parsing.",
+  "scenarios": [
+    {
+      "name": "exact_on_boundary",
+      "description": "x = 2.0 lands exactly on xs[2]. Spec left-bias returns 2.",
+      "inputs": [ 2.0, [1.0, 2.0, 3.0, 4.0, 5.0] ],
+      "expected": 2
+    },
+    {
+      "name": "between_entries",
+      "description": "x = 2.5 falls strictly between xs[2] and xs[3]; smallest i with xs[i] ≥ 2.5 is 3.",
+      "inputs": [ 2.5, [1.0, 2.0, 3.0, 4.0, 5.0] ],
+      "expected": 3
+    },
+    {
+      "name": "below_minimum",
+      "description": "x < xs[1] → return 1 (clamp position at the lower end).",
+      "inputs": [ 0.5, [1.0, 2.0, 3.0, 4.0, 5.0] ],
+      "expected": 1
+    },
+    {
+      "name": "exact_at_first",
+      "description": "x = xs[1] returns 1 (left-bias on duplicates / exact matches).",
+      "inputs": [ 1.0, [1.0, 2.0, 3.0, 4.0, 5.0] ],
+      "expected": 1
+    },
+    {
+      "name": "above_maximum",
+      "description": "x > xs[N] → return N+1 (one past the end). For this 5-element table, expected = 6.",
+      "inputs": [ 10.0, [1.0, 2.0, 3.0, 4.0, 5.0] ],
+      "expected": 6
+    },
+    {
+      "name": "exact_at_last",
+      "description": "x = xs[N] returns N (still satisfies xs[i] ≥ x with smallest i).",
+      "inputs": [ 5.0, [1.0, 2.0, 3.0, 4.0, 5.0] ],
+      "expected": 5
+    },
+    {
+      "name": "nan_x",
+      "description": "NaN x is treated as 'greater than every finite element' → return N+1 = 6.",
+      "inputs": [ "NaN", [1.0, 2.0, 3.0, 4.0, 5.0] ],
+      "expected": 6
+    },
+    {
+      "name": "single_element_below",
+      "description": "Single-element table; x below the entry returns 1.",
+      "inputs": [ 0.5, [3.0] ],
+      "expected": 1
+    },
+    {
+      "name": "single_element_at",
+      "description": "Single-element table; x equal to the entry returns 1.",
+      "inputs": [ 3.0, [3.0] ],
+      "expected": 1
+    },
+    {
+      "name": "single_element_above",
+      "description": "Single-element table; x above the entry returns N+1 = 2.",
+      "inputs": [ 5.0, [3.0] ],
+      "expected": 2
+    },
+    {
+      "name": "duplicates_left_bias",
+      "description": "Duplicates in xs: returned index is the smallest i with xs[i] ≥ x. For x = 2.0 and xs = [1, 2, 2, 2, 3], expected = 2.",
+      "inputs": [ 2.0, [1.0, 2.0, 2.0, 2.0, 3.0] ],
+      "expected": 2
+    },
+    {
+      "name": "duplicates_below_run",
+      "description": "Duplicates: x just below the run still returns the start of the run.",
+      "inputs": [ 1.999999, [1.0, 2.0, 2.0, 2.0, 3.0] ],
+      "expected": 2
+    },
+    {
+      "name": "non_decreasing_allowed",
+      "description": "Spec says 'non-decreasing' (not strictly increasing); equal-adjacent xs are valid. With xs = [1, 1, 2, 2, 3], x = 1.5 returns the smallest i with xs[i] ≥ 1.5 = 3.",
+      "inputs": [ 1.5, [1.0, 1.0, 2.0, 2.0, 3.0] ],
+      "expected": 3
+    }
+  ],
+  "error_scenarios": [
+    {
+      "name": "non_monotonic_xs",
+      "description": "xs is not non-decreasing — bindings MUST reject at the call (or load) site with diagnostic code 'searchsorted_non_monotonic'.",
+      "inputs": [ 2.0, [1.0, 3.0, 2.0, 4.0, 5.0] ],
+      "expected_error_code": "searchsorted_non_monotonic"
+    },
+    {
+      "name": "nan_in_xs",
+      "description": "xs contains a NaN entry — bindings MUST reject with diagnostic code 'searchsorted_nan_in_table'.",
+      "inputs": [ 2.0, [1.0, "NaN", 3.0, 4.0, 5.0] ],
+      "expected_error_code": "searchsorted_nan_in_table"
+    }
+  ]
+}

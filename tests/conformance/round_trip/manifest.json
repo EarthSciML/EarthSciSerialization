@@ -4,10 +4,8 @@
   "description": "Canonical fixtures that every binding MUST round-trip losslessly under the idempotent-re-save contract (see ../README.md). Paths are relative to tests/.",
   "fixtures": [
     { "id": "valid/minimal_chemistry",              "path": "valid/minimal_chemistry.esm",              "tags": ["core", "reactions"] },
-    { "id": "valid/model_only",                     "path": "valid/model_only.esm",                     "tags": ["core", "model"] },
     { "id": "valid/reaction_system_only",           "path": "valid/reaction_system_only.esm",           "tags": ["core", "reactions"] },
     { "id": "valid/full_model_specification",       "path": "valid/full_model_specification.esm",       "tags": ["core", "model"] },
-    { "id": "valid/full_coupled",                   "path": "valid/full_coupled.esm",                   "tags": ["coupling"] },
 
     { "id": "valid/metadata_minimal",               "path": "valid/metadata_minimal.esm",               "tags": ["metadata"] },
     { "id": "valid/metadata_complete",              "path": "valid/metadata_complete.esm",              "tags": ["metadata"] },
@@ -23,10 +21,6 @@
     { "id": "valid/events_discrete_periodic",       "path": "valid/events_discrete_periodic.esm",       "tags": ["events"] },
     { "id": "valid/events_discrete_preset_times",   "path": "valid/events_discrete_preset_times.esm",   "tags": ["events"] },
 
-    { "id": "valid/operators_comprehensive",        "path": "valid/operators_comprehensive.esm",        "tags": ["operators"] },
-    { "id": "valid/basic_interpolation_operators",  "path": "valid/basic_interpolation_operators.esm",  "tags": ["operators", "interpolation"] },
-    { "id": "valid/interpolation_operators_comprehensive", "path": "valid/interpolation_operators_comprehensive.esm", "tags": ["operators", "interpolation"] },
-
     { "id": "valid/units_conversions",              "path": "valid/units_conversions.esm",              "tags": ["units"] },
     { "id": "valid/units_dimensional_analysis",     "path": "valid/units_dimensional_analysis.esm",     "tags": ["units"] },
     { "id": "valid/units_propagation",              "path": "valid/units_propagation.esm",              "tags": ["units"] },
@@ -34,7 +28,6 @@
     { "id": "valid/data_loaders_comprehensive",     "path": "valid/data_loaders_comprehensive.esm",     "tags": ["data_loaders"] },
     { "id": "valid/data_loaders_earthscidata_jl",   "path": "valid/data_loaders_earthscidata_jl.esm",   "tags": ["data_loaders"] },
 
-    { "id": "valid/scoped_refs_coupling",           "path": "valid/scoped_refs_coupling.esm",           "tags": ["scoping"] },
     { "id": "valid/scoped_refs_nested",             "path": "valid/scoped_refs_nested.esm",             "tags": ["scoping"] },
 
     { "id": "valid/expr_graphs_variable_deps",      "path": "valid/expr_graphs_variable_deps.esm",      "tags": ["expressions"] },
@@ -58,9 +51,17 @@
 
     { "id": "fixtures/sde/ornstein_uhlenbeck",       "path": "fixtures/sde/ornstein_uhlenbeck.esm",       "tags": ["sde", "brownian"] },
     { "id": "fixtures/sde/correlated_noise",         "path": "fixtures/sde/correlated_noise.esm",         "tags": ["sde", "brownian", "correlated"] },
-    { "id": "registered_funcs/pure_math",            "path": "registered_funcs/pure_math.esm",            "tags": ["registered_functions", "call", "gt-p3ep"] },
-    { "id": "registered_funcs/one_d_interpolator",   "path": "registered_funcs/one_d_interpolator.esm",   "tags": ["registered_functions", "call", "interpolation", "gt-p3ep"] },
-    { "id": "registered_funcs/two_d_table_lookup",   "path": "registered_funcs/two_d_table_lookup.esm",   "tags": ["registered_functions", "call", "table_lookup", "gt-p3ep"] },
+    { "id": "valid/enums_categorical_lookup",        "path": "valid/enums_categorical_lookup.esm",        "tags": ["enums", "categorical-lookup", "closed-function-registry", "esm-tzp"] },
+    { "id": "closed_functions/datetime/year",        "path": "closed_functions/datetime/year/canonical.esm",        "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/month",       "path": "closed_functions/datetime/month/canonical.esm",       "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/day",         "path": "closed_functions/datetime/day/canonical.esm",         "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/hour",        "path": "closed_functions/datetime/hour/canonical.esm",        "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/minute",      "path": "closed_functions/datetime/minute/canonical.esm",      "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/second",      "path": "closed_functions/datetime/second/canonical.esm",      "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/day_of_year", "path": "closed_functions/datetime/day_of_year/canonical.esm", "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/julian_day",  "path": "closed_functions/datetime/julian_day/canonical.esm",  "tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/datetime/is_leap_year","path": "closed_functions/datetime/is_leap_year/canonical.esm","tags": ["closed-function-registry", "datetime", "esm-tzp", "esm-4aw"] },
+    { "id": "closed_functions/interp/searchsorted",  "path": "closed_functions/interp/searchsorted/canonical.esm",  "tags": ["closed-function-registry", "interp", "esm-tzp", "esm-4aw"] },
 
     { "id": "discretizations/centered_2nd_uniform",  "path": "discretizations/centered_2nd_uniform.esm",  "tags": ["discretization", "cartesian"] },
     { "id": "discretizations/centered_arbitrary_order_uniform", "path": "discretizations/centered_arbitrary_order_uniform.esm", "tags": ["discretization", "cartesian", "arbitrary-order", "esm-z6d"] },

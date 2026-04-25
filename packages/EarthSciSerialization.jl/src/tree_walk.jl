@@ -285,18 +285,64 @@ function _compile(expr::VarExpr, var_map, param_syms, reg_funcs)
     throw(TreeWalkError("E_TREEWALK_UNBOUND_VARIABLE", name))
 end
 function _compile(expr::OpExpr, var_map, param_syms, reg_funcs)
+    op_sym = Symbol(expr.op)
+    handler = nothing
+    if op_sym === :fn
+        # Closed function registry (esm-spec §9.2 / esm-tzp). The function
+        # name is captured in the node's `handler` slot as a tuple of
+        # (name::String, const_array_or_nothing). For
+        # `interp.searchsorted` the second arg is a const-op array which
+        # we pre-extract so the runtime hot path doesn't walk the AST.
+        fname = expr.name
+        fname === nothing &&
+            throw(TreeWalkError("E_TREEWALK_FN_MISSING_NAME", expr.op))
+        if !(fname in _CLOSED_FUNCTION_NAMES)
+            throw(TreeWalkError("E_TREEWALK_UNKNOWN_CLOSED_FUNCTION", fname))
+        end
+        if fname == "interp.searchsorted"
+            length(expr.args) == 2 ||
+                throw(TreeWalkError("E_TREEWALK_FN_ARITY",
+                    "interp.searchsorted expects 2 args, got $(length(expr.args))"))
+            tab = expr.args[2]
+            if !(tab isa OpExpr && tab.op == "const" && tab.value isa AbstractVector)
+                throw(TreeWalkError("E_TREEWALK_FN_ARG_NOT_CONST",
+                    "interp.searchsorted: 2nd arg must be a `const`-op array"))
+            end
+            # Compile only the scalar first arg as a child; carry the
+            # constant array on the node so the runtime call is one
+            # _eval_node + one closed-function dispatch.
+            children = _Node[_compile(expr.args[1], var_map, param_syms, reg_funcs)]
+            handler = (fname, tab.value)
+        else
+            children = _Node[_compile(a, var_map, param_syms, reg_funcs)
+                             for a in expr.args]
+            handler = (fname, nothing)
+        end
+        return _mknode(kind=_NK_OP, op=op_sym, children=children, handler=handler)
+    end
+
     children = _Node[_compile(a, var_map, param_syms, reg_funcs)
                      for a in expr.args]
-    handler = nothing
-    op_sym = Symbol(expr.op)
-    if op_sym === :call
-        hid = expr.handler_id
-        hid === nothing &&
-            throw(TreeWalkError("E_TREEWALK_CALL_MISSING_HANDLER", expr.op))
-        h = get(reg_funcs, hid, nothing)
-        h === nothing &&
-            throw(TreeWalkError("E_TREEWALK_CALL_UNKNOWN_HANDLER", hid))
-        handler = h
+    if op_sym === :const
+        # Scalar `const` ops fold to a literal at compile time. Non-scalar
+        # `const` only ever appears as an argument to ops that consume
+        # arrays (handled in their respective compile paths above).
+        v = expr.value
+        if v isa Real && !(v isa Bool)
+            return _mknode(kind=_NK_LITERAL, literal=Float64(v))
+        end
+        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
+            "non-scalar `const` op outside an array-consuming position"))
+    elseif op_sym === :enum
+        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
+            "`enum` op encountered after lowering — call `lower_enums!` before compile"))
+    elseif op_sym === :call
+        # Removed in v0.3.0 (esm-spec §9 closure). `parse_expression` already
+        # rejects file-loaded `call` ops; reaching this arm means a caller
+        # constructed a `call` OpExpr programmatically.
+        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
+            "`call` op was removed in v0.3.0 — migrate to `fn` ops " *
+            "or AST equations (esm-spec §9 closure, RFC closed-function-registry)"))
     elseif op_sym === :D
         throw(TreeWalkError("E_TREEWALK_D_IN_RHS",
                             "D(...) only allowed in equation LHS"))
@@ -450,9 +496,18 @@ function _eval_node_op(n::_Node, u, p, t)
         _expect_arity_n(op, c, 1)
         return _eval_node(c[1], u, p, t)
 
-    elseif op === :call
-        args_evaluated = Any[_eval_node(ci, u, p, t) for ci in c]
-        return Float64(n.handler(args_evaluated...))
+    elseif op === :fn
+        # `n.handler` is `(fname::String, const_array_or_nothing)`. The
+        # handler tuple's array is `nothing` for everything except
+        # `interp.searchsorted`, where it carries the precompiled table.
+        fname, tab = n.handler::Tuple{String,Any}
+        if tab === nothing
+            args_evaluated = Any[_eval_node(ci, u, p, t) for ci in c]
+            return Float64(evaluate_closed_function(fname, args_evaluated))
+        else
+            x = _eval_node(c[1], u, p, t)
+            return Float64(evaluate_closed_function(fname, Any[x, tab]))
+        end
 
     else
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP", String(op)))
@@ -522,7 +577,7 @@ function _sub_preserving(expr::OpExpr, bindings::Dict{String,Expr})
                   reduce=expr.reduce, ranges=expr.ranges,
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
-                  fn=expr.fn, handler_id=expr.handler_id)
+                  fn=expr.fn, name=expr.name, value=expr.value)
 end
 
 # Resolve observed-into-observed substitutions to a fixed point. After

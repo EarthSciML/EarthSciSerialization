@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://earthsciml.org/schemas/esm/0.2.0/esm.schema.json",
+  "$id": "https://earthsciml.org/schemas/esm/0.3.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.2.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.2.0 promotes boundary_conditions from a domain property to a first-class model-level section (see docs/rfcs/discretization.md §9). Files declaring domains.<d>.boundary_conditions are no longer valid under this schema and must be migrated via the spec.migrate_0_1_to_0_2 convention (RFC §16.1).",
+  "description": "EarthSciML Serialization Format (v0.3.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.3.0 closes the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family and `interp.searchsorted`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
   "type": "object",
   "required": ["esm", "metadata"],
   "additionalProperties": false,
@@ -32,15 +32,10 @@
       "description": "External data source registrations (by reference).",
       "additionalProperties": { "$ref": "#/$defs/DataLoader" }
     },
-    "operators": {
+    "enums": {
       "type": "object",
-      "description": "Registered runtime operators (by reference).",
-      "additionalProperties": { "$ref": "#/$defs/Operator" }
-    },
-    "registered_functions": {
-      "type": "object",
-      "description": "Registry of named pure functions that may be invoked inside expressions via the 'call' op. Each entry names a handler the runtime binds to a concrete implementation (e.g. an interpolation table lookup, a @register_symbolic stub in Julia).",
-      "additionalProperties": { "$ref": "#/$defs/RegisteredFunction" }
+      "description": "File-local symbol-to-positive-integer mappings used by the 'enum' AST op to make categorical lookups cross-binding-portable. Each entry is an enum name; its value is an object mapping symbolic names (strings) to positive integers. Two .esm files may declare an enum of the same name with different mappings; enums are file-local and never merged across files. See esm-spec.md §9.3.",
+      "additionalProperties": { "$ref": "#/$defs/EnumDeclaration" }
     },
     "coupling": {
       "type": "array",
@@ -159,7 +154,7 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "call", "bc"
+            "fn", "enum", "const", "bc"
           ]
         },
         "args": {
@@ -250,9 +245,12 @@
           "type": "string",
           "description": "For broadcast: the name of the scalar operator to apply element-wise to the operands in args. Must be an ExpressionNode op name drawn from the scalar subset (arithmetic, elementary functions, comparisons, etc.)."
         },
-        "handler_id": {
+        "name": {
           "type": "string",
-          "description": "For call: the identifier of a registered function (a key in the top-level `registered_functions` map). The handler receives the evaluated `args` positionally."
+          "description": "For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted."
+        },
+        "value": {
+          "description": "For const: the inline literal value carried by this expression node. Any JSON number, integer, or nested array thereof. `args` MUST be empty for a const node."
         },
         "kind": {
           "type": "string",
@@ -287,8 +285,25 @@
           "then": { "required": ["axis"] }
         },
         {
-          "if": { "properties": { "op": { "const": "call" } }, "required": ["op"] },
-          "then": { "required": ["handler_id"] }
+          "if": { "properties": { "op": { "const": "fn" } }, "required": ["op"] },
+          "then": { "required": ["name"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "const" } }, "required": ["op"] },
+          "then": { "required": ["value"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "enum" } }, "required": ["op"] },
+          "then": {
+            "properties": {
+              "args": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": { "type": "string" }
+              }
+            }
+          }
         },
         {
           "if": { "properties": { "op": { "const": "bc" } }, "required": ["op"] },
@@ -1403,96 +1418,13 @@
       ]
     },
 
-    "RegisteredFunction": {
+    "EnumDeclaration": {
       "type": "object",
-      "description": "A named pure function that may be invoked inside an expression via the 'call' op. Analogous to Operator, but intended for side-effect-free callables embedded directly in expression trees (e.g. interpolation handlers, Julia @register_symbolic stubs, table lookups).",
-      "required": ["id", "signature"],
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Registered identifier. Must match the key in the `registered_functions` map and the `handler_id` used by 'call' op nodes that reference this function."
-        },
-        "signature": {
-          "type": "object",
-          "description": "Calling convention.",
-          "required": ["arg_count"],
-          "additionalProperties": false,
-          "properties": {
-            "arg_count": {
-              "type": "integer",
-              "minimum": 0,
-              "description": "Number of positional arguments the handler expects."
-            },
-            "arg_types": {
-              "type": "array",
-              "description": "Optional per-argument type hints. Each entry is one of 'scalar', 'array', 'index'. When present the array length must equal arg_count.",
-              "items": {
-                "type": "string",
-                "enum": ["scalar", "array", "index"]
-              }
-            },
-            "return_type": {
-              "type": "string",
-              "description": "Optional return-type hint.",
-              "enum": ["scalar", "array"]
-            }
-          }
-        },
-        "units": {
-          "type": "string",
-          "description": "Optional output units string (same grammar as variable units)."
-        },
-        "arg_units": {
-          "type": "array",
-          "description": "Optional per-argument units hints. Each entry is either a units string or null (no hint). When present the array length must equal signature.arg_count.",
-          "items": {
-            "oneOf": [
-              { "type": "string" },
-              { "type": "null" }
-            ]
-          }
-        },
-        "description": { "type": "string" },
-        "references": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/Reference" }
-        },
-        "config": {
-          "type": "object",
-          "description": "Implementation-specific configuration passed to the handler at bind time (e.g. table data, grid descriptors).",
-          "additionalProperties": true
-        }
-      }
-    },
-
-    "Operator": {
-      "type": "object",
-      "description": "A registered runtime operator (e.g., dry deposition, wet scavenging).",
-      "required": ["operator_id", "needed_vars"],
-      "additionalProperties": false,
-      "properties": {
-        "operator_id": {
-          "type": "string",
-          "description": "Registered identifier the runtime uses to find the implementation."
-        },
-        "reference": { "$ref": "#/$defs/Reference" },
-        "config": {
-          "type": "object",
-          "description": "Implementation-specific configuration.",
-          "additionalProperties": true
-        },
-        "needed_vars": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Variables required by the operator."
-        },
-        "modifies": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Variables the operator modifies."
-        },
-        "description": { "type": "string" }
+      "description": "A file-local enum mapping symbolic names to positive integers (esm-spec.md §9.3). Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum is its own namespace). Bindings resolve enum-op nodes at load time before evaluating expressions.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
       }
     },
 
@@ -1539,12 +1471,11 @@
     },
 
     "CouplingEntry": {
-      "description": "A single coupling rule connecting models, reaction systems, data loaders, or operators.",
+      "description": "A single coupling rule connecting models, reaction systems, or data loaders.",
       "oneOf": [
         { "$ref": "#/$defs/CouplingOperatorCompose" },
         { "$ref": "#/$defs/CouplingCouple" },
         { "$ref": "#/$defs/CouplingVariableMap" },
-        { "$ref": "#/$defs/CouplingOperatorApply" },
         { "$ref": "#/$defs/CouplingCallback" },
         { "$ref": "#/$defs/CouplingEvent" }
       ]
@@ -1652,21 +1583,6 @@
           "type": "string",
           "enum": ["pointwise", "broadcast", "mean", "integral"],
           "description": "Strategy for mapping between 0D and spatial systems."
-        },
-        "description": { "type": "string" }
-      }
-    },
-
-    "CouplingOperatorApply": {
-      "type": "object",
-      "description": "Register an Operator to run during simulation.",
-      "required": ["type", "operator"],
-      "additionalProperties": false,
-      "properties": {
-        "type": { "const": "operator_apply" },
-        "operator": {
-          "type": "string",
-          "description": "Name of the operator (key in the operators section)."
         },
         "description": { "type": "string" }
       }

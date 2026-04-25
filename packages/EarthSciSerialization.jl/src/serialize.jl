@@ -79,8 +79,11 @@ function serialize_expression(expr::Expr)
         if expr.fn !== nothing
             result["fn"] = expr.fn
         end
-        if expr.handler_id !== nothing
-            result["handler_id"] = expr.handler_id
+        if expr.name !== nothing
+            result["name"] = expr.name
+        end
+        if expr.value !== nothing
+            result["value"] = expr.value
         end
         return result
     else
@@ -1017,6 +1020,12 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     end
     if file.registered_functions !== nothing
         result["registered_functions"] = Dict(k => serialize_registered_function(v) for (k, v) in file.registered_functions)
+    end
+    if file.enums !== nothing
+        # esm-spec §9.3 — enum names map to objects mapping symbol → positive
+        # integer. The on-wire shape is the parsed shape unchanged.
+        result["enums"] = Dict{String,Any}(
+            k => Dict{String,Int}(s => i for (s, i) in v) for (k, v) in file.enums)
     end
     if !isempty(file.coupling)
         result["coupling"] = [serialize_coupling_entry(c) for c in file.coupling]

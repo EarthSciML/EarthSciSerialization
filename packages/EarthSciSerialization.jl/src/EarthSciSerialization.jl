@@ -25,6 +25,7 @@ include("validate.jl")
 include("reactions.jl")
 include("flatten.jl")
 include("mock_systems.jl")
+include("registered_functions.jl")
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
@@ -128,6 +129,9 @@ export
     mtk2esm, mtk2esm_gaps, GapReport,
     # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
     build_evaluator, TreeWalkError,
+    # Closed function registry (esm-tzp / esm-4aw; esm-spec §9.2)
+    evaluate_closed_function, closed_function_names, ClosedFunctionError,
+    lower_enums!,
     # GridAccessor interface (gt-hvl4; concrete impls live in ESD)
     GridAccessor, GridAccessorError,
     cell_centers, neighbors, metric_eval,

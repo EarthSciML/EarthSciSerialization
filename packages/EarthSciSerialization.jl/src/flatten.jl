@@ -352,7 +352,9 @@ function namespace_expr(expr::OpExpr, prefix::String, local_names::Set{String}):
         shape=expr.shape,
         perm=expr.perm,
         axis=expr.axis,
-        fn=expr.fn)
+        fn=expr.fn,
+        name=expr.name,
+        value=expr.value)
 end
 
 """
