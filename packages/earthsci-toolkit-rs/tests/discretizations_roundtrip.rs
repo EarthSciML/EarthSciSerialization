@@ -8,7 +8,7 @@
 //! round-trip contract is structural equivalence of the top-level
 //! `discretizations` subtree after load → save → load.
 
-use earthsci_toolkit::{load, save, EsmFile};
+use earthsci_toolkit::{EsmFile, load, save};
 use serde_json::Value;
 
 fn normalize_numbers(v: &mut Value) {
@@ -95,7 +95,9 @@ fn cross_metric_composite_structure() {
     let axis_names: Vec<&str> = axes.iter().map(|v| v.as_str().unwrap_or("")).collect();
     assert_eq!(axis_names, vec!["xi", "eta"]);
 
-    let terms = composite["terms"].as_array().expect("terms must be an array");
+    let terms = composite["terms"]
+        .as_array()
+        .expect("terms must be an array");
     assert_eq!(terms.len(), 2);
 
     // Composite entries do NOT carry a stencil key.

@@ -40,7 +40,7 @@ use crate::{EsmFile, error::EsmError};
 ///     reaction_systems: None,
 ///     data_loaders: None,
 ///     operators: None,
-///     registered_functions: None,
+///     enums: None,
 ///     coupling: None,
 ///     domains: None,
 ///     interfaces: None,
@@ -101,8 +101,8 @@ mod tests {
             reaction_systems: None,
             data_loaders: None,
             operators: None,
+            enums: None,
 
-            registered_functions: None,
             coupling: None,
             domains: None,
             interfaces: None,
@@ -182,8 +182,8 @@ mod tests {
             reaction_systems: None,
             data_loaders: None,
             operators: None,
+            enums: None,
 
-            registered_functions: None,
             coupling: None,
             domains: None,
             interfaces: None,
@@ -223,8 +223,8 @@ mod tests {
             reaction_systems: None,
             data_loaders: None,
             operators: None,
+            enums: None,
 
-            registered_functions: None,
             coupling: None,
             domains: None,
             interfaces: None,

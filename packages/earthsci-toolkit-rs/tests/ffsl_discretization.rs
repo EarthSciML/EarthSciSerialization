@@ -4,7 +4,7 @@
 //! Verifies the Rust binding parses and schema-validates the CAM5 FFSL
 //! fixture and rejects structural violations of the discriminator contract.
 
-use earthsci_toolkit::{load, EsmError};
+use earthsci_toolkit::{EsmError, load};
 
 const FIXTURE: &str = include_str!("../../../tests/discretizations/cam5_ffsl_advection.esm");
 
@@ -12,7 +12,10 @@ const FIXTURE: &str = include_str!("../../../tests/discretizations/cam5_ffsl_adv
 fn ffsl_fixture_loads_and_validates() {
     let parsed = load(FIXTURE).expect("CAM5 FFSL fixture must load and validate");
     assert_eq!(parsed.esm, "0.2.0");
-    assert_eq!(parsed.metadata.name.as_deref(), Some("CAM5FvFfslAdvection1D"));
+    assert_eq!(
+        parsed.metadata.name.as_deref(),
+        Some("CAM5FvFfslAdvection1D")
+    );
 }
 
 #[test]
@@ -49,8 +52,7 @@ fn ffsl_rule_missing_cfl_policy_is_rejected() {
 #[test]
 fn stencil_rule_with_ffsl_field_is_rejected() {
     // Conversely, a stencil rule MUST NOT carry reconstruction/remap/etc.
-    let stencil_fixture =
-        include_str!("../../../tests/discretizations/centered_2nd_uniform.esm");
+    let stencil_fixture = include_str!("../../../tests/discretizations/centered_2nd_uniform.esm");
     let mut doc: serde_json::Value = serde_json::from_str(stencil_fixture).unwrap();
     doc["discretizations"]["centered_2nd_uniform"]["reconstruction"] =
         serde_json::json!({ "order": "PPM" });

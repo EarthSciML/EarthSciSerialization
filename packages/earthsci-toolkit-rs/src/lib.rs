@@ -49,6 +49,7 @@ pub mod migration;
 pub mod parse;
 pub mod reactions;
 pub mod ref_loading;
+pub mod registered_functions;
 pub mod rule_engine;
 pub mod serialize;
 pub mod substitute;
@@ -92,6 +93,9 @@ pub use reactions::{
     stoichiometric_matrix,
 };
 pub use ref_loading::resolve_subsystem_refs;
+pub use registered_functions::{
+    ClosedArg, ClosedFunctionError, ClosedValue, closed_function_names, evaluate_closed_function,
+};
 pub use rule_engine::{
     DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
     apply_bindings, check_guard, check_guards, check_unrewritten_pde_ops, match_pattern,

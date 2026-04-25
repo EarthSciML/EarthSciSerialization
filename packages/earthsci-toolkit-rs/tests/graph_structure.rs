@@ -98,8 +98,8 @@ fn test_component_graph_generation() {
         reaction_systems: Some(reaction_systems),
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,
@@ -180,8 +180,8 @@ fn test_component_graph_exports() {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,
@@ -445,8 +445,8 @@ fn test_component_existence() {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+        enums: None,
 
-        registered_functions: None,
         coupling: None,
         domains: None,
         interfaces: None,

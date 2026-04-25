@@ -112,12 +112,12 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         reaction_systems: None,
         data_loaders: None,
         operators: None,
+        enums: None,
         coupling: None,
         domains: None,
         interfaces: None,
         grids: None,
         discretizations: None,
-        registered_functions: None,
     }
 }
 

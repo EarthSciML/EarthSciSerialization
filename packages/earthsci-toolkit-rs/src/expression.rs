@@ -1,6 +1,7 @@
 //! Expression manipulation utilities
 
 use crate::Expr;
+use crate::registered_functions::{ClosedArg, evaluate_closed_function};
 use std::collections::{HashMap, HashSet};
 
 /// Extract all free variables from an expression
@@ -89,12 +90,94 @@ fn evaluate_with_unbound_tracking(
                 Err(())
             }
         }
-        Expr::Operator(op_node) => evaluate_operator_with_unbound_tracking(
-            &op_node.op,
-            &op_node.args,
-            bindings,
-            unbound_vars,
-        ),
+        Expr::Operator(op_node) => {
+            // The `fn` op (esm-spec §4.4) dispatches to the closed function
+            // registry — handled upstream because it needs `op_node.name`
+            // and the structural shape of the args (e.g. the const-array `xs`
+            // for `interp.searchsorted`), not just a list of evaluated f64s.
+            if op_node.op == "fn" {
+                return evaluate_fn_with_unbound_tracking(op_node, bindings, unbound_vars);
+            }
+            // The `const` op carries an inline literal in `value`; treat the
+            // scalar case as a numeric leaf so `evaluate(const{value: 3.5})`
+            // returns 3.5. Array-valued `const` nodes only make sense as
+            // arguments to `fn` ops (handled above) or `index` (out of scope
+            // for the scalar evaluator) — surface the error path so callers
+            // notice rather than silently returning NaN.
+            if op_node.op == "const" {
+                return evaluate_const_with_unbound_tracking(op_node);
+            }
+            evaluate_operator_with_unbound_tracking(
+                &op_node.op,
+                &op_node.args,
+                bindings,
+                unbound_vars,
+            )
+        }
+    }
+}
+
+fn evaluate_const_with_unbound_tracking(op_node: &crate::types::ExpressionNode) -> Result<f64, ()> {
+    let v = op_node.value.as_ref().ok_or(())?;
+    match v {
+        serde_json::Value::Number(n) => n.as_f64().ok_or(()),
+        // Non-scalar `const` payloads can't promote to a single f64.
+        _ => Err(()),
+    }
+}
+
+fn evaluate_fn_with_unbound_tracking(
+    op_node: &crate::types::ExpressionNode,
+    bindings: &HashMap<String, f64>,
+    unbound_vars: &mut Vec<String>,
+) -> Result<f64, ()> {
+    let name = op_node.name.as_deref().ok_or(())?;
+    // Coerce each argument to the shape the closed-function dispatcher
+    // expects: a `const`-op carrying a JSON array becomes `ClosedArg::Array`,
+    // everything else evaluates to a scalar.
+    let mut closed_args: Vec<ClosedArg> = Vec::with_capacity(op_node.args.len());
+    let mut had_error = false;
+    for arg in &op_node.args {
+        if let Expr::Operator(child) = arg
+            && child.op == "const"
+            && let Some(serde_json::Value::Array(arr)) = child.value.as_ref()
+        {
+            let mut values = Vec::with_capacity(arr.len());
+            for v in arr {
+                match v {
+                    serde_json::Value::Number(n) => match n.as_f64() {
+                        Some(f) => values.push(f),
+                        None => {
+                            had_error = true;
+                            break;
+                        }
+                    },
+                    serde_json::Value::String(s) if s == "NaN" => values.push(f64::NAN),
+                    serde_json::Value::String(s) if s == "Inf" => values.push(f64::INFINITY),
+                    serde_json::Value::String(s) if s == "-Inf" => values.push(f64::NEG_INFINITY),
+                    _ => {
+                        had_error = true;
+                        break;
+                    }
+                }
+            }
+            if had_error {
+                break;
+            }
+            closed_args.push(ClosedArg::Array(values));
+        } else {
+            match evaluate_with_unbound_tracking(arg, bindings, unbound_vars) {
+                Ok(v) => closed_args.push(ClosedArg::Scalar(v)),
+                Err(_) => had_error = true,
+            }
+        }
+    }
+    if had_error {
+        return Err(());
+    }
+    match evaluate_closed_function(name, &closed_args) {
+        Ok(v) => Ok(v.as_f64()),
+        Err(_) => Err(()),
     }
 }
 

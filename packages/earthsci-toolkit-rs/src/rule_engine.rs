@@ -663,7 +663,9 @@ fn parse_where(
         if !obj.contains_key("op") {
             return Err(RuleEngineError::new(
                 "E_RULE_PARSE",
-                format!("rule `{name}`: `where` object must be an expression node with an `op` field"),
+                format!(
+                    "rule `{name}`: `where` object must be an expression node with an `op` field"
+                ),
             ));
         }
         return Ok((Vec::new(), Some(parse_expr(v)?)));
@@ -689,7 +691,9 @@ fn parse_region(
     let obj = v.as_object().ok_or_else(|| {
         RuleEngineError::new(
             "E_RULE_PARSE",
-            format!("rule `{name}`: `region` must be a string (legacy) or object (normative scope)"),
+            format!(
+                "rule `{name}`: `region` must be a string (legacy) or object (normative scope)"
+            ),
         )
     })?;
     let kind = obj.get("kind").and_then(|s| s.as_str()).ok_or_else(|| {
@@ -868,11 +872,7 @@ fn eval_region(region: &RuleRegion, ctx: &RuleContext) -> Result<bool, RuleEngin
 /// `xmin`/`west` → `-i`, `xmax`/`east` → `+i`, `ymin`/`south` → `-j`,
 /// `ymax`/`north` → `+j`. Edge detection uses `GridMeta::dim_bounds`;
 /// absent bounds or an unrecognised `side` fall through (returns `Ok(false)`).
-fn eval_panel_boundary(
-    panel: i64,
-    side: &str,
-    ctx: &RuleContext,
-) -> Result<bool, RuleEngineError> {
+fn eval_panel_boundary(panel: i64, side: &str, ctx: &RuleContext) -> Result<bool, RuleEngineError> {
     let Some(grid_name) = &ctx.grid_name else {
         return Ok(false);
     };
@@ -921,17 +921,16 @@ fn eval_mask_field(field: &str, ctx: &RuleContext) -> bool {
     let Some(points) = ctx.mask_fields.get(field) else {
         return false;
     };
-    points.iter().any(|pt| mask_entry_matches(pt, &ctx.query_point))
+    points
+        .iter()
+        .any(|pt| mask_entry_matches(pt, &ctx.query_point))
 }
 
 // A mask entry matches when every (axis, value) it declares agrees
 // with the corresponding entry in `query_point`. Axes present in the
 // query point but absent from the mask entry are ignored, so a 2D
 // surface mask can scope rules on a 3D grid (matches on i,j for any k).
-fn mask_entry_matches(
-    mask_pt: &HashMap<String, i64>,
-    query_pt: &HashMap<String, i64>,
-) -> bool {
+fn mask_entry_matches(mask_pt: &HashMap<String, i64>, query_pt: &HashMap<String, i64>) -> bool {
     if mask_pt.is_empty() {
         return false;
     }
@@ -1017,11 +1016,7 @@ impl ScalarValue {
     }
 }
 
-fn eval_scalar(
-    e: &Expr,
-    b: &HashMap<String, Expr>,
-    ctx: &RuleContext,
-) -> Option<ScalarValue> {
+fn eval_scalar(e: &Expr, b: &HashMap<String, Expr>, ctx: &RuleContext) -> Option<ScalarValue> {
     match e {
         Expr::Integer(i) => Some(ScalarValue::Int(*i)),
         Expr::Number(f) => Some(ScalarValue::Float(*f)),
@@ -1042,8 +1037,7 @@ fn eval_op(
     b: &HashMap<String, Expr>,
     ctx: &RuleContext,
 ) -> Option<ScalarValue> {
-    let args: Option<Vec<ScalarValue>> =
-        node.args.iter().map(|a| eval_scalar(a, b, ctx)).collect();
+    let args: Option<Vec<ScalarValue>> = node.args.iter().map(|a| eval_scalar(a, b, ctx)).collect();
     match node.op.as_str() {
         "==" | "!=" | "<" | "<=" | ">" | ">=" => {
             let args = args?;
@@ -1075,7 +1069,9 @@ fn eval_op(
                         .sum(),
                 ))
             } else {
-                Some(ScalarValue::Float(args.into_iter().map(|v| v.to_f64()).sum()))
+                Some(ScalarValue::Float(
+                    args.into_iter().map(|v| v.to_f64()).sum(),
+                ))
             }
         }
         "-" => {
@@ -1110,7 +1106,9 @@ fn eval_op(
                         .product(),
                 ))
             } else {
-                Some(ScalarValue::Float(args.into_iter().map(|v| v.to_f64()).product()))
+                Some(ScalarValue::Float(
+                    args.into_iter().map(|v| v.to_f64()).product(),
+                ))
             }
         }
         "and" => {
@@ -1428,8 +1426,7 @@ mod tests {
                     for (dk, dv) in bounds {
                         if let Some(arr) = dv.as_array()
                             && arr.len() == 2
-                            && let (Some(lo), Some(hi)) =
-                                (arr[0].as_i64(), arr[1].as_i64())
+                            && let (Some(lo), Some(hi)) = (arr[0].as_i64(), arr[1].as_i64())
                         {
                             meta.dim_bounds.insert(dk.clone(), [lo, hi]);
                         }
