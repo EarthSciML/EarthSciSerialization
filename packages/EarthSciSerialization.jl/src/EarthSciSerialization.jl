@@ -39,6 +39,7 @@ include("discretize.jl")
 include("grid_accessor.jl")
 include("abstract_grid.jl")
 include("grid_assembly.jl")
+include("ghost_cells.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
 
@@ -141,6 +142,8 @@ export
     # FV grid-metric assembly (esm-xom; ported from ESD src/fv_stencil.jl)
     FVLaplacianStencil, FVGradientStencil,
     precompute_laplacian_stencil, precompute_gradient_stencil,
-    apply_laplacian!, apply_gradient!
+    apply_laplacian!, apply_gradient!,
+    # Trait-generic ghost-cell gathering (esm-dlz; ported from ESD src/ghost_cells.jl)
+    extend_with_ghosts, fill_ghost_cells!, extend_with_ghosts_vector
 
 end # module EarthSciSerialization
