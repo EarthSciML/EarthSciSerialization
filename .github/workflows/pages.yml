@@ -66,7 +66,8 @@ jobs:
           cp -r docs/public/. /tmp/lychee-root/EarthSciSerialization/
 
       - name: Link-check built site (internal links only)
-        uses: lycheeverse/lychee-action@v1
+        # v1 ships lychee 0.15.0 which lacks --root-dir; v2 ships 0.23.0 which supports it.
+        uses: lycheeverse/lychee-action@v2
         with:
           # Restrict to internal links — exclude all external schemes so we don't
           # depend on third-party uptime in the deploy gate.
