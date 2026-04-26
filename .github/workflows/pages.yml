@@ -55,6 +55,31 @@ jobs:
       - name: Build site with Hugo
         run: hugo --source docs --minify --destination public --baseURL "${{ steps.pages.outputs.base_url }}/"
 
+      # Hugo emits root-relative hrefs of the form /EarthSciSerialization/...
+      # because the GitHub-Pages baseURL has that path component. The local build
+      # tree lives at docs/public/, so we stage it under a parent dir that mirrors
+      # the deployed path layout. Lychee's --root-dir then resolves those hrefs to
+      # real files.
+      - name: Stage built site for link-checking
+        run: |
+          mkdir -p /tmp/lychee-root/EarthSciSerialization
+          cp -r docs/public/. /tmp/lychee-root/EarthSciSerialization/
+
+      - name: Link-check built site (internal links only)
+        uses: lycheeverse/lychee-action@v1
+        with:
+          # Restrict to internal links — exclude all external schemes so we don't
+          # depend on third-party uptime in the deploy gate.
+          args: >-
+            --offline
+            --no-progress
+            --root-dir /tmp/lychee-root
+            --exclude '^https?://'
+            --exclude '^mailto:'
+            '/tmp/lychee-root/EarthSciSerialization/**/*.html'
+          fail: true
+          format: detailed
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
