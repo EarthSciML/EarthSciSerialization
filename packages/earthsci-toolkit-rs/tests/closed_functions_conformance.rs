@@ -40,6 +40,31 @@ fn decode_input(v: &Value) -> ClosedArg {
         },
         Value::Number(n) => ClosedArg::Scalar(n.as_f64().expect("finite scalar")),
         Value::Array(arr) => {
+            // 2-D arrays (e.g. the `table` arg of `interp.bilinear`) decode
+            // to ClosedArg::Array2D. Detect by peeking at the first inner
+            // element; ragged inner rows are preserved (the dispatcher's
+            // load-time validator surfaces the diagnostic).
+            if matches!(arr.first(), Some(Value::Array(_))) {
+                let mut rows: Vec<Vec<f64>> = Vec::with_capacity(arr.len());
+                for row_v in arr {
+                    let row_arr = match row_v {
+                        Value::Array(a) => a,
+                        other => panic!("mixed 2-D array entry: {other:?}"),
+                    };
+                    let mut row_vals = Vec::with_capacity(row_arr.len());
+                    for v in row_arr {
+                        match v {
+                            Value::Number(n) => row_vals.push(n.as_f64().expect("finite entry")),
+                            Value::String(s) if s == "NaN" => row_vals.push(f64::NAN),
+                            Value::String(s) if s == "Inf" => row_vals.push(f64::INFINITY),
+                            Value::String(s) if s == "-Inf" => row_vals.push(f64::NEG_INFINITY),
+                            other => panic!("unsupported 2-D row entry: {other:?}"),
+                        }
+                    }
+                    rows.push(row_vals);
+                }
+                return ClosedArg::Array2D(rows);
+            }
             let mut values = Vec::with_capacity(arr.len());
             for v in arr {
                 match v {
@@ -82,7 +107,7 @@ fn closed_value_to_f64(v: ClosedValue) -> f64 {
 #[test]
 fn closed_function_registry_v030_set() {
     let names = closed_function_names();
-    assert_eq!(names.len(), 10);
+    assert_eq!(names.len(), 12);
     for n in [
         "datetime.year",
         "datetime.month",
@@ -94,6 +119,8 @@ fn closed_function_registry_v030_set() {
         "datetime.julian_day",
         "datetime.is_leap_year",
         "interp.searchsorted",
+        "interp.linear",
+        "interp.bilinear",
     ] {
         assert!(names.contains(n), "missing closed-function name: {n}");
     }

@@ -142,6 +142,52 @@ fn evaluate_fn_with_unbound_tracking(
             && child.op == "const"
             && let Some(serde_json::Value::Array(arr)) = child.value.as_ref()
         {
+            // 2-D const arrays (e.g. the `table` arg of `interp.bilinear`)
+            // arrive as a JSON array of JSON arrays. Detect this by
+            // peeking at the first inner element; mixed-type or
+            // not-uniformly-nested arrays surface as `closed_function_arg_type`
+            // downstream when the dispatcher asks for the wrong shape.
+            if matches!(arr.first(), Some(serde_json::Value::Array(_))) {
+                let mut rows: Vec<Vec<f64>> = Vec::with_capacity(arr.len());
+                for row_v in arr {
+                    let serde_json::Value::Array(row_arr) = row_v else {
+                        had_error = true;
+                        break;
+                    };
+                    let mut row_vals = Vec::with_capacity(row_arr.len());
+                    for v in row_arr {
+                        match v {
+                            serde_json::Value::Number(n) => match n.as_f64() {
+                                Some(f) => row_vals.push(f),
+                                None => {
+                                    had_error = true;
+                                    break;
+                                }
+                            },
+                            serde_json::Value::String(s) if s == "NaN" => row_vals.push(f64::NAN),
+                            serde_json::Value::String(s) if s == "Inf" => {
+                                row_vals.push(f64::INFINITY)
+                            }
+                            serde_json::Value::String(s) if s == "-Inf" => {
+                                row_vals.push(f64::NEG_INFINITY)
+                            }
+                            _ => {
+                                had_error = true;
+                                break;
+                            }
+                        }
+                    }
+                    if had_error {
+                        break;
+                    }
+                    rows.push(row_vals);
+                }
+                if had_error {
+                    break;
+                }
+                closed_args.push(ClosedArg::Array2D(rows));
+                continue;
+            }
             let mut values = Vec::with_capacity(arr.len());
             for v in arr {
                 match v {
