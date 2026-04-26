@@ -156,10 +156,13 @@ export
     laplacian_neighbor_table, gradient_neighbor_table,
     const_wrap, get_idx_vars, make_arrayop, evaluate_arrayop,
     # MMS convergence harness (esm-ivo; ESD walker Layer B driver)
+    # PPM reconstruction extensions (esm-k1d): sub-stencil targeting,
+    # output-kind selector, parabola pass.
     MMSEvaluatorError, ManufacturedSolution, MMSConvergenceResult,
     parse_accuracy_order, lookup_manufactured_solution,
-    register_manufactured_solution!, eval_coeff,
-    apply_stencil_periodic_1d, mms_convergence, verify_mms_convergence,
+    register_manufactured_solution!, eval_coeff, OUTPUT_KINDS,
+    apply_stencil_periodic_1d, parabola_reconstruct_periodic_1d,
+    mms_convergence, verify_mms_convergence,
     # MPAS-style unstructured MMS support (esm-0sy)
     VectorManufacturedSolution, MPASLikeMesh, MPASCoeffContext,
     register_vector_manufactured_solution!, lookup_vector_manufactured_solution,

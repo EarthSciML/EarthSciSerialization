@@ -89,11 +89,18 @@ end
 # ============================================================
 
 """
-    ManufacturedSolution(name, sample, derivative, periodic, domain)
+    ManufacturedSolution(name, sample, derivative, periodic, domain;
+                         cell_average=nothing)
 
 A registered manufactured solution. `sample(x)` returns u(x); `derivative(x)`
 returns du/dx. `periodic` and `domain` describe the sampling support so the
 harness can wrap stencils correctly.
+
+`cell_average(lo, hi)` is an optional analytic ū = (∫_lo^hi u dx) / (hi - lo).
+When supplied it is used directly by `sampling: "cell_average"` sweeps; when
+`nothing`, the harness falls back to a fixed 5-point Gauss–Legendre quadrature
+(exact through degree 9 — well above what a 4th-order edge stencil can
+exercise on a smooth solution).
 """
 struct ManufacturedSolution
     name::Symbol
@@ -101,16 +108,53 @@ struct ManufacturedSolution
     derivative::Function
     periodic::Bool
     domain::Tuple{Float64,Float64}
+    cell_average::Union{Nothing,Function}
 end
 
-# Built-in: u(x) = sin(2π x) on [0,1] periodic; du/dx = 2π cos(2π x).
+ManufacturedSolution(name::Symbol, sample::Function, derivative::Function,
+                     periodic::Bool, domain::Tuple{Float64,Float64};
+                     cell_average::Union{Nothing,Function}=nothing) =
+    ManufacturedSolution(name, sample, derivative, periodic, domain, cell_average)
+
+# Built-in: u(x) = sin(2π x) on [0,1] periodic; du/dx = 2π cos(2π x);
+# ū over [a,b] = (cos(2π a) − cos(2π b)) / (2π (b − a)).
 const _MMS_SIN_2PI_X_PERIODIC = ManufacturedSolution(
     :sin_2pi_x_periodic,
     x -> sin(2π * x),
     x -> 2π * cos(2π * x),
     true,
     (0.0, 1.0),
+    (lo, hi) -> (cos(2π * lo) - cos(2π * hi)) / (2π * (hi - lo)),
 )
+
+# 5-point Gauss–Legendre nodes / weights on [-1, 1] (exact through degree 9).
+# Used as the default cell-average integrator when a ManufacturedSolution does
+# not carry an analytic `cell_average`.
+const _GL5_NODES = (-0.9061798459386640,
+                    -0.5384693101056831,
+                     0.0,
+                     0.5384693101056831,
+                     0.9061798459386640)
+const _GL5_WEIGHTS = (0.2369268850561891,
+                      0.4786286704993665,
+                      128.0 / 225.0,
+                      0.4786286704993665,
+                      0.2369268850561891)
+
+# ū over [lo, hi] for the manufactured solution, using its analytic average if
+# present and otherwise 5-point Gauss–Legendre on `sample`.
+function _cell_average(ms::ManufacturedSolution, lo::Float64, hi::Float64)::Float64
+    if ms.cell_average !== nothing
+        return Float64(ms.cell_average(lo, hi))
+    end
+    half = 0.5 * (hi - lo)
+    mid = 0.5 * (hi + lo)
+    s = 0.0
+    @inbounds for k in 1:5
+        s += _GL5_WEIGHTS[k] * ms.sample(mid + half * _GL5_NODES[k])
+    end
+    return 0.5 * s
+end
 
 const _MMS_REGISTRY = Dict{Symbol,ManufacturedSolution}(
     :sin_2pi_x_periodic => _MMS_SIN_2PI_X_PERIODIC,
@@ -173,22 +217,31 @@ end
 
 """
     apply_stencil_periodic_1d(stencil_json, u::Vector{Float64},
-                              bindings::Dict{String,Float64}) -> Vector{Float64}
+                              bindings::Dict{String,Float64};
+                              sub_stencil=nothing) -> Vector{Float64}
 
 Apply a 1D Cartesian stencil to the periodic sample vector `u`. Each entry of
 `stencil_json` must carry `selector.offset` (Int) and `coeff` (an AST node).
 The coefficient is evaluated once per call against `bindings`. The result has
 the same length as `u`.
 
+`stencil_json` may also be an `AbstractDict` mapping sub-stencil names to
+entry lists — the PPM-style "multi-output" rule layout where one rule emits
+several stencils (e.g. left-edge value, right-edge value). Pass `sub_stencil`
+to select which named entry to apply; an unspecified or unknown name on a
+multi-stencil rule throws `MMSEvaluatorError(E_MMS_BAD_FIXTURE, …)`.
+
 Used by [`mms_convergence`] to drive the manufactured-solution sweep without
 re-implementing the stencil semantics in the walker.
 """
 function apply_stencil_periodic_1d(stencil_json,
                                    u::Vector{Float64},
-                                   bindings::Dict{String,Float64})::Vector{Float64}
+                                   bindings::Dict{String,Float64};
+                                   sub_stencil::Union{Nothing,AbstractString}=nothing)::Vector{Float64}
+    entries = _resolve_substencil(stencil_json, sub_stencil)
     n = length(u)
-    coeff_pairs = Vector{Tuple{Int,Float64}}(undef, length(stencil_json))
-    for (k, s) in enumerate(stencil_json)
+    coeff_pairs = Vector{Tuple{Int,Float64}}(undef, length(entries))
+    for (k, s) in enumerate(entries)
         sel = s["selector"]
         coeff_pairs[k] = (Int(sel["offset"]), eval_coeff(s["coeff"], bindings))
     end
@@ -202,6 +255,154 @@ function apply_stencil_periodic_1d(stencil_json,
         out[i] = acc
     end
     return out
+end
+
+# Resolve `stencil_json` to a list of stencil entries. A list is returned as-is.
+# A dict is treated as a multi-output rule keyed by sub-stencil name; the caller
+# must select one via `sub_stencil`. The bare-list form keeps every existing
+# single-stencil rule (centered_2nd_uniform, upwind_1st_advection, …) working
+# without modification.
+function _resolve_substencil(stencil_json,
+                             sub_stencil::Union{Nothing,AbstractString})
+    if stencil_json isa AbstractDict
+        sub_stencil === nothing && throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "rule has multi-stencil mapping; input.esm must select one via " *
+            "`sub_stencil` (available: $(collect(keys(stencil_json))))"))
+        haskey(stencil_json, sub_stencil) || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "rule has no sub-stencil $(repr(sub_stencil)) " *
+            "(available: $(collect(keys(stencil_json))))"))
+        return stencil_json[sub_stencil]
+    end
+    sub_stencil === nothing || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "`sub_stencil=$(repr(sub_stencil))` was requested but rule carries " *
+        "a single stencil list, not a multi-stencil mapping"))
+    return stencil_json
+end
+
+# ============================================================
+# Output-kind selector
+# ============================================================
+
+"""
+    OUTPUT_KINDS
+
+Tuple of output-kind selectors recognised by [`mms_convergence`]. The selector
+controls which analytic reference the per-cell stencil output is compared
+against and at which point along the cell the reference is sampled:
+
+| Kind                        | Sample point per cell `i`            | Reference        |
+|-----------------------------|--------------------------------------|------------------|
+| `"derivative_at_cell_center"` (default) | `lo + (i - 0.5) dx`        | `ms.derivative`  |
+| `"value_at_cell_center"`    | `lo + (i - 0.5) dx`                  | `ms.sample`      |
+| `"value_at_edge_left"`      | `lo + (i - 1)   dx`                  | `ms.sample`      |
+| `"value_at_edge_right"`     | `lo + i         dx`                  | `ms.sample`      |
+
+PPM-style edge reconstructions surface as `value_at_edge_left` /
+`value_at_edge_right`; the parabola-pass reconstruction (see
+[`parabola_reconstruct_periodic_1d`]) further composes them.
+"""
+const OUTPUT_KINDS = (
+    "derivative_at_cell_center",
+    "value_at_cell_center",
+    "value_at_edge_left",
+    "value_at_edge_right",
+)
+
+# Sample the analytic reference at the per-cell point implied by `output_kind`.
+# Returns the `n`-vector that the stencil output is compared against.
+function _reference_samples(ms::ManufacturedSolution,
+                            output_kind::AbstractString,
+                            domain_lo::Float64,
+                            dx::Float64,
+                            n::Int)::Vector{Float64}
+    if output_kind == "derivative_at_cell_center"
+        return [ms.derivative(domain_lo + (i - 0.5) * dx) for i in 1:n]
+    elseif output_kind == "value_at_cell_center"
+        return [ms.sample(domain_lo + (i - 0.5) * dx) for i in 1:n]
+    elseif output_kind == "value_at_edge_left"
+        return [ms.sample(domain_lo + (i - 1) * dx) for i in 1:n]
+    elseif output_kind == "value_at_edge_right"
+        return [ms.sample(domain_lo + i * dx) for i in 1:n]
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unknown output_kind $(repr(output_kind)); " *
+        "expected one of $(collect(OUTPUT_KINDS))"))
+end
+
+# ============================================================
+# Parabola pass — PPM sub-cell reconstruction
+# ============================================================
+
+"""
+    parabola_reconstruct_periodic_1d(stencils_json, u_bar, bindings;
+                                     left_edge_stencil, right_edge_stencil,
+                                     subcell_points) -> (xs, vals)
+
+Given a vector of cell-averaged samples `u_bar` and a multi-stencil mapping
+`stencils_json` carrying named entries for the left- and right-edge values,
+reconstruct the Colella–Woodward (1984) PPM parabola in each cell and
+evaluate it at the supplied normalised sub-cell points.
+
+Inside cell `i` with edge values `u_L`, `u_R` and average `ū`, the parabola is
+
+    u(ξ) = u_L + ξ · (Δu + u₆ · (1 − ξ)),
+    Δu = u_R − u_L,
+    u₆ = 6 (ū − ½ (u_L + u_R)).
+
+`subcell_points` is a vector of `ξ ∈ [0, 1]` sample positions; the reconstruction
+is evaluated at `ξ` in every cell, yielding a flattened length-`length(u_bar) *
+length(subcell_points)` vector. The returned `xs` are the matching absolute
+positions assuming periodic domain `[domain_lo, domain_lo + length(u_bar)·dx)`,
+with `domain_lo` and `dx` carried in `bindings` under the keys `"domain_lo"`
+and `"dx"`.
+"""
+function parabola_reconstruct_periodic_1d(stencils_json,
+                                          u_bar::Vector{Float64},
+                                          bindings::Dict{String,Float64};
+                                          left_edge_stencil::AbstractString,
+                                          right_edge_stencil::AbstractString,
+                                          subcell_points::Vector{Float64})::Tuple{Vector{Float64},Vector{Float64}}
+    stencils_json isa AbstractDict || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "parabola pass requires a multi-stencil mapping; got $(typeof(stencils_json))"))
+    haskey(bindings, "dx") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "parabola pass requires `dx` in bindings"))
+    haskey(bindings, "domain_lo") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "parabola pass requires `domain_lo` in bindings"))
+    all(0.0 .<= subcell_points .<= 1.0) || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "subcell_points must lie in [0,1]; got $(subcell_points)"))
+
+    u_L = apply_stencil_periodic_1d(stencils_json, u_bar, bindings;
+                                    sub_stencil=left_edge_stencil)
+    u_R = apply_stencil_periodic_1d(stencils_json, u_bar, bindings;
+                                    sub_stencil=right_edge_stencil)
+
+    n = length(u_bar)
+    dx = bindings["dx"]
+    lo = bindings["domain_lo"]
+    q = length(subcell_points)
+    xs = Vector{Float64}(undef, n * q)
+    vals = Vector{Float64}(undef, n * q)
+    @inbounds for i in 1:n
+        L = u_L[i]
+        R = u_R[i]
+        Δu = R - L
+        u6 = 6.0 * (u_bar[i] - 0.5 * (L + R))
+        cell_lo = lo + (i - 1) * dx
+        for (jq, ξ) in enumerate(subcell_points)
+            idx = (i - 1) * q + jq
+            xs[idx] = cell_lo + ξ * dx
+            vals[idx] = L + ξ * (Δu + u6 * (1.0 - ξ))
+        end
+    end
+    return xs, vals
 end
 
 # ============================================================
@@ -239,6 +440,33 @@ carry `rule`, `manufactured_solution`, `sampling`, and `grids`.
 solution from `input_json["manufactured_solution"]` via
 [`lookup_manufactured_solution`]. Pass an explicit `ManufacturedSolution` to
 override (useful for tests with custom u(x)).
+
+# Multi-stencil rules (PPM-style)
+
+For rules that emit several named stencils (e.g. PPM left-edge / right-edge
+reconstruction), the rule's `stencil` field is a mapping `{name: [entries…]}`
+rather than a bare list. Two `input_json` keys then drive the sweep:
+
+- `"sub_stencil"` — name of the entry to apply. Required when the rule
+  carries a multi-stencil mapping.
+- `"output_kind"` — one of [`OUTPUT_KINDS`](@ref); selects the per-cell
+  reference point and analytic field. Defaults to `"derivative_at_cell_center"`,
+  preserving every existing single-stencil rule's contract.
+
+A `reconstruction` block in `input_json` enables the PPM parabola pass
+(see [`parabola_reconstruct_periodic_1d`]):
+
+```json
+{ "reconstruction": {
+    "kind": "parabola",
+    "left_edge_stencil":  "u_L",
+    "right_edge_stencil": "u_R",
+    "subcell_points":     [0.1, 0.3, 0.5, 0.7, 0.9]
+}}
+```
+
+When present, the harness measures pointwise L∞ error of the parabolic
+reconstruction against the manufactured solution at every sub-cell sample.
 """
 function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
                          manufactured::Union{Nothing,ManufacturedSolution}=nothing)::MMSConvergenceResult
@@ -258,9 +486,9 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
         lookup_manufactured_solution(String(input_json["manufactured_solution"])) :
         manufactured
     sampling = String(get(input_json, "sampling", "cell_center"))
-    sampling == "cell_center" || throw(MMSEvaluatorError(
+    sampling in ("cell_center", "cell_average") || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",
-        "only `sampling: cell_center` is currently supported (got $(repr(sampling)))"))
+        "sampling must be \"cell_center\" or \"cell_average\" (got $(repr(sampling)))"))
     raw_grids = input_json["grids"]
     raw_grids isa AbstractVector || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",
@@ -270,16 +498,36 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
         "E_MMS_BAD_FIXTURE",
         "convergence requires at least two grids; got $(grids)"))
 
+    sub_stencil_field = get(input_json, "sub_stencil", nothing)
+    sub_stencil = sub_stencil_field === nothing ? nothing : String(sub_stencil_field)
+    output_kind = String(get(input_json, "output_kind", "derivative_at_cell_center"))
+    output_kind in OUTPUT_KINDS || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unknown output_kind $(repr(output_kind)); " *
+        "expected one of $(collect(OUTPUT_KINDS))"))
+    reconstruction = get(input_json, "reconstruction", nothing)
+
     domain_lo, domain_hi = ms.domain
     L = domain_hi - domain_lo
     errors = Vector{Float64}(undef, length(grids))
     for (k, n) in enumerate(grids)
         dx = L / n
-        bindings = Dict{String,Float64}("dx" => dx, "h" => dx)
-        u = [ms.sample(domain_lo + (i - 0.5) * dx) for i in 1:n]
-        du_num = apply_stencil_periodic_1d(stencil, u, bindings)
-        du_exact = [ms.derivative(domain_lo + (i - 0.5) * dx) for i in 1:n]
-        errors[k] = maximum(abs.(du_num .- du_exact))
+        bindings = Dict{String,Float64}(
+            "dx" => dx, "h" => dx, "domain_lo" => domain_lo)
+        u = sampling == "cell_average" ?
+            [_cell_average(ms,
+                           domain_lo + (i - 1) * dx,
+                           domain_lo + i * dx) for i in 1:n] :
+            [ms.sample(domain_lo + (i - 0.5) * dx) for i in 1:n]
+        if reconstruction === nothing
+            num = apply_stencil_periodic_1d(stencil, u, bindings;
+                                            sub_stencil=sub_stencil)
+            ref = _reference_samples(ms, output_kind, domain_lo, dx, n)
+            errors[k] = maximum(abs.(num .- ref))
+        else
+            errors[k] = _parabola_pass_error(stencil, u, bindings,
+                                             ms, reconstruction)
+        end
     end
 
     if any(!isfinite, errors) || any(e -> e <= 0, errors)
@@ -291,6 +539,37 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
     orders = [log2(errors[i] / errors[i + 1]) for i in 1:(length(errors) - 1)]
     observed_min = minimum(orders)
     return MMSConvergenceResult(grids, errors, orders, observed_min, declared)
+end
+
+# Drive one parabola-pass error measurement per grid resolution. Pulled out so
+# `mms_convergence` stays linear and the field-extraction errors stay close to
+# the field names the user wrote.
+function _parabola_pass_error(stencil, u_bar::Vector{Float64},
+                              bindings::Dict{String,Float64},
+                              ms::ManufacturedSolution,
+                              reconstruction::AbstractDict)::Float64
+    kind = String(get(reconstruction, "kind", "parabola"))
+    kind == "parabola" || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unknown reconstruction kind $(repr(kind)); only \"parabola\" is supported"))
+    haskey(reconstruction, "left_edge_stencil") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "reconstruction.parabola requires `left_edge_stencil`"))
+    haskey(reconstruction, "right_edge_stencil") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "reconstruction.parabola requires `right_edge_stencil`"))
+    haskey(reconstruction, "subcell_points") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "reconstruction.parabola requires `subcell_points`"))
+    pts = Float64[Float64(p) for p in reconstruction["subcell_points"]]
+    xs, vals = parabola_reconstruct_periodic_1d(
+        stencil, u_bar, bindings;
+        left_edge_stencil=String(reconstruction["left_edge_stencil"]),
+        right_edge_stencil=String(reconstruction["right_edge_stencil"]),
+        subcell_points=pts,
+    )
+    refs = ms.sample.(xs)
+    return maximum(abs.(vals .- refs))
 end
 
 """

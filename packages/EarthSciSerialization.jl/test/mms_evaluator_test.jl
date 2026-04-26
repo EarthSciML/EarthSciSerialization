@@ -412,4 +412,309 @@ using EarthSciSerialization
         @test_throws EarthSciSerialization.UnboundVariableError eval_coeff(
             "h", Dict("dx" => 0.125))
     end
+
+    # ====================================================================
+    # PPM reconstruction-style extensions (esm-k1d):
+    #   sub-stencil targeting, output-kind selector, parabola pass.
+    # ====================================================================
+
+    # Centered linear edge interpolation: u_{i+1/2} ≈ ½(u_i + u_{i+1}),
+    # u_{i-1/2} ≈ ½(u_{i-1} + u_i). Stored as a multi-stencil mapping so the
+    # rule emits two outputs (left edge, right edge) under one accuracy claim.
+    half = Dict("op" => "/", "args" => Any[1, 2])
+    edge2_rule = Dict(
+        "discretizations" => Dict(
+            "centered_edge_linear" => Dict(
+                "applies_to" => Dict("op" => "interp", "args" => Any["\$u"]),
+                "grid_family" => "cartesian",
+                "accuracy" => "O(dx^2)",
+                "stencil" => Dict(
+                    "u_L" => [
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => -1),
+                             "coeff" => half),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 0),
+                             "coeff" => half),
+                    ],
+                    "u_R" => [
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 0),
+                             "coeff" => half),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 1),
+                             "coeff" => half),
+                    ],
+                ),
+            ),
+        ),
+    )
+    edge_grids_input = Dict(
+        "rule" => "centered_edge_linear",
+        "manufactured_solution" =>
+            "sin(2*pi*x) on [0,1] periodic; derivative 2*pi*cos(2*pi*x)",
+        "sampling" => "cell_center",
+        "grids" => [Dict("n" => 16), Dict("n" => 32),
+                    Dict("n" => 64), Dict("n" => 128)],
+    )
+
+    @testset "apply_stencil_periodic_1d — sub-stencil targeting" begin
+        spec = edge2_rule["discretizations"]["centered_edge_linear"]
+        n = 64
+        dx = 1.0 / n
+        u = [sin(2π * (i - 0.5) * dx) for i in 1:n]
+        bindings = Dict("dx" => dx)
+
+        u_L = apply_stencil_periodic_1d(spec["stencil"], u, bindings;
+                                        sub_stencil="u_L")
+        u_R = apply_stencil_periodic_1d(spec["stencil"], u, bindings;
+                                        sub_stencil="u_R")
+        # Right edge of cell i and left edge of cell i+1 must agree exactly.
+        @test all(isapprox.(u_R[1:end-1], u_L[2:end]; atol=1e-14))
+        @test isapprox(u_R[end], u_L[1]; atol=1e-14)  # periodic wrap
+
+        # Bare-list form rejects an unsolicited sub_stencil arg.
+        bare = [Dict("selector" => Dict("kind" => "cartesian",
+                                        "axis" => "x", "offset" => 0),
+                     "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_periodic_1d(
+            bare, u, bindings; sub_stencil="anything")
+
+        # Mapping form requires a sub_stencil selection.
+        @test_throws MMSEvaluatorError apply_stencil_periodic_1d(
+            spec["stencil"], u, bindings)
+
+        # Unknown sub-stencil name throws.
+        @test_throws MMSEvaluatorError apply_stencil_periodic_1d(
+            spec["stencil"], u, bindings; sub_stencil="u_X")
+    end
+
+    @testset "mms_convergence — output_kind=value_at_edge_right" begin
+        input = Base.merge(edge_grids_input, Dict(
+            "sub_stencil" => "u_R",
+            "output_kind" => "value_at_edge_right",
+        ))
+        result = mms_convergence(edge2_rule, input)
+        @test result.declared_order == 2.0
+        @test result.observed_min_order ≥ 1.9
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+    end
+
+    @testset "mms_convergence — output_kind=value_at_edge_left" begin
+        input = Base.merge(edge_grids_input, Dict(
+            "sub_stencil" => "u_L",
+            "output_kind" => "value_at_edge_left",
+        ))
+        result = mms_convergence(edge2_rule, input)
+        @test result.observed_min_order ≥ 1.9
+    end
+
+    @testset "mms_convergence — unknown output_kind rejected" begin
+        bad = Base.merge(edge_grids_input, Dict(
+            "sub_stencil" => "u_R",
+            "output_kind" => "value_at_face",
+        ))
+        @test_throws MMSEvaluatorError mms_convergence(edge2_rule, bad)
+    end
+
+    # PPM unlimited 4th-order edge value (Colella & Woodward 1984, eq. 1.6):
+    #   u_{i+1/2} = (7/12)(u_i + u_{i+1}) − (1/12)(u_{i-1} + u_{i+2}).
+    # u_L for cell i = u_{i-1/2} (shift the coefficients one cell left).
+    seven_twelfths = Dict("op" => "/", "args" => Any[7, 12])
+    minus_one_twelfth = Dict("op" => "/", "args" => Any[-1, 12])
+    ppm_rule = Dict(
+        "discretizations" => Dict(
+            "ppm_unlimited" => Dict(
+                "applies_to" => Dict("op" => "interp", "args" => Any["\$u"]),
+                "grid_family" => "cartesian",
+                "accuracy" => "O(dx^3)",
+                "stencil" => Dict(
+                    "u_L" => [
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => -2),
+                             "coeff" => minus_one_twelfth),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => -1),
+                             "coeff" => seven_twelfths),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 0),
+                             "coeff" => seven_twelfths),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 1),
+                             "coeff" => minus_one_twelfth),
+                    ],
+                    "u_R" => [
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => -1),
+                             "coeff" => minus_one_twelfth),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 0),
+                             "coeff" => seven_twelfths),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 1),
+                             "coeff" => seven_twelfths),
+                        Dict("selector" => Dict("kind" => "cartesian",
+                                                "axis" => "\$x", "offset" => 2),
+                             "coeff" => minus_one_twelfth),
+                    ],
+                ),
+            ),
+        ),
+    )
+
+    @testset "parabola_reconstruct_periodic_1d — round-trip in one cell" begin
+        # Sanity: when u_L = u_R = ū, the parabola is constant ≡ ū.
+        stencils = Dict(
+            "u_L" => [Dict("selector" => Dict("offset" => 0), "coeff" => 1.0)],
+            "u_R" => [Dict("selector" => Dict("offset" => 0), "coeff" => 1.0)],
+        )
+        u_bar = [3.0, 3.0, 3.0, 3.0]
+        bindings = Dict("dx" => 0.25, "domain_lo" => 0.0)
+        xs, vals = parabola_reconstruct_periodic_1d(
+            stencils, u_bar, bindings;
+            left_edge_stencil="u_L", right_edge_stencil="u_R",
+            subcell_points=[0.1, 0.5, 0.9])
+        @test all(isapprox.(vals, 3.0; atol=1e-14))
+        @test length(xs) == length(u_bar) * 3
+    end
+
+    @testset "parabola_reconstruct_periodic_1d — input validation" begin
+        bindings_full = Dict("dx" => 0.25, "domain_lo" => 0.0)
+        bindings_no_dx = Dict("domain_lo" => 0.0)
+        bindings_no_lo = Dict("dx" => 0.25)
+        spec = Dict(
+            "u_L" => [Dict("selector" => Dict("offset" => 0), "coeff" => 1.0)],
+            "u_R" => [Dict("selector" => Dict("offset" => 0), "coeff" => 1.0)],
+        )
+        u = [1.0, 2.0]
+
+        @test_throws MMSEvaluatorError parabola_reconstruct_periodic_1d(
+            [1, 2, 3], u, bindings_full;
+            left_edge_stencil="u_L", right_edge_stencil="u_R",
+            subcell_points=[0.5])
+
+        @test_throws MMSEvaluatorError parabola_reconstruct_periodic_1d(
+            spec, u, bindings_no_dx;
+            left_edge_stencil="u_L", right_edge_stencil="u_R",
+            subcell_points=[0.5])
+
+        @test_throws MMSEvaluatorError parabola_reconstruct_periodic_1d(
+            spec, u, bindings_no_lo;
+            left_edge_stencil="u_L", right_edge_stencil="u_R",
+            subcell_points=[0.5])
+
+        @test_throws MMSEvaluatorError parabola_reconstruct_periodic_1d(
+            spec, u, bindings_full;
+            left_edge_stencil="u_L", right_edge_stencil="u_R",
+            subcell_points=[1.5])
+    end
+
+    @testset "mms_convergence — PPM parabola pass on cell averages" begin
+        # PPM with the unlimited 4th-order edge formula on cell-averaged input
+        # achieves third-order pointwise convergence inside the cell. We use
+        # the analytic cell average (sin(2π x) integrated over [a,b]) to avoid
+        # leaking quadrature error into the order estimate.
+        input = Dict(
+            "rule" => "ppm_unlimited",
+            "manufactured_solution" =>
+                "sin(2*pi*x) on [0,1] periodic; derivative 2*pi*cos(2*pi*x)",
+            "sampling" => "cell_average",
+            "grids" => [Dict("n" => 16), Dict("n" => 32),
+                        Dict("n" => 64), Dict("n" => 128)],
+            "reconstruction" => Dict(
+                "kind" => "parabola",
+                "left_edge_stencil" => "u_L",
+                "right_edge_stencil" => "u_R",
+                "subcell_points" => [0.1, 0.3, 0.5, 0.7, 0.9],
+            ),
+        )
+        result = mms_convergence(ppm_rule, input)
+        @test all(result.errors .> 0)
+        @test all(result.errors[i] > result.errors[i+1] for i in 1:3)
+        @test result.observed_min_order ≥ 2.8  # 3rd-order with margin
+        @test result.declared_order == 3.0
+    end
+
+    @testset "verify_mms_convergence — PPM parabola pass passes its threshold" begin
+        input = Dict(
+            "rule" => "ppm_unlimited",
+            "manufactured_solution" =>
+                "sin(2*pi*x) on [0,1] periodic; derivative 2*pi*cos(2*pi*x)",
+            "sampling" => "cell_average",
+            "grids" => [Dict("n" => 16), Dict("n" => 32),
+                        Dict("n" => 64), Dict("n" => 128)],
+            "reconstruction" => Dict(
+                "kind" => "parabola",
+                "left_edge_stencil" => "u_L",
+                "right_edge_stencil" => "u_R",
+                "subcell_points" => [0.1, 0.3, 0.5, 0.7, 0.9],
+            ),
+        )
+        expected = Dict(
+            "rule" => "ppm_unlimited",
+            "metric" => "Linf",
+            "expected_min_order" => 2.8,
+        )
+        result = verify_mms_convergence(ppm_rule, input, expected)
+        @test result.observed_min_order ≥ 2.8
+    end
+
+    @testset "mms_convergence — bad reconstruction rejected" begin
+        for missing_field in ("left_edge_stencil",
+                              "right_edge_stencil",
+                              "subcell_points")
+            recon = Dict("kind" => "parabola",
+                         "left_edge_stencil" => "u_L",
+                         "right_edge_stencil" => "u_R",
+                         "subcell_points" => [0.5])
+            delete!(recon, missing_field)
+            input = Dict(
+                "rule" => "ppm_unlimited",
+                "manufactured_solution" =>
+                    "sin(2*pi*x) on [0,1] periodic; derivative 2*pi*cos(2*pi*x)",
+                "sampling" => "cell_average",
+                "grids" => [Dict("n" => 16), Dict("n" => 32)],
+                "reconstruction" => recon,
+            )
+            @test_throws MMSEvaluatorError mms_convergence(ppm_rule, input)
+        end
+
+        # Unknown reconstruction kind.
+        input_bad_kind = Dict(
+            "rule" => "ppm_unlimited",
+            "manufactured_solution" =>
+                "sin(2*pi*x) on [0,1] periodic; derivative 2*pi*cos(2*pi*x)",
+            "sampling" => "cell_average",
+            "grids" => [Dict("n" => 16), Dict("n" => 32)],
+            "reconstruction" => Dict(
+                "kind" => "bezier",
+                "left_edge_stencil" => "u_L",
+                "right_edge_stencil" => "u_R",
+                "subcell_points" => [0.5],
+            ),
+        )
+        @test_throws MMSEvaluatorError mms_convergence(ppm_rule, input_bad_kind)
+    end
+
+    @testset "mms_convergence — sampling=cell_average works on existing rule" begin
+        # Centered 2nd-order FD against analytic cell averages: still O(dx^2).
+        input = Base.merge(centered_input, Dict("sampling" => "cell_average"))
+        result = mms_convergence(centered_2nd_uniform_rule, input)
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+    end
+
+    @testset "ManufacturedSolution — cell_average fallback uses GL quadrature" begin
+        # Without an analytic cell_average, the harness falls back to a 5-point
+        # Gauss–Legendre quadrature; for sin(2π x) this is exact-enough that the
+        # resulting average matches the analytic value to >1e-9.
+        analytic = lookup_manufactured_solution(
+            "sin(2*pi*x) on [0,1] periodic; derivative 2*pi*cos(2*pi*x)")
+        no_avg = ManufacturedSolution(
+            :_test_no_avg, analytic.sample, analytic.derivative, true, (0.0, 1.0))
+        for (lo, hi) in ((0.0, 0.0625), (0.25, 0.5), (0.875, 1.0))
+            ref = analytic.cell_average(lo, hi)
+            est = EarthSciSerialization._cell_average(no_avg, lo, hi)
+            @test isapprox(est, ref; atol=1e-9)
+        end
+    end
 end
