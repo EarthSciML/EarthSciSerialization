@@ -575,9 +575,8 @@ const expr = ExpressionBuilder.add(
 
 ## Next Steps
 
-- **Interactive Development** — Try the [SolidJS Interactive Components](../tutorial/interactive-components.md)
-- **Web Integration** — See [Web Application Examples](../examples/web-applications.md)
-- **Performance** — Read the [Performance Guide](../guides/performance.md)
-- **Advanced Features** — Explore [Expression Manipulation](../tutorial/expressions.md)
+- **Interactive Development** — Explore the [esm-editor package](https://github.com/EarthSciML/EarthSciSerialization/tree/main/packages/esm-editor) (SolidJS interactive components)
+- **Web Integration** — See the [examples directory](../examples/) for web application patterns
+- **Reference** — Browse the [TypeScript API Reference](../api/typescript/)
 
-Ready to build interactive model editors? Check out our [Interactive Tutorial](../tutorial/interactive-components.md)!
+Ready to build interactive model editors? Browse the [examples](../examples/) and the [esm-editor source](https://github.com/EarthSciML/EarthSciSerialization/tree/main/packages/esm-editor).

@@ -677,10 +677,9 @@ fn run_external_validator(filename: &str) -> Result<bool, Box<dyn std::error::Er
 
 ## Next Steps
 
-- **CLI Automation** — Learn [CLI Scripting Patterns](../guides/cli-automation.md)
-- **WASM Integration** — See [Web Assembly Guide](../guides/wasm-integration.md)
-- **Performance** — Read [High-Performance ESM Processing](../guides/performance.md)
-- **Deployment** — Check [Production Deployment](../guides/deployment.md)
+- **Reference** — Browse the [Rust API Reference](../api/rust/)
+- **Source** — Read the [earthsci-toolkit-rs crate source](https://github.com/EarthSciML/EarthSciSerialization/tree/main/packages/earthsci-toolkit-rs)
+- **Examples** — Explore the [examples directory](../examples/)
 
 ## Common Patterns
 
@@ -746,4 +745,4 @@ let esm_file = EsmBuilder::new("Atmospheric Chemistry")
     .build();
 ```
 
-Ready for high-performance ESM processing? Check out our [Performance Guide](../guides/performance.md)!
+Ready for high-performance ESM processing? Browse the [Rust API Reference](../api/rust/) and the [crate source](https://github.com/EarthSciML/EarthSciSerialization/tree/main/packages/earthsci-toolkit-rs).

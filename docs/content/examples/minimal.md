@@ -316,9 +316,8 @@ The same `.esm` file works identically across:
 Now that you understand the basic structure:
 
 1. **Try More Complex Examples** — See [Atmospheric Chemistry](atmospheric-chemistry.md)
-2. **Learn Expression Syntax** — Read [Working with Expressions](../tutorial/expressions.md)
-3. **Understand Validation** — Check [Validation Guide](../guides/validation.md)
-4. **Build Your Own Model** — Follow [Building Your First Model](../tutorial/first-model.md)
+2. **Understand Validation** — Read the [Validation Errors](../troubleshooting/validation-errors/) guide
+3. **Browse Standard Library** — See the [Standard Library](../standard_library/) for shipped subsystems
 
 ## Common Mistakes
 

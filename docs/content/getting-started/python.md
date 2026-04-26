@@ -519,10 +519,9 @@ def process_many_expressions(expression_list):
 
 ## Next Steps
 
-- **Scientific Workflows** — Explore [Scientific Computing Examples](../examples/scientific-computing.md)
-- **Advanced Analysis** — Read [Unit Analysis Guide](../guides/unit-analysis.md)
-- **Visualization** — Check [Visualization Examples](../examples/visualization.md)
-- **Performance** — See [Performance Optimization](../guides/performance.md)
+- **Reference** — Browse the [Python API Reference](../api/python/)
+- **Examples** — Work through the [examples directory](../examples/)
+- **Units** — Read the [units standard](../units-standard/)
 
 ## Common Patterns
 
@@ -593,4 +592,4 @@ class ESMDataPipeline:
         return result.x
 ```
 
-Ready to dive into scientific computing? Check out our [Scientific Examples](../examples/scientific-computing.md)!
+Ready to dive into scientific computing? Browse the [examples](../examples/) and the [Python API Reference](../api/python/).

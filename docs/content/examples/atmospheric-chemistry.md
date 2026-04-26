@@ -640,8 +640,7 @@ This cycling is much faster than NOₓ removal processes.
 
 1. **Extend the Model** — Add VOC chemistry, aerosol interactions
 2. **Spatial Dimensions** — Convert to 3D atmospheric model
-3. **Learn Coupling** — See [Multi-Component System](multi-component.md)
-4. **Optimization** — Study [Performance Guide](../guides/performance.md)
+3. **Reference** — Browse the [Standard Library](../standard_library/) for shipped subsystems
 
 This atmospheric chemistry example demonstrates how ESM format handles:
 - ✅ Complex multi-species chemical kinetics
@@ -650,4 +649,4 @@ This atmospheric chemistry example demonstrates how ESM format handles:
 - ✅ Cross-language simulation compatibility
 - ✅ Self-documenting model structure
 
-Ready for more complex systems? Try the [Multi-Component Example](multi-component.md)!
+Ready for more complex systems? Browse the other [examples](../) for additional patterns.

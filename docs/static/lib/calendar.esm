@@ -1,0 +1,120 @@
+{
+  "esm": "0.3.0",
+  "metadata": {
+    "name": "Calendar",
+    "description": "Standard-library calendar subsystem. Decomposes a UTC scalar time `t_utc` (IEEE-754 binary64 seconds since 1970-01-01T00:00:00Z, proleptic Gregorian, no leap-second consultation; see esm-spec.md §9.2) into the closed `datetime.*` calendar fields plus a small set of derived helpers (`seconds_since_midnight`, `fractional_year`) authored as pure-AST compositions of those fields. Includable as a subsystem via §4.7 reference; see docs/standard_library.md.",
+    "authors": ["EarthSciML"],
+    "created": "2026-04-25T00:00:00Z",
+    "tags": ["standard-library", "calendar", "datetime", "closed-function-registry"],
+    "references": [
+      {
+        "citation": "esm-spec.md §9.2 (datetime.* closed function registry); Fliegel, H.F., Van Flandern, T.C., 1968. A machine algorithm for processing calendar dates. Communications of the ACM 11(10), 657."
+      }
+    ]
+  },
+  "models": {
+    "Calendar": {
+      "coupletype": "Calendar",
+      "variables": {
+        "t_utc": {
+          "type": "parameter",
+          "units": "s",
+          "default": 0.0,
+          "description": "UTC seconds since the Unix epoch (1970-01-01T00:00:00Z). IEEE-754 binary64; proleptic Gregorian; no leap-second consultation. Negative values denote pre-1970 instants."
+        },
+        "year": {
+          "type": "observed",
+          "units": "1",
+          "description": "Proleptic-Gregorian calendar year of `t_utc` (e.g. 2026; 1969 for late-1969 instants; -1 for 2 BC). Integer-valued (zero ulp) per esm-spec.md §9.2.",
+          "expression": { "op": "fn", "name": "datetime.year", "args": ["t_utc"] }
+        },
+        "month": {
+          "type": "observed",
+          "units": "1",
+          "description": "Calendar month of `t_utc`, 1..12 (1 = January). Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.month", "args": ["t_utc"] }
+        },
+        "day": {
+          "type": "observed",
+          "units": "1",
+          "description": "Day of month, 1..31. Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.day", "args": ["t_utc"] }
+        },
+        "hour": {
+          "type": "observed",
+          "units": "1",
+          "description": "UTC hour, 0..23. Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.hour", "args": ["t_utc"] }
+        },
+        "minute": {
+          "type": "observed",
+          "units": "1",
+          "description": "UTC minute, 0..59. Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.minute", "args": ["t_utc"] }
+        },
+        "second": {
+          "type": "observed",
+          "units": "1",
+          "description": "UTC second, 0..59 (no leap-second slot per esm-spec.md §9.2). Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.second", "args": ["t_utc"] }
+        },
+        "day_of_year": {
+          "type": "observed",
+          "units": "1",
+          "description": "Day of the proleptic-Gregorian year of `t_utc`, 1..366 (1 = Jan 1). Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.day_of_year", "args": ["t_utc"] }
+        },
+        "julian_day": {
+          "type": "observed",
+          "units": "d",
+          "description": "Continuous Julian Day Number including fractional time-of-day (JD 0 = noon UTC on 4713-01-01 BC, proleptic Julian calendar). Tolerance ≤ 1 ulp per esm-spec.md §9.2.",
+          "expression": { "op": "fn", "name": "datetime.julian_day", "args": ["t_utc"] }
+        },
+        "is_leap_year": {
+          "type": "observed",
+          "units": "1",
+          "description": "1 if the proleptic-Gregorian year of `t_utc` is a leap year, else 0. Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.is_leap_year", "args": ["t_utc"] }
+        },
+        "seconds_since_midnight": {
+          "type": "observed",
+          "units": "s",
+          "description": "Seconds elapsed since the most recent UTC midnight, 0..86399. Built from the integer-exact `hour`, `minute`, `second` decompositions: `hour*3600 + minute*60 + second`. Integer-valued.",
+          "expression": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": ["hour", 3600] },
+              { "op": "*", "args": ["minute", 60] },
+              "second"
+            ]
+          }
+        },
+        "fractional_year": {
+          "type": "observed",
+          "units": "rad",
+          "description": "NOAA solar-position fractional-year angle γ (radians): `(2π/365) * ((day_of_year - 1) + (hour - 12)/24)`. Always uses 365.0 (NOAA convention; the resulting ~1-minute leap-year drift is below the algorithm's intrinsic accuracy). Tolerance ~3 ulp per esm-spec.md §9.2 (one transcendental composition).",
+          "expression": {
+            "op": "*",
+            "args": [
+              0.01721420632103996,
+              {
+                "op": "+",
+                "args": [
+                  { "op": "-", "args": ["day_of_year", 1] },
+                  {
+                    "op": "/",
+                    "args": [
+                      { "op": "-", "args": ["hour", 12] },
+                      24.0
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "equations": []
+    }
+  }
+}

@@ -604,4 +604,4 @@ esm validate model.esm --format json
 ✅ **Test examples** from documentation work in your environment
 ✅ **Keep backups** of working models before making changes
 
-Ready to solve validation issues? Use this guide alongside the [ESM Format Overview](../tutorial/esm-format-overview.md) for comprehensive understanding!
+Ready to solve validation issues? Use this guide alongside the [Standard Library reference](../../standard_library/) for comprehensive understanding!

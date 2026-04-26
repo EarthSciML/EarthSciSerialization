@@ -1,0 +1,205 @@
+{
+  "esm": "0.3.0",
+  "metadata": {
+    "name": "Solar",
+    "description": "Standard-library solar-geometry subsystem. Computes solar declination δ, the equation of time, and the solar zenith angle θ_z given latitude (degrees north), longitude (degrees east of prime meridian), and a UTC scalar time `t_utc`. The algorithm is the Spencer-/NOAA-style Fourier series for δ and EoT; it is bit-defined relative to the closed `datetime.*` registry (esm-spec.md §9.2) plus the §4.2 elementary-function ops, so all bindings agree to ≤ 10 ulp on the transcendental composition. Includable via §4.7 reference; see docs/standard_library.md.",
+    "authors": ["EarthSciML"],
+    "created": "2026-04-25T00:00:00Z",
+    "tags": ["standard-library", "solar", "zenith-angle", "noaa", "closed-function-registry"],
+    "references": [
+      {
+        "citation": "NOAA Global Monitoring Laboratory, Solar Position Calculator (https://gml.noaa.gov/grad/solcalc/calcdetails.html); Spencer, J.W., 1971. Fourier series representation of the position of the sun. Search 2(5), 172."
+      },
+      {
+        "citation": "Reda, I., Andreas, A., 2008. Solar position algorithm for solar radiation applications. NREL/TP-560-34302 (used as a high-accuracy cross-check; this subsystem ships the simpler NOAA Fourier model)."
+      }
+    ]
+  },
+  "models": {
+    "Solar": {
+      "coupletype": "Solar",
+      "variables": {
+        "t_utc": {
+          "type": "parameter",
+          "units": "s",
+          "default": 0.0,
+          "description": "UTC seconds since the Unix epoch (esm-spec.md §9.2). Same convention as `Calendar.t_utc`."
+        },
+        "lat": {
+          "type": "parameter",
+          "units": "deg",
+          "default": 0.0,
+          "description": "Latitude, degrees north of the equator. Range [-90, 90]."
+        },
+        "lon": {
+          "type": "parameter",
+          "units": "deg",
+          "default": 0.0,
+          "description": "Longitude, degrees east of the prime meridian. Range [-180, 180]."
+        },
+        "day_of_year": {
+          "type": "observed",
+          "units": "1",
+          "description": "Day of year of `t_utc`, 1..366. Integer-valued.",
+          "expression": { "op": "fn", "name": "datetime.day_of_year", "args": ["t_utc"] }
+        },
+        "hour": {
+          "type": "observed",
+          "units": "1",
+          "description": "UTC hour of `t_utc`, 0..23.",
+          "expression": { "op": "fn", "name": "datetime.hour", "args": ["t_utc"] }
+        },
+        "minute": {
+          "type": "observed",
+          "units": "1",
+          "description": "UTC minute of `t_utc`, 0..59.",
+          "expression": { "op": "fn", "name": "datetime.minute", "args": ["t_utc"] }
+        },
+        "second": {
+          "type": "observed",
+          "units": "1",
+          "description": "UTC second of `t_utc`, 0..59.",
+          "expression": { "op": "fn", "name": "datetime.second", "args": ["t_utc"] }
+        },
+        "gamma": {
+          "type": "observed",
+          "units": "rad",
+          "description": "NOAA fractional-year angle γ = (2π/365) · ((day_of_year - 1) + (hour - 12)/24). Always uses 365.0 (NOAA convention).",
+          "expression": {
+            "op": "*",
+            "args": [
+              0.01721420632103996,
+              {
+                "op": "+",
+                "args": [
+                  { "op": "-", "args": ["day_of_year", 1] },
+                  { "op": "/", "args": [ { "op": "-", "args": ["hour", 12] }, 24.0 ] }
+                ]
+              }
+            ]
+          }
+        },
+        "solar_declination": {
+          "type": "observed",
+          "units": "rad",
+          "description": "Solar declination δ (radians) — the Spencer Fourier series in γ: δ = 0.006918 - 0.399912 cos γ + 0.070257 sin γ - 0.006758 cos 2γ + 0.000907 sin 2γ - 0.002697 cos 3γ + 0.00148 sin 3γ. Accurate to ~0.0006 rad (~2 arcmin); cross-binding tolerance ≤ 10 ulp.",
+          "expression": {
+            "op": "+",
+            "args": [
+              0.006918,
+              { "op": "*", "args": [-0.399912, { "op": "cos", "args": ["gamma"] }] },
+              { "op": "*", "args": [ 0.070257, { "op": "sin", "args": ["gamma"] }] },
+              { "op": "*", "args": [-0.006758, { "op": "cos", "args": [ { "op": "*", "args": [2.0, "gamma"] } ] }] },
+              { "op": "*", "args": [ 0.000907, { "op": "sin", "args": [ { "op": "*", "args": [2.0, "gamma"] } ] }] },
+              { "op": "*", "args": [-0.002697, { "op": "cos", "args": [ { "op": "*", "args": [3.0, "gamma"] } ] }] },
+              { "op": "*", "args": [ 0.00148,  { "op": "sin", "args": [ { "op": "*", "args": [3.0, "gamma"] } ] }] }
+            ]
+          }
+        },
+        "equation_of_time": {
+          "type": "observed",
+          "units": "min",
+          "description": "Equation of time (apparent − mean solar time), in minutes, NOAA Spencer form: EoT = 229.18 · (0.000075 + 0.001868 cos γ - 0.032077 sin γ - 0.014615 cos 2γ - 0.040849 sin 2γ). Accurate to ~0.5 min.",
+          "expression": {
+            "op": "*",
+            "args": [
+              229.18,
+              {
+                "op": "+",
+                "args": [
+                  0.000075,
+                  { "op": "*", "args": [ 0.001868, { "op": "cos", "args": ["gamma"] }] },
+                  { "op": "*", "args": [-0.032077, { "op": "sin", "args": ["gamma"] }] },
+                  { "op": "*", "args": [-0.014615, { "op": "cos", "args": [ { "op": "*", "args": [2.0, "gamma"] } ] }] },
+                  { "op": "*", "args": [-0.040849, { "op": "sin", "args": [ { "op": "*", "args": [2.0, "gamma"] } ] }] }
+                ]
+              }
+            ]
+          }
+        },
+        "true_solar_time": {
+          "type": "observed",
+          "units": "min",
+          "description": "True solar time at the longitude `lon`, expressed as minutes since UTC midnight: hour·60 + minute + second/60 + EoT + 4·lon. The 4 minutes per degree term is the rotation rate of the Earth (1440 min / 360°).",
+          "expression": {
+            "op": "+",
+            "args": [
+              { "op": "*", "args": ["hour", 60.0] },
+              "minute",
+              { "op": "/", "args": ["second", 60.0] },
+              "equation_of_time",
+              { "op": "*", "args": [4.0, "lon"] }
+            ]
+          }
+        },
+        "hour_angle": {
+          "type": "observed",
+          "units": "rad",
+          "description": "Solar hour angle ω (radians): ω = (true_solar_time/4 − 180)·π/180. Zero at local solar noon, positive in the afternoon.",
+          "expression": {
+            "op": "*",
+            "args": [
+              0.017453292519943295,
+              {
+                "op": "-",
+                "args": [
+                  { "op": "/", "args": ["true_solar_time", 4.0] },
+                  180.0
+                ]
+              }
+            ]
+          }
+        },
+        "lat_rad": {
+          "type": "observed",
+          "units": "rad",
+          "description": "Latitude in radians: lat · π/180.",
+          "expression": { "op": "*", "args": [0.017453292519943295, "lat"] }
+        },
+        "cos_zenith": {
+          "type": "observed",
+          "units": "1",
+          "description": "Cosine of the solar zenith angle: cos θ_z = sin φ · sin δ + cos φ · cos δ · cos ω. Range [-1, 1]; negative values correspond to a sun below the horizon.",
+          "expression": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  { "op": "sin", "args": ["lat_rad"] },
+                  { "op": "sin", "args": ["solar_declination"] }
+                ]
+              },
+              {
+                "op": "*",
+                "args": [
+                  { "op": "cos", "args": ["lat_rad"] },
+                  { "op": "cos", "args": ["solar_declination"] },
+                  { "op": "cos", "args": ["hour_angle"] }
+                ]
+              }
+            ]
+          }
+        },
+        "solar_zenith_angle": {
+          "type": "observed",
+          "units": "rad",
+          "description": "Solar zenith angle θ_z = acos(clamp(cos_zenith, -1, 1)) (radians). The clamp protects against round-off pushing the cos value just outside [-1, 1] near sunrise/sunset; without it `acos` returns NaN. Accurate to a few arcminutes given the underlying Spencer δ and EoT series.",
+          "expression": {
+            "op": "acos",
+            "args": [
+              {
+                "op": "min",
+                "args": [
+                  1.0,
+                  { "op": "max", "args": [-1.0, "cos_zenith"] }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "equations": []
+    }
+  }
+}

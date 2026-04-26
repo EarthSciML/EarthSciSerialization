@@ -144,7 +144,7 @@ Common validation checks include:
 Now that you have your first ESM file working:
 
 1. **Explore Examples** — See [Real-World Examples](../examples/) for more complex models
-2. **Learn the Format** — Read the [ESM Format Overview](../tutorial/esm-format-overview.md)
+2. **Learn the Format** — Browse the [Standard Library](../standard_library/) and [registered functions](../registered_functions/)
 3. **Choose Your Language** — Check the language-specific getting started guides:
    - [Julia Guide](julia.md) — For simulation and ModelingToolkit integration
    - [TypeScript Guide](typescript.md) — For web applications and visualization

@@ -316,8 +316,8 @@ result = solve(optprob, ADAM())
 ## Next Steps
 
 - **Try the Examples** — Work through [Real-World Examples](../examples/)
-- **Learn Model Composition** — Read [Advanced Model Composition](../tutorial/model-composition.md)
-- **Performance Tuning** — Check [Performance Guide](../guides/performance.md)
+- **Reference** — Browse the [Julia API Reference](../api/julia/)
+- **Standard Library** — See the [Standard Library](../standard_library/) for shipped subsystems
 - **Contribute** — Help improve the Julia implementation
 
 ## Common Patterns
