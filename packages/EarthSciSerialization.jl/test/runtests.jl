@@ -54,20 +54,6 @@ using JSON3
             # Test loading and parsing all valid test fixtures
             valid_fixtures_dir = joinpath(@__DIR__, "..", "..", "..", "tests", "valid")
 
-            # Fixtures still authored against the v0.2.x `operators` /
-            # `registered_functions` extension points (esm-spec §9 closure
-            # removed both in v0.3.0). Migration is the responsibility of
-            # follow-on bead `esm-tzp/op-mig`. Until that lands these
-            # fixtures parse to SchemaValidationError; mark them broken.
-            legacy_v0_2_fixtures = Set([
-                "operators_comprehensive.esm",
-                "full_coupled.esm",
-                "interpolation_operators_comprehensive.esm",
-                "basic_interpolation_operators.esm",
-                "model_only.esm",
-                "scoped_refs_coupling.esm",
-            ])
-
             if isdir(valid_fixtures_dir)
                 valid_files = filter(f -> endswith(f, ".esm"), readdir(valid_fixtures_dir))
                 @info "Testing $(length(valid_files)) valid fixture files"
@@ -75,10 +61,6 @@ using JSON3
                 for filename in valid_files
                     filepath = joinpath(valid_fixtures_dir, filename)
                     @testset "Valid fixture: $filename" begin
-                        if filename in legacy_v0_2_fixtures
-                            @test_broken false  # tracked by esm-tzp/op-mig
-                            continue
-                        end
                         try
                             esm_data = EarthSciSerialization.load(filepath)
                             @test esm_data isa EarthSciSerialization.EsmFile
@@ -100,22 +82,8 @@ using JSON3
             # Test that load(save(load(file))) == load(file) for all valid fixtures
             valid_fixtures_dir = joinpath(@__DIR__, "..", "..", "..", "tests", "valid")
 
-            # Same v0.2.x legacy skip-list as the parse harness — these
-            # fixtures fail under the v0.3.0 schema until esm-umm migrates them.
-            legacy_v0_2_fixtures_rt = Set([
-                "operators_comprehensive.esm",
-                "full_coupled.esm",
-                "interpolation_operators_comprehensive.esm",
-                "basic_interpolation_operators.esm",
-                "model_only.esm",
-                "scoped_refs_coupling.esm",
-            ])
-
             if isdir(valid_fixtures_dir)
                 valid_files = filter(f -> endswith(f, ".esm"), readdir(valid_fixtures_dir))
-                # Drop legacy fixtures from the round-trip pool so the
-                # "first 5" sample doesn't land on a known-broken file.
-                valid_files = filter(f -> !(f in legacy_v0_2_fixtures_rt), valid_files)
 
                 for filename in valid_files[1:min(5, length(valid_files))]  # Test first 5 for performance
                     filepath = joinpath(valid_fixtures_dir, filename)

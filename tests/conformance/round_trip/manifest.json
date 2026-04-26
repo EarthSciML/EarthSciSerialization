@@ -29,11 +29,23 @@
     { "id": "valid/data_loaders_earthscidata_jl",   "path": "valid/data_loaders_earthscidata_jl.esm",   "tags": ["data_loaders"] },
 
     { "id": "valid/scoped_refs_nested",             "path": "valid/scoped_refs_nested.esm",             "tags": ["scoping"] },
+    { "id": "valid/scoped_refs_coupling",           "path": "valid/scoped_refs_coupling.esm",           "tags": ["scoping", "coupling", "esm-umm"] },
 
     { "id": "valid/expr_graphs_variable_deps",      "path": "valid/expr_graphs_variable_deps.esm",      "tags": ["expressions"] },
     { "id": "valid/tests_examples_comprehensive",   "path": "valid/tests_examples_comprehensive.esm",   "tags": ["tests_blocks"] },
     { "id": "valid/wildfire_atmosphere_ocean",      "path": "valid/wildfire_atmosphere_ocean.esm",      "tags": ["coupling", "end_to_end"] },
     { "id": "valid/structural_issues",              "path": "valid/structural_issues.esm",              "tags": ["core"] },
+    { "id": "valid/full_coupled",                   "path": "valid/full_coupled.esm",                   "tags": ["coupling", "comprehensive", "esm-umm"] },
+    { "id": "valid/model_only",                     "path": "valid/model_only.esm",                     "tags": ["model", "esm-umm"] },
+
+    { "id": "coupling/advanced_coupling",                   "path": "coupling/advanced_coupling.esm",                   "tags": ["coupling", "esm-umm"] },
+    { "id": "coupling/coupling_resolution_algorithm",       "path": "coupling/coupling_resolution_algorithm.esm",       "tags": ["coupling", "esm-umm"] },
+    { "id": "coupling/complete_coupling_types",             "path": "coupling/complete_coupling_types.esm",             "tags": ["coupling", "esm-umm"] },
+    { "id": "coupling/multi_step_coupling_chains_fixtures", "path": "coupling/multi_step_coupling_chains_fixtures.esm", "tags": ["coupling", "multi-step", "esm-umm"] },
+
+    { "id": "end_to_end/coupled_atmospheric_system",        "path": "end_to_end/coupled_atmospheric_system.esm",        "tags": ["end_to_end", "coupling", "esm-umm"] },
+    { "id": "end_to_end/ocean_atmosphere_biogeochemistry",  "path": "end_to_end/ocean_atmosphere_biogeochemistry.esm",  "tags": ["end_to_end", "coupling", "esm-umm"] },
+    { "id": "end_to_end/land_atmosphere_hydrology",         "path": "end_to_end/land_atmosphere_hydrology.esm",         "tags": ["end_to_end", "coupling", "esm-umm"] },
 
     { "id": "fixtures/arrayop/01_pure_ode_analytical",      "path": "fixtures/arrayop/01_pure_ode_analytical.esm",      "tags": ["arrayop"] },
     { "id": "fixtures/arrayop/02_mixed_ode_algebraic",      "path": "fixtures/arrayop/02_mixed_ode_algebraic.esm",      "tags": ["arrayop"] },

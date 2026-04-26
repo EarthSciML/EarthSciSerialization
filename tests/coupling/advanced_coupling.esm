@@ -151,6 +151,12 @@
     },
     "Transport": {
       "variables": {
+        "u": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.0,
+          "description": "Transported scalar concentration"
+        },
         "wind_speed": {
           "type": "parameter",
           "units": "m/s",

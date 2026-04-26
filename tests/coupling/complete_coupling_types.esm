@@ -236,6 +236,12 @@
         "notes": "Transport operator using _var placeholder for operator_compose coupling"
       },
       "variables": {
+        "u": {
+          "type": "state",
+          "units": "mol/mol",
+          "default": 0.0,
+          "description": "Transported scalar concentration"
+        },
         "u_wind": {
           "type": "parameter",
           "units": "m/s",
