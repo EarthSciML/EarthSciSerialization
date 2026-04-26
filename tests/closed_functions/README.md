@@ -25,7 +25,13 @@ tests/closed_functions/
 │   ├── julian_day/           (datetime.julian_day)
 │   └── is_leap_year/         (datetime.is_leap_year)
 └── interp/
-    └── searchsorted/         (interp.searchsorted)
+    ├── searchsorted/         (interp.searchsorted)
+    │   ├── canonical.esm
+    │   └── expected.json
+    ├── linear/               (interp.linear — 1-D tensor interpolation)
+    │   ├── canonical.esm
+    │   └── expected.json
+    └── bilinear/             (interp.bilinear — 2-D tensor interpolation)
         ├── canonical.esm
         └── expected.json
 ```
@@ -75,3 +81,9 @@ The scenario sets cover the boundary semantics pinned in esm-spec §9.2:
 - **searchsorted**: empty array, single element, duplicates, exact-on-
   boundary, x ≤ xs[1], x > xs[N], NaN x, NaN-in-xs (error), non-monotonic
   xs (error).
+- **interp.linear / interp.bilinear**: exact-at-knot (every position),
+  midpoint and quarter-point blends, below/above each axis (extrapolate-
+  flat), NaN x or y (NaN out), minimal-size grid (N=2 / 2x2), non-uniform
+  axis spacing. Load-time error scenarios cover non-monotonic axis,
+  equal-adjacent axis, axis-table length mismatch (and ragged rows for
+  bilinear), NaN in axis, and single-element axis.

@@ -241,7 +241,7 @@ const schema = {
         },
         "name": {
           "type": "string",
-          "description": "For fn: dotted module path of a function in the closed function registry (esm-spec §9.2). v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted."
+          "description": "For fn: dotted module path of a function in the closed function registry (esm-spec §9.2). v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear."
         },
         "value": {
           "description": "For const: inline literal value carried by the node (number, integer, or nested array thereof). args MUST be empty for a const node."

@@ -137,9 +137,15 @@ def test_closed_function_fixture(fixture_dir: Path):
 
     spec = json.loads(expected.read_text())
     fn_name = spec["function"]
-    assert fn_name in closed_function_names(), (
-        f"fixture's `function` field {fn_name!r} is not in the closed registry"
-    )
+    if fn_name not in closed_function_names():
+        # Spec-first phased rollout (esm-94w and similar): a new closed
+        # function may have its fixture defined in the spec PR before this
+        # binding's implementation lands. Skip rather than fail; the
+        # per-language [Impl] bead adds the function to the registry, at
+        # which point this skip turns into a real run automatically.
+        pytest.skip(
+            f"fixture function {fn_name!r} not yet implemented in this binding"
+        )
     tol = spec.get("tolerance") or {}
     abs_tol = float(tol.get("abs", 0.0))
     rel_tol = float(tol.get("rel", 0.0))

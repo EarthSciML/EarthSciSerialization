@@ -1966,7 +1966,88 @@ Returns the 1-based index `i` of the first element of `xs` that is `≥ x` (left
 
 **Tolerance:** exact (the returned index is integer; the comparison is the IEEE-754 `≥` predicate, which has no rounding tolerance).
 
-The `interp.searchsorted` primitive composes with the existing `index` op (§4.3.3) to express tabulated lookups: `{"op": "index", "args": ["table", {"op": "fn", "name": "interp.searchsorted", "args": ["x", {"op": "const", "value": [...]}]}]}`. Linear blends between adjacent table entries are written in AST: subtract neighbouring `index`-ed values, multiply by a fractional weight, add. There is no `interp.linear_1d` in v1; it is recoverable from `searchsorted` + `index` + AST arithmetic, and adding it would create a redundant primitive whose behavior the spec would have to pin to ulp.
+The `interp.searchsorted` primitive composes with the existing `index` op (§4.3.3) to express tabulated lookups: `{"op": "index", "args": ["table", {"op": "fn", "name": "interp.searchsorted", "args": ["x", {"op": "const", "value": [...]}]}]}`. Linear blends between adjacent table entries can be written in pure AST (subtract neighbouring `index`-ed values, multiply by a fractional weight, add); the `interp.linear` and `interp.bilinear` primitives below are the **named, opaque** form of those blends — semantically equivalent to the AST composition but exposed as a single `fn` node so that bindings with symbolic-rewriting layers (notably the Julia / MTK extension) can register them as opaque operators and avoid the alias-elimination blow-up that ~10-node-per-lookup AST inlining causes for components with hundreds of lookups (see `docs/rfcs/closed-function-registry.md` and the `interp.linear` / `interp.bilinear` rationale in §9.2 below).
+
+#### `interp.*` — tensor interpolation
+
+| Name | Arity | Args | Return |
+|---|---|---|---|
+| `interp.linear` | 3 | `table: const array[N], axis: const array[N], x: scalar` | scalar |
+| `interp.bilinear` | 5 | `table: const array[Nx][Ny], axis_x: const array[Nx], axis_y: const array[Ny], x: scalar, y: scalar` | scalar |
+
+These primitives are the named, opaque form of the searchsorted-plus-index-plus-AST-arithmetic pattern that produces a 1-D or 2-D linear interpolation into a tabulated dataset. They exist for the perf reason described in the paragraph above (pinning a single `fn` node lets bindings with symbolic layers stop alias-eliminating tens of intermediate nodes per lookup), not because the math is novel. Bindings MAY satisfy these by composing existing primitives internally (`interp.searchsorted` + `index` + AST blend) OR by direct implementation; either is conformant as long as the conformance fixtures in `tests/closed_functions/interp/linear/` and `tests/closed_functions/interp/bilinear/` pass.
+
+**Argument shape contract (loaded at file-load time, not at evaluation):**
+
+- `table` and the axis array(s) MUST be `const`-op arrays of finite floats. Loaders MUST resolve their nested shapes at load time. The shape relation MUST hold:
+  - `interp.linear`: `len(table) == len(axis) == N` with `N ≥ 2`.
+  - `interp.bilinear`: outer length of `table` MUST equal `Nx == len(axis_x)` and every inner row of `table` MUST have length `Ny == len(axis_y)`, with `Nx ≥ 2` and `Ny ≥ 2`. The table is row-major: `table[i][j]` is the value at `(axis_x[i], axis_y[j])`.
+- Each axis array MUST be **strictly increasing**. Equal adjacent axis values are not allowed (they would make a denominator zero in the blend). `interp.searchsorted` permits equal-adjacent (§9.2) because it returns an index, not a blend; `interp.linear` / `interp.bilinear` do not.
+- Axis arrays MUST NOT contain NaN. Table arrays MAY contain NaN (a query landing in a cell whose corner is NaN will produce NaN in the output; this is intentional, since "missing data" is a real use case).
+- Bindings MUST reject violations at file-load time with the diagnostic codes listed under "Errors" below. Loading MUST fail.
+
+**Semantics — `interp.linear`:**
+
+Let `axis = [a₁, ..., aₙ]` (1-based indexing for spec exposition) and `table = [t₁, ..., tₙ]`. For a scalar query `x`:
+
+1. **Below-range clamp.** If `x ≤ a₁`, return `t₁`.
+2. **Above-range clamp.** If `x ≥ aₙ`, return `tₙ`.
+3. **In-range blend.** Otherwise let `i` be the unique index in `[1, n−1]` satisfying `aᵢ ≤ x < aᵢ₊₁` (existence and uniqueness are guaranteed by strict monotonicity and the clamps in steps 1–2). Compute the weight and blend in this exact order (pinned for cross-binding bit-equivalence):
+
+   ```
+   w      = (x − aᵢ) / (aᵢ₊₁ − aᵢ)
+   result = tᵢ + w · (tᵢ₊₁ − tᵢ)
+   ```
+
+   This form (rather than `(1 − w)·tᵢ + w·tᵢ₊₁`) is required because it is **exact at the endpoints**: `w = 0` ⇒ `result = tᵢ` exactly, and `w = 1` ⇒ `result = tᵢ + (tᵢ₊₁ − tᵢ) = tᵢ₊₁` to within IEEE-754 round-to-nearest, with no rounding error from `1 − w` cancellation when `x` is near `aᵢ₊₁`.
+
+4. **NaN propagation.** If `x` is NaN, the result is NaN. (The clamp comparisons in steps 1–2 are IEEE-754 `≤` and `≥`, which both return false for NaN, so the function falls through to step 3, where `aᵢ − x` and `(aᵢ₊₁ − aᵢ)` produce a NaN weight that propagates through the blend.)
+
+**Semantics — `interp.bilinear`:**
+
+Let `axis_x = [x₁, ..., x_{Nx}]`, `axis_y = [y₁, ..., y_{Ny}]`, and `table[i][j]` be the value at `(xᵢ, yⱼ)`. For scalar queries `(x, y)`:
+
+1. **Per-axis clamp.** Compute `x_q = clamp(x, x₁, x_{Nx})` and `y_q = clamp(y, y₁, y_{Ny})`, where `clamp(v, lo, hi)` is `lo` if `v ≤ lo`, `hi` if `v ≥ hi`, else `v`. This is the 2-D extrapolate-flat rule: queries outside the table are pinned to the nearest edge.
+2. **Cell location.** Choose `i` as the **largest** index in `[1, Nx − 1]` with `xᵢ ≤ x_q`, and `j` as the largest index in `[1, Ny − 1]` with `yⱼ ≤ y_q`. (Equivalent formulation: clamp the result of `interp.searchsorted(x_q, axis_x)` to `[2, Nx]`, then subtract 1; analogously for `y`.) Both assignments are unique because step 1 guarantees `x₁ ≤ x_q ≤ x_{Nx}` and `y₁ ≤ y_q ≤ y_{Ny}`. When `x_q` lands exactly on an interior knot `xₖ` the convention selects `i = k` (so `wx = 0` and the x-blend reduces to the row at knot `k` exactly); the same blend evaluated under the alternative `i = k − 1` (so `wx = 1`) produces the bit-identical result under the pinned form, but the spec pins the convention for definiteness.
+3. **Weights.**
+
+   ```
+   wx = (x_q − xᵢ) / (xᵢ₊₁ − xᵢ)
+   wy = (y_q − yⱼ) / (yⱼ₊₁ − yⱼ)
+   ```
+
+4. **Two 1-D blends in x, then one in y.** Pinned evaluation order (cross-binding bit-equivalence requires this exact form, as it is the natural composition of two `interp.linear` calls along the inner axis):
+
+   ```
+   row_j   = table[i][j]   + wx · (table[i+1][j]   − table[i][j])
+   row_jp1 = table[i][j+1] + wx · (table[i+1][j+1] − table[i][j+1])
+   result  = row_j + wy · (row_jp1 − row_j)
+   ```
+
+5. **NaN propagation.** If `x` or `y` is NaN, the corresponding axis weight is NaN, and the result is NaN. NaN entries in `table` propagate through whichever blend touches them.
+
+**Errors (load time):**
+
+| Diagnostic code | Condition |
+|---|---|
+| `interp_non_monotonic_axis` | Any `axis` (or `axis_x`, `axis_y`) is not strictly increasing. Includes equal-adjacent and decreasing pairs. |
+| `interp_axis_length_mismatch` | `interp.linear`: `len(table) != len(axis)`. `interp.bilinear`: outer length of `table` differs from `len(axis_x)`, or any row's length differs from `len(axis_y)`. |
+| `interp_nan_in_axis` | Any axis contains NaN. |
+| `interp_axis_too_short` | Any axis has fewer than 2 entries (no interval to blend across). |
+| `interp_table_not_const` / `interp_axis_not_const` | The `table` or any axis argument is not a literal `const`-op array (e.g. it is a variable reference or a non-`const` expression). |
+
+**Tolerance:** when bindings implement the pinned evaluation order in IEEE-754 `binary64` arithmetic, agreement is **bit-exact** (`{ "abs": 0, "rel": 0 }`) for fixtures whose inputs are exactly representable and whose intermediate arithmetic does not require an FMA (the spec does not require FMA usage; bindings that use FMA selectively MUST ensure their results still match the non-FMA reference within the per-fixture tolerance). For mixed-FMA / non-FMA cross-binding comparisons the harness MAY relax to `{ "abs": 0, "rel": 4e-16 }` (~2 ulp at unit magnitude); see `tests/closed_functions/interp/linear/expected.json` and `bilinear/expected.json` for the per-fixture tolerance fields actually applied in CI.
+
+**Composition rationale (informative):** `interp.linear(table, axis, x)` is exactly equivalent to the following AST composition (modulo evaluation order / FMA effects, which the spec pins above):
+
+```jsonc
+// Let i = interp.searchsorted(x, axis) clamped to [2, N], i_lo = i − 1.
+// Then the linear blend is:
+//   table[i_lo] + (x − axis[i_lo]) / (axis[i] − axis[i_lo]) · (table[i] − table[i_lo])
+// (with extrapolate-flat handled by clamping the search result before the index lookup).
+```
+
+The named primitive exists so that symbolic layers in bindings (notably the Julia MTK extension) can mark each lookup as opaque to alias elimination via `@register_symbolic`, instead of paying the structural-simplify cost of ~10 alias-eliminated intermediates per lookup. With ~230 lookups per `fastjx` photolysis evaluation (18 wavelengths × 13 species), that difference is the gap between MTK simplification finishing in seconds versus minutes-to-hours (see escalation `hq-wisp-y6g6`).
 
 ### 9.3 The `enums` block
 

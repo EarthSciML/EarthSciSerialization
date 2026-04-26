@@ -6,7 +6,7 @@
  */
 
 /**
- * EarthSciML Serialization Format (v0.3.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.3.0 closes the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family and `interp.searchsorted`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).
+ * EarthSciML Serialization Format (v0.3.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.3.0 closes the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).
  */
 export type ESMFormat = ESMFormat1 & ESMFormat2;
 export type ESMFormat1 = {
@@ -170,7 +170,7 @@ export type ExpressionNode = ExpressionNode1 & {
    */
   fn?: string;
   /**
-   * For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted.
+   * For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear.
    */
   name?: string;
   /**

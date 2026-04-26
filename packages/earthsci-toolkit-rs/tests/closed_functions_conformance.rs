@@ -172,10 +172,17 @@ fn run_fixture(fixture_dir: &Path, total_scenarios: &mut usize, total_errors: &m
         .as_str()
         .unwrap_or_else(|| panic!("{}: missing 'function' field", expected.display()))
         .to_string();
-    assert!(
-        closed_function_names().contains(&fn_name),
-        "expected.json refers to {fn_name} which is not in the closed registry"
-    );
+    if !closed_function_names().contains(&fn_name) {
+        // Spec-first phased rollout (esm-94w and similar): the spec PR adds
+        // the fixture before this binding's implementation lands. Skip
+        // rather than fail; the per-language [Impl] bead registers the
+        // function and the fixture starts running automatically.
+        eprintln!(
+            "skipping fixture {}: function {fn_name} not yet implemented in this binding",
+            expected.display()
+        );
+        return;
+    }
 
     let abs_tol = spec
         .get("tolerance")

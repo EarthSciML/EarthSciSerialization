@@ -1,0 +1,171 @@
+{
+  "function": "interp.bilinear",
+  "tolerance": { "abs": 0, "rel": 0 },
+  "_comment": "Cross-binding conformance reference for interp.bilinear (esm-spec §9.2). Each `success` scenario gives positional inputs [table, axis_x, axis_y, x, y] and the expected scalar. Tolerance is 0/0 because the chosen inputs are exactly representable in IEEE-754 binary64 and the spec-pinned evaluation order (two 1-D x-blends followed by one 1-D y-blend, each in the form `a + w*(b - a)`) produces the same Float64 result on any conformant binding. Bindings that selectively use FMA MUST verify their results still match these references; if a binding cannot meet 0/0 on a particular fixture, raise the issue against esm-94w rather than relaxing the fixture silently. Out-of-range queries clamp per axis to the nearest endpoint (extrapolate-flat).",
+  "scenarios": [
+    {
+      "name": "exact_corner_origin",
+      "description": "(x, y) = (axis_x[1], axis_y[1]) exactly returns table[1][1]; both wx and wy are 0.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 0.0, 0.0 ],
+      "expected": 0.0
+    },
+    {
+      "name": "exact_corner_max",
+      "description": "(x, y) = (axis_x[Nx], axis_y[Ny]) exactly returns table[Nx][Ny]; clamps select the last cell, weights are 1; pinned form `t[i] + 1*(t[i+1] - t[i])` returns `t[i+1]`.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 2.0, 20.0 ],
+      "expected": 22.0
+    },
+    {
+      "name": "exact_interior_knot_both_axes",
+      "description": "(x, y) lands exactly on the interior knot in both axes (axis_x[2]=1, axis_y[2]=10); cell convention selects `i = 2, j = 2`, both weights are 0; result = table[2][2] = 11.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 1.0, 10.0 ],
+      "expected": 11.0
+    },
+    {
+      "name": "exact_x_knot_blend_y",
+      "description": "x lands exactly on interior knot (wx=0), y midway in cell. row_j and row_jp1 reduce to table[2][1] and table[2][2]; result = 10 + 0.5*(11-10) = 10.5.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 1.0, 5.0 ],
+      "expected": 10.5
+    },
+    {
+      "name": "blend_x_exact_y_knot",
+      "description": "x midway in cell i=1 (wx=0.5), y exactly on the interior knot axis_y[2]=10. Cell convention selects j=2 (largest with axis_y[j] ≤ y_q), wy = (10-10)/(20-10) = 0. row_j = table[1][2] + 0.5*(table[2][2]-table[1][2]) = 1 + 0.5*(11-1) = 6; row_jp1 = table[1][3] + 0.5*(table[2][3]-table[1][3]) = 2 + 0.5*(12-2) = 7; result = 6 + 0*(7-6) = 6.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 0.5, 10.0 ],
+      "expected": 6.0
+    },
+    {
+      "name": "center_of_first_cell",
+      "description": "(x, y) at the center of cell (i=1, j=1); wx = wy = 0.5; row_j = 0 + 0.5*10 = 5; row_jp1 = 1 + 0.5*10 = 6; result = 5 + 0.5*1 = 5.5.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 0.5, 5.0 ],
+      "expected": 5.5
+    },
+    {
+      "name": "quarter_point_in_x_three_quarter_in_y",
+      "description": "x = 0.25 (wx = 0.25 in cell i=1), y = 7.5 (wy = 0.75 in cell j=1). row_j = 0 + 0.25*(10-0) = 2.5; row_jp1 = 1 + 0.25*(11-1) = 3.5; result = 2.5 + 0.75*(3.5-2.5) = 3.25.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 0.25, 7.5 ],
+      "expected": 3.25
+    },
+    {
+      "name": "below_both_clamps_to_corner",
+      "description": "(x, y) below both axes clamps to (axis_x[1], axis_y[1]); result = table[1][1] = 0.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], -100.0, -100.0 ],
+      "expected": 0.0
+    },
+    {
+      "name": "above_both_clamps_to_corner",
+      "description": "(x, y) above both axes clamps to (axis_x[Nx], axis_y[Ny]); result = table[Nx][Ny] = 22.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 1000.0, 1000.0 ],
+      "expected": 22.0
+    },
+    {
+      "name": "below_x_only_blend_y",
+      "description": "x below axis_x[1] clamps to axis_x[1]; y midway in cell j=1. wx=0; row_j = 0; row_jp1 = 1; result = 0 + 0.5*1 = 0.5.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], -5.0, 5.0 ],
+      "expected": 0.5
+    },
+    {
+      "name": "above_y_only_blend_x",
+      "description": "y above axis_y[Ny] clamps to axis_y[Ny] (= 20); x midway in cell i=2 (between axis_x[2]=1 and axis_x[3]=2). wy=1; row_j = table[2][3] + 0.5*(table[3][3]-table[2][3]) = 12 + 0.5*10 = 17. With wy=1, result = row_j + 1*(row_jp1 - row_j); but j is selected as Ny-1 = 2 by the cell convention, so row_j is at axis_y[2]=10 and row_jp1 at axis_y[3]=20. Recompute: cell j = 2, wy = (20-10)/(20-10) = 1; row_j = table[2][2] + 0.5*(table[3][2]-table[2][2]) = 11 + 0.5*10 = 16; row_jp1 = table[2][3] + 0.5*(table[3][3]-table[2][3]) = 12 + 0.5*10 = 17; result = 16 + 1*(17-16) = 17.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 1.5, 100.0 ],
+      "expected": 17.0
+    },
+    {
+      "name": "nan_x_returns_nan",
+      "description": "NaN x propagates through wx and the x-blends.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], "NaN", 5.0 ],
+      "expected": "NaN"
+    },
+    {
+      "name": "nan_y_returns_nan",
+      "description": "NaN y propagates through wy and the final y-blend.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 0.5, "NaN" ],
+      "expected": "NaN"
+    },
+    {
+      "name": "minimal_2x2_grid_center",
+      "description": "Minimal-shape 2x2 table. Center of the single cell; wx=wy=0.5. row_j = 0+0.5*2=1; row_jp1 = 1+0.5*2=2; result = 1+0.5*1 = 1.5.",
+      "inputs": [ [[0.0, 1.0], [2.0, 3.0]], [0.0, 1.0], [0.0, 1.0], 0.5, 0.5 ],
+      "expected": 1.5
+    },
+    {
+      "name": "minimal_2x2_grid_corner",
+      "description": "Minimal-shape 2x2 table; query at the (max, max) corner returns the (max, max) entry.",
+      "inputs": [ [[0.0, 1.0], [2.0, 3.0]], [0.0, 1.0], [0.0, 1.0], 1.0, 1.0 ],
+      "expected": 3.0
+    },
+    {
+      "name": "non_uniform_axis_x_blend",
+      "description": "Non-uniform axis_x = [0, 2, 3]; axis_y = [0, 1, 2]; query at center of first x-cell (x=1 → wx = 0.5 over span [0,2]) and y=0.5 (wy=0.5 over span [0,1]). row_j = 0 + 0.5*(20-0) = 10; row_jp1 = 1 + 0.5*(21-1) = 11; result = 10 + 0.5*(11-10) = 10.5.",
+      "inputs": [ [[0.0, 1.0, 2.0], [20.0, 21.0, 22.0], [30.0, 31.0, 32.0]], [0.0, 2.0, 3.0], [0.0, 1.0, 2.0], 1.0, 0.5 ],
+      "expected": 10.5
+    },
+    {
+      "name": "non_uniform_axis_y_blend",
+      "description": "Non-uniform axis_y = [0, 1, 4]; axis_x = [0, 1, 2]; query at center of second y-cell (y=2.5 → wy = (2.5-1)/(4-1) = 0.5) and x=1.5 (wx=0.5 over [1,2]). Cell (i=2, j=2). row_j = table[2][2] + 0.5*(table[3][2]-table[2][2]) = 11 + 0.5*(21-11) = 16; row_jp1 = table[2][3] + 0.5*(table[3][3]-table[2][3]) = 12 + 0.5*(22-12) = 17; result = 16 + 0.5*(17-16) = 16.5.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 1.0, 4.0], 1.5, 2.5 ],
+      "expected": 16.5
+    }
+  ],
+  "error_scenarios": [
+    {
+      "name": "non_monotonic_axis_x",
+      "description": "axis_x decreases. Bindings MUST reject at load time with diagnostic code `interp_non_monotonic_axis`.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 2.0, 1.0], [0.0, 10.0, 20.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_non_monotonic_axis"
+    },
+    {
+      "name": "non_monotonic_axis_y",
+      "description": "axis_y decreases. Bindings MUST reject with `interp_non_monotonic_axis`.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 20.0, 10.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_non_monotonic_axis"
+    },
+    {
+      "name": "equal_adjacent_axis_x",
+      "description": "axis_x has duplicate adjacent entries (denominator zero). Bindings MUST reject with `interp_non_monotonic_axis` (interp.bilinear requires strict monotonicity).",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 1.0], [0.0, 10.0, 20.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_non_monotonic_axis"
+    },
+    {
+      "name": "axis_x_length_mismatch",
+      "description": "table outer length is 3, axis_x has 2. Bindings MUST reject with `interp_axis_length_mismatch`.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0], [0.0, 10.0, 20.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_axis_length_mismatch"
+    },
+    {
+      "name": "axis_y_length_mismatch",
+      "description": "Inner row has 3 entries, axis_y has 2. Bindings MUST reject with `interp_axis_length_mismatch`.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_axis_length_mismatch"
+    },
+    {
+      "name": "ragged_inner_rows",
+      "description": "table inner rows have inconsistent lengths. Bindings MUST reject with `interp_axis_length_mismatch` (every row's length must equal len(axis_y)).",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, 10.0, 20.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_axis_length_mismatch"
+    },
+    {
+      "name": "nan_in_axis_x",
+      "description": "axis_x contains NaN. Bindings MUST reject with `interp_nan_in_axis`.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, "NaN", 2.0], [0.0, 10.0, 20.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_nan_in_axis"
+    },
+    {
+      "name": "nan_in_axis_y",
+      "description": "axis_y contains NaN. Bindings MUST reject with `interp_nan_in_axis`.",
+      "inputs": [ [[0.0, 1.0, 2.0], [10.0, 11.0, 12.0], [20.0, 21.0, 22.0]], [0.0, 1.0, 2.0], [0.0, "NaN", 20.0], 0.5, 5.0 ],
+      "expected_error_code": "interp_nan_in_axis"
+    },
+    {
+      "name": "axis_x_too_short",
+      "description": "axis_x has only one entry (no x-cell to blend across). Bindings MUST reject with `interp_axis_too_short`.",
+      "inputs": [ [[0.0, 1.0, 2.0]], [0.0], [0.0, 10.0, 20.0], 0.0, 5.0 ],
+      "expected_error_code": "interp_axis_too_short"
+    },
+    {
+      "name": "axis_y_too_short",
+      "description": "axis_y has only one entry (no y-cell to blend across). Bindings MUST reject with `interp_axis_too_short`.",
+      "inputs": [ [[0.0], [10.0], [20.0]], [0.0, 1.0, 2.0], [0.0], 0.5, 0.0 ],
+      "expected_error_code": "interp_axis_too_short"
+    }
+  ]
+}

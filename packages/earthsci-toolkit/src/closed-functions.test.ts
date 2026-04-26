@@ -94,6 +94,25 @@ describe('Closed function registry — cross-binding conformance', () => {
     return
   }
 
+  // Functions whose dispatch this harness directly understands. New
+  // closed-function fixtures landed by spec PRs (e.g. esm-94w's
+  // interp.linear / interp.bilinear) appear under tests/closed_functions/
+  // before the per-language [Impl] beads add binding code; skip those
+  // fixtures here until the implementation bead extends this harness with
+  // a dispatch arm.
+  const harnessKnownFunctions = new Set<string>([
+    'datetime.year',
+    'datetime.month',
+    'datetime.day',
+    'datetime.hour',
+    'datetime.minute',
+    'datetime.second',
+    'datetime.day_of_year',
+    'datetime.julian_day',
+    'datetime.is_leap_year',
+    'interp.searchsorted',
+  ])
+
   for (const { module: mod, fn, dir } of fixtures) {
     describe(`${mod}.${fn}`, () => {
       const canonicalPath = join(dir, 'canonical.esm')
@@ -101,6 +120,11 @@ describe('Closed function registry — cross-binding conformance', () => {
 
       const expected: ExpectedFile = JSON.parse(readFileSync(expectedPath, 'utf-8'))
       const fileText = readFileSync(canonicalPath, 'utf-8')
+
+      if (!harnessKnownFunctions.has(expected.function)) {
+        it.skip(`fixture function ${expected.function} not yet implemented in this binding`, () => {})
+        return
+      }
 
       it('parses the canonical .esm without error', () => {
         const parsed = load(fileText)

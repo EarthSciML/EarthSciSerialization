@@ -1,0 +1,129 @@
+{
+  "function": "interp.linear",
+  "tolerance": { "abs": 0, "rel": 0 },
+  "_comment": "Cross-binding conformance reference for interp.linear (esm-spec §9.2). Each `success` scenario gives positional inputs [table, axis, x] and the expected scalar. Tolerance is 0/0 because the chosen inputs are exactly representable in IEEE-754 binary64 and the spec-pinned evaluation order (`result = t[i] + w * (t[i+1] - t[i])`) produces the same Float64 result on any conformant binding. Bindings that selectively use FMA MUST verify their results still match these references; if a binding cannot meet 0/0 on a particular fixture, raise the issue against esm-94w rather than relaxing the fixture silently. Out-of-range queries clamp to the nearest endpoint (extrapolate-flat).",
+  "scenarios": [
+    {
+      "name": "exact_at_first_knot",
+      "description": "x = axis[1] returns table[1] exactly.",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], 0.0 ],
+      "expected": 10.0
+    },
+    {
+      "name": "exact_at_interior_knot",
+      "description": "x lands exactly on an interior axis knot — return the corresponding table entry without blending.",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], 2.0 ],
+      "expected": 40.0
+    },
+    {
+      "name": "exact_at_last_knot",
+      "description": "x = axis[N] returns table[N] exactly. With the pinned form `t[i] + w*(t[i+1]-t[i])` and w handled by clamp, no rounding error from (1-w) cancellation.",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], 4.0 ],
+      "expected": 160.0
+    },
+    {
+      "name": "midpoint_first_cell",
+      "description": "x at midpoint of [axis[1], axis[2]] = 0.5; w = 0.5; result = 10 + 0.5*(20-10) = 15.",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], 0.5 ],
+      "expected": 15.0
+    },
+    {
+      "name": "midpoint_interior_cell",
+      "description": "x at midpoint of [axis[2], axis[3]] = 1.5; w = 0.5; result = 20 + 0.5*(40-20) = 30.",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], 1.5 ],
+      "expected": 30.0
+    },
+    {
+      "name": "quarter_point_interior_cell",
+      "description": "x = 2.25 in cell [2,3]; w = 0.25; result = 40 + 0.25*(80-40) = 50.",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], 2.25 ],
+      "expected": 50.0
+    },
+    {
+      "name": "below_minimum_clamps",
+      "description": "x < axis[1]: extrapolate-flat returns table[1].",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], -5.0 ],
+      "expected": 10.0
+    },
+    {
+      "name": "above_maximum_clamps",
+      "description": "x > axis[N]: extrapolate-flat returns table[N].",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], 99.0 ],
+      "expected": 160.0
+    },
+    {
+      "name": "nan_x_returns_nan",
+      "description": "NaN x propagates through the blend (clamp comparisons return false for NaN, falling through to step 3 where the weight is NaN). Expected output is NaN.",
+      "inputs": [ [10.0, 20.0, 40.0, 80.0, 160.0], [0.0, 1.0, 2.0, 3.0, 4.0], "NaN" ],
+      "expected": "NaN"
+    },
+    {
+      "name": "two_point_table_midpoint",
+      "description": "Minimal-size table (N=2). x = 12.5 in [10,20]; w = 0.25; result = 3 + 0.25*(7-3) = 4.",
+      "inputs": [ [3.0, 7.0], [10.0, 20.0], 12.5 ],
+      "expected": 4.0
+    },
+    {
+      "name": "two_point_table_below_clamps",
+      "description": "Minimal-size table; x below axis[1] returns table[1].",
+      "inputs": [ [3.0, 7.0], [10.0, 20.0], 0.0 ],
+      "expected": 3.0
+    },
+    {
+      "name": "two_point_table_above_clamps",
+      "description": "Minimal-size table; x above axis[N] returns table[N].",
+      "inputs": [ [3.0, 7.0], [10.0, 20.0], 100.0 ],
+      "expected": 7.0
+    },
+    {
+      "name": "non_uniform_axis_blend",
+      "description": "Axis spacing varies. x = 3.0 in cell [1, 5]; w = (3-1)/(5-1) = 0.5; result = 1 + 0.5*(4-1) = 2.5.",
+      "inputs": [ [0.0, 1.0, 4.0], [0.0, 1.0, 5.0], 3.0 ],
+      "expected": 2.5
+    },
+    {
+      "name": "non_uniform_axis_at_interior_knot",
+      "description": "Axis spacing varies. x lands on an interior knot.",
+      "inputs": [ [0.0, 1.0, 4.0], [0.0, 1.0, 5.0], 1.0 ],
+      "expected": 1.0
+    },
+    {
+      "name": "negative_axis_and_table_values",
+      "description": "Both axis and table take negative values; x in interior cell. axis=[-2, -1, 0, 1], table=[-10, -5, 0, 5]; x=-0.5, w=0.5, result = -5 + 0.5*(0-(-5)) = -2.5.",
+      "inputs": [ [-10.0, -5.0, 0.0, 5.0], [-2.0, -1.0, 0.0, 1.0], -0.5 ],
+      "expected": -2.5
+    }
+  ],
+  "error_scenarios": [
+    {
+      "name": "non_monotonic_axis",
+      "description": "Axis decreases at one position. Bindings MUST reject at load time with diagnostic code `interp_non_monotonic_axis`.",
+      "inputs": [ [10.0, 20.0, 30.0, 40.0], [0.0, 2.0, 1.0, 3.0], 1.5 ],
+      "expected_error_code": "interp_non_monotonic_axis"
+    },
+    {
+      "name": "equal_adjacent_axis",
+      "description": "Axis has two equal-adjacent entries (denominator zero in blend). Bindings MUST reject with `interp_non_monotonic_axis` (`interp.linear` requires strictly increasing, unlike `interp.searchsorted` which permits non-decreasing).",
+      "inputs": [ [10.0, 20.0, 30.0, 40.0], [0.0, 1.0, 1.0, 2.0], 0.5 ],
+      "expected_error_code": "interp_non_monotonic_axis"
+    },
+    {
+      "name": "axis_table_length_mismatch",
+      "description": "table has 4 entries, axis has 3. Bindings MUST reject with `interp_axis_length_mismatch`.",
+      "inputs": [ [10.0, 20.0, 30.0, 40.0], [0.0, 1.0, 2.0], 1.0 ],
+      "expected_error_code": "interp_axis_length_mismatch"
+    },
+    {
+      "name": "nan_in_axis",
+      "description": "Axis contains a NaN entry. Bindings MUST reject with `interp_nan_in_axis`.",
+      "inputs": [ [10.0, 20.0, 30.0, 40.0], [0.0, "NaN", 2.0, 3.0], 1.0 ],
+      "expected_error_code": "interp_nan_in_axis"
+    },
+    {
+      "name": "axis_too_short",
+      "description": "Axis has only one entry (no interval to blend). Bindings MUST reject with `interp_axis_too_short`.",
+      "inputs": [ [42.0], [0.0], 0.0 ],
+      "expected_error_code": "interp_axis_too_short"
+    }
+  ]
+}

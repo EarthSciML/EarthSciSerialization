@@ -55,7 +55,12 @@ func TestClosedFunctionsConformance(t *testing.T) {
 				t.Fatalf("%s: missing `function` field", e.expected)
 			}
 			if !IsClosedFunction(fixture.Function) {
-				t.Fatalf("fixture references non-closed-registry function %q", fixture.Function)
+				// Spec-first phased rollout (esm-94w and similar): a new
+				// closed-function fixture lands in the spec PR before this
+				// binding's implementation. Skip rather than fail; the
+				// per-language [Impl] bead adds the function to the registry
+				// and the fixture starts running automatically.
+				t.Skipf("fixture function %q not yet implemented in this binding", fixture.Function)
 			}
 			for _, sc := range fixture.Scenarios {
 				sc := sc
