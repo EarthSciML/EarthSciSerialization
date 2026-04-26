@@ -51,10 +51,9 @@ type Guard struct {
 // per-query-point boolean predicate AST (RFC §5.2.7); structurally
 // distinguished from the guard-list Where at parse time by JSON shape.
 //
-// The Go binding evaluates region.index_range, region.boundary, and the
-// where-expression predicate per query point (RFC §5.2.7). region.panel_boundary
-// and region.mask_field parse and round-trip but do not evaluate
-// (conservative fall-through, equivalent to W_UNEVAL_SCOPE).
+// The Go binding evaluates region.index_range, region.boundary,
+// region.panel_boundary, region.mask_field, and the where-expression
+// predicate per query point (RFC §5.2.7).
 type Rule struct {
 	Name        string
 	Pattern     Expression
@@ -87,6 +86,11 @@ type GridMeta struct {
 	// scope evaluation (RFC §5.2.7). Absence is equivalent to "scope
 	// disabled" (conservative fall-through).
 	DimBounds map[string][2]int64
+	// HasPanelConnectivity is the runtime cubed_sphere marker (RFC §6.4):
+	// true iff the grid carries a panel_connectivity table. Consumed by
+	// region.panel_boundary scope evaluation — applying that scope to a
+	// grid without this marker raises E_REGION_GRID_MISMATCH.
+	HasPanelConnectivity bool
 }
 
 // VariableMeta is the subset of variable metadata consulted by the
@@ -111,6 +115,11 @@ type RuleContext struct {
 	// GridName is the grid the QueryPoint refers to (used to resolve
 	// region.boundary.side against GridMeta.DimBounds).
 	GridName string
+	// MaskFields holds loader-backed boolean masks consumed by
+	// region.mask_field scope evaluation (RFC §5.2.7). Each entry is the
+	// list of grid points where the named mask is truthy; a rule fires at
+	// a query point iff some entry is a subset of that query point.
+	MaskFields map[string][]map[string]int64
 }
 
 // NewRuleContext returns an empty RuleContext with initialized maps.
@@ -119,6 +128,7 @@ func NewRuleContext() RuleContext {
 		Grids:      map[string]GridMeta{},
 		Variables:  map[string]VariableMeta{},
 		QueryPoint: map[string]int64{},
+		MaskFields: map[string][]map[string]int64{},
 	}
 }
 
@@ -616,7 +626,11 @@ func rewritePass(expr Expression, rules []Rule, ctx RuleContext, changed *bool) 
 		if !ok {
 			continue
 		}
-		if !checkScope(r, m2, ctx) {
+		fire, err := checkScope(r, m2, ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !fire {
 			continue
 		}
 		newExpr, err := ApplyBindings(r.Replacement, m2)
@@ -656,30 +670,133 @@ func rewritePass(expr Expression, rules []Rule, ctx RuleContext, changed *bool) 
 // checkScope evaluates a rule's per-query-point scope. Returns true when
 // the rule should fire at the current query point, false otherwise
 // (conservative fall-through). A legacy string region and a missing
-// where_expr pass unconditionally, preserving v0.2 semantics.
-func checkScope(r *Rule, bindings map[string]Expression, ctx RuleContext) bool {
-	if r.RegionScope != nil && !evalRegion(r.RegionScope, ctx) {
-		return false
+// where_expr pass unconditionally, preserving v0.2 semantics. Returns
+// E_REGION_GRID_MISMATCH when a region.panel_boundary scope is applied
+// to a grid that lacks panel_connectivity metadata (RFC §5.2.7, §6.4).
+func checkScope(r *Rule, bindings map[string]Expression, ctx RuleContext) (bool, error) {
+	if r.RegionScope != nil {
+		ok, err := evalRegion(r.RegionScope, ctx)
+		if err != nil || !ok {
+			return false, err
+		}
 	}
 	if r.WhereExpr != nil && !evalWhereExpr(r.WhereExpr, bindings, ctx) {
-		return false
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
-func evalRegion(scope *RuleRegionScope, ctx RuleContext) bool {
+func evalRegion(scope *RuleRegionScope, ctx RuleContext) (bool, error) {
 	switch scope.Kind {
 	case "index_range":
 		v, has := ctx.QueryPoint[scope.Axis]
 		if !has {
+			return false, nil
+		}
+		return int64(scope.Lo) <= v && v <= int64(scope.Hi), nil
+	case "boundary":
+		return evalBoundary(scope.Side, ctx), nil
+	case "panel_boundary":
+		return evalPanelBoundary(scope.Panel, scope.Side, ctx)
+	case "mask_field":
+		return evalMaskField(scope.Field, ctx), nil
+	}
+	return false, nil
+}
+
+// evalPanelBoundary evaluates a {kind:"panel_boundary", panel, side} scope
+// (RFC §5.2.7, §6.4). Cubed-sphere only: presence of panel_connectivity
+// metadata is the runtime marker for that family. Applying the scope to a
+// grid without it emits E_REGION_GRID_MISMATCH.
+//
+// Canonical cubed-sphere query-point axes are p, i, j (§7 query-point
+// table). Side names map to panel-local axes: xmin/west → -i, xmax/east →
+// +i, ymin/south → -j, ymax/north → +j. Edge detection uses dim_bounds;
+// absent bounds or an unrecognised side fall through (returns false).
+func evalPanelBoundary(panel int, side string, ctx RuleContext) (bool, error) {
+	if ctx.GridName == "" {
+		return false, nil
+	}
+	meta, ok := ctx.Grids[ctx.GridName]
+	if !ok {
+		return false, nil
+	}
+	if !meta.HasPanelConnectivity {
+		return false, newRuleErr("E_REGION_GRID_MISMATCH",
+			fmt.Sprintf("rule region.panel_boundary applied to grid `%s` "+
+				"which has no panel_connectivity metadata (cubed_sphere-only scope)",
+				ctx.GridName))
+	}
+	if len(ctx.QueryPoint) == 0 {
+		return false, nil
+	}
+	p, has := ctx.QueryPoint["p"]
+	if !has {
+		return false, nil
+	}
+	if p != int64(panel) {
+		return false, nil
+	}
+	var axis string
+	var whichHi bool
+	switch side {
+	case "xmin", "west":
+		axis, whichHi = "i", false
+	case "xmax", "east":
+		axis, whichHi = "i", true
+	case "ymin", "south":
+		axis, whichHi = "j", false
+	case "ymax", "north":
+		axis, whichHi = "j", true
+	default:
+		return false, nil
+	}
+	bounds, has := meta.DimBounds[axis]
+	if !has {
+		return false, nil
+	}
+	v, has := ctx.QueryPoint[axis]
+	if !has {
+		return false, nil
+	}
+	target := bounds[0]
+	if whichHi {
+		target = bounds[1]
+	}
+	return v == target, nil
+}
+
+func evalMaskField(field string, ctx RuleContext) bool {
+	if len(ctx.QueryPoint) == 0 {
+		return false
+	}
+	points, ok := ctx.MaskFields[field]
+	if !ok {
+		return false
+	}
+	for _, pt := range points {
+		if maskEntryMatches(pt, ctx.QueryPoint) {
+			return true
+		}
+	}
+	return false
+}
+
+// maskEntryMatches reports whether mask_pt is a subset of query_pt: every
+// (axis, value) the mask declares must agree with query_pt. Axes present
+// in query_pt but absent from mask_pt are ignored, so a 2D surface mask
+// can scope rules on a 3D grid (matches on i,j for any k).
+func maskEntryMatches(maskPt, queryPt map[string]int64) bool {
+	if len(maskPt) == 0 {
+		return false
+	}
+	for axis, v := range maskPt {
+		qv, has := queryPt[axis]
+		if !has || qv != v {
 			return false
 		}
-		return int64(scope.Lo) <= v && v <= int64(scope.Hi)
-	case "boundary":
-		return evalBoundary(scope.Side, ctx)
 	}
-	// panel_boundary, mask_field: deferred — conservative fall-through.
-	return false
+	return true
 }
 
 func evalBoundary(side string, ctx RuleContext) bool {

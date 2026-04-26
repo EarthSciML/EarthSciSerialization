@@ -123,6 +123,7 @@ func buildFixtureContext(raw json.RawMessage) (RuleContext, error) {
 		Variables  map[string]map[string]interface{} `json:"variables"`
 		QueryPoint map[string]interface{}            `json:"query_point"`
 		GridName   string                            `json:"grid_name"`
+		MaskFields map[string][]map[string]interface{} `json:"mask_fields"`
 	}
 	if err := dec.Decode(&obj); err != nil {
 		return ctx, err
@@ -137,6 +138,9 @@ func buildFixtureContext(raw json.RawMessage) (RuleContext, error) {
 		}
 		if arr, ok := v["nonuniform_dims"].([]interface{}); ok {
 			meta.NonuniformDims = stringSlice(arr)
+		}
+		if _, ok := v["panel_connectivity"].(map[string]interface{}); ok {
+			meta.HasPanelConnectivity = true
 		}
 		if db, ok := v["dim_bounds"].(map[string]interface{}); ok {
 			meta.DimBounds = map[string][2]int64{}
@@ -173,6 +177,19 @@ func buildFixtureContext(raw json.RawMessage) (RuleContext, error) {
 		if i, ok := jsonToInt64(v); ok {
 			ctx.QueryPoint[k] = i
 		}
+	}
+	for k, pts := range obj.MaskFields {
+		entries := make([]map[string]int64, 0, len(pts))
+		for _, pt := range pts {
+			entry := map[string]int64{}
+			for axis, raw := range pt {
+				if i, ok := jsonToInt64(raw); ok {
+					entry[axis] = i
+				}
+			}
+			entries = append(entries, entry)
+		}
+		ctx.MaskFields[k] = entries
 	}
 	ctx.GridName = obj.GridName
 	return ctx, nil
