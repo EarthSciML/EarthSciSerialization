@@ -1,10 +1,7 @@
 ---
-layout: home
-title: EarthSciSerialization
-nav_order: 1
+title: "EarthSciSerialization"
+description: "Language-agnostic JSON-based format for earth science model components."
 ---
-
-# EarthSciSerialization
 
 **EarthSciML Serialization Format** — a language-agnostic JSON-based format for
 earth science model components, their composition, and runtime configuration.
@@ -22,13 +19,13 @@ suite.
 
 ## Start here
 
-- [Getting Started — Installation](getting-started/installation.md)
-- [API Reference](api/index.md)
-- [Examples](examples/index.md)
-- [Tutorials](tutorial/index.md)
-- [Guides](guides/index.md)
+- [Getting Started — Installation](getting-started/installation/)
+- [API Reference](api/)
+- [Examples](examples/)
+- [Tutorials](tutorial/)
+- [Guides](guides/)
 - [RFCs & Design Notes](rfcs/)
-- [Troubleshooting](troubleshooting/index.md)
+- [Troubleshooting](troubleshooting/)
 
 ## Specification
 
@@ -37,8 +34,8 @@ at the repository root, alongside the machine-readable
 [`esm-schema.json`](https://github.com/EarthSciML/EarthSciSerialization/blob/main/esm-schema.json).
 
 Design proposals and extensions live under [RFCs](rfcs/), including the
-[discretization RFC](rfcs/discretization.md) and
-[DAE binding strategies](rfcs/dae-binding-strategies.md).
+[discretization RFC](rfcs/discretization/) and
+[DAE binding strategies](rfcs/dae-binding-strategies/).
 
 ## What's new
 

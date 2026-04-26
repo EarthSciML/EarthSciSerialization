@@ -49,6 +49,7 @@ test-results/
 Manifest.toml
 deps/deps.jl
 docs/site/
+docs/_site/
 
 # Rust
 target/
@@ -112,6 +113,9 @@ conformance-results/
 # Generated documentation data
 **/api-data.json
 docs/generated/
+docs/content/generated/
+docs/public/
+docs/.hugo_build.lock
 
 # Beads / Dolt files
 .dolt/
