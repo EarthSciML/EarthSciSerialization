@@ -1086,4 +1086,254 @@ using EarthSciSerialization
             @test isapprox(est, ref; atol=1e-9)
         end
     end
+
+    # ============================================================
+    # 2D Arakawa C-grid staggered dispatch (esm-x9f)
+    # ============================================================
+
+    # Inline divergence_arakawa_c rule spec. Mirrors the on-disk
+    # `discretizations/finite_volume/divergence_arakawa_c.json` shape so the
+    # ESS test suite stays self-contained. Two-point centered C-grid divergence:
+    # (ux[i+1,j] - ux[i,j])/dx + (uy[i,j+1] - uy[i,j])/dy.
+    arakawa_stencil = [
+        Dict("selector" => Dict("kind" => "arakawa", "stagger" => "face_x",
+                                "axis" => "\$x", "offset" => 0),
+             "coeff" => Dict("op" => "/", "args" => Any[-1, "dx"])),
+        Dict("selector" => Dict("kind" => "arakawa", "stagger" => "face_x",
+                                "axis" => "\$x", "offset" => 1),
+             "coeff" => Dict("op" => "/", "args" => Any[1, "dx"])),
+        Dict("selector" => Dict("kind" => "arakawa", "stagger" => "face_y",
+                                "axis" => "\$y", "offset" => 0),
+             "coeff" => Dict("op" => "/", "args" => Any[-1, "dy"])),
+        Dict("selector" => Dict("kind" => "arakawa", "stagger" => "face_y",
+                                "axis" => "\$y", "offset" => 1),
+             "coeff" => Dict("op" => "/", "args" => Any[1, "dy"])),
+    ]
+    arakawa_rule = Dict("discretizations" => Dict("divergence_arakawa_c" => Dict(
+        "applies_to" => Dict("op" => "div", "args" => Any["\$F"]),
+        "grid_family" => "arakawa",
+        "stagger" => "C",
+        "requires_locations" => Any["face_x", "face_y"],
+        "emits_location" => "cell_center",
+        "combine" => "+",
+        "accuracy" => "O(h^2)",
+        "stencil" => arakawa_stencil,
+    )))
+    arakawa_input = Dict(
+        "rule" => "divergence_arakawa_c",
+        "manufactured_solution" => "F = (sin(2*pi*x)*cos(2*pi*y), " *
+            "cos(2*pi*x)*sin(2*pi*y)); div = 4*pi*cos(2*pi*x)*cos(2*pi*y)",
+        "sampling" => "cell_center",
+        "grids" => [Dict("n" => 16), Dict("n" => 32),
+                    Dict("n" => 64), Dict("n" => 128)],
+    )
+    arakawa_expected = Dict(
+        "rule" => "divergence_arakawa_c",
+        "metric" => "Linf",
+        "expected_min_order" => 1.9,
+    )
+
+    @testset "lookup_vector_manufactured_solution — sincos 2D" begin
+        ms = lookup_vector_manufactured_solution(
+            "F = (sin(2*pi*x)*cos(2*pi*y), cos(2*pi*x)*sin(2*pi*y))")
+        @test ms.name === :vec_sincos_2d_periodic
+        @test ms.periodic
+        @test ms.domain == ((0.0, 1.0), (0.0, 1.0))
+        # Velocity at (0.25, 0.0) = (sin(π/2)*cos(0), cos(π/2)*sin(0)) = (1, 0).
+        u, v = ms.velocity(0.25, 0.0)
+        @test isapprox(u, 1.0; atol=1e-12)
+        @test isapprox(v, 0.0; atol=1e-12)
+        # Divergence at (0, 0) = 4π.
+        @test isapprox(ms.divergence(0.0, 0.0), 4π; atol=1e-12)
+        # Dict form with explicit name routes by registry key.
+        ms_by_name = lookup_vector_manufactured_solution(
+            Dict("name" => "vec_sincos_2d_periodic"))
+        @test ms_by_name === ms
+        # Dict form with expression falls through to the string lookup.
+        ms_by_expr = lookup_vector_manufactured_solution(
+            Dict("expression" => "F = (sin(2*pi*x)*cos(2*pi*y), " *
+                                 "cos(2*pi*x)*sin(2*pi*y))"))
+        @test ms_by_expr === ms
+        @test_throws MMSEvaluatorError lookup_vector_manufactured_solution(
+            "no such vector field")
+        @test_throws MMSEvaluatorError lookup_vector_manufactured_solution(
+            Dict("foo" => "bar"))
+    end
+
+    @testset "apply_stencil_2d_arakawa — canonical 2x2 fixture" begin
+        # Replicates `discretizations/finite_volume/divergence_arakawa_c/
+        # fixtures/canonical/{input,expected}.esm`. ux = u(x,y) = x sampled at
+        # face_x faces; uy = v(x,y) = y² sampled at face_y faces. Expected
+        # divergence per cell is in the fixture's expected.esm `values` field.
+        ux = [0.0 0.0; 0.5 0.5; 1.0 1.0]    # shape (3, 2): nx=2, ny=2
+        uy = [0.0 0.25 1.0; 0.0 0.25 1.0]   # shape (2, 3)
+        cb = CellBindings(Dict{String,Float64}("dx" => 0.5, "dy" => 0.5))
+        out = apply_stencil_2d_arakawa(arakawa_stencil, ux, uy, cb)
+        @test size(out) == (2, 2)
+        @test isapprox(out, [1.5 2.5; 1.5 2.5]; atol=1e-12)
+    end
+
+    @testset "apply_stencil_2d_arakawa — periodic MMS sample (constant field)" begin
+        # On a constant velocity field, every two-point centered difference is
+        # exactly zero — divergence is identically zero across all cells.
+        nx, ny = 4, 3
+        ux = ones(Float64, nx + 1, ny)
+        uy = ones(Float64, nx, ny + 1)
+        cb = CellBindings(Dict{String,Float64}("dx" => 0.25, "dy" => 1/3))
+        out = apply_stencil_2d_arakawa(arakawa_stencil, ux, uy, cb)
+        @test all(out .== 0.0)
+    end
+
+    @testset "apply_stencil_2d_arakawa — accepts bare axis names" begin
+        # Schema-canonical axis is "$x"/"$y" (with the placeholder $); accept
+        # the bare "x"/"y" too so test fixtures don't have to type the dollar.
+        bare_stencil = deepcopy(arakawa_stencil)
+        for s in bare_stencil
+            sel = s["selector"]
+            sel["axis"] = sel["axis"] == "\$x" ? "x" : "y"
+        end
+        ux = [0.0 0.0; 0.5 0.5; 1.0 1.0]
+        uy = [0.0 0.25 1.0; 0.0 0.25 1.0]
+        cb = CellBindings(Dict{String,Float64}("dx" => 0.5, "dy" => 0.5))
+        out = apply_stencil_2d_arakawa(bare_stencil, ux, uy, cb)
+        @test isapprox(out, [1.5 2.5; 1.5 2.5]; atol=1e-12)
+    end
+
+    @testset "apply_stencil_2d_arakawa — rejects bad selector / shape" begin
+        cb = CellBindings(Dict{String,Float64}("dx" => 0.5, "dy" => 0.5))
+        ux = zeros(Float64, 3, 2)
+        uy = zeros(Float64, 2, 3)
+
+        # Wrong selector kind.
+        bad_kind = [Dict("selector" => Dict("kind" => "latlon",
+                                            "axis" => "lon", "offset" => 0),
+                         "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_2d_arakawa(
+            bad_kind, ux, uy, cb)
+
+        # Unknown axis.
+        bad_axis = [Dict("selector" => Dict("kind" => "arakawa",
+                                            "stagger" => "face_x",
+                                            "axis" => "z", "offset" => 0),
+                         "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_2d_arakawa(
+            bad_axis, ux, uy, cb)
+
+        # face_x must pair with x axis.
+        cross_axis = [Dict("selector" => Dict("kind" => "arakawa",
+                                              "stagger" => "face_x",
+                                              "axis" => "\$y", "offset" => 0),
+                           "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_2d_arakawa(
+            cross_axis, ux, uy, cb)
+
+        # Unknown stagger (e.g. cell_center) is rejected — the applier only
+        # supports face-staggered velocity inputs in this iteration.
+        bad_stagger = [Dict("selector" => Dict("kind" => "arakawa",
+                                               "stagger" => "cell_center",
+                                               "axis" => "\$x", "offset" => 0),
+                            "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_2d_arakawa(
+            bad_stagger, ux, uy, cb)
+
+        # ux/uy shape mismatch.
+        ux_bad = zeros(Float64, 4, 2)
+        @test_throws MMSEvaluatorError apply_stencil_2d_arakawa(
+            arakawa_stencil, ux_bad, uy, cb)
+
+        # Out-of-range offset.
+        oob = [Dict("selector" => Dict("kind" => "arakawa",
+                                       "stagger" => "face_x",
+                                       "axis" => "\$x", "offset" => 5),
+                    "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_2d_arakawa(
+            oob, ux, uy, cb)
+    end
+
+    @testset "mms_convergence — divergence_arakawa_c (sincos 2D MMS)" begin
+        result = mms_convergence(arakawa_rule, arakawa_input)
+        @test length(result.errors) == 4
+        @test all(isfinite, result.errors)
+        @test all(result.errors .> 0)
+        @test result.declared_order == 2.0
+        @test all(result.errors[i] > result.errors[i + 1] for i in 1:3)
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+        @test result.orders[end] ≥ 1.9
+    end
+
+    @testset "verify_mms_convergence — passes on arakawa C divergence" begin
+        result = verify_mms_convergence(
+            arakawa_rule, arakawa_input, arakawa_expected)
+        @test result.observed_min_order ≥ arakawa_expected["expected_min_order"]
+        @test result.observed_min_order ≥ 1.9
+    end
+
+    @testset "mms_convergence — arakawa with explicit nx/ny grid entries" begin
+        # Asymmetric grids should also converge at order 2 — the stencil is
+        # tensor-product-like and each axis converges independently.
+        explicit = Base.merge(arakawa_input, Dict(
+            "grids" => [Dict("nx" => 32, "ny" => 16),
+                        Dict("nx" => 64, "ny" => 32),
+                        Dict("nx" => 128, "ny" => 64)]))
+        result = mms_convergence(arakawa_rule, explicit)
+        @test result.observed_min_order ≥ 1.85
+    end
+
+    @testset "mms_convergence — arakawa error paths" begin
+        # 1D solution on a 2D arakawa rule is a type error.
+        @test_throws MMSEvaluatorError mms_convergence(
+            arakawa_rule, arakawa_input;
+            manufactured=lookup_manufactured_solution(
+                "sin(2*pi*x) on [0,1] periodic"))
+
+        # Grid entry missing both `n` and `nx`/`ny` is rejected.
+        bad_grid = Base.merge(arakawa_input, Dict("grids" => [Dict("foo" => 1),
+                                                              Dict("foo" => 2)]))
+        @test_throws MMSEvaluatorError mms_convergence(arakawa_rule, bad_grid)
+
+        # Single grid is too few.
+        too_few = Base.merge(arakawa_input, Dict("grids" => [Dict("n" => 16)]))
+        @test_throws MMSEvaluatorError mms_convergence(arakawa_rule, too_few)
+
+        # Mixed selector kinds in a single stencil are rejected.
+        mixed_stencil = Any[]
+        for s in arakawa_stencil
+            push!(mixed_stencil, deepcopy(s))
+        end
+        push!(mixed_stencil,
+              Dict{String,Any}("selector" => Dict{String,Any}(
+                                   "kind" => "cartesian",
+                                   "axis" => "x", "offset" => 0),
+                               "coeff" => 0.0))
+        mixed = Dict("discretizations" => Dict(
+            "divergence_arakawa_c" => Base.merge(
+                arakawa_rule["discretizations"]["divergence_arakawa_c"],
+                Dict("stencil" => mixed_stencil))))
+        @test_throws MMSEvaluatorError mms_convergence(mixed, arakawa_input)
+    end
+
+    @testset "register_vector_manufactured_solution! — arakawa path" begin
+        # Custom 2D vector MMS with both components nonzero in both axes.
+        # F = (cos(2π x) sin(2π y), -sin(2π x) cos(2π y))
+        # ∂_x [cos(2π x) sin(2π y)] = -2π sin(2π x) sin(2π y)
+        # ∂_y [-sin(2π x) cos(2π y)] = -sin(2π x) · -2π sin(2π y) = 2π sin(2π x) sin(2π y)
+        # Sum = 0 — divergence-free. So we use a different non-trivial choice.
+        # F = (sin(2π x) sin(2π y), sin(2π x) sin(2π y))
+        # ∂_x F1 = 2π cos(2π x) sin(2π y); ∂_y F2 = 2π sin(2π x) cos(2π y)
+        # div = 2π (cos(2π x) sin(2π y) + sin(2π x) cos(2π y))
+        custom = VectorManufacturedSolution(
+            :_test_arakawa_custom,
+            (x, y) -> (sin(2π * x) * sin(2π * y), sin(2π * x) * sin(2π * y)),
+            (x, y) -> 2π * (cos(2π * x) * sin(2π * y) +
+                            sin(2π * x) * cos(2π * y)),
+            ((0.0, 1.0), (0.0, 1.0)),
+            true,
+        )
+        register_vector_manufactured_solution!(custom)
+        @test EarthSciSerialization._MMS_VECTOR_REGISTRY[:_test_arakawa_custom] === custom
+        result = mms_convergence(
+            arakawa_rule, arakawa_input; manufactured=custom)
+        @test result.observed_min_order ≥ 1.9
+        delete!(EarthSciSerialization._MMS_VECTOR_REGISTRY, :_test_arakawa_custom)
+    end
 end

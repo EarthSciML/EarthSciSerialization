@@ -626,6 +626,151 @@ function apply_stencil_2d_latlon(stencil_json,
     return out, interior
 end
 
+# ============================================================
+# Stencil application (2D Arakawa C-grid staggered)
+# ============================================================
+
+# Canonicalise an arakawa selector axis. Accepts both the spec-canonical
+# placeholder forms ("$x", "$y") and the bare ("x", "y") shorthand so future
+# rule files can drop the `$` if the schema relaxes.
+function _arakawa_axis_canonical(axis::AbstractString)
+    a = String(axis)
+    (a == "\$x" || a == "x") && return "x"
+    (a == "\$y" || a == "y") && return "y"
+    return nothing
+end
+
+"""
+    apply_stencil_2d_arakawa(stencil_json,
+                             ux::Matrix{Float64}, uy::Matrix{Float64},
+                             cb::CellBindings) -> Matrix{Float64}
+
+Apply a 2D `kind: "arakawa"` C-grid staggered stencil to the velocity
+components `ux` (sampled at face_x positions, shape `(nx+1, ny)`) and `uy`
+(sampled at face_y positions, shape `(nx, ny+1)`). Returns a cell-centered
+matrix of shape `(nx, ny)`.
+
+Each entry of `stencil_json` must carry a selector with
+`kind == "arakawa"`, `stagger ∈ {"face_x", "face_y"}`, an `axis` matching the
+stagger (`"\$x"` for `face_x`, `"\$y"` for `face_y`; bare `"x"`/`"y"` are also
+accepted), plus an `Int` `offset`. The `coeff` AST is evaluated cell-by-cell
+against `bindings_at(cb, i, j)` so per-cell metric fields (`dx`, `dy`, plus
+any caller-supplied per-cell entries) can vary freely.
+
+The combine rule is `+` (sum of contributions).
+
+Both axes are treated as periodic (face indices wrap modulo `nx` / `ny`); the
+canonical Arakawa C convention stores `(nx+1) × ny` and `nx × (ny+1)` faces
+with the first/last row redundantly filled, matching the `divergence_arakawa_c`
+canonical fixture. Non-periodic boundaries are out of scope for this
+applier — a future bead can add an `interior` mask analogous to
+[`apply_stencil_2d_latlon`].
+
+# Example
+
+```julia
+ux = [(sin(2π*(i-1)*dx) for j in 1:ny) for i in 1:nx+1]
+uy = zeros(nx, ny+1)
+cb = CellBindings(Dict("dx" => dx, "dy" => dy))
+div = apply_stencil_2d_arakawa(stencil, ux, uy, cb)
+```
+"""
+function apply_stencil_2d_arakawa(stencil_json,
+                                   ux::Matrix{Float64},
+                                   uy::Matrix{Float64},
+                                   cb::CellBindings)::Matrix{Float64}
+    nx_x_faces, ny_x_cells = size(ux)
+    nx_y_cells, ny_y_faces = size(uy)
+    nx_x_faces >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "ux must have shape (nx+1, ny) with nx ≥ 1; got $(size(ux))"))
+    ny_y_faces >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "uy must have shape (nx, ny+1) with ny ≥ 1; got $(size(uy))"))
+    nx = nx_x_faces - 1
+    ny = ny_y_faces - 1
+    nx == nx_y_cells || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "ux and uy disagree on nx: ux→$(nx) (size(ux)=$(size(ux))), " *
+        "uy→$(nx_y_cells) (size(uy)=$(size(uy)))"))
+    ny == ny_x_cells || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "ux and uy disagree on ny: ux→$(ny_x_cells) (size(ux)=$(size(ux))), " *
+        "uy→$(ny) (size(uy)=$(size(uy)))"))
+
+    fx_pairs = Tuple{Int,Any}[]
+    fy_pairs = Tuple{Int,Any}[]
+    for s in stencil_json
+        sel = s["selector"]
+        kind = String(get(sel, "kind", ""))
+        kind == "arakawa" || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "apply_stencil_2d_arakawa requires `selector.kind == \"arakawa\"`, " *
+            "got $(repr(kind))"))
+        stagger = String(get(sel, "stagger", ""))
+        axis_raw = String(get(sel, "axis", ""))
+        canonical = _arakawa_axis_canonical(axis_raw)
+        canonical === nothing && throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "arakawa selector axis must be \"\$x\" or \"\$y\" " *
+            "(or \"x\"/\"y\"), got $(repr(axis_raw))"))
+        off = Int(sel["offset"])
+        if stagger == "face_x"
+            canonical == "x" || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arakawa stagger \"face_x\" must pair with axis \"\$x\", " *
+                "got axis $(repr(axis_raw))"))
+            push!(fx_pairs, (off, s["coeff"]))
+        elseif stagger == "face_y"
+            canonical == "y" || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arakawa stagger \"face_y\" must pair with axis \"\$y\", " *
+                "got axis $(repr(axis_raw))"))
+            push!(fy_pairs, (off, s["coeff"]))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arakawa selector stagger must be \"face_x\" or \"face_y\" " *
+                "(got $(repr(stagger))); cell_center / vertex selectors are " *
+                "not yet supported"))
+        end
+    end
+
+    # The C-grid storage gives ux at faces 1..nx+1 and uy at faces 1..ny+1, so
+    # direct indexing `ux[i+off, j]` and `uy[i, j+off]` covers offset ∈ 0:1
+    # without any wrap. Each face value at the periodic seam (face nx+1, face
+    # ny+1) is supplied by the caller as the periodic-equal copy of face 1, so
+    # for periodic MMS the seam is automatic; for non-periodic boundary cases
+    # (canonical fixtures) the explicit boundary face values are honoured.
+    nfx = nx + 1
+    nfy = ny + 1
+    out = zeros(Float64, nx, ny)
+    @inbounds for j in 1:ny, i in 1:nx
+        b = bindings_at(cb, i, j)
+        acc = 0.0
+        for (off, coeff_node) in fx_pairs
+            ii = i + off
+            (1 <= ii <= nfx) || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arakawa face_x offset $(off) at cell i=$(i) is out of range " *
+                "for ux of shape $(size(ux)); only offsets that keep " *
+                "1 ≤ i+offset ≤ nx+1 are supported"))
+            acc += eval_coeff(coeff_node, b) * ux[ii, j]
+        end
+        for (off, coeff_node) in fy_pairs
+            jj = j + off
+            (1 <= jj <= nfy) || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arakawa face_y offset $(off) at cell j=$(j) is out of range " *
+                "for uy of shape $(size(uy)); only offsets that keep " *
+                "1 ≤ j+offset ≤ ny+1 are supported"))
+            acc += eval_coeff(coeff_node, b) * uy[i, jj]
+        end
+        out[i, j] = acc
+    end
+    return out
+end
+
 # Detect whether a stencil is 2D lat-lon by selector kind. Returns the kind
 # string of the first entry; throws if entries disagree. Multi-stencil
 # mappings (PPM-style {name: [entries…]}) are flat-cartesian by construction
@@ -710,7 +855,7 @@ When present, the harness measures pointwise L∞ error of the parabolic
 reconstruction against the manufactured solution at every sub-cell sample.
 """
 function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
-                         manufactured::Union{Nothing,ManufacturedSolution,ManufacturedSolution2D}=nothing)::MMSConvergenceResult
+                         manufactured=nothing)::MMSConvergenceResult
     rule_name = String(input_json["rule"])
     spec = _resolve_rule_spec(rule_json, rule_name)
     if _mms_rule_kind(spec) === :weno5
@@ -734,11 +879,13 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
     kind = _stencil_kind(stencil)
     if kind == "latlon"
         return _mms_convergence_2d_latlon(stencil, input_json, declared, manufactured)
+    elseif kind == "arakawa"
+        return _mms_convergence_2d_arakawa(stencil, input_json, declared, manufactured)
     elseif kind != "cartesian" && kind != ""
         throw(MMSEvaluatorError(
             "E_MMS_BAD_FIXTURE",
             "unsupported selector kind $(repr(kind)); " *
-            "expected one of \"cartesian\", \"latlon\""))
+            "expected one of \"cartesian\", \"latlon\", \"arakawa\""))
     end
     # 1D cartesian path falls through to the inline body below.
     manufactured isa Union{Nothing,ManufacturedSolution} || throw(MMSEvaluatorError(
@@ -866,6 +1013,104 @@ function _mms_convergence_2d_latlon(stencil, input_json::AbstractDict,
     return _finalize_convergence(grids, errors, declared)
 end
 
+# 2D Arakawa C-grid staggered convergence. Samples the manufactured velocity
+# field at face_x positions for the x-component and face_y positions for the
+# y-component, applies the cell-centered divergence stencil, and compares
+# against the analytic divergence at cell centers. The error metric is L∞
+# over all cells (no boundary mask — both axes are periodic).
+#
+# Each grid entry may carry `nx`/`ny` directly, or a single `n` (then
+# `nx = ny = n`, the canonical square-grid case). The fixture domain is taken
+# from the manufactured solution's `domain` field; both axes are assumed
+# periodic to match the C-grid stencil's wrap convention.
+function _mms_convergence_2d_arakawa(stencil, input_json::AbstractDict,
+                                     declared::Float64,
+                                     manufactured)::MMSConvergenceResult
+    manufactured isa Union{Nothing,VectorManufacturedSolution} || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "2D arakawa stencil requires a `VectorManufacturedSolution`, got $(typeof(manufactured))"))
+    ms = manufactured === nothing ?
+        lookup_vector_manufactured_solution(input_json["manufactured_solution"]) :
+        manufactured
+    ms.periodic || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "arakawa convergence requires a periodic manufactured solution; " *
+        "$(ms.name) is non-periodic"))
+
+    raw_grids = input_json["grids"]
+    raw_grids isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `grids` must be an array, got $(typeof(raw_grids))"))
+    grid_pairs = Tuple{Int,Int}[]
+    for g in raw_grids
+        if haskey(g, "nx") && haskey(g, "ny")
+            push!(grid_pairs, (Int(g["nx"]), Int(g["ny"])))
+        elseif haskey(g, "n")
+            n = Int(g["n"])
+            push!(grid_pairs, (n, n))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arakawa grid entry must carry `nx`+`ny` or `n`; " *
+                "got keys $(collect(keys(g)))"))
+        end
+    end
+    length(grid_pairs) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "convergence requires at least two grids; got $(grid_pairs)"))
+
+    (xlo, xhi), (ylo, yhi) = ms.domain
+    Lx = xhi - xlo
+    Ly = yhi - ylo
+    Lx > 0 && Ly > 0 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "arakawa MMS requires positive domain extents; got $(ms.domain)"))
+
+    grids = [ny for (_, ny) in grid_pairs]
+    errors = Vector{Float64}(undef, length(grid_pairs))
+    for (k, (nx, ny)) in enumerate(grid_pairs)
+        dx = Lx / nx
+        dy = Ly / ny
+        # Sample ux at face_x positions: x_face = xlo + (i-1)*dx for i = 1..nx+1,
+        # y_cell = ylo + (j-0.5)*dy for j = 1..ny.
+        ux = Matrix{Float64}(undef, nx + 1, ny)
+        for j in 1:ny
+            yc = ylo + (j - 0.5) * dy
+            for i in 1:(nx + 1)
+                xf = xlo + (i - 1) * dx
+                u_val, _ = ms.velocity(xf, yc)
+                ux[i, j] = u_val
+            end
+        end
+        # Sample uy at face_y positions: y_face = ylo + (j-1)*dy for j = 1..ny+1,
+        # x_cell = xlo + (i-0.5)*dx for i = 1..nx.
+        uy = Matrix{Float64}(undef, nx, ny + 1)
+        for j in 1:(ny + 1)
+            yf = ylo + (j - 1) * dy
+            for i in 1:nx
+                xc = xlo + (i - 0.5) * dx
+                _, v_val = ms.velocity(xc, yf)
+                uy[i, j] = v_val
+            end
+        end
+        cb = CellBindings(
+            Dict{String,Float64}("dx" => dx, "dy" => dy,
+                                 "h" => min(dx, dy)),
+            Dict{String,Function}(
+                "x" => (i, j) -> xlo + (i - 0.5) * dx,
+                "y" => (i, j) -> ylo + (j - 0.5) * dy,
+            ),
+        )
+        div_num = apply_stencil_2d_arakawa(stencil, ux, uy, cb)
+        div_exact = [ms.divergence(xlo + (i - 0.5) * dx,
+                                   ylo + (j - 0.5) * dy)
+                     for i in 1:nx, j in 1:ny]
+        errors[k] = maximum(abs.(div_num .- div_exact))
+    end
+
+    return _finalize_convergence(grids, errors, declared)
+end
+
 # Common tail: fail-fast non-finite check, refinement orders, observed min.
 function _finalize_convergence(grids::Vector{Int}, errors::Vector{Float64},
                                declared::Float64)::MMSConvergenceResult
@@ -926,7 +1171,7 @@ acceptance criterion.
 function verify_mms_convergence(rule_json::AbstractDict,
                                 input_json::AbstractDict,
                                 expected_json::AbstractDict;
-                                manufactured::Union{Nothing,ManufacturedSolution,ManufacturedSolution2D}=nothing,
+                                manufactured=nothing,
                                 tolerance::Float64=0.2)::MMSConvergenceResult
     haskey(expected_json, "expected_min_order") || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",
@@ -1006,8 +1251,22 @@ const _MMS_VEC_SIN_2PI_X_PERIODIC = VectorManufacturedSolution(
     true,
 )
 
+# Built-in: u(x,y) = (sin(2π x) cos(2π y), cos(2π x) sin(2π y)) on [0,1]² periodic;
+# div(u) = 2π cos(2π x) cos(2π y) + 2π cos(2π x) cos(2π y) = 4π cos(2π x) cos(2π y).
+# Both components are non-trivial in both axes, which exercises a 2D staggered
+# divergence stencil more thoroughly than the 1D-style (sin(2π x), 0) field
+# (whose y-axis contribution is identically zero).
+const _MMS_VEC_SINCOS_2D_PERIODIC = VectorManufacturedSolution(
+    :vec_sincos_2d_periodic,
+    (x, y) -> (sin(2π * x) * cos(2π * y), cos(2π * x) * sin(2π * y)),
+    (x, y) -> 4π * cos(2π * x) * cos(2π * y),
+    ((0.0, 1.0), (0.0, 1.0)),
+    true,
+)
+
 const _MMS_VECTOR_REGISTRY = Dict{Symbol,VectorManufacturedSolution}(
     :vec_sin_2pi_x_periodic => _MMS_VEC_SIN_2PI_X_PERIODIC,
+    :vec_sincos_2d_periodic => _MMS_VEC_SINCOS_2D_PERIODIC,
 )
 
 """
@@ -1031,6 +1290,16 @@ ignored. Throws `MMSEvaluatorError(E_MMS_UNKNOWN_SOLUTION, …)` on no match.
 function lookup_vector_manufactured_solution(
         description::AbstractString)::VectorManufacturedSolution
     norm = lowercase(replace(String(description), r"[\s\*]" => ""))
+    # Two non-trivial 2D periodic components — match before the 1D (sin, 0)
+    # pattern so a description like "sin(2π x) cos(2π y), cos(2π x) sin(2π y)"
+    # routes to the correct entry.
+    if (occursin("sin(2pix)cos(2piy)", norm) ||
+        occursin("sin(2πx)cos(2πy)", norm) ||
+        occursin("vec=(sin(2pix)cos(2piy)", norm) ||
+        occursin("vec=(sin(2πx)cos(2πy)", norm) ||
+        occursin("sincos2d", norm) || occursin("sincos_2d", norm))
+        return _MMS_VECTOR_REGISTRY[:vec_sincos_2d_periodic]
+    end
     if (occursin("sin(2pi", norm) || occursin("sin(2π", norm)) &&
        (occursin(",0)", norm) || occursin("vec=(sin", norm) ||
         occursin("v=0", norm))
@@ -1039,6 +1308,29 @@ function lookup_vector_manufactured_solution(
     throw(MMSEvaluatorError(
         "E_MMS_UNKNOWN_SOLUTION",
         "no vector manufactured solution registered for $(repr(description)); " *
+        "register one with register_vector_manufactured_solution!"))
+end
+
+"""
+    lookup_vector_manufactured_solution(description::AbstractDict) ->
+        VectorManufacturedSolution
+
+Resolve a vector manufactured solution from a dict description. Accepts a
+`"name"` key (exact match against the registry) and falls back to
+string-matching on the `"expression"` key.
+"""
+function lookup_vector_manufactured_solution(
+        description::AbstractDict)::VectorManufacturedSolution
+    if haskey(description, "name")
+        sym = Symbol(String(description["name"]))
+        haskey(_MMS_VECTOR_REGISTRY, sym) && return _MMS_VECTOR_REGISTRY[sym]
+    end
+    if haskey(description, "expression")
+        return lookup_vector_manufactured_solution(String(description["expression"]))
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_UNKNOWN_SOLUTION",
+        "no vector manufactured solution matches dict $(repr(description)); " *
         "register one with register_vector_manufactured_solution!"))
 end
 
