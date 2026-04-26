@@ -9,6 +9,11 @@
 //! * `interp.searchsorted` — 1-based search-into-sorted-array (Julia
 //!   `searchsortedfirst` semantics with explicit out-of-range / NaN /
 //!   duplicate behavior pinned by spec).
+//! * `interp.linear`, `interp.bilinear` — 1-D and 2-D linear tensor
+//!   interpolation with extrapolate-flat clamping. Implemented as direct
+//!   primitives (rather than as `interp.searchsorted` + `index` +
+//!   AST-arithmetic compositions) to satisfy the §9.2 pinned evaluation
+//!   order `result = a + w * (b - a)` for cross-binding bit-equivalence.
 //!
 //! The set is **closed**: callers MUST reject any `fn`-op `name` outside this
 //! list (diagnostic `unknown_closed_function`). Bindings agreeing on this
@@ -56,15 +61,21 @@ pub enum ClosedArg {
     /// Scalar argument (e.g. `t_utc`, `x`).
     Scalar(f64),
 
-    /// Inline `const`-op array (e.g. the `xs` table for `searchsorted`).
+    /// Inline `const`-op array (e.g. the `xs` table for `searchsorted`,
+    /// or an axis array for `interp.linear` / `interp.bilinear`).
     Array(Vec<f64>),
+
+    /// Inline `const`-op 2-D array (e.g. the `table` arg for
+    /// `interp.bilinear`). Outer index is the row (axis-x position),
+    /// inner index the column (axis-y position); see esm-spec §9.2.
+    Array2D(Vec<Vec<f64>>),
 }
 
 impl ClosedArg {
     fn expect_scalar(&self, name: &str, position: usize) -> Result<f64, ClosedFunctionError> {
         match self {
             ClosedArg::Scalar(v) => Ok(*v),
-            ClosedArg::Array(_) => Err(ClosedFunctionError::new(
+            ClosedArg::Array(_) | ClosedArg::Array2D(_) => Err(ClosedFunctionError::new(
                 "closed_function_arg_type",
                 format!("{name}: arg #{position} must be scalar, got array"),
             )),
@@ -74,9 +85,23 @@ impl ClosedArg {
     fn expect_array(&self, name: &str, position: usize) -> Result<&[f64], ClosedFunctionError> {
         match self {
             ClosedArg::Array(v) => Ok(v.as_slice()),
-            ClosedArg::Scalar(_) => Err(ClosedFunctionError::new(
+            ClosedArg::Scalar(_) | ClosedArg::Array2D(_) => Err(ClosedFunctionError::new(
                 "closed_function_arg_type",
-                format!("{name}: arg #{position} must be array, got scalar"),
+                format!("{name}: arg #{position} must be 1-D array, got other shape"),
+            )),
+        }
+    }
+
+    fn expect_array2d(
+        &self,
+        name: &str,
+        position: usize,
+    ) -> Result<&[Vec<f64>], ClosedFunctionError> {
+        match self {
+            ClosedArg::Array2D(v) => Ok(v.as_slice()),
+            ClosedArg::Scalar(_) | ClosedArg::Array(_) => Err(ClosedFunctionError::new(
+                "closed_function_arg_type",
+                format!("{name}: arg #{position} must be 2-D array, got other shape"),
             )),
         }
     }
@@ -126,6 +151,8 @@ pub fn closed_function_names() -> &'static HashSet<String> {
             "datetime.julian_day",
             "datetime.is_leap_year",
             "interp.searchsorted",
+            "interp.linear",
+            "interp.bilinear",
         ]
         .iter()
         .map(|s| (*s).to_string())
@@ -211,6 +238,24 @@ pub fn evaluate_closed_function(
             Ok(ClosedValue::Integer(check_i32(
                 name,
                 searchsorted(name, x, xs)?,
+            )?))
+        }
+        "interp.linear" => {
+            expect_arity(name, args, 3)?;
+            let table = args[0].expect_array(name, 0)?;
+            let axis = args[1].expect_array(name, 1)?;
+            let x = args[2].expect_scalar(name, 2)?;
+            Ok(ClosedValue::Float(interp_linear(table, axis, x)?))
+        }
+        "interp.bilinear" => {
+            expect_arity(name, args, 5)?;
+            let table = args[0].expect_array2d(name, 0)?;
+            let axis_x = args[1].expect_array(name, 1)?;
+            let axis_y = args[2].expect_array(name, 2)?;
+            let x = args[3].expect_scalar(name, 3)?;
+            let y = args[4].expect_scalar(name, 4)?;
+            Ok(ClosedValue::Float(interp_bilinear(
+                table, axis_x, axis_y, x, y,
             )?))
         }
         _ => Err(ClosedFunctionError::new(
@@ -374,6 +419,184 @@ fn searchsorted(name: &str, x: f64, xs: &[f64]) -> Result<i64, ClosedFunctionErr
     Ok((n as i64) + 1)
 }
 
+// `interp.linear` per esm-spec §9.2: 1-D linear interpolation with
+// extrapolate-flat clamping. Load-time validation diagnostics:
+// `interp_axis_too_short`, `interp_axis_length_mismatch`,
+// `interp_nan_in_axis`, `interp_non_monotonic_axis`. Evaluation uses the
+// pinned form `result = t[i] + w * (t[i+1] - t[i])` so endpoints are
+// recovered exactly under IEEE-754 round-to-nearest.
+fn interp_linear(table: &[f64], axis: &[f64], x: f64) -> Result<f64, ClosedFunctionError> {
+    validate_axis("interp.linear", "axis", axis)?;
+    if table.len() != axis.len() {
+        return Err(ClosedFunctionError::new(
+            "interp_axis_length_mismatch",
+            format!(
+                "interp.linear: len(table)={} != len(axis)={}",
+                table.len(),
+                axis.len()
+            ),
+        ));
+    }
+    let n = axis.len();
+    if x <= axis[0] {
+        return Ok(table[0]);
+    }
+    if x >= axis[n - 1] {
+        return Ok(table[n - 1]);
+    }
+    // Strict monotonicity + the in-range tests above guarantee that some
+    // interior cell exists. NaN x falls through both clamps (IEEE-754 ≤ /
+    // ≥ are false on NaN) into the blend, where it propagates via `w`.
+    let mut i = 0usize;
+    if x.is_nan() {
+        // NaN must propagate, not produce a misleading "no cell found"
+        // error; pick any cell, the blend will yield NaN anyway.
+        i = 0;
+    } else {
+        for k in 0..(n - 1) {
+            if axis[k] <= x && x < axis[k + 1] {
+                i = k;
+                break;
+            }
+        }
+    }
+    let w = (x - axis[i]) / (axis[i + 1] - axis[i]);
+    Ok(table[i] + w * (table[i + 1] - table[i]))
+}
+
+// `interp.bilinear` per esm-spec §9.2: 2-D linear interpolation,
+// row-major (`table[i][j]` lives at `(axis_x[i], axis_y[j])`), with
+// per-axis extrapolate-flat clamping. Pinned evaluation order is two
+// 1-D x-blends followed by one 1-D y-blend, each in the form
+// `a + w * (b - a)`; the clamp-then-cell-locate sequence guarantees a
+// unique cell in `[1, Nx-1] × [1, Ny-1]`.
+fn interp_bilinear(
+    table: &[Vec<f64>],
+    axis_x: &[f64],
+    axis_y: &[f64],
+    x: f64,
+    y: f64,
+) -> Result<f64, ClosedFunctionError> {
+    validate_axis("interp.bilinear", "axis_x", axis_x)?;
+    validate_axis("interp.bilinear", "axis_y", axis_y)?;
+    if table.len() != axis_x.len() {
+        return Err(ClosedFunctionError::new(
+            "interp_axis_length_mismatch",
+            format!(
+                "interp.bilinear: outer len(table)={} != len(axis_x)={}",
+                table.len(),
+                axis_x.len()
+            ),
+        ));
+    }
+    let ny = axis_y.len();
+    for (i, row) in table.iter().enumerate() {
+        if row.len() != ny {
+            return Err(ClosedFunctionError::new(
+                "interp_axis_length_mismatch",
+                format!(
+                    "interp.bilinear: table row {row_idx} has len={got} but len(axis_y)={ny}",
+                    row_idx = i + 1,
+                    got = row.len(),
+                ),
+            ));
+        }
+    }
+    let nx = axis_x.len();
+    // Per-axis clamp (extrapolate-flat). NaN falls through both branches
+    // because `<=` / `>=` are false for NaN — the resulting NaN
+    // propagates via the weight into the final blend.
+    let x_q = if x <= axis_x[0] {
+        axis_x[0]
+    } else if x >= axis_x[nx - 1] {
+        axis_x[nx - 1]
+    } else {
+        x
+    };
+    let y_q = if y <= axis_y[0] {
+        axis_y[0]
+    } else if y >= axis_y[ny - 1] {
+        axis_y[ny - 1]
+    } else {
+        y
+    };
+    // Cell location: largest i in [0, nx-2] (0-based) with axis_x[i] <=
+    // x_q. The clamp puts x_q in [axis_x[0], axis_x[nx-1]], so the
+    // search is well-defined whenever x is finite. NaN x produces NaN
+    // x_q; the comparisons all return false, so we fall back to cell 0
+    // and let the NaN weight propagate.
+    let i = locate_cell(axis_x, x_q);
+    let j = locate_cell(axis_y, y_q);
+    let wx = (x_q - axis_x[i]) / (axis_x[i + 1] - axis_x[i]);
+    let wy = (y_q - axis_y[j]) / (axis_y[j + 1] - axis_y[j]);
+    let row_j = table[i][j] + wx * (table[i + 1][j] - table[i][j]);
+    let row_jp1 = table[i][j + 1] + wx * (table[i + 1][j + 1] - table[i][j + 1]);
+    Ok(row_j + wy * (row_jp1 - row_j))
+}
+
+// Largest 0-based index `i` in `[0, axis.len() - 2]` with `axis[i] <=
+// q`. Falls back to 0 when no such index exists (only possible for NaN
+// q after clamping, where the comparisons are all false; the blend
+// then propagates NaN regardless of which cell we pick).
+fn locate_cell(axis: &[f64], q: f64) -> usize {
+    let last = axis.len() - 2;
+    let mut i = 0usize;
+    for (k, v) in axis.iter().take(last + 1).enumerate() {
+        if *v <= q {
+            i = k;
+        } else {
+            break;
+        }
+    }
+    i
+}
+
+// Shared axis-validation helper for `interp.linear` and
+// `interp.bilinear`. Diagnoses (in order of precedence): too-short,
+// NaN-in-axis, non-monotonic. Strict monotonicity (`<`, not `≤`) is
+// required because equal-adjacent entries would zero the blend
+// denominator — `interp.searchsorted` permits non-decreasing because it
+// returns an index, not a blend.
+fn validate_axis(fn_name: &str, label: &str, axis: &[f64]) -> Result<(), ClosedFunctionError> {
+    if axis.len() < 2 {
+        return Err(ClosedFunctionError::new(
+            "interp_axis_too_short",
+            format!(
+                "{fn_name}: {label} has {len} entries; need at least 2 (no interval to blend across)",
+                len = axis.len()
+            ),
+        ));
+    }
+    for (i, v) in axis.iter().copied().enumerate() {
+        if v.is_nan() {
+            return Err(ClosedFunctionError::new(
+                "interp_nan_in_axis",
+                format!(
+                    "{fn_name}: {label}[{idx}] is NaN; NaN entries in axes are forbidden",
+                    idx = i + 1
+                ),
+            ));
+        }
+    }
+    // NaN was filtered above, so `>=` here is well-defined and detects
+    // both equal-adjacent and decreasing pairs (the strict-monotonicity
+    // requirement that distinguishes interp.linear/bilinear from
+    // searchsorted's non-decreasing rule).
+    for w in axis.windows(2) {
+        if w[0] >= w[1] {
+            return Err(ClosedFunctionError::new(
+                "interp_non_monotonic_axis",
+                format!(
+                    "{fn_name}: {label} is not strictly increasing (encountered {a} then {b})",
+                    a = w[0],
+                    b = w[1]
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -383,6 +606,9 @@ mod tests {
     }
     fn a(vs: &[f64]) -> ClosedArg {
         ClosedArg::Array(vs.to_vec())
+    }
+    fn a2(rows: &[&[f64]]) -> ClosedArg {
+        ClosedArg::Array2D(rows.iter().map(|r| r.to_vec()).collect())
     }
 
     #[test]
@@ -394,7 +620,7 @@ mod tests {
     #[test]
     fn closed_function_names_v030() {
         let names = closed_function_names();
-        assert_eq!(names.len(), 10);
+        assert_eq!(names.len(), 12);
         for n in [
             "datetime.year",
             "datetime.month",
@@ -406,6 +632,8 @@ mod tests {
             "datetime.julian_day",
             "datetime.is_leap_year",
             "interp.searchsorted",
+            "interp.linear",
+            "interp.bilinear",
         ] {
             assert!(names.contains(n), "missing {n}");
         }
@@ -501,5 +729,239 @@ mod tests {
         )
         .unwrap();
         assert_eq!(v, ClosedValue::Integer(2));
+    }
+
+    #[test]
+    fn interp_linear_exact_at_knot() {
+        let v = evaluate_closed_function(
+            "interp.linear",
+            &[
+                a(&[10.0, 20.0, 40.0, 80.0, 160.0]),
+                a(&[0.0, 1.0, 2.0, 3.0, 4.0]),
+                s(2.0),
+            ],
+        )
+        .unwrap();
+        assert_eq!(v.as_f64(), 40.0);
+    }
+
+    #[test]
+    fn interp_linear_midpoint_blend() {
+        let v = evaluate_closed_function(
+            "interp.linear",
+            &[
+                a(&[10.0, 20.0, 40.0, 80.0, 160.0]),
+                a(&[0.0, 1.0, 2.0, 3.0, 4.0]),
+                s(0.5),
+            ],
+        )
+        .unwrap();
+        assert_eq!(v.as_f64(), 15.0);
+    }
+
+    #[test]
+    fn interp_linear_below_clamps() {
+        let v = evaluate_closed_function(
+            "interp.linear",
+            &[a(&[3.0, 7.0]), a(&[10.0, 20.0]), s(-100.0)],
+        )
+        .unwrap();
+        assert_eq!(v.as_f64(), 3.0);
+    }
+
+    #[test]
+    fn interp_linear_above_clamps_exact_endpoint() {
+        // Pinned form `t[i] + w*(t[i+1]-t[i])` recovers the endpoint
+        // exactly under round-to-nearest when w = 1.
+        let v = evaluate_closed_function(
+            "interp.linear",
+            &[
+                a(&[10.0, 20.0, 40.0, 80.0, 160.0]),
+                a(&[0.0, 1.0, 2.0, 3.0, 4.0]),
+                s(99.0),
+            ],
+        )
+        .unwrap();
+        assert_eq!(v.as_f64(), 160.0);
+    }
+
+    #[test]
+    fn interp_linear_nan_propagates() {
+        let v = evaluate_closed_function(
+            "interp.linear",
+            &[
+                a(&[10.0, 20.0, 40.0, 80.0, 160.0]),
+                a(&[0.0, 1.0, 2.0, 3.0, 4.0]),
+                s(f64::NAN),
+            ],
+        )
+        .unwrap();
+        assert!(v.as_f64().is_nan());
+    }
+
+    #[test]
+    fn interp_linear_non_monotonic_rejects() {
+        let err = evaluate_closed_function(
+            "interp.linear",
+            &[a(&[10.0, 20.0, 30.0, 40.0]), a(&[0.0, 2.0, 1.0, 3.0]), s(1.5)],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_non_monotonic_axis");
+    }
+
+    #[test]
+    fn interp_linear_equal_adjacent_rejects() {
+        let err = evaluate_closed_function(
+            "interp.linear",
+            &[a(&[10.0, 20.0, 30.0, 40.0]), a(&[0.0, 1.0, 1.0, 2.0]), s(0.5)],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_non_monotonic_axis");
+    }
+
+    #[test]
+    fn interp_linear_length_mismatch_rejects() {
+        let err = evaluate_closed_function(
+            "interp.linear",
+            &[a(&[10.0, 20.0, 30.0, 40.0]), a(&[0.0, 1.0, 2.0]), s(1.0)],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_axis_length_mismatch");
+    }
+
+    #[test]
+    fn interp_linear_nan_in_axis_rejects() {
+        let err = evaluate_closed_function(
+            "interp.linear",
+            &[
+                a(&[10.0, 20.0, 30.0, 40.0]),
+                a(&[0.0, f64::NAN, 2.0, 3.0]),
+                s(1.0),
+            ],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_nan_in_axis");
+    }
+
+    #[test]
+    fn interp_linear_axis_too_short_rejects() {
+        let err = evaluate_closed_function(
+            "interp.linear",
+            &[a(&[42.0]), a(&[0.0]), s(0.0)],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_axis_too_short");
+    }
+
+    #[test]
+    fn interp_bilinear_exact_corner() {
+        let v = evaluate_closed_function(
+            "interp.bilinear",
+            &[
+                a2(&[&[0.0, 1.0, 2.0], &[10.0, 11.0, 12.0], &[20.0, 21.0, 22.0]]),
+                a(&[0.0, 1.0, 2.0]),
+                a(&[0.0, 10.0, 20.0]),
+                s(2.0),
+                s(20.0),
+            ],
+        )
+        .unwrap();
+        assert_eq!(v.as_f64(), 22.0);
+    }
+
+    #[test]
+    fn interp_bilinear_center_blend() {
+        let v = evaluate_closed_function(
+            "interp.bilinear",
+            &[
+                a2(&[&[0.0, 1.0, 2.0], &[10.0, 11.0, 12.0], &[20.0, 21.0, 22.0]]),
+                a(&[0.0, 1.0, 2.0]),
+                a(&[0.0, 10.0, 20.0]),
+                s(0.5),
+                s(5.0),
+            ],
+        )
+        .unwrap();
+        assert_eq!(v.as_f64(), 5.5);
+    }
+
+    #[test]
+    fn interp_bilinear_clamps_to_corner() {
+        let v = evaluate_closed_function(
+            "interp.bilinear",
+            &[
+                a2(&[&[0.0, 1.0, 2.0], &[10.0, 11.0, 12.0], &[20.0, 21.0, 22.0]]),
+                a(&[0.0, 1.0, 2.0]),
+                a(&[0.0, 10.0, 20.0]),
+                s(1000.0),
+                s(1000.0),
+            ],
+        )
+        .unwrap();
+        assert_eq!(v.as_f64(), 22.0);
+    }
+
+    #[test]
+    fn interp_bilinear_nan_x_propagates() {
+        let v = evaluate_closed_function(
+            "interp.bilinear",
+            &[
+                a2(&[&[0.0, 1.0, 2.0], &[10.0, 11.0, 12.0], &[20.0, 21.0, 22.0]]),
+                a(&[0.0, 1.0, 2.0]),
+                a(&[0.0, 10.0, 20.0]),
+                s(f64::NAN),
+                s(5.0),
+            ],
+        )
+        .unwrap();
+        assert!(v.as_f64().is_nan());
+    }
+
+    #[test]
+    fn interp_bilinear_ragged_rows_reject() {
+        let err = evaluate_closed_function(
+            "interp.bilinear",
+            &[
+                a2(&[&[0.0, 1.0, 2.0], &[10.0, 11.0], &[20.0, 21.0, 22.0]]),
+                a(&[0.0, 1.0, 2.0]),
+                a(&[0.0, 10.0, 20.0]),
+                s(0.5),
+                s(5.0),
+            ],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_axis_length_mismatch");
+    }
+
+    #[test]
+    fn interp_bilinear_axis_x_length_mismatch_rejects() {
+        let err = evaluate_closed_function(
+            "interp.bilinear",
+            &[
+                a2(&[&[0.0, 1.0, 2.0], &[10.0, 11.0, 12.0], &[20.0, 21.0, 22.0]]),
+                a(&[0.0, 1.0]),
+                a(&[0.0, 10.0, 20.0]),
+                s(0.5),
+                s(5.0),
+            ],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_axis_length_mismatch");
+    }
+
+    #[test]
+    fn interp_bilinear_non_monotonic_axis_rejects() {
+        let err = evaluate_closed_function(
+            "interp.bilinear",
+            &[
+                a2(&[&[0.0, 1.0, 2.0], &[10.0, 11.0, 12.0], &[20.0, 21.0, 22.0]]),
+                a(&[0.0, 2.0, 1.0]),
+                a(&[0.0, 10.0, 20.0]),
+                s(0.5),
+                s(5.0),
+            ],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "interp_non_monotonic_axis");
     }
 }
