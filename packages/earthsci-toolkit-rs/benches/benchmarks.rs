@@ -118,6 +118,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         interfaces: None,
         grids: None,
         discretizations: None,
+        staggering_rules: None,
     }
 }
 

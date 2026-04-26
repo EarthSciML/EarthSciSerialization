@@ -210,7 +210,7 @@ pub fn evaluate_closed_function(
             let xs = args[1].expect_array(name, 1)?;
             Ok(ClosedValue::Integer(check_i32(
                 name,
-                searchsorted(name, x, xs)? as i64,
+                searchsorted(name, x, xs)?,
             )?))
         }
         _ => Err(ClosedFunctionError::new(
