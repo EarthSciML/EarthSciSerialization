@@ -161,20 +161,66 @@ const _MMS_REGISTRY = Dict{Symbol,ManufacturedSolution}(
 )
 
 """
+    ManufacturedSolution2D(name, sample, derivative_combo, domain_lon, domain_lat)
+
+A registered 2D (lon, lat) manufactured solution. `sample(lon, lat)` returns
+u(lon, lat); `derivative_combo(lon, lat, R)` returns the value the rule's
+combined stencil should reproduce — for the latlon `grad`+`combine: "+"`
+rule that is ∂_x u + ∂_y u with the spherical metric (∂_x = (1/(R cos_lat))
+∂_lon, ∂_y = (1/R) ∂_lat). `domain_lon`/`domain_lat` describe the sampling
+support so the harness can size the grid correctly. `domain_lon` is taken
+to be periodic; `domain_lat` is open (poles excluded by an interior mask).
+"""
+struct ManufacturedSolution2D
+    name::Symbol
+    sample::Function          # (lon, lat) -> Float64
+    derivative_combo::Function # (lon, lat, R) -> Float64
+    domain_lon::Tuple{Float64,Float64}
+    domain_lat::Tuple{Float64,Float64}
+end
+
+# Y_{2,0} normalized real spherical harmonic, expressed in (lat) since
+# colatitude θ = π/2 − lat ⇒ cos θ = sin lat:
+#   Y_{2,0}(lat) = (1/4) sqrt(5/π) (3 sin²(lat) − 1)
+# It is independent of lon, so ∂_lon Y_{2,0} ≡ 0 (the lon stencil exactly
+# cancels), while ∂_lat Y_{2,0} = (1/4) sqrt(5/π) · 6 sin(lat) cos(lat).
+# Combined under the rule's `+`:  (1/R) · ∂_lat Y_{2,0}.
+const _Y20_NORM = sqrt(5.0 / π) / 4.0
+
+const _MMS_Y20_SPHERE = ManufacturedSolution2D(
+    :Y_2_0_sphere,
+    (lon, lat) -> _Y20_NORM * (3 * sin(lat)^2 - 1),
+    (lon, lat, R) -> (1.0 / R) * _Y20_NORM * 6 * sin(lat) * cos(lat),
+    (0.0, 2π),
+    (-π / 2, π / 2),
+)
+
+const _MMS_REGISTRY_2D = Dict{Symbol,ManufacturedSolution2D}(
+    :Y_2_0_sphere => _MMS_Y20_SPHERE,
+)
+
+"""
     register_manufactured_solution!(ms::ManufacturedSolution)
+    register_manufactured_solution!(ms::ManufacturedSolution2D)
 
 Add or replace a manufactured solution in the registry. Returns `ms`.
+1D and 2D entries live in independent registries keyed by name.
 """
 function register_manufactured_solution!(ms::ManufacturedSolution)
     _MMS_REGISTRY[ms.name] = ms
     return ms
 end
 
+function register_manufactured_solution!(ms::ManufacturedSolution2D)
+    _MMS_REGISTRY_2D[ms.name] = ms
+    return ms
+end
+
 """
     lookup_manufactured_solution(description::AbstractString) -> ManufacturedSolution
 
-Resolve a `manufactured_solution` description string from an `input.esm` to
-a registered solution. Matching is loose: punctuation and whitespace are
+Resolve a 1D `manufactured_solution` description string from an `input.esm`
+to a registered solution. Matching is loose: punctuation and whitespace are
 ignored, so e.g. `"sin(2*pi*x) on [0,1] periodic; …"` resolves to
 `:sin_2pi_x_periodic`.
 """
@@ -186,6 +232,26 @@ function lookup_manufactured_solution(description::AbstractString)::Manufactured
     throw(MMSEvaluatorError(
         "E_MMS_UNKNOWN_SOLUTION",
         "no manufactured solution registered for $(repr(description)); " *
+        "register one with register_manufactured_solution!"))
+end
+
+"""
+    lookup_manufactured_solution_2d(description::AbstractString) -> ManufacturedSolution2D
+
+Resolve a 2D `manufactured_solution` description string to a registered
+sphere/lat-lon solution. Matching is loose: alphanumerics-only comparison,
+so `"Y_{2,0} spherical harmonic on the unit sphere"` resolves to
+`:Y_2_0_sphere`.
+"""
+function lookup_manufactured_solution_2d(description::AbstractString)::ManufacturedSolution2D
+    norm = replace(lowercase(String(description)), r"[^a-z0-9]" => "")
+    if occursin("y20", norm) || occursin("y2_0", norm) ||
+       occursin("sphericalharmonic20", norm) || occursin("sphericalharmonicy20", norm)
+        return _MMS_REGISTRY_2D[:Y_2_0_sphere]
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_UNKNOWN_SOLUTION",
+        "no 2D manufactured solution registered for $(repr(description)); " *
         "register one with register_manufactured_solution!"))
 end
 
@@ -209,6 +275,44 @@ function _resolve_rule_spec(rule_json::AbstractDict, name::AbstractString)
         return d[name]
     end
     return rule_json
+end
+
+# ============================================================
+# Cell-indexed bindings (per-cell metric callables)
+# ============================================================
+
+"""
+    CellBindings(scalars, per_cell)
+
+Bundle of stencil-coefficient bindings that mixes index-independent scalars
+(`dx`, `dlon`, `R`, …) with per-cell callables (e.g. `cos_lat[j]`,
+`area[i,j]`). `bindings_at(cb, idx...)` materializes a plain
+`Dict{String,Float64}` for cell `idx` by evaluating each per-cell entry at
+that index. Used by [`apply_stencil_2d_latlon`] and any future grid-aware
+stencil applier so that AST coefficients carrying `cos_lat` (or any
+metric field) can be evaluated cell-by-cell with no walker-side
+reimplementation.
+"""
+struct CellBindings
+    scalars::Dict{String,Float64}
+    per_cell::Dict{String,Function}  # name -> (idx...) -> Float64
+end
+
+CellBindings(scalars::Dict{String,Float64}) =
+    CellBindings(scalars, Dict{String,Function}())
+
+"""
+    bindings_at(cb::CellBindings, idx...) -> Dict{String,Float64}
+
+Materialize the per-cell binding dict for cell `idx`. Per-cell entries
+override scalar entries with the same name.
+"""
+function bindings_at(cb::CellBindings, idx...)::Dict{String,Float64}
+    out = copy(cb.scalars)
+    for (name, fn) in cb.per_cell
+        out[name] = fn(idx...)
+    end
+    return out
 end
 
 # ============================================================
@@ -406,6 +510,100 @@ function parabola_reconstruct_periodic_1d(stencils_json,
 end
 
 # ============================================================
+# Stencil application (2D structured lat-lon, cell-centered)
+# ============================================================
+
+"""
+    apply_stencil_2d_latlon(stencil_json, u::Matrix{Float64},
+                            cb::CellBindings) -> (out::Matrix{Float64},
+                                                  interior::BitMatrix)
+
+Apply a 2D `kind: "latlon"` stencil to the cell-centered sample matrix
+`u` of shape `(nlon, nlat)`. Each entry of `stencil_json` must carry a
+selector with `kind == "latlon"`, `axis ∈ {"lon", "lat"}`, and
+`offset::Int`, plus a `coeff` AST node. The lon axis is treated as
+periodic (modulo `nlon`); the lat axis is non-periodic — cells where the
+stencil would reach `j < 1` or `j > nlat` are flagged in the returned
+`interior` mask so callers can compute L∞ on the interior only (poles
+excluded).
+
+The coefficient AST is evaluated cell-by-cell against `bindings_at(cb, i, j)`,
+so per-cell metric fields (`cos_lat`, `R`, `dlon`, `dlat`, …) can vary
+freely with index. The combine rule is `+` (sum of contributions); other
+combines are not yet supported.
+"""
+function apply_stencil_2d_latlon(stencil_json,
+                                 u::Matrix{Float64},
+                                 cb::CellBindings)::Tuple{Matrix{Float64},BitMatrix}
+    nlon, nlat = size(u)
+    lon_pairs = Tuple{Int,Any}[]
+    lat_pairs = Tuple{Int,Any}[]
+    for s in stencil_json
+        sel = s["selector"]
+        kind = String(get(sel, "kind", ""))
+        kind == "latlon" || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "apply_stencil_2d_latlon requires `selector.kind == \"latlon\"`, " *
+            "got $(repr(kind))"))
+        axis = String(sel["axis"])
+        off = Int(sel["offset"])
+        if axis == "lon"
+            push!(lon_pairs, (off, s["coeff"]))
+        elseif axis == "lat"
+            push!(lat_pairs, (off, s["coeff"]))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "latlon selector axis must be \"lon\" or \"lat\", got $(repr(axis))"))
+        end
+    end
+    out = zeros(Float64, nlon, nlat)
+    # interior[i,j] = true iff every lat offset stays in [1, nlat] for cell (i,j).
+    interior = trues(nlon, nlat)
+    max_neg_lat = isempty(lat_pairs) ? 0 : -minimum(off for (off, _) in lat_pairs)
+    max_pos_lat = isempty(lat_pairs) ? 0 :  maximum(off for (off, _) in lat_pairs)
+    for j in 1:nlat
+        in_interior = (j - max_neg_lat >= 1) && (j + max_pos_lat <= nlat)
+        for i in 1:nlon
+            interior[i, j] = in_interior
+            in_interior || continue
+            b = bindings_at(cb, i, j)
+            acc = 0.0
+            for (off, coeff_node) in lon_pairs
+                ii = mod1(i + off, nlon)
+                acc += eval_coeff(coeff_node, b) * u[ii, j]
+            end
+            for (off, coeff_node) in lat_pairs
+                jj = j + off
+                acc += eval_coeff(coeff_node, b) * u[i, jj]
+            end
+            out[i, j] = acc
+        end
+    end
+    return out, interior
+end
+
+# Detect whether a stencil is 2D lat-lon by selector kind. Returns the kind
+# string of the first entry; throws if entries disagree. Multi-stencil
+# mappings (PPM-style {name: [entries…]}) are flat-cartesian by construction
+# and report kind "cartesian" without inspecting their bodies.
+function _stencil_kind(stencil_json)::String
+    if stencil_json isa AbstractDict
+        return "cartesian"
+    end
+    isempty(stencil_json) && throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE", "stencil is empty"))
+    first_kind = String(get(first(stencil_json)["selector"], "kind", ""))
+    for s in stencil_json
+        k = String(get(s["selector"], "kind", ""))
+        k == first_kind || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "mixed selector kinds in stencil: $(repr(first_kind)) and $(repr(k))"))
+    end
+    return first_kind
+end
+
+# ============================================================
 # Convergence sweep
 # ============================================================
 
@@ -469,7 +667,7 @@ When present, the harness measures pointwise L∞ error of the parabolic
 reconstruction against the manufactured solution at every sub-cell sample.
 """
 function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
-                         manufactured::Union{Nothing,ManufacturedSolution}=nothing)::MMSConvergenceResult
+                         manufactured::Union{Nothing,ManufacturedSolution,ManufacturedSolution2D}=nothing)::MMSConvergenceResult
     rule_name = String(input_json["rule"])
     spec = _resolve_rule_spec(rule_json, rule_name)
     haskey(spec, "stencil") || throw(MMSEvaluatorError(
@@ -482,13 +680,27 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
             "E_MMS_BAD_FIXTURE",
             "rule $(repr(rule_name)) has no `accuracy` field"))
 
-    ms = manufactured === nothing ?
-        lookup_manufactured_solution(String(input_json["manufactured_solution"])) :
-        manufactured
     sampling = String(get(input_json, "sampling", "cell_center"))
     sampling in ("cell_center", "cell_average") || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",
         "sampling must be \"cell_center\" or \"cell_average\" (got $(repr(sampling)))"))
+
+    kind = _stencil_kind(stencil)
+    if kind == "latlon"
+        return _mms_convergence_2d_latlon(stencil, input_json, declared, manufactured)
+    elseif kind != "cartesian" && kind != ""
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "unsupported selector kind $(repr(kind)); " *
+            "expected one of \"cartesian\", \"latlon\""))
+    end
+    # 1D cartesian path falls through to the inline body below.
+    manufactured isa Union{Nothing,ManufacturedSolution} || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "1D cartesian stencil requires a `ManufacturedSolution`, got $(typeof(manufactured))"))
+    ms = manufactured === nothing ?
+        lookup_manufactured_solution(String(input_json["manufactured_solution"])) :
+        manufactured
     raw_grids = input_json["grids"]
     raw_grids isa AbstractVector || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",
@@ -530,12 +742,92 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
         end
     end
 
+    return _finalize_convergence(grids, errors, declared)
+end
+
+# 2D structured lat-lon convergence. Uses Y_{2,0}-style sphere MMS with R
+# (radius) plumbing and a per-cell `cos_lat` binding. Each grid entry may
+# carry `nlon`/`nlat` directly, or a single `n` (then `nlon = 2n`, `nlat = n`,
+# the canonical sphere-MMS aspect ratio). The error metric is L∞ over the
+# interior cells (poles excluded by the lat stencil's reach).
+function _mms_convergence_2d_latlon(stencil, input_json::AbstractDict,
+                                    declared::Float64,
+                                    manufactured)::MMSConvergenceResult
+    manufactured isa Union{Nothing,ManufacturedSolution2D} || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "2D latlon stencil requires a `ManufacturedSolution2D`, got $(typeof(manufactured))"))
+    ms = manufactured === nothing ?
+        lookup_manufactured_solution_2d(String(input_json["manufactured_solution"])) :
+        manufactured
+    R = Float64(get(input_json, "radius", 1.0))
+    R > 0 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "radius must be positive, got $(R)"))
+    raw_grids = input_json["grids"]
+    raw_grids isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `grids` must be an array, got $(typeof(raw_grids))"))
+    grid_pairs = Tuple{Int,Int}[]
+    for g in raw_grids
+        if haskey(g, "nlon") && haskey(g, "nlat")
+            push!(grid_pairs, (Int(g["nlon"]), Int(g["nlat"])))
+        elseif haskey(g, "n")
+            n = Int(g["n"])
+            push!(grid_pairs, (2 * n, n))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "latlon grid entry must carry `nlon`+`nlat` or `n`; got keys $(collect(keys(g)))"))
+        end
+    end
+    length(grid_pairs) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "convergence requires at least two grids; got $(grid_pairs)"))
+
+    lon_lo, lon_hi = ms.domain_lon
+    lat_lo, lat_hi = ms.domain_lat
+    Llon = lon_hi - lon_lo
+    Llat = lat_hi - lat_lo
+
+    grids = [nlat for (_, nlat) in grid_pairs]  # index by lat resolution
+    errors = Vector{Float64}(undef, length(grid_pairs))
+    for (k, (nlon, nlat)) in enumerate(grid_pairs)
+        dlon = Llon / nlon
+        dlat = Llat / nlat
+        lon_centers = [lon_lo + (i - 0.5) * dlon for i in 1:nlon]
+        lat_centers = [lat_lo + (j - 0.5) * dlat for j in 1:nlat]
+        u = [ms.sample(lon_centers[i], lat_centers[j]) for i in 1:nlon, j in 1:nlat]
+        cb = CellBindings(
+            Dict{String,Float64}("dlon" => dlon, "dlat" => dlat,
+                                 "h" => min(dlon, dlat), "R" => R),
+            Dict{String,Function}(
+                "cos_lat" => (i, j) -> cos(lat_centers[j]),
+                "lat"     => (i, j) -> lat_centers[j],
+                "lon"     => (i, j) -> lon_centers[i],
+            ),
+        )
+        du_num, interior = apply_stencil_2d_latlon(stencil, u, cb)
+        du_exact = [ms.derivative_combo(lon_centers[i], lat_centers[j], R)
+                    for i in 1:nlon, j in 1:nlat]
+        diffs = abs.(du_num .- du_exact)
+        any(interior) || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "no interior cells on grid (nlon=$(nlon), nlat=$(nlat)); " *
+            "lat stencil reach exceeds nlat"))
+        errors[k] = maximum(diffs[interior])
+    end
+
+    return _finalize_convergence(grids, errors, declared)
+end
+
+# Common tail: fail-fast non-finite check, refinement orders, observed min.
+function _finalize_convergence(grids::Vector{Int}, errors::Vector{Float64},
+                               declared::Float64)::MMSConvergenceResult
     if any(!isfinite, errors) || any(e -> e <= 0, errors)
         throw(MMSEvaluatorError(
             "E_MMS_NON_FINITE",
             "non-finite or zero error on some grid; errors=$(errors)"))
     end
-
     orders = [log2(errors[i] / errors[i + 1]) for i in 1:(length(errors) - 1)]
     observed_min = minimum(orders)
     return MMSConvergenceResult(grids, errors, orders, observed_min, declared)
@@ -588,7 +880,7 @@ acceptance criterion.
 function verify_mms_convergence(rule_json::AbstractDict,
                                 input_json::AbstractDict,
                                 expected_json::AbstractDict;
-                                manufactured::Union{Nothing,ManufacturedSolution}=nothing,
+                                manufactured::Union{Nothing,ManufacturedSolution,ManufacturedSolution2D}=nothing,
                                 tolerance::Float64=0.2)::MMSConvergenceResult
     haskey(expected_json, "expected_min_order") || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",

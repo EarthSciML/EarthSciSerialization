@@ -401,6 +401,220 @@ using EarthSciSerialization
             "polynomial x^3")
     end
 
+    # ============================================================
+    # 2D structured + per-cell metric bindings (esm-5ur)
+    # ============================================================
+
+    @testset "CellBindings — bindings_at materializes per-cell dict" begin
+        cb = CellBindings(
+            Dict{String,Float64}("R" => 6.371e6, "dlon" => 0.1, "dlat" => 0.05),
+            Dict{String,Function}(
+                "cos_lat" => (i, j) -> cos(0.1 * j),
+                "lat"     => (i, j) -> 0.1 * j,
+            ),
+        )
+        b = bindings_at(cb, 3, 7)
+        @test b["R"] == 6.371e6
+        @test b["dlon"] == 0.1
+        @test isapprox(b["cos_lat"], cos(0.7); atol=1e-12)
+        @test isapprox(b["lat"], 0.7; atol=1e-12)
+        # Per-cell entries override scalars with the same name.
+        cb2 = CellBindings(
+            Dict{String,Float64}("x" => 1.0),
+            Dict{String,Function}("x" => (i, j) -> 2.0),
+        )
+        @test bindings_at(cb2, 0, 0)["x"] == 2.0
+    end
+
+    @testset "lookup_manufactured_solution_2d — Y_{2,0}" begin
+        ms2 = lookup_manufactured_solution_2d(
+            "Y_{2,0} spherical harmonic on the unit sphere")
+        @test ms2.name === :Y_2_0_sphere
+        @test ms2.domain_lon == (0.0, 2π)
+        @test ms2.domain_lat == (-π / 2, π / 2)
+        # Lon-independent: gradient_combo at (lon, lat, R) doesn't depend on lon.
+        v1 = ms2.derivative_combo(0.0, 0.3, 1.0)
+        v2 = ms2.derivative_combo(1.7, 0.3, 1.0)
+        @test isapprox(v1, v2; atol=1e-12)
+        # At equator (lat=0): ∂_lat Y_{2,0} = 0 ⇒ combined = 0.
+        @test isapprox(ms2.derivative_combo(0.0, 0.0, 1.0), 0.0; atol=1e-12)
+        @test_throws MMSEvaluatorError lookup_manufactured_solution_2d(
+            "polynomial blob")
+    end
+
+    # The latlon rule lives in EarthSciDiscretizations
+    # (`discretizations/finite_difference/centered_2nd_uniform_latlon.json`).
+    # Embed the equivalent dict here so the ESS test suite is self-contained.
+    centered_2nd_latlon_rule = Dict(
+        "discretizations" => Dict(
+            "centered_2nd_uniform_latlon" => Dict(
+                "applies_to" => Dict("op" => "grad", "args" => Any["\$u"], "dim" => "\$k"),
+                "grid_family" => "latlon",
+                "combine" => "+",
+                "accuracy" => "O(h^2)",
+                "stencil" => [
+                    Dict("selector" => Dict("kind" => "latlon",
+                                            "axis" => "lon", "offset" => -1),
+                         "coeff" => Dict("op" => "/", "args" => Any[
+                             -1, Dict("op" => "*", "args" =>
+                                 Any[2, "R", "cos_lat", "dlon"])])),
+                    Dict("selector" => Dict("kind" => "latlon",
+                                            "axis" => "lon", "offset" => 1),
+                         "coeff" => Dict("op" => "/", "args" => Any[
+                             1, Dict("op" => "*", "args" =>
+                                 Any[2, "R", "cos_lat", "dlon"])])),
+                    Dict("selector" => Dict("kind" => "latlon",
+                                            "axis" => "lat", "offset" => -1),
+                         "coeff" => Dict("op" => "/", "args" => Any[
+                             -1, Dict("op" => "*", "args" => Any[2, "R", "dlat"])])),
+                    Dict("selector" => Dict("kind" => "latlon",
+                                            "axis" => "lat", "offset" => 1),
+                         "coeff" => Dict("op" => "/", "args" => Any[
+                             1, Dict("op" => "*", "args" => Any[2, "R", "dlat"])])),
+                ],
+            ),
+        ),
+    )
+    latlon_input = Dict(
+        "rule" => "centered_2nd_uniform_latlon",
+        "manufactured_solution" =>
+            "Y_{2,0} spherical harmonic on the unit sphere; " *
+            "globally smooth, lon-independent",
+        "sampling" => "cell_center",
+        "radius" => 1.0,
+        "grids" => [Dict("n" => 16), Dict("n" => 32),
+                    Dict("n" => 64), Dict("n" => 128)],
+    )
+    latlon_expected = Dict(
+        "rule" => "centered_2nd_uniform_latlon",
+        "metric" => "Linf",
+        "expected_min_order" => 1.9,
+    )
+
+    @testset "apply_stencil_2d_latlon — interior mask + per-cell cos_lat" begin
+        # Build a tiny 4×3 lat-lon stencil application by hand and check that
+        # interior excludes lat boundaries and that cos_lat is read per-cell.
+        nlon, nlat = 4, 3
+        stencil = centered_2nd_latlon_rule["discretizations"]["centered_2nd_uniform_latlon"]["stencil"]
+        u = ones(Float64, nlon, nlat)        # constant field — derivative is 0
+        dlon = 2π / nlon
+        dlat = π / nlat
+        lat_centers = [-π / 2 + (j - 0.5) * dlat for j in 1:nlat]
+        cb = CellBindings(
+            Dict{String,Float64}("R" => 1.0, "dlon" => dlon, "dlat" => dlat),
+            Dict{String,Function}(
+                "cos_lat" => (i, j) -> cos(lat_centers[j]),
+            ),
+        )
+        out, interior = apply_stencil_2d_latlon(stencil, u, cb)
+        # Interior is only the middle lat row (j=2); j=1 and j=3 are excluded.
+        @test interior[1, 2] && interior[2, 2] && interior[3, 2] && interior[4, 2]
+        @test !interior[1, 1] && !interior[1, 3]
+        # On a constant field, the interior result is exactly zero.
+        @test all(out[interior] .== 0.0)
+        # Boundary cells were skipped (default zero in the output).
+        @test all(out[.!interior] .== 0.0)
+    end
+
+    @testset "apply_stencil_2d_latlon — rejects mixed/wrong selector kinds" begin
+        bad_kind = [
+            Dict("selector" => Dict("kind" => "cartesian",
+                                    "axis" => "x", "offset" => 1),
+                 "coeff" => 1.0),
+        ]
+        u = zeros(Float64, 2, 2)
+        cb = CellBindings(Dict{String,Float64}())
+        @test_throws MMSEvaluatorError apply_stencil_2d_latlon(bad_kind, u, cb)
+
+        bad_axis = [
+            Dict("selector" => Dict("kind" => "latlon",
+                                    "axis" => "z", "offset" => 1),
+                 "coeff" => 1.0),
+        ]
+        @test_throws MMSEvaluatorError apply_stencil_2d_latlon(bad_axis, u, cb)
+    end
+
+    @testset "mms_convergence — centered_2nd_uniform_latlon (Y_{2,0})" begin
+        result = mms_convergence(centered_2nd_latlon_rule, latlon_input)
+        @test length(result.errors) == 4
+        @test all(isfinite, result.errors)
+        @test all(result.errors .> 0)
+        # 2nd-order convergence on the lat axis.
+        @test result.declared_order == 2.0
+        @test all(result.errors[i] > result.errors[i + 1] for i in 1:3)
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+        @test result.orders[end] ≥ 1.9
+    end
+
+    @testset "verify_mms_convergence — passes on Y_{2,0} latlon" begin
+        result = verify_mms_convergence(
+            centered_2nd_latlon_rule, latlon_input, latlon_expected)
+        @test result.observed_min_order ≥ latlon_expected["expected_min_order"]
+    end
+
+    @testset "mms_convergence — latlon error paths" begin
+        # nlon/nlat explicit form is accepted alongside `n`.
+        explicit = Base.merge(latlon_input, Dict(
+            "grids" => [Dict("nlon" => 32, "nlat" => 16),
+                        Dict("nlon" => 64, "nlat" => 32),
+                        Dict("nlon" => 128, "nlat" => 64)]))
+        result = mms_convergence(centered_2nd_latlon_rule, explicit)
+        @test result.observed_min_order ≥ 1.9
+
+        # Mixed selector kinds in a single stencil are rejected.
+        mixed_stencil = Any[]
+        for s in centered_2nd_latlon_rule["discretizations"]["centered_2nd_uniform_latlon"]["stencil"]
+            push!(mixed_stencil, deepcopy(s))
+        end
+        push!(mixed_stencil,
+              Dict{String,Any}("selector" => Dict{String,Any}(
+                                   "kind" => "cartesian",
+                                   "axis" => "x", "offset" => 0),
+                               "coeff" => 0.0))
+        mixed = Dict("discretizations" => Dict(
+            "centered_2nd_uniform_latlon" => Base.merge(
+                centered_2nd_latlon_rule["discretizations"]["centered_2nd_uniform_latlon"],
+                Dict("stencil" => mixed_stencil))))
+        @test_throws MMSEvaluatorError mms_convergence(mixed, latlon_input)
+
+        # Negative radius is rejected.
+        bad_R = Base.merge(latlon_input, Dict("radius" => -1.0))
+        @test_throws MMSEvaluatorError mms_convergence(
+            centered_2nd_latlon_rule, bad_R)
+
+        # Grid entry missing both `n` and `nlon`/`nlat` is rejected.
+        bad_grid = Base.merge(latlon_input, Dict("grids" => [Dict("foo" => 1),
+                                                              Dict("foo" => 2)]))
+        @test_throws MMSEvaluatorError mms_convergence(
+            centered_2nd_latlon_rule, bad_grid)
+
+        # 1D solution on a 2D rule is a type error.
+        @test_throws MMSEvaluatorError mms_convergence(
+            centered_2nd_latlon_rule, latlon_input;
+            manufactured=lookup_manufactured_solution(
+                "sin(2*pi*x) on [0,1] periodic"))
+    end
+
+    @testset "register_manufactured_solution! — 2D path" begin
+        # 2D MMS exercising the registry path without hitting machine zero.
+        # u(lon, lat) = lat^3: ∂_lon = 0, ∂_lat = 3 lat^2; centered 2nd FD on
+        # a cubic carries a known O(dlat^2) truncation term (= dlat^2 / R).
+        custom = ManufacturedSolution2D(
+            :_test_lat_cubic,
+            (lon, lat) -> lat^3,
+            (lon, lat, R) -> 3 * lat^2 / R,
+            (0.0, 2π),
+            (-1.0, 1.0),  # avoid lat = ±π/2 (cos = 0 in lon coeff)
+        )
+        register_manufactured_solution!(custom)
+        @test EarthSciSerialization._MMS_REGISTRY_2D[:_test_lat_cubic] === custom
+        result = mms_convergence(
+            centered_2nd_latlon_rule, latlon_input; manufactured=custom)
+        # Pure 2nd-order convergence on a cubic.
+        @test result.observed_min_order ≥ 1.95
+        delete!(EarthSciSerialization._MMS_REGISTRY_2D, :_test_lat_cubic)
+    end
+
     @testset "eval_coeff — direct passthrough to evaluate" begin
         # Smoke test: matches ESD's `eval_coeff` semantics so a downstream
         # walker can swap to the ESS export with no behaviour change.
