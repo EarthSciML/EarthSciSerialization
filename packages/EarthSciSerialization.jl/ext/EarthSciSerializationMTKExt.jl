@@ -146,6 +146,8 @@ function _esm_to_symbolic(expr::EsmExpr, var_dict::Dict{String,Any},
             return _build_transpose(expr, var_dict, t_sym, dim_dict)
         elseif op == "concat"
             return _build_concat(expr, var_dict, t_sym, dim_dict)
+        elseif op == "fn"
+            return _build_fn(expr, var_dict, t_sym, dim_dict)
         else
             error("Unsupported operator: $op")
         end
@@ -496,6 +498,120 @@ function _build_concat(expr::OpExpr, var_dict::Dict{String,Any},
     expr.axis === nothing && error("concat node missing 'axis'")
     arrs = [_esm_to_symbolic(a, var_dict, t_sym, dim_dict) for a in expr.args]
     return cat(arrs...; dims=expr.axis + 1)
+end
+
+# ========================================
+# Closed function `fn` op (esm-spec §9.2)
+# ========================================
+#
+# `interp.linear` and `interp.bilinear` are registered as opaque symbolic
+# operators here so that MTK `structural_simplify` does NOT decompose each
+# call into the ~10 underlying searchsorted+index+blend nodes — components
+# with hundreds of lookups (e.g. fastjx 18 wavelengths × 13 species ≈ 230
+# lookups) blew up the alias-elimination pass otherwise (esm-94w / esm-q7a;
+# rationale documented at esm-spec §9.2 + escalation hq-wisp-y6g6).
+#
+# The const table and axis arrays carried by the `fn` AST node are extracted
+# at lowering time and passed as concrete `Vector{Float64}` (axes / 1-D
+# tables) or `Vector{Vector{Float64}}` (2-D tables). These container types
+# act as the non-symbolic-arg discriminators in `@register_symbolic`; the
+# scalar query argument(s) are the only symbolic args MTK traces.
+#
+# `interp.searchsorted` is intentionally NOT registered here — its return
+# is an integer index, and the only spec-supported composition with `index`
+# requires array-shaped intermediate evaluation that does not lower cleanly
+# to MTK. Callers needing searchsorted in symbolic contexts should use the
+# named tensor-interp primitives instead (which were added precisely for
+# that reason).
+
+# 1-D linear interp registered op. The `table` and `axis` arguments are
+# concrete vectors; `x` is the symbolic query that MTK's tracer flows.
+function _esm_interp_linear(table::Vector{Float64}, axis::Vector{Float64}, x::Real)::Float64
+    return EarthSciSerialization.evaluate_closed_function("interp.linear",
+        Any[table, axis, Float64(x)])::Float64
+end
+
+# 2-D bilinear interp registered op. The `table` is a row-major nested
+# vector (`table[i][j]` at `(axis_x[i], axis_y[j])`).
+function _esm_interp_bilinear(table::Vector{Vector{Float64}},
+                              axis_x::Vector{Float64}, axis_y::Vector{Float64},
+                              x::Real, y::Real)::Float64
+    return EarthSciSerialization.evaluate_closed_function("interp.bilinear",
+        Any[table, axis_x, axis_y, Float64(x), Float64(y)])::Float64
+end
+
+# Register both with `@register_symbolic` so MTK treats each call as a
+# single opaque scalar node rather than alias-eliminating the underlying
+# blend ASTs. The `false` flag suppresses automatic differentiation
+# definition — the spec contract is bit-exact at exact-knot inputs but
+# piecewise-linear in between, and a derivative-of-clamp lookup is not part
+# of the spec contract; downstream users who need analytic gradients must
+# define them separately.
+@register_symbolic _esm_interp_linear(table::Vector{Float64}, axis::Vector{Float64}, x) false
+@register_symbolic _esm_interp_bilinear(table::Vector{Vector{Float64}}, axis_x::Vector{Float64}, axis_y::Vector{Float64}, x, y) false
+
+# Recursively coerce a JSON-parsed const-array value into the concrete
+# vector type the registered op expects. Inputs may be Vector{Any} of
+# Float64 (after JSON3 decode) or Vector{Float64}/Matrix-like.
+function _to_float64_vector(v)::Vector{Float64}
+    v isa Vector{Float64} && return v
+    if v isa AbstractVector
+        return Float64[Float64(x) for x in v]
+    end
+    error("expected a vector value, got $(typeof(v))")
+end
+
+function _to_float64_table_2d(v)::Vector{Vector{Float64}}
+    v isa Vector{Vector{Float64}} && return v
+    if v isa AbstractVector
+        out = Vector{Vector{Float64}}(undef, length(v))
+        for (i, row) in enumerate(v)
+            out[i] = _to_float64_vector(row)
+        end
+        return out
+    end
+    error("expected a 2-D nested vector, got $(typeof(v))")
+end
+
+# Pull a `const`-op array value out of an AST argument node. Errors give
+# the same `interp_*_not_const` flavor the spec defines for load-time
+# validation, surfaced as plain Julia errors during MTK lowering.
+function _extract_const_array_node(arg::EsmExpr, fname::String, label::String)
+    if arg isa OpExpr && arg.op == "const" && arg.value isa AbstractVector
+        return arg.value
+    end
+    error("$(fname): `$(label)` argument must be a `const`-op array " *
+          "(esm-spec §9.2); got $(typeof(arg))")
+end
+
+function _build_fn(expr::OpExpr, var_dict::Dict{String,Any},
+                   t_sym, dim_dict::Dict{String,Any})
+    fname = expr.name
+    fname === nothing && error("`fn` op missing required `name` field (esm-spec §4.4)")
+    if fname == "interp.linear"
+        length(expr.args) == 3 ||
+            error("interp.linear expects 3 args, got $(length(expr.args))")
+        table = _to_float64_vector(_extract_const_array_node(expr.args[1], fname, "table"))
+        axis  = _to_float64_vector(_extract_const_array_node(expr.args[2], fname, "axis"))
+        x_sym = _esm_to_symbolic(expr.args[3], var_dict, t_sym, dim_dict)
+        return _esm_interp_linear(table, axis, x_sym)
+    elseif fname == "interp.bilinear"
+        length(expr.args) == 5 ||
+            error("interp.bilinear expects 5 args, got $(length(expr.args))")
+        table  = _to_float64_table_2d(_extract_const_array_node(expr.args[1], fname, "table"))
+        axis_x = _to_float64_vector(_extract_const_array_node(expr.args[2], fname, "axis_x"))
+        axis_y = _to_float64_vector(_extract_const_array_node(expr.args[3], fname, "axis_y"))
+        x_sym  = _esm_to_symbolic(expr.args[4], var_dict, t_sym, dim_dict)
+        y_sym  = _esm_to_symbolic(expr.args[5], var_dict, t_sym, dim_dict)
+        return _esm_interp_bilinear(table, axis_x, axis_y, x_sym, y_sym)
+    end
+    # Other closed functions (datetime.*, interp.searchsorted) are not
+    # exposed as registered symbolic ops — they're either unused in MTK
+    # contexts or whose return shape (integer index) doesn't compose with
+    # symbolic arithmetic.
+    error("Unsupported `fn` name in MTK lowering: `$(fname)`. " *
+          "Only `interp.linear` and `interp.bilinear` are registered as " *
+          "@register_symbolic operators (esm-94w).")
 end
 
 function _get_or_make_dim(dim_dict::Dict{String,Any}, name::AbstractString)

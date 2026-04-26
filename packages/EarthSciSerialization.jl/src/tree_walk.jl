@@ -312,7 +312,32 @@ function _compile(expr::OpExpr, var_map, param_syms, reg_funcs)
             # constant array on the node so the runtime call is one
             # _eval_node + one closed-function dispatch.
             children = _Node[_compile(expr.args[1], var_map, param_syms, reg_funcs)]
-            handler = (fname, tab.value)
+            handler = (fname, Any[tab.value])
+        elseif fname == "interp.linear"
+            # Args = (table, axis, x). Const arrays at positions [1, 2];
+            # scalar query at [3]. Pre-extract the const arrays so the
+            # runtime hot path skips AST traversal.
+            length(expr.args) == 3 ||
+                throw(TreeWalkError("E_TREEWALK_FN_ARITY",
+                    "interp.linear expects 3 args, got $(length(expr.args))"))
+            tbl  = _require_const_array(expr.args[1], "interp.linear", "table")
+            axs  = _require_const_array(expr.args[2], "interp.linear", "axis")
+            children = _Node[_compile(expr.args[3], var_map, param_syms, reg_funcs)]
+            handler = (fname, Any[tbl, axs])
+        elseif fname == "interp.bilinear"
+            # Args = (table, axis_x, axis_y, x, y). Const arrays at [1, 2, 3];
+            # scalar queries at [4, 5].
+            length(expr.args) == 5 ||
+                throw(TreeWalkError("E_TREEWALK_FN_ARITY",
+                    "interp.bilinear expects 5 args, got $(length(expr.args))"))
+            tbl  = _require_const_array(expr.args[1], "interp.bilinear", "table")
+            axx  = _require_const_array(expr.args[2], "interp.bilinear", "axis_x")
+            axy  = _require_const_array(expr.args[3], "interp.bilinear", "axis_y")
+            children = _Node[
+                _compile(expr.args[4], var_map, param_syms, reg_funcs),
+                _compile(expr.args[5], var_map, param_syms, reg_funcs),
+            ]
+            handler = (fname, Any[tbl, axx, axy])
         else
             children = _Node[_compile(a, var_map, param_syms, reg_funcs)
                              for a in expr.args]
@@ -497,21 +522,46 @@ function _eval_node_op(n::_Node, u, p, t)
         return _eval_node(c[1], u, p, t)
 
     elseif op === :fn
-        # `n.handler` is `(fname::String, const_array_or_nothing)`. The
-        # handler tuple's array is `nothing` for everything except
-        # `interp.searchsorted`, where it carries the precompiled table.
-        fname, tab = n.handler::Tuple{String,Any}
-        if tab === nothing
+        # `n.handler` is `(fname::String, const_args_or_nothing)`. The
+        # tuple's second slot is `nothing` for closed functions whose args
+        # are all scalar (e.g. `datetime.*`). For closed functions with
+        # const-array args (`interp.searchsorted`, `interp.linear`,
+        # `interp.bilinear`) it is a `Vector{Any}` carrying the pre-extracted
+        # arrays in spec arg-position order; the remaining scalar args are
+        # the node's children, also in spec order.
+        fname, const_args = n.handler::Tuple{String,Any}
+        if const_args === nothing
             args_evaluated = Any[_eval_node(ci, u, p, t) for ci in c]
             return Float64(evaluate_closed_function(fname, args_evaluated))
-        else
+        elseif fname == "interp.searchsorted"
+            # Spec arg order: (x, xs); xs is const, x is the only child.
             x = _eval_node(c[1], u, p, t)
-            return Float64(evaluate_closed_function(fname, Any[x, tab]))
+            return Float64(evaluate_closed_function(fname, Any[x, const_args[1]]))
+        elseif fname == "interp.linear"
+            # Spec arg order: (table, axis, x); table & axis are const; x is the only child.
+            x = _eval_node(c[1], u, p, t)
+            return Float64(evaluate_closed_function(fname,
+                Any[const_args[1], const_args[2], x]))
+        elseif fname == "interp.bilinear"
+            # Spec arg order: (table, axis_x, axis_y, x, y); first three are
+            # const; x and y are children in order.
+            x = _eval_node(c[1], u, p, t)
+            y = _eval_node(c[2], u, p, t)
+            return Float64(evaluate_closed_function(fname,
+                Any[const_args[1], const_args[2], const_args[3], x, y]))
         end
 
     else
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP", String(op)))
     end
+end
+
+@inline function _require_const_array(arg, fname::String, arg_label::String)
+    if arg isa OpExpr && arg.op == "const" && arg.value isa AbstractVector
+        return arg.value
+    end
+    throw(TreeWalkError("E_TREEWALK_FN_ARG_NOT_CONST",
+        "$(fname): `$(arg_label)` argument must be a `const`-op array node"))
 end
 
 @inline function _expect_arity_n(op::Symbol, c::Vector{_Node}, n::Int)

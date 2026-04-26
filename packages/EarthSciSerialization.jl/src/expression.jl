@@ -247,6 +247,35 @@ function evaluate(expr::OpExpr, bindings::Dict{String,Float64})::Float64
             x_val = evaluate(expr.args[1], bindings)
             xs = _extract_const_array(expr.args[2], "interp.searchsorted")
             return Float64(evaluate_closed_function(fname, Any[x_val, xs]))
+        elseif fname == "interp.linear"
+            # `interp.linear(table, axis, x)` — table and axis arrive as
+            # `const`-op AST nodes carrying inline arrays; only the scalar
+            # query argument is recursively evaluated. Extracting the arrays
+            # bypasses the scalar `const` evaluation path that would otherwise
+            # try to coerce the array to Float64.
+            if length(expr.args) != 3
+                throw(ClosedFunctionError("closed_function_arity",
+                    "interp.linear expects 3 arguments, got $(length(expr.args))"))
+            end
+            table = _extract_const_array(expr.args[1], "interp.linear")
+            axis  = _extract_const_array(expr.args[2], "interp.linear")
+            x_val = evaluate(expr.args[3], bindings)
+            return Float64(evaluate_closed_function(fname, Any[table, axis, x_val]))
+        elseif fname == "interp.bilinear"
+            # `interp.bilinear(table, axis_x, axis_y, x, y)` — table is a
+            # nested `const`-op array (Vector of Vectors); axes are flat
+            # `const`-op arrays; x, y are scalar.
+            if length(expr.args) != 5
+                throw(ClosedFunctionError("closed_function_arity",
+                    "interp.bilinear expects 5 arguments, got $(length(expr.args))"))
+            end
+            table  = _extract_const_array(expr.args[1], "interp.bilinear")
+            axis_x = _extract_const_array(expr.args[2], "interp.bilinear")
+            axis_y = _extract_const_array(expr.args[3], "interp.bilinear")
+            x_val  = evaluate(expr.args[4], bindings)
+            y_val  = evaluate(expr.args[5], bindings)
+            return Float64(evaluate_closed_function(fname,
+                Any[table, axis_x, axis_y, x_val, y_val]))
         end
         evaluated = Any[evaluate(a, bindings) for a in expr.args]
         result = evaluate_closed_function(fname, evaluated)

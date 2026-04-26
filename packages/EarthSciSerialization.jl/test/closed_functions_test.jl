@@ -87,7 +87,9 @@ end
                         sname = String(scenario.name)
                         inputs_decoded = [_decode_input(v) for v in scenario.inputs]
                         actual = evaluate_closed_function(fn_name, inputs_decoded)
-                        expected_val = scenario.expected
+                        # Expected may also be a NaN/Inf string sentinel
+                        # (esm-94w fixtures use this for nan-x / nan-y cases).
+                        expected_val = _decode_input(scenario.expected)
                         @testset "$(sname)" begin
                             @test _within_tol(actual, expected_val, abs_tol, rel_tol)
                         end
@@ -134,7 +136,9 @@ end
         @test "datetime.julian_day" in names
         @test "datetime.is_leap_year" in names
         @test "interp.searchsorted" in names
-        @test length(names) == 10
+        @test "interp.linear" in names
+        @test "interp.bilinear" in names
+        @test length(names) == 12
     end
 
     # Unknown name → diagnostic `unknown_closed_function`.

@@ -10,6 +10,10 @@ Implements the spec-defined closed function set from esm-spec §9.2:
 * `interp.searchsorted` — 1-based search-into-sorted-array (Julia's
   `searchsortedfirst` semantics with explicit out-of-range / NaN /
   duplicate behavior pinned by spec).
+* `interp.linear` / `interp.bilinear` — 1-D / 2-D linear interpolation
+  with extrapolate-flat boundaries. Pinned evaluation order
+  (`a + w * (b - a)`) for cross-binding bit-equivalence on
+  exactly-representable IEEE-754 inputs (esm-94w).
 
 The set is **closed**: callers MUST reject any `fn`-op `name` outside this
 list (diagnostic `unknown_closed_function`). This module provides:
@@ -44,6 +48,17 @@ Raised by the closed function registry when the spec contract is violated.
 - `closed_function_overflow` — integer-typed result would overflow Int32.
 - `searchsorted_non_monotonic` — `xs` is not non-decreasing.
 - `searchsorted_nan_in_table` — `xs` contains a NaN entry.
+- `interp_non_monotonic_axis` — `interp.linear` / `interp.bilinear` axis is
+  not strictly increasing (esm-spec §9.2; equal-adjacent rejected because the
+  blend denominator would be zero).
+- `interp_axis_length_mismatch` — `interp.linear`: `len(table) != len(axis)`;
+  `interp.bilinear`: `len(table) != len(axis_x)`, or any inner row length
+  differs from `len(axis_y)`.
+- `interp_nan_in_axis` — any `axis` (or `axis_x`, `axis_y`) contains a NaN.
+- `interp_axis_too_short` — any axis has fewer than 2 entries.
+- `interp_table_not_const` / `interp_axis_not_const` — table / axis argument
+  is not a literal `const`-op array (e.g. a variable reference). Raised by
+  the AST extraction site, not by `evaluate_closed_function` directly.
 """
 struct ClosedFunctionError <: Exception
     code::String
@@ -72,6 +87,8 @@ function closed_function_names()::Set{String}
         "datetime.julian_day",
         "datetime.is_leap_year",
         "interp.searchsorted",
+        "interp.linear",
+        "interp.bilinear",
     ])
 end
 
@@ -140,6 +157,13 @@ function evaluate_closed_function(name::String, args::AbstractVector)
     elseif name == "interp.searchsorted"
         _expect_arity(name, args, 2)
         return _interp_searchsorted(name, Float64(args[1]), args[2])
+    elseif name == "interp.linear"
+        _expect_arity(name, args, 3)
+        return _interp_linear(name, args[1], args[2], Float64(args[3]))
+    elseif name == "interp.bilinear"
+        _expect_arity(name, args, 5)
+        return _interp_bilinear(name, args[1], args[2], args[3],
+                                Float64(args[4]), Float64(args[5]))
     end
     # Should be unreachable — `name in _CLOSED_FUNCTION_NAMES` covered above.
     throw(ClosedFunctionError("unknown_closed_function",
@@ -215,6 +239,146 @@ function _interp_searchsorted(name::String, x::Float64, xs)::Int32
         end
     end
     return _check_int32(name, n + 1)
+end
+
+# Validate a 1-D axis used by `interp.linear` / `interp.bilinear`. Per
+# esm-spec §9.2: strictly increasing, no NaN, length ≥ 2. Returns the axis
+# coerced to `Vector{Float64}` for downstream blending. `axis_label` names
+# the failing axis ("axis", "axis_x", "axis_y") for the diagnostic.
+function _validate_interp_axis(name::String, axis_raw, axis_label::String)::Vector{Float64}
+    if !(axis_raw isa AbstractVector)
+        throw(ClosedFunctionError("closed_function_arity",
+            "$(name): `$(axis_label)` must be an array (got $(typeof(axis_raw)))"))
+    end
+    n = length(axis_raw)
+    if n < 2
+        throw(ClosedFunctionError("interp_axis_too_short",
+            "$(name): `$(axis_label)` has $(n) entries; need ≥ 2 to define a blend interval."))
+    end
+    out = Vector{Float64}(undef, n)
+    @inbounds for i in 1:n
+        v = Float64(axis_raw[i])
+        if isnan(v)
+            throw(ClosedFunctionError("interp_nan_in_axis",
+                "$(name): `$(axis_label)`[$(i)] is NaN; axis arrays must be all-finite."))
+        end
+        if i > 1 && !(v > out[i-1])
+            throw(ClosedFunctionError("interp_non_monotonic_axis",
+                "$(name): `$(axis_label)` is not strictly increasing " *
+                "(`$(axis_label)`[$(i)] = $(v) is not > `$(axis_label)`[$(i-1)] = $(out[i-1]))."))
+        end
+        out[i] = v
+    end
+    return out
+end
+
+# `interp.linear` per esm-spec §9.2: extrapolate-flat clamps + pinned
+# evaluation order `t[i] + w * (t[i+1] - t[i])` for endpoint exactness.
+function _interp_linear(name::String, table_raw, axis_raw, x::Float64)::Float64
+    if !(table_raw isa AbstractVector)
+        throw(ClosedFunctionError("closed_function_arity",
+            "$(name): `table` must be an array (got $(typeof(table_raw)))"))
+    end
+    axis = _validate_interp_axis(name, axis_raw, "axis")
+    if length(table_raw) != length(axis)
+        throw(ClosedFunctionError("interp_axis_length_mismatch",
+            "$(name): `len(table)` = $(length(table_raw)) but `len(axis)` = $(length(axis))."))
+    end
+    n = length(axis)
+    # Extrapolate-flat clamps. NaN x bypasses both clamps (IEEE-754 ≤/≥ on NaN
+    # are false) and falls through to the in-cell blend, where (x - axis[i])
+    # is NaN and propagates through the result — matching the spec.
+    if x <= axis[1]
+        return Float64(table_raw[1])
+    elseif x >= axis[n]
+        return Float64(table_raw[n])
+    end
+    # In-range: locate i with axis[i] ≤ x < axis[i+1]. n ≥ 2 guaranteed by
+    # `_validate_interp_axis`. Linear scan; tables are §9.2-capped at the
+    # const-op inline limit, so this is O(N) on small N.
+    i = 1
+    @inbounds for k in 1:(n - 1)
+        if axis[k] <= x < axis[k + 1]
+            i = k
+            break
+        end
+    end
+    @inbounds begin
+        ai   = axis[i];     ai1   = axis[i + 1]
+        ti   = Float64(table_raw[i]);    ti1 = Float64(table_raw[i + 1])
+        w    = (x - ai) / (ai1 - ai)
+        return ti + w * (ti1 - ti)
+    end
+end
+
+# `interp.bilinear` per esm-spec §9.2: per-axis extrapolate-flat clamps,
+# cell-location convention "largest i with x_i ≤ x_q", pinned evaluation
+# order (two x-blends, one y-blend, each in `a + w*(b-a)` form).
+function _interp_bilinear(name::String, table_raw, axis_x_raw, axis_y_raw,
+                          x::Float64, y::Float64)::Float64
+    if !(table_raw isa AbstractVector)
+        throw(ClosedFunctionError("closed_function_arity",
+            "$(name): `table` must be an array (got $(typeof(table_raw)))"))
+    end
+    axis_x = _validate_interp_axis(name, axis_x_raw, "axis_x")
+    axis_y = _validate_interp_axis(name, axis_y_raw, "axis_y")
+    Nx = length(axis_x)
+    Ny = length(axis_y)
+    if length(table_raw) != Nx
+        throw(ClosedFunctionError("interp_axis_length_mismatch",
+            "$(name): outer `len(table)` = $(length(table_raw)) but `len(axis_x)` = $(Nx)."))
+    end
+    # Validate every inner row length matches Ny (rejects ragged tables).
+    @inbounds for i in 1:Nx
+        row = table_raw[i]
+        if !(row isa AbstractVector)
+            throw(ClosedFunctionError("closed_function_arity",
+                "$(name): `table[$(i)]` must be an array (got $(typeof(row)))"))
+        end
+        if length(row) != Ny
+            throw(ClosedFunctionError("interp_axis_length_mismatch",
+                "$(name): `len(table[$(i)])` = $(length(row)) but `len(axis_y)` = $(Ny)."))
+        end
+    end
+    # Per-axis extrapolate-flat clamp. NaN x or y propagates through (IEEE-754
+    # ≤/≥ on NaN are false → x_q stays NaN → wx is NaN → result is NaN).
+    x_q = x <= axis_x[1] ? axis_x[1] :
+          x >= axis_x[Nx] ? axis_x[Nx] : x
+    y_q = y <= axis_y[1] ? axis_y[1] :
+          y >= axis_y[Ny] ? axis_y[Ny] : y
+    # Cell location: largest i in [1, Nx-1] with axis_x[i] ≤ x_q (analog j).
+    # Default to last cell so the corner-at-max case (wx = 1) lands correctly
+    # in the pinned-form blend. NaN x_q falls through with i = Nx-1 (irrelevant
+    # because the blend will be NaN anyway).
+    i = Nx - 1
+    @inbounds for k in (Nx - 1):-1:1
+        if axis_x[k] <= x_q
+            i = k
+            break
+        end
+    end
+    j = Ny - 1
+    @inbounds for k in (Ny - 1):-1:1
+        if axis_y[k] <= y_q
+            j = k
+            break
+        end
+    end
+    @inbounds begin
+        xi   = axis_x[i];   xip1 = axis_x[i + 1]
+        yj   = axis_y[j];   yjp1 = axis_y[j + 1]
+        wx = (x_q - xi) / (xip1 - xi)
+        wy = (y_q - yj) / (yjp1 - yj)
+        # Two 1-D x-blends, then one y-blend. Pinned form `a + w*(b - a)`
+        # required for cross-binding bit-equivalence (esm-spec §9.2).
+        t_ij     = Float64(table_raw[i][j])
+        t_i1j    = Float64(table_raw[i + 1][j])
+        t_ijp1   = Float64(table_raw[i][j + 1])
+        t_i1jp1  = Float64(table_raw[i + 1][j + 1])
+        row_j   = t_ij    + wx * (t_i1j   - t_ij)
+        row_jp1 = t_ijp1  + wx * (t_i1jp1 - t_ijp1)
+        return row_j + wy * (row_jp1 - row_j)
+    end
 end
 
 @inline function _expect_arity(name::String, args::AbstractVector, n::Int)
