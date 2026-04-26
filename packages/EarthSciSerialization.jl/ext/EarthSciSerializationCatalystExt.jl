@@ -255,6 +255,14 @@ function _catalyst_rate_to_esm(expr)
     if Symbolics.iscall(raw)
         op = Symbolics.operation(raw)
         args = Symbolics.arguments(raw)
+        # Species reference: Catalyst represents a time-dependent species
+        # `S` inside a rate as a call `S(t)` whose operation is the species
+        # symbol itself. Emit a bare identifier rather than wrapping it in
+        # {op: "S", args: ["t"]}, which would serialize as a registered-
+        # function call and break downstream consumers (esm-edt).
+        if Symbolics.issym(op)
+            return VarExpr(_strip_time(string(Symbolics.getname(op))))
+        end
         esm_args = [_catalyst_rate_to_esm(a) for a in args]
         if op == (+); return OpExpr("+", esm_args)
         elseif op == (*); return OpExpr("*", esm_args)
@@ -264,6 +272,19 @@ function _catalyst_rate_to_esm(expr)
         else
             return OpExpr(string(nameof(op)), esm_args)
         end
+    end
+    # Const-style symbolic literal: numeric values (including those
+    # introduced by MTK Constants substitution) appear in the symbolic
+    # tree as BasicSymbolic Const nodes for which `issym`/`iscall` are
+    # both false. Without this branch they fall through to the string
+    # fallback below and get serialized as JSON strings (esm-edt).
+    val = Symbolics.value(raw)
+    if val isa Bool
+        return IntExpr(Int64(val))
+    elseif val isa Integer
+        return IntExpr(Int64(val))
+    elseif val isa Real
+        return NumExpr(Float64(val))
     end
     return VarExpr(string(expr))
 end
