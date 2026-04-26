@@ -22,6 +22,8 @@ import {
   ClosedFunctionError,
   validateSearchsortedTable,
   searchsortedFirst,
+  interpLinear,
+  interpBilinear,
 } from './registered_functions.js'
 
 const fixturesRoot = join(__dirname, '../../../tests/closed_functions')
@@ -30,7 +32,9 @@ interface Scenario {
   name: string
   description?: string
   inputs: Array<number | string | unknown[]>
-  expected: number
+  // `expected` may be the JSON string "NaN" for the NaN-propagation
+  // scenarios; decodeInput() converts it to Number.NaN before comparison.
+  expected: number | string
 }
 
 interface ErrorScenario {
@@ -111,6 +115,8 @@ describe('Closed function registry — cross-binding conformance', () => {
     'datetime.julian_day',
     'datetime.is_leap_year',
     'interp.searchsorted',
+    'interp.linear',
+    'interp.bilinear',
   ])
 
   for (const { module: mod, fn, dir } of fixtures) {
@@ -144,42 +150,85 @@ describe('Closed function registry — cross-binding conformance', () => {
       //   - interp.searchsorted uses param `x` (xs is inline const).
       const paramName = `${mod}` === 'datetime' ? 't_utc' : 'x'
 
+      // Spec tolerance per esm-spec §9.2 (matches Julia ref): pass
+      // if either |actual−expected| ≤ abs OR ≤ rel·max(1, |expected|).
+      // NaN expected matches NaN actual (both must be NaN).
+      function withinTolerance(got: number, exp: number, tol: { abs: number; rel: number }): boolean {
+        if (Number.isNaN(exp)) return Number.isNaN(got)
+        const diff = Math.abs(got - exp)
+        return diff <= tol.abs || diff <= tol.rel * Math.max(1, Math.abs(exp))
+      }
+
       for (const scenario of expected.scenarios) {
         it(`scenario ${scenario.name}`, () => {
           const decoded = scenario.inputs.map(decodeInput)
-          const bindings = new Map<string, number>()
+          const tol = expected.tolerance
+          const exp = decodeInput(scenario.expected) as number
           if (mod === 'datetime') {
+            const bindings = new Map<string, number>()
             bindings.set(paramName, decoded[0] as number)
             const got = evaluate(rhsTemplate, bindings)
-            const tol = expected.tolerance
-            const exp = scenario.expected
-            // Spec tolerance per esm-spec §9.2 (matches Julia ref): pass
-            // if either |actual−expected| ≤ abs OR ≤ rel·max(1, |expected|).
-            const diff = Math.abs(got - exp)
-            const within = diff <= tol.abs || diff <= tol.rel * Math.max(1, Math.abs(exp))
-            expect(within, `${scenario.name}: got ${got}, expected ${exp} (tol abs=${tol.abs}, rel=${tol.rel})`).toBe(true)
-          } else {
-            // interp.searchsorted: drive the function directly with [x, xs]
-            // from the scenario (the harness mirrors the Julia ref). Also
-            // smoke-test through evaluate() with the inline xs.
+            expect(
+              withinTolerance(got, exp, tol),
+              `${scenario.name}: got ${got}, expected ${exp} (tol abs=${tol.abs}, rel=${tol.rel})`,
+            ).toBe(true)
+          } else if (expected.function === 'interp.searchsorted') {
+            // Drive the function directly with [x, xs] from the scenario
+            // (mirrors the Julia ref).
             const x = decoded[0] as number
             const xs = decoded[1] as number[]
             const got = searchsortedFirst(x, xs)
             expect(got).toBe(scenario.expected)
+          } else if (expected.function === 'interp.linear') {
+            const table = decoded[0] as number[]
+            const axis = decoded[1] as number[]
+            const x = decoded[2] as number
+            const got = interpLinear(table, axis, x)
+            expect(
+              withinTolerance(got, exp, tol),
+              `${scenario.name}: got ${got}, expected ${exp} (tol abs=${tol.abs}, rel=${tol.rel})`,
+            ).toBe(true)
+          } else if (expected.function === 'interp.bilinear') {
+            const table = decoded[0] as number[][]
+            const axisX = decoded[1] as number[]
+            const axisY = decoded[2] as number[]
+            const x = decoded[3] as number
+            const y = decoded[4] as number
+            const got = interpBilinear(table, axisX, axisY, x, y)
+            expect(
+              withinTolerance(got, exp, tol),
+              `${scenario.name}: got ${got}, expected ${exp} (tol abs=${tol.abs}, rel=${tol.rel})`,
+            ).toBe(true)
+          } else {
+            throw new Error(`unhandled fixture function ${expected.function}`)
           }
         })
       }
 
-      // Error scenarios are interp-only. Validate the diagnostic code.
+      // Error scenarios validate spec-pinned diagnostic codes.
       for (const errorScenario of expected.error_scenarios ?? []) {
         it(`error scenario ${errorScenario.name} → ${errorScenario.expected_error_code}`, () => {
           const decoded = errorScenario.inputs.map(decodeInput)
-          const xs = decoded[1] as number[]
           try {
-            validateSearchsortedTable(xs)
-            // If validation passes, drive searchsortedFirst — some error
-            // paths surface only at call time.
-            searchsortedFirst(decoded[0] as number, xs)
+            if (expected.function === 'interp.searchsorted') {
+              const xs = decoded[1] as number[]
+              validateSearchsortedTable(xs)
+              searchsortedFirst(decoded[0] as number, xs)
+            } else if (expected.function === 'interp.linear') {
+              const table = decoded[0] as number[]
+              const axis = decoded[1] as number[]
+              const x = decoded[2] as number
+              interpLinear(table, axis, x)
+            } else if (expected.function === 'interp.bilinear') {
+              const table = decoded[0] as number[][]
+              const axisX = decoded[1] as number[]
+              const axisY = decoded[2] as number[]
+              const x = decoded[3] as number
+              const y = decoded[4] as number
+              interpBilinear(table, axisX, axisY, x, y)
+            } else {
+              throw new Error(`unhandled error-scenario fixture function ${expected.function}`)
+            }
             throw new Error(
               `${errorScenario.name}: expected ClosedFunctionError ${errorScenario.expected_error_code}, got success`,
             )
