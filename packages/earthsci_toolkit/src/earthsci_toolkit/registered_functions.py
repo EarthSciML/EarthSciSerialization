@@ -10,6 +10,11 @@ Implements the spec-defined closed function set from esm-spec §9.2:
 * ``interp.searchsorted`` — 1-based search-into-sorted-array (Julia's
   ``searchsortedfirst`` semantics with explicit out-of-range / NaN /
   duplicate behavior pinned by spec).
+* ``interp.linear`` — 1-D linear interpolation into a tabulated dataset with
+  extrapolate-flat boundary handling (spec §9.2 ``interp.*`` subsection).
+* ``interp.bilinear`` — 2-D linear interpolation (row-major table indexed by
+  ``axis_x`` then ``axis_y``); pinned evaluation order is two 1-D x-blends
+  followed by one 1-D y-blend so that bindings agree bit-exactly.
 
 The set is **closed**: callers MUST reject any ``fn``-op ``name`` outside this
 list (diagnostic ``unknown_closed_function``). This module provides:
@@ -22,7 +27,9 @@ list (diagnostic ``unknown_closed_function``). This module provides:
 - :class:`ClosedFunctionError` — error type carrying spec-defined diagnostic
   codes (``unknown_closed_function``, ``closed_function_overflow``,
   ``searchsorted_non_monotonic``, ``closed_function_arity``,
-  ``searchsorted_nan_in_table``).
+  ``searchsorted_nan_in_table``, ``interp_non_monotonic_axis``,
+  ``interp_axis_length_mismatch``, ``interp_nan_in_axis``,
+  ``interp_axis_too_short``).
 
 Calendar arithmetic uses Python's stdlib :mod:`datetime` with the
 proleptic-Gregorian default; the v0.3.0 spec contract forbids leap-second
@@ -82,6 +89,8 @@ _CLOSED_FUNCTION_NAMES: frozenset = frozenset({
     "datetime.julian_day",
     "datetime.is_leap_year",
     "interp.searchsorted",
+    "interp.linear",
+    "interp.bilinear",
 })
 
 
@@ -232,6 +241,155 @@ def _interp_searchsorted(name: str, x: float, xs: Any) -> int:
     return _check_int32(name, n + 1)
 
 
+def _validate_interp_axis(name: str, axis: Sequence[Any], axis_label: str) -> List[float]:
+    """Validate a 1-D interpolation axis and return it as a list of floats.
+
+    Spec §9.2 ``interp.*`` subsection requires axes be strictly increasing
+    (no equal-adjacent), contain no NaN, and have at least two entries —
+    otherwise there is no interval to blend across.
+    """
+    if not isinstance(axis, (list, tuple)):
+        raise ClosedFunctionError(
+            "closed_function_arity",
+            f"{name}: {axis_label} must be an inline `const` array (got "
+            f"{type(axis).__name__})",
+        )
+    n = len(axis)
+    if n < 2:
+        raise ClosedFunctionError(
+            "interp_axis_too_short",
+            f"{name}: {axis_label} has {n} entries; need ≥ 2 to define a cell",
+        )
+    out: List[float] = []
+    prev = float("-inf")
+    for i, raw in enumerate(axis):
+        v = float(raw)
+        if math.isnan(v):
+            raise ClosedFunctionError(
+                "interp_nan_in_axis",
+                f"{name}: {axis_label}[{i + 1}] is NaN; NaN entries in axes "
+                f"are forbidden",
+            )
+        if i > 0 and v <= prev:
+            raise ClosedFunctionError(
+                "interp_non_monotonic_axis",
+                f"{name}: {axis_label} is not strictly increasing "
+                f"({axis_label}[{i + 1}]={v} ≤ {axis_label}[{i}]={prev})",
+            )
+        out.append(v)
+        prev = v
+    return out
+
+
+def _interp_linear(name: str, table: Any, axis: Any, x: float) -> float:
+    """``interp.linear`` per esm-spec §9.2 ``interp.*`` subsection.
+
+    Extrapolate-flat boundary, pinned blend ``t[i] + w*(t[i+1] - t[i])``.
+    """
+    if not isinstance(table, (list, tuple)):
+        raise ClosedFunctionError(
+            "closed_function_arity",
+            f"{name}: table must be an inline `const` array (got "
+            f"{type(table).__name__})",
+        )
+    axis_vals = _validate_interp_axis(name, axis, "axis")
+    n = len(axis_vals)
+    if len(table) != n:
+        raise ClosedFunctionError(
+            "interp_axis_length_mismatch",
+            f"{name}: len(table)={len(table)} != len(axis)={n}",
+        )
+    table_vals = [float(t) for t in table]
+    if math.isnan(x):
+        # Spec step 4: the clamps in steps 1–2 use IEEE `≤` / `≥` which return
+        # false for NaN, so we fall through to the blend, where the NaN weight
+        # propagates. Implement directly as NaN.
+        return float("nan")
+    if x <= axis_vals[0]:
+        return table_vals[0]
+    if x >= axis_vals[-1]:
+        return table_vals[-1]
+    # Find i in 0-based [0, n-2] s.t. axis[i] <= x < axis[i+1]. Linear scan
+    # matches the spec's exposition; the conformance tables are tiny.
+    for i in range(n - 1):
+        if axis_vals[i] <= x < axis_vals[i + 1]:
+            w = (x - axis_vals[i]) / (axis_vals[i + 1] - axis_vals[i])
+            return table_vals[i] + w * (table_vals[i + 1] - table_vals[i])
+    # Unreachable: strict monotonicity + clamps cover every finite x.
+    raise ClosedFunctionError(
+        "closed_function_arity",
+        f"{name}: failed to locate cell for x={x} (internal error)",
+    )
+
+
+def _interp_bilinear(
+    name: str,
+    table: Any,
+    axis_x: Any,
+    axis_y: Any,
+    x: float,
+    y: float,
+) -> float:
+    """``interp.bilinear`` per esm-spec §9.2 ``interp.*`` subsection.
+
+    Two pinned 1-D x-blends followed by one 1-D y-blend; per-axis
+    extrapolate-flat clamp; row-major ``table[i][j]`` at ``(axis_x[i], axis_y[j])``.
+    """
+    if not isinstance(table, (list, tuple)):
+        raise ClosedFunctionError(
+            "closed_function_arity",
+            f"{name}: table must be an inline `const` 2-D array (got "
+            f"{type(table).__name__})",
+        )
+    ax = _validate_interp_axis(name, axis_x, "axis_x")
+    ay = _validate_interp_axis(name, axis_y, "axis_y")
+    nx, ny = len(ax), len(ay)
+    if len(table) != nx:
+        raise ClosedFunctionError(
+            "interp_axis_length_mismatch",
+            f"{name}: outer len(table)={len(table)} != len(axis_x)={nx}",
+        )
+    table_rows: List[List[float]] = []
+    for i, row in enumerate(table):
+        if not isinstance(row, (list, tuple)):
+            raise ClosedFunctionError(
+                "interp_axis_length_mismatch",
+                f"{name}: table row {i + 1} is not an array (got "
+                f"{type(row).__name__})",
+            )
+        if len(row) != ny:
+            raise ClosedFunctionError(
+                "interp_axis_length_mismatch",
+                f"{name}: table row {i + 1} has length {len(row)} != "
+                f"len(axis_y)={ny}",
+            )
+        table_rows.append([float(v) for v in row])
+    if math.isnan(x) or math.isnan(y):
+        # Spec step 5: NaN inputs propagate through the corresponding axis
+        # weight. Short-circuit to NaN.
+        return float("nan")
+    # Per-axis extrapolate-flat clamp (spec step 1).
+    x_q = ax[0] if x <= ax[0] else (ax[-1] if x >= ax[-1] else x)
+    y_q = ay[0] if y <= ay[0] else (ay[-1] if y >= ay[-1] else y)
+    # Cell location: largest 0-based index in [0, n-2] with axis[i] <= q.
+    # Linear scan (small fixtures); matches the spec's "largest i" convention
+    # so that an interior-knot query lands on i = k (wx = 0).
+    i = 0
+    for k in range(nx - 1):
+        if ax[k] <= x_q:
+            i = k
+    j = 0
+    for k in range(ny - 1):
+        if ay[k] <= y_q:
+            j = k
+    wx = (x_q - ax[i]) / (ax[i + 1] - ax[i])
+    wy = (y_q - ay[j]) / (ay[j + 1] - ay[j])
+    # Pinned evaluation order: two x-blends, then one y-blend.
+    row_j = table_rows[i][j] + wx * (table_rows[i + 1][j] - table_rows[i][j])
+    row_jp1 = table_rows[i][j + 1] + wx * (table_rows[i + 1][j + 1] - table_rows[i][j + 1])
+    return row_j + wy * (row_jp1 - row_j)
+
+
 # ============================================================
 # Dispatch
 # ============================================================
@@ -288,6 +446,14 @@ def evaluate_closed_function(name: str, args: Sequence[Any]) -> Union[int, float
     if name == "interp.searchsorted":
         _expect_arity(name, args, 2)
         return _interp_searchsorted(name, float(args[0]), args[1])
+    if name == "interp.linear":
+        _expect_arity(name, args, 3)
+        return _interp_linear(name, args[0], args[1], float(args[2]))
+    if name == "interp.bilinear":
+        _expect_arity(name, args, 5)
+        return _interp_bilinear(
+            name, args[0], args[1], args[2], float(args[3]), float(args[4])
+        )
     # Should be unreachable — `name in _CLOSED_FUNCTION_NAMES` covered above.
     raise ClosedFunctionError(
         "unknown_closed_function",
@@ -301,12 +467,15 @@ def evaluate_closed_function(name: str, args: Sequence[Any]) -> Union[int, float
 
 
 def extract_const_array(node: Any) -> List[Any]:
-    """Extract a const-op array argument as a flat Python list.
+    """Extract a const-op array argument as a (possibly nested) Python list.
 
-    The closed function ``interp.searchsorted`` takes an inline ``const``
-    array as its second argument (see esm-spec §9.2.2). Evaluators need to
-    pass the raw array — not a per-element-evaluated value — to the closed
-    function dispatch. This helper unwraps ``{op: "const", value: [...]}``.
+    The ``interp.*`` closed functions take inline ``const`` arrays for their
+    table and axis arguments (see esm-spec §9.2 ``interp.*`` subsection):
+    ``interp.searchsorted`` for ``xs``; ``interp.linear`` for ``table`` and
+    ``axis``; ``interp.bilinear`` for ``table`` (2-D), ``axis_x``, and
+    ``axis_y``. Evaluators must pass the raw array — not a per-element-
+    evaluated value — to the closed function dispatch. This helper unwraps
+    ``{op: "const", value: [...]}``.
     """
     if isinstance(node, ExprNode) and node.op == "const":
         return list(node.value or [])
@@ -314,7 +483,7 @@ def extract_const_array(node: Any) -> List[Any]:
         return list(node)
     raise ClosedFunctionError(
         "closed_function_arity",
-        "interp.searchsorted: xs argument must be an inline `const` array",
+        "interp.*: table / axis argument must be an inline `const` array",
     )
 
 

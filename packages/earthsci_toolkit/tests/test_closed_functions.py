@@ -107,9 +107,11 @@ def test_closed_function_names_v030_set():
         "datetime.julian_day",
         "datetime.is_leap_year",
         "interp.searchsorted",
+        "interp.linear",
+        "interp.bilinear",
     }
     assert set(names) == expected
-    assert len(names) == 10
+    assert len(names) == 12
 
 
 def test_unknown_function_rejected():

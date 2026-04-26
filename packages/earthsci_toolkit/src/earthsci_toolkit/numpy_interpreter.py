@@ -150,14 +150,15 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
             f"`const` op value must be a number or nested array, got {type(v).__name__}"
         )
     if op == "fn":
+        from .expression import _INTERP_CONST_ARG_POSITIONS
         from .registered_functions import evaluate_closed_function, extract_const_array
         if expr.name is None:
             raise NumpyInterpreterError("`fn` op requires a `name` field")
         evaluated_args = []
+        const_arg_positions = _INTERP_CONST_ARG_POSITIONS.get(expr.name, ())
         for i, a in enumerate(expr.args):
             if (
-                expr.name == "interp.searchsorted"
-                and i == 1
+                i in const_arg_positions
                 and isinstance(a, ExprNode)
                 and a.op == "const"
             ):

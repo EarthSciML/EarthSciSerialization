@@ -7,6 +7,13 @@ from .esm_types import Expr, ExprNode, Model, ReactionSystem, ModelVariable
 import sympy as sp
 
 
+_INTERP_CONST_ARG_POSITIONS: Dict[str, tuple] = {
+    "interp.searchsorted": (1,),
+    "interp.linear": (0, 1),
+    "interp.bilinear": (0, 1, 2),
+}
+
+
 def free_variables(expr: Expr) -> Set[str]:
     """
     Extract all free variables from an expression.
@@ -160,12 +167,14 @@ def evaluate(expr: Expr, bindings: Dict[str, float]) -> float:
             if expr.name is None:
                 raise ValueError("`fn` op requires a `name` field")
             evaluated_args = []
-            # `interp.searchsorted` takes the second arg as an inline `const`
-            # array (not a per-element value); pass through the raw list.
+            # The `interp.*` closed functions take inline `const` arrays for
+            # their table and axis args (esm-spec §9.2): pass through raw
+            # rather than per-element-evaluating, which would discard nested
+            # array structure.
+            const_arg_positions = _INTERP_CONST_ARG_POSITIONS.get(expr.name, ())
             for i, a in enumerate(expr.args):
                 if (
-                    expr.name == "interp.searchsorted"
-                    and i == 1
+                    i in const_arg_positions
                     and isinstance(a, ExprNode)
                     and a.op == "const"
                 ):
