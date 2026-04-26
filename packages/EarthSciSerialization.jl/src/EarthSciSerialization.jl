@@ -168,6 +168,9 @@ export
     apply_stencil_periodic_1d, apply_stencil_2d_latlon,
     parabola_reconstruct_periodic_1d,
     mms_convergence, verify_mms_convergence,
+    # WENO5 nonlinear reconstruction (esm-rq3)
+    apply_weno5_reconstruction_periodic_1d, mms_weno5_convergence,
+    # MPAS-style unstructured MMS support (esm-0sy)
     VectorManufacturedSolution, MPASLikeMesh, MPASCoeffContext,
     register_vector_manufactured_solution!, lookup_vector_manufactured_solution,
     make_periodic_quad_mesh, apply_mpas_cell_stencil,

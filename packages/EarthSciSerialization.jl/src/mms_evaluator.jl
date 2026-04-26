@@ -90,17 +90,22 @@ end
 
 """
     ManufacturedSolution(name, sample, derivative, periodic, domain;
-                         cell_average=nothing)
+                         cell_average=nothing, edge_value=nothing)
 
 A registered manufactured solution. `sample(x)` returns u(x); `derivative(x)`
 returns du/dx. `periodic` and `domain` describe the sampling support so the
 harness can wrap stencils correctly.
 
 `cell_average(lo, hi)` is an optional analytic ū = (∫_lo^hi u dx) / (hi - lo).
-When supplied it is used directly by `sampling: "cell_average"` sweeps; when
-`nothing`, the harness falls back to a fixed 5-point Gauss–Legendre quadrature
-(exact through degree 9 — well above what a 4th-order edge stencil can
-exercise on a smooth solution).
+When supplied it is used directly by `sampling: "cell_average"` sweeps and by
+nonlinear reconstruction sweeps that consume cell-averaged inputs (e.g. WENO5);
+when `nothing`, the harness falls back to a fixed 5-point Gauss–Legendre
+quadrature (exact through degree 9 — well above what a 4th-order edge stencil
+can exercise on a smooth solution).
+
+`edge_value(x)` is an optional pointwise truth at a cell face — typically equal
+to `sample(x)`, but kept distinct so that non-pointwise solutions can supply a
+separate face evaluator. Required by nonlinear reconstruction sweeps.
 """
 struct ManufacturedSolution
     name::Symbol
@@ -108,13 +113,16 @@ struct ManufacturedSolution
     derivative::Function
     periodic::Bool
     domain::Tuple{Float64,Float64}
-    cell_average::Union{Nothing,Function}
+    cell_average::Union{Function,Nothing}
+    edge_value::Union{Function,Nothing}
 end
 
 ManufacturedSolution(name::Symbol, sample::Function, derivative::Function,
                      periodic::Bool, domain::Tuple{Float64,Float64};
-                     cell_average::Union{Nothing,Function}=nothing) =
-    ManufacturedSolution(name, sample, derivative, periodic, domain, cell_average)
+                     cell_average::Union{Nothing,Function}=nothing,
+                     edge_value::Union{Nothing,Function}=nothing) =
+    ManufacturedSolution(name, sample, derivative, periodic, domain,
+                         cell_average, edge_value)
 
 # Built-in: u(x) = sin(2π x) on [0,1] periodic; du/dx = 2π cos(2π x);
 # ū over [a,b] = (cos(2π a) − cos(2π b)) / (2π (b − a)).
@@ -125,6 +133,7 @@ const _MMS_SIN_2PI_X_PERIODIC = ManufacturedSolution(
     true,
     (0.0, 1.0),
     (lo, hi) -> (cos(2π * lo) - cos(2π * hi)) / (2π * (hi - lo)),
+    nothing,
 )
 
 # 5-point Gauss–Legendre nodes / weights on [-1, 1] (exact through degree 9).
@@ -156,8 +165,24 @@ function _cell_average(ms::ManufacturedSolution, lo::Float64, hi::Float64)::Floa
     return 0.5 * s
 end
 
+# Built-in: u(x) = sin(2π x + 1) on [0,1] periodic. The phase shift moves the
+# critical points off every dyadic cell face on n ∈ {32,64,128,256}, which is
+# the standard WENO5-JS smooth-MMS solution (avoids the omega_k → d_k stall
+# at f'(x_{i+1/2}) = 0 — see Henrick, Aslam & Powers, JCP 2005). Supplies
+# analytic `cell_average` and `edge_value` for nonlinear reconstruction sweeps.
+const _MMS_PHASE_SHIFTED_SINE = ManufacturedSolution(
+    :phase_shifted_sine,
+    x -> sin(2π * x + 1.0),
+    x -> 2π * cos(2π * x + 1.0),
+    true,
+    (0.0, 1.0),
+    (a, b) -> (-cos(2π * b + 1.0) + cos(2π * a + 1.0)) / (2π * (b - a)),
+    x -> sin(2π * x + 1.0),
+)
+
 const _MMS_REGISTRY = Dict{Symbol,ManufacturedSolution}(
     :sin_2pi_x_periodic => _MMS_SIN_2PI_X_PERIODIC,
+    :phase_shifted_sine => _MMS_PHASE_SHIFTED_SINE,
 )
 
 """
@@ -217,15 +242,33 @@ function register_manufactured_solution!(ms::ManufacturedSolution2D)
 end
 
 """
-    lookup_manufactured_solution(description::AbstractString) -> ManufacturedSolution
+    lookup_manufactured_solution(description) -> ManufacturedSolution
 
-Resolve a 1D `manufactured_solution` description string from an `input.esm`
-to a registered solution. Matching is loose: punctuation and whitespace are
-ignored, so e.g. `"sin(2*pi*x) on [0,1] periodic; …"` resolves to
-`:sin_2pi_x_periodic`.
+Resolve a 1D `manufactured_solution` description from an `input.esm` to a
+registered solution. Accepts either a string (legacy form — loose-matched on
+punctuation-stripped lowercase, e.g. `"sin(2*pi*x) on [0,1] periodic; …"` →
+`:sin_2pi_x_periodic`) or an `AbstractDict` (current form — exact match on a
+`name` key, then string-fallback on the `expression` key).
 """
+function lookup_manufactured_solution(description::AbstractDict)::ManufacturedSolution
+    if haskey(description, "name")
+        sym = Symbol(String(description["name"]))
+        haskey(_MMS_REGISTRY, sym) && return _MMS_REGISTRY[sym]
+    end
+    if haskey(description, "expression")
+        return lookup_manufactured_solution(String(description["expression"]))
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_UNKNOWN_SOLUTION",
+        "no manufactured solution matches dict $(repr(description)); " *
+        "register one with register_manufactured_solution!"))
+end
+
 function lookup_manufactured_solution(description::AbstractString)::ManufacturedSolution
     norm = lowercase(replace(String(description), r"[\s\*]" => ""))
+    if occursin("sin(2pix+1", norm) || occursin("sin(2πx+1", norm)
+        return _MMS_REGISTRY[:phase_shifted_sine]
+    end
     if occursin("sin(2pi", norm) || occursin("sin(2π", norm)
         return _MMS_REGISTRY[:sin_2pi_x_periodic]
     end
@@ -670,6 +713,9 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
                          manufactured::Union{Nothing,ManufacturedSolution,ManufacturedSolution2D}=nothing)::MMSConvergenceResult
     rule_name = String(input_json["rule"])
     spec = _resolve_rule_spec(rule_json, rule_name)
+    if _mms_rule_kind(spec) === :weno5
+        return mms_weno5_convergence(rule_json, input_json; manufactured=manufactured)
+    end
     haskey(spec, "stencil") || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",
         "rule $(repr(rule_name)) has no `stencil` field"))
@@ -699,7 +745,7 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
         "E_MMS_BAD_FIXTURE",
         "1D cartesian stencil requires a `ManufacturedSolution`, got $(typeof(manufactured))"))
     ms = manufactured === nothing ?
-        lookup_manufactured_solution(String(input_json["manufactured_solution"])) :
+        lookup_manufactured_solution(input_json["manufactured_solution"]) :
         manufactured
     raw_grids = input_json["grids"]
     raw_grids isa AbstractVector || throw(MMSEvaluatorError(
@@ -1472,4 +1518,219 @@ function verify_mms_convergence_mpas(rule_json::AbstractDict,
             "errors=$(result.errors)"))
     end
     return result
+end
+
+# ============================================================
+# WENO5 nonlinear reconstruction (esm-rq3)
+# ============================================================
+
+# Internal helper: extract `(offsets, coeffs)` for a candidate sub-stencil's
+# linear pass. Sub-stencil coefficients in the schema are pure rationals
+# (no `dx`), so eval_coeff is run against an empty binding table.
+function _weno_candidate_pairs(candidate, bindings)
+    stencil = candidate["stencil"]
+    pairs = Vector{Tuple{Int,Float64}}(undef, length(stencil))
+    for (k, s) in enumerate(stencil)
+        pairs[k] = (Int(s["selector"]["offset"]),
+                    eval_coeff(s["coeff"], bindings))
+    end
+    return pairs
+end
+
+"""
+    apply_weno5_reconstruction_periodic_1d(spec, q, side; eps=1e-6) -> Vector{Float64}
+
+Reconstruct cell-edge values from periodic cell averages `q` using the
+classical Jiang-Shu (1996) WENO5 nonlinear weights.
+
+`spec` is a discretization spec dict carrying the
+`reconstruction_left_biased` / `reconstruction_right_biased` blocks (each
+with `candidates[*].stencil` of length 3 and `linear_weights.{d0,d1,d2}`).
+`side` is `:left_biased` (returns `q_{i+1/2}^L`, the right face of cell `i`,
+upwind for u > 0) or `:right_biased` (returns `q_{i-1/2}^R`, the left face
+of cell `i`, upwind for u < 0). `eps` is the smoothness-indicator
+regularisation (Jiang-Shu 1996 eq. 2.10; `1e-6` is the canonical value).
+
+The candidate sub-stencils' linear coefficients are pulled from the schema
+via [`eval_coeff`]; the smoothness indicators (Shu 1998 eq. 2.16) and
+nonlinear-weight ratio form (Jiang-Shu 1996 eqs. 2.9–2.10) are applied
+in-kernel because the §7 stencil schema cannot yet express the ratio
+form (see `discretizations/finite_volume/weno5_advection.json`,
+`nonlinear_weights.comment`).
+"""
+function apply_weno5_reconstruction_periodic_1d(spec::AbstractDict,
+                                                q::Vector{Float64},
+                                                side::Symbol;
+                                                eps::Float64=1e-6)::Vector{Float64}
+    rk = side === :left_biased  ? "reconstruction_left_biased"  :
+         side === :right_biased ? "reconstruction_right_biased" :
+         throw(MMSEvaluatorError(
+             "E_MMS_BAD_FIXTURE",
+             "WENO5 reconstruction side must be :left_biased or :right_biased, " *
+             "got $(repr(side))"))
+    haskey(spec, rk) || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "rule has no $(repr(rk)) block (required for WENO5 nonlinear sweep)"))
+    block = spec[rk]
+    cands = block["candidates"]
+    length(cands) == 3 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "WENO5 expects 3 candidate sub-stencils, got $(length(cands))"))
+    bindings = Dict{String,Float64}()
+    pairs = ntuple(k -> _weno_candidate_pairs(cands[k], bindings), 3)
+
+    haskey(block, "linear_weights") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "WENO5 $(rk) block has no `linear_weights`"))
+    lw = block["linear_weights"]
+    d0 = eval_coeff(lw["d0"], bindings)
+    d1 = eval_coeff(lw["d1"], bindings)
+    d2 = eval_coeff(lw["d2"], bindings)
+
+    n = length(q)
+    out = Vector{Float64}(undef, n)
+    @inbounds for i in 1:n
+        # Linear candidate evaluations (p0,p1,p2) — index reflection for
+        # right-biased is encoded directly in the schema's stencil offsets,
+        # so the same linear pass handles both sides.
+        p0 = 0.0; p1 = 0.0; p2 = 0.0
+        for (off, c) in pairs[1]; p0 += c * q[mod1(i + off, n)]; end
+        for (off, c) in pairs[2]; p1 += c * q[mod1(i + off, n)]; end
+        for (off, c) in pairs[3]; p2 += c * q[mod1(i + off, n)]; end
+
+        # Smoothness indicators in the support window of each side. The
+        # right-biased block uses index-reflected support (j -> -j), so the
+        # quadratic-form formulae are written in the corresponding direction.
+        if side === :left_biased
+            qm2 = q[mod1(i - 2, n)]
+            qm1 = q[mod1(i - 1, n)]
+            q0  = q[i]
+            qp1 = q[mod1(i + 1, n)]
+            qp2 = q[mod1(i + 2, n)]
+        else
+            qm2 = q[mod1(i + 2, n)]
+            qm1 = q[mod1(i + 1, n)]
+            q0  = q[i]
+            qp1 = q[mod1(i - 1, n)]
+            qp2 = q[mod1(i - 2, n)]
+        end
+        b0 = (13/12) * (qm2 - 2qm1 + q0)^2  + (1/4) * (qm2 - 4qm1 + 3q0)^2
+        b1 = (13/12) * (qm1 - 2q0  + qp1)^2 + (1/4) * (qm1 - qp1)^2
+        b2 = (13/12) * (q0  - 2qp1 + qp2)^2 + (1/4) * (3q0  - 4qp1 + qp2)^2
+
+        a0 = d0 / (eps + b0)^2
+        a1 = d1 / (eps + b1)^2
+        a2 = d2 / (eps + b2)^2
+        s = a0 + a1 + a2
+        out[i] = (a0/s) * p0 + (a1/s) * p1 + (a2/s) * p2
+    end
+    return out
+end
+
+# Internal: dispatch helper. Returns `:weno5` for WENO5 nonlinear
+# reconstruction rules, else `:linear_stencil` (the original sweep path).
+function _mms_rule_kind(spec::AbstractDict)::Symbol
+    form = String(get(spec, "form", ""))
+    if form == "weighted_essentially_nonoscillatory"
+        return :weno5
+    end
+    return :linear_stencil
+end
+
+# Internal: parse `reconstruction` from input fixture as a `:left_biased` or
+# `:right_biased` Symbol.
+function _parse_reconstruction_side(s)::Symbol
+    str = lowercase(strip(String(s)))
+    str == "left_biased"  && return :left_biased
+    str == "right_biased" && return :right_biased
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `reconstruction` must be \"left_biased\" or \"right_biased\", " *
+        "got $(repr(s))"))
+end
+
+"""
+    mms_weno5_convergence(rule_json, input_json; manufactured=nothing) -> MMSConvergenceResult
+
+Run a manufactured-solution convergence sweep for a WENO5 nonlinear
+reconstruction rule (`form == "weighted_essentially_nonoscillatory"`).
+
+The rule spec must carry the `reconstruction_left_biased` /
+`reconstruction_right_biased` blocks. The input fixture must declare:
+
+- `reconstruction` — `"left_biased"` (default if missing) or `"right_biased"`,
+- `weno_epsilon` — smoothness-indicator regularisation (default 1e-6),
+- `grids` — at least two cell counts,
+- `manufactured_solution` — a registered solution that supplies both
+  `cell_average(a, b)` (used to seed cell-averaged input) and `edge_value(x)`
+  (used as truth at cell faces). The built-in `:phase_shifted_sine` covers
+  the canonical Jiang-Shu MMS case.
+
+The returned `MMSConvergenceResult` reports the L∞ error of the reconstructed
+right-cell-face value (left-biased) or left-cell-face value (right-biased)
+against `manufactured.edge_value` over the grid sequence.
+"""
+function mms_weno5_convergence(rule_json::AbstractDict, input_json::AbstractDict;
+                               manufactured::Union{Nothing,ManufacturedSolution}=nothing)::MMSConvergenceResult
+    rule_name = String(input_json["rule"])
+    spec = _resolve_rule_spec(rule_json, rule_name)
+    _mms_rule_kind(spec) === :weno5 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "rule $(repr(rule_name)) is not a WENO5 nonlinear reconstruction " *
+        "(form=$(repr(get(spec, "form", nothing))))"))
+    declared = haskey(spec, "accuracy") ?
+        parse_accuracy_order(String(spec["accuracy"])) :
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "rule $(repr(rule_name)) has no `accuracy` field"))
+
+    ms = manufactured === nothing ?
+        lookup_manufactured_solution(input_json["manufactured_solution"]) :
+        manufactured
+    ms.cell_average === nothing && throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "WENO5 sweep requires a manufactured solution with `cell_average`; " *
+        "$(ms.name) has none"))
+    ms.edge_value === nothing && throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "WENO5 sweep requires a manufactured solution with `edge_value`; " *
+        "$(ms.name) has none"))
+
+    side = _parse_reconstruction_side(get(input_json, "reconstruction", "left_biased"))
+    eps = Float64(get(input_json, "weno_epsilon", 1e-6))
+    raw_grids = input_json["grids"]
+    raw_grids isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `grids` must be an array, got $(typeof(raw_grids))"))
+    grids = Int[Int(g["n"]) for g in raw_grids]
+    length(grids) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "convergence requires at least two grids; got $(grids)"))
+
+    domain_lo, domain_hi = ms.domain
+    L = domain_hi - domain_lo
+    errors = Vector{Float64}(undef, length(grids))
+    for (k, n) in enumerate(grids)
+        dx = L / n
+        q = [ms.cell_average(domain_lo + (i - 1) * dx,
+                             domain_lo + i       * dx) for i in 1:n]
+        qhat = apply_weno5_reconstruction_periodic_1d(spec, q, side; eps=eps)
+        # Truth at the upwind face of cell i. Left-biased reconstructs the
+        # right face (x_{i+1/2}); right-biased reconstructs the left face
+        # (x_{i-1/2}).
+        face_truth = side === :left_biased ?
+            [ms.edge_value(domain_lo + i       * dx) for i in 1:n] :
+            [ms.edge_value(domain_lo + (i - 1) * dx) for i in 1:n]
+        errors[k] = maximum(abs.(qhat .- face_truth))
+    end
+
+    if any(!isfinite, errors) || any(e -> e <= 0, errors)
+        throw(MMSEvaluatorError(
+            "E_MMS_NON_FINITE",
+            "non-finite or zero error on some grid; errors=$(errors)"))
+    end
+
+    orders = [log2(errors[i] / errors[i + 1]) for i in 1:(length(errors) - 1)]
+    observed_min = minimum(orders)
+    return MMSConvergenceResult(grids, errors, orders, observed_min, declared)
 end

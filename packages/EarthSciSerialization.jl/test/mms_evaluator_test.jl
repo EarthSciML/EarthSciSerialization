@@ -615,6 +615,161 @@ using EarthSciSerialization
         delete!(EarthSciSerialization._MMS_REGISTRY_2D, :_test_lat_cubic)
     end
 
+    # Inline WENO5 rule spec. Mirrors the on-disk
+    # `discretizations/finite_volume/weno5_advection.json` shape so the ESS
+    # test suite is self-contained — the §7 stencil schema cannot yet express
+    # the nonlinear-weight ratio form, so the kernel applies it in-code (see
+    # mms_evaluator.jl `apply_weno5_reconstruction_periodic_1d`).
+    function _weno5_substencil(offsets, coeffs)
+        [Dict("selector" => Dict("kind" => "cartesian", "axis" => "\$x",
+                                 "offset" => off),
+              "coeff" => Dict("op" => "/", "args" => Any[num, den]))
+         for (off, (num, den)) in zip(offsets, coeffs)]
+    end
+    weno5_rule = Dict(
+        "discretizations" => Dict(
+            "weno5_advection" => Dict(
+                "applies_to" => Dict("op" => "reconstruct", "args" => Any["\$q"],
+                                     "dim" => "\$x"),
+                "form" => "weighted_essentially_nonoscillatory",
+                "grid_family" => "cartesian",
+                "accuracy" => "O(dx^5)",
+                "reconstruction_left_biased" => Dict(
+                    "candidates" => [
+                        Dict("stencil" => _weno5_substencil(
+                            [-2, -1, 0], [(1, 3), (-7, 6), (11, 6)])),
+                        Dict("stencil" => _weno5_substencil(
+                            [-1, 0, 1],  [(-1, 6), (5, 6), (1, 3)])),
+                        Dict("stencil" => _weno5_substencil(
+                            [0, 1, 2],   [(1, 3), (5, 6), (-1, 6)])),
+                    ],
+                    "linear_weights" => Dict(
+                        "d0" => Dict("op" => "/", "args" => Any[1, 10]),
+                        "d1" => Dict("op" => "/", "args" => Any[6, 10]),
+                        "d2" => Dict("op" => "/", "args" => Any[3, 10]),
+                    ),
+                ),
+                "reconstruction_right_biased" => Dict(
+                    "candidates" => [
+                        Dict("stencil" => _weno5_substencil(
+                            [2, 1, 0],   [(1, 3), (-7, 6), (11, 6)])),
+                        Dict("stencil" => _weno5_substencil(
+                            [1, 0, -1],  [(-1, 6), (5, 6), (1, 3)])),
+                        Dict("stencil" => _weno5_substencil(
+                            [0, -1, -2], [(1, 3), (5, 6), (-1, 6)])),
+                    ],
+                    "linear_weights" => Dict(
+                        "d0" => Dict("op" => "/", "args" => Any[1, 10]),
+                        "d1" => Dict("op" => "/", "args" => Any[6, 10]),
+                        "d2" => Dict("op" => "/", "args" => Any[3, 10]),
+                    ),
+                ),
+            ),
+        ),
+    )
+    weno5_input = Dict(
+        "rule" => "weno5_advection",
+        "manufactured_solution" => Dict("name" => "phase_shifted_sine"),
+        "reconstruction" => "left_biased",
+        "weno_epsilon" => 1.0e-6,
+        "grids" => [Dict("n" => 32), Dict("n" => 64),
+                    Dict("n" => 128), Dict("n" => 256)],
+    )
+
+    @testset "lookup_manufactured_solution — dict + phase-shifted sine" begin
+        ms = lookup_manufactured_solution(Dict("name" => "phase_shifted_sine"))
+        @test ms.name === :phase_shifted_sine
+        @test ms.cell_average !== nothing
+        @test ms.edge_value !== nothing
+        # Cell average over a full period of sin(2πx + 1) is zero.
+        @test isapprox(ms.cell_average(0.0, 1.0), 0.0; atol=1e-12)
+        # Half-period analytic check.
+        @test isapprox(ms.cell_average(0.0, 0.5),
+                       (-cos(π + 1.0) + cos(1.0)) / π; atol=1e-12)
+        @test isapprox(ms.edge_value(0.25), sin(π/2 + 1.0); atol=1e-12)
+
+        # String fallback via expression key.
+        ms2 = lookup_manufactured_solution(
+            Dict("expression" => "sin(2*pi*x+1) on [0,1] periodic"))
+        @test ms2.name === :phase_shifted_sine
+
+        # Unknown dict descriptor surfaces E_MMS_UNKNOWN_SOLUTION.
+        @test_throws MMSEvaluatorError lookup_manufactured_solution(
+            Dict("name" => "no_such_solution"))
+    end
+
+    @testset "apply_weno5_reconstruction_periodic_1d — smooth convergence" begin
+        spec = weno5_rule["discretizations"]["weno5_advection"]
+        ms = lookup_manufactured_solution(Dict("name" => "phase_shifted_sine"))
+        # Smooth-MMS convergence: the L∞ error of WENO5 against the analytic
+        # face value must contract at order ≥ 4.5 between successive halvings
+        # on n ∈ {64, 128, 256} (Henrick-Aslam-Powers result; canonical 5).
+        function err_at(n)
+            dx = 1.0 / n
+            q = [ms.cell_average((i - 1) * dx, i * dx) for i in 1:n]
+            qhat = apply_weno5_reconstruction_periodic_1d(spec, q, :left_biased)
+            face = [ms.edge_value(i * dx) for i in 1:n]
+            return maximum(abs.(qhat .- face))
+        end
+        e64  = err_at(64)
+        e128 = err_at(128)
+        e256 = err_at(256)
+        @test e64 > e128 > e256
+        @test log2(e64  / e128) ≥ 4.5
+        @test log2(e128 / e256) ≥ 4.5
+    end
+
+    @testset "mms_weno5_convergence — left-biased smooth sweep" begin
+        result = mms_weno5_convergence(weno5_rule, weno5_input)
+        @test result.declared_order == 5.0
+        @test result.grids == [32, 64, 128, 256]
+        @test all(result.errors .> 0)
+        @test all(isfinite, result.errors)
+        # All consecutive doublings must hit ≥ 4.5; final pair tightens to ~5.
+        @test all(o -> o ≥ 4.5, result.orders)
+        @test result.orders[end] ≥ 4.8
+        @test result.observed_min_order ≥ 4.5
+    end
+
+    @testset "mms_weno5_convergence — right-biased symmetric" begin
+        right = Base.merge(weno5_input, Dict("reconstruction" => "right_biased"))
+        result = mms_weno5_convergence(weno5_rule, right)
+        @test result.observed_min_order ≥ 4.5
+        @test result.orders[end] ≥ 4.8
+    end
+
+    @testset "mms_convergence — dispatches to WENO5 on `form` field" begin
+        # Top-level `mms_convergence` must transparently route nonlinear
+        # reconstruction rules (form == weighted_essentially_nonoscillatory)
+        # through the WENO5 path. Same fixture, different entry point.
+        result = mms_convergence(weno5_rule, weno5_input)
+        @test result.declared_order == 5.0
+        @test result.observed_min_order ≥ 4.5
+    end
+
+    @testset "mms_weno5_convergence — error paths" begin
+        # WENO5 sweep rejects a manufactured solution without cell_average.
+        bad_input = Base.merge(weno5_input, Dict(
+            "manufactured_solution" => Dict("name" => "sin_2pi_x_periodic")))
+        @test_throws MMSEvaluatorError mms_weno5_convergence(weno5_rule, bad_input)
+
+        # Bad reconstruction side string.
+        bad_side = Base.merge(weno5_input, Dict("reconstruction" => "centered"))
+        @test_throws MMSEvaluatorError mms_weno5_convergence(weno5_rule, bad_side)
+
+        # Bad reconstruction side passed directly to the kernel.
+        @test_throws MMSEvaluatorError apply_weno5_reconstruction_periodic_1d(
+            weno5_rule["discretizations"]["weno5_advection"],
+            zeros(Float64, 32), :centered)
+
+        # WENO5 convergence rejects a non-WENO rule.
+        @test_throws MMSEvaluatorError mms_weno5_convergence(
+            centered_2nd_uniform_rule,
+            Base.merge(centered_input,
+                       Dict("manufactured_solution" =>
+                                Dict("name" => "phase_shifted_sine"))))
+    end
+
     @testset "eval_coeff — direct passthrough to evaluate" begin
         # Smoke test: matches ESD's `eval_coeff` semantics so a downstream
         # walker can swap to the ESS export with no behaviour change.
