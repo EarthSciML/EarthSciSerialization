@@ -334,3 +334,571 @@ function verify_mms_convergence(rule_json::AbstractDict,
     end
     return result
 end
+
+# ============================================================
+# MPAS-style unstructured MMS support (esm-0sy)
+# ============================================================
+#
+# The existing convergence harness above is restricted to 1D Cartesian periodic
+# stencils. MPAS-style discretizations (e.g. `mpas_cell_div` in
+# tests/discretizations/mpas_cell_div.esm) use:
+#
+#   - `reduction`-kind stencil selectors that iterate over a connectivity table
+#     (`edgesOnCell`) with a per-cell variable arity (`nEdgesOnCell[$target]`),
+#   - `index`-op coefficients that look up array entries in connectivity +
+#     metric tables (`edgesOnCell`, `dvEdge`, `areaCell`),
+#   - vector manufactured solutions (edge-normal flux F = u·n̂ rather than a
+#     scalar u(x)) sampled at edge midpoints, and
+#   - a per-cell sign convention from the staggering rule (RFC §7.4):
+#     `outward_from_first_cell` flips the sign on edges where the target cell
+#     sits in `cellsOnEdge[2,e]` rather than `cellsOnEdge[1,e]`.
+#
+# The pieces below add just enough to drive a convergence sweep on the
+# `mpas_cell_div` rule using a refining periodic quad mesh (regular 4-valence
+# unstructured fixture). The same machinery accepts any MPAS-like mesh that
+# supplies the canonical field set, so a hex/Voronoi generator can drop in
+# later without changing the stencil applier.
+
+# ============================================================
+# Vector manufactured-solution registry
+# ============================================================
+
+"""
+    VectorManufacturedSolution(name, velocity, divergence, domain, periodic)
+
+Vector-field manufactured solution for MPAS-style cell-centered divergence /
+gradient MMS. `velocity(x, y) -> (u, v)` returns the analytic velocity at a
+point; `divergence(x, y) -> div(u)` returns the analytic divergence at a cell
+center. `domain` is `((xmin, xmax), (ymin, ymax))`; `periodic` indicates
+periodic wrap on both axes.
+"""
+struct VectorManufacturedSolution
+    name::Symbol
+    velocity::Function
+    divergence::Function
+    domain::NTuple{2,Tuple{Float64,Float64}}
+    periodic::Bool
+end
+
+# Built-in: u(x,y) = (sin(2π x), 0) on [0,1]² periodic; div(u) = 2π cos(2π x).
+const _MMS_VEC_SIN_2PI_X_PERIODIC = VectorManufacturedSolution(
+    :vec_sin_2pi_x_periodic,
+    (x, y) -> (sin(2π * x), 0.0),
+    (x, y) -> 2π * cos(2π * x),
+    ((0.0, 1.0), (0.0, 1.0)),
+    true,
+)
+
+const _MMS_VECTOR_REGISTRY = Dict{Symbol,VectorManufacturedSolution}(
+    :vec_sin_2pi_x_periodic => _MMS_VEC_SIN_2PI_X_PERIODIC,
+)
+
+"""
+    register_vector_manufactured_solution!(ms::VectorManufacturedSolution)
+
+Add or replace a vector manufactured solution in the registry. Returns `ms`.
+"""
+function register_vector_manufactured_solution!(ms::VectorManufacturedSolution)
+    _MMS_VECTOR_REGISTRY[ms.name] = ms
+    return ms
+end
+
+"""
+    lookup_vector_manufactured_solution(description::AbstractString) ->
+        VectorManufacturedSolution
+
+Resolve a `manufactured_solution` description string from an MPAS-style
+`input.esm` to a registered vector solution. Punctuation and whitespace are
+ignored. Throws `MMSEvaluatorError(E_MMS_UNKNOWN_SOLUTION, …)` on no match.
+"""
+function lookup_vector_manufactured_solution(
+        description::AbstractString)::VectorManufacturedSolution
+    norm = lowercase(replace(String(description), r"[\s\*]" => ""))
+    if (occursin("sin(2pi", norm) || occursin("sin(2π", norm)) &&
+       (occursin(",0)", norm) || occursin("vec=(sin", norm) ||
+        occursin("v=0", norm))
+        return _MMS_VECTOR_REGISTRY[:vec_sin_2pi_x_periodic]
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_UNKNOWN_SOLUTION",
+        "no vector manufactured solution registered for $(repr(description)); " *
+        "register one with register_vector_manufactured_solution!"))
+end
+
+# ============================================================
+# MPAS-like mesh
+# ============================================================
+
+"""
+    MPASLikeMesh
+
+Minimal MPAS-style topology + geometry for cell-centered MMS testing.
+
+Carries the canonical MPAS field set:
+
+- `nCells`, `nEdges`                              — counts
+- `cellsOnEdge :: Matrix{Int}`   (`nEdges × 2`)   — adjacent cells per edge
+- `edgesOnCell :: Matrix{Int}`   (`nCells × maxEdges`) — edges per cell
+- `nEdgesOnCell :: Vector{Int}`  (`nCells`)       — per-cell edge count
+- `dcEdge, dvEdge :: Vector{Float64}` (`nEdges`)  — center-to-center, side length
+- `areaCell :: Vector{Float64}` (`nCells`)
+- `cell_centers :: Matrix{Float64}` (`nCells × 2`)
+- `edge_midpoints :: Matrix{Float64}` (`nEdges × 2`)
+- `edge_normals :: Matrix{Float64}` (`nEdges × 2`) — points from
+  `cellsOnEdge[e,1]` toward `cellsOnEdge[e,2]` (RFC §7.4
+  `outward_from_first_cell`)
+- `domain :: ((xmin,xmax),(ymin,ymax))`
+
+Index order matches the canonical MPAS NetCDF layout (`[nCells, maxEdges]`,
+`[nEdges, 2]`) so AST coefficients written as `index(edgesOnCell, \$target, k)`
+or `index(cellsOnEdge, e, 1)` resolve naturally. All indices are 1-based
+(Julia native). Builders MUST pre-resolve periodic wrap so consumers never see
+boundary sentinels.
+"""
+struct MPASLikeMesh
+    nCells::Int
+    nEdges::Int
+    cellsOnEdge::Matrix{Int}
+    edgesOnCell::Matrix{Int}
+    nEdgesOnCell::Vector{Int}
+    dcEdge::Vector{Float64}
+    dvEdge::Vector{Float64}
+    areaCell::Vector{Float64}
+    cell_centers::Matrix{Float64}
+    edge_midpoints::Matrix{Float64}
+    edge_normals::Matrix{Float64}
+    domain::NTuple{2,Tuple{Float64,Float64}}
+end
+
+"""
+    make_periodic_quad_mesh(n::Int; L::Float64=1.0) -> MPASLikeMesh
+
+Build a doubly-periodic regular quad mesh on `[0,L]²` with `n × n` cells.
+Each cell has exactly 4 edges (`maxEdges == 4`); cell-to-edge wiring uses the
+order `(east, north, west, south)`. The mesh has the same canonical field set
+as a true MPAS Voronoi mesh, so `apply_mpas_cell_stencil` and
+`mms_convergence_mpas` exercise the unstructured code path even though the
+geometry is uniform.
+
+The chosen ordering puts each cell's "east" edge in `cellsOnEdge[1, e]` (i.e.
+the host cell to the west of the edge), with the edge normal pointing east
+toward `cellsOnEdge[2, e]` — matching the staggering rule's
+`outward_from_first_cell` convention.
+"""
+function make_periodic_quad_mesh(n::Int; L::Float64=1.0)::MPASLikeMesh
+    n >= 2 || throw(ArgumentError("make_periodic_quad_mesh: n must be ≥ 2"))
+    nCells = n * n
+    nEdges = 2 * nCells  # one east + one north edge per cell on a torus
+    h = L / n
+
+    # 1-based linear index for cell at column i, row j (1..n each).
+    cell_id(i, j) = (j - 1) * n + i
+    # East-edge id for the cell at (i,j): edges 1..nCells (one per cell).
+    east_edge(i, j) = cell_id(i, j)
+    # North-edge id: shifted by nCells.
+    north_edge(i, j) = nCells + cell_id(i, j)
+
+    cellsOnEdge   = zeros(Int, nEdges, 2)
+    edgesOnCell   = zeros(Int, nCells, 4)
+    nEdgesOnCell  = fill(4, nCells)
+    dcEdge        = fill(h, nEdges)
+    dvEdge        = fill(h, nEdges)
+    areaCell      = fill(h * h, nCells)
+    cell_centers  = zeros(Float64, nCells, 2)
+    edge_midpoints = zeros(Float64, nEdges, 2)
+    edge_normals  = zeros(Float64, nEdges, 2)
+
+    wrap(k) = mod1(k, n)
+
+    for j in 1:n, i in 1:n
+        c = cell_id(i, j)
+        cell_centers[c, 1] = (i - 0.5) * h
+        cell_centers[c, 2] = (j - 0.5) * h
+
+        e_e = east_edge(i, j)
+        e_n = north_edge(i, j)
+        e_w = east_edge(wrap(i - 1), j)
+        e_s = north_edge(i, wrap(j - 1))
+
+        # edge order on the cell: (east, north, west, south)
+        edgesOnCell[c, 1] = e_e
+        edgesOnCell[c, 2] = e_n
+        edgesOnCell[c, 3] = e_w
+        edgesOnCell[c, 4] = e_s
+    end
+
+    for j in 1:n, i in 1:n
+        # east edge of cell (i,j): between (i,j) [first] and (i+1,j) [second]
+        e = east_edge(i, j)
+        cellsOnEdge[e, 1] = cell_id(i, j)
+        cellsOnEdge[e, 2] = cell_id(wrap(i + 1), j)
+        edge_midpoints[e, 1] = i * h
+        edge_midpoints[e, 2] = (j - 0.5) * h
+        edge_normals[e, 1] = 1.0
+        edge_normals[e, 2] = 0.0
+
+        # north edge of cell (i,j): between (i,j) [first] and (i,j+1) [second]
+        e = north_edge(i, j)
+        cellsOnEdge[e, 1] = cell_id(i, j)
+        cellsOnEdge[e, 2] = cell_id(i, wrap(j + 1))
+        edge_midpoints[e, 1] = (i - 0.5) * h
+        edge_midpoints[e, 2] = j * h
+        edge_normals[e, 1] = 0.0
+        edge_normals[e, 2] = 1.0
+    end
+
+    return MPASLikeMesh(
+        nCells, nEdges, cellsOnEdge, edgesOnCell, nEdgesOnCell,
+        dcEdge, dvEdge, areaCell,
+        cell_centers, edge_midpoints, edge_normals,
+        ((0.0, L), (0.0, L)),
+    )
+end
+
+# ============================================================
+# MPAS coefficient evaluator (`index` ops + scalar bindings)
+# ============================================================
+
+"""
+    MPASCoeffContext(arrays, scalars)
+
+Bindings for evaluating an MPAS stencil coefficient AST inside a reduction
+loop. `arrays` keys map to integer / float vectors or matrices (e.g.
+`"edgesOnCell"`, `"dvEdge"`, `"areaCell"`); `scalars` carry per-iteration
+state (`"\$target"` = current cell id, `"k"` = current reduction index) plus
+any grid scalars (`"dx"`, `"h"`).
+"""
+struct MPASCoeffContext
+    arrays::Dict{String,Any}
+    scalars::Dict{String,Float64}
+end
+
+# Coerce a scalar coefficient sub-expression (Number, String, Dict) to Float64
+# inside an MPAS context.
+function _eval_mpas_coeff_scalar(node, ctx::MPASCoeffContext)::Float64
+    if node isa Number
+        return Float64(node)
+    elseif node isa AbstractString
+        s = String(node)
+        haskey(ctx.scalars, s) || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "MPAS coefficient references unbound scalar $(repr(s)); " *
+            "available: $(collect(keys(ctx.scalars)))"))
+        return ctx.scalars[s]
+    elseif node isa AbstractDict
+        op = String(node["op"])
+        args = node["args"]
+        if op == "index"
+            return _eval_mpas_index(node, ctx)
+        elseif op == "+"
+            return sum(_eval_mpas_coeff_scalar(a, ctx) for a in args)
+        elseif op == "-"
+            length(args) == 1 && return -_eval_mpas_coeff_scalar(args[1], ctx)
+            length(args) == 2 && return _eval_mpas_coeff_scalar(args[1], ctx) -
+                                        _eval_mpas_coeff_scalar(args[2], ctx)
+            throw(ArgumentError("MPAS `-` op needs 1 or 2 args, got $(length(args))"))
+        elseif op == "*"
+            acc = 1.0
+            for a in args
+                acc *= _eval_mpas_coeff_scalar(a, ctx)
+            end
+            return acc
+        elseif op == "/"
+            length(args) == 2 || throw(ArgumentError(
+                "MPAS `/` op requires 2 args, got $(length(args))"))
+            denom = _eval_mpas_coeff_scalar(args[2], ctx)
+            denom == 0.0 && throw(DivideError())
+            return _eval_mpas_coeff_scalar(args[1], ctx) / denom
+        elseif op == "^"
+            length(args) == 2 || throw(ArgumentError(
+                "MPAS `^` op requires 2 args, got $(length(args))"))
+            return _eval_mpas_coeff_scalar(args[1], ctx) ^
+                   _eval_mpas_coeff_scalar(args[2], ctx)
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "MPAS coefficient evaluator does not support op $(repr(op))"))
+        end
+    else
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "MPAS coefficient node has unsupported type $(typeof(node))"))
+    end
+end
+
+# Evaluate an `index` op as a Float64. The first arg must be the array name
+# (string); subsequent args are integer-valued sub-expressions.
+function _eval_mpas_index(node::AbstractDict, ctx::MPASCoeffContext)::Float64
+    args = node["args"]
+    length(args) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "MPAS `index` op requires array name + at least one index, got args=$(args)"))
+    name_node = args[1]
+    name_node isa AbstractString || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "MPAS `index` op first arg must be a string array name, got $(typeof(name_node))"))
+    name = String(name_node)
+    haskey(ctx.arrays, name) || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "MPAS coefficient references unbound array $(repr(name)); " *
+        "available: $(collect(keys(ctx.arrays)))"))
+    arr = ctx.arrays[name]
+    nidx = length(args) - 1
+    idxs = ntuple(i -> begin
+        v = _eval_mpas_coeff_scalar(args[i + 1], ctx)
+        Int(round(v))
+    end, nidx)
+    return Float64(arr[idxs...])
+end
+
+# ============================================================
+# Reduction-stencil application
+# ============================================================
+
+"""
+    apply_mpas_cell_stencil(stencil_json, edge_field::Vector{Float64},
+                            mesh::MPASLikeMesh; scalars=Dict{String,Float64}(),
+                            sign_convention::AbstractString="outward_from_first_cell"
+                            ) -> Vector{Float64}
+
+Apply an MPAS cell-centered reduction stencil (e.g. `mpas_cell_div`) to an
+edge-centered field, returning a cell-centered output vector of length
+`mesh.nCells`.
+
+`stencil_json` MUST contain a single entry whose `selector.kind == "reduction"`
+with `table == "edgesOnCell"`, `count_expr == index(nEdgesOnCell, \$target)`,
+and `combine == "+"`. The `coeff` AST may use `index` ops over any of the
+canonical arrays (`edgesOnCell`, `cellsOnEdge`, `dvEdge`, `dcEdge`, `areaCell`,
+`nEdgesOnCell`) plus the scalar bindings `\$target`, `k`, and any caller-
+supplied scalars (e.g. `dx`).
+
+The per-cell sign is applied automatically per `sign_convention`:
+`"outward_from_first_cell"` (RFC §7.4) flips the sign on edges where the
+target cell appears as `cellsOnEdge[2, e]`. Pass `"none"` to disable.
+"""
+function apply_mpas_cell_stencil(stencil_json,
+                                 edge_field::Vector{Float64},
+                                 mesh::MPASLikeMesh;
+                                 scalars::Dict{String,Float64}=Dict{String,Float64}(),
+                                 sign_convention::AbstractString="outward_from_first_cell"
+                                 )::Vector{Float64}
+    length(edge_field) == mesh.nEdges || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "edge_field length $(length(edge_field)) ≠ mesh.nEdges $(mesh.nEdges)"))
+    length(stencil_json) == 1 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "MPAS reduction stencil expects exactly one entry, got $(length(stencil_json))"))
+    entry = stencil_json[1]
+    sel = entry["selector"]
+    String(sel["kind"]) == "reduction" || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "apply_mpas_cell_stencil requires selector.kind == 'reduction', got $(repr(sel["kind"]))"))
+    String(sel["table"]) == "edgesOnCell" || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "apply_mpas_cell_stencil currently supports table == 'edgesOnCell' only " *
+        "(got $(repr(sel["table"])))"))
+    String(get(sel, "combine", "+")) == "+" || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "apply_mpas_cell_stencil currently supports combine == '+' only"))
+    coeff_node = entry["coeff"]
+
+    arrays = Dict{String,Any}(
+        "edgesOnCell" => mesh.edgesOnCell,
+        "cellsOnEdge" => mesh.cellsOnEdge,
+        "nEdgesOnCell" => mesh.nEdgesOnCell,
+        "dcEdge" => mesh.dcEdge,
+        "dvEdge" => mesh.dvEdge,
+        "areaCell" => mesh.areaCell,
+    )
+    out = zeros(Float64, mesh.nCells)
+    apply_sign = sign_convention == "outward_from_first_cell"
+    apply_sign || sign_convention == "none" || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unsupported sign_convention $(repr(sign_convention)); " *
+        "expected 'outward_from_first_cell' or 'none'"))
+
+    @inbounds for c in 1:mesh.nCells
+        kmax = mesh.nEdgesOnCell[c]
+        acc = 0.0
+        for k in 1:kmax
+            scal = copy(scalars)
+            scal["\$target"] = Float64(c)
+            scal["k"] = Float64(k)
+            ctx = MPASCoeffContext(arrays, scal)
+            coeff = _eval_mpas_coeff_scalar(coeff_node, ctx)
+            e = mesh.edgesOnCell[c, k]
+            sgn = (apply_sign && mesh.cellsOnEdge[e, 2] == c) ? -1.0 : 1.0
+            acc += coeff * sgn * edge_field[e]
+        end
+        out[c] = acc
+    end
+    return out
+end
+
+# ============================================================
+# Convergence sweep — MPAS cell-centered divergence
+# ============================================================
+
+"""
+    sample_edge_normal_flux(mesh::MPASLikeMesh,
+                            ms::VectorManufacturedSolution) -> Vector{Float64}
+
+Sample the edge-normal flux F_e = u(midpoint_e) · n̂_e for every edge, using
+the manufactured velocity field. Returns a vector of length `mesh.nEdges`.
+"""
+function sample_edge_normal_flux(mesh::MPASLikeMesh,
+                                 ms::VectorManufacturedSolution)::Vector{Float64}
+    F = zeros(Float64, mesh.nEdges)
+    @inbounds for e in 1:mesh.nEdges
+        x = mesh.edge_midpoints[e, 1]
+        y = mesh.edge_midpoints[e, 2]
+        u, v = ms.velocity(x, y)
+        F[e] = u * mesh.edge_normals[e, 1] + v * mesh.edge_normals[e, 2]
+    end
+    return F
+end
+
+"""
+    sample_cell_divergence(mesh::MPASLikeMesh,
+                           ms::VectorManufacturedSolution) -> Vector{Float64}
+
+Sample the analytic divergence at each cell center.
+"""
+function sample_cell_divergence(mesh::MPASLikeMesh,
+                                ms::VectorManufacturedSolution)::Vector{Float64}
+    d = zeros(Float64, mesh.nCells)
+    @inbounds for c in 1:mesh.nCells
+        x = mesh.cell_centers[c, 1]
+        y = mesh.cell_centers[c, 2]
+        d[c] = ms.divergence(x, y)
+    end
+    return d
+end
+
+"""
+    mms_convergence_mpas(rule_json, input_json;
+                          manufactured=nothing,
+                          mesh_builder=make_periodic_quad_mesh,
+                          sign_convention="outward_from_first_cell"
+                          ) -> MMSConvergenceResult
+
+Run an MPAS-style cell-centered divergence convergence sweep. The fixture
+schema mirrors the structured `mms_convergence` driver:
+
+```jsonc
+{
+  "rule": "mpas_cell_div",
+  "manufactured_solution": "vec=(sin(2*pi*x), 0); div=2*pi*cos(2*pi*x)",
+  "sampling": "cell_center",
+  "grids": [{"n": 8}, {"n": 16}, {"n": 32}, {"n": 64}],
+  "topology": "quad_periodic"   // optional; default "quad_periodic"
+}
+```
+
+`mesh_builder(n)` is invoked per grid. The default builds a doubly-periodic
+regular quad mesh; pass a custom builder (e.g. a hex/Voronoi generator) to
+exercise other unstructured topologies — the stencil applier is topology-
+agnostic given the MPAS field set.
+"""
+function mms_convergence_mpas(rule_json::AbstractDict, input_json::AbstractDict;
+        manufactured::Union{Nothing,VectorManufacturedSolution}=nothing,
+        mesh_builder::Function=make_periodic_quad_mesh,
+        sign_convention::AbstractString="outward_from_first_cell"
+        )::MMSConvergenceResult
+    rule_name = String(input_json["rule"])
+    spec = _resolve_rule_spec(rule_json, rule_name)
+    haskey(spec, "stencil") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "rule $(repr(rule_name)) has no `stencil` field"))
+    haskey(spec, "accuracy") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "rule $(repr(rule_name)) has no `accuracy` field"))
+    declared = parse_accuracy_order(String(spec["accuracy"]))
+    stencil = spec["stencil"]
+
+    ms = manufactured === nothing ?
+        lookup_vector_manufactured_solution(String(input_json["manufactured_solution"])) :
+        manufactured
+
+    sampling = String(get(input_json, "sampling", "cell_center"))
+    sampling == "cell_center" || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "MPAS MMS only supports `sampling: cell_center` (got $(repr(sampling)))"))
+
+    raw_grids = input_json["grids"]
+    raw_grids isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `grids` must be an array, got $(typeof(raw_grids))"))
+    grids = Int[Int(g["n"]) for g in raw_grids]
+    length(grids) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "convergence requires at least two grids; got $(grids)"))
+
+    domain_lo_x = ms.domain[1][1]
+    domain_hi_x = ms.domain[1][2]
+    Lx = domain_hi_x - domain_lo_x
+
+    errors = Vector{Float64}(undef, length(grids))
+    for (k, n) in enumerate(grids)
+        mesh = mesh_builder(n)
+        h = Lx / n
+        F = sample_edge_normal_flux(mesh, ms)
+        d_exact = sample_cell_divergence(mesh, ms)
+        d_num = apply_mpas_cell_stencil(stencil, F, mesh;
+            scalars=Dict{String,Float64}("dx" => h, "h" => h),
+            sign_convention=sign_convention)
+        errors[k] = maximum(abs.(d_num .- d_exact))
+    end
+
+    if any(!isfinite, errors) || any(e -> e <= 0, errors)
+        throw(MMSEvaluatorError(
+            "E_MMS_NON_FINITE",
+            "non-finite or zero error on some grid; errors=$(errors)"))
+    end
+
+    orders = [log2(errors[i] / errors[i + 1]) for i in 1:(length(errors) - 1)]
+    observed_min = minimum(orders)
+    return MMSConvergenceResult(grids, errors, orders, observed_min, declared)
+end
+
+"""
+    verify_mms_convergence_mpas(rule_json, input_json, expected_json;
+                                 manufactured=nothing,
+                                 mesh_builder=make_periodic_quad_mesh,
+                                 sign_convention="outward_from_first_cell",
+                                 tolerance=0.2) -> MMSConvergenceResult
+
+MPAS-flavor twin of [`verify_mms_convergence`]. Throws
+`MMSEvaluatorError(E_MMS_ORDER_DEFICIT, …)` if the observed minimum order is
+below `expected_json["expected_min_order"]` or more than `tolerance` below
+the declared order.
+"""
+function verify_mms_convergence_mpas(rule_json::AbstractDict,
+        input_json::AbstractDict, expected_json::AbstractDict;
+        manufactured::Union{Nothing,VectorManufacturedSolution}=nothing,
+        mesh_builder::Function=make_periodic_quad_mesh,
+        sign_convention::AbstractString="outward_from_first_cell",
+        tolerance::Float64=0.2)::MMSConvergenceResult
+    haskey(expected_json, "expected_min_order") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "expected.esm has no `expected_min_order` field"))
+    threshold = Float64(expected_json["expected_min_order"])
+    result = mms_convergence_mpas(rule_json, input_json;
+        manufactured=manufactured, mesh_builder=mesh_builder,
+        sign_convention=sign_convention)
+    if result.observed_min_order < threshold
+        throw(MMSEvaluatorError(
+            "E_MMS_ORDER_DEFICIT",
+            "observed min order $(round(result.observed_min_order; digits=3)) " *
+            "below expected $(threshold); errors=$(result.errors)"))
+    end
+    if abs(result.observed_min_order - result.declared_order) > tolerance &&
+       result.observed_min_order < result.declared_order - tolerance
+        throw(MMSEvaluatorError(
+            "E_MMS_ORDER_DEFICIT",
+            "observed min order $(round(result.observed_min_order; digits=3)) " *
+            "outside ±$(tolerance) of declared $(result.declared_order); " *
+            "errors=$(result.errors)"))
+    end
+    return result
+end

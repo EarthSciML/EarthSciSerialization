@@ -159,6 +159,12 @@ export
     MMSEvaluatorError, ManufacturedSolution, MMSConvergenceResult,
     parse_accuracy_order, lookup_manufactured_solution,
     register_manufactured_solution!, eval_coeff,
-    apply_stencil_periodic_1d, mms_convergence, verify_mms_convergence
+    apply_stencil_periodic_1d, mms_convergence, verify_mms_convergence,
+    # MPAS-style unstructured MMS support (esm-0sy)
+    VectorManufacturedSolution, MPASLikeMesh, MPASCoeffContext,
+    register_vector_manufactured_solution!, lookup_vector_manufactured_solution,
+    make_periodic_quad_mesh, apply_mpas_cell_stencil,
+    sample_edge_normal_flux, sample_cell_divergence,
+    mms_convergence_mpas, verify_mms_convergence_mpas
 
 end # module EarthSciSerialization

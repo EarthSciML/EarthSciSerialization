@@ -164,6 +164,243 @@ using EarthSciSerialization
             centered_2nd_uniform_rule, single_grid)
     end
 
+    # ============================================================
+    # MPAS-style unstructured MMS support (esm-0sy)
+    # ============================================================
+
+    @testset "make_periodic_quad_mesh — topology and metric" begin
+        mesh = make_periodic_quad_mesh(4)
+        @test mesh.nCells == 16
+        @test mesh.nEdges == 32
+        @test all(mesh.nEdgesOnCell .== 4)
+        @test all(mesh.dcEdge .≈ 0.25)
+        @test all(mesh.dvEdge .≈ 0.25)
+        @test all(mesh.areaCell .≈ 0.0625)
+
+        # Every cell sees each of its 4 edges; each edge is referenced twice.
+        edge_visits = zeros(Int, mesh.nEdges)
+        for c in 1:mesh.nCells, k in 1:mesh.nEdgesOnCell[c]
+            edge_visits[mesh.edgesOnCell[c, k]] += 1
+        end
+        @test all(edge_visits .== 2)
+
+        # cellsOnEdge agrees with edgesOnCell — for every (c, e) the cell c
+        # appears in cellsOnEdge[e, :].
+        for c in 1:mesh.nCells, k in 1:mesh.nEdgesOnCell[c]
+            e = mesh.edgesOnCell[c, k]
+            @test c == mesh.cellsOnEdge[e, 1] || c == mesh.cellsOnEdge[e, 2]
+        end
+
+        # Edge normals are unit-length axis-aligned.
+        for e in 1:mesh.nEdges
+            nrm = sqrt(mesh.edge_normals[e, 1]^2 + mesh.edge_normals[e, 2]^2)
+            @test nrm ≈ 1.0
+        end
+
+        # Periodic wrap: cells in the leftmost column see east edges that
+        # connect them to the rightmost column.
+        n = 4
+        c_left = 1
+        e_w = mesh.edgesOnCell[c_left, 3]  # west edge of cell (1,1)
+        @test mesh.cellsOnEdge[e_w, 1] == n        # cell (n,1) sits "before"
+        @test mesh.cellsOnEdge[e_w, 2] == c_left
+    end
+
+    @testset "MPASCoeffContext — index op + scalar bindings" begin
+        mesh = make_periodic_quad_mesh(4)
+        ctx = EarthSciSerialization.MPASCoeffContext(
+            Dict{String,Any}(
+                "edgesOnCell" => mesh.edgesOnCell,
+                "areaCell"    => mesh.areaCell,
+                "dvEdge"      => mesh.dvEdge,
+            ),
+            Dict{String,Float64}("\$target" => 1.0, "k" => 2.0, "h" => 0.25),
+        )
+        # index(edgesOnCell, $target, k) == mesh.edgesOnCell[1, 2]
+        idx_node = Dict("op" => "index", "args" =>
+            Any["edgesOnCell", "\$target", "k"])
+        @test EarthSciSerialization._eval_mpas_coeff_scalar(idx_node, ctx) ≈
+              Float64(mesh.edgesOnCell[1, 2])
+        # composed: dvEdge[edgesOnCell[$target,k]] / areaCell[$target]
+        coeff = Dict("op" => "/", "args" => Any[
+            Dict("op" => "index", "args" =>
+                Any["dvEdge",
+                    Dict("op" => "index", "args" =>
+                        Any["edgesOnCell", "\$target", "k"])]),
+            Dict("op" => "index", "args" => Any["areaCell", "\$target"]),
+        ])
+        c = 1; k = 2
+        e_expect = mesh.edgesOnCell[c, k]
+        @test EarthSciSerialization._eval_mpas_coeff_scalar(coeff, ctx) ≈
+              mesh.dvEdge[e_expect] / mesh.areaCell[c]
+
+        # Unknown scalar: clear error.
+        bad = Dict("op" => "index", "args" => Any["dvEdge", "no_such_var"])
+        @test_throws MMSEvaluatorError EarthSciSerialization._eval_mpas_coeff_scalar(
+            bad, ctx)
+        # Unknown array: clear error.
+        bad2 = Dict("op" => "index", "args" => Any["no_such_array", "\$target"])
+        @test_throws MMSEvaluatorError EarthSciSerialization._eval_mpas_coeff_scalar(
+            bad2, ctx)
+    end
+
+    # MPAS cell-centered divergence stencil (matches tests/discretizations/
+    # mpas_cell_div.esm). The coefficient walks edgesOnCell with the canonical
+    # index ops; the per-cell sign comes from the MPAS C-grid staggering rule
+    # (edge_normal_convention = outward_from_first_cell), applied by the
+    # stencil engine, not the coefficient itself.
+    mpas_cell_div_rule = Dict(
+        "discretizations" => Dict(
+            "mpas_cell_div" => Dict(
+                "applies_to" => Dict("op" => "div", "args" => Any["\$F"], "dim" => "cell"),
+                "grid_family" => "unstructured",
+                "requires_locations" => Any["edge_normal"],
+                "emits_location" => "cell_center",
+                "combine" => "+",
+                "accuracy" => "O(dx^2)",
+                "stencil" => [
+                    Dict(
+                        "selector" => Dict(
+                            "kind" => "reduction",
+                            "table" => "edgesOnCell",
+                            "count_expr" => Dict("op" => "index", "args" =>
+                                Any["nEdgesOnCell", "\$target"]),
+                            "k_bound" => "k",
+                            "combine" => "+",
+                        ),
+                        "coeff" => Dict(
+                            "op" => "/",
+                            "args" => Any[
+                                Dict("op" => "index", "args" => Any[
+                                    "dvEdge",
+                                    Dict("op" => "index", "args" =>
+                                        Any["edgesOnCell", "\$target", "k"]),
+                                ]),
+                                Dict("op" => "index", "args" =>
+                                    Any["areaCell", "\$target"]),
+                            ],
+                        ),
+                    ),
+                ],
+            ),
+        ),
+    )
+    mpas_cell_div_input = Dict(
+        "rule" => "mpas_cell_div",
+        "manufactured_solution" =>
+            "vec=(sin(2*pi*x), 0); div=2*pi*cos(2*pi*x) on [0,1]^2 periodic",
+        "sampling" => "cell_center",
+        "grids" => [Dict("n" => 8), Dict("n" => 16),
+                    Dict("n" => 32), Dict("n" => 64)],
+        "topology" => "quad_periodic",
+    )
+    mpas_cell_div_expected = Dict(
+        "rule" => "mpas_cell_div",
+        "metric" => "Linf",
+        "expected_min_order" => 1.9,
+    )
+
+    @testset "apply_mpas_cell_stencil — divergence theorem on uniform mesh" begin
+        mesh = make_periodic_quad_mesh(32)
+        ms = lookup_vector_manufactured_solution(
+            "vec=(sin(2*pi*x), 0); div=2*pi*cos(2*pi*x)")
+        F = sample_edge_normal_flux(mesh, ms)
+        d_num = apply_mpas_cell_stencil(
+            mpas_cell_div_rule["discretizations"]["mpas_cell_div"]["stencil"],
+            F, mesh)
+        d_exact = sample_cell_divergence(mesh, ms)
+        # Second-order on n=32 should already have L∞ error well below 0.05.
+        @test maximum(abs.(d_num .- d_exact)) < 0.05
+    end
+
+    @testset "mms_convergence_mpas — quad_periodic, mpas_cell_div" begin
+        result = mms_convergence_mpas(mpas_cell_div_rule, mpas_cell_div_input)
+        @test result.grids == [8, 16, 32, 64]
+        @test length(result.errors) == 4
+        @test all(result.errors .> 0)
+        @test all(isfinite, result.errors)
+        @test all(result.errors[i] > result.errors[i + 1] for i in 1:3)
+        @test result.declared_order == 2.0
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+        @test result.orders[end] ≥ 1.9
+    end
+
+    @testset "verify_mms_convergence_mpas — passes the proven case" begin
+        result = verify_mms_convergence_mpas(
+            mpas_cell_div_rule, mpas_cell_div_input, mpas_cell_div_expected)
+        @test result.observed_min_order ≥ mpas_cell_div_expected["expected_min_order"]
+    end
+
+    @testset "verify_mms_convergence_mpas — flags an order deficit" begin
+        # Drop the dvEdge weighting → the stencil becomes a non-converging
+        # average that does not approximate the divergence at all.
+        broken = deepcopy(mpas_cell_div_rule)
+        broken["discretizations"]["mpas_cell_div"]["stencil"][1]["coeff"] =
+            Dict("op" => "/", "args" => Any[
+                1.0,
+                Dict("op" => "index", "args" => Any["areaCell", "\$target"]),
+            ])
+        @test_throws MMSEvaluatorError verify_mms_convergence_mpas(
+            broken, mpas_cell_div_input, mpas_cell_div_expected)
+    end
+
+    @testset "register_vector_manufactured_solution!" begin
+        custom = VectorManufacturedSolution(
+            :_test_zero_field,
+            (x, y) -> (0.0, 0.0),
+            (x, y) -> 0.0,
+            ((0.0, 1.0), (0.0, 1.0)),
+            true,
+        )
+        register_vector_manufactured_solution!(custom)
+        @test EarthSciSerialization._MMS_VECTOR_REGISTRY[:_test_zero_field] === custom
+        delete!(EarthSciSerialization._MMS_VECTOR_REGISTRY, :_test_zero_field)
+    end
+
+    @testset "mms_convergence_mpas — error paths" begin
+        # Missing accuracy
+        no_accuracy = deepcopy(mpas_cell_div_rule)
+        delete!(no_accuracy["discretizations"]["mpas_cell_div"], "accuracy")
+        @test_throws MMSEvaluatorError mms_convergence_mpas(
+            no_accuracy, mpas_cell_div_input)
+
+        # Unknown rule name
+        bad_name = Base.merge(mpas_cell_div_input, Dict("rule" => "no_such_rule"))
+        @test_throws MMSEvaluatorError mms_convergence_mpas(
+            mpas_cell_div_rule, bad_name)
+
+        # Unsupported sampling
+        bad_sampling = Base.merge(mpas_cell_div_input,
+            Dict("sampling" => "edge"))
+        @test_throws MMSEvaluatorError mms_convergence_mpas(
+            mpas_cell_div_rule, bad_sampling)
+
+        # Single-grid sweep cannot produce a slope
+        single = Base.merge(mpas_cell_div_input, Dict("grids" => [Dict("n" => 32)]))
+        @test_throws MMSEvaluatorError mms_convergence_mpas(
+            mpas_cell_div_rule, single)
+
+        # Unknown manufactured solution
+        unknown_ms = Base.merge(mpas_cell_div_input,
+            Dict("manufactured_solution" => "polynomial x^3"))
+        @test_throws MMSEvaluatorError mms_convergence_mpas(
+            mpas_cell_div_rule, unknown_ms)
+    end
+
+    @testset "lookup_vector_manufactured_solution" begin
+        ms = lookup_vector_manufactured_solution(
+            "vec=(sin(2*pi*x), 0); div=2*pi*cos(2*pi*x)")
+        @test ms.name === :vec_sin_2pi_x_periodic
+        @test ms.periodic
+        @test ms.domain == ((0.0, 1.0), (0.0, 1.0))
+        u, v = ms.velocity(0.25, 0.5)
+        @test isapprox(u, 1.0; atol=1e-12)
+        @test v == 0.0
+        @test isapprox(ms.divergence(0.0, 0.0), 2π; atol=1e-12)
+        @test_throws MMSEvaluatorError lookup_vector_manufactured_solution(
+            "polynomial x^3")
+    end
+
     @testset "eval_coeff — direct passthrough to evaluate" begin
         # Smoke test: matches ESD's `eval_coeff` semantics so a downstream
         # walker can swap to the ESS export with no behaviour change.
