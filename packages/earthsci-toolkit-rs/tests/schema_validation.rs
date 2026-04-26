@@ -2,7 +2,7 @@
 //!
 //! Tests that invalid ESM files properly fail schema validation with appropriate error messages.
 
-use earthsci_toolkit::{validate, *};
+use earthsci_toolkit::*;
 
 /// Test that missing ESM version fails schema validation
 #[test]
