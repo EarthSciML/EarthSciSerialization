@@ -129,6 +129,9 @@ export {
   dispatchClosedFunction,
   searchsortedFirst,
   validateSearchsortedTable,
+  interpLinear,
+  interpBilinear,
+  validateInterpAxis,
 } from './registered_functions.js'
 export type { ClosedFunctionErrorCode } from './registered_functions.js'
 

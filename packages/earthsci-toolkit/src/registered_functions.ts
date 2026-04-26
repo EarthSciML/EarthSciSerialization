@@ -5,6 +5,7 @@
  *  - datetime.year / .month / .day / .hour / .minute / .second
  *  - datetime.day_of_year / .julian_day / .is_leap_year
  *  - interp.searchsorted
+ *  - interp.linear, interp.bilinear (named tensor-interpolation primitives, esm-94w)
  *
  * The dispatch table is closed by construction. `fn`-op nodes whose name
  * is not in this set MUST be rejected with diagnostic
@@ -21,6 +22,12 @@ export type ClosedFunctionErrorCode =
   | 'closed_function_overflow'
   | 'searchsorted_non_monotonic'
   | 'searchsorted_nan_in_table'
+  | 'interp_non_monotonic_axis'
+  | 'interp_axis_length_mismatch'
+  | 'interp_nan_in_axis'
+  | 'interp_axis_too_short'
+  | 'interp_table_not_const'
+  | 'interp_axis_not_const'
 
 /**
  * Error thrown by closed function dispatch and load-time table validation.
@@ -46,6 +53,8 @@ export const CLOSED_FUNCTION_NAMES: readonly string[] = Object.freeze([
   'datetime.julian_day',
   'datetime.is_leap_year',
   'interp.searchsorted',
+  'interp.linear',
+  'interp.bilinear',
 ])
 
 const SECONDS_PER_DAY = 86400
@@ -255,6 +264,161 @@ export function searchsortedFirst(x: number, xs: readonly number[]): number {
 }
 
 /**
+ * Validate a 1-D interpolation axis (`interp.linear` / `interp.bilinear`).
+ * Strictly increasing, no NaN, length ≥ 2. Diagnostic codes match
+ * esm-spec §9.2 "Errors (load time)" table.
+ */
+export function validateInterpAxis(axis: readonly number[], where: string): void {
+  if (axis.length < 2) {
+    throw new ClosedFunctionError(
+      'interp_axis_too_short',
+      `${where}: axis has ${axis.length} entries (must have at least 2)`,
+    )
+  }
+  for (let i = 0; i < axis.length; i++) {
+    if (Number.isNaN(axis[i]!)) {
+      throw new ClosedFunctionError(
+        'interp_nan_in_axis',
+        `${where}: axis[${i + 1}] is NaN`,
+      )
+    }
+  }
+  for (let i = 1; i < axis.length; i++) {
+    if (axis[i]! <= axis[i - 1]!) {
+      throw new ClosedFunctionError(
+        'interp_non_monotonic_axis',
+        `${where}: axis is not strictly increasing at index ${i + 1} (axis[${i + 1}]=${axis[i]} ≤ axis[${i}]=${axis[i - 1]})`,
+      )
+    }
+  }
+}
+
+function asNumberArray(name: string, v: unknown, argLabel: string): number[] {
+  if (!Array.isArray(v) || !v.every((e) => typeof e === 'number')) {
+    throw new ClosedFunctionError(
+      'interp_axis_not_const',
+      `${name}: ${argLabel} must be a const-array of numbers`,
+    )
+  }
+  return v as number[]
+}
+
+function asNumberMatrix(name: string, v: unknown): number[][] {
+  if (!Array.isArray(v) || !v.every((row) => Array.isArray(row) && row.every((e) => typeof e === 'number'))) {
+    throw new ClosedFunctionError(
+      'interp_table_not_const',
+      `${name}: table must be a const-array of const-arrays of numbers`,
+    )
+  }
+  return v as number[][]
+}
+
+/**
+ * 1-D linear interpolation with extrapolate-flat clamps. Pinned form
+ * `result = t[i] + w * (t[i+1] - t[i])` so that w=0/1 reproduce the
+ * endpoint exactly under IEEE-754 round-to-nearest.
+ *
+ * Validates `axis` on every call (cheap relative to dispatch overhead;
+ * matches the `searchsortedFirst` convention in this module).
+ */
+export function interpLinear(table: readonly number[], axis: readonly number[], x: number): number {
+  if (table.length !== axis.length) {
+    throw new ClosedFunctionError(
+      'interp_axis_length_mismatch',
+      `interp.linear: len(table)=${table.length} != len(axis)=${axis.length}`,
+    )
+  }
+  validateInterpAxis(axis, 'interp.linear')
+  const n = axis.length
+  if (x <= axis[0]!) return table[0]!
+  if (x >= axis[n - 1]!) return table[n - 1]!
+  // Find unique i in [0, n-2] with axis[i] <= x < axis[i+1].
+  // Binary search; axis is strictly increasing so xs[i] >= x ⇒ first such i+1.
+  let lo = 0
+  let hi = n // exclusive
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (axis[mid]! > x) hi = mid
+    else lo = mid + 1
+  }
+  // lo is first index with axis[lo] > x; cell is [lo-1, lo].
+  const i = lo - 1
+  const w = (x - axis[i]!) / (axis[i + 1]! - axis[i]!)
+  return table[i]! + w * (table[i + 1]! - table[i]!)
+}
+
+/**
+ * 2-D bilinear interpolation with per-axis extrapolate-flat clamps.
+ * Pinned evaluation order: two x-blends followed by one y-blend, each
+ * in the form `a + w*(b - a)` (esm-spec §9.2). `table` is row-major:
+ * `table[i][j]` is the value at `(axis_x[i], axis_y[j])`.
+ */
+export function interpBilinear(
+  table: readonly (readonly number[])[],
+  axisX: readonly number[],
+  axisY: readonly number[],
+  x: number,
+  y: number,
+): number {
+  const nx = axisX.length
+  const ny = axisY.length
+  if (table.length !== nx) {
+    throw new ClosedFunctionError(
+      'interp_axis_length_mismatch',
+      `interp.bilinear: outer len(table)=${table.length} != len(axis_x)=${nx}`,
+    )
+  }
+  for (let r = 0; r < table.length; r++) {
+    if (table[r]!.length !== ny) {
+      throw new ClosedFunctionError(
+        'interp_axis_length_mismatch',
+        `interp.bilinear: table row ${r + 1} has length ${table[r]!.length}, expected len(axis_y)=${ny}`,
+      )
+    }
+  }
+  validateInterpAxis(axisX, 'interp.bilinear axis_x')
+  validateInterpAxis(axisY, 'interp.bilinear axis_y')
+
+  // Per-axis clamp (extrapolate-flat). NaN passes through unchanged
+  // because both comparisons return false for NaN, propagating to wx/wy.
+  const xq = x <= axisX[0]! ? axisX[0]! : x >= axisX[nx - 1]! ? axisX[nx - 1]! : x
+  const yq = y <= axisY[0]! ? axisY[0]! : y >= axisY[ny - 1]! ? axisY[ny - 1]! : y
+
+  // Cell location: largest i in [0, nx-2] with axis_x[i] <= xq.
+  // Equivalent to clamp(searchsortedfirst(xq, axis), 2, nx) - 1, then
+  // converted to 0-based. For xq exactly on an interior knot k (1-based),
+  // the spec convention selects i = k (0-based: k-1) so that wx = 0.
+  function locateCell(axis: readonly number[], q: number): number {
+    const m = axis.length
+    let lo = 0
+    let hi = m
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (axis[mid]! > q) hi = mid
+      else lo = mid + 1
+    }
+    // lo is first index with axis[lo] > q (or m if none). Cell index is
+    // lo - 1, clamped to [0, m-2].
+    let i = lo - 1
+    if (i < 0) i = 0
+    if (i > m - 2) i = m - 2
+    return i
+  }
+  const i = locateCell(axisX, xq)
+  const j = locateCell(axisY, yq)
+  const wx = (xq - axisX[i]!) / (axisX[i + 1]! - axisX[i]!)
+  const wy = (yq - axisY[j]!) / (axisY[j + 1]! - axisY[j]!)
+
+  const t_ij = table[i]![j]!
+  const t_ip1_j = table[i + 1]![j]!
+  const t_i_jp1 = table[i]![j + 1]!
+  const t_ip1_jp1 = table[i + 1]![j + 1]!
+  const rowJ = t_ij + wx * (t_ip1_j - t_ij)
+  const rowJp1 = t_i_jp1 + wx * (t_ip1_jp1 - t_i_jp1)
+  return rowJ + wy * (rowJp1 - rowJ)
+}
+
+/**
  * Resolve a closed-function name + already-evaluated positional args
  * into a scalar result. `args` semantics:
  *
@@ -262,6 +426,9 @@ export function searchsortedFirst(x: number, xs: readonly number[]): number {
  *  - interp.searchsorted takes [scalar x, number[] xs]. The xs array
  *    MUST be a plain array of numbers (the AST evaluator extracts it
  *    from a `const`-op child without numeric-collapsing it).
+ *  - interp.linear takes [number[] table, number[] axis, scalar x].
+ *  - interp.bilinear takes
+ *    [number[][] table, number[] axis_x, number[] axis_y, scalar x, scalar y].
  *
  * Unknown names raise `unknown_closed_function`.
  */
@@ -314,6 +481,22 @@ export function dispatchClosedFunction(name: string, args: unknown[]): number {
         )
       }
       return searchsortedFirst(x, xs as number[])
+    }
+    case 'interp.linear': {
+      requireArity(name, args, 3)
+      const table = asNumberArray(name, args[0], 'table')
+      const axis = asNumberArray(name, args[1], 'axis')
+      const x = asNumber(name, args[2], 2)
+      return interpLinear(table, axis, x)
+    }
+    case 'interp.bilinear': {
+      requireArity(name, args, 5)
+      const table = asNumberMatrix(name, args[0])
+      const axisX = asNumberArray(name, args[1], 'axis_x')
+      const axisY = asNumberArray(name, args[2], 'axis_y')
+      const x = asNumber(name, args[3], 3)
+      const y = asNumber(name, args[4], 4)
+      return interpBilinear(table, axisX, axisY, x, y)
     }
     default:
       throw new ClosedFunctionError(
