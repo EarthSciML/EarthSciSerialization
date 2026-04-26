@@ -614,6 +614,18 @@ class DocumentationExtractor:
 class DocumentationGenerator:
     """Generates comprehensive documentation from extracted API information."""
 
+    # Julia Documenter.jl `[text](@ref)` / `[text](@ref target)` cross-references
+    # are meaningful only inside a Documenter.jl-built site. In our Hugo build
+    # they render as broken `<a href="@ref">` links and fail the lychee gate.
+    # Unwrap them to plain `text` so the prose still reads naturally.
+    _DOCUMENTER_REF_RE = re.compile(r"\[([^\]]+)\]\(@ref(?:\s+[^)]*)?\)")
+
+    @classmethod
+    def _sanitize_docstring(cls, text: str) -> str:
+        if not text:
+            return text
+        return cls._DOCUMENTER_REF_RE.sub(r"\1", text)
+
     def __init__(self, project_root: Path, output_dir: Path):
         self.project_root = project_root
         self.output_dir = output_dir
@@ -675,7 +687,7 @@ class DocumentationGenerator:
                         f.write(f"**Signature:**\n```{lang}\n{func.signature}\n```\n\n")
 
                         if func.docstring:
-                            f.write(f"**Description:**\n{func.docstring}\n\n")
+                            f.write(f"**Description:**\n{self._sanitize_docstring(func.docstring)}\n\n")
 
                         # Cross-language references
                         cross_refs = self.api_docs["cross_references"].get(lang, {}).get(func.name, [])
@@ -698,7 +710,7 @@ class DocumentationGenerator:
                         f.write(f"**Definition:**\n```{lang}\n{typ.definition}\n```\n\n")
 
                         if typ.docstring:
-                            f.write(f"**Description:**\n{typ.docstring}\n\n")
+                            f.write(f"**Description:**\n{self._sanitize_docstring(typ.docstring)}\n\n")
 
                         # Cross-language references
                         cross_refs = self.api_docs["cross_references"].get(lang, {}).get(typ.name, [])
@@ -736,7 +748,7 @@ class DocumentationGenerator:
                         f.write(f"**{func.language.title()}:**\n")
                         f.write(f"```{func.language}\n{func.signature}\n```\n\n")
                         if func.docstring:
-                            f.write(f"> {func.docstring.split('.')[0]}.\n\n")
+                            f.write(f"> {self._sanitize_docstring(func.docstring).split('.')[0]}.\n\n")
 
                     f.write("---\n\n")
 
@@ -758,7 +770,7 @@ class DocumentationGenerator:
                         f.write(f"**{typ.language.title()}:**\n")
                         f.write(f"```{typ.language}\n{typ.definition}\n```\n\n")
                         if typ.docstring:
-                            f.write(f"> {typ.docstring.split('.')[0]}.\n\n")
+                            f.write(f"> {self._sanitize_docstring(typ.docstring).split('.')[0]}.\n\n")
 
                     f.write("---\n\n")
 
@@ -766,8 +778,12 @@ class DocumentationGenerator:
         """Generate examples documentation from test cases and fixtures."""
         examples_dir = self.output_dir / "examples"
 
-        # Generate examples index
-        index_file = examples_dir / "index.md"
+        # Generate examples index. Use Hugo's branch-bundle convention
+        # (`_index.md`); a plain `index.md` would mark the directory a *leaf*
+        # bundle, which causes sibling per-language `.md` files to be treated as
+        # page resources rather than rendered pages — leaving every link from
+        # this index a 404 on the live site.
+        index_file = examples_dir / "_index.md"
         with open(index_file, 'w') as f:
             f.write("# Examples Index\n\n")
             f.write("Collection of examples showing how to use the ESM Format libraries.\n\n")
@@ -804,8 +820,9 @@ class DocumentationGenerator:
     def _generate_index_pages(self):
         """Generate main index pages linking all documentation."""
 
-        # Generate API index
-        api_index = self.output_dir / "api" / "index.md"
+        # Generate API index — branch bundle (`_index.md`), not a leaf bundle.
+        # See note in `_generate_examples_documentation`.
+        api_index = self.output_dir / "api" / "_index.md"
         with open(api_index, 'w') as f:
             f.write("# API Reference Index\n\n")
             f.write("Complete API documentation for all ESM Format language implementations.\n\n")
@@ -820,7 +837,7 @@ class DocumentationGenerator:
 
             f.write("## Cross-Language Resources\n\n")
             f.write("- [Cross-Language Comparison](../generated/cross-language-comparison.md)\n")
-            f.write("- [Examples Index](../examples/index.md)\n\n")
+            f.write("- [Examples Index](../examples/)\n\n")
 
 def setup_documentation_infrastructure(project_root: Path):
     """Set up automated documentation building infrastructure."""
