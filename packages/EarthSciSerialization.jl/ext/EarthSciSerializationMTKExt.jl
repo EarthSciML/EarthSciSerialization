@@ -51,9 +51,15 @@ function _esm_to_symbolic(expr::EsmExpr, var_dict::Dict{String,Any},
     elseif expr isa NumExpr
         # Integer-valued NumExpr is promoted to Int so arrayop index
         # expressions like `i - 1` stay integer-typed when fixtures
-        # still encode whole numbers as NumExpr.
+        # still encode whole numbers as NumExpr. Floats above Int64 range
+        # (e.g. Avogadro's number 6.022e23) stay Float64 — Int(x) on them
+        # raises InexactError.
         v = expr.value
-        return v == floor(v) ? Int(v) : v
+        if isfinite(v) && v == floor(v) && typemin(Int) <= v <= typemax(Int)
+            return Int(v)
+        else
+            return v
+        end
     elseif expr isa VarExpr
         if haskey(var_dict, expr.name)
             return var_dict[expr.name]
@@ -352,9 +358,14 @@ function _esm_to_julia_ast(expr::EsmExpr, var_name_to_sym::Dict{String,Symbol})
     elseif expr isa NumExpr
         # Prefer integer literals when the value is whole — this matters for
         # expressions like `u[i-1]` where the macro's offset-range inference
-        # needs integer offsets, not 1.0 floats.
+        # needs integer offsets, not 1.0 floats. Guard against floats outside
+        # Int64 range (e.g. 6.022e23) which would raise InexactError on Int().
         v = expr.value
-        return v == floor(v) ? Int(v) : v
+        if isfinite(v) && v == floor(v) && typemin(Int) <= v <= typemax(Int)
+            return Int(v)
+        else
+            return v
+        end
     elseif expr isa VarExpr
         return get(var_name_to_sym, expr.name, Symbol(expr.name))
     elseif expr isa OpExpr

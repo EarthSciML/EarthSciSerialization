@@ -278,4 +278,33 @@ _strip_time_suffix(s::AbstractString) = endswith(s, "(t)") ? s[1:end-3] : s
         @test _has_op(recovered.reactions[1].rate, "max")
         @test _has_op(recovered.reactions[2].rate, "min")
     end
+
+    @testset "NumExpr above Int64 range stays Float (esm-6z5)" begin
+        # Regression for esm-6z5: _esm_to_symbolic previously called
+        # `Int(v)` on every integer-valued NumExpr, which raises
+        # InexactError for values above Int64.max (e.g. Avogadro's
+        # number 6.022e23 used in atmospheric chemistry rate constants).
+        species = [
+            EarthSciSerialization.Species("A"),
+            EarthSciSerialization.Species("B"),
+        ]
+        params = [EarthSciSerialization.Parameter("k", 1.0)]
+        # Avogadro's number — integer-valued in IEEE 754 (floor(N) == N)
+        # but ~6.5 orders of magnitude above typemax(Int64) ≈ 9.22e18.
+        avogadro = 6.022e23
+        @test avogadro == floor(avogadro)
+        @test avogadro > typemax(Int)
+        rate = OpExpr("*",
+            EarthSciSerialization.Expr[VarExpr("k"), NumExpr(avogadro)])
+        rxns = EarthSciSerialization.Reaction[
+            EarthSciSerialization.Reaction(Dict("A" => 1), Dict("B" => 1),
+                                           rate),
+        ]
+        esm_rsys = EarthSciSerialization.ReactionSystem(species, rxns;
+                                                        parameters=params)
+
+        # Should not raise InexactError.
+        cat_rsys = Catalyst.ReactionSystem(esm_rsys; name=:AvogadroRate)
+        @test occursin("ReactionSystem", string(typeof(cat_rsys)))
+    end
 end
