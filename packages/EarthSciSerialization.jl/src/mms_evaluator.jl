@@ -180,9 +180,25 @@ const _MMS_PHASE_SHIFTED_SINE = ManufacturedSolution(
     x -> sin(2π * x + 1.0),
 )
 
+# Built-in: u(z) = sin(2π z) on the unit column z ∈ [0, 1]; du/dz = 2π cos(2π z).
+# Used by the 1D vertical-stencil MMS path (esm-bhv). The column has bounded
+# support (faces at z = 0 and z = 1 are not periodic-equal), so periodic = false;
+# centered-difference vertical stencils evaluated at cell centers stay inside the
+# face index range without wrapping.
+const _MMS_VERTICAL_SIN_2PI_Z_UNIT_COLUMN = ManufacturedSolution(
+    :vertical_sin_2pi_z_unit_column,
+    z -> sin(2π * z),
+    z -> 2π * cos(2π * z),
+    false,
+    (0.0, 1.0),
+    (lo, hi) -> (cos(2π * lo) - cos(2π * hi)) / (2π * (hi - lo)),
+    nothing,
+)
+
 const _MMS_REGISTRY = Dict{Symbol,ManufacturedSolution}(
     :sin_2pi_x_periodic => _MMS_SIN_2PI_X_PERIODIC,
     :phase_shifted_sine => _MMS_PHASE_SHIFTED_SINE,
+    :vertical_sin_2pi_z_unit_column => _MMS_VERTICAL_SIN_2PI_Z_UNIT_COLUMN,
 )
 
 """
@@ -268,6 +284,9 @@ function lookup_manufactured_solution(description::AbstractString)::Manufactured
     norm = lowercase(replace(String(description), r"[\s\*]" => ""))
     if occursin("sin(2pix+1", norm) || occursin("sin(2πx+1", norm)
         return _MMS_REGISTRY[:phase_shifted_sine]
+    end
+    if occursin("sin(2piz", norm) || occursin("sin(2πz", norm)
+        return _MMS_REGISTRY[:vertical_sin_2pi_z_unit_column]
     end
     if occursin("sin(2pi", norm) || occursin("sin(2π", norm)
         return _MMS_REGISTRY[:sin_2pi_x_periodic]
@@ -771,6 +790,110 @@ function apply_stencil_2d_arakawa(stencil_json,
     return out
 end
 
+# ============================================================
+# Stencil application (1D vertical, face-staggered → cell-centered)
+# ============================================================
+
+"""
+    apply_stencil_1d_vertical(stencil_json,
+                              u_face::Vector{Float64},
+                              cb::CellBindings) -> Vector{Float64}
+
+Apply a 1D `kind: "vertical"` stencil to a vertical-face sample vector
+`u_face` of shape `(nz+1,)`. Returns a cell-centered vector of shape `(nz,)`.
+
+Each entry of `stencil_json` must carry a selector with
+`kind == "vertical"`, `stagger ∈ {"face_top", "face_bottom"}`, and an `Int`
+`offset`. The cell→face mapping is
+
+- `stagger == "face_bottom"` with offset `o` reads `u_face[i + o]`
+- `stagger == "face_top"`    with offset `o` reads `u_face[i + 1 + o]`
+
+so a centered first-difference vertical-derivative stencil is
+
+```julia
+stencil = [
+    Dict("selector" => Dict("kind" => "vertical",
+                            "stagger" => "face_bottom", "offset" => 0),
+         "coeff"    => Dict("op" => "/", "args" => Any[-1, "dz"])),
+    Dict("selector" => Dict("kind" => "vertical",
+                            "stagger" => "face_top",    "offset" => 0),
+         "coeff"    => Dict("op" => "/", "args" => Any[ 1, "dz"])),
+]
+```
+
+Both faces and cells are non-periodic — the column has finite support, with
+face 1 at `z_lo` and face `nz+1` at `z_hi`. Offsets that would step outside
+`[1, nz+1]` throw `MMSEvaluatorError(E_MMS_BAD_FIXTURE, …)`; for a centered
+two-point stencil this is never the case, so no boundary mask is needed.
+
+The `coeff` AST is evaluated cell-by-cell against `bindings_at(cb, i)`, so
+non-uniform spacing (per-cell `dz`, `face_top`, `face_bottom`, `z`) can be
+plumbed via `cb.per_cell` without changing the stencil rule.
+
+The combine rule is `+` (sum of contributions); other combines are not yet
+supported.
+"""
+function apply_stencil_1d_vertical(stencil_json,
+                                   u_face::Vector{Float64},
+                                   cb::CellBindings)::Vector{Float64}
+    nf = length(u_face)
+    nf >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "u_face must have shape (nz+1,) with nz ≥ 1; got length $(nf)"))
+    nz = nf - 1
+
+    bot_pairs = Tuple{Int,Any}[]   # face_bottom: u_face[i + offset]
+    top_pairs = Tuple{Int,Any}[]   # face_top:    u_face[i + 1 + offset]
+    for s in stencil_json
+        sel = s["selector"]
+        kind = String(get(sel, "kind", ""))
+        kind == "vertical" || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "apply_stencil_1d_vertical requires `selector.kind == \"vertical\"`, " *
+            "got $(repr(kind))"))
+        stagger = String(get(sel, "stagger", ""))
+        off = Int(sel["offset"])
+        if stagger == "face_bottom"
+            push!(bot_pairs, (off, s["coeff"]))
+        elseif stagger == "face_top"
+            push!(top_pairs, (off, s["coeff"]))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "vertical selector stagger must be \"face_top\" or \"face_bottom\" " *
+                "(got $(repr(stagger))); cell_center / vertex selectors are " *
+                "not yet supported"))
+        end
+    end
+
+    out = zeros(Float64, nz)
+    @inbounds for i in 1:nz
+        b = bindings_at(cb, i)
+        acc = 0.0
+        for (off, coeff_node) in bot_pairs
+            ii = i + off
+            (1 <= ii <= nf) || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "vertical face_bottom offset $(off) at cell i=$(i) is out of " *
+                "range for u_face of length $(nf); only offsets that keep " *
+                "1 ≤ i+offset ≤ nz+1 are supported"))
+            acc += eval_coeff(coeff_node, b) * u_face[ii]
+        end
+        for (off, coeff_node) in top_pairs
+            ii = i + 1 + off
+            (1 <= ii <= nf) || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "vertical face_top offset $(off) at cell i=$(i) is out of " *
+                "range for u_face of length $(nf); only offsets that keep " *
+                "1 ≤ i+1+offset ≤ nz+1 are supported"))
+            acc += eval_coeff(coeff_node, b) * u_face[ii]
+        end
+        out[i] = acc
+    end
+    return out
+end
+
 # Detect whether a stencil is 2D lat-lon by selector kind. Returns the kind
 # string of the first entry; throws if entries disagree. Multi-stencil
 # mappings (PPM-style {name: [entries…]}) are flat-cartesian by construction
@@ -881,11 +1004,13 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
         return _mms_convergence_2d_latlon(stencil, input_json, declared, manufactured)
     elseif kind == "arakawa"
         return _mms_convergence_2d_arakawa(stencil, input_json, declared, manufactured)
+    elseif kind == "vertical"
+        return _mms_convergence_1d_vertical(stencil, input_json, declared, manufactured)
     elseif kind != "cartesian" && kind != ""
         throw(MMSEvaluatorError(
             "E_MMS_BAD_FIXTURE",
             "unsupported selector kind $(repr(kind)); " *
-            "expected one of \"cartesian\", \"latlon\", \"arakawa\""))
+            "expected one of \"cartesian\", \"latlon\", \"arakawa\", \"vertical\""))
     end
     # 1D cartesian path falls through to the inline body below.
     manufactured isa Union{Nothing,ManufacturedSolution} || throw(MMSEvaluatorError(
@@ -1106,6 +1231,75 @@ function _mms_convergence_2d_arakawa(stencil, input_json::AbstractDict,
                                    ylo + (j - 0.5) * dy)
                      for i in 1:nx, j in 1:ny]
         errors[k] = maximum(abs.(div_num .- div_exact))
+    end
+
+    return _finalize_convergence(grids, errors, declared)
+end
+
+# 1D vertical (face-staggered → cell-centered) convergence. Each grid entry
+# may carry `nz` directly, or the generic `n`. The fixture domain is taken
+# from the manufactured solution's `domain` field; the column is non-periodic.
+# The error metric is L∞ over all `nz` cells — interior coverage is implicit
+# because face-staggered offsets ∈ {0, +1} stay inside [1, nz+1] without wrap.
+function _mms_convergence_1d_vertical(stencil, input_json::AbstractDict,
+                                      declared::Float64,
+                                      manufactured)::MMSConvergenceResult
+    manufactured isa Union{Nothing,ManufacturedSolution} || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "1D vertical stencil requires a `ManufacturedSolution`, got $(typeof(manufactured))"))
+    ms = manufactured === nothing ?
+        lookup_manufactured_solution(input_json["manufactured_solution"]) :
+        manufactured
+
+    raw_grids = input_json["grids"]
+    raw_grids isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `grids` must be an array, got $(typeof(raw_grids))"))
+    grids = Int[]
+    for g in raw_grids
+        if haskey(g, "nz")
+            push!(grids, Int(g["nz"]))
+        elseif haskey(g, "n")
+            push!(grids, Int(g["n"]))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "vertical grid entry must carry `nz` or `n`; " *
+                "got keys $(collect(keys(g)))"))
+        end
+    end
+    length(grids) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "convergence requires at least two grids; got $(grids)"))
+
+    z_lo, z_hi = ms.domain
+    H = z_hi - z_lo
+    H > 0 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "vertical MMS requires positive column extent; got $(ms.domain)"))
+
+    errors = Vector{Float64}(undef, length(grids))
+    for (k, nz) in enumerate(grids)
+        dz = H / nz
+        # Sample at face positions z_lo + (i-1)*dz for i = 1..nz+1.
+        face_z = [z_lo + (i - 1) * dz for i in 1:(nz + 1)]
+        u_face = [ms.sample(z) for z in face_z]
+        # Per-cell metric exposes dz as both a scalar and a per-cell callable
+        # so AST coefficients written either as bare "dz" or as
+        # `index(dz, $target)` resolve in this harness without rewriting.
+        # `face_top` / `face_bottom` and `z` are also exposed per-cell so
+        # non-uniform-spacing rules (later) can read the face/center positions.
+        cb = CellBindings(
+            Dict{String,Float64}("dz" => dz, "h" => dz),
+            Dict{String,Function}(
+                "z"           => i -> z_lo + (i - 0.5) * dz,
+                "face_bottom" => i -> face_z[i],
+                "face_top"    => i -> face_z[i + 1],
+            ),
+        )
+        u_num = apply_stencil_1d_vertical(stencil, u_face, cb)
+        u_exact = [ms.derivative(z_lo + (i - 0.5) * dz) for i in 1:nz]
+        errors[k] = maximum(abs.(u_num .- u_exact))
     end
 
     return _finalize_convergence(grids, errors, declared)

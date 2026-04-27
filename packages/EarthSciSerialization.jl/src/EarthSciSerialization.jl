@@ -166,7 +166,7 @@ export
     lookup_manufactured_solution_2d,
     register_manufactured_solution!, eval_coeff, OUTPUT_KINDS,
     apply_stencil_periodic_1d, apply_stencil_2d_latlon,
-    apply_stencil_2d_arakawa,
+    apply_stencil_2d_arakawa, apply_stencil_1d_vertical,
     parabola_reconstruct_periodic_1d,
     mms_convergence, verify_mms_convergence,
     # WENO5 nonlinear reconstruction (esm-rq3)

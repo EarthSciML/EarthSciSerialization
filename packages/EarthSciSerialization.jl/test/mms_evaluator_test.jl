@@ -1336,4 +1336,142 @@ using EarthSciSerialization
         @test result.observed_min_order ≥ 1.9
         delete!(EarthSciSerialization._MMS_VECTOR_REGISTRY, :_test_arakawa_custom)
     end
+
+    # ============================================================
+    # 1D vertical face-staggered stencils (esm-bhv)
+    # ============================================================
+    # Inline centered_2nd_uniform_vertical rule spec. Mirrors the ESD-side rule
+    # shape: a 1D vertical grid with face_top / face_bottom selectors carrying
+    # offset 0, computing (u_face[i+1] − u_face[i])/dz at each cell center.
+    vertical_stencil = [
+        Dict("selector" => Dict("kind" => "vertical",
+                                "stagger" => "face_bottom", "offset" => 0),
+             "coeff" => Dict("op" => "/", "args" => Any[-1, "dz"])),
+        Dict("selector" => Dict("kind" => "vertical",
+                                "stagger" => "face_top", "offset" => 0),
+             "coeff" => Dict("op" => "/", "args" => Any[1, "dz"])),
+    ]
+    vertical_rule = Dict("discretizations" => Dict(
+        "centered_2nd_uniform_vertical" => Dict(
+            "applies_to" => Dict("op" => "grad", "args" => Any["\$u"], "dim" => "z"),
+            "grid_family" => "cartesian",
+            "combine" => "+",
+            "accuracy" => "O(dz^2)",
+            "stencil" => vertical_stencil,
+        )))
+    vertical_input = Dict(
+        "rule" => "centered_2nd_uniform_vertical",
+        "manufactured_solution" => "sin(2*pi*z) on [0,1] vertical column",
+        "sampling" => "cell_center",
+        "grids" => [Dict("nz" => 16), Dict("nz" => 32),
+                    Dict("nz" => 64), Dict("nz" => 128)],
+    )
+    vertical_expected = Dict(
+        "rule" => "centered_2nd_uniform_vertical",
+        "metric" => "Linf",
+        "expected_min_order" => 1.9,
+    )
+
+    @testset "lookup_manufactured_solution — vertical sin(2π z)" begin
+        ms = lookup_manufactured_solution(
+            "sin(2*pi*z) on [0,1] vertical column")
+        @test ms.name === :vertical_sin_2pi_z_unit_column
+        @test ms.domain == (0.0, 1.0)
+        @test !ms.periodic
+        @test isapprox(ms.sample(0.25), 1.0; atol=1e-12)
+        @test isapprox(ms.derivative(0.0), 2π; atol=1e-12)
+        # Dict form by registry name.
+        ms_by_name = lookup_manufactured_solution(
+            Dict("name" => "vertical_sin_2pi_z_unit_column"))
+        @test ms_by_name === ms
+    end
+
+    @testset "apply_stencil_1d_vertical — centered face-difference exact on linear" begin
+        # u(z) = a + b z sampled at faces. Centered difference (u_top − u_bot)/dz
+        # equals b at every cell center, exactly.
+        nz = 5
+        dz = 1.0 / nz
+        z_face = [(i - 1) * dz for i in 1:(nz + 1)]
+        a, b = 0.7, -1.25
+        u_face = a .+ b .* z_face
+        cb = CellBindings(Dict{String,Float64}("dz" => dz))
+        out = apply_stencil_1d_vertical(vertical_stencil, u_face, cb)
+        @test length(out) == nz
+        @test all(isapprox.(out, b; atol=1e-12))
+    end
+
+    @testset "apply_stencil_1d_vertical — rejects bad selector / shape" begin
+        cb = CellBindings(Dict{String,Float64}("dz" => 0.5))
+        u_face = zeros(Float64, 3)
+
+        # Wrong selector kind.
+        bad_kind = [Dict("selector" => Dict("kind" => "cartesian",
+                                            "axis" => "z", "offset" => 0),
+                         "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_1d_vertical(
+            bad_kind, u_face, cb)
+
+        # Unknown stagger (cell_center is not yet supported by this applier).
+        bad_stagger = [Dict("selector" => Dict("kind" => "vertical",
+                                               "stagger" => "cell_center",
+                                               "offset" => 0),
+                            "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_1d_vertical(
+            bad_stagger, u_face, cb)
+
+        # Out-of-range offset on face_top: at cell nz with offset=+1, would
+        # need u_face[nz+2], one past the domain.
+        oob = [Dict("selector" => Dict("kind" => "vertical",
+                                       "stagger" => "face_top",
+                                       "offset" => 1),
+                    "coeff" => 1.0)]
+        @test_throws MMSEvaluatorError apply_stencil_1d_vertical(
+            oob, u_face, cb)
+
+        # u_face too short to host a cell.
+        @test_throws MMSEvaluatorError apply_stencil_1d_vertical(
+            vertical_stencil, [1.0], cb)
+    end
+
+    @testset "mms_convergence — centered_2nd_uniform_vertical (sin 2π z)" begin
+        result = mms_convergence(vertical_rule, vertical_input)
+        @test length(result.errors) == 4
+        @test all(isfinite, result.errors)
+        @test all(result.errors .> 0)
+        @test result.declared_order == 2.0
+        @test all(result.errors[i] > result.errors[i + 1] for i in 1:3)
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+        @test result.orders[end] ≥ 1.9
+    end
+
+    @testset "verify_mms_convergence — passes on vertical sin(2π z)" begin
+        result = verify_mms_convergence(
+            vertical_rule, vertical_input, vertical_expected)
+        @test result.observed_min_order ≥ vertical_expected["expected_min_order"]
+        @test result.observed_min_order ≥ 1.9
+    end
+
+    @testset "mms_convergence — vertical with explicit `n` grid entries" begin
+        explicit = Base.merge(vertical_input, Dict(
+            "grids" => [Dict("n" => 16), Dict("n" => 32), Dict("n" => 64)]))
+        result = mms_convergence(vertical_rule, explicit)
+        @test result.observed_min_order ≥ 1.85
+    end
+
+    @testset "mms_convergence — vertical error paths" begin
+        # 2D solution on a 1D vertical rule is a type error (vector MMS).
+        @test_throws MMSEvaluatorError mms_convergence(
+            vertical_rule, vertical_input;
+            manufactured=lookup_vector_manufactured_solution(
+                "F = (sin(2*pi*x)*cos(2*pi*y), cos(2*pi*x)*sin(2*pi*y))"))
+
+        # Grid entry missing both `nz` and `n` is rejected.
+        bad_grid = Base.merge(vertical_input, Dict(
+            "grids" => [Dict("foo" => 1), Dict("foo" => 2)]))
+        @test_throws MMSEvaluatorError mms_convergence(vertical_rule, bad_grid)
+
+        # Single grid is too few.
+        too_few = Base.merge(vertical_input, Dict("grids" => [Dict("nz" => 16)]))
+        @test_throws MMSEvaluatorError mms_convergence(vertical_rule, too_few)
+    end
 end
