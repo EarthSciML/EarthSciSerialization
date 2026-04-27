@@ -233,4 +233,49 @@ _strip_time_suffix(s::AbstractString) = endswith(s, "(t)") ? s[1:end-3] : s
         @test !occursin("\"300.0\"", json_str)
         @test !occursin("\"300\"", json_str)
     end
+
+    @testset "Rate AST: max/min round-trip (esm-70t)" begin
+        # Regression for esm-70t: _esm_to_symbolic previously rejected
+        # `max` and `min` rate operators with
+        #   "Unsupported operator in rate expression: max"
+        # The geoschem_fullchem .esm uses 64 instances of the
+        # max(expr, 0.0) clamp pattern common in atmospheric chemistry to
+        # enforce non-negative rate constants. Both operators must
+        # round-trip ESM → Catalyst → ESM without error.
+        species = [
+            EarthSciSerialization.Species("A"),
+            EarthSciSerialization.Species("B"),
+        ]
+        params = [EarthSciSerialization.Parameter("k", 1.0)]
+        # Rate 1: max(k, 0.0) — the clamp pattern from geoschem_fullchem.
+        rate_max = OpExpr("max",
+            EarthSciSerialization.Expr[VarExpr("k"), NumExpr(0.0)])
+        # Rate 2: min(k, 5.0) — symmetric coverage for the other primitive.
+        rate_min = OpExpr("min",
+            EarthSciSerialization.Expr[VarExpr("k"), NumExpr(5.0)])
+        rxns = EarthSciSerialization.Reaction[
+            EarthSciSerialization.Reaction(Dict("A" => 1), Dict("B" => 1),
+                                           rate_max),
+            EarthSciSerialization.Reaction(Dict("A" => 1), Dict("B" => 1),
+                                           rate_min),
+        ]
+        esm_rsys = EarthSciSerialization.ReactionSystem(species, rxns;
+                                                        parameters=params)
+
+        cat_rsys = Catalyst.ReactionSystem(esm_rsys; name=:MaxMinClamp)
+        @test occursin("ReactionSystem", string(typeof(cat_rsys)))
+
+        recovered = EarthSciSerialization.ReactionSystem(cat_rsys)
+        @test length(recovered.reactions) == 2
+
+        function _has_op(node, name)
+            if node isa OpExpr
+                node.op == name && return true
+                return any(a -> _has_op(a, name), node.args)
+            end
+            return false
+        end
+        @test _has_op(recovered.reactions[1].rate, "max")
+        @test _has_op(recovered.reactions[2].rate, "min")
+    end
 end

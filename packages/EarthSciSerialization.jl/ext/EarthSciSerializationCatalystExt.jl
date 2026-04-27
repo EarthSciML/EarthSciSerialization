@@ -52,6 +52,10 @@ function _esm_to_symbolic(expr::Expr, var_dict::Dict{String,Any})
             arg = _esm_to_symbolic(expr.args[1], var_dict)
             fn = getfield(Base, Symbol(op))
             return fn(arg)
+        elseif op in ("max", "min")
+            args = [_esm_to_symbolic(a, var_dict) for a in expr.args]
+            fn = getfield(Base, Symbol(op))
+            return length(args) == 1 ? args[1] : reduce(fn, args)
         else
             error("Unsupported operator in rate expression: $op")
         end
